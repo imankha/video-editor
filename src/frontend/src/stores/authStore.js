@@ -17,8 +17,6 @@ export const useAuthStore = create((set, get) => ({
   showAccountSettings: false,  // T430: Account settings panel
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
-  hasGuestActivity: false,  // true once a guest user has done any write operation
-  migrationPending: false,  // T820: true if a guest migration failed and needs retry
 
   // T550: Check if the current user is an admin
   checkAdmin: async () => {
@@ -29,13 +27,6 @@ export const useAuthStore = create((set, get) => ({
       set({ isAdmin: data.is_admin });
     } catch {
       // Best-effort — non-critical
-    }
-  },
-
-  // Mark that a guest has done meaningful work (triggers exit warning)
-  markGuestActivity: () => {
-    if (!get().isAuthenticated) {
-      set({ hasGuestActivity: true });
     }
   },
 
@@ -112,29 +103,6 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // T820: Set migration pending state (called from sessionInit when /me returns migration_pending)
-  setMigrationPending: (pending) => set({ migrationPending: pending }),
-
-  // T820: Retry a failed migration
-  retryMigration: async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/retry-migration`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!res.ok) return { status: 'error' };
-      const data = await res.json();
-      if (data.status === 'success') {
-        set({ migrationPending: false });
-        // Reload to pick up migrated data
-        window.location.reload();
-      }
-      return data;
-    } catch {
-      return { status: 'error' };
-    }
-  },
-
   // Called on app load after session check
   setSessionState: (isAuthenticated, email = null, pictureUrl = null) => {
     console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}`);
@@ -143,8 +111,6 @@ export const useAuthStore = create((set, get) => ({
       email,
       pictureUrl,
       isCheckingSession: false,
-      // Clear guest activity once authenticated — no need for exit warning
-      ...(isAuthenticated ? { hasGuestActivity: false } : {}),
     });
     // T530: Fetch credit balance if authenticated
     if (isAuthenticated) {

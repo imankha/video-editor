@@ -2,14 +2,9 @@
  * Session initialization — resolves user identity from server, installs
  * X-Profile-ID and X-User-ID headers on all subsequent fetch() requests.
  *
- * T405: User identity comes from the SERVER, not the client.
- * - rb_session cookie → /api/auth/me → user_id (returning visitor)
- * - /api/auth/init-guest → new UUID + cookie (new visitor)
- * - No more ?user= URL param or localStorage user IDs
- *
- * T85b: reinstallProfileHeader() for profile switching.
- * The fetch interceptor reads from mutable variables,
- * so switching profiles just updates the variable — no re-patching needed.
+ * T1330: guest accounts removed. If /me returns 401, we set
+ * `isAuthenticated=false` and resolve without a user_id. No init-guest
+ * fallback; the app renders the empty shell until the user logs in.
  */
 
 import axios from 'axios';
@@ -21,7 +16,6 @@ let _currentUserId = null;
 let _fetchPatched = false;
 let _axiosPatched = false;
 let _initPromise = null;
-let _onGuestWrite = null;
 
 /** Update the preloader progress bar (no-op if preloader already dismissed). */
 function updatePreloader(percent, message) {
@@ -29,19 +23,16 @@ function updatePreloader(percent, message) {
 }
 
 /**
- * Retry a fetch call with exponential backoff.
- * Handles both server errors (5xx) and network failures (server unreachable).
- * Used for cold-start resilience — the server may return 500 or be
- * temporarily unreachable while waking up on Fly.io.
+ * Retry a fetch call with exponential backoff. Handles 5xx and network
+ * failures — used for cold-start resilience on Fly.io wake-ups.
  */
 async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = {}) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, options);
       if (response.ok || response.status < 500) return response;
-      // Server error (500+) — retry after delay if we have attempts left
       if (attempt < retries) {
-        const delay = baseDelay * Math.pow(2, attempt); // 1s, 2s, 4s
+        const delay = baseDelay * Math.pow(2, attempt);
         console.warn(`[sessionInit] ${url} returned ${response.status}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
         updatePreloader(5 + attempt * 5, 'Waking up server...');
         await new Promise(r => setTimeout(r, delay));
@@ -50,7 +41,6 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
         return response;
       }
     } catch (err) {
-      // Network error (server unreachable, DNS failure, etc.)
       if (attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt);
         console.warn(`[sessionInit] ${url} network error: ${err.message}, retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`);
@@ -62,14 +52,6 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
       }
     }
   }
-}
-
-/**
- * Register a callback that fires after any successful mutating API call
- * while the user is a guest. Used to track guest activity for the exit warning.
- */
-export function setGuestWriteCallback(fn) {
-  _onGuestWrite = fn;
 }
 
 /**
@@ -86,7 +68,6 @@ function installFetchInterceptor() {
 
     if (isApiRequest) {
       init = { ...init };
-      // Ensure cookies are sent (rb_session)
       if (!init.credentials) {
         init.credentials = 'include';
       }
@@ -125,57 +106,45 @@ function installAxiosInterceptor() {
     return config;
   });
 
-  // Fire guest-write callback on any successful mutating API call
-  axios.interceptors.response.use((response) => {
-    const method = response.config?.method?.toLowerCase();
-    const isWrite = method && method !== 'get' && method !== 'head' && method !== 'options';
-    if (isWrite && response.status < 400 && _onGuestWrite) {
-      _onGuestWrite();
-    }
-    return response;
-  });
-
   _axiosPatched = true;
 }
 
-// Patch interceptors at module load time (synchronous).
-// _currentUserId is null until initSession() resolves — that's fine,
-// the interceptor reads the mutable variable on each request.
 installFetchInterceptor();
 installAxiosInterceptor();
 
 /**
  * Set the user ID for all subsequent API requests.
- * Called after /api/auth/me or /api/auth/init-guest returns the user_id.
+ * Called after /api/auth/me returns the user_id, or after onAuthSuccess.
  */
 export function setUserId(userId) {
   _currentUserId = userId;
 }
 
 /**
- * Initialize the user session. Resolves user identity from server:
+ * Initialize the user session.
  *
- * 1. GET /api/auth/me — check for existing session (cookie-based)
- *    - If valid: use that user_id, set auth state
- * 2. If no session: POST /api/auth/init-guest — create anonymous user
- *    - Server generates UUID, creates session, sets cookie
- * 3. POST /api/auth/init — initialize profile + database for user
+ * 1. GET /api/auth/me — check for existing authenticated session
+ *    - ok → use user_id, call /init to load profile
+ *    - 401 → resolve with {userId: null, isAuthenticated: false}
  *
  * Safe to call multiple times — returns cached promise after first call.
  *
- * @returns {Promise<{profileId: string, userId: string, isNewUser: boolean}>}
+ * @returns {Promise<{profileId: string|null, userId: string|null, isNewUser: boolean, isAuthenticated: boolean}>}
  */
 export async function initSession() {
   if (_initPromise) return _initPromise;
 
   _initPromise = (async () => {
     const { useAuthStore } = await import('../stores/authStore');
-    let userId = null;
 
-    // Step 1: Check for existing session via cookie
     updatePreloader(10, 'Connecting to server...');
     const authExpected = sessionStorage.getItem('authExpected');
     if (authExpected) sessionStorage.removeItem('authExpected');
+
+    let userId = null;
+    let email = null;
+    let pictureUrl = null;
+
     try {
       const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, {
         credentials: 'include',
@@ -183,49 +152,30 @@ export async function initSession() {
       if (meResponse.ok) {
         const meData = await meResponse.json();
         userId = meData.user_id;
+        email = meData.email || null;
+        pictureUrl = meData.picture_url || null;
         _currentUserId = userId;
-        const hasEmail = !!meData.email;
-        console.log(`[Auth:Init] /me OK: user=${userId}, authenticated=${hasEmail}${hasEmail ? `, email=${meData.email}` : ''}`);
-        // Only authenticated if they have an email (Google sign-in).
-        // A guest session has a user_id but no email — still not authenticated.
-        useAuthStore.getState().setSessionState(hasEmail, meData.email || null, meData.picture_url || null);
-        // T820: Track migration status from /me response
-        if (meData.migration_pending) {
-          console.warn('[Auth:Init] Migration pending — guest data needs transfer');
-          useAuthStore.getState().setMigrationPending(true);
-        }
+        console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}`);
       } else {
-        console.log(`[Auth:Init] /me returned ${meResponse.status} — no existing session`);
+        console.log(`[Auth:Init] /me returned ${meResponse.status} — unauthenticated`);
         if (authExpected) {
           console.error(`[Auth:Init] Session cookie lost after sign-in for ${authExpected}. ` +
             'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
         }
       }
     } catch (err) {
-      // Network error or server unreachable — log it, then fall through to guest init
       console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
-    // Step 2: No valid session — create a guest user. The guest has a
-    // user_id but no email; `isAuthenticated` stays false so `requireAuth`
-    // still prompts via AuthGateModal before any mutating action. T1330
-    // removes this fallback entirely (guest accounts deleted at that point).
     if (!userId) {
-      updatePreloader(15, 'Creating session...');
-      const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!guestResponse.ok) {
-        throw new Error(`Guest init failed: ${guestResponse.status}`);
-      }
-      const guestData = await guestResponse.json();
-      userId = guestData.user_id;
-      _currentUserId = userId;
       useAuthStore.getState().setSessionState(false);
+      updatePreloader(40, 'Getting things ready...');
+      return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false };
     }
 
-    // Step 3: Have a user_id (from session) — initialize profile
+    // Authenticated — load profile + mark session state
+    useAuthStore.getState().setSessionState(true, email, pictureUrl);
+
     updatePreloader(25, 'Initializing profile...');
     const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
@@ -240,17 +190,15 @@ export async function initSession() {
 
     return {
       profileId: initData.profile_id,
-      userId: userId,
+      userId,
       isNewUser: initData.is_new_user,
+      isAuthenticated: true,
     };
   })();
 
   return _initPromise;
 }
 
-/**
- * Get the current profile ID (null if init hasn't completed).
- */
 export function getProfileId() {
   return _profileId;
 }
@@ -258,17 +206,12 @@ export function getProfileId() {
 /**
  * Update the profile ID used in the X-Profile-ID header.
  * Called on profile switch — no need to re-patch fetch().
- *
- * @param {string} newProfileId - The new profile GUID to use
  */
 export function reinstallProfileHeader(newProfileId) {
   _currentProfileId = newProfileId;
   _profileId = newProfileId;
 }
 
-/**
- * Get the current user ID (null until initSession resolves).
- */
 export function getUserId() {
   return _currentUserId;
 }

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
-import { Home, Scissors, LogIn, ShieldCheck } from 'lucide-react';
+import { Home, Scissors, ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
-import { initSession, setGuestWriteCallback } from './utils/sessionInit';
+import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { CreditBalance } from './components/CreditBalance';
@@ -96,9 +96,6 @@ function App() {
   // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.
   useEffect(() => {
-    // Wire guest-write callback: any successful mutating API call while guest marks activity
-    setGuestWriteCallback(() => useAuthStore.getState().markGuestActivity());
-
     const updatePreloader = (percent, message) => {
       if (window.__preloaderUpdate) window.__preloaderUpdate(percent, message);
     };
@@ -114,7 +111,13 @@ function App() {
       }
     };
 
-    initSession().then(() => {
+    initSession().then((session) => {
+      // T1330: only fetch per-user data when authenticated. Pre-login we
+      // show the empty app shell; per-user stores stay empty until login.
+      if (!session.isAuthenticated) {
+        dismissPreloader();
+        return;
+      }
       // T630/T635: Fire all initial data fetches in parallel after auth resolves
       warmAllUserVideos();
       const dataFetches = [
@@ -236,15 +239,26 @@ function App() {
       useAuthStore.getState().setSessionState(false);
       dismissPreloader();
     });
+
+    // T1330: fire the same per-user data fetches when the user logs in
+    // (same-device path — cross-device recovery reloads instead).
+    const unsubAuth = useAuthStore.subscribe((state, prev) => {
+      if (state.isAuthenticated && !prev.isAuthenticated) {
+        warmAllUserVideos();
+        useProfileStore.getState().fetchProfiles();
+        useProjectsStore.getState().fetchProjects();
+        useGamesDataStore.getState().fetchGames();
+        useQuestStore.getState().fetchDefinitions();
+        useQuestStore.getState().fetchProgress();
+        useSettingsStore.getState().loadSettings();
+        useGalleryStore.getState().fetchCount();
+      }
+    });
+    return () => unsubAuth();
   }, []);
 
-  const hasGuestActivity = useAuthStore(state => state.hasGuestActivity);
-  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isAdmin = useAuthStore(state => state.isAdmin);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
-  const requireAuth = useAuthStore(state => state.requireAuth);
-  const migrationPending = useAuthStore(state => state.migrationPending);
-  const retryMigration = useAuthStore(state => state.retryMigration);
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
@@ -469,10 +483,6 @@ function App() {
         <AccountSettings />
         {/* Toast Notifications */}
         <ToastContainer />
-        {/* Guest activity banner — only shown after guest does meaningful work */}
-        {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
-        {/* T820: Migration retry banner — shown when guest migration failed */}
-        {migrationPending && <MigrationRetryBanner onRetry={retryMigration} />}
         {/* Quest overlay — auto-shows for new users (T540) */}
         <QuestPanel />
         {/* Admin button — fixed top-right, visible only to admins */}
@@ -487,10 +497,6 @@ function App() {
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
-      {/* Guest activity banner — only shown after guest does meaningful work */}
-      {hasGuestActivity && !isAuthenticated && <GuestSaveBanner onSignIn={() => requireAuth(() => {})} />}
-      {/* T820: Migration retry banner — shown when guest migration failed */}
-      {migrationPending && <MigrationRetryBanner onRetry={retryMigration} />}
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
 
@@ -638,38 +644,6 @@ function AdminButton({ onClick }) {
       <ShieldCheck size={15} />
       <span className="hidden sm:inline font-medium">Admin</span>
     </button>
-  );
-}
-
-function MigrationRetryBanner({ onRetry }) {
-  return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-amber-500/30 shadow-xl text-sm">
-      <span className="text-amber-400">Some of your data from a previous session couldn't be transferred.</span>
-      <button
-        onClick={onRetry}
-        className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 transition-colors text-white font-medium whitespace-nowrap"
-      >
-        Try again
-      </button>
-    </div>
-  );
-}
-
-function GuestSaveBanner({ onSignIn }) {
-  return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-800 border border-yellow-500/40 shadow-xl text-sm">
-      <span className="text-yellow-400">⚠</span>
-      <span className="text-gray-200">
-        You're a guest — your work <span className="text-white font-medium">won't be recoverable</span> without signing in.
-      </span>
-      <button
-        onClick={onSignIn}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors text-white font-medium whitespace-nowrap"
-      >
-        <LogIn size={13} />
-        Sign in to save
-      </button>
-    </div>
   );
 }
 
