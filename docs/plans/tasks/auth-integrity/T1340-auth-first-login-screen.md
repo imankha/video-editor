@@ -44,3 +44,6 @@ Show a full-screen login page when no authenticated session exists. Google sign-
 - [ ] Returning users with valid cookie go straight to app (no login flash)
 - [ ] OTP sign-in works from login screen
 - [ ] Mobile-friendly layout
+- [ ] FedCM migration: opt in via `use_fedcm_for_prompt: true` and stop relying on `isNotDisplayed()` / `isSkippedMoment()` status methods (GSI_LOGGER deprecation warning currently printed on every load from `GoogleOneTap.jsx:68`). Migration guide: https://developers.google.com/identity/gsi/web/guides/fedcm-migration
+- [ ] No `GSI_LOGGER` FedCM deprecation warnings in console on initial load
+- [ ] Handle `cancel_called` / FedCM `AbortError` cleanly when the prompt is dismissed or the component unmounts (no unhandled rejection in console)
