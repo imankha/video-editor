@@ -206,31 +206,19 @@ export async function initSession() {
       console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
-    // Step 2: No valid session — create anonymous guest
+    // Step 2: No valid session — T1340: do NOT create a guest. The
+    // AppAuthGate renders LoginScreen when !isAuthenticated, so the user is
+    // prompted to sign in (Google or OTP) before the app mounts. The
+    // /api/auth/init-guest endpoint still exists (removed in T1330) but is no
+    // longer reachable from the frontend happy path.
     if (!userId) {
-      console.log('[Auth:Init] No session — creating guest');
-      updatePreloader(25, 'Setting up session...');
-      const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!guestResponse.ok) {
-        console.error(`[Auth:Init] Guest init failed: ${guestResponse.status}`);
-        throw new Error(`Guest init failed: ${guestResponse.status}`);
-      }
-      const guestData = await guestResponse.json();
-      userId = guestData.user_id;
-      _currentUserId = userId;
-      _profileId = guestData.profile_id;
-      _currentProfileId = guestData.profile_id;
-      console.log(`[Auth:Init] Guest created: user=${userId}, profile=${guestData.profile_id}`);
+      console.log('[Auth:Init] No session — LoginScreen will gate the app');
+      updatePreloader(40, 'Ready');
       useAuthStore.getState().setSessionState(false);
-      updatePreloader(40, 'Getting things ready...');
-
       return {
-        profileId: guestData.profile_id,
-        userId: userId,
-        isNewUser: guestData.is_new_user,
+        profileId: null,
+        userId: null,
+        isNewUser: false,
       };
     }
 
