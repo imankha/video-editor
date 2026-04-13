@@ -36,7 +36,7 @@ Goal: Eliminate orphaned accounts by removing guest accounts entirely. Users mus
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
 | T1270 | [Cookie Path + SameSite Fix](tasks/auth-integrity/T1270-cookie-path-fix.md) | 9 | 1 | 9.0 | DONE | Add `path="/"` to cookies, fix SameSite to `lax` |
-| T1290 | [Auth DB Restore Must Succeed](tasks/auth-integrity/T1290-auth-db-restore-must-succeed.md) | 9 | 4 | 2.3 | TODO | Fail startup if auth.sqlite can't restore from R2 |
+| T1290 | [Auth DB Restore Must Succeed](tasks/auth-integrity/T1290-auth-db-restore-must-succeed.md) | 9 | 4 | 2.3 | AWAITING USER VERIFICATION | Fail startup if auth.sqlite can't restore from R2 |
 | T1340 | [Auth-First Login Screen](tasks/auth-integrity/T1340-auth-first-login-screen.md) | 9 | 4 | 2.3 | TODO | Full-screen login page on first visit (blocks T1330) |
 | T1330 | [Remove Guest Accounts](tasks/auth-integrity/T1330-remove-guest-accounts.md) | 10 | 6 | 1.7 | TODO | Rip out init-guest, migration, guest banners — ~400 LOC removed |
 
