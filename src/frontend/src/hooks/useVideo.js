@@ -247,15 +247,21 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const play = async () => {
     if (videoRef.current && videoRef.current.src) {
+      const v = videoRef.current;
+      console.log(`[SCRUB] play() called currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState} paused=${v.paused} isSeeking=${isSeeking} isBuffering=${isBuffering}`);
       try {
-        // video.play() returns a promise - must handle it
         await videoRef.current.play();
+        console.log(`[SCRUB] play() resolved`);
       } catch (error) {
         // Ignore AbortError - happens when play() is interrupted by pause()
         if (error.name !== 'AbortError') {
-          console.error('Video play error:', error);
+          console.error('[SCRUB] play() rejected:', error.name, error.message);
+        } else {
+          console.log('[SCRUB] play() aborted (normal — interrupted by pause/seek)');
         }
       }
+    } else {
+      console.warn('[SCRUB] play() ignored — no video src');
     }
   };
 
@@ -264,6 +270,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const pause = () => {
     if (videoRef.current) {
+      const v = videoRef.current;
+      console.log(`[SCRUB] pause() called currentTime=${v.currentTime.toFixed(2)} paused=${v.paused}`);
       videoRef.current.pause();
     }
   };
@@ -302,10 +310,19 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         ? clampToVisibleRange(time)
         : Math.max(0, Math.min(time, effectiveDuration));
 
+      const v = videoRef.current;
+      const target = clipToVideo(validTime);
+      console.log(
+        `[SCRUB] seek(${time.toFixed(2)}) → validTime=${validTime.toFixed(2)} target=${target.toFixed(2)} ` +
+        `| current=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState} ` +
+        `paused=${v.paused} isPlaying=${isPlaying} isBuffering=${isBuffering}`
+      );
       setIsSeeking(true);
       setCurrentTime(validTime); // Optimistic update: UI responds instantly (playhead, timestamps, selection)
-      videoRef.current.currentTime = clipToVideo(validTime); // Translate clip time → video element time
+      videoRef.current.currentTime = target; // Translate clip time → video element time
       // The seeked event (handleSeeked) will refine with the actual displayed frame time
+    } else {
+      console.warn(`[SCRUB] seek(${time}) ignored — no video src`);
     }
   };
 
@@ -391,19 +408,41 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handlePlay = () => {
+    const v = videoRef.current;
+    if (v) console.log(`[SCRUB] event:play currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState}`);
     setIsPlaying(true);
   };
 
   const handlePause = () => {
+    const v = videoRef.current;
+    if (v) console.log(`[SCRUB] event:pause currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState}`);
     setIsPlaying(false);
+  };
+
+  const handleStalled = () => {
+    const v = videoRef.current;
+    if (v) console.warn(`[SCRUB] event:stalled currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState}`);
+  };
+
+  const handleSuspend = () => {
+    const v = videoRef.current;
+    if (v) console.log(`[SCRUB] event:suspend currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState}`);
   };
 
   // Buffering event handlers - pause time updates when video is waiting for data
   const handleWaiting = () => {
+    const v = videoRef.current;
+    if (v) {
+      console.log(`[SCRUB] event:waiting currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState}`);
+    }
     setIsBuffering(true);
   };
 
   const handlePlaying = () => {
+    const v = videoRef.current;
+    if (v) {
+      console.log(`[SCRUB] event:playing currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState}`);
+    }
     setIsBuffering(false);
   };
 
@@ -469,10 +508,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   }, [isPlaying, isSeeking, isBuffering, clipDuration, clipToVideo, videoToClip]);
 
   const handleSeeking = () => {
+    const v = videoRef.current;
+    if (v) {
+      console.log(`[SCRUB] event:seeking currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState}`);
+    }
     setIsSeeking(true);
   };
 
   const handleSeeked = () => {
+    const v = videoRef.current;
+    if (v) {
+      console.log(`[SCRUB] event:seeked currentTime=${v.currentTime.toFixed(2)} readyState=${v.readyState} networkState=${v.networkState} buffered=${v.buffered.length ? `[${v.buffered.start(0).toFixed(1)}-${v.buffered.end(v.buffered.length - 1).toFixed(1)}]` : 'none'}`);
+    }
     setIsSeeking(false);
     if (videoRef.current) {
       setCurrentTime(videoToClip(videoRef.current.currentTime));
@@ -769,6 +816,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       onWaiting: handleWaiting,
       onPlaying: handlePlaying,
       onCanPlay: handleCanPlay,
+      onStalled: handleStalled,
+      onSuspend: handleSuspend,
     }
   };
 }
