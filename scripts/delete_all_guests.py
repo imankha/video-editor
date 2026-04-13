@@ -80,7 +80,7 @@ def get_r2_client(config):
 
 def download_auth_db(r2_client, bucket, app_env, dest):
     key = f"{app_env}/auth/auth.sqlite"
-    print(f"Downloading {key} → {dest}")
+    print(f"Downloading {key} -> {dest}")
     dest.parent.mkdir(parents=True, exist_ok=True)
     r2_client.download_file(bucket, key, str(dest))
 
@@ -90,7 +90,7 @@ def upload_auth_db(r2_client, bucket, app_env, src):
     conn = sqlite3.connect(str(src))
     conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.close()
-    print(f"Uploading {src} → {key}")
+    print(f"Uploading {src} -> {key}")
     r2_client.upload_file(str(src), bucket, key)
 
 
@@ -117,6 +117,12 @@ def delete_guests(db_path):
     conn = sqlite3.connect(str(db_path))
     try:
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute(
+            "DELETE FROM sessions WHERE user_id IN (SELECT user_id FROM users WHERE email IS NULL)"
+        )
+        conn.execute(
+            "DELETE FROM credit_transactions WHERE user_id IN (SELECT user_id FROM users WHERE email IS NULL)"
+        )
         cur = conn.execute("DELETE FROM users WHERE email IS NULL")
         deleted = cur.rowcount
         conn.commit()
