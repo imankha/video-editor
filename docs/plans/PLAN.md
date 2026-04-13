@@ -66,7 +66,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1350 | [Cache Warming CORS Cleanup](tasks/video-load-reliability/T1350-cache-warming-cors-fix.md) | DONE | 3.0 | Switch warmUrl to `no-cors`; eliminates console spam on every page load |
 | T1400 | [Video Load Contention](tasks/video-load-reliability/T1400-video-load-contention.md) | TODO | 4.5 | Pause warmer on foreground load, warn on range-fallback, kill StrictMode double-mount — 55s → <10s cold load |
 | T1410 | [Video Load Regression Since 04-08](tasks/video-load-reliability/T1410-video-load-regression-since-0408.md) | DONE | 5.0 | Warmer aborts on foreground load, StrictMode dedup — 35–56s → ~400–950ms cold load |
-| T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TODO | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
+| T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TESTING | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
 
 ### Standalone Tasks
 

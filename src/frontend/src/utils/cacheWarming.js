@@ -216,9 +216,9 @@ async function warmUrl(url, options = {}) {
         });
         console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
       } catch (tailErr) {
-        // Tail warming failure is non-fatal (network error, not CORS —
-        // no-cors can't produce CORS failures).
-        console.log(`[CacheWarming] Tail warm failed: ${tailErr.message}`);
+        if (tailErr.name !== 'AbortError') {
+          console.log(`[CacheWarming] Tail warm failed: ${tailErr.message}`);
+        }
       }
     }
 
@@ -347,7 +347,6 @@ export async function warmAllUserVideos() {
     return { warmed: 0, total: 0 };
   }
   if (warmupInProgress) {
-    console.log('[CacheWarming] Warmup already in progress, skipping');
     return { warmed: 0, total: 0 };
   }
   warmupInProgress = true;

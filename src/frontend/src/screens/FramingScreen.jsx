@@ -420,7 +420,7 @@ export function FramingScreen({
     warmVideoCache(clipUrl);
     if (controller.signal.aborted) return;
     loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange);
-    lastLoadedUrlRef.current = clipUrl;
+    lastLoadedUrlRef.current = clipUrl.split('?')[0];
     return () => controller.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
@@ -439,8 +439,10 @@ export function FramingScreen({
     // The useLayoutEffect above may have already loaded the video (for overlay→framing
     // transitions), but state restoration still needs to happen. Guard with ref to
     // prevent infinite loops (restore updates state → re-render → effect re-fires).
-    if (stateRestoredForUrlRef.current !== clipUrl) {
-      stateRestoredForUrlRef.current = clipUrl;
+    // Guard on URL path (without query) because R2 signatures regenerate per render.
+    const clipUrlKey = clipUrl.split('?')[0];
+    if (stateRestoredForUrlRef.current !== clipUrlKey) {
+      stateRestoredForUrlRef.current = clipUrlKey;
       const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
       const parsedCropKfs = clipCropKeyframes(firstClip);
 
@@ -461,10 +463,11 @@ export function FramingScreen({
     }
 
     // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
-    if (lastLoadedUrlRef.current === clipUrl) return;
+    // Compare path-without-query since signed R2 URLs regenerate per render.
+    if (lastLoadedUrlRef.current === clipUrlKey) return;
 
     console.log('[FramingScreen] Initializing video for first clip:', firstClip.id);
-    lastLoadedUrlRef.current = clipUrl;
+    lastLoadedUrlRef.current = clipUrlKey;
     initialLoadDoneRef.current = true;
 
     // T1410: AbortController so StrictMode's synthetic unmount can short-circuit
