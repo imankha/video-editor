@@ -1,79 +1,39 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { API_BASE } from '../config';
+import { ensureGisInitialized } from '../utils/googleAuth';
 
 /**
- * T435: Google One Tap Auto-Prompt
+ * Google One Tap — shows Google's floating sign-in UI for unauthenticated
+ * users once the session check completes. Credential verification is
+ * handled centrally in utils/googleAuth; this component only drives the
+ * prompt visibility.
  *
- * Shows Google's One Tap floating sign-in UI for guest users after session
- * init completes. If the user clicks it, they're authenticated immediately
- * (same flow as AuthGateModal). Google handles dismiss cooldown automatically.
- *
- * Renders nothing — this is a behavior-only component.
+ * Renders nothing — behavior-only.
  */
 export function GoogleOneTap() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isCheckingSession = useAuthStore((s) => s.isCheckingSession);
   const showAuthModal = useAuthStore((s) => s.showAuthModal);
-  const onAuthSuccess = useAuthStore((s) => s.onAuthSuccess);
   const promptShownRef = useRef(false);
 
-  const handleCredentialResponse = useCallback(async (response) => {
-    if (!response?.credential) {
-      console.warn('[Auth:OneTap] No credential in response', response);
-      return;
-    }
-    console.log('[Auth:OneTap] Credential received, verifying with backend...');
-    try {
-      const res = await fetch(`${API_BASE}/api/auth/google`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: response.credential }),
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        console.error(`[Auth:OneTap] Backend rejected: ${res.status}`, errData.detail || errData);
-        return;
-      }
-      const data = await res.json();
-      console.log(`[Auth:OneTap] Success: ${data.email} (user=${data.user_id})`);
-      onAuthSuccess(data.email, data.user_id, data.picture_url);
-    } catch (err) {
-      console.error('[Auth:OneTap] Network error:', err.message);
-    }
-  }, [onAuthSuccess]);
-
   useEffect(() => {
-    // Wait for session init to finish
     if (isCheckingSession) return;
-    // Don't prompt authenticated users
     if (isAuthenticated) return;
-    // Don't prompt if AuthGateModal is open
     if (showAuthModal) return;
-    // Only prompt once per mount cycle
     if (promptShownRef.current) return;
 
-    const gis = window.google?.accounts?.id;
+    const gis = ensureGisInitialized();
     if (!gis) {
       console.warn('[Auth:OneTap] Google Identity Services not loaded');
       return;
     }
-
-    console.log('[Auth:OneTap] Initializing GIS + prompting');
-    gis.initialize({
-      client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-      callback: handleCredentialResponse,
-      use_fedcm_for_prompt: true,
-    });
     gis.prompt();
     promptShownRef.current = true;
 
-    // No cleanup cancel — calling gis.cancel() in cleanup races with React
-    // StrictMode's mount/unmount/mount cycle and aborts the prompt before the
-    // user can interact. `requireAuth` cancels explicitly when opening the
-    // modal, which covers the only case we actually want to dismiss early.
-  }, [isCheckingSession, isAuthenticated, showAuthModal, handleCredentialResponse]);
+    // No cleanup cancel — it would race with React StrictMode's mount/
+    // unmount/mount cycle and abort the prompt before the user can
+    // interact. requireAuth() explicitly cancels when opening the modal.
+  }, [isCheckingSession, isAuthenticated, showAuthModal]);
 
   return null;
 }

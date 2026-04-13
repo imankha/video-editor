@@ -89,3 +89,90 @@ subagents working the Auth Integrity epic. Each task appends a section.
 - Fly auto-restart behaviour is assumed (standard Fly machine policy on
   non-zero exit) — not re-verified under this task. Manual verification
   steps live in the task file under "Manual Verification".
+
+## T1340 — Auth-First Login Screen
+
+- Branch: `feature/T1340-auth-first-login-screen` (NOT merged; AWAITING USER
+  VERIFICATION — Google OAuth round-trip and OTP email delivery are not
+  unit-testable).
+- New render gate: `src/frontend/src/components/AppAuthGate.jsx` wraps `<App />`
+  in `main.jsx`. Three branches: `isCheckingSession` → spinner,
+  `!isAuthenticated` → `<LoginScreen />`, authed → children. The existing
+  `isCheckingSession` short-circuit in App.jsx (line 446 `if (isCheckingSession) return null;`)
+  is now dead code — App.jsx only renders once AppAuthGate has already confirmed
+  authenticated. Left it in place (defensive / cheap); T1330 can remove if desired.
+- OTP logic EXTRACTED into `src/frontend/src/components/auth/OtpAuthForm.jsx`.
+  Consumed by both `LoginScreen.jsx` and `AuthGateModal.jsx`. `resetKey` prop
+  forces an internal reset (AuthGateModal passes `showAuthModal`).
+- `sessionInit.js` no longer calls `/api/auth/init-guest` on `/me` 401. The
+  frontend guest code path is effectively dead but NOT removed — per T1330's
+  scope. What's still live in frontend:
+  - `authStore`: `hasGuestActivity`, `markGuestActivity`, `migrationPending`,
+    `retryMigration`, `setMigrationPending` — unused by the happy path now.
+  - `App.jsx`: `<GuestSaveBanner>`, `<MigrationRetryBanner>` — rendered
+    conditionally on `hasGuestActivity && !isAuthenticated` and
+    `migrationPending`. Both conditions are now unreachable under T1340's
+    gate but the JSX is intact.
+  - `sessionInit`: `setGuestWriteCallback` + axios response interceptor that
+    calls `_onGuestWrite` still exist. Harmless but unused.
+  - Backend `/api/auth/init-guest`, `/api/auth/retry-migration`, and
+    `_migrate_guest_profile` are all untouched. T1330 removes them.
+- `GoogleOneTap.jsx` still mounts in main.jsx. When LoginScreen is visible it
+  both try to initialize GIS; LoginScreen's `useEffect` runs and overwrites
+  the GIS callback (GIS supports only one). LoginScreen owns the viewport
+  so OneTap's floating prompt is moot — but worth knowing if T1330 sees
+  double-init logs.
+- `onAuthSuccess` in authStore calls `window.location.reload()` on cross-device
+  recovery and redirects via `setSessionState` otherwise. Unchanged by T1340.
+- Unit tests added at `src/frontend/src/__tests__/` (new `__tests__` dir):
+  - `AppAuthGate.test.jsx` — 3 cases
+  - `LoginScreen.test.jsx` — 1 smoke test
+  Pattern: mock authStore with `vi.mock('../stores/authStore', ...)`. Follow
+  this for any new auth-layer tests in T1330.
+- Frontend unit suite: 27 files / 439 tests passing. Build: exit 0.
+- Commits on the branch:
+  - `c729751` — failing tests
+  - `3f847a1` — implementation
+  - (docs commit to follow)
+
+## T1340 — Scope collapse (2026-04-13)
+
+The full-screen LoginScreen + AppAuthGate were reverted after user feedback:
+
+> "I don't think we need to change the UI flow to accommodate no guest users,
+>  we just need to make sure there are no user actions that change persisted
+>  state before login."
+
+Key learnings for T1330:
+
+- **Don't gate render on auth.** The app's empty-state UX already works
+  correctly for "guest with user_id but no email". Gating render forces
+  every per-user fetch to be re-pathed; gating writes (which is the actual
+  requirement) is already handled by `requireAuth` → `AuthGateModal`.
+- **Stores do per-user fetches from many places, not just App.jsx.**
+  `ProjectsScreen.jsx:108-109`, `FramingScreen.jsx:124`, `profileStore.js:226-227`,
+  and `gamesDataStore.js:298` all fire fetches outside App.jsx's orchestration.
+  Any "don't fetch before login" strategy MUST live at the store level or
+  every call site has to be updated individually. Approach A (store-level
+  guard + subscribe to authStore) is the design T1330 should follow.
+- **Views must render empty-state identically for "unauthenticated" and
+  "authenticated but empty".** Current `ProjectsScreen` shows "Failed to
+  load games / Cannot connect to server" when fetches 401 — that error UI
+  is wrong for the pre-login case. T1330 must either (a) make stores
+  resolve with empty data pre-login, or (b) have views suppress error UI
+  when `!isAuthenticated`.
+- **One Tap / FedCM fixes are permanent wins** and stayed on the branch:
+  - Dedupe mounts — `<GoogleOneTap />` / `<AuthGateModal />` live in
+    `main.jsx`, not `App.jsx`.
+  - No cleanup `gis.cancel()` (StrictMode race).
+  - `use_fedcm_for_prompt: true`; no deprecated `isNotDisplayed`/`isSkippedMoment`.
+- **OtpAuthForm is reusable** — `src/frontend/src/components/auth/OtpAuthForm.jsx`.
+  T1330's login surface (modal or standalone page) should consume it.
+- **Deleted from the branch during revert** (resurrect from git if needed):
+  - `src/frontend/src/components/AppAuthGate.jsx`
+  - `src/frontend/src/components/LoginScreen.jsx`
+  - `src/frontend/src/__tests__/AppAuthGate.test.jsx`
+  - `src/frontend/src/__tests__/LoginScreen.test.jsx`
+- `sessionInit.js` `/api/auth/init-guest` fallback is back in place. T1330
+  removes it for real and must ship store-level auth gating in the same
+  change — otherwise the unauthenticated shell will 401-storm on load.

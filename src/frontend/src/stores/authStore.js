@@ -45,9 +45,9 @@ export const useAuthStore = create((set, get) => ({
       action();
       return;
     }
-    console.log('[Auth] requireAuth: user not authenticated, opening modal');
-    // Cancel Google One Tap before opening modal (prevents overlap)
-    window.google?.accounts?.id?.cancel();
+    // No gis.cancel() here — canceling an in-flight FedCM prompt emits a
+    // noisy AbortError, and both surfaces now share the same callback, so
+    // the floating One Tap coexisting with the modal is harmless.
     set({ showAuthModal: true, pendingAction: action });
   },
 

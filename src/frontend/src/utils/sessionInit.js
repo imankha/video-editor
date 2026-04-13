@@ -206,32 +206,23 @@ export async function initSession() {
       console.warn('[sessionInit] /me check failed:', err.message || err);
     }
 
-    // Step 2: No valid session — create anonymous guest
+    // Step 2: No valid session — create a guest user. The guest has a
+    // user_id but no email; `isAuthenticated` stays false so `requireAuth`
+    // still prompts via AuthGateModal before any mutating action. T1330
+    // removes this fallback entirely (guest accounts deleted at that point).
     if (!userId) {
-      console.log('[Auth:Init] No session — creating guest');
-      updatePreloader(25, 'Setting up session...');
+      updatePreloader(15, 'Creating session...');
       const guestResponse = await fetchWithRetry(`${API_BASE}/api/auth/init-guest`, {
         method: 'POST',
         credentials: 'include',
       });
       if (!guestResponse.ok) {
-        console.error(`[Auth:Init] Guest init failed: ${guestResponse.status}`);
         throw new Error(`Guest init failed: ${guestResponse.status}`);
       }
       const guestData = await guestResponse.json();
       userId = guestData.user_id;
       _currentUserId = userId;
-      _profileId = guestData.profile_id;
-      _currentProfileId = guestData.profile_id;
-      console.log(`[Auth:Init] Guest created: user=${userId}, profile=${guestData.profile_id}`);
       useAuthStore.getState().setSessionState(false);
-      updatePreloader(40, 'Getting things ready...');
-
-      return {
-        profileId: guestData.profile_id,
-        userId: userId,
-        isNewUser: guestData.is_new_user,
-      };
     }
 
     // Step 3: Have a user_id (from session) — initialize profile
