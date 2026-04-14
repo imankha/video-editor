@@ -13,6 +13,17 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     // Note: Don't set crossOrigin for presigned R2 URLs - we only need metadata,
     // not canvas pixel access, so "opaque" mode (no CORS) is fine
 
+    // [DIAG upload-freeze] capture start time + warm state so timeout logs can
+    // tell us whether this URL was pre-warmed and how long it actually waited.
+    const __diagStart = performance.now();
+    let __diagWarmState = null;
+    try {
+      // Dynamic import to avoid circular dep if any.
+      import('../utils/cacheWarming').then(({ getWarmedState }) => {
+        __diagWarmState = getWarmedState(url);
+      }).catch(() => { /* ignore */ });
+    } catch { /* ignore */ }
+
     const cleanup = () => {
       video.remove();
     };
@@ -20,7 +31,13 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     // Set timeout for loading
     const timeoutId = setTimeout(() => {
       if (video.readyState === 0) {
-        console.error('[videoMetadata] Timeout loading metadata from URL:', url?.substring(0, 80));
+        console.error('[videoMetadata] Timeout loading metadata from URL:', {
+          url: url?.substring(0, 80),
+          elapsedMs: Math.round(performance.now() - __diagStart),
+          warmState: __diagWarmState,
+          readyState: video.readyState,
+          networkState: video.networkState,
+        });
         cleanup();
         reject(new Error('Video metadata loading timed out'));
       }

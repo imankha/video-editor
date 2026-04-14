@@ -86,6 +86,22 @@ let gamesQueue = [];
 let galleryQueue = [];
 let workingQueue = [];
 
+/**
+ * [DIAG upload-freeze] Snapshot of warmer state. Used by uploadManager to
+ * correlate upload-start moments with concurrent warm-fetch activity.
+ */
+export function getWarmingDiag() {
+  return {
+    priority: currentPriority,
+    inFlight: inFlightControllers.size,
+    tier1: tier1Queue.length,
+    games: gamesQueue.length,
+    gallery: galleryQueue.length,
+    working: workingQueue.length,
+    workersRunning,
+  };
+}
+
 // Current priority
 let currentPriority = WARMUP_PRIORITY.GAMES;
 

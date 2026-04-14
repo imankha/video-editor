@@ -367,6 +367,26 @@ export default function CropOverlay({
   // Convert crop to screen coordinates
   const screenCrop = videoToScreen(currentCrop.x, currentCrop.y, currentCrop.width, currentCrop.height);
 
+  // [DIAG upload-freeze] Trace NaN in SVG rect attrs. Root cause is usually
+  // videoMetadata.width/height being 0/undefined before the video has loaded,
+  // or currentCrop containing NaN from an uninitialized keyframe.
+  const __diagHasNaN = [screenCrop.x, screenCrop.y, screenCrop.width, screenCrop.height].some(Number.isNaN);
+  if (__diagHasNaN) {
+    console.warn('[DIAG crop-nan] NaN screenCrop', {
+      screenCrop,
+      currentCrop,
+      videoMetadata: { w: videoMetadata?.width, h: videoMetadata?.height },
+      videoDisplayRect: videoDisplayRect && {
+        scaleX: videoDisplayRect.scaleX,
+        scaleY: videoDisplayRect.scaleY,
+        offsetX: videoDisplayRect.offsetX,
+        offsetY: videoDisplayRect.offsetY,
+        width: videoDisplayRect.width,
+        height: videoDisplayRect.height,
+      },
+    });
+  }
+
   /**
    * Check if crop size requires maximum 4x AI upscaling
    * Warns when crop is small enough that it would hit the 1440p limit with 4x upscaling.
