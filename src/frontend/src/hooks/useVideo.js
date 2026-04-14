@@ -256,7 +256,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (verdict) {
         const elapsedMs = Math.round(performance.now() - loadStartRef.current);
         console.warn(
-          `[VIDEO_LOAD] range_fallback_suspected id=${loadId} bufferedSec=${verdict.bufferedSec.toFixed(1)} clipDurSec=${verdict.clipDurationSec} ratio=${verdict.ratio.toFixed(1)} elapsedMs=${elapsedMs} networkState=${v.networkState} readyState=${v.readyState}`
+          `[VIDEO_LOAD] range_fallback_suspected id=${loadId} trigger=watchdog bufferedSec=${verdict.bufferedSec.toFixed(1)} clipDurSec=${verdict.clipDurationSec} ratio=${verdict.ratio.toFixed(1)} elapsedMs=${elapsedMs} networkState=${v.networkState} readyState=${v.readyState}`
         );
       }
     }, RANGE_FALLBACK_WATCHDOG_MS);
@@ -616,12 +616,26 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
       }
       setVideoElementReady();
-      // T1400: playable signal — cold-load measurement endpoint.
+      // T1400: playable signal — cold-load measurement endpoint. Also
+      // check for range overbuffer here: a fast load can still buffer far
+      // more than the clip needs (T1430). ignoreReadyState=true because
+      // the video is by definition playable at this point.
       if (loadStartRef.current) {
         const bufferedSec = video.buffered?.length
           ? video.buffered.end(video.buffered.length - 1)
           : 0;
         console.log(`[VIDEO_LOAD] playable id=${loadIdRef.current} elapsedMs=${elapsed} readyState=${video.readyState} bufferedSec=${bufferedSec.toFixed(1)}`);
+        const verdict = checkRangeFallback({
+          bufferedSec,
+          clipDurationSec: clipDurationForLoadRef.current,
+          readyState: video.readyState,
+          ignoreReadyState: true,
+        });
+        if (verdict) {
+          console.warn(
+            `[VIDEO_LOAD] range_fallback_suspected id=${loadIdRef.current} trigger=playable bufferedSec=${verdict.bufferedSec.toFixed(1)} clipDurSec=${verdict.clipDurationSec} ratio=${verdict.ratio.toFixed(1)} elapsedMs=${elapsed} readyState=${video.readyState}`
+          );
+        }
       }
       // T1400: clear watchdog — load completed in time, no fallback to flag.
       if (watchdogTimerRef.current) {

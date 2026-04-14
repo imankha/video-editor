@@ -22,11 +22,15 @@ export const RANGE_FALLBACK_RATIO = 3;
  * @param {number} args.readyState - HTMLMediaElement.readyState
  * @returns {null | { bufferedSec, clipDurationSec, ratio }}
  */
-export function checkRangeFallback({ bufferedSec, clipDurationSec, readyState }) {
+export function checkRangeFallback({ bufferedSec, clipDurationSec, readyState, ignoreReadyState = false }) {
   // If clip duration is unknown we can't compare — skip.
   if (!clipDurationSec || clipDurationSec <= 0) return null;
-  // Already playable — no fallback to flag; the load completed in time.
-  if (readyState >= 3) return null;
+  // By default, skip the check once video is playable (the 5s watchdog is
+  // for "still not playable, but way overbuffered" — the slow-load case).
+  // Callers running the check AT loadeddata pass ignoreReadyState=true because
+  // a fast load can still overbuffer massively (T1430): e.g., 2152s buffered
+  // for an 8s clip despite a clean 206 range response.
+  if (!ignoreReadyState && readyState >= 3) return null;
   const ratio = bufferedSec / clipDurationSec;
   if (ratio <= RANGE_FALLBACK_RATIO) return null;
   return { bufferedSec, clipDurationSec, ratio };

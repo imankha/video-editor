@@ -32,14 +32,27 @@ describe('videoLoadWatchdog.checkRangeFallback', () => {
   });
 
   it('returns null when video is already playable (readyState >= HAVE_FUTURE_DATA)', () => {
-    // If the load completed in time, there's no fallback to flag regardless of
-    // buffered amount.
+    // Default (watchdog path): if the load completed in time, there's no
+    // slow-load fallback to flag regardless of buffered amount.
     expect(
       checkRangeFallback({ bufferedSec: 2152, clipDurationSec: 8, readyState: 3 })
     ).toBeNull();
     expect(
       checkRangeFallback({ bufferedSec: 2152, clipDurationSec: 8, readyState: 4 })
     ).toBeNull();
+  });
+
+  it('with ignoreReadyState=true, flags overbuffer even on a fast playable load', () => {
+    // At-playable check: fast load can still overbuffer massively (T1430).
+    // Real observed case: 1.8s load, 2152s buffered, readyState=4.
+    const result = checkRangeFallback({
+      bufferedSec: 2152,
+      clipDurationSec: 8,
+      readyState: 4,
+      ignoreReadyState: true,
+    });
+    expect(result).not.toBeNull();
+    expect(result.ratio).toBeGreaterThan(RANGE_FALLBACK_RATIO);
   });
 
   it('returns null when nothing has buffered yet', () => {
