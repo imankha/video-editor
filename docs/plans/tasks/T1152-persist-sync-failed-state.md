@@ -1,6 +1,6 @@
 # T1152: Persist Sync-Failed State Across Restarts
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-04-13
@@ -40,8 +40,8 @@ Drop the `set_sync_failed(user_id, True)` calls (redundant with `mark_sync_pendi
 
 ## Acceptance Criteria
 
-- [ ] `is_sync_failed(user_id)` returns True iff `.sync_pending` marker exists
-- [ ] No separate in-memory dict tracking sync failure
-- [ ] `X-Sync-Status: failed` header still sent when marker exists
-- [ ] Restart test: create marker, restart backend, next request still reports degraded
-- [ ] Existing `test_sync_status.py` tests still pass (adapt if needed)
+- [x] `is_sync_failed(user_id)` returns True iff `.sync_pending` marker exists
+- [x] No separate in-memory dict tracking sync failure
+- [x] `X-Sync-Status: failed` header still sent when marker exists
+- [x] Restart test: create marker, restart backend, next request still reports degraded
+- [x] Existing `test_sync_status.py` tests still pass (adapt if needed)
