@@ -69,7 +69,7 @@ const TAIL_WARM_SIZE = 5 * 1024 * 1024;
  * @param {'games' | 'gallery'} priority
  */
 export function setWarmupPriority(priority) {
-  if (priority === currentPriority) return;
+  if (priority === currentPriority) return { abortedCount: 0 };
   console.log(`[CacheWarming] Priority changed to: ${priority}`);
 
   // T1410: entering FOREGROUND_ACTIVE aborts every in-flight warm fetch and
@@ -80,8 +80,8 @@ export function setWarmupPriority(priority) {
       priorityBeforeForeground = currentPriority;
     }
     currentPriority = priority;
-    abortInFlightWarms();
-    return;
+    const abortedCount = abortInFlightWarms();
+    return { abortedCount };
   }
 
   // Leaving FOREGROUND_ACTIVE — restore prior priority if caller passed one,
@@ -95,6 +95,7 @@ export function setWarmupPriority(priority) {
     }
   }
   priorityBeforeForeground = null;
+  return { abortedCount: 0 };
 }
 
 /**
@@ -108,12 +109,14 @@ export function clearForegroundActive() {
 }
 
 function abortInFlightWarms() {
-  if (inFlightControllers.size === 0) return;
-  console.log(`[CacheWarming] Aborting ${inFlightControllers.size} in-flight warm fetches for foreground load`);
+  const count = inFlightControllers.size;
+  if (count === 0) return 0;
+  console.log(`[CacheWarming] Aborting ${count} in-flight warm fetches for foreground load`);
   for (const ctrl of inFlightControllers) {
     try { ctrl.abort(); } catch { /* ignore */ }
   }
   inFlightControllers.clear();
+  return count;
 }
 
 

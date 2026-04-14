@@ -6,6 +6,10 @@ import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { checkRangeFallback } from '../utils/videoLoadWatchdog';
+
+// T1400: watchdog delay before checking buffered vs clip duration.
+const RANGE_FALLBACK_WATCHDOG_MS = 5000;
 
 /**
  * Custom hook for managing video state and playback
@@ -36,6 +40,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // stale-blob error. VideoPlayer uses this to suppress the error overlay
   // during the swap so the user never sees "format not supported".
   const isRecoveringRef = useRef(false);
+
+  // T1400: monotonic load id + watchdog timer handle so range-fallback
+  // warnings can be correlated across concurrent/serial loads and cleared
+  // on loadeddata/error/unmount.
+  const loadIdRef = useRef(0);
+  const watchdogTimerRef = useRef(null);
+  const loadStartRef = useRef(0);
+  const clipDurationForLoadRef = useRef(null);
 
   // Get state and setters from the store
   const {
@@ -210,13 +222,44 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       return;
     }
 
-    console.log('[useVideo] loadVideoFromStreamingUrl (RANGE REQUESTS) called with:', url?.substring(0, 60));
-    if (clipRange) {
-      console.log(`[useVideo] Clip range: offset=${newClipOffset}s, duration=${newClipDuration}s`);
-    }
+    // T1400: structured load logs. `loadId` correlates start -> first_frame ->
+    // playable across concurrent loads. Prefix `[VIDEO_LOAD]` is greppable in
+    // prod logs.
+    const loadId = ++loadIdRef.current;
+    loadStartRef.current = performance.now();
+    clipDurationForLoadRef.current = newClipDuration;
+    console.log(`[VIDEO_LOAD] start id=${loadId} clipDurSec=${newClipDuration ?? 'null'} url=${url?.substring(0, 60)}`);
+
     // T1410: pause warmup & abort in-flight warm fetches so foreground video
     // wins the race for R2 connections. Cleared on loadeddata/error below.
-    setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    if (abortedCount > 0) {
+      console.log(`[VIDEO_LOAD] warmer_abort id=${loadId} count=${abortedCount}`);
+    }
+
+    // T1400: range-fallback watchdog — if we're still not playable after
+    // RANGE_FALLBACK_WATCHDOG_MS and the player has buffered >3x the clip
+    // duration, the range request silently degraded. Fire one warning.
+    if (watchdogTimerRef.current) clearTimeout(watchdogTimerRef.current);
+    watchdogTimerRef.current = setTimeout(() => {
+      watchdogTimerRef.current = null;
+      const v = videoRef.current;
+      if (!v) return;
+      const bufferedSec = v.buffered?.length
+        ? v.buffered.end(v.buffered.length - 1)
+        : 0;
+      const verdict = checkRangeFallback({
+        bufferedSec,
+        clipDurationSec: clipDurationForLoadRef.current,
+        readyState: v.readyState,
+      });
+      if (verdict) {
+        const elapsedMs = Math.round(performance.now() - loadStartRef.current);
+        console.warn(
+          `[VIDEO_LOAD] range_fallback_suspected id=${loadId} bufferedSec=${verdict.bufferedSec.toFixed(1)} clipDurSec=${verdict.clipDurationSec} ratio=${verdict.ratio.toFixed(1)} elapsedMs=${elapsedMs} networkState=${v.networkState} readyState=${v.readyState}`
+        );
+      }
+    }, RANGE_FALLBACK_WATCHDOG_MS);
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
     // T1360: streaming load — no blob to recover, clear any previous stash.
@@ -494,6 +537,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       const video = videoRef.current;
+      // T1400: first-frame-available signal for cold-load measurement.
+      if (loadStartRef.current) {
+        const elapsedMs = Math.round(performance.now() - loadStartRef.current);
+        console.log(`[VIDEO_LOAD] first_frame id=${loadIdRef.current} elapsedMs=${elapsedMs}`);
+      }
       // Use clipDuration if set (playing subset of game video), else full video duration
       const effectiveDuration = clipDuration ?? video.duration;
       setDuration(effectiveDuration);
@@ -543,7 +591,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // warmer so it doesn't race the foreground <video>. Blob srcs are already
       // fully downloaded — no network race to worry about.
       if (!isBlob && video.src) {
-        setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+        const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+        if (abortedCount > 0) {
+          console.log(`[VIDEO_LOAD] warmer_abort id=${loadIdRef.current} count=${abortedCount} trigger=loadstart`);
+        }
       }
 
       // Note: HEAD request to check file size/range support removed
@@ -565,6 +616,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         console.log(`[VIDEO] Loaded in ${elapsed}ms (${durationStr}s video)`);
       }
       setVideoElementReady();
+      // T1400: playable signal — cold-load measurement endpoint.
+      if (loadStartRef.current) {
+        const bufferedSec = video.buffered?.length
+          ? video.buffered.end(video.buffered.length - 1)
+          : 0;
+        console.log(`[VIDEO_LOAD] playable id=${loadIdRef.current} elapsedMs=${elapsed} readyState=${video.readyState} bufferedSec=${bufferedSec.toFixed(1)}`);
+      }
+      // T1400: clear watchdog — load completed in time, no fallback to flag.
+      if (watchdogTimerRef.current) {
+        clearTimeout(watchdogTimerRef.current);
+        watchdogTimerRef.current = null;
+      }
       // T1410: foreground video is now playable — let the warmer resume.
       clearForegroundActive();
     }
@@ -670,6 +733,15 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     });
     setError(userMessage);
     retryAttemptRef.current += 1;
+    // T1400: structured error log + clear watchdog.
+    if (loadStartRef.current) {
+      const elapsedMs = Math.round(performance.now() - loadStartRef.current);
+      console.warn(`[VIDEO_LOAD] error id=${loadIdRef.current} elapsedMs=${elapsedMs} code=${errorCode} kind=${kind}`);
+    }
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+      watchdogTimerRef.current = null;
+    }
     // T1410: foreground load failed — release the warmer throttle.
     clearForegroundActive();
   }, [videoUrl, setError, setVideoUrl]);
@@ -742,6 +814,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // mode (StrictMode synthetic unmount, route change mid-load), release
       // the warmer so it isn't stuck paused forever.
       clearForegroundActive();
+      // T1400: drop pending watchdog so it doesn't fire after unmount.
+      if (watchdogTimerRef.current) {
+        clearTimeout(watchdogTimerRef.current);
+        watchdogTimerRef.current = null;
+      }
     };
   }, [videoUrl]);
 
