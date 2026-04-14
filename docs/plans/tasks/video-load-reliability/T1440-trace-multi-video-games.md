@@ -1,6 +1,6 @@
 # T1440: Trace (multi-video) Games Fail in Framing with "Video format not supported"
 
-**Status:** TESTING
+**Status:** DONE
 **Epic:** [Video Load Reliability](EPIC.md)
 **Created:** 2026-04-13
 
