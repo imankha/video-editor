@@ -1439,15 +1439,23 @@ async def stream_working_clip_bounded(
     last byte. It cannot over-fetch past the end because the proxy returns a
     shorter 206 response (the browser treats that as EOF for this resource).
 
-    Byte window: 0 .. floor((end_time / duration) * video_size * 1.15)
-    - Starts at 0 so the moov atom is always inside the window (faststart
-      places moov near offset 0; this covers non-faststart fallback too).
-    - 15% tail buffer guards against non-uniform bitrate: the proportional
-      estimate undershoots on CBR-ish content, more so on VBR with high-motion
-      tails. Spec called for "whatever buffer guarantees the full range" —
-      15% is generous without giving the browser enough room to overbuffer
-      by a meaningful factor.
+    Two-window strategy:
+    - Moov window:  bytes [0, MOOV_WINDOW_END] — small head so the <video>
+      element can parse the sample table and learn the byte offsets for
+      video time. Faststart (T1380) places moov near offset 20; 10MB is
+      comfortably larger than any realistic moov for the source sizes we
+      see.
+    - Clip window:  bytes [clipStartByte * 0.9, clipEndByte * 1.15] — the
+      clip body with 10% padding before and 15% after, guarding against
+      non-uniform bitrate in the proportional estimate.
+
+    Any request that falls outside both windows (i.e. the gap between moov
+    end and clip-window start, or bytes past clip-window end) returns 416.
+    The browser treats 416 as EOF and stops speculative fetching — this is
+    what actually bounds the over-buffer. Content-Range reports the true
+    source size so the browser's sample-table byte offsets resolve correctly.
     """
+    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB should cover any moov
     from fastapi.responses import StreamingResponse
     import httpx
 
@@ -1475,12 +1483,13 @@ async def stream_working_clip_bounded(
 
     duration = row['video_duration']
     size = row['video_size']
+    start_time = row['start_time']
     end_time = row['end_time']
 
-    # Compute clip window upper bound. Start at 0 so moov is always included.
-    est_end_byte = int((end_time / duration) * size)
-    buffered_end = min(size - 1, int(est_end_byte * 1.15))
-    clip_total = buffered_end + 1  # inclusive bytes 0..buffered_end
+    # Two windows.
+    moov_end = min(size - 1, MOOV_WINDOW_END)
+    clip_start_byte = max(0, int((start_time / duration) * size * 0.9))
+    clip_end_byte = min(size - 1, int((end_time / duration) * size * 1.15))
 
     # Generate presigned URL for the game video.
     from app.routers.games import get_game_video_url
@@ -1488,10 +1497,10 @@ async def stream_working_clip_bounded(
     if not presigned_url:
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
-    # Parse incoming Range header and clamp to our window.
+    # Parse incoming Range header.
     range_hdr = request.headers.get("range") or request.headers.get("Range")
     req_start = 0
-    req_end = buffered_end
+    req_end = size - 1  # placeholder; clamped below
     if range_hdr and range_hdr.startswith("bytes="):
         spec = range_hdr[len("bytes="):].strip()
         if "-" in spec:
@@ -1500,18 +1509,43 @@ async def stream_working_clip_bounded(
                 if lo_s:
                     req_start = int(lo_s)
                 if hi_s:
-                    req_end = min(int(hi_s), buffered_end)
+                    req_end = int(hi_s)
             except ValueError:
                 raise HTTPException(status_code=416, detail="Malformed Range header")
 
-    if req_start > buffered_end or req_start < 0 or req_start > req_end:
+    # Pick the window this request targets. Moov window takes precedence when
+    # the request starts at the head; clip window handles seeks into the body.
+    if req_start <= moov_end:
+        window_end = moov_end
+        window_kind = "moov"
+    elif clip_start_byte <= req_start <= clip_end_byte:
+        window_end = clip_end_byte
+        window_kind = "clip"
+    else:
+        logger.info(
+            f"[clip-stream] 416 gap clip_id={clip_id} req={req_start}-{req_end} "
+            f"moov=0-{moov_end} clip={clip_start_byte}-{clip_end_byte}"
+        )
         raise HTTPException(
             status_code=416,
-            detail=f"Requested range not satisfiable within clip window 0-{buffered_end}",
-            headers={"Content-Range": f"bytes */{clip_total}"},
+            detail="Requested range outside clip/moov windows",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    # Clamp upper bound to window. If req_end was not given, serve to window end.
+    req_end = min(req_end, window_end)
+    if req_start > req_end:
+        raise HTTPException(
+            status_code=416,
+            detail="Invalid range",
+            headers={"Content-Range": f"bytes */{size}"},
         )
 
     segment_len = req_end - req_start + 1
+    logger.info(
+        f"[clip-stream] clip_id={clip_id} window={window_kind} "
+        f"range={req_start}-{req_end} segment_len={segment_len}"
+    )
 
     async def stream_from_r2():
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
@@ -1533,7 +1567,7 @@ async def stream_working_clip_bounded(
         status_code=206,
         media_type="video/mp4",
         headers={
-            "Content-Range": f"bytes {req_start}-{req_end}/{clip_total}",
+            "Content-Range": f"bytes {req_start}-{req_end}/{size}",
             "Content-Length": str(segment_len),
             "Accept-Ranges": "bytes",
             "Cache-Control": "no-cache",
