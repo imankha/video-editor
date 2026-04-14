@@ -166,11 +166,20 @@ Test status: full frontend suite 443/443 passing.
 
 | Metric | Master median | Master p95 | Branch median | Branch p95 |
 |---|---|---|---|---|
-| TTFP (ms) | — | — | — | — |
-| Load-to-playable (ms) | — | — | — | — |
-| `range_fallback_suspected` fires on slow source | — | — | — | — |
+| TTFP (ms) | n/a | n/a | 307–782 (n=2) | 782 |
+| Load-to-playable (ms) | n/a | n/a | 1839–20561 (n=2) | 20561 |
+| `range_fallback_suspected` fires on slow source | n/a | n/a | ✓ (fired at `playable` trigger on 20.5s run) | ✓ |
+| `warmer_abort` count per load | n/a | n/a | 2–6 | 6 |
 | StrictMode double-mount dedup (already landed in T1410) | ✓ | ✓ | ✓ | ✓ |
 | Warmer aborts on foreground (already landed in T1410) | ✓ | ✓ | ✓ | ✓ |
+
+Two captured runs, same 8s clip @ 2144s offset, 3GB source:
+- Fast run (warm R2 edge): TTFP 782ms → playable 1839ms; 2 warms aborted.
+- Slow run (cold R2 edge): TTFP 307ms → playable 20561ms; 6 warms aborted;
+  `range_fallback_suspected` fired at `playable` trigger (ratio ≈ 2151s / 8s).
+  HAR: 3 open-ended `bytes=N-` range requests, R2 returned 206 with remainder
+  of file (~1.88GB Content-Length). Browser could not bound the range from
+  `#t=start,end` alone. Follow-up: T1430.
 
 **Measurement protocol:** see `[VIDEO_LOAD] start` / `first_frame` / `playable`
 deltas in devtools console. 5 iterations per side, fresh profile, "Disable
