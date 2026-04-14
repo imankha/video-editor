@@ -77,7 +77,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1151 | [Background Sync Retry Worker](tasks/T1151-background-sync-retry-worker.md) | NOT RECOMMENDED | 0.8 | Sweep `.sync_pending` markers on an interval. Rejected: contention risk (SQLite writer lock, version races) outweighs narrow idle-after-failure benefit |
 | T1152 | [Persist Sync-Failed State](tasks/T1152-persist-sync-failed-state.md) | TESTING | 2.5 | `_sync_failed` dict resets on restart — use `.sync_pending` marker as source of truth so degraded state survives |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | TODO | 0.9 | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task, not impl |
-| T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | TODO | 0.8 | profile+user.sqlite parallel sync can split-brain on partial failure; evaluate fix options |
+| T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | MEASURING | 0.8 | precursor log line landed; wait 30d for partial-sync frequency data before recommending |
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TODO | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TODO | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |

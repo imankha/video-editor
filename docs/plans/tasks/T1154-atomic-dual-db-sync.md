@@ -1,10 +1,22 @@
 # T1154: Atomic Dual-DB Sync (profile + user)
 
-**Status:** TODO
+**Status:** MEASURING (precursor log landed 2026-04-13; revisit after 30d of data)
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-04-13
 **Updated:** 2026-04-13
+
+## Measurement Phase (Active)
+
+Phase 1 of this task requires measured frequency of partial-success sync events. Historical logs could not supply this because:
+1. The existing `[SYNC] ... -> R2 sync FAILED` line ([db_sync.py:333](../../src/backend/app/middleware/db_sync.py#L333)) does not distinguish which of profile/user failed — both collapse into one message.
+2. No log retention infra (no fly.toml log shipping, no external sink) — `fly logs` is live-tail only.
+
+**Precursor commit landed on `feature/T1154-log-partial-sync`:** added `[SYNC_PARTIAL]` warning at [db_sync.py:~295](../../src/backend/app/middleware/db_sync.py) that fires only when `profile_ok != user_ok` in the parallel branch. Fields: `user`, `profile_ok`, `user_ok`, `path`, `method`.
+
+**Next step (deferred ~30d from deploy):** grep prod logs for `[SYNC_PARTIAL]`, count events/day and events/1000 requests, cross-reference against credit writes, then write `T1154-recommendation.md` per acceptance criteria below.
+
+**Note:** without log retention infra, measurement requires either (a) ad-hoc capture windows via `fly logs` during high traffic, or (b) a separate infra task to ship logs. Flag this when resuming.
 
 ## Problem
 
