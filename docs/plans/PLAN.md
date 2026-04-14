@@ -69,7 +69,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TESTING | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
 | T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | DONE | 1.5 | Observability + two-window proxy: cold 20.5s→2.0s, warm 2.2s→0.6s; Step 3 MSE unnecessary |
 | T1440 | [Trace multi-video games fail in framing](tasks/video-load-reliability/T1440-trace-multi-video-games.md) | DONE | 1.0 | Clips endpoint joined only `games` for blake3_hash; multi-video games store it per-sequence in `game_videos` → `game_video_url` null → framing 404 |
-| T1450 | [Trace load parity via R2 faststart migration](tasks/video-load-reliability/T1450-trace-load-parity.md) | TESTING | 1.5 | One-shot `ffmpeg -movflags +faststart` rewrite of 13 moov-at-end games on R2; preserves size so no DB changes; brings Trace load 3.2s→~2s |
+| T1450 | [Trace load parity via R2 faststart migration](tasks/video-load-reliability/T1450-trace-load-parity.md) | DONE | 1.5 | One-shot `ffmpeg -movflags +faststart` rewrite of 13 moov-at-end games on R2; all verified faststart; Trace load 3.2s→2.95s (remaining gap to Veo parity tracked in T1460) |
 
 ### Standalone Tasks
 
@@ -82,7 +82,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | MEASURING | 0.8 | precursor log line landed; wait 30d for partial-sync frequency data before recommending |
 | T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | TESTING | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
 | T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | TESTING | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
-| T1180 | [Fix NULL video_filename Root Cause](tasks/T1180-export-guard-null-video-filename.md) | TODO | 3.0 | `games` rows committing with `video_filename IS NULL` → export crashes on `games/None.mp4`. Fix the write path, not downstream guards |
+| T1180 | [Fix NULL video_filename Root Cause](tasks/T1180-design.md) | TESTING | 3.0 | Root cause: frontend created `games` row with `videos=[]` then attached in separate step — orphaned on failure. Fix: backend rejects empty videos; frontend hashes first, then creates game atomically with video ref |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |

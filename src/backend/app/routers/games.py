@@ -258,8 +258,18 @@ async def create_game(request: CreateGameRequest):
 
     For single-video games: videos has 1 entry.
     For multi-video games (e.g., halves): videos has 2+ entries.
-    For games without video yet: videos is empty.
+
+    T1180: empty videos is rejected. Callers must hash the first video
+    before calling this endpoint; additional videos are attached via
+    POST /api/games/{id}/videos. This prevents games rows from being
+    committed with NULL video_filename and no game_videos rows.
     """
+    if not request.videos:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one video reference is required. Hash the first video before creating the game.",
+        )
+
     # Validate all video hashes exist in R2
     for video in request.videos:
         _validate_video_in_r2(video.blake3_hash.lower())
