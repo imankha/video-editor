@@ -148,7 +148,7 @@ def migrate_one(s3, key: str, size: int, dry_run: bool) -> str:
 
         t0 = time.time()
         print(f"  uploading {fmt_size(new_size)}...")
-        s3.upload_file(str(out_path), BUCKET, key)
+        s3.upload_file(str(out_path), BUCKET, key, ExtraArgs={"ContentType": "video/mp4"})
         up = time.time() - t0
 
         print(f"  done  dl={dl:.1f}s ffmpeg={ff:.1f}s up={up:.1f}s")
