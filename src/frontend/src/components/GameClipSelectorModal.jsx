@@ -662,11 +662,18 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                       const gameName = games.find(g => g.id === clip.game_id)?.name;
 
                       return (
-                        <button
+                        <div
                           key={clip.id}
-                          type="button"
+                          role="button"
+                          tabIndex={0}
                           onClick={() => toggleClip(clip.id)}
-                          className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-colors text-left ${
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              toggleClip(clip.id);
+                            }
+                          }}
+                          className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-colors text-left cursor-pointer ${
                             isIncluded
                               ? 'bg-gray-700/50 border-gray-600 hover:border-blue-500'
                               : 'bg-gray-800/50 border-gray-700 opacity-50 hover:opacity-75'
@@ -711,7 +718,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                           <span className="text-xs text-gray-500 flex-shrink-0">
                             {formatDuration(clipDuration)}
                           </span>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
