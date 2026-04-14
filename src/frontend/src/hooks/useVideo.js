@@ -5,7 +5,7 @@ import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
-import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback } from '../utils/videoLoadWatchdog';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
@@ -229,6 +229,19 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     loadStartRef.current = performance.now();
     clipDurationForLoadRef.current = newClipDuration;
     console.log(`[VIDEO_LOAD] start id=${loadId} clipDurSec=${newClipDuration ?? 'null'} url=${url?.substring(0, 60)}`);
+
+    // T1430: log whether this clip/URL was pre-warmed. Helps correlate slow
+    // cold-path loads with warmer coverage gaps before we build the proxy.
+    {
+      const ws = getWarmedState(url);
+      const clipStart = newClipOffset;
+      const clipEnd = newClipDuration ? newClipOffset + newClipDuration : null;
+      const rangeCovered = !!(ws && clipEnd !== null && ws.clipRanges.some(
+        r => r.startTime <= clipStart && r.endTime >= clipEnd
+      ));
+      const clipWarmed = !!(ws && (ws.urlWarmed || ws.clipRanges.length > 0));
+      console.log(`[VIDEO_LOAD] warm_status id=${loadId} clipWarmed=${clipWarmed} rangeCovered=${rangeCovered} urlWarmed=${ws?.urlWarmed ?? false} clipRanges=${ws?.clipRanges.length ?? 0}`);
+    }
 
     // T1410: pause warmup & abort in-flight warm fetches so foreground video
     // wins the race for R2 connections. Cleared on loadeddata/error below.

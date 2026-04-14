@@ -34,6 +34,37 @@ export const WARMUP_PRIORITY = Object.freeze({
 // For clip ranges, key is "url|startByte-endByte" to allow multiple ranges per URL
 const warmedUrls = new Set();
 
+// T1430: per-URL warm state for observability. Lets useVideo log whether the
+// clip about to be loaded was actually pre-warmed. Keyed by full URL.
+// Shape: { urlWarmed: bool, tailWarmed: bool, clipRanges: Array<{startTime,
+// endTime, startByte, endByte, warmedAt}>, warmedAt: number }
+const warmedState = new Map();
+
+function getOrInitState(url) {
+  let s = warmedState.get(url);
+  if (!s) {
+    s = { urlWarmed: false, tailWarmed: false, clipRanges: [], warmedAt: 0 };
+    warmedState.set(url, s);
+  }
+  return s;
+}
+
+/**
+ * T1430: returns warm state for a URL, or null if never seen.
+ * useVideo uses this at load start to log clipWarmed / rangeCovered.
+ */
+export function getWarmedState(url) {
+  if (!url) return null;
+  const s = warmedState.get(url);
+  if (!s) return null;
+  return {
+    urlWarmed: s.urlWarmed,
+    tailWarmed: s.tailWarmed,
+    clipRanges: s.clipRanges.slice(),
+    warmedAt: s.warmedAt,
+  };
+}
+
 // Priority queues - tier1 is project clips (highest), then games, gallery, working
 let tier1Queue = [];
 let gamesQueue = [];
@@ -184,6 +215,7 @@ async function warmUrl(url, options = {}) {
   }
 
   const { size, warmTail } = options;
+  const startMs = performance.now();
   const controller = new AbortController();
   inFlightControllers.add(controller);
 
@@ -205,6 +237,13 @@ async function warmUrl(url, options = {}) {
       signal: controller.signal,
     });
 
+    // T1430: record URL warm before optional tail so observers see partial state.
+    {
+      const s = getOrInitState(url);
+      s.urlWarmed = true;
+      s.warmedAt = Date.now();
+    }
+
     // For large videos, also warm the tail where moov atom often lives
     if (warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD) {
       const tailStart = Math.max(0, size - TAIL_WARM_SIZE);
@@ -217,7 +256,8 @@ async function warmUrl(url, options = {}) {
           credentials: 'omit',
           signal: controller.signal,
         });
-        console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
+        getOrInitState(url).tailWarmed = true;
+        console.log(`[CacheWarming] Warmed tail url=${url.substring(0, 60)} size=${Math.round(size / 1024 / 1024)}MB elapsedMs=${Math.round(performance.now() - startMs)}`);
       } catch (tailErr) {
         if (tailErr.name !== 'AbortError') {
           console.log(`[CacheWarming] Tail warm failed: ${tailErr.message}`);
@@ -226,6 +266,7 @@ async function warmUrl(url, options = {}) {
     }
 
     warmedUrls.add(url);
+    console.log(`[CacheWarming] Warmed url url=${url.substring(0, 60)} tail=${warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD ? 'yes' : 'no'} elapsedMs=${Math.round(performance.now() - startMs)}`);
     return true;
   } catch {
     // Network error (DNS, offline, aborted). Not warmed.
@@ -239,8 +280,9 @@ async function warmUrl(url, options = {}) {
  * Warm a clip's byte range using proportional estimation.
  * Primes the Cloudflare edge cache for the clip's region of the game video.
  */
-async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) {
+async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, clipId = null) {
   if (!url || !videoDuration || !videoSize) return false;
+  const startMs = performance.now();
 
   const startByte = Math.floor((startTime / videoDuration) * videoSize);
   const endByte = Math.ceil((endTime / videoDuration) * videoSize);
@@ -264,7 +306,11 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) 
       signal: controller.signal,
     });
 
-    console.log(`[CacheWarming] Warmed clip range ${Math.round(warmStart / 1024 / 1024)}MB-${Math.round(warmEnd / 1024 / 1024)}MB of ${Math.round(videoSize / 1024 / 1024)}MB video`);
+    // T1430: record clip range so useVideo can check coverage at load start.
+    const s = getOrInitState(url);
+    s.clipRanges.push({ startTime, endTime, startByte: warmStart, endByte: warmEnd, warmedAt: Date.now() });
+    s.warmedAt = Date.now();
+    console.log(`[CacheWarming] Warmed clip clipId=${clipId ?? 'null'} url=${url.substring(0, 60)} range=${warmStart}-${warmEnd} elapsedMs=${Math.round(performance.now() - startMs)}`);
     return true;
   } catch {
     // Network failure or aborted; clip range not warmed.
@@ -286,7 +332,7 @@ async function worker(workerId) {
 
     let success;
     if (item.type === 'clipRange') {
-      success = await warmClipRange(item.url, item.startTime, item.endTime, item.videoDuration, item.videoSize);
+      success = await warmClipRange(item.url, item.startTime, item.endTime, item.videoDuration, item.videoSize, item.clipId);
     } else {
       success = await warmUrl(item.url, { size: item.size, warmTail: item.warmTail });
     }
@@ -333,6 +379,7 @@ async function runWorkers() {
  */
 export function clearWarmingCache() {
   warmedUrls.clear();
+  warmedState.clear();
   tier1Queue = [];
   gamesQueue = [];
   galleryQueue = [];
@@ -381,6 +428,7 @@ export async function warmAllUserVideos() {
         for (const clip of (project.clips || [])) {
           tier1Queue.push({
             type: 'clipRange',
+            clipId: clip.id ?? null,
             url: clip.game_url,
             startTime: clip.start_time,
             endTime: clip.end_time,
@@ -433,6 +481,7 @@ export function pushClipRanges(clipRanges) {
 
   const items = clipRanges.map(clip => ({
     type: 'clipRange',
+    clipId: clip.clipId ?? clip.id ?? null,
     url: clip.url,
     startTime: clip.startTime,
     endTime: clip.endTime,
