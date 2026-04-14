@@ -171,6 +171,9 @@ class WorkingClipResponse(BaseModel):
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     game_video_url: Optional[str] = None  # Presigned URL for source game video (for framing preview)
+    # T1460: needed client-side for pushClipRanges proportional byte estimation
+    video_duration: Optional[float] = None
+    video_size: Optional[int] = None
     tags: Optional[List[str]] = None
     rating: Optional[int] = None
 
@@ -1019,7 +1022,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 rc.end_time as raw_end_time,
                 g.blake3_hash as game_blake3_hash,
                 g.video_filename as game_video_filename,
-                gv.blake3_hash as gv_blake3_hash
+                gv.blake3_hash as gv_blake3_hash,
+                COALESCE(gv.duration, g.video_duration) AS video_duration,
+                COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             LEFT JOIN games g ON rc.game_id = g.id
@@ -1088,6 +1093,8 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
                 game_video_url=game_video_url,
+                video_duration=clip['video_duration'],
+                video_size=clip['video_size'],
                 tags=tags,
                 rating=rating
             ))

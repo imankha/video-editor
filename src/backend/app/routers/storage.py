@@ -299,6 +299,7 @@ async def get_warmup_urls(
             SELECT p.id as project_id,
                    p.working_video_id,
                    wv.filename as working_video_filename,
+                   wc.id as clip_id,
                    rc.start_time,
                    rc.end_time,
                    g.blake3_hash,
@@ -356,6 +357,7 @@ async def get_warmup_urls(
 
                 if game_url:
                     project_map[pid]["clips"].append({
+                        "id": row['clip_id'],
                         "game_url": game_url,
                         "start_time": row['start_time'],
                         "end_time": row['end_time'],

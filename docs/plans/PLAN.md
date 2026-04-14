@@ -71,6 +71,9 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1440 | [Trace multi-video games fail in framing](tasks/video-load-reliability/T1440-trace-multi-video-games.md) | DONE | 1.0 | Clips endpoint joined only `games` for blake3_hash; multi-video games store it per-sequence in `game_videos` → `game_video_url` null → framing 404 |
 | T1450 | [Trace load parity via R2 faststart migration](tasks/video-load-reliability/T1450-trace-load-parity.md) | DONE | 1.5 | One-shot `ffmpeg -movflags +faststart` rewrite of 13 moov-at-end games on R2; all verified faststart; Trace load 3.2s→2.95s (remaining gap to Veo parity tracked in T1460) |
 | T1470 | [R2 objects missing Content-Type](tasks/video-load-reliability/T1470-r2-content-type-missing.md) | DONE | 4.0 | `CopyObject`-stamp ContentType=video/mp4 on all `games/*.mp4`; fix faststart script to preserve header. Staging: 22/23 migrated |
+| T1460 | [Warm-path parity + faststart route choice](tasks/video-load-reliability/T1460-warm-path-parity-faststart.md) | TESTING | 1.5 | Move direct-vs-proxy decision into `useVideo` so freshest warm state wins; `warm_status` keyed on R2 URL; backend warmup payload includes `clip.id`; `?direct=1` A/B flag for faststart route measurement |
+| T1480 | [cacheWarming test asserts stale fetch count](tasks/T1480-cachewarming-test-stale-fetch-count.md) | TODO | 4.0 | Pre-existing: T1410 test expects 1 fetch but warmClipRange fires 2 (head-prewarm + body) since T1430. Assertion needs updating. Found during T1460 |
+| T1490 | [First clip-stream request returns 401, frontend hangs](tasks/T1490-video-stream-first-request-401.md) | TODO | 5.0 | Every new clip load: first GET /stream 401 (no session cookie), retry 206. Browser auto-retries so user only sees slow spin. Likely vite dev-proxy cookie issue; also need fail-fast on 401 in video error handler |
 
 ### Standalone Tasks
 
