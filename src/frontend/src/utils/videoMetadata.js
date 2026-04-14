@@ -10,8 +10,15 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
     video.preload = 'metadata';
-    // Note: Don't set crossOrigin for presigned R2 URLs - we only need metadata,
-    // not canvas pixel access, so "opaque" mode (no CORS) is fine
+    // Same-origin proxy URLs (e.g. /api/clips/.../stream) need credentials so the
+    // session cookie attaches. Presigned R2 URLs must NOT use credentials (auth
+    // is in the URL and CORS would reject). T1490.
+    const isSameOrigin =
+      url.startsWith('/') ||
+      (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+    if (isSameOrigin) {
+      video.crossOrigin = 'use-credentials';
+    }
 
     // [DIAG upload-freeze] capture start time + warm state so timeout logs can
     // tell us whether this URL was pre-warmed and how long it actually waited.

@@ -757,6 +757,20 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (videoUrl && !videoUrl.startsWith('blob:')) {
         invalidateUrl(videoUrl);
       }
+      // T1490 sub-issue B: MediaError doesn't expose HTTP status. Probe with
+      // a credentialed HEAD so a 401 surfaces as auth_fail instead of a
+      // generic network error.
+      const probeUrl = videoUrl;
+      if (probeUrl && !probeUrl.startsWith('blob:')) {
+        fetch(probeUrl, { method: 'HEAD', credentials: 'include' })
+          .then((resp) => {
+            if (resp.status === 401) {
+              console.warn(`[VIDEO_LOAD] auth_fail id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
+              setError('Your session expired. Please refresh to sign in again.');
+            }
+          })
+          .catch(() => { /* probe failure is non-actionable */ });
+      }
     } else if (kind === VideoErrorKind.DECODE_ERROR) {
       userMessage = 'Video could not be decoded. The file may be corrupted.';
     } else if (kind === VideoErrorKind.FORMAT_ERROR) {
