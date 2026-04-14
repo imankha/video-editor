@@ -303,6 +303,19 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
   const controller = new AbortController();
   inFlightControllers.add(controller);
   try {
+    // T1430: also prime the moov/ftyp header region. `<video>` always fetches
+    // a tiny head range first (e.g. bytes 0-63) to parse the moov atom before
+    // it can seek to clipOffset. If the head is cold, the clip-range warm
+    // doesn't help — playable time is dominated by that cold head fetch.
+    // Keep this cheap (4KB) and run in parallel with the body warm.
+    const headPromise = fetch(url, {
+      method: 'GET',
+      headers: { 'Range': 'bytes=0-1048575' },
+      mode: 'no-cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    }).catch(() => {});
+
     // See warmUrl for the no-cors rationale. Opaque response (status 0,
     // ok false) is expected and counts as a successful cache warm.
     // T1410: signal attached so foreground loads can abort us.
@@ -313,12 +326,13 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
       credentials: 'omit',
       signal: controller.signal,
     });
+    await headPromise;
 
     // T1430: record clip range so useVideo can check coverage at load start.
     const s = getOrInitState(url);
     s.clipRanges.push({ startTime, endTime, startByte: warmStart, endByte: warmEnd, warmedAt: Date.now() });
     s.warmedAt = Date.now();
-    console.log(`[CacheWarming] Warmed clip clipId=${clipId ?? 'null'} url=${url.substring(0, 60)} range=${warmStart}-${warmEnd} elapsedMs=${Math.round(performance.now() - startMs)}`);
+    console.log(`[CacheWarming] Warmed clip clipId=${clipId ?? 'null'} url=${url.substring(0, 60)} head=0-1048575 range=${warmStart}-${warmEnd} elapsedMs=${Math.round(performance.now() - startMs)}`);
     return true;
   } catch {
     // Network failure or aborted; clip range not warmed.
