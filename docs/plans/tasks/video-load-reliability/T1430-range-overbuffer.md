@@ -1,6 +1,6 @@
 # T1430: Browser Over-Buffers Clip Range (2151s buffered for 8s clip)
 
-**Status:** TODO
+**Status:** TESTING (Step 1 only — Steps 2/3 still TODO)
 **Epic:** [Video Load Reliability](EPIC.md)
 **Created:** 2026-04-13
 
