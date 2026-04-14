@@ -16,7 +16,7 @@ import { ConfirmationDialog } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
-import { warmVideoCache } from '../utils/cacheWarming';
+import { warmVideoCache, getWarmedState } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
@@ -373,9 +373,26 @@ export function FramingScreen({
    */
   const getClipVideoConfig = useCallback((clip) => {
     if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
-      // Game clip: use game video with clip offset
+      // T1430 Step 2: if the clip byte range isn't warmed at the R2 edge, go
+      // through the backend proxy which clamps Content-Length to the clip
+      // window. Prevents the browser from over-buffering 2000+ seconds for
+      // an 8-second clip on cold R2 edge cache. When warm, presigned R2 URL
+      // is faster (no Fly→R2 hop), so use that.
+      const ws = getWarmedState(clip.game_video_url);
+      const clipEnd = clip.start_time + (clip.end_time - clip.start_time);
+      const rangeCovered = !!(ws && ws.clipRanges.some(
+        r => r.startTime <= clip.start_time && r.endTime >= clipEnd
+      ));
+      const useProxy = !rangeCovered;
+      const url = useProxy
+        ? `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`
+        : clip.game_video_url;
+      // clipOffset stays at clip.start_time regardless of proxy vs direct —
+      // the proxy only truncates the *end* of the byte stream; the moov still
+      // describes the original video timebase, so the <video> element seeks
+      // by time the same way.
       return {
-        url: clip.game_video_url,
+        url,
         clipRange: {
           clipOffset: clip.start_time,
           clipDuration: clip.end_time - clip.start_time,

@@ -5,7 +5,7 @@ import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
-import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback } from '../utils/videoLoadWatchdog';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
@@ -48,6 +48,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const watchdogTimerRef = useRef(null);
   const loadStartRef = useRef(0);
   const clipDurationForLoadRef = useRef(null);
+  // T1430 Step 2: flag loads that go through the backend clip-stream proxy.
+  // The watchdog's buffered-vs-clip-duration heuristic is a false positive on
+  // that path (the proxy intentionally exposes a clip-sized byte window but
+  // the moov still reports full-video time, so v.buffered.end reads much
+  // larger than clipDuration even though only the clip body was transferred).
+  const isProxyLoadRef = useRef(false);
 
   // Get state and setters from the store
   const {
@@ -228,7 +234,21 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     const loadId = ++loadIdRef.current;
     loadStartRef.current = performance.now();
     clipDurationForLoadRef.current = newClipDuration;
+    isProxyLoadRef.current = !!url && /\/api\/clips\/[^?]*\/stream(\?|$)/.test(url);
     console.log(`[VIDEO_LOAD] start id=${loadId} clipDurSec=${newClipDuration ?? 'null'} url=${url?.substring(0, 60)}`);
+
+    // T1430: log whether this clip/URL was pre-warmed. Helps correlate slow
+    // cold-path loads with warmer coverage gaps before we build the proxy.
+    {
+      const ws = getWarmedState(url);
+      const clipStart = newClipOffset;
+      const clipEnd = newClipDuration ? newClipOffset + newClipDuration : null;
+      const rangeCovered = !!(ws && clipEnd !== null && ws.clipRanges.some(
+        r => r.startTime <= clipStart && r.endTime >= clipEnd
+      ));
+      const clipWarmed = !!(ws && (ws.urlWarmed || ws.clipRanges.length > 0));
+      console.log(`[VIDEO_LOAD] warm_status id=${loadId} clipWarmed=${clipWarmed} rangeCovered=${rangeCovered} urlWarmed=${ws?.urlWarmed ?? false} clipRanges=${ws?.clipRanges.length ?? 0}`);
+    }
 
     // T1410: pause warmup & abort in-flight warm fetches so foreground video
     // wins the race for R2 connections. Cleared on loadeddata/error below.
@@ -248,7 +268,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const bufferedSec = v.buffered?.length
         ? v.buffered.end(v.buffered.length - 1)
         : 0;
-      const verdict = checkRangeFallback({
+      const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
         bufferedSec,
         clipDurationSec: clipDurationForLoadRef.current,
         readyState: v.readyState,
@@ -625,7 +645,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           ? video.buffered.end(video.buffered.length - 1)
           : 0;
         console.log(`[VIDEO_LOAD] playable id=${loadIdRef.current} elapsedMs=${elapsed} readyState=${video.readyState} bufferedSec=${bufferedSec.toFixed(1)}`);
-        const verdict = checkRangeFallback({
+        const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
           bufferedSec,
           clipDurationSec: clipDurationForLoadRef.current,
           readyState: video.readyState,

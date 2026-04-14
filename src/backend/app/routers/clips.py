@@ -10,7 +10,7 @@ Files are stored in:
 - uploads/ - Clips uploaded directly to projects
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -1417,6 +1417,162 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
         # Default: redirect to presigned URL (best for video elements)
         return RedirectResponse(url=presigned_url, status_code=302)
+
+
+@router.get("/projects/{project_id}/clips/{clip_id}/stream")
+async def stream_working_clip_bounded(
+    project_id: int,
+    clip_id: int,
+    request: Request,
+):
+    """
+    T1430 Step 2: proxy a bounded byte range of the source game video to the
+    browser.
+
+    Why: when the frontend sets <video src> to a presigned R2 URL, the browser
+    issues open-ended ranges (bytes=N-) and R2 offers N-to-EOF. The browser
+    then over-buffers far past the clip window (observed: 2152s buffered for
+    an 8s clip on a 3GB source, ~20s playable on cold edge cache). There is
+    no client-side API to bound that.
+
+    Fix: the browser sees a clamped Content-Length that ends at the clip's
+    last byte. It cannot over-fetch past the end because the proxy returns a
+    shorter 206 response (the browser treats that as EOF for this resource).
+
+    Two-window strategy:
+    - Moov window:  bytes [0, MOOV_WINDOW_END] — small head so the <video>
+      element can parse the sample table and learn the byte offsets for
+      video time. Faststart (T1380) places moov near offset 20; 10MB is
+      comfortably larger than any realistic moov for the source sizes we
+      see.
+    - Clip window:  bytes [clipStartByte * 0.9, clipEndByte * 1.15] — the
+      clip body with 10% padding before and 15% after, guarding against
+      non-uniform bitrate in the proportional estimate.
+
+    Any request that falls outside both windows (i.e. the gap between moov
+    end and clip-window start, or bytes past clip-window end) returns 416.
+    The browser treats 416 as EOF and stops speculative fetching — this is
+    what actually bounds the over-buffer. Content-Range reports the true
+    source size so the browser's sample-table byte offsets resolve correctly.
+    """
+    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB should cover any moov
+    from fastapi.responses import StreamingResponse
+    import httpx
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                rc.start_time,
+                rc.end_time,
+                g.blake3_hash,
+                g.video_filename,
+                g.video_duration,
+                g.video_size
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            JOIN games g ON rc.game_id = g.id
+            WHERE wc.id = ? AND wc.project_id = ?
+        """, (clip_id, project_id))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Clip not found or has no game source")
+    if not row['video_duration'] or not row['video_size']:
+        raise HTTPException(status_code=422, detail="Game video missing duration/size metadata")
+
+    duration = row['video_duration']
+    size = row['video_size']
+    start_time = row['start_time']
+    end_time = row['end_time']
+
+    # Two windows.
+    moov_end = min(size - 1, MOOV_WINDOW_END)
+    clip_start_byte = max(0, int((start_time / duration) * size * 0.9))
+    clip_end_byte = min(size - 1, int((end_time / duration) * size * 1.15))
+
+    # Generate presigned URL for the game video.
+    from app.routers.games import get_game_video_url
+    presigned_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+    if not presigned_url:
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+    # Parse incoming Range header.
+    range_hdr = request.headers.get("range") or request.headers.get("Range")
+    req_start = 0
+    req_end = size - 1  # placeholder; clamped below
+    if range_hdr and range_hdr.startswith("bytes="):
+        spec = range_hdr[len("bytes="):].strip()
+        if "-" in spec:
+            lo_s, hi_s = spec.split("-", 1)
+            try:
+                if lo_s:
+                    req_start = int(lo_s)
+                if hi_s:
+                    req_end = int(hi_s)
+            except ValueError:
+                raise HTTPException(status_code=416, detail="Malformed Range header")
+
+    # Pick the window this request targets. Moov window takes precedence when
+    # the request starts at the head; clip window handles seeks into the body.
+    if req_start <= moov_end:
+        window_end = moov_end
+        window_kind = "moov"
+    elif clip_start_byte <= req_start <= clip_end_byte:
+        window_end = clip_end_byte
+        window_kind = "clip"
+    else:
+        logger.info(
+            f"[clip-stream] 416 gap clip_id={clip_id} req={req_start}-{req_end} "
+            f"moov=0-{moov_end} clip={clip_start_byte}-{clip_end_byte}"
+        )
+        raise HTTPException(
+            status_code=416,
+            detail="Requested range outside clip/moov windows",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    # Clamp upper bound to window. If req_end was not given, serve to window end.
+    req_end = min(req_end, window_end)
+    if req_start > req_end:
+        raise HTTPException(
+            status_code=416,
+            detail="Invalid range",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    segment_len = req_end - req_start + 1
+    logger.info(
+        f"[clip-stream] clip_id={clip_id} window={window_kind} "
+        f"range={req_start}-{req_end} segment_len={segment_len}"
+    )
+
+    async def stream_from_r2():
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+            async with client.stream(
+                "GET",
+                presigned_url,
+                headers={"Range": f"bytes={req_start}-{req_end}"},
+            ) as response:
+                if response.status_code not in (200, 206):
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"R2 returned {response.status_code}",
+                    )
+                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                    yield chunk
+
+    return StreamingResponse(
+        stream_from_r2(),
+        status_code=206,
+        media_type="video/mp4",
+        headers={
+            "Content-Range": f"bytes {req_start}-{req_end}/{size}",
+            "Content-Length": str(segment_len),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 @router.put("/projects/{project_id}/clips/{clip_id}")

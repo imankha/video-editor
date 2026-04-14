@@ -34,6 +34,52 @@ export const WARMUP_PRIORITY = Object.freeze({
 // For clip ranges, key is "url|startByte-endByte" to allow multiple ranges per URL
 const warmedUrls = new Set();
 
+// T1430: per-URL warm state for observability. Lets useVideo log whether the
+// clip about to be loaded was actually pre-warmed. Keyed by full URL.
+// Shape: { urlWarmed: bool, tailWarmed: bool, clipRanges: Array<{startTime,
+// endTime, startByte, endByte, warmedAt}>, warmedAt: number }
+const warmedState = new Map();
+
+// T1430: presigned R2 URLs include a signature query string that varies per
+// call (different expiry/signing time). Key warmedState by host+path only so
+// a warmer using one signed URL and a later clip lookup using a different
+// signed URL still resolve to the same warm record.
+function stableUrlKey(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
+function getOrInitState(url) {
+  const key = stableUrlKey(url);
+  let s = warmedState.get(key);
+  if (!s) {
+    s = { urlWarmed: false, tailWarmed: false, clipRanges: [], warmedAt: 0 };
+    warmedState.set(key, s);
+  }
+  return s;
+}
+
+/**
+ * T1430: returns warm state for a URL, or null if never seen.
+ * useVideo uses this at load start to log clipWarmed / rangeCovered.
+ */
+export function getWarmedState(url) {
+  if (!url) return null;
+  const s = warmedState.get(stableUrlKey(url));
+  if (!s) return null;
+  return {
+    urlWarmed: s.urlWarmed,
+    tailWarmed: s.tailWarmed,
+    clipRanges: s.clipRanges.slice(),
+    warmedAt: s.warmedAt,
+  };
+}
+
 // Priority queues - tier1 is project clips (highest), then games, gallery, working
 let tier1Queue = [];
 let gamesQueue = [];
@@ -54,6 +100,11 @@ const inFlightControllers = new Set();
 
 // T1410: priority before FOREGROUND_ACTIVE, so we can restore it on clear.
 let priorityBeforeForeground = null;
+
+// T1430: while true, workers refuse to pull from games/gallery/working queues.
+// Keeps tier-1 project clips warming alone, without having to share bandwidth
+// and worker slots with games. Flipped to false once tier1 drains.
+let tier1PhaseActive = false;
 
 
 // Concurrency settings
@@ -142,6 +193,9 @@ function getNextItem() {
     }
   }
 
+  // T1430: don't pull games/gallery while tier-1 phase is active.
+  if (tier1PhaseActive) return null;
+
   // Tier 2/3: games and gallery by user navigation priority
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;
   const secondaryQueue = currentPriority === WARMUP_PRIORITY.GAMES ? galleryQueue : gamesQueue;
@@ -184,6 +238,7 @@ async function warmUrl(url, options = {}) {
   }
 
   const { size, warmTail } = options;
+  const startMs = performance.now();
   const controller = new AbortController();
   inFlightControllers.add(controller);
 
@@ -205,6 +260,13 @@ async function warmUrl(url, options = {}) {
       signal: controller.signal,
     });
 
+    // T1430: record URL warm before optional tail so observers see partial state.
+    {
+      const s = getOrInitState(url);
+      s.urlWarmed = true;
+      s.warmedAt = Date.now();
+    }
+
     // For large videos, also warm the tail where moov atom often lives
     if (warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD) {
       const tailStart = Math.max(0, size - TAIL_WARM_SIZE);
@@ -217,7 +279,8 @@ async function warmUrl(url, options = {}) {
           credentials: 'omit',
           signal: controller.signal,
         });
-        console.log(`[CacheWarming] Warmed tail of large video (${Math.round(size / 1024 / 1024)}MB)`);
+        getOrInitState(url).tailWarmed = true;
+        console.log(`[CacheWarming] Warmed tail url=${url.substring(0, 60)} size=${Math.round(size / 1024 / 1024)}MB elapsedMs=${Math.round(performance.now() - startMs)}`);
       } catch (tailErr) {
         if (tailErr.name !== 'AbortError') {
           console.log(`[CacheWarming] Tail warm failed: ${tailErr.message}`);
@@ -226,6 +289,7 @@ async function warmUrl(url, options = {}) {
     }
 
     warmedUrls.add(url);
+    console.log(`[CacheWarming] Warmed url url=${url.substring(0, 60)} tail=${warmTail && size && size > TAIL_WARM_SIZE_THRESHOLD ? 'yes' : 'no'} elapsedMs=${Math.round(performance.now() - startMs)}`);
     return true;
   } catch {
     // Network error (DNS, offline, aborted). Not warmed.
@@ -239,8 +303,9 @@ async function warmUrl(url, options = {}) {
  * Warm a clip's byte range using proportional estimation.
  * Primes the Cloudflare edge cache for the clip's region of the game video.
  */
-async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) {
+async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, clipId = null) {
   if (!url || !videoDuration || !videoSize) return false;
+  const startMs = performance.now();
 
   const startByte = Math.floor((startTime / videoDuration) * videoSize);
   const endByte = Math.ceil((endTime / videoDuration) * videoSize);
@@ -253,6 +318,19 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) 
   const controller = new AbortController();
   inFlightControllers.add(controller);
   try {
+    // T1430: also prime the moov/ftyp header region. `<video>` always fetches
+    // a tiny head range first (e.g. bytes 0-63) to parse the moov atom before
+    // it can seek to clipOffset. If the head is cold, the clip-range warm
+    // doesn't help — playable time is dominated by that cold head fetch.
+    // Keep this cheap (4KB) and run in parallel with the body warm.
+    const headPromise = fetch(url, {
+      method: 'GET',
+      headers: { 'Range': 'bytes=0-1048575' },
+      mode: 'no-cors',
+      credentials: 'omit',
+      signal: controller.signal,
+    }).catch(() => {});
+
     // See warmUrl for the no-cors rationale. Opaque response (status 0,
     // ok false) is expected and counts as a successful cache warm.
     // T1410: signal attached so foreground loads can abort us.
@@ -263,8 +341,13 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize) 
       credentials: 'omit',
       signal: controller.signal,
     });
+    await headPromise;
 
-    console.log(`[CacheWarming] Warmed clip range ${Math.round(warmStart / 1024 / 1024)}MB-${Math.round(warmEnd / 1024 / 1024)}MB of ${Math.round(videoSize / 1024 / 1024)}MB video`);
+    // T1430: record clip range so useVideo can check coverage at load start.
+    const s = getOrInitState(url);
+    s.clipRanges.push({ startTime, endTime, startByte: warmStart, endByte: warmEnd, warmedAt: Date.now() });
+    s.warmedAt = Date.now();
+    console.log(`[CacheWarming] Warmed clip clipId=${clipId ?? 'null'} url=${url.substring(0, 60)} head=0-1048575 range=${warmStart}-${warmEnd} elapsedMs=${Math.round(performance.now() - startMs)}`);
     return true;
   } catch {
     // Network failure or aborted; clip range not warmed.
@@ -286,7 +369,7 @@ async function worker(workerId) {
 
     let success;
     if (item.type === 'clipRange') {
-      success = await warmClipRange(item.url, item.startTime, item.endTime, item.videoDuration, item.videoSize);
+      success = await warmClipRange(item.url, item.startTime, item.endTime, item.videoDuration, item.videoSize, item.clipId);
     } else {
       success = await warmUrl(item.url, { size: item.size, warmTail: item.warmTail });
     }
@@ -313,16 +396,33 @@ async function runWorkers() {
     return;
   }
 
-  console.log(`[CacheWarming] Starting ${CONCURRENCY} workers for ${totalBefore} videos (priority: ${currentPriority})`);
+  console.log(`[CacheWarming] Starting workers for ${totalBefore} videos (priority: ${currentPriority}, tier1=${tier1Queue.length})`);
 
-  // Start concurrent workers
-  const workers = [];
-  for (let i = 0; i < CONCURRENCY; i++) {
-    workers.push(worker(i));
+  let totalWarmed = 0;
+
+  // T1430: Phase 1 — drain tier-1 (project clips the user is about to open)
+  // before games/gallery get any workers. Evidence from Step 1 logs: with all
+  // 5 workers racing from the start, tier-1 completed fast but games
+  // monopolized R2 bandwidth until abort. Tier-1 first makes the warm-path
+  // win more reliable when the user clicks immediately.
+  if (tier1Queue.length > 0) {
+    tier1PhaseActive = true;
+    const tier1Workers = Math.min(CONCURRENCY, tier1Queue.length);
+    const phase1 = [];
+    for (let i = 0; i < tier1Workers; i++) phase1.push(worker(i));
+    const r1 = await Promise.all(phase1);
+    totalWarmed += r1.reduce((a, b) => a + b, 0);
+    tier1PhaseActive = false;
   }
 
-  const results = await Promise.all(workers);
-  const totalWarmed = results.reduce((a, b) => a + b, 0);
+  // Phase 2 — games/gallery/working at full concurrency.
+  const remaining = gamesQueue.length + galleryQueue.length + workingQueue.length;
+  if (remaining > 0 && currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+    const phase2 = [];
+    for (let i = 0; i < CONCURRENCY; i++) phase2.push(worker(i));
+    const r2 = await Promise.all(phase2);
+    totalWarmed += r2.reduce((a, b) => a + b, 0);
+  }
 
   console.log(`[CacheWarming] Complete: ${totalWarmed} videos warmed`);
   workersRunning = false;
@@ -333,6 +433,8 @@ async function runWorkers() {
  */
 export function clearWarmingCache() {
   warmedUrls.clear();
+  warmedState.clear();
+  tier1PhaseActive = false;
   tier1Queue = [];
   gamesQueue = [];
   galleryQueue = [];
@@ -381,6 +483,7 @@ export async function warmAllUserVideos() {
         for (const clip of (project.clips || [])) {
           tier1Queue.push({
             type: 'clipRange',
+            clipId: clip.id ?? null,
             url: clip.game_url,
             startTime: clip.start_time,
             endTime: clip.end_time,
@@ -433,6 +536,7 @@ export function pushClipRanges(clipRanges) {
 
   const items = clipRanges.map(clip => ({
     type: 'clipRange',
+    clipId: clip.clipId ?? clip.id ?? null,
     url: clip.url,
     startTime: clip.startTime,
     endTime: clip.endTime,
