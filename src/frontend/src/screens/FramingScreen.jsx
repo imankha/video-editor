@@ -16,7 +16,7 @@ import { ConfirmationDialog } from '../components/shared';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
-import { warmVideoCache } from '../utils/cacheWarming';
+import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
@@ -404,6 +404,26 @@ export function FramingScreen({
   useEffect(() => {
     if (projectId) fetchClips(projectId);
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only refresh
+
+  // T1460: gesture-driven warm. The /storage/warmup tier-1 queue is built at
+  // app init and excludes exported projects, so opening framing on any project
+  // that was in tier-1=0 state would always land on the cold proxy path. Fire
+  // pushClipRanges when framing mounts with clips — this is the user gesture
+  // "opened framing", and it prepends the right ranges at the front of tier-1.
+  useEffect(() => {
+    if (!clips.length) return;
+    const ranges = clips
+      .filter(c => c.game_video_url && c.start_time != null && c.end_time != null && c.video_duration && c.video_size)
+      .map(c => ({
+        clipId: c.id,
+        url: c.game_video_url,
+        startTime: c.start_time,
+        endTime: c.end_time,
+        videoDuration: c.video_duration,
+        videoSize: c.video_size,
+      }));
+    if (ranges.length) pushClipRanges(ranges);
+  }, [clips]);
 
   // T580: On mount, immediately load the first clip's video before first paint.
   // When switching from overlay → framing, the shared videoStore may still hold
