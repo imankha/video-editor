@@ -59,27 +59,27 @@ PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
 SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (profiling target)
 
-# In-memory sync failure tracking per user.
-# Set to True when R2 upload fails; cleared on next successful sync.
-_sync_failed: dict[str, bool] = {}
+# T1152: Sync failure state is backed by the .sync_pending marker file on disk
+# (same marker used by T930 for crash-survival). This keeps a single source of
+# truth and makes the degraded state survive backend restarts.
 
 
 def is_sync_failed(user_id: str) -> bool:
     """Check if the given user has a pending sync failure."""
-    return _sync_failed.get(user_id, False)
+    return has_sync_pending(user_id)
 
 
 def set_sync_failed(user_id: str, failed: bool) -> None:
-    """Set or clear the sync failure flag for a user."""
-    was_failed = _sync_failed.get(user_id, False)
+    """Set or clear the sync failure marker for a user."""
+    was_failed = has_sync_pending(user_id)
     if failed:
-        _sync_failed[user_id] = True
+        mark_sync_pending(user_id)
         if not was_failed:
-            logger.warning(f"[SYNC] User {user_id} entered degraded state — R2 sync failed")
+            logger.warning(f"[SYNC] User {user_id} entered degraded state - R2 sync failed")
     else:
-        _sync_failed.pop(user_id, None)
+        clear_sync_pending(user_id)
         if was_failed:
-            logger.info(f"[SYNC] User {user_id} recovered — R2 sync succeeded")
+            logger.info(f"[SYNC] User {user_id} recovered - R2 sync succeeded")
 
 
 def retry_pending_sync(user_id: str) -> bool:
@@ -240,7 +240,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             try:
                 if retry_pending_sync(user_id):
                     clear_sync_pending(user_id)
-                    set_sync_failed(user_id, False)
                     logger.info(f"[SYNC] Retry succeeded for user {user_id}")
                 else:
                     logger.warning(f"[SYNC] Retry still failing for user {user_id}")
@@ -324,15 +323,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 sync_duration = time.perf_counter() - sync_start
 
                 if sync_status == "ok":
-                    clear_sync_pending(user_id)  # T930: Only clear on success
-                    set_sync_failed(user_id, False)
-                    logger.info(f"[SYNC] {request.method} {request.url.path} → R2 sync OK ({sync_duration:.2f}s)")
+                    # T930/T1152: clearing the marker is the single source of truth for recovery
+                    clear_sync_pending(user_id)
+                    logger.info(f"[SYNC] {request.method} {request.url.path} -> R2 sync OK ({sync_duration:.2f}s)")
                 elif sync_status == "conflict":
-                    set_sync_failed(user_id, True)
-                    logger.warning(f"[SYNC] {request.method} {request.url.path} → version conflict ({sync_duration:.2f}s)")
+                    # Marker remains (set by mark_sync_pending before the attempt)
+                    logger.warning(f"[SYNC] {request.method} {request.url.path} -> version conflict ({sync_duration:.2f}s)")
                 else:
-                    set_sync_failed(user_id, True)
-                    logger.warning(f"[SYNC] {request.method} {request.url.path} → R2 sync FAILED ({sync_duration:.2f}s)")
+                    logger.warning(f"[SYNC] {request.method} {request.url.path} -> R2 sync FAILED ({sync_duration:.2f}s)")
 
             # T950: Distinguish conflict from failure in header
             if is_sync_failed(user_id):
