@@ -1,6 +1,6 @@
 # T1330: Remove Guest Accounts
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 10
 **Complexity:** 6
 **Created:** 2026-04-10
