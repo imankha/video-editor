@@ -1,74 +1,99 @@
-# T1180: Guard Export Against Games with NULL video_filename
+# T1180: Fix Root Cause of NULL `games.video_filename`
 
 **Status:** TODO
 **Impact:** 4
-**Complexity:** 2
+**Complexity:** 3
 **Created:** 2026-04-13
 
 ## Problem
 
-Framing export crashes with an opaque ffmpeg error when the source game has `games.video_filename IS NULL`. The source URL is built via string-format and becomes literally `games/None.mp4`, which ffprobe fails to resolve.
+`games` rows are being committed with `video_filename IS NULL` (and sometimes
+`blake3_hash IS NULL`), leaving the games table referencing nothing on disk.
+Downstream code formats the column into URLs and produces paths like
+`games/None.mp4`, which ffprobe/ffmpeg can't resolve. Framing export crashes
+on such projects with an opaque ffmpeg error.
 
-**Observed traceback (dev, imankh@gmail.com, project 3):**
+Per CLAUDE.md "No defensive fixes for internal bugs": **fix the write path
+that allows NULL to be committed**, not the read paths that choke on it.
+
+## Observed symptom (surfacing incident)
+
+Dev, imankh@gmail.com, project 3. Framing export failed:
 
 ```
-app.services.ffmpeg_service - ERROR - Failed to get video info for
+ffmpeg_service - ERROR - Failed to get video info for
   https://<r2>.cloudflarestorage.com/reel-ballers-users/games/None.mp4
   Command '['ffprobe', ...]' returned non-zero exit status 1.
 app.routers.export.framing - ERROR - [Render Background] Failed:
   Failed to extract clip range from R2: ffmpeg error
 ```
 
-Data chain when it happens:
+Data chain:
 
 | Table | Row | Bad field |
 |-------|-----|-----------|
-| `working_clips` id=3 | `uploaded_filename = NULL` | no direct-upload fallback |
-| `raw_clips` id=5 | `filename = ''` (empty) | — |
-| `games` id=4 | `video_filename = NULL`, `blake3_hash = NULL` | **root cause** |
+| `working_clips` id=3 | `uploaded_filename = NULL` | no upload fallback |
+| `raw_clips` id=5 | `filename = ''` | empty |
+| `games` id=4 | `video_filename = NULL`, `blake3_hash = NULL` | **root** |
 
-The game `"Vs Albion Fram Nov 11"` was created without a `video_filename` — likely a failed upload or an interrupted game-creation flow that committed the `games` row before the video was persisted.
+Game: `"Vs Albion Fram Nov 11"`, user `34e63f91-1969-44ec-a1ce-19f8f8226382`,
+profile `cc51236f`.
 
-## How it fails today
+## Investigation targets
 
-Export dispatches (202), the background task computes fps, starts the LocalProcessor with `Input: games/None.mp4`, and ffmpeg fails on the first probe. The user sees a generic export failure; credits are reserved and must be refunded manually (or via existing error-path refunds — verify).
+1. Every `INSERT INTO games` / game-row-creating code path — enumerate and
+   check whether `video_filename` is written in the same transaction.
+2. Whether there's a legitimate two-step flow (insert row → upload video →
+   UPDATE video_filename) that fails-open on upload error, leaving a
+   half-committed row.
+3. Whether the schema should have `video_filename NOT NULL` (check if any
+   legitimate workflow requires a row to exist before the video is known —
+   e.g., auto-created games from annotations).
+4. Whether an older migration or test helper is seeding NULL rows.
 
-## Solution
+## Fix preference order
 
-Two layers:
+1. **Atomic write**: don't commit the row until video_filename is known.
+2. **Transactional cleanup**: if step 2 must remain separate, rollback the
+   row on upload failure.
+3. **Schema constraint**: add `NOT NULL` if no legitimate null case exists.
 
-### 1. Export pre-flight validation (fail fast, user-visible)
+## Cleanup of existing broken row
 
-Before returning 202 from `POST /api/export/render`, resolve the source URL for every clip and reject any whose resolved path ends with `None` (or has a NULL `video_filename`). Return 400 with a message like `"Clip 'X' references a game with no uploaded video — please re-upload the game."`
-
-Avoids credit reservation and background task dispatch for unexportable projects.
-
-### 2. Backfill/cleanup detection (optional, lower priority)
-
-Admin endpoint or a `session_init` one-shot that logs (does not delete) any `games` rows with `video_filename IS NULL` that are referenced by any `raw_clips`. Makes the corrupted state visible without silently pruning (per project coding standard: log loudly, don't hide).
+One-off deletion (or manual via admin) for game id=4 in imankh's dev DB,
+after user confirmation. **Do not** add startup-time repair code — log
+loudly if the state is observed after the fix ships, but don't silently
+"heal" it (per coding standard).
 
 ## Out of scope
 
-- Fixing the upstream create-game flow that allows `video_filename = NULL` to be committed. That's a separate task once we know the source — could be a concurrent upload abort, a schema default, or an older code path. File follow-up if the pre-flight logs reveal the pattern.
-- Deleting the corrupted game 4. User can do that manually via existing delete flows.
+- Pre-flight export validation / user-visible 400 on export-time NULL.
+  That's a downstream read-side concern; if the write path is fixed, the
+  read-side never sees it. File a follow-up only if an unfixable two-step
+  flow forces us to accept transient NULL state.
 
 ## Context
 
 ### Relevant Files
 
-- `src/backend/app/routers/export/framing.py` — `_run_local_framing_export` around line 500 (where `input_path` is built).
-- `src/backend/app/services/ffmpeg_service.py` — `get_video_info` raises the underlying error.
-- `src/backend/app/routers/export/render.py` (or wherever `POST /api/export/render` lives) — add pre-flight check here.
-- Game video URL resolution — grep for `games/{...}.mp4` or `video_filename` in export paths.
+- `src/backend/app/database.py` — `games` schema (line ~623).
+- Grep entry points: `INSERT INTO games`, `video_filename =`, game upload
+  routers, game auto-create paths (`auto_project_id` flow).
+- `src/backend/app/services/ffmpeg_service.py:get_video_info` — where the
+  symptom surfaces (do not modify as part of this task).
 
 ### Related Tasks
 
-- T1160 + T1170: DB hygiene (discovered this bug during manual testing of those).
-- T1440: Trace multi-video games — similar class of "game lookup returns null" bug.
+- T1160 + T1170: DB hygiene (discovered this during manual testing).
+- T1440: Trace multi-video games — similar class of "game lookup returns
+  null" bug.
 
 ## Acceptance Criteria
 
-- [ ] `POST /api/export/render` returns 400 with a clear message when any clip's source game has `video_filename IS NULL`.
-- [ ] No credits are reserved when pre-flight fails.
-- [ ] Test: export with a project containing a clip whose game has `video_filename = NULL` → 400, no background task, no credit reservation.
-- [ ] (Optional) Session-init logs count of orphaned `games` rows.
+- [ ] Root-cause write path identified and documented in the design doc.
+- [ ] Fix prevents `games.video_filename` from being committed as NULL in
+  all identified paths.
+- [ ] Regression test: the creation path that produced the bug is
+  exercised and now either succeeds with a value or rolls back cleanly.
+- [ ] Existing broken row in dev DB cleaned up (after user confirms).
+- [ ] No defensive guards added to export/read paths.
