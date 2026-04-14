@@ -40,11 +40,26 @@ const warmedUrls = new Set();
 // endTime, startByte, endByte, warmedAt}>, warmedAt: number }
 const warmedState = new Map();
 
+// T1430: presigned R2 URLs include a signature query string that varies per
+// call (different expiry/signing time). Key warmedState by host+path only so
+// a warmer using one signed URL and a later clip lookup using a different
+// signed URL still resolve to the same warm record.
+function stableUrlKey(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    return u.origin + u.pathname;
+  } catch {
+    return url.split('?')[0];
+  }
+}
+
 function getOrInitState(url) {
-  let s = warmedState.get(url);
+  const key = stableUrlKey(url);
+  let s = warmedState.get(key);
   if (!s) {
     s = { urlWarmed: false, tailWarmed: false, clipRanges: [], warmedAt: 0 };
-    warmedState.set(url, s);
+    warmedState.set(key, s);
   }
   return s;
 }
@@ -55,7 +70,7 @@ function getOrInitState(url) {
  */
 export function getWarmedState(url) {
   if (!url) return null;
-  const s = warmedState.get(url);
+  const s = warmedState.get(stableUrlKey(url));
   if (!s) return null;
   return {
     urlWarmed: s.urlWarmed,

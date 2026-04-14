@@ -48,6 +48,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const watchdogTimerRef = useRef(null);
   const loadStartRef = useRef(0);
   const clipDurationForLoadRef = useRef(null);
+  // T1430 Step 2: flag loads that go through the backend clip-stream proxy.
+  // The watchdog's buffered-vs-clip-duration heuristic is a false positive on
+  // that path (the proxy intentionally exposes a clip-sized byte window but
+  // the moov still reports full-video time, so v.buffered.end reads much
+  // larger than clipDuration even though only the clip body was transferred).
+  const isProxyLoadRef = useRef(false);
 
   // Get state and setters from the store
   const {
@@ -228,6 +234,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     const loadId = ++loadIdRef.current;
     loadStartRef.current = performance.now();
     clipDurationForLoadRef.current = newClipDuration;
+    isProxyLoadRef.current = !!url && /\/api\/clips\/[^?]*\/stream(\?|$)/.test(url);
     console.log(`[VIDEO_LOAD] start id=${loadId} clipDurSec=${newClipDuration ?? 'null'} url=${url?.substring(0, 60)}`);
 
     // T1430: log whether this clip/URL was pre-warmed. Helps correlate slow
@@ -261,7 +268,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const bufferedSec = v.buffered?.length
         ? v.buffered.end(v.buffered.length - 1)
         : 0;
-      const verdict = checkRangeFallback({
+      const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
         bufferedSec,
         clipDurationSec: clipDurationForLoadRef.current,
         readyState: v.readyState,
@@ -638,7 +645,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           ? video.buffered.end(video.buffered.length - 1)
           : 0;
         console.log(`[VIDEO_LOAD] playable id=${loadIdRef.current} elapsedMs=${elapsed} readyState=${video.readyState} bufferedSec=${bufferedSec.toFixed(1)}`);
-        const verdict = checkRangeFallback({
+        const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
           bufferedSec,
           clipDurationSec: clipDurationForLoadRef.current,
           readyState: video.readyState,
