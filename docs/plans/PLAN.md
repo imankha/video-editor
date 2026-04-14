@@ -67,7 +67,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1400 | [Video Load Contention](tasks/video-load-reliability/T1400-video-load-contention.md) | DONE | 4.5 | Narrowed post-T1410: range-fallback watchdog + `[VIDEO_LOAD]` structured logs for prod measurement |
 | T1410 | [Video Load Regression Since 04-08](tasks/video-load-reliability/T1410-video-load-regression-since-0408.md) | DONE | 5.0 | Warmer aborts on foreground load, StrictMode dedup — 35–56s → ~400–950ms cold load |
 | T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TESTING | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
-| T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | TESTING (Steps 1-2) | 1.5 | Steps 1 (observability) + 2 (bounded proxy) in TESTING; Step 3 TODO if proxy insufficient |
+| T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | DONE | 1.5 | Observability + two-window proxy: cold 20.5s→2.0s, warm 2.2s→0.6s; Step 3 MSE unnecessary |
 
 ### Standalone Tasks
 
