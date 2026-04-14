@@ -176,6 +176,10 @@ class WorkingClipResponse(BaseModel):
     video_size: Optional[int] = None
     tags: Optional[List[str]] = None
     rating: Optional[int] = None
+    # T1500: source video dimensions persisted on working_clips to eliminate per-load metadata probe
+    width: Optional[int] = None
+    height: Optional[int] = None
+    fps: Optional[float] = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -612,6 +616,45 @@ async def get_raw_clip_file(clip_id: int):
 
 
 
+def _get_dims_from_raw_clip(cursor, raw_clip_id: int) -> tuple[Optional[int], Optional[int], Optional[float]]:
+    """
+    T1500: Look up source video dimensions for a raw_clip via its parent game_video.
+    Returns (width, height, fps); any or all may be None for legacy rows.
+    """
+    cursor.execute("""
+        SELECT gv.video_width, gv.video_height, gv.fps
+        FROM raw_clips rc
+        LEFT JOIN game_videos gv
+            ON gv.game_id = rc.game_id
+            AND gv.sequence = COALESCE(rc.video_sequence, 1)
+        WHERE rc.id = ?
+    """, (raw_clip_id,))
+    row = cursor.fetchone()
+    if not row:
+        return (None, None, None)
+    return (row['video_width'], row['video_height'], row['fps'])
+
+
+def _insert_working_clip_with_dims(
+    cursor,
+    project_id: int,
+    raw_clip_id: int,
+    sort_order: int,
+    version: int = 1,
+) -> int:
+    """
+    T1500: INSERT a working_clips row with width/height/fps copied from the parent
+    game_video. Returns the new working_clip id. Dims may be NULL if the parent
+    game_video hasn't been backfilled yet — frontend probe fallback handles those.
+    """
+    width, height, fps = _get_dims_from_raw_clip(cursor, raw_clip_id)
+    cursor.execute("""
+        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, width, height, fps)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (project_id, raw_clip_id, sort_order, version, width, height, fps))
+    return cursor.lastrowid
+
+
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
     """Create a 9:16 project for a 5-star clip and return the project ID."""
     # Fetch tags and rating from the raw clip to generate a name if needed
@@ -641,11 +684,8 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     """, (project_name,))
     project_id = cursor.lastrowid
 
-    # Add the raw clip as a working clip in this project
-    cursor.execute("""
-        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
-        VALUES (?, ?, 0, 1)
-    """, (project_id, raw_clip_id))
+    # Add the raw clip as a working clip in this project (T1500: copies dims from game_video)
+    _insert_working_clip_with_dims(cursor, project_id=project_id, raw_clip_id=raw_clip_id, sort_order=0)
 
     # Update the raw clip with the auto_project_id
     cursor.execute("""
@@ -1012,6 +1052,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 wc.crop_data,
                 wc.timing_data,
                 wc.segments_data,
+                wc.width as wc_width,
+                wc.height as wc_height,
+                wc.fps as wc_fps,
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -1096,7 +1139,10 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 video_duration=clip['video_duration'],
                 video_size=clip['video_size'],
                 tags=tags,
-                rating=rating
+                rating=rating,
+                width=clip['wc_width'],
+                height=clip['wc_height'],
+                fps=clip['wc_fps'],
             ))
 
     return result
@@ -1185,10 +1231,14 @@ async def add_clip_to_project(
             """, (project_id, end_time))
             next_version = cursor.fetchone()['next_version']
 
-            cursor.execute("""
-                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version)
-                VALUES (?, ?, ?, ?)
-            """, (project_id, raw_clip_id, next_order, next_version))
+            # T1500: copies width/height/fps from the parent game_video
+            _insert_working_clip_with_dims(
+                cursor,
+                project_id=project_id,
+                raw_clip_id=raw_clip_id,
+                sort_order=next_order,
+                version=next_version,
+            )
 
         else:
             # Uploading new file directly to R2 (no local storage, no temp file)
@@ -1201,10 +1251,34 @@ async def add_clip_to_project(
             if not upload_bytes_to_r2(user_id, f"uploads/{uploaded_filename}", content):
                 raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
 
+            # T1500: probe uploaded file for width/height/fps so project loads skip the metadata probe
+            upload_width: Optional[int] = None
+            upload_height: Optional[int] = None
+            upload_fps: Optional[float] = None
+            try:
+                import tempfile as _tempfile
+                from app.ai_upscaler import get_video_metadata_ffprobe
+                with _tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
+                    tf.write(content)
+                    tf_path = tf.name
+                try:
+                    meta = get_video_metadata_ffprobe(tf_path)
+                    if meta:
+                        upload_width = meta.get('width') or None
+                        upload_height = meta.get('height') or None
+                        upload_fps = meta.get('fps')
+                finally:
+                    try:
+                        os.unlink(tf_path)
+                    except OSError:
+                        pass
+            except Exception as probe_err:
+                logger.warning(f"[T1500] ffprobe failed on uploaded clip {uploaded_filename}: {probe_err}")
+
             cursor.execute("""
-                INSERT INTO working_clips (project_id, uploaded_filename, sort_order, version)
-                VALUES (?, ?, ?, ?)
-            """, (project_id, uploaded_filename, next_order, 1))
+                INSERT INTO working_clips (project_id, uploaded_filename, sort_order, version, width, height, fps)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (project_id, uploaded_filename, next_order, 1, upload_width, upload_height, upload_fps))
 
         conn.commit()
         clip_id = cursor.lastrowid

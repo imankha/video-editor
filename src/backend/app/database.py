@@ -809,6 +809,13 @@ def ensure_database():
             # T550: GPU cost tracking per export job
             "ALTER TABLE export_jobs ADD COLUMN gpu_seconds REAL",
             "ALTER TABLE export_jobs ADD COLUMN modal_function TEXT",
+            # T1500: persist clip source dimensions (eliminate per-load metadata probe)
+            # NB: game_videos.fps runs in the late-migration block (game_videos is created
+            # after this main migration list).
+            "ALTER TABLE games ADD COLUMN video_fps REAL",
+            "ALTER TABLE working_clips ADD COLUMN width INTEGER",
+            "ALTER TABLE working_clips ADD COLUMN height INTEGER",
+            "ALTER TABLE working_clips ADD COLUMN fps REAL",
         ]
 
         for migration in migrations:
@@ -1039,6 +1046,7 @@ def ensure_database():
                 video_width INTEGER,
                 video_height INTEGER,
                 video_size INTEGER,
+                fps REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(game_id, sequence)
             )
@@ -1049,6 +1057,17 @@ def ensure_database():
             CREATE INDEX IF NOT EXISTS idx_game_videos_game
             ON game_videos(game_id)
         """)
+
+        # T1500: post-creation migrations for tables defined after the main migration block.
+        # game_videos is created here (not in the initial table block), so ALTER TABLE
+        # for existing DBs must run after its creation.
+        for late_migration in [
+            "ALTER TABLE game_videos ADD COLUMN fps REAL",
+        ]:
+            try:
+                cursor.execute(late_migration)
+            except sqlite3.OperationalError:
+                pass
 
         # T80: Track in-progress multipart uploads
         # Allows resuming interrupted uploads

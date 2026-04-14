@@ -4,7 +4,7 @@ import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
-import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { extractVideoMetadataFromUrl, shouldProbeClipMetadata } from '../utils/videoMetadata';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { clipFileUrl as getClipFileUrlSelector } from '../utils/clipSelectors';
 
@@ -145,9 +145,10 @@ export function useProjectLoader() {
         return { clip, url: null, durationOverride: null };
       });
 
-      // Probe each unique URL once
-      for (const { url } of clipConfigs) {
-        if (url && !urlMetadataMap.has(url)) {
+      // T1500: Only probe URLs for clips missing persisted width/height/fps.
+      // Populated clips hydrate metadataCache directly — zero /stream requests.
+      for (const { clip, url } of clipConfigs) {
+        if (url && shouldProbeClipMetadata(clip) && !urlMetadataMap.has(url)) {
           urlMetadataMap.set(url, extractVideoMetadataFromUrl(url).catch(err => {
             console.warn(`[useProjectLoader] Failed to load metadata from ${url?.substring(0, 60)}:`, err);
             return null;
@@ -160,14 +161,15 @@ export function useProjectLoader() {
 
       for (const { clip, url, durationOverride } of clipConfigs) {
         if (!url) continue;
-        const metadata = await urlMetadataMap.get(url);
-        const duration = durationOverride ?? metadata?.duration ?? 0;
+        // T1500: prefer persisted dims; fall back to probe result for un-backfilled rows.
+        const probed = urlMetadataMap.has(url) ? await urlMetadataMap.get(url) : null;
+        const duration = durationOverride ?? probed?.duration ?? 0;
         metadataCache[clip.id] = {
           duration,
-          width: metadata?.width || 0,
-          height: metadata?.height || 0,
-          framerate: metadata?.framerate || 30,
-          metadata: { ...metadata, duration },
+          width: clip.width || probed?.width || 0,
+          height: clip.height || probed?.height || 0,
+          framerate: clip.fps || probed?.framerate || 30,
+          metadata: { ...(probed || {}), duration, width: clip.width || probed?.width, height: clip.height || probed?.height, framerate: clip.fps || probed?.framerate },
         };
       }
 

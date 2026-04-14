@@ -1,4 +1,14 @@
 /**
+ * T1500: Decide whether a clip needs a metadata probe.
+ * Returns false only when width/height/fps are all populated (truthy non-zero).
+ * Any missing or 0 value falls through to the probe path.
+ */
+export function shouldProbeClipMetadata(clip) {
+  if (!clip) return true;
+  return !(clip.width && clip.height && clip.fps);
+}
+
+/**
  * Extract metadata from a video URL.
  * Used for loading project clips from backend.
  *

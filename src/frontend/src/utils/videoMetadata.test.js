@@ -9,7 +9,33 @@
  * right after calling — before awaiting.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { extractVideoMetadataFromUrl } from './videoMetadata';
+import { extractVideoMetadataFromUrl, shouldProbeClipMetadata } from './videoMetadata';
+
+describe('T1500 shouldProbeClipMetadata', () => {
+  it('returns false when clip has width, height, and fps', () => {
+    expect(shouldProbeClipMetadata({ width: 1920, height: 1080, fps: 30 })).toBe(false);
+  });
+
+  it('returns true when width is missing', () => {
+    expect(shouldProbeClipMetadata({ width: null, height: 1080, fps: 30 })).toBe(true);
+  });
+
+  it('returns true when height is missing', () => {
+    expect(shouldProbeClipMetadata({ width: 1920, height: null, fps: 30 })).toBe(true);
+  });
+
+  it('returns true when fps is missing', () => {
+    expect(shouldProbeClipMetadata({ width: 1920, height: 1080, fps: null })).toBe(true);
+  });
+
+  it('returns true when any dim is 0 (treated as missing)', () => {
+    expect(shouldProbeClipMetadata({ width: 0, height: 1080, fps: 30 })).toBe(true);
+  });
+
+  it('returns true when clip is undefined', () => {
+    expect(shouldProbeClipMetadata(undefined)).toBe(true);
+  });
+});
 
 describe('T1490 extractVideoMetadataFromUrl crossOrigin', () => {
   let createdVideo;
