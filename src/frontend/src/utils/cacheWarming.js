@@ -86,6 +86,11 @@ const inFlightControllers = new Set();
 // T1410: priority before FOREGROUND_ACTIVE, so we can restore it on clear.
 let priorityBeforeForeground = null;
 
+// T1430: while true, workers refuse to pull from games/gallery/working queues.
+// Keeps tier-1 project clips warming alone, without having to share bandwidth
+// and worker slots with games. Flipped to false once tier1 drains.
+let tier1PhaseActive = false;
+
 
 // Concurrency settings
 const CONCURRENCY = 5;
@@ -172,6 +177,9 @@ function getNextItem() {
       return { ...item, _cacheKey: cacheKey };
     }
   }
+
+  // T1430: don't pull games/gallery while tier-1 phase is active.
+  if (tier1PhaseActive) return null;
 
   // Tier 2/3: games and gallery by user navigation priority
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;
@@ -359,16 +367,33 @@ async function runWorkers() {
     return;
   }
 
-  console.log(`[CacheWarming] Starting ${CONCURRENCY} workers for ${totalBefore} videos (priority: ${currentPriority})`);
+  console.log(`[CacheWarming] Starting workers for ${totalBefore} videos (priority: ${currentPriority}, tier1=${tier1Queue.length})`);
 
-  // Start concurrent workers
-  const workers = [];
-  for (let i = 0; i < CONCURRENCY; i++) {
-    workers.push(worker(i));
+  let totalWarmed = 0;
+
+  // T1430: Phase 1 — drain tier-1 (project clips the user is about to open)
+  // before games/gallery get any workers. Evidence from Step 1 logs: with all
+  // 5 workers racing from the start, tier-1 completed fast but games
+  // monopolized R2 bandwidth until abort. Tier-1 first makes the warm-path
+  // win more reliable when the user clicks immediately.
+  if (tier1Queue.length > 0) {
+    tier1PhaseActive = true;
+    const tier1Workers = Math.min(CONCURRENCY, tier1Queue.length);
+    const phase1 = [];
+    for (let i = 0; i < tier1Workers; i++) phase1.push(worker(i));
+    const r1 = await Promise.all(phase1);
+    totalWarmed += r1.reduce((a, b) => a + b, 0);
+    tier1PhaseActive = false;
   }
 
-  const results = await Promise.all(workers);
-  const totalWarmed = results.reduce((a, b) => a + b, 0);
+  // Phase 2 — games/gallery/working at full concurrency.
+  const remaining = gamesQueue.length + galleryQueue.length + workingQueue.length;
+  if (remaining > 0 && currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+    const phase2 = [];
+    for (let i = 0; i < CONCURRENCY; i++) phase2.push(worker(i));
+    const r2 = await Promise.all(phase2);
+    totalWarmed += r2.reduce((a, b) => a + b, 0);
+  }
 
   console.log(`[CacheWarming] Complete: ${totalWarmed} videos warmed`);
   workersRunning = false;
@@ -380,6 +405,7 @@ async function runWorkers() {
 export function clearWarmingCache() {
   warmedUrls.clear();
   warmedState.clear();
+  tier1PhaseActive = false;
   tier1Queue = [];
   gamesQueue = [];
   galleryQueue = [];
