@@ -1,6 +1,6 @@
 # T1400: Video Load Contention — Pause Warmer, Diagnose Fallbacks, Fix Double-Mount
 
-**Status:** TESTING (awaiting before/after measurement)
+**Status:** DONE
 **Epic:** [Video Load Reliability](EPIC.md)
 **Priority:** 1 of 1 (new entry)
 **Branch:** `feature/T1400-video-load-contention` (not created)
