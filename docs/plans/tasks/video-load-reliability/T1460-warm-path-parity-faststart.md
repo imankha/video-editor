@@ -1,8 +1,19 @@
 # T1460: Close Remaining Trace Load Gap — Warm-Path Miss + Faststart Route Choice
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Video Load Reliability](EPIC.md)
 **Created:** 2026-04-14
+**Updated:** 2026-04-14
+
+## Shipped
+
+- Issue 1 fix: `pushClipRanges` tags warm entries with `clipId`; `warm_status` now reports `clipWarmed=true` on warm reload (commits `3a16ecb`, `a6d0fe3`, `795b259`, merged `aae016a`).
+- Route decision moved into `useVideo` via `src/frontend/src/utils/videoLoadRoute.js` with verdicts `DIRECT_WARM` / `DIRECT_FORCED` / proxy fallback.
+- `?direct=1` A/B override implemented.
+
+## Remaining
+
+- Collect 5–10 cold + warm samples with and without `?direct=1`, compare `[VIDEO_LOAD] playable elapsedMs` medians, and hard-code the winning route for faststart files (or document that warm-path hit rate makes the question moot).
 
 ## Problem
 

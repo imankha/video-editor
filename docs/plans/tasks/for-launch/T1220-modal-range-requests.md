@@ -2,13 +2,22 @@
 
 **Status:** TODO
 **Impact:** 8
-**Complexity:** 6
+**Complexity:** 5
 **Created:** 2026-04-08
-**Updated:** 2026-04-08
+**Updated:** 2026-04-14
+
+## Precedent (pattern already proven on non-Modal paths)
+
+The presigned-URL + FFmpeg range-seek pattern this task proposes is **already in production** for every code path except the Modal GPU image:
+
+- **f1cb8d8** (T1130 DONE) — multi-clip exports use presigned URLs instead of downloading full game videos.
+- **63cc3c8** — local framing processors (`local_framing`, `local_framing_mock`) extract only the clip range via presigned URL + FFmpeg, matching the multi-clip pattern.
+
+Helpers exist: `src/backend/app/storage.py :: generate_presigned_url()` is already used by the frontend and non-Modal export paths. This task is a port, not a rewrite.
 
 ## Problem
 
-Modal GPU functions download the **entire source video** from R2 before processing, even when only a few seconds of footage are needed. For a 3GB, 90-minute game video where we need a 10-second clip, this wastes:
+Modal GPU functions still download the **entire source video** from R2 before processing, even when only a few seconds of footage are needed. For a 3GB, 90-minute game video where we need a 10-second clip, this wastes:
 
 - **Bandwidth**: ~3GB downloaded per clip instead of ~50MB
 - **Time**: Minutes of download time before processing can start
@@ -23,8 +32,12 @@ Modal GPU functions download the **entire source video** from R2 before processi
 
 ### Where This Happens
 
-- `video_processing.py` `process_clips_ai()`: downloads each source video completely via `r2.download_file()`
-- FFmpeg commands use `-ss` after `-i` (post-input seek), meaning FFmpeg reads the full file up to the seek point
+`src/backend/app/modal_functions/video_processing.py` has ~15 call sites still using `r2.download_file(bucket, full_input_key, input_path)` (full-file download) with post-input `-ss` after `-i`. Verified 2026-04-14:
+
+- Lines 223, 597, 723, 992, 1393, 1622, 1797, 1893, 2094, 2508, 2520, 2746, 2962 — `r2.download_file()` calls
+- `-ss` placement is post-input across all FFmpeg commands in this file
+
+Every non-Modal extraction path has already migrated off this pattern (see Precedent).
 
 ## Solution
 
