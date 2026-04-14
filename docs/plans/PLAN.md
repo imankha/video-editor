@@ -74,7 +74,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
 | T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | TESTING | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
-| T1151 | [Background Sync Retry Worker](tasks/T1151-background-sync-retry-worker.md) | TODO | 1.6 | Sweep `.sync_pending` markers on an interval — recovery independent of request traffic (idle-after-failure sessions) |
+| T1151 | [Background Sync Retry Worker](tasks/T1151-background-sync-retry-worker.md) | NOT RECOMMENDED | 0.8 | Sweep `.sync_pending` markers on an interval. Rejected: contention risk (SQLite writer lock, version races) outweighs narrow idle-after-failure benefit |
 | T1152 | [Persist Sync-Failed State](tasks/T1152-persist-sync-failed-state.md) | TESTING | 2.5 | `_sync_failed` dict resets on restart — use `.sync_pending` marker as source of truth so degraded state survives |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | TODO | 0.9 | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task, not impl |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | TODO | 0.8 | profile+user.sqlite parallel sync can split-brain on partial failure; evaluate fix options |

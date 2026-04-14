@@ -1,10 +1,31 @@
 # T1151: Background Sync Retry Worker
 
-**Status:** TODO
-**Impact:** 8
-**Complexity:** 5
+**Status:** NOT RECOMMENDED
+**Impact:** 2 (narrow — only idle-after-failure sessions benefit)
+**Complexity:** 6 (concurrency with active requests)
 **Created:** 2026-04-13
 **Updated:** 2026-04-13
+
+## Decision: Not Recommended (2026-04-13)
+
+The failure mode this solves — a user's sync fails AND they go idle before
+the next request — is narrow. Active users are already covered by T1150's
+request-driven retry. The concurrency surface this introduces is wide:
+
+- **SQLite writer lock**: worker reading the DB file concurrent with a
+  request's write can upload a torn/inconsistent snapshot. Needs WAL
+  checkpoint coordination or snapshot-under-lock.
+- **Version races**: worker and an incoming request can both observe the
+  marker and both kick off an upload. The second one 409s on R2 version
+  check and leaves the marker dirty for no reason. Needs a per-user lock.
+- **R2 version churn**: aggressive polling increments version numbers
+  without user-visible benefit and makes conflict debugging harder.
+
+For the idle-user data-loss scenario specifically, the better mitigations
+are upstream: fix partial-failure semantics (T1154), or evaluate whether
+critical writes should block on R2 in the first place (T1153). Revisit
+this task only if logs show meaningful data loss from idle-after-failure
+in practice.
 
 ## Problem
 
