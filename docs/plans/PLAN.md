@@ -70,7 +70,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | DONE | 1.5 | Observability + two-window proxy: cold 20.5s→2.0s, warm 2.2s→0.6s; Step 3 MSE unnecessary |
 | T1440 | [Trace multi-video games fail in framing](tasks/video-load-reliability/T1440-trace-multi-video-games.md) | DONE | 1.0 | Clips endpoint joined only `games` for blake3_hash; multi-video games store it per-sequence in `game_videos` → `game_video_url` null → framing 404 |
 | T1450 | [Trace load parity via R2 faststart migration](tasks/video-load-reliability/T1450-trace-load-parity.md) | DONE | 1.5 | One-shot `ffmpeg -movflags +faststart` rewrite of 13 moov-at-end games on R2; all verified faststart; Trace load 3.2s→2.95s (remaining gap to Veo parity tracked in T1460) |
-| T1470 | [R2 objects missing Content-Type](tasks/video-load-reliability/T1470-r2-content-type-missing.md) | TESTING | 4.0 | `CopyObject`-stamp ContentType=video/mp4 on all `games/*.mp4`; fix faststart script to preserve header. Staging: 22/23 migrated |
+| T1470 | [R2 objects missing Content-Type](tasks/video-load-reliability/T1470-r2-content-type-missing.md) | DONE | 4.0 | `CopyObject`-stamp ContentType=video/mp4 on all `games/*.mp4`; fix faststart script to preserve header. Staging: 22/23 migrated |
 
 ### Standalone Tasks
 
