@@ -20,6 +20,19 @@
 
 import { API_BASE } from '../config';
 
+// T1490: warm fetch options depend on URL origin. R2 presigned URLs don't
+// serve CORS headers — no-cors + credentials:omit is required. Same-origin
+// proxy /stream URLs need the session cookie — cors + credentials:include,
+// else backend 401s the request. Returns the fetch init subset to merge.
+function warmFetchMode(url) {
+  const isSameOrigin =
+    url.startsWith('/') ||
+    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+  return isSameOrigin
+    ? { credentials: 'include' }
+    : { mode: 'no-cors', credentials: 'omit' };
+}
+
 // Priority constants
 export const WARMUP_PRIORITY = Object.freeze({
   GAMES: 'games',
@@ -271,8 +284,7 @@ async function warmUrl(url, options = {}) {
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
-      mode: 'no-cors',
-      credentials: 'omit',
+      ...warmFetchMode(url),
       signal: controller.signal,
     });
 
@@ -291,8 +303,7 @@ async function warmUrl(url, options = {}) {
         await fetch(url, {
           method: 'GET',
           headers: { 'Range': `bytes=${tailStart}-${tailEnd}` },
-          mode: 'no-cors',
-          credentials: 'omit',
+          ...warmFetchMode(url),
           signal: controller.signal,
         });
         getOrInitState(url).tailWarmed = true;
@@ -342,8 +353,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
     const headPromise = fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1048575' },
-      mode: 'no-cors',
-      credentials: 'omit',
+      ...warmFetchMode(url),
       signal: controller.signal,
     }).catch(() => {});
 
@@ -353,8 +363,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
-      mode: 'no-cors',
-      credentials: 'omit',
+      ...warmFetchMode(url),
       signal: controller.signal,
     });
     await headPromise;
