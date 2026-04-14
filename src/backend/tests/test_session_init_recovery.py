@@ -6,10 +6,14 @@ on the user's first session init (once per user per process) — replacing the
 boot-time loop that needed user context it didn't have.
 """
 
+import asyncio
 import sys
+import time
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -115,3 +119,100 @@ class TestLazyStartupRecovery:
             user_session_init(uid)
 
         assert call_count["n"] == 1, f"expected 1 recovery invocation, got {call_count['n']}"
+
+
+class TestRunningLoopPath:
+    """Covers the production path where an event loop is already running.
+
+    user_session_init is called from sync middleware inside an async
+    FastAPI request, so there IS a running loop. The scheduler must:
+      1. Return immediately (create_task is fire-and-forget).
+      2. Propagate the caller's user_id / profile_id ContextVars into
+         the background task via the default context copy semantics.
+      3. Not block the caller on the recovery's duration.
+    """
+
+    @pytest.mark.asyncio
+    async def test_create_task_branch_propagates_context_and_does_not_block(self):
+        from app.session_init import (
+            _init_cache, user_session_init, _run_startup_recovery as _real,
+        )
+        from app.services.user_db import create_profile, set_selected_profile_id
+        from app.user_context import get_current_user_id
+        from app.profile_context import get_current_profile_id
+
+        uid = _uid("loop")
+        pid = uuid4().hex[:8]
+        _seed_orphans_for(uid, pid)
+        create_profile(uid, pid, "Test", "#000", is_default=True)
+        set_selected_profile_id(uid, pid)
+        _init_cache.pop(uid, None)
+
+        observed = {}
+        gate = asyncio.Event()
+
+        async def _spy(user_id: str):
+            # Sleep long enough that a blocking caller would be obvious.
+            await asyncio.sleep(0.2)
+            observed["user_id_arg"] = user_id
+            observed["ctx_user_id"] = get_current_user_id()
+            observed["ctx_profile_id"] = get_current_profile_id()
+            gate.set()
+
+        with patch("app.session_init._run_startup_recovery", _spy):
+            started = time.perf_counter()
+            user_session_init(uid)
+            elapsed = time.perf_counter() - started
+
+        # create_task must return immediately — user_session_init returning
+        # cannot have waited 200ms for the background task.
+        assert elapsed < 0.1, (
+            f"user_session_init blocked for {elapsed:.3f}s — create_task "
+            f"should be fire-and-forget"
+        )
+
+        # Now drain the scheduled task.
+        await asyncio.wait_for(gate.wait(), timeout=2.0)
+
+        assert observed["user_id_arg"] == uid
+        assert observed["ctx_user_id"] == uid, (
+            "user_id ContextVar did not propagate into create_task"
+        )
+        assert observed["ctx_profile_id"] == pid, (
+            "profile_id ContextVar did not propagate into create_task"
+        )
+
+
+class TestErrorIsolation:
+    """If recover_orphaned_jobs raises, process_modal_queue must still run."""
+
+    @pytest.mark.asyncio
+    async def test_queue_drain_runs_even_if_orphan_recovery_raises(self):
+        from app import session_init as si
+        from app.user_context import set_current_user_id
+        from app.profile_context import set_current_profile_id
+
+        uid = _uid("isolerr")
+        pid = uuid4().hex[:8]
+        _seed_orphans_for(uid, pid)
+        set_current_user_id(uid)
+        set_current_profile_id(pid)
+
+        queue_called = {"n": 0}
+
+        async def _boom():
+            raise RuntimeError("orphan recovery exploded")
+
+        async def _ok_queue():
+            queue_called["n"] += 1
+            return {"processed": 0, "succeeded": 0, "failed": 0}
+
+        with patch("app.services.export_worker.recover_orphaned_jobs", _boom), \
+             patch("app.services.modal_queue.process_modal_queue", _ok_queue):
+            # Call the inner coroutine directly so we test _run_startup_recovery's
+            # try/except structure, not the scheduler.
+            await si._run_startup_recovery(uid)
+
+        assert queue_called["n"] == 1, (
+            "process_modal_queue must run even when recover_orphaned_jobs raises"
+        )
