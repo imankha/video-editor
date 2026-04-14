@@ -197,29 +197,24 @@ describe('uploadManager', () => {
 
   describe('uploadGame integration', () => {
     it('should handle dedup (video exists in R2, game already owned)', async () => {
-      // Step 1: POST /api/games creates the game row
+      // T1180: Hash runs first (no fetch), then POST /api/games creates the
+      // game atomically with the video reference. Then prepare-upload.
+      // No separate attach step.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           status: 'already_owned',
           game_id: 123,
           name: 'Test Game',
+          video_url: 'https://example.com/video.mp4',
         }),
       });
-      // Step 2: prepare-upload returns 'exists' (video already in R2)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           status: 'exists',
           blake3_hash: 'a'.repeat(64),
           file_size: 1024,
-        }),
-      });
-      // Step 3: POST /api/games/{id}/videos attaches video
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          videos: [{ video_url: 'https://example.com/video.mp4' }],
         }),
       });
 
@@ -240,29 +235,22 @@ describe('uploadManager', () => {
     });
 
     it('should handle dedup (video exists in R2, new game created)', async () => {
-      // Step 1: POST /api/games creates the game row
+      // T1180: create-game-with-video then prepare-upload. No separate attach.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           status: 'created',
           game_id: 456,
           name: 'New Game',
+          video_url: 'https://example.com/video.mp4',
         }),
       });
-      // Step 2: prepare-upload returns 'exists' (video already in R2)
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           status: 'exists',
           blake3_hash: 'a'.repeat(64),
           file_size: 1024,
-        }),
-      });
-      // Step 3: POST /api/games/{id}/videos attaches video
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          videos: [{ video_url: 'https://example.com/video.mp4' }],
         }),
       });
 

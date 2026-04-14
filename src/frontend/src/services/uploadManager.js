@@ -270,14 +270,19 @@ async function uploadParts(
  * @param {Object} options - Video metadata for R2 object
  * @returns {Promise<Object>} - { blake3_hash, file_size, uploaded }
  */
-export async function ensureVideoInR2(file, onProgress, options = {}) {
+/**
+ * Hash + analyze a file. Extracted so callers (uploadGame) can create
+ * the games row with a known blake3_hash BEFORE the R2 upload starts —
+ * otherwise the row would be committed with video_filename=NULL and get
+ * orphaned if the upload fails (T1180).
+ *
+ * @returns {Promise<{blake3_hash: string, faststartInfo: object, file_size: number}>}
+ */
+export async function hashAndAnalyze(file, onProgress) {
   const notify = (phase, percent, message) => {
-    if (onProgress) {
-      onProgress({ phase, percent, message });
-    }
+    if (onProgress) onProgress({ phase, percent, message });
   };
 
-  // Phase 0: Analyze MP4 structure for faststart (T1380)
   notify(UPLOAD_PHASE.HASHING, 0, 'Analyzing video...');
   const faststartInfo = await analyzeMp4Faststart(file);
   if (faststartInfo.needsRelocation) {
@@ -288,12 +293,33 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     );
   }
 
-  // Phase 1: Hash (uses original file bytes for dedup consistency)
   notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
   const hash = await hashFile(file, (p) => {
     notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
   });
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
+
+  const file_size = faststartInfo.needsRelocation ? faststartInfo.newSize : file.size;
+  return { blake3_hash: hash, faststartInfo, file_size };
+}
+
+export async function ensureVideoInR2(file, onProgress, options = {}) {
+  const notify = (phase, percent, message) => {
+    if (onProgress) {
+      onProgress({ phase, percent, message });
+    }
+  };
+
+  // Allow caller to pass precomputed hash/analysis to skip rehashing.
+  let hash, faststartInfo;
+  if (options.precomputed) {
+    hash = options.precomputed.blake3_hash;
+    faststartInfo = options.precomputed.faststartInfo;
+  } else {
+    const h = await hashAndAnalyze(file, onProgress);
+    hash = h.blake3_hash;
+    faststartInfo = h.faststartInfo;
+  }
 
   // Phase 2: Prepare (check R2 for dedup, create multipart upload, generate URLs)
   // Use the new file size if faststart relocation changes it
@@ -439,15 +465,16 @@ async function addVideosToGame(gameId, videos) {
 }
 
 /**
- * Upload a game with deduplication support (single video)
+ * Upload a game with deduplication support (single video).
  *
- * Flow:
- * 1. Create game immediately via POST /api/games (no videos)
- * 2. Hash file → check R2 → upload if needed (ensureVideoInR2)
- * 3. Attach video to game via POST /api/games/{id}/videos
+ * Flow (T1180 — atomic create):
+ * 1. Hash file (shows progress bar).
+ * 2. Create game via POST /api/games with the video reference attached.
+ *    Row is never committed with NULL video_filename.
+ * 3. Upload bytes to R2 (reuses the precomputed hash).
  *
- * The game exists in the DB from step 1, so quest progress and UI
- * update immediately. The video uploads in the background.
+ * The game appears in the DB after hashing (few seconds), not instantly,
+ * but never in a broken/orphan state.
  *
  * @param {File} file - Video file to upload
  * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
@@ -462,37 +489,34 @@ export async function uploadGame(file, onProgress, options = {}) {
   };
 
   try {
-    // Step 1: Create game immediately (no videos yet)
-    // This makes the game visible in the DB right away for quest progress etc.
-    const gameResult = await createGame(options, []);
+    // Step 1: Hash the file (accurate progress from sampled hash).
+    const hashResult = await hashAndAnalyze(file, onProgress);
 
-    // Notify caller of game_id immediately so clip saves work during upload
-    if (options.onGameCreated) {
-      options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
-    }
-
-    // Refresh quest progress now that the game row exists
-    useQuestStore.getState().fetchProgress({ force: true });
-    // Refresh games list so the game appears in the UI
-    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
-      useGamesDataStore.getState().invalidateGames()
-    );
-
-    // Step 2: Ensure video is in R2 (hash + dedup + upload)
-    const r2Result = await ensureVideoInR2(file, onProgress, options);
-
-    // Step 3: Attach video to the game
-    notify(UPLOAD_PHASE.FINALIZING, 90, 'Linking video...');
-    const attachResult = await addVideosToGame(gameResult.game_id, [{
-      blake3_hash: r2Result.blake3_hash,
+    // Step 2: Create game atomically with the video reference.
+    const gameResult = await createGame(options, [{
+      blake3_hash: hashResult.blake3_hash,
       sequence: 1,
       duration: options.videoDuration || null,
       width: options.videoWidth || null,
       height: options.videoHeight || null,
-      file_size: r2Result.file_size || file.size,
+      file_size: hashResult.file_size,
     }]);
 
-    const videoUrl = attachResult.videos?.[0]?.video_url || null;
+    // Notify caller of game_id so clip saves work during the R2 upload.
+    if (options.onGameCreated) {
+      options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+    }
+
+    useQuestStore.getState().fetchProgress({ force: true });
+    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+      useGamesDataStore.getState().invalidateGames()
+    );
+
+    // Step 3: Upload bytes to R2 using the precomputed hash.
+    const r2Result = await ensureVideoInR2(file, onProgress, {
+      ...options,
+      precomputed: hashResult,
+    });
 
     notify(UPLOAD_PHASE.COMPLETE, 100, r2Result.uploaded ? 'Upload complete' : 'Game linked');
 
@@ -500,7 +524,7 @@ export async function uploadGame(file, onProgress, options = {}) {
       status: gameResult.status,
       game_id: gameResult.game_id,
       name: gameResult.name,
-      video_url: videoUrl,
+      video_url: gameResult.video_url,
       blake3_hash: r2Result.blake3_hash,
       file_size: r2Result.file_size,
       deduplicated: !r2Result.uploaded,
@@ -531,61 +555,62 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
   };
 
   try {
-    // Step 1: Create game immediately (no videos yet)
-    const gameResult = await createGame(options, []);
-
-    // Notify caller of game_id immediately so clip saves work during upload
-    if (options.onGameCreated) {
-      options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
-    }
-
-    // Refresh quest progress and games list
-    useQuestStore.getState().fetchProgress({ force: true });
-    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
-      useGamesDataStore.getState().invalidateGames()
-    );
-
-    const videoRefs = [];
     const fileCount = files.length;
+    const fileWeight = 1 / fileCount;
+    let gameResult = null;
+    let lastAttach = null;
 
-    // Step 2: Upload each video to R2 sequentially
+    // Per T1180: create the game only once the first video's hash is known,
+    // then process each subsequent file independently (hash → upload → attach)
+    // so per-file progress stays visible to the user.
     for (let i = 0; i < fileCount; i++) {
       const file = files[i];
       const sequence = i + 1;
       const metadata = options.videoMetadataList?.[i] || {};
-      const fileWeight = 1 / fileCount;
       const basePercent = i * fileWeight * 100;
-
       const halfLabel = fileCount === 2 ? (i === 0 ? 'First Half' : 'Second Half') : `Part ${sequence}`;
 
-      const r2Result = await ensureVideoInR2(file, (progress) => {
-        // Map per-file progress to overall progress
+      const perFileProgress = (progress) => {
         const overallPercent = Math.round(basePercent + progress.percent * fileWeight);
-        notify(
-          progress.phase,
-          overallPercent,
-          `${halfLabel}: ${progress.message}`
-        );
-      }, {
-        videoDuration: metadata.duration || null,
-        videoWidth: metadata.width || null,
-        videoHeight: metadata.height || null,
-        label: halfLabel,
-      });
+        notify(progress.phase, overallPercent, `${halfLabel}: ${progress.message}`);
+      };
 
-      videoRefs.push({
-        blake3_hash: r2Result.blake3_hash,
+      // Step A: Hash this file.
+      const hashResult = await hashAndAnalyze(file, perFileProgress);
+
+      const videoRef = {
+        blake3_hash: hashResult.blake3_hash,
         sequence,
         duration: metadata.duration || null,
         width: metadata.width || null,
         height: metadata.height || null,
-        file_size: r2Result.file_size || file.size,
+        file_size: hashResult.file_size,
+      };
+
+      // Step B: First file creates the game atomically.
+      //         Subsequent files attach to the existing game.
+      if (i === 0) {
+        gameResult = await createGame(options, [videoRef]);
+        if (options.onGameCreated) {
+          options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+        }
+        useQuestStore.getState().fetchProgress({ force: true });
+        import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+          useGamesDataStore.getState().invalidateGames()
+        );
+      } else {
+        lastAttach = await addVideosToGame(gameResult.game_id, [videoRef]);
+      }
+
+      // Step C: Upload bytes to R2.
+      await ensureVideoInR2(file, perFileProgress, {
+        videoDuration: metadata.duration || null,
+        videoWidth: metadata.width || null,
+        videoHeight: metadata.height || null,
+        label: halfLabel,
+        precomputed: hashResult,
       });
     }
-
-    // Step 3: Attach all videos to the game
-    notify(UPLOAD_PHASE.FINALIZING, 95, 'Linking videos...');
-    const attachResult = await addVideosToGame(gameResult.game_id, videoRefs);
 
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
@@ -593,8 +618,8 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       status: gameResult.status,
       game_id: gameResult.game_id,
       name: gameResult.name,
-      video_url: attachResult.videos?.[0]?.video_url || null,
-      videos: attachResult.videos,
+      video_url: lastAttach?.videos?.[0]?.video_url || gameResult.video_url || null,
+      videos: lastAttach?.videos || gameResult.videos,
       deduplicated: false,
     };
   } catch (error) {
