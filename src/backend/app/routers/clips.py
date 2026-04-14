@@ -1018,10 +1018,17 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
                 g.blake3_hash as game_blake3_hash,
-                g.video_filename as game_video_filename
+                g.video_filename as game_video_filename,
+                gv.blake3_hash as gv_blake3_hash
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             LEFT JOIN games g ON rc.game_id = g.id
+            -- T1440: multi-video games (e.g. Trace uploads split into halves)
+            -- store per-sequence metadata in game_videos; games.blake3_hash is
+            -- NULL for them. Resolve via the clip's video_sequence.
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -1049,12 +1056,16 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 filename = None
                 file_url = None
 
-            # Generate game video presigned URL for framing preview
+            # Generate game video presigned URL for framing preview.
+            # T1440: prefer per-sequence hash (game_videos.blake3_hash) for
+            # multi-video games; fall back to the legacy single-video fields
+            # on games itself.
+            blake3 = clip['gv_blake3_hash'] or clip['game_blake3_hash']
             game_video_url = None
-            if clip['game_blake3_hash'] or clip['game_video_filename']:
+            if blake3 or clip['game_video_filename']:
                 from app.routers.games import get_game_video_url
                 game_video_url = get_game_video_url(
-                    clip['game_blake3_hash'],
+                    blake3,
                     clip['game_video_filename']
                 )
 
@@ -1439,39 +1450,44 @@ async def stream_working_clip_bounded(
     last byte. It cannot over-fetch past the end because the proxy returns a
     shorter 206 response (the browser treats that as EOF for this resource).
 
-    Two-window strategy:
-    - Moov window:  bytes [0, MOOV_WINDOW_END] — small head so the <video>
-      element can parse the sample table and learn the byte offsets for
-      video time. Faststart (T1380) places moov near offset 20; 10MB is
-      comfortably larger than any realistic moov for the source sizes we
-      see.
-    - Clip window:  bytes [clipStartByte * 0.9, clipEndByte * 1.15] — the
-      clip body with 10% padding before and 15% after, guarding against
-      non-uniform bitrate in the proportional estimate.
+    Three-window strategy:
+    - Moov head window:  bytes [0, MOOV_WINDOW_END] — covers moov for
+      faststart files (moov near offset 20).
+    - Moov tail window:  bytes [size - MOOV_TAIL_SIZE, size - 1] — covers
+      moov for moov-at-end files (T1440: Trace uploads are not always
+      faststart; browser reads near EOF looking for moov).
+    - Clip window:       bytes [clipStartByte * 0.9, clipEndByte * 1.15]
+      — the clip body with padding to guard against non-uniform bitrate in
+      the proportional estimate.
 
-    Any request that falls outside both windows (i.e. the gap between moov
-    end and clip-window start, or bytes past clip-window end) returns 416.
-    The browser treats 416 as EOF and stops speculative fetching — this is
-    what actually bounds the over-buffer. Content-Range reports the true
-    source size so the browser's sample-table byte offsets resolve correctly.
+    Any request outside all three windows returns 416. Content-Range reports
+    the true source size so the browser's sample-table byte offsets resolve
+    correctly.
     """
-    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB should cover any moov
+    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB covers any faststart moov
+    MOOV_TAIL_SIZE = 10 * 1024 * 1024       # last 10 MB for moov-at-end files
     from fastapi.responses import StreamingResponse
     import httpx
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # T1440: resolve per-sequence metadata (blake3_hash, duration, size)
+        # from game_videos for multi-video games; games table fields are NULL
+        # for those. Fall back to games fields when sequence row missing.
         cursor.execute("""
             SELECT
                 rc.start_time,
                 rc.end_time,
-                g.blake3_hash,
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename,
-                g.video_duration,
-                g.video_size
+                COALESCE(gv.duration, g.video_duration) AS video_duration,
+                COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            JOIN games g ON rc.game_id = g.id
+            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
             WHERE wc.id = ? AND wc.project_id = ?
         """, (clip_id, project_id))
         row = cursor.fetchone()
@@ -1486,8 +1502,9 @@ async def stream_working_clip_bounded(
     start_time = row['start_time']
     end_time = row['end_time']
 
-    # Two windows.
+    # Three windows.
     moov_end = min(size - 1, MOOV_WINDOW_END)
+    moov_tail_start = max(0, size - MOOV_TAIL_SIZE)
     clip_start_byte = max(0, int((start_time / duration) * size * 0.9))
     clip_end_byte = min(size - 1, int((end_time / duration) * size * 1.15))
 
@@ -1521,10 +1538,14 @@ async def stream_working_clip_bounded(
     elif clip_start_byte <= req_start <= clip_end_byte:
         window_end = clip_end_byte
         window_kind = "clip"
+    elif req_start >= moov_tail_start:
+        window_end = size - 1
+        window_kind = "moov_tail"
     else:
         logger.info(
             f"[clip-stream] 416 gap clip_id={clip_id} req={req_start}-{req_end} "
-            f"moov=0-{moov_end} clip={clip_start_byte}-{clip_end_byte}"
+            f"moov=0-{moov_end} clip={clip_start_byte}-{clip_end_byte} "
+            f"moov_tail={moov_tail_start}-{size - 1}"
         )
         raise HTTPException(
             status_code=416,
