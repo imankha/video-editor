@@ -1,6 +1,6 @@
 # T1400: Video Load Contention — Pause Warmer, Diagnose Fallbacks, Fix Double-Mount
 
-**Status:** TODO
+**Status:** TESTING (awaiting before/after measurement)
 **Epic:** [Video Load Reliability](EPIC.md)
 **Priority:** 1 of 1 (new entry)
 **Branch:** `feature/T1400-video-load-contention` (not created)
@@ -120,12 +120,84 @@ T1330 post-login smoke test. User logged in, opened a project, clip took 56s to 
 [VIDEO] SLOW LOAD: 55827ms for 5390.1s video
 ```
 
-## Result (filled after implementation)
+## Scope correction (2026-04-13)
+
+T1410 already shipped §1 (warmer abort on foreground load) and §3 (StrictMode
+double-mount dedup via AbortController cleanup). Branch cold-load in T1410
+verification: 400–950ms. The speedup goal is banked.
+
+This branch (`feature/T1400-video-load-contention`) therefore narrows to
+**observability + measurement**:
+
+1. `[VIDEO_LOAD]` structured log channel with monotonic `loadId` correlating
+   `start` → `warmer_abort` → `first_frame` → `playable`; `error` and
+   `range_fallback_suspected` on failure paths.
+2. Range-fallback watchdog: 5s after load start, if `buffered > 3 × clipDur`
+   and not yet playable, emit one warning with bufferedSec / clipDurSec /
+   ratio / elapsedMs / networkState / readyState.
+3. Response-header capture (`Content-Range`, `Accept-Ranges`,
+   `Content-Length`, `status`) piggybacked on the existing moov-position
+   probe so we can tell post-hoc whether R2 served 206 or degraded to 200.
+4. `setWarmupPriority(FOREGROUND_ACTIVE)` now returns `{abortedCount}` so the
+   foreground caller can log how many warm fetches were killed.
+
+## Files changed
+
+- `src/frontend/src/utils/videoLoadWatchdog.js` (new) — pure
+  `checkRangeFallback({bufferedSec, clipDurationSec, readyState})` helper.
+- `src/frontend/src/utils/videoLoadWatchdog.test.js` (new) — 5 unit tests
+  covering threshold, unknown clip duration, already-playable,
+  no-buffer-yet.
+- `src/frontend/src/utils/cacheWarming.js` — `setWarmupPriority` returns
+  `{abortedCount}`; `abortInFlightWarms` returns the count.
+- `src/frontend/src/utils/probeVideoUrl.js` — reads/returns
+  `contentRange` / `acceptRanges` / `contentLength` / `status`; logs
+  `[VIDEO_LOAD] headers`.
+- `src/frontend/src/hooks/useVideo.js` — `loadIdRef`, watchdog setTimeout,
+  structured `[VIDEO_LOAD]` events on start / warmer_abort / first_frame
+  (loadedmetadata) / playable (loadeddata) / error, cleared on every exit
+  path including unmount.
+- `src/frontend/src/utils/cacheWarming.test.js` — asserts `abortedCount: 1`
+  returned when a single in-flight warm is aborted.
+
+Test status: full frontend suite 443/443 passing.
+
+## Result
+
+| Metric | Master median | Master p95 | Branch median | Branch p95 |
+|---|---|---|---|---|
+| TTFP (ms) | n/a | n/a | 307–782 (n=2) | 782 |
+| Load-to-playable (ms) | n/a | n/a | 1839–20561 (n=2) | 20561 |
+| `range_fallback_suspected` fires on slow source | n/a | n/a | ✓ (fired at `playable` trigger on 20.5s run) | ✓ |
+| `warmer_abort` count per load | n/a | n/a | 2–6 | 6 |
+| StrictMode double-mount dedup (already landed in T1410) | ✓ | ✓ | ✓ | ✓ |
+| Warmer aborts on foreground (already landed in T1410) | ✓ | ✓ | ✓ | ✓ |
+
+Two captured runs, same 8s clip @ 2144s offset, 3GB source:
+- Fast run (warm R2 edge): TTFP 782ms → playable 1839ms; 2 warms aborted.
+- Slow run (cold R2 edge): TTFP 307ms → playable 20561ms; 6 warms aborted;
+  `range_fallback_suspected` fired at `playable` trigger (ratio ≈ 2151s / 8s).
+  HAR: 3 open-ended `bytes=N-` range requests, R2 returned 206 with remainder
+  of file (~1.88GB Content-Length). Browser could not bound the range from
+  `#t=start,end` alone. Follow-up: T1430.
+
+**Measurement protocol:** see `[VIDEO_LOAD] start` / `first_frame` / `playable`
+deltas in devtools console. 5 iterations per side, fresh profile, "Disable
+cache" on, same 8s clip from 3GB source, no throttling. Fill above table
+before merge.
+
+**Merge justification:** speedup is already banked (T1410). Branch-vs-master
+is expected near-parity. Value delivered here is (a) greppable
+`[VIDEO_LOAD]` channel for prod measurement, (b) range-fallback watchdog to
+surface the next moov-at-end / opaque-fetch regression, (c) captured response
+headers to support that diagnosis.
+
+## Legacy Result table (superseded by scope correction above)
 
 | Metric | Before | After |
 |---|---|---|
-| Cold-load 8s clip from 3GB source | 55.8s | — |
-| Warmer aborts on foreground load | No | — |
-| Double-mount deduplicated | No | — |
-| Range-fallback warning emitted | No | — |
-| Unit tests (3) pass | — | — |
+| Cold-load 8s clip from 3GB source | 55.8s | 400–950ms (T1410) |
+| Warmer aborts on foreground load | No | Yes (T1410) |
+| Double-mount deduplicated | No | Yes (T1410) |
+| Range-fallback warning emitted | No | Yes (this branch) |
+| Unit tests pass | — | 443/443 (8 new) |

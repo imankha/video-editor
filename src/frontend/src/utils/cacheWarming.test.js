@@ -67,7 +67,9 @@ describe('cacheWarming — T1410 foreground abort', () => {
     expect(entry.signal.aborted).toBe(false);
 
     // Flip priority — should abort all in-flight warms.
-    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    // T1400: return value reports abortedCount so callers can log it.
+    const abortResult = cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    expect(abortResult).toEqual({ abortedCount: 1 });
 
     expect(entry.signal.aborted).toBe(true);
 
