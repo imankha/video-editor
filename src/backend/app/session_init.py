@@ -132,11 +132,58 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
-    # 9. Cache the result
+    # 9. Cache the result BEFORE scheduling recovery so concurrent first
+    # requests (e.g. two tabs) don't both schedule the same work.
     result = {
         "profile_id": profile_id,
         "is_new_user": is_new_user,
     }
     _init_cache[user_id] = result
 
+    # 10. T1380 + T1390: per-user orphaned-job recovery and modal queue drain.
+    # Runs once per user per server process (gated by _init_cache above).
+    # Both routines need user+profile context, which is set above. When an
+    # event loop is running we schedule as a background task so the user's
+    # first request isn't blocked; in sync test contexts we run inline.
+    _schedule_startup_recovery(user_id)
+
     return result
+
+
+async def _run_startup_recovery(user_id: str) -> None:
+    """Run orphaned-job recovery and modal queue drain for the current user.
+
+    Expects user_id + profile_id ContextVars to already be set by the caller
+    (asyncio.create_task copies the current context, so this is automatic
+    when scheduled from user_session_init).
+    """
+    from .services.export_worker import recover_orphaned_jobs
+    from .services.modal_queue import process_modal_queue
+
+    try:
+        await recover_orphaned_jobs()
+    except Exception as e:
+        logger.warning(
+            f"[SessionInit] recover_orphaned_jobs failed for {user_id}: {e}"
+        )
+
+    try:
+        result = await process_modal_queue()
+        if result.get("processed", 0) > 0:
+            logger.info(
+                f"[SessionInit] modal queue for {user_id}: "
+                f"{result['succeeded']} ok, {result['failed']} failed"
+            )
+    except Exception as e:
+        logger.warning(
+            f"[SessionInit] process_modal_queue failed for {user_id}: {e}"
+        )
+
+
+def _schedule_startup_recovery(user_id: str) -> None:
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(_run_startup_recovery(user_id))
+    except RuntimeError:
+        asyncio.run(_run_startup_recovery(user_id))

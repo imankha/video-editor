@@ -65,7 +65,6 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress
-from app.services.export_worker import recover_orphaned_jobs
 from app.user_context import set_current_user_id, get_current_user_id
 from app.session_init import user_session_init
 from app.middleware import RequestContextMiddleware
@@ -279,23 +278,14 @@ async def startup_event():
     # Default user 'a' init removed — all users now go through auth.
     # Profile context is set per-request by the middleware.
 
-    # Recover any orphaned export jobs from previous server run
-    try:
-        await recover_orphaned_jobs()
-        logger.info("Orphaned export jobs recovery complete")
-    except Exception as e:
-        logger.warning(f"Failed to recover orphaned jobs: {e}")
-
-    # Process any pending modal tasks from previous server run
-    try:
-        from app.services.modal_queue import process_modal_queue
-        result = await process_modal_queue()
-        if result.get("processed", 0) > 0:
-            logger.info(f"Modal queue processed: {result['succeeded']} succeeded, {result['failed']} failed")
-        else:
-            logger.info("Modal queue: no pending tasks found")
-    except Exception as e:
-        logger.warning(f"Failed to process modal queue: {e}")
+    # T1380 + T1390: orphaned-job recovery and modal queue drain are deferred to
+    # each user's first request of this server process (see session_init.py).
+    # Boot-time iteration over all users does not scale — most users have no
+    # pending work, and per-user R2 restore at boot would dominate cold start.
+    logger.info(
+        "[Startup] orphaned-job recovery + modal queue drain deferred to "
+        "per-user first request (runs once per user via user_session_init)"
+    )
 
 
 

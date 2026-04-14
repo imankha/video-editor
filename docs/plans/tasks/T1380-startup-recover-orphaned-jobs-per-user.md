@@ -1,6 +1,6 @@
 # T1380: Recover Orphaned Jobs Per-User at Startup
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-04-13
