@@ -103,7 +103,10 @@ describe('cacheWarming — T1410 foreground abort', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // warmClipRange issues 2 parallel fetches: head-prewarm (0-1MB) + clip body range.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const ranges = fetchMock.mock.calls.map((c) => c[1]?.headers?.Range);
+    expect(new Set(ranges).size).toBe(2);
   });
 
   it('StrictMode double-invoke: aborting first foreground load leaves exactly one survivor', async () => {
