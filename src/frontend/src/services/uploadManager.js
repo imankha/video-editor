@@ -15,6 +15,7 @@ import { API_BASE } from '../config';
 import { GameCreateStatus } from '../constants/gameConstants';
 import { useQuestStore } from '../stores/questStore';
 import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
+import { getWarmingDiag } from '../utils/cacheWarming';
 
 // Upload phases for progress tracking
 export const UPLOAD_PHASE = {
@@ -105,9 +106,18 @@ export async function hashFile(file, onProgress) {
  */
 async function uploadPart(file, part, onProgress, faststartInfo = null) {
   const { part_number, presigned_url, start_byte, end_byte } = part;
+
+  // [DIAG upload-freeze] measure main-thread time to assemble the part blob.
+  // getReorderedSlice builds a Blob across 3 regions; if it blocks for tens of
+  // ms per part, parallel part uploads will stutter the UI.
+  const __diagSliceStart = performance.now();
   const blob = faststartInfo?.needsRelocation
     ? getReorderedSlice(file, faststartInfo, start_byte, end_byte + 1)
     : file.slice(start_byte, end_byte + 1);
+  const __diagSliceMs = performance.now() - __diagSliceStart;
+  if (__diagSliceMs > 5) {
+    console.log(`[DIAG upload-freeze] part=${part_number} slice_ms=${__diagSliceMs.toFixed(1)} size=${(end_byte - start_byte + 1) >> 20}MB reordered=${!!faststartInfo?.needsRelocation}`);
+  }
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -283,8 +293,17 @@ export async function hashAndAnalyze(file, onProgress) {
     if (onProgress) onProgress({ phase, percent, message });
   };
 
+  // [DIAG upload-freeze] wall-clock each phase to correlate with UI stutter.
+  const __diagFileMB = (file.size / (1 << 20)).toFixed(1);
+  const __diagWarmAtStart = getWarmingDiag();
+  console.log(`[DIAG upload-freeze] ensureVideoInR2 START file=${file.name} size=${__diagFileMB}MB warmer=${JSON.stringify(__diagWarmAtStart)}`);
+  const __diagT0 = performance.now();
+
+  // Phase 0: Analyze MP4 structure for faststart (T1380)
   notify(UPLOAD_PHASE.HASHING, 0, 'Analyzing video...');
+  const __diagAnalyzeStart = performance.now();
   const faststartInfo = await analyzeMp4Faststart(file);
+  console.log(`[DIAG upload-freeze] analyzeMp4Faststart ${(performance.now() - __diagAnalyzeStart).toFixed(0)}ms needsRelocation=${faststartInfo.needsRelocation}`);
   if (faststartInfo.needsRelocation) {
     console.log(
       `[Upload] Moov atom at end (offset ${faststartInfo.moovOffset}), ` +
@@ -294,9 +313,11 @@ export async function hashAndAnalyze(file, onProgress) {
   }
 
   notify(UPLOAD_PHASE.HASHING, 0, 'Computing file hash...');
+  const __diagHashStart = performance.now();
   const hash = await hashFile(file, (p) => {
     notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
   });
+  console.log(`[DIAG upload-freeze] hashFile ${(performance.now() - __diagHashStart).toFixed(0)}ms`);
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
 
   const file_size = faststartInfo.needsRelocation ? faststartInfo.newSize : file.size;
@@ -374,6 +395,8 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     notify(UPLOAD_PHASE.UPLOADING, 0, 'Uploading...');
   }
 
+  const __diagUploadStart = performance.now();
+  console.log(`[DIAG upload-freeze] uploadParts BEGIN warmer=${JSON.stringify(getWarmingDiag())}`);
   const parts = await uploadParts(
     file,
     prepareData.parts,
@@ -386,6 +409,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     3,
     faststartInfo
   );
+  console.log(`[DIAG upload-freeze] uploadParts ${((performance.now() - __diagUploadStart) / 1000).toFixed(1)}s parts=${prepareData.parts.length}`);
   notify(UPLOAD_PHASE.UPLOADING, 100, 'Upload complete');
 
   // Phase 4: Finalize R2 multipart
@@ -413,6 +437,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   const finalizeData = await finalizeRes.json();
   notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
+  console.log(`[DIAG upload-freeze] ensureVideoInR2 END total=${((performance.now() - __diagT0) / 1000).toFixed(1)}s`);
   return {
     blake3_hash: finalizeData.blake3_hash,
     file_size: finalizeData.file_size,
