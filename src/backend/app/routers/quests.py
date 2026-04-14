@@ -259,8 +259,24 @@ async def get_progress():
 
     Completed quests are read from user.sqlite (user-scoped, T970).
     Step progress for uncompleted quests is derived from the active profile.
+
+    Allowlisted pre-login: if no user context is set, return an all-incomplete
+    shape so the onboarding quest panel can render without a 401.
     """
-    user_id = get_current_user_id()
+    try:
+        user_id = get_current_user_id()
+    except RuntimeError:
+        return {
+            "quests": [
+                {
+                    "id": qdef["id"],
+                    "steps": {sid: False for sid in qdef["step_ids"]},
+                    "completed": False,
+                    "reward_claimed": False,
+                }
+                for qdef in QUEST_DEFINITIONS
+            ]
+        }
 
     if PROFILING_ENABLED:
         _t_total = time.perf_counter()

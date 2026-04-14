@@ -152,6 +152,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth/',               # All auth sub-routes (google, email/*, me, logout)
         '/api/health',              # Health check
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
+        '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/docs',                    # API docs
         '/redoc',                   # API docs
         '/openapi.json',            # OpenAPI spec
