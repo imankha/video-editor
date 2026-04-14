@@ -1018,10 +1018,17 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
                 g.blake3_hash as game_blake3_hash,
-                g.video_filename as game_video_filename
+                g.video_filename as game_video_filename,
+                gv.blake3_hash as gv_blake3_hash
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             LEFT JOIN games g ON rc.game_id = g.id
+            -- T1440: multi-video games (e.g. Trace uploads split into halves)
+            -- store per-sequence metadata in game_videos; games.blake3_hash is
+            -- NULL for them. Resolve via the clip's video_sequence.
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -1049,12 +1056,16 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 filename = None
                 file_url = None
 
-            # Generate game video presigned URL for framing preview
+            # Generate game video presigned URL for framing preview.
+            # T1440: prefer per-sequence hash (game_videos.blake3_hash) for
+            # multi-video games; fall back to the legacy single-video fields
+            # on games itself.
+            blake3 = clip['gv_blake3_hash'] or clip['game_blake3_hash']
             game_video_url = None
-            if clip['game_blake3_hash'] or clip['game_video_filename']:
+            if blake3 or clip['game_video_filename']:
                 from app.routers.games import get_game_video_url
                 game_video_url = get_game_video_url(
-                    clip['game_blake3_hash'],
+                    blake3,
                     clip['game_video_filename']
                 )
 
@@ -1461,17 +1472,23 @@ async def stream_working_clip_bounded(
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # T1440: resolve per-sequence metadata (blake3_hash, duration, size)
+        # from game_videos for multi-video games; games table fields are NULL
+        # for those. Fall back to games fields when sequence row missing.
         cursor.execute("""
             SELECT
                 rc.start_time,
                 rc.end_time,
-                g.blake3_hash,
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                 g.video_filename,
-                g.video_duration,
-                g.video_size
+                COALESCE(gv.duration, g.video_duration) AS video_duration,
+                COALESCE(gv.video_size, g.video_size) AS video_size
             FROM working_clips wc
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            JOIN games g ON rc.game_id = g.id
+            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
             WHERE wc.id = ? AND wc.project_id = ?
         """, (clip_id, project_id))
         row = cursor.fetchone()

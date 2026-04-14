@@ -68,6 +68,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1410 | [Video Load Regression Since 04-08](tasks/video-load-reliability/T1410-video-load-regression-since-0408.md) | DONE | 5.0 | Warmer aborts on foreground load, StrictMode dedup — 35–56s → ~400–950ms cold load |
 | T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TESTING | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
 | T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | DONE | 1.5 | Observability + two-window proxy: cold 20.5s→2.0s, warm 2.2s→0.6s; Step 3 MSE unnecessary |
+| T1440 | [Trace multi-video games fail in framing](tasks/video-load-reliability/T1440-trace-multi-video-games.md) | TESTING | 1.0 | Clips endpoint joined only `games` for blake3_hash; multi-video games store it per-sequence in `game_videos` → `game_video_url` null → framing 404 |
 
 ### Standalone Tasks
 
