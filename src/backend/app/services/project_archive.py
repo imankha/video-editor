@@ -14,7 +14,12 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from io import BytesIO
 
-from app.database import get_db_connection
+from app.database import (
+    get_db_connection,
+    get_database_path,
+    DB_SIZE_WARNING_THRESHOLD,
+)
+from app.queries import latest_working_clips_subquery
 from app.storage import (
     R2_ENABLED,
     upload_bytes_to_r2,
@@ -354,7 +359,13 @@ def cleanup_database_bloat() -> dict:
     Returns:
         Dict with counts of deleted rows per category.
     """
-    result = {"working_videos_pruned": 0, "export_jobs_pruned": 0}
+    result = {
+        "working_videos_pruned": 0,
+        "export_jobs_pruned": 0,
+        "working_clips_pruned": 0,
+        "before_after_tracks_pruned": 0,
+        "modal_tasks_pruned": 0,
+    }
 
     try:
         with get_db_connection() as conn:
@@ -381,14 +392,63 @@ def cleanup_database_bloat() -> dict:
             """)
             result["export_jobs_pruned"] = cursor.rowcount
 
-            if result["working_videos_pruned"] > 0 or result["export_jobs_pruned"] > 0:
-                conn.commit()
-                # VACUUM to reclaim disk space after deletes
-                conn.execute("VACUUM")
-                logger.info(
-                    f"Database cleanup: pruned {result['working_videos_pruned']} old working_video versions, "
-                    f"{result['export_jobs_pruned']} old export_jobs"
+            # 3. T1160: Delete old working_clips versions (keep only latest per identity)
+            cursor.execute(f"""
+                DELETE FROM working_clips
+                WHERE id NOT IN ({latest_working_clips_subquery(project_filter=False)})
+            """)
+            result["working_clips_pruned"] = cursor.rowcount
+
+            # 4. T1160: Delete before_after_tracks for non-current final_videos
+            cursor.execute("""
+                DELETE FROM before_after_tracks
+                WHERE final_video_id NOT IN (
+                    SELECT final_video_id FROM projects WHERE final_video_id IS NOT NULL
                 )
+            """)
+            result["before_after_tracks_pruned"] = cursor.rowcount
+
+            # 5. T1160: Delete terminal modal_tasks older than 24h
+            cursor.execute("""
+                DELETE FROM modal_tasks
+                WHERE status IN ('complete', 'error', 'cancelled')
+                AND COALESCE(completed_at, created_at) < datetime('now', '-1 day')
+            """)
+            result["modal_tasks_pruned"] = cursor.rowcount
+
+            any_pruned = any(v > 0 for v in result.values())
+            if any_pruned:
+                conn.commit()
+                logger.info(
+                    f"Database cleanup pruned: "
+                    f"working_videos={result['working_videos_pruned']}, "
+                    f"export_jobs={result['export_jobs_pruned']}, "
+                    f"working_clips={result['working_clips_pruned']}, "
+                    f"before_after_tracks={result['before_after_tracks_pruned']}, "
+                    f"modal_tasks={result['modal_tasks_pruned']}"
+                )
+
+            # T1170: VACUUM only when DB exceeds threshold. Must run outside a
+            # transaction; commit above ensures we're in autocommit state.
+            db_path = get_database_path()
+            if db_path.exists():
+                size_before = db_path.stat().st_size
+                if size_before > DB_SIZE_WARNING_THRESHOLD:
+                    logger.info(
+                        f"[Cleanup] DB {size_before // 1024}KB > "
+                        f"{DB_SIZE_WARNING_THRESHOLD // 1024}KB — running VACUUM"
+                    )
+                    conn.execute("VACUUM")
+                    size_after = db_path.stat().st_size
+                    logger.info(
+                        f"[Cleanup] VACUUM: {size_before // 1024}KB -> {size_after // 1024}KB "
+                        f"({(size_before - size_after) // 1024}KB freed)"
+                    )
+                else:
+                    logger.debug(
+                        f"[Cleanup] DB {size_before // 1024}KB under "
+                        f"{DB_SIZE_WARNING_THRESHOLD // 1024}KB — skipping VACUUM"
+                    )
 
         return result
 
