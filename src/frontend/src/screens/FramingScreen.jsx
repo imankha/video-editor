@@ -410,8 +410,16 @@ export function FramingScreen({
   // that was in tier-1=0 state would always land on the cold proxy path. Fire
   // pushClipRanges when framing mounts with clips — this is the user gesture
   // "opened framing", and it prepends the right ranges at the front of tier-1.
+  // Key on clip ids so store re-emits with same identity don't re-queue.
+  const warmableClipIdsKey = useMemo(
+    () => clips
+      .filter(c => c.game_video_url && c.start_time != null && c.end_time != null && c.video_duration && c.video_size)
+      .map(c => c.id)
+      .join(','),
+    [clips]
+  );
   useEffect(() => {
-    if (!clips.length) return;
+    if (!warmableClipIdsKey) return;
     const ranges = clips
       .filter(c => c.game_video_url && c.start_time != null && c.end_time != null && c.video_duration && c.video_size)
       .map(c => ({
@@ -423,7 +431,7 @@ export function FramingScreen({
         videoSize: c.video_size,
       }));
     if (ranges.length) pushClipRanges(ranges);
-  }, [clips]);
+  }, [warmableClipIdsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- warmableClipIdsKey captures the identity we care about
 
   // T580: On mount, immediately load the first clip's video before first paint.
   // When switching from overlay → framing, the shared videoStore may still hold

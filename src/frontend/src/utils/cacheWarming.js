@@ -550,15 +550,33 @@ export async function warmAllUserVideos() {
 export function pushClipRanges(clipRanges) {
   if (!clipRanges?.length) return;
 
-  const items = clipRanges.map(clip => ({
-    type: 'clipRange',
-    clipId: clip.clipId ?? clip.id ?? null,
-    url: clip.url,
-    startTime: clip.startTime,
-    endTime: clip.endTime,
-    videoDuration: clip.videoDuration,
-    videoSize: clip.videoSize,
-  }));
+  // T1460: dedupe against items already queued or warmed. Without this,
+  // every FramingScreen mount/clip-switch re-pushed the same ranges,
+  // inflating tier1 to 6-8 items for a 2-clip project. That saturated
+  // R2 connections during foreground load and triggered metadata-load
+  // timeouts and a 35s first-frame stall on direct-warm loads.
+  const key = (url, st, et) => `${url}|${st}-${et}`;
+  const existingKeys = new Set(
+    tier1Queue
+      .filter(i => i.type === 'clipRange')
+      .map(i => key(i.url, i.startTime, i.endTime))
+  );
+  const items = clipRanges
+    .filter(clip => {
+      const k = key(clip.url, clip.startTime, clip.endTime);
+      return !existingKeys.has(k) && !warmedUrls.has(k);
+    })
+    .map(clip => ({
+      type: 'clipRange',
+      clipId: clip.clipId ?? clip.id ?? null,
+      url: clip.url,
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      videoDuration: clip.videoDuration,
+      videoSize: clip.videoSize,
+    }));
+
+  if (!items.length) return;
 
   // Prepend to tier1 so these process next
   tier1Queue = [...items, ...tier1Queue];
