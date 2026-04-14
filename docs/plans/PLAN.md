@@ -69,6 +69,7 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1420 | [Warmup Abort Polish](tasks/video-load-reliability/T1420-warmup-polish.md) | TESTING | 2.0 | Silence AbortError-as-failure log; dedupe StrictMode double-invoke of init load |
 | T1430 | [Range Overbuffer (2151s for 8s clip)](tasks/video-load-reliability/T1430-range-overbuffer.md) | DONE | 1.5 | Observability + two-window proxy: cold 20.5s→2.0s, warm 2.2s→0.6s; Step 3 MSE unnecessary |
 | T1440 | [Trace multi-video games fail in framing](tasks/video-load-reliability/T1440-trace-multi-video-games.md) | DONE | 1.0 | Clips endpoint joined only `games` for blake3_hash; multi-video games store it per-sequence in `game_videos` → `game_video_url` null → framing 404 |
+| T1450 | [Trace load parity via R2 faststart migration](tasks/video-load-reliability/T1450-trace-load-parity.md) | TESTING | 1.5 | One-shot `ffmpeg -movflags +faststart` rewrite of 13 moov-at-end games on R2; preserves size so no DB changes; brings Trace load 3.2s→~2s |
 
 ### Standalone Tasks
 
@@ -84,8 +85,8 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
-| T1380 | [Recover Orphaned Jobs Per-User at Startup](tasks/T1380-startup-recover-orphaned-jobs-per-user.md) | TODO | 1.7 | `recover_orphaned_jobs` runs without user context at boot → always fails; never actually recovers jobs |
-| T1390 | [Process Modal Queue Per-User at Startup](tasks/T1390-startup-modal-queue-per-user.md) | TODO | 1.7 | `process_modal_queue` runs without user context at boot → always fails; queued jobs never drain |
+| T1380 | [Recover Orphaned Jobs Per-User at Startup](tasks/T1380-startup-recover-orphaned-jobs-per-user.md) | TESTING | 1.7 | Moved to lazy per-user recovery in user_session_init (once per user per process) — scales to millions of users |
+| T1390 | [Process Modal Queue Per-User at Startup](tasks/T1390-startup-modal-queue-per-user.md) | TESTING | 1.7 | Same fix as T1380: modal queue drain runs lazily on first request under correct user context |
 
 ### Epic: For Launch (IN_PROGRESS)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
