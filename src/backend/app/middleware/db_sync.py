@@ -292,6 +292,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                             profile_ok = profile_future.result()
                             user_ok = user_future.result()
 
+                        # T1154: distinguishing log for partial-success events so we can
+                        # measure frequency before deciding on atomic-sync strategy.
+                        if profile_ok != user_ok:
+                            logger.warning(
+                                f"[SYNC_PARTIAL] user={_user_id} profile_ok={profile_ok} "
+                                f"user_ok={user_ok} path={request.url.path} "
+                                f"method={request.method}"
+                            )
+
                         # Map explicit sync return values to middleware expectations
                         db_status = "ok" if profile_ok else "failed"
                         user_sync_success = user_ok
