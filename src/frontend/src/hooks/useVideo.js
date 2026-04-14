@@ -7,6 +7,7 @@ import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback } from '../utils/videoLoadWatchdog';
+import { chooseLoadRoute, isDirectForced } from '../utils/videoLoadRoute';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
@@ -201,14 +202,27 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * @param {Object} preloadedMetadata - Optional pre-extracted metadata
    * @param {Object} clipRange - Optional {clipOffset, clipDuration} for playing a subset of the video
    */
-  const loadVideoFromStreamingUrl = useCallback((url, preloadedMetadata = null, clipRange = null) => {
+  const loadVideoFromStreamingUrl = useCallback((url, preloadedMetadata = null, clipRange = null, options = {}) => {
     const newClipOffset = clipRange?.clipOffset || 0;
     const newClipDuration = clipRange?.clipDuration || null;
     const effectiveDuration = newClipDuration || preloadedMetadata?.duration || 0;
 
+    // T1460: decide direct-vs-proxy at load time (not at clip-select time) so
+    // the freshest warm state wins. Also gives us the raw R2 URL to use for
+    // warm_status telemetry, even when we still end up going through proxy.
+    const route = chooseLoadRoute({
+      url,
+      gameUrl: options.gameUrl || null,
+      clipOffset: newClipOffset,
+      clipDuration: newClipDuration,
+      forceDirect: isDirectForced(),
+      getWarmedStateFn: getWarmedState,
+    });
+    const loadUrl = route.loadUrl;
+
     // Same video URL — just update clip range and seek, no reload needed
     const currentUrl = useVideoStore.getState().videoUrl;
-    if (url === currentUrl && videoRef.current) {
+    if (loadUrl === currentUrl && videoRef.current) {
       console.log(`[useVideo] Same URL, seeking to clip offset=${newClipOffset}s`);
       const currentMeta = useVideoStore.getState().metadata;
       const baseMeta = preloadedMetadata || currentMeta;
@@ -217,7 +231,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const meta = baseMeta && effectiveDuration ? { ...baseMeta, duration: effectiveDuration } : baseMeta;
       setVideoLoaded({
         file: null,
-        url: url,
+        url: loadUrl,
         metadata: meta,
         duration: effectiveDuration,
         clipOffset: newClipOffset,
@@ -234,20 +248,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     const loadId = ++loadIdRef.current;
     loadStartRef.current = performance.now();
     clipDurationForLoadRef.current = newClipDuration;
-    isProxyLoadRef.current = !!url && /\/api\/clips\/[^?]*\/stream(\?|$)/.test(url);
-    console.log(`[VIDEO_LOAD] start id=${loadId} clipDurSec=${newClipDuration ?? 'null'} url=${url?.substring(0, 60)}`);
+    isProxyLoadRef.current = !!loadUrl && /\/api\/clips\/[^?]*\/stream(\?|$)/.test(loadUrl);
+    console.log(`[VIDEO_LOAD] start id=${loadId} route=${route.route} clipDurSec=${newClipDuration ?? 'null'} url=${loadUrl?.substring(0, 60)}`);
 
-    // T1430: log whether this clip/URL was pre-warmed. Helps correlate slow
-    // cold-path loads with warmer coverage gaps before we build the proxy.
+    // T1460: warm_status lookup uses the R2 URL the warmer recorded against
+    // (warmLookupUrl), not the chosen load URL. Before this change, picking
+    // the proxy URL meant warm_status always reported clipWarmed=false even
+    // when the R2 bytes had been warmed.
     {
-      const ws = getWarmedState(url);
-      const clipStart = newClipOffset;
-      const clipEnd = newClipDuration ? newClipOffset + newClipDuration : null;
-      const rangeCovered = !!(ws && clipEnd !== null && ws.clipRanges.some(
-        r => r.startTime <= clipStart && r.endTime >= clipEnd
-      ));
+      const ws = getWarmedState(route.warmLookupUrl);
       const clipWarmed = !!(ws && (ws.urlWarmed || ws.clipRanges.length > 0));
-      console.log(`[VIDEO_LOAD] warm_status id=${loadId} clipWarmed=${clipWarmed} rangeCovered=${rangeCovered} urlWarmed=${ws?.urlWarmed ?? false} clipRanges=${ws?.clipRanges.length ?? 0}`);
+      console.log(`[VIDEO_LOAD] warm_status id=${loadId} clipWarmed=${clipWarmed} rangeCovered=${route.rangeCovered} urlWarmed=${ws?.urlWarmed ?? false} clipRanges=${ws?.clipRanges.length ?? 0} route=${route.route}`);
     }
 
     // T1410: pause warmup & abort in-flight warm fetches so foreground video
@@ -299,7 +310,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       : preloadedMetadata;
     setVideoLoaded({
       file: null,
-      url: url,
+      url: loadUrl,
       metadata: meta,
       duration: effectiveDuration,
       clipOffset: newClipOffset,
