@@ -6,6 +6,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
+import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
