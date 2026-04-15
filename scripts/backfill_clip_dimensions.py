@@ -202,6 +202,27 @@ def backfill_profile(db_path: Path, s3, dry_run: bool) -> dict:
         """, (meta["width"], meta["height"], meta["fps"], row["game_id"], row["sequence"]))
         stats["updated_wc"] += cur.rowcount
 
+    # Second pass: fill ANY working_clips still missing dims from its game_videos row,
+    # regardless of whether the game_video itself needed backfilling this run. This
+    # catches rows where the cascade JOIN missed (e.g. raw_clips.video_sequence drift).
+    if not dry_run:
+        cur.execute("""
+            UPDATE working_clips
+            SET width = COALESCE(working_clips.width, gv.video_width),
+                height = COALESCE(working_clips.height, gv.video_height),
+                fps = COALESCE(working_clips.fps, gv.fps)
+            FROM (
+                SELECT rc.id AS raw_clip_id, gv.video_width, gv.video_height, gv.fps
+                FROM raw_clips rc
+                JOIN game_videos gv
+                  ON gv.game_id = rc.game_id
+                 AND gv.sequence = COALESCE(rc.video_sequence, 1)
+            ) AS gv
+            WHERE working_clips.raw_clip_id = gv.raw_clip_id
+              AND (working_clips.width IS NULL OR working_clips.height IS NULL OR working_clips.fps IS NULL)
+        """)
+        stats["updated_wc"] += cur.rowcount
+
     try:
         if not dry_run:
             conn.commit()
