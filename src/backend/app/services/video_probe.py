@@ -53,21 +53,47 @@ def ffprobe_bytes(data: bytes) -> Optional[dict]:
 
 
 def probe_r2_video(s3_client, bucket: str, key: str) -> Optional[dict]:
-    """Byte-range fetch from R2 + ffprobe. Head first, tail fallback."""
+    """
+    Probe a video in R2 via presigned URL + ffprobe. ffprobe natively uses HTTP
+    byte-range requests, pulling only the bytes it needs (moov atom + a handful
+    of samples) — far more reliable than pre-fetching a fixed prefix, which
+    often fails because ffprobe needs to cross-reference moov and mdat offsets.
+    """
     try:
-        obj = s3_client.get_object(Bucket=bucket, Key=key, Range=f"bytes=0-{HEAD_BYTES - 1}")
-        meta = ffprobe_bytes(obj["Body"].read())
-        if meta:
-            return meta
+        url = s3_client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": key},
+            ExpiresIn=300,
+        )
+        import subprocess, json
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-analyzeduration", "500000",
+                "-probesize", "5000000",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=r_frame_rate,width,height",
+                "-of", "json",
+                url,
+            ],
+            capture_output=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            logger.warning(f"[video_probe] ffprobe failed for {key}: {result.stderr[:200]!r}")
+            return None
+        parsed = json.loads(result.stdout)
+        stream = (parsed.get("streams") or [{}])[0]
+        if not stream.get("width") or not stream.get("height"):
+            return None
+        fps_str = stream.get("r_frame_rate", "30/1")
+        num, _, den = fps_str.partition("/")
+        fps = float(num) / float(den) if den else float(num)
+        return {
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "fps": fps,
+        }
     except Exception as e:
-        logger.warning(f"[video_probe] head range fetch failed for {key}: {e}")
-
-    try:
-        head = s3_client.head_object(Bucket=bucket, Key=key)
-        size = head["ContentLength"]
-        start = max(0, size - TAIL_BYTES)
-        obj = s3_client.get_object(Bucket=bucket, Key=key, Range=f"bytes={start}-{size - 1}")
-        return ffprobe_bytes(obj["Body"].read())
-    except Exception as e:
-        logger.warning(f"[video_probe] tail range fetch failed for {key}: {e}")
+        logger.warning(f"[video_probe] probe_r2_video failed for {key}: {e}")
         return None

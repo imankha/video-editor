@@ -4,9 +4,8 @@ import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
-import { extractVideoMetadataFromUrl, shouldProbeClipMetadata } from '../utils/videoMetadata';
+// T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
-import { clipFileUrl as getClipFileUrlSelector } from '../utils/clipSelectors';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -131,45 +130,32 @@ export function useProjectLoader() {
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
-      // Load video metadata — deduplicate by URL so each game video is probed once
+      // T1500: dims (width/height/fps) live on working_clips. No probe.
+      // Missing dims indicate a backfill gap — log loudly so it's visible.
       const metadataCache = {};
-      const urlMetadataMap = new Map(); // url -> Promise<metadata>
+      for (const clip of clipsData) {
+        const hasUrl = (clip.game_video_url && clip.start_time != null && clip.end_time != null)
+          || Boolean(clip.filename);
+        if (!hasUrl) continue;
 
-      // Build per-clip config and deduplicate URL probes
-      const clipConfigs = clipsData.map(clip => {
-        if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
-          return { clip, url: clip.game_video_url, durationOverride: clip.end_time - clip.start_time };
-        } else if (clip.filename) {
-          return { clip, url: getClipFileUrlSelector(clip, projectId), durationOverride: null };
+        if (!clip.width || !clip.height || !clip.fps) {
+          console.error(
+            `[useProjectLoader] T1500 gap: clip id=${clip.id} missing dims ` +
+            `(width=${clip.width} height=${clip.height} fps=${clip.fps}). ` +
+            `Run scripts/backfill_clip_dimensions.py to fix.`
+          );
         }
-        return { clip, url: null, durationOverride: null };
-      });
 
-      // T1500: Only probe URLs for clips missing persisted width/height/fps.
-      // Populated clips hydrate metadataCache directly — zero /stream requests.
-      for (const { clip, url } of clipConfigs) {
-        if (url && shouldProbeClipMetadata(clip) && !urlMetadataMap.has(url)) {
-          urlMetadataMap.set(url, extractVideoMetadataFromUrl(url).catch(err => {
-            console.warn(`[useProjectLoader] Failed to load metadata from ${url?.substring(0, 60)}:`, err);
-            return null;
-          }));
-        }
-      }
+        const duration = (clip.start_time != null && clip.end_time != null)
+          ? clip.end_time - clip.start_time
+          : (clip.video_duration ?? 0);
 
-      // Wait for all unique probes, then build cache
-      await Promise.all(urlMetadataMap.values());
-
-      for (const { clip, url, durationOverride } of clipConfigs) {
-        if (!url) continue;
-        // T1500: prefer persisted dims; fall back to probe result for un-backfilled rows.
-        const probed = urlMetadataMap.has(url) ? await urlMetadataMap.get(url) : null;
-        const duration = durationOverride ?? probed?.duration ?? 0;
         metadataCache[clip.id] = {
           duration,
-          width: clip.width || probed?.width || 0,
-          height: clip.height || probed?.height || 0,
-          framerate: clip.fps || probed?.framerate || 30,
-          metadata: { ...(probed || {}), duration, width: clip.width || probed?.width, height: clip.height || probed?.height, framerate: clip.fps || probed?.framerate },
+          width: clip.width,
+          height: clip.height,
+          framerate: clip.fps,
+          metadata: { duration, width: clip.width, height: clip.height, framerate: clip.fps },
         };
       }
 

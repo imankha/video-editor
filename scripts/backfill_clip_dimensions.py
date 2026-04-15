@@ -45,6 +45,8 @@ REPO = HERE.parent
 load_dotenv(REPO / ".env")
 
 BUCKET = os.environ["R2_BUCKET"]
+APP_ENV = os.environ.get("APP_ENV", "dev")  # dev/staging/prod — nests DB keys under this prefix
+USER_PREFIX = f"{APP_ENV}/users/"
 HEAD_BYTES = 1024 * 1024       # 1 MB head fetch (covers moov for faststart MP4s)
 TAIL_BYTES = 512 * 1024        # 512 KB tail fetch (fallback for moov-at-end)
 
@@ -55,6 +57,7 @@ def s3_client():
         endpoint_url=os.environ["R2_ENDPOINT"],
         aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto",
         config=Config(signature_version="s3v4"),
     )
 
@@ -93,27 +96,59 @@ def _ffprobe_bytes(data: bytes) -> Optional[dict]:
 
 
 def probe_r2_object(s3, key: str) -> Optional[dict]:
-    """Byte-range fetch + ffprobe. Head first; tail fallback."""
+    """Probe via presigned URL — ffprobe does native HTTP byte-range fetching."""
     try:
-        head = s3.get_object(Bucket=BUCKET, Key=key, Range=f"bytes=0-{HEAD_BYTES - 1}")
-        data = head["Body"].read()
-        meta = _ffprobe_bytes(data)
-        if meta:
-            return meta
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": BUCKET, "Key": key},
+            ExpiresIn=300,
+        )
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-analyzeduration", "500000",
+                "-probesize", "5000000",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=r_frame_rate,width,height",
+                "-of", "json",
+                url,
+            ],
+            capture_output=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            print(f"  ffprobe rc={result.returncode} for {key}: {result.stderr[:200]!r}", file=sys.stderr)
+            return None
+        parsed = json.loads(result.stdout)
+        stream = (parsed.get("streams") or [{}])[0]
+        if not stream.get("width") or not stream.get("height"):
+            return None
+        fps_str = stream.get("r_frame_rate", "30/1")
+        num, _, den = fps_str.partition("/")
+        fps = float(num) / float(den) if den else float(num)
+        return {
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "fps": fps,
+        }
     except Exception as e:
-        print(f"  head fetch failed for {key}: {e}", file=sys.stderr)
-
-    # Fallback: tail (moov-at-end MP4s)
-    try:
-        obj = s3.head_object(Bucket=BUCKET, Key=key)
-        size = obj["ContentLength"]
-        start = max(0, size - TAIL_BYTES)
-        tail = s3.get_object(Bucket=BUCKET, Key=key, Range=f"bytes={start}-{size - 1}")
-        data = tail["Body"].read()
-        return _ffprobe_bytes(data)
-    except Exception as e:
-        print(f"  tail fetch failed for {key}: {e}", file=sys.stderr)
+        print(f"  probe failed for {key}: {e}", file=sys.stderr)
         return None
+
+
+def _ensure_t1500_columns(cur) -> None:
+    """Apply T1500 ALTER TABLE migrations to a downloaded DB. Idempotent."""
+    for ddl in (
+        "ALTER TABLE game_videos ADD COLUMN fps REAL",
+        "ALTER TABLE working_clips ADD COLUMN width INTEGER",
+        "ALTER TABLE working_clips ADD COLUMN height INTEGER",
+        "ALTER TABLE working_clips ADD COLUMN fps REAL",
+        "ALTER TABLE games ADD COLUMN video_fps REAL",
+    ):
+        try:
+            cur.execute(ddl)
+        except sqlite3.OperationalError:
+            pass  # column exists
 
 
 def backfill_profile(db_path: Path, s3, dry_run: bool) -> dict:
@@ -122,6 +157,8 @@ def backfill_profile(db_path: Path, s3, dry_run: bool) -> dict:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    _ensure_t1500_columns(cur)
+    conn.commit()
 
     cur.execute("""
         SELECT id, game_id, sequence, blake3_hash, video_width, video_height, fps
@@ -164,9 +201,11 @@ def backfill_profile(db_path: Path, s3, dry_run: bool) -> dict:
         """, (meta["width"], meta["height"], meta["fps"], row["game_id"], row["sequence"]))
         stats["updated_wc"] += cur.rowcount
 
-    if not dry_run:
-        conn.commit()
-    conn.close()
+    try:
+        if not dry_run:
+            conn.commit()
+    finally:
+        conn.close()
     return stats
 
 
@@ -184,7 +223,7 @@ def main():
     s3 = s3_client()
 
     def _process(user_id: str, profile_id: str):
-        db_key = f"users/{user_id}/profiles/{profile_id}/profile.sqlite"
+        db_key = f"{USER_PREFIX}{user_id}/profiles/{profile_id}/profile.sqlite"
         print(f"\n[{user_id}/{profile_id}] downloading {db_key}")
         with tempfile.TemporaryDirectory() as td:
             local = Path(td) / "profile.sqlite"
@@ -202,13 +241,14 @@ def main():
     if args.all_users:
         paginator = s3.get_paginator("list_objects_v2")
         seen = set()
-        for page in paginator.paginate(Bucket=BUCKET, Prefix="users/"):
+        for page in paginator.paginate(Bucket=BUCKET, Prefix=USER_PREFIX):
             for obj in page.get("Contents") or []:
                 k = obj["Key"]
                 if k.endswith("/profile.sqlite"):
+                    # {env}/users/<uid>/profiles/<pid>/profile.sqlite
                     parts = k.split("/")
-                    if len(parts) == 5:  # users/<uid>/profiles/<pid>/profile.sqlite
-                        key = (parts[1], parts[3])
+                    if len(parts) == 6:
+                        key = (parts[2], parts[4])
                         if key not in seen:
                             seen.add(key)
                             _process(*key)
