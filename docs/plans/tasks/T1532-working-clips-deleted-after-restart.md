@@ -25,10 +25,17 @@ opening and the next sync.
 
 ## Hypothesis
 
-A load/hydration flow for manual projects (`is_auto_created=0`) may be reconciling
-working_clips against some invariant and deleting rows that fail validation —
-possibly a check against raw_clips.auto_project_id or video_sequence. Spring 2026
-is manual, so none of its raw_clips point to it via auto_project_id.
+**Only multi-clip / manual reels are affected.** Observed on staging:
+- Auto-created single-clip projects (1/2/3, `is_auto_created=1`) kept their
+  working_clips across the restart+load cycle.
+- Manual multi-clip project Spring 2026 (`is_auto_created=0`) lost all 3.
+
+The distinguishing trait is that manual multi-clip working_clips reference
+raw_clips whose `auto_project_id` points to a DIFFERENT project (or NULL).
+A hydration flow likely treats "working_clip where raw_clip.auto_project_id
+!= working_clip.project_id" as stale and deletes it. Auto projects pass this
+check trivially (IDs match by construction); manual projects that reuse clips
+from auto projects fail it.
 
 ## Goal
 
@@ -38,12 +45,43 @@ on read/hydration — deletion must be explicit user action or migration.
 
 ## Investigation pointers
 
-- Search `DELETE FROM working_clips` in src/backend.
-- Search hydration paths invoked on project load (`GET /api/projects/{id}`,
-  `PATCH /api/projects/{id}/state`).
-- Check startup / restore flows that fire on backend boot.
-- Spring 2026 is `is_auto_created=0` — check if any code treats manual vs
-  auto projects differently in working_clips cleanup.
+Primary suspects found via `DELETE FROM working_clips` grep:
+- [src/backend/app/routers/projects.py:866](src/backend/app/routers/projects.py#L866) —
+  `DELETE ... WHERE project_id=? AND exported_at IS NULL AND version>1`. Fires in
+  a restore/state path. If version somehow >1 for the multi-clip project, this
+  would purge them.
+- [src/backend/app/services/project_archive.py:397](src/backend/app/services/project_archive.py#L397) —
+  "Delete old working_clips versions (keep only latest per identity)". T1160
+  pruning. Runs in archive flow — confirm if triggered on load.
+- [src/backend/app/services/project_archive.py:127](src/backend/app/services/project_archive.py#L127) —
+  Archive-project deletion.
+
+Also check: `restored_at` column on projects implies a restore flow. The
+`PATCH /api/projects/{id}/state` observed on staging at 20:42:02 (post-restart)
+is a possible trigger.
+
+Other angles:
+- `current_mode='framing'` hydration on project GET.
+- Version-identity logic: `latest_working_clips_subquery` — verify it doesn't
+  treat manual-project working_clips as "old" when they share raw_clip_ids
+  with auto-project working_clips.
+
+## Prime suspect
+
+[src/backend/app/queries.py:63](src/backend/app/queries.py#L63)
+`latest_working_clips_subquery` partitions by
+`COALESCE(rc.end_time, uploaded_filename)` — NOT by project_id. When called
+with `project_filter=False` (as at
+[project_archive.py:397](src/backend/app/services/project_archive.py#L397)),
+the "latest" is computed across ALL projects. A manual multi-clip project
+reusing raw_clips that already belong to auto-projects shares the same
+partition key (rc.end_time). ROW_NUMBER keeps exactly one row per partition
+— if the auto-project copy wins the tie-break, the manual-project copies
+are deleted. This matches the symptom exactly (auto projects survived,
+manual project lost all its clips).
+
+Fix direction: partition must include project_id OR the subquery should
+never run with project_filter=False on a per-user DB.
 
 ## Related
 
