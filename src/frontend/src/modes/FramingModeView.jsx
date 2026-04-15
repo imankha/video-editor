@@ -300,6 +300,7 @@ export function FramingModeView({
               videoUrl={videoUrl}
               handlers={handlers}
               clipRange={clipRange}
+              muted={!includeAudio}
               onFileSelect={isFullscreen ? undefined : onFileSelect}
               overlays={[
                 videoUrl && currentCropState && metadata && (
