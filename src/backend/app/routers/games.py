@@ -206,13 +206,36 @@ def _validate_video_in_r2(blake3_hash: str) -> None:
         )
 
 
+def _probe_fps_from_r2(blake3_hash: str) -> Optional[float]:
+    """
+    T1500: Byte-range fetch the just-uploaded game video and ffprobe for fps.
+    Width/height arrive from the client (already on VideoReference) — only fps
+    is unreliable from the browser, so we probe server-side here. Returns None
+    on failure; the backfill script catches stragglers.
+    """
+    from app.storage import get_r2_client, R2_BUCKET
+    from app.services.video_probe import probe_r2_video
+    try:
+        client = get_r2_client()
+        if client is None:
+            return None
+        meta = probe_r2_video(client, R2_BUCKET, f"games/{blake3_hash}.mp4")
+        return meta.get("fps") if meta else None
+    except Exception as e:
+        logger.warning(f"[T1500] fps probe failed for {blake3_hash}: {e}")
+        return None
+
+
 def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference]) -> None:
     """Insert game_videos rows for a game. Shared by create and add-videos."""
     for video in videos:
+        # T1500: capture fps server-side via byte-range ffprobe so project loads
+        # can skip the per-clip metadata probe.
+        fps = _probe_fps_from_r2(video.blake3_hash.lower())
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
-                                     video_width, video_height, video_size)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                     video_width, video_height, video_size, fps)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             game_id,
             video.blake3_hash.lower(),
@@ -221,6 +244,7 @@ def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference]) -> N
             video.width,
             video.height,
             video.file_size,
+            fps,
         ))
 
 
@@ -441,6 +465,15 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
             if v.height:
                 updates.append("video_height = ?")
                 params.append(v.height)
+            # T1500: mirror fps from the game_videos row we just inserted+probed
+            cursor.execute(
+                "SELECT fps FROM game_videos WHERE game_id = ? AND sequence = ?",
+                (game_id, v.sequence),
+            )
+            gv_row = cursor.fetchone()
+            if gv_row and gv_row['fps']:
+                updates.append("video_fps = ?")
+                params.append(gv_row['fps'])
 
         if updates:
             params.append(game_id)

@@ -162,6 +162,45 @@ def test_library_add_copies_dims_from_game_video():
         assert row['fps'] == pytest.approx(29.97)
 
 
+def test_game_video_insert_probes_fps_from_r2(monkeypatch):
+    """
+    T1500 follow-up: inserting a game_video triggers a server-side byte-range
+    ffprobe that populates fps. Width/height still come from the client.
+    """
+    from app.routers import games as games_module
+
+    def fake_probe(blake3_hash: str):
+        return 29.97 if blake3_hash == "hash9003" else None
+
+    monkeypatch.setattr(games_module, "_probe_fps_from_r2", fake_probe)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO games (id, name, video_filename) VALUES (?, ?, ?)",
+            (9003, "test game 9003", "g9003.mp4"),
+        )
+        video = games_module.VideoReference(
+            blake3_hash="HASH9003",
+            sequence=1,
+            duration=10.0,
+            width=1920,
+            height=1080,
+            file_size=12345,
+        )
+        games_module._insert_game_videos(cursor, 9003, [video])
+        conn.commit()
+
+        cursor.execute(
+            "SELECT video_width, video_height, fps FROM game_videos WHERE game_id = ?",
+            (9003,),
+        )
+        row = cursor.fetchone()
+        assert row['video_width'] == 1920
+        assert row['video_height'] == 1080
+        assert row['fps'] == pytest.approx(29.97)
+
+
 def test_library_add_leaves_nulls_when_game_video_missing_dims():
     """
     When parent game_video has NULL dims (legacy row, pre-backfill), working_clips
