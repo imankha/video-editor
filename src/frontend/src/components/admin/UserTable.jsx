@@ -4,6 +4,7 @@ import { CreditGrantModal } from './CreditGrantModal';
 import { GpuUsagePanel } from './GpuUsagePanel';
 import { QuestFunnelChart } from './QuestFunnelChart';
 import { useQuestStore } from '../../stores/questStore';
+import { useAuthStore } from '../../stores/authStore';
 
 const CLOUDFLARE_DASHBOARD_URL = 'https://dash.cloudflare.com/?to=/:account/web-analytics';
 
@@ -274,7 +275,27 @@ export function UserTable({ users, allUsers }) {
                 className="border-b border-white/5 hover:bg-white/5 transition-colors"
               >
                 <td className="px-3 py-2.5 text-gray-200 text-xs">
-                  {user.email || <span className="text-gray-500 italic">guest</span>}
+                  {user.email ? (
+                    // T1510: click to impersonate. Server enforces admin-cannot-
+                    // impersonate-admin and all other guards — this is a UX link,
+                    // not an authorization decision.
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`Impersonate ${user.email}?`)) return;
+                        try {
+                          await useAuthStore.getState().startImpersonation(user.user_id);
+                        } catch (e) {
+                          window.alert(e.message || 'Impersonation failed');
+                        }
+                      }}
+                      className="text-purple-300 hover:text-purple-200 hover:underline focus:outline-none focus:ring-1 focus:ring-purple-400 rounded"
+                      title="Log in as this user"
+                    >
+                      {user.email}
+                    </button>
+                  ) : (
+                    <span className="text-gray-500 italic">guest</span>
+                  )}
                 </td>
 
                 {/* Credits with grant button */}

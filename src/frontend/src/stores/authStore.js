@@ -17,6 +17,8 @@ export const useAuthStore = create((set, get) => ({
   showAccountSettings: false,  // T430: Account settings panel
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
+  // T1510: impersonation state — { id, email, expires_at } | null
+  impersonator: null,
 
   // T550: Check if the current user is an admin
   checkAdmin: async () => {
@@ -104,12 +106,13 @@ export const useAuthStore = create((set, get) => ({
   },
 
   // Called on app load after session check
-  setSessionState: (isAuthenticated, email = null, pictureUrl = null) => {
-    console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}`);
+  setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null) => {
+    console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}${impersonator ? ` (impersonated by ${impersonator.email})` : ''}`);
     set({
       isAuthenticated,
       email,
       pictureUrl,
+      impersonator,
       isCheckingSession: false,
     });
     // T530: Fetch credit balance if authenticated
@@ -144,6 +147,35 @@ export const useAuthStore = create((set, get) => ({
     });
     resetSession();
     window.location.reload();
+  },
+
+  // T1510: Start impersonating a target user. Admin gesture only.
+  // Full page reload follows so all Zustand data stores reset naturally —
+  // the stop flow does the same in reverse.
+  startImpersonation: async (targetUserId) => {
+    const res = await fetch(`${API_BASE}/api/admin/impersonate/${targetUserId}`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Impersonation failed (${res.status}): ${body}`);
+    }
+    window.location.href = '/';
+  },
+
+  // T1510: Stop impersonating — server restores the admin's own session,
+  // then we hard reload to wipe in-memory state from the impersonated user.
+  stopImpersonation: async () => {
+    try {
+      await fetch(`${API_BASE}/api/admin/impersonate/stop`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {
+      // Best-effort — reload regardless so the admin isn't stuck.
+    }
+    window.location.href = '/';
   },
 
   // T430: Toggle account settings panel

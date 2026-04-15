@@ -137,6 +137,34 @@ def init_auth_db():
         )
         db.commit()
 
+        # T1510: impersonation columns on sessions (additive, idempotent)
+        for ddl in (
+            "ALTER TABLE sessions ADD COLUMN impersonator_user_id TEXT",
+            "ALTER TABLE sessions ADD COLUMN impersonation_expires_at TEXT",
+        ):
+            try:
+                db.execute(ddl)
+            except sqlite3.OperationalError:
+                pass
+
+        # T1510: audit log for every impersonation start/stop/expire.
+        # Lives in auth.sqlite (global) — admin actions must not be scoped
+        # to the target user's DB.
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS impersonation_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id TEXT NOT NULL,
+                target_user_id TEXT NOT NULL,
+                action TEXT NOT NULL CHECK (action IN ('start', 'stop', 'expire')),
+                ip TEXT,
+                user_agent TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE INDEX IF NOT EXISTS idx_impersonation_audit_admin ON impersonation_audit(admin_user_id);
+            CREATE INDEX IF NOT EXISTS idx_impersonation_audit_target ON impersonation_audit(target_user_id);
+        """)
+        db.commit()
+
         # T1330: drop any NULL-email (guest) rows + rebuild users with NOT NULL email.
         _migrate_users_email_not_null(db)
 
@@ -518,25 +546,32 @@ def create_session(user_id: str, ttl_days: int = 30) -> str:
 
 def validate_session(session_id: str) -> Optional[dict]:
     """
-    Validate a session cookie. Returns {user_id, email} or None.
+    Validate a session cookie. Returns {user_id, email, impersonator_user_id?,
+    impersonator_email?, impersonation_expires_at?} or None.
 
     Uses an in-process cache (5-min TTL) to avoid SQLite hits on every request.
+
+    T1510: if the session row has impersonation_expires_at set and it has
+    passed, the session is treated as expired and an 'expire' audit row is
+    written.
     """
-    # Check cache first
+    # Check cache first (cache does not store impersonation state — skip it
+    # for impersonation sessions so TTL checks always hit the DB).
     with _session_cache_lock:
         if session_id in _session_cache:
             user_id, email, expires_at = _session_cache[session_id]
             if datetime.fromisoformat(expires_at) > datetime.utcnow():
                 return {"user_id": user_id, "email": email}
             else:
-                # Expired — remove from cache
                 del _session_cache[session_id]
                 return None
 
     # Cache miss — hit SQLite
     with get_auth_db() as db:
         row = db.execute(
-            """SELECT s.session_id, s.user_id, s.expires_at, u.email
+            """SELECT s.session_id, s.user_id, s.expires_at,
+                      s.impersonator_user_id, s.impersonation_expires_at,
+                      u.email
                FROM sessions s
                JOIN users u ON s.user_id = u.user_id
                WHERE s.session_id = ?""",
@@ -548,18 +583,48 @@ def validate_session(session_id: str) -> Optional[dict]:
 
     expires_at = row['expires_at']
     if datetime.fromisoformat(expires_at) < datetime.utcnow():
-        # Expired — clean up
         invalidate_session(session_id)
         return None
 
     user_id = row['user_id']
     email = row['email']
+    impersonator_user_id = row['impersonator_user_id']
+    impersonation_expires_at = row['impersonation_expires_at']
 
-    # Cache it
+    # T1510: impersonation TTL enforcement
+    if impersonator_user_id and impersonation_expires_at:
+        if datetime.fromisoformat(impersonation_expires_at) < datetime.utcnow():
+            try:
+                log_impersonation(
+                    impersonator_user_id, user_id, "expire", None, None
+                )
+            except Exception:
+                logger.exception("[AuthDB] Failed to write impersonation expire audit")
+            invalidate_session(session_id)
+            return None
+
+    result = {"user_id": user_id, "email": email}
+    if impersonator_user_id:
+        # Look up impersonator email for richer /me responses
+        imp_email = None
+        with get_auth_db() as db:
+            imp_row = db.execute(
+                "SELECT email FROM users WHERE user_id = ?",
+                (impersonator_user_id,),
+            ).fetchone()
+            if imp_row:
+                imp_email = imp_row["email"]
+        result["impersonator_user_id"] = impersonator_user_id
+        result["impersonator_email"] = imp_email
+        result["impersonation_expires_at"] = impersonation_expires_at
+        # Do NOT cache impersonation sessions — we need fresh TTL checks
+        return result
+
+    # Cache non-impersonation sessions only
     with _session_cache_lock:
         _session_cache[session_id] = (user_id, email, expires_at)
 
-    return {"user_id": user_id, "email": email}
+    return result
 
 
 def invalidate_session(session_id: str) -> None:
@@ -625,6 +690,86 @@ def is_admin(user_id: str) -> bool:
         return db.execute(
             "SELECT 1 FROM admin_users WHERE email = ?", (row["email"],)
         ).fetchone() is not None
+
+
+# ---------------------------------------------------------------------------
+# T1510: Impersonation
+# ---------------------------------------------------------------------------
+
+IMPERSONATION_TTL_MINUTES = 60
+
+
+def create_impersonation_session(
+    target_user_id: str,
+    impersonator_user_id: str,
+    ttl_minutes: int = IMPERSONATION_TTL_MINUTES,
+) -> str:
+    """Mint a new session row flagged with impersonator_user_id + TTL.
+
+    The session cookie itself uses the normal 30-day expires_at — the shorter
+    impersonation_expires_at is enforced in validate_session().
+    """
+    session_id = secrets.token_urlsafe(32)
+    now = datetime.utcnow()
+    expires_at = (now + timedelta(days=30)).isoformat()
+    impersonation_expires_at = (now + timedelta(minutes=ttl_minutes)).isoformat()
+
+    with get_auth_db() as db:
+        db.execute(
+            """INSERT INTO sessions
+                  (session_id, user_id, expires_at,
+                   impersonator_user_id, impersonation_expires_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (session_id, target_user_id, expires_at,
+             impersonator_user_id, impersonation_expires_at),
+        )
+        db.commit()
+
+    logger.info(
+        f"[AuthDB][T1510] Impersonation session created: "
+        f"admin={impersonator_user_id} target={target_user_id} "
+        f"expires={impersonation_expires_at}"
+    )
+    return session_id
+
+
+def find_or_create_admin_restore_session(admin_user_id: str) -> str:
+    """On stop-impersonation: return a valid plain session for the admin.
+
+    Prefers the most recent non-expired, non-impersonation session. Mints a
+    fresh one if none exist (e.g., admin's original session has since expired).
+    """
+    now = datetime.utcnow().isoformat()
+    with get_auth_db() as db:
+        row = db.execute(
+            """SELECT session_id FROM sessions
+               WHERE user_id = ?
+                 AND impersonator_user_id IS NULL
+                 AND expires_at > ?
+               ORDER BY created_at DESC LIMIT 1""",
+            (admin_user_id, now),
+        ).fetchone()
+    if row:
+        return row["session_id"]
+    return create_session(admin_user_id)
+
+
+def log_impersonation(
+    admin_user_id: str,
+    target_user_id: str,
+    action: str,
+    ip: Optional[str],
+    user_agent: Optional[str],
+) -> None:
+    """Write a row to impersonation_audit. action ∈ {'start','stop','expire'}."""
+    with get_auth_db() as db:
+        db.execute(
+            """INSERT INTO impersonation_audit
+                  (admin_user_id, target_user_id, action, ip, user_agent)
+               VALUES (?, ?, ?, ?, ?)""",
+            (admin_user_id, target_user_id, action, ip, user_agent),
+        )
+        db.commit()
 
 
 def get_all_users_for_admin() -> list:

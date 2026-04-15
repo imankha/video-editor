@@ -19,6 +19,7 @@ import { getProjectDisplayName } from './utils/clipDisplayName';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import { useQuestStore } from './stores/questStore';
@@ -463,6 +464,7 @@ function App() {
   if (editorMode === EDITOR_MODES.ADMIN) {
     return (
       <>
+        <ImpersonationBanner />
         <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
         <ToastContainer />
       </>
@@ -473,6 +475,7 @@ function App() {
   if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
     return (
       <>
+        <ImpersonationBanner />
         <ProjectsScreen
             onStateReset={clearSelection}
             onLoadGame={handleLoadGame}
@@ -500,6 +503,7 @@ function App() {
   return (
     <ProjectProvider>
     <AppStateProvider value={appStateValue}>
+    <ImpersonationBanner />
     <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
