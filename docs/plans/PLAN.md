@@ -57,6 +57,8 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | TODO | 1.6 | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests |
 | T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | TODO | 3.0 | POST /achievements/opened_framing_editor took 60.65s handler, blocked GET /projects/4 via per-user serializer — user-visible freeze on reel load |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | TESTING | 1.3 | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
+| T1533 | [Overlay Working Video Slow First-Load](tasks/T1533-overlay-working-video-slow-load.md) | TODO | 2.0 | After multi-clip framing export, overlay hits 15s metadata timeout on first open; browser range-walks 20MB. Likely moov atom not at head despite `+faststart` with `-c copy` on multipart upload. |
+| T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | TESTING | 3.0 | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin → BrokenPipe. |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)

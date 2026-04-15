@@ -326,7 +326,9 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
         "-movflags", "+faststart",  # Faster streaming/loading
         "-c:a", "aac",
         "-b:a", "192k",
-        "-shortest",
+        # No -shortest: video duration must drive output length. With concat-copied
+        # mixed-audio sources the audio stream may be shorter than the video, and
+        # -shortest would truncate the encode and break the stdin pipe mid-write.
         output_path,
     ]
 
@@ -426,11 +428,11 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
         logger.warning(f"[{job_id}] Error reading stderr: {e}")
 
     if ffmpeg_proc.returncode != 0:
-        logger.error(f"[{job_id}] FFmpeg stderr: {stderr_text[:1000]}")
-        raise RuntimeError(f"FFmpeg encoding failed (code {ffmpeg_proc.returncode}): {stderr_text[:500]}")
+        logger.error(f"[{job_id}] FFmpeg stderr (tail): {stderr_text[-2000:]}")
+        raise RuntimeError(f"FFmpeg encoding failed (code {ffmpeg_proc.returncode}): {stderr_text[-500:]}")
 
     if write_error:
-        logger.error(f"[{job_id}] FFmpeg stderr: {stderr_text[:1000]}")
+        logger.error(f"[{job_id}] FFmpeg stderr (tail): {stderr_text[-2000:]}")
         raise RuntimeError(f"Frame writing failed: {write_error}")
 
     logger.info(f"[{job_id}] Overlay export complete: {frame_idx} frames")
