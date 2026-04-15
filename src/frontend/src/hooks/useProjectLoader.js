@@ -131,20 +131,32 @@ export function useProjectLoader() {
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
-      // T1500: dims (width/height/fps) live on working_clips. No probe.
-      // Missing dims indicate a backfill gap — log loudly so it's visible.
+      // T1500: dims (width/height/fps) live on working_clips. Probe fallback
+      // only when dims are missing — a backfill gap should not brick the UI.
       const metadataCache = {};
       for (const clip of clipsData) {
         const hasUrl = (clip.game_video_url && clip.start_time != null && clip.end_time != null)
           || Boolean(clip.filename);
         if (!hasUrl) continue;
 
-        if (!clip.width || !clip.height || !clip.fps) {
-          console.error(
+        let width = clip.width;
+        let height = clip.height;
+        let framerate = clip.fps;
+
+        if (!width || !height || !framerate) {
+          console.warn(
             `[useProjectLoader] T1500 gap: clip id=${clip.id} missing dims ` +
             `(width=${clip.width} height=${clip.height} fps=${clip.fps}). ` +
-            `Run scripts/backfill_clip_dimensions.py to fix.`
+            `Probing URL as fallback. Run scripts/backfill_clip_dimensions.py to fix permanently.`
           );
+          try {
+            const probed = await extractVideoMetadataFromUrl(clip.game_video_url, `clip_${clip.id}.mp4`);
+            width = width || probed.width;
+            height = height || probed.height;
+            framerate = framerate || probed.framerate;
+          } catch (err) {
+            console.error(`[useProjectLoader] Probe fallback failed for clip id=${clip.id}:`, err);
+          }
         }
 
         const duration = (clip.start_time != null && clip.end_time != null)
@@ -153,10 +165,10 @@ export function useProjectLoader() {
 
         metadataCache[clip.id] = {
           duration,
-          width: clip.width,
-          height: clip.height,
-          framerate: clip.fps,
-          metadata: { duration, width: clip.width, height: clip.height, framerate: clip.fps },
+          width,
+          height,
+          framerate,
+          metadata: { duration, width, height, framerate },
         };
       }
 
