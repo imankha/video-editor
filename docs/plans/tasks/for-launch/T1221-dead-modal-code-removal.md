@@ -1,6 +1,6 @@
 # T1221: Remove Dead Modal Functions Discovered During T1220 Audit
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-04-14
