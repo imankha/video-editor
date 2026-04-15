@@ -263,10 +263,8 @@ MODAL_APP_NAME = "reel-ballers-video-v2"
 _render_overlay_fn = None
 _process_framing_ai_fn = None
 _process_framing_ai_parallel_fn = None
-_process_multi_clip_fn = None
 _detect_players_fn = None
 _detect_players_batch_fn = None
-_extract_clip_fn = None
 
 
 def modal_enabled() -> bool:
@@ -393,40 +391,6 @@ def _get_detect_players_batch_fn():
     except Exception as e:
         logger.error(f"[Modal] Failed to connect to detect_players_batch_modal: {e}")
         raise RuntimeError(f"Modal detect_players_batch_modal not available: {e}")
-
-
-def _get_extract_clip_fn():
-    """Get a reference to the deployed extract_clip_modal function."""
-    global _extract_clip_fn
-
-    if _extract_clip_fn is not None:
-        return _extract_clip_fn
-
-    try:
-        import modal
-        _extract_clip_fn = modal.Function.from_name(MODAL_APP_NAME, "extract_clip_modal")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/extract_clip_modal")
-        return _extract_clip_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to extract_clip_modal: {e}")
-        raise RuntimeError(f"Modal extract_clip_modal not available: {e}")
-
-
-def _get_process_multi_clip_fn():
-    """Get a reference to the deployed process_multi_clip_modal function."""
-    global _process_multi_clip_fn
-
-    if _process_multi_clip_fn is not None:
-        return _process_multi_clip_fn
-
-    try:
-        import modal
-        _process_multi_clip_fn = modal.Function.from_name(MODAL_APP_NAME, "process_multi_clip_modal")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/process_multi_clip_modal")
-        return _process_multi_clip_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to process_multi_clip_modal: {e}")
-        raise RuntimeError(f"Modal process_multi_clip_modal not available: {e}")
 
 
 # Cached reference for unified function
@@ -947,209 +911,6 @@ async def call_modal_clips_ai(
     return {"status": "error", "error": _translate_modal_error(last_error)}
 
 
-async def call_modal_multi_clip(
-    job_id: str,
-    user_id: str,
-    source_keys: list,
-    output_key: str,
-    clips_data: list,
-    transition: dict,
-    target_width: int,
-    target_height: int,
-    fps: int = 30,
-    include_audio: bool = True,
-    progress_callback = None,
-    call_id_callback = None,
-) -> dict:
-    """
-    Call Modal process_multi_clip_modal for multi-clip AI upscaling.
-
-    Single container processes all clips sequentially with shared model.
-
-    Args:
-        job_id: Unique export job identifier
-        user_id: Raw user ID (R2 prefix conversion handled internally)
-        source_keys: List of R2 keys for source clips
-        output_key: R2 key for final output
-        clips_data: Per-clip config [{cropKeyframes, segmentsData, clipIndex}, ...]
-        transition: {type: "cut"|"fade"|"dissolve", duration: float}
-        target_width: Target output width
-        target_height: Target output height
-        fps: Target frame rate (default 30)
-        include_audio: Include audio (default True)
-        progress_callback: async callable(progress: float, message: str)
-        call_id_callback: Optional callable(call_id: str) to receive Modal call ID for recovery
-
-    Returns:
-        {"status": "success", "output_key": "...", "clips_processed": N} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
-
-    # Convert raw user_id to R2-prefixed user_id for Modal
-    user_id = _resolve_modal_user_id(user_id)
-
-    process_multi_clip = _get_process_multi_clip_fn()
-
-    # Estimate processing time: ~1.0s per frame total on T4 GPU for Real-ESRGAN
-    # Assume ~10s per clip at 30fps = 300 frames per clip
-    estimated_frames_per_clip = 300
-    total_frames = len(clips_data) * estimated_frames_per_clip
-    estimated_time = total_frames * 1.0  # seconds total
-
-    _log_modal_job_start(
-        job_type="framing_ai_multiclip",
-        job_id=job_id,
-        user_id=user_id,
-        modal_app=MODAL_APP_NAME,
-        extra={
-            "clips": len(clips_data),
-            "resolution": f"{target_width}x{target_height}",
-            "estimated_frames": total_frames,
-            "estimated_time": f"{estimated_time:.0f}s",
-            "output": output_key,
-        },
-    )
-
-    # Track timing for progress improvement
-    job_start_time = time.time()
-    log_progress_event(job_id, "modal_start", extra={"type": "multi_clip", "clips": len(clips_data), "frames": total_frames})
-
-    modal_call_id = None  # Initialize for exception handler
-    try:
-        # Use spawn() to get call_id for recovery (instead of remote() which blocks)
-        def spawn_modal_job():
-            call = process_multi_clip.spawn(
-                job_id=job_id,
-                user_id=user_id,
-                source_keys=source_keys,
-                output_key=output_key,
-                clips_data=clips_data,
-                transition=transition,
-                target_width=target_width,
-                target_height=target_height,
-                fps=fps,
-                include_audio=include_audio,
-            )
-            return call
-
-        # Start the Modal job in a background task
-        loop = asyncio.get_running_loop()
-        modal_call = await loop.run_in_executor(None, spawn_modal_job)
-
-        # Get call_id for recovery
-        modal_call_id = modal_call.object_id
-        spawn_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_spawn", elapsed=spawn_elapsed, extra={"call_id": modal_call_id[:16]})
-        logger.info(f"[Modal] Multi-clip job spawned with call_id: {modal_call_id}")
-
-        # Notify caller of call_id so it can be stored for recovery
-        if call_id_callback:
-            try:
-                call_id_callback(modal_call_id)
-            except Exception as e:
-                logger.warning(f"[Modal] call_id_callback failed: {e}")
-
-        # Create a future to wait for the result
-        async def wait_for_result():
-            return await loop.run_in_executor(None, modal_call.get)
-
-        result_future = asyncio.create_task(wait_for_result())
-
-        # Simulate progress while waiting for Modal
-        if progress_callback:
-            start_time = asyncio.get_event_loop().time()
-            progress_start = 10
-            progress_end = 90
-
-            # Progress phases: (threshold, phase_id, message)
-            # Adjusted based on single-clip benchmarks, with concat phase added
-            phases = [
-                (0.00, "modal_download", "Downloading source clips..."),
-                (0.08, "modal_init", "Loading AI model..."),
-                (0.12, "modal_upscale", "Processing clips with AI upscaling..."),
-                (0.55, "modal_encode", "Encoding clips..."),
-                (0.65, "modal_concat", "Concatenating clips..."),
-                (0.70, "modal_upload", "Uploading result..."),
-            ]
-
-            current_phase = "modal_download"
-
-            while not result_future.done():
-                elapsed = asyncio.get_event_loop().time() - start_time
-                raw_progress = min(elapsed / estimated_time, 0.95)
-                progress = progress_start + raw_progress * (progress_end - progress_start)
-
-                phase_msg = "Processing..."
-                for threshold, phase_id, msg in phases:
-                    if raw_progress >= threshold:
-                        current_phase = phase_id
-                        phase_msg = msg
-
-                try:
-                    await progress_callback(progress, phase_msg, current_phase)
-                except Exception as e:
-                    logger.warning(f"[Modal] Progress callback failed: {e}")
-
-                await asyncio.sleep(3)  # Update every 3 seconds
-
-            # Log summary
-            total_time = asyncio.get_event_loop().time() - start_time
-            logger.info(f"[Modal Summary] job={job_id} total={total_time:.1f}s (simulated progress)")
-
-        result = await result_future
-
-        total_elapsed = time.time() - job_start_time
-        log_progress_event(job_id, "modal_complete", elapsed=total_elapsed, extra={
-            "status": result.get("status", "unknown"),
-            "clips": len(clips_data),
-            "frames": total_frames,
-            "fps_actual": round(total_frames / total_elapsed, 1) if total_elapsed > 0 else 0
-        })
-
-        _log_modal_job_end(
-            job_type="framing_ai_multiclip",
-            job_id=job_id,
-            user_id=user_id,
-            modal_app=MODAL_APP_NAME,
-            elapsed=total_elapsed,
-            status=result.get("status", "unknown"),
-            extra={"call_id": modal_call_id or "unknown", "clips": len(clips_data)},
-        )
-
-        return result
-
-    except Exception as e:
-        total_elapsed = time.time() - job_start_time
-        error_class = classify_modal_error(e)
-        log_progress_event(job_id, "modal_error", elapsed=total_elapsed, extra={"error": str(e)[:50]})
-
-        _log_modal_job_end(
-            job_type="framing_ai_multiclip",
-            job_id=job_id,
-            user_id=user_id,
-            modal_app=MODAL_APP_NAME,
-            elapsed=total_elapsed,
-            status="error",
-            error=e,
-            error_class=error_class,
-            extra={"call_id": modal_call_id or "unknown"},
-        )
-
-        # Check if this is a transient/connection error
-        is_connection_error = error_class == "transient" or _is_transient_network_error(e)
-
-        if modal_call_id and is_connection_error:
-            # Connection error while polling - job may still be running on Modal
-            logger.warning(f"[Modal] Connection lost while polling job {job_id}: {e}")
-            logger.info(f"[Modal] Job {job_id} may still be running, returning recoverable status (call_id: {modal_call_id})")
-            return {"status": "connection_lost", "call_id": modal_call_id, "message": "Connection lost but job may still be running. Refresh to check status."}
-
-        logger.error(f"[Modal] Multi-clip job {job_id} failed: {e}", exc_info=True)
-        return {"status": "error", "error": _translate_modal_error(e)}
-
-
 async def call_modal_overlay(
     job_id: str,
     user_id: str,
@@ -1522,66 +1283,6 @@ async def call_modal_detect_players_batch(
         return {"status": "error", "error": _translate_modal_error(e)}
 
 
-async def call_modal_extract_clip(
-    user_id: str,
-    input_key: str,
-    output_key: str,
-    start_time: float,
-    end_time: float,
-    copy_codec: bool = True,
-) -> dict:
-    """
-    Call Modal extract_clip_modal function to extract a clip from a video.
-
-    This is a CPU-only operation (no GPU) - just FFmpeg codec copy.
-
-    Args:
-        user_id: Raw user ID (R2 prefix conversion handled internally)
-        input_key: R2 key for source video (e.g., "games/abc123.mp4")
-        output_key: R2 key for output clip (e.g., "clips/def456.mp4")
-        start_time: Start time in seconds
-        end_time: End time in seconds
-        copy_codec: If True, copy codecs (faster); if False, re-encode
-
-    Returns:
-        {"status": "success", "output_key": "...", "duration": float} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        raise RuntimeError("Modal is not enabled. Set MODAL_ENABLED=true")
-
-    # Convert raw user_id to R2-prefixed user_id for Modal
-    user_id = _resolve_modal_user_id(user_id)
-
-    extract_clip = _get_extract_clip_fn()
-
-    logger.info(f"[Modal] Calling extract_clip_modal")
-    logger.info(f"[Modal] User: {user_id}, Input: {input_key}, Output: {output_key}")
-    logger.info(f"[Modal] Time range: {start_time:.2f}s - {end_time:.2f}s")
-
-    try:
-        result = await asyncio.to_thread(
-            extract_clip.remote,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            start_time=start_time,
-            end_time=end_time,
-            copy_codec=copy_codec,
-        )
-
-        if result.get("status") == "success":
-            logger.info(f"[Modal] Clip extraction completed: {result.get('output_key')}")
-        else:
-            logger.error(f"[Modal] Clip extraction failed: {result.get('error')}")
-
-        return result
-
-    except Exception as e:
-        logger.error(f"[Modal] Clip extraction failed: {e}", exc_info=True)
-        return {"status": "error", "error": _translate_modal_error(e)}
-
-
 
 # Test function
 if __name__ == "__main__":
@@ -1594,7 +1295,7 @@ if __name__ == "__main__":
             print("  - render_overlay: Apply highlight overlays (T4 GPU)")
             print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling (T4 GPU)")
             print("  - detect_players_modal: YOLO player detection (T4 GPU)")
-            print("  - extract_clip_modal: FFmpeg clip extraction (CPU)")
+            print("  - process_clips_ai: Unified multi-clip AI upscaling (GPU)")
         else:
             print("Modal is disabled - set MODAL_ENABLED=true to enable")
 

@@ -27,13 +27,9 @@ class TestModalQueueImports:
         """
         Verify modal_client.py imports work correctly.
         """
-        from app.services.modal_client import (
-            modal_enabled,
-            call_modal_extract_clip,
-        )
+        from app.services.modal_client import modal_enabled
 
         assert callable(modal_enabled)
-        assert callable(call_modal_extract_clip)
 
     def test_clips_router_imports_without_errors(self):
         """
