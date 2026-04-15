@@ -321,11 +321,21 @@ async def auth_me(request: Request):
     except Exception:
         logger.exception(f"[Auth] /me: get_user_by_id failed for user={user_id} (ignored)")
 
+    # T1510: surface impersonation state so the frontend can show the banner.
+    impersonator = None
+    if session.get("impersonator_user_id"):
+        impersonator = {
+            "id": session["impersonator_user_id"],
+            "email": session.get("impersonator_email"),
+            "expires_at": session.get("impersonation_expires_at"),
+        }
+
     return {
         "email": email,
         "user_id": user_id,
         "is_authenticated": True,
         "picture_url": picture_url,
+        "impersonator": impersonator,
     }
 
 

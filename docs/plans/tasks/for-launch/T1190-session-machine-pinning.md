@@ -4,7 +4,22 @@
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-08
-**Updated:** 2026-04-08
+**Updated:** 2026-04-15
+
+## Interaction with T1510 (admin impersonation)
+
+T1510 shipped first and calls `response.delete_cookie("fly_machine_id")` on
+every impersonation start/stop. When T1190 lands, the design must ensure:
+
+1. The `fly_machine_id` cookie is **always cleared** when a session swaps user
+   context (impersonation start or stop). This is already wired in T1510.
+2. The first request after an impersonation swap must be allowed to land on
+   any machine and re-pin — the target user's DB may live on a different
+   Fly machine than the admin's.
+
+The hooks exist in `src/backend/app/routers/admin.py` (`_clear_machine_pin_cookie`).
+Do not remove them when implementing T1190.
+
 
 ## Problem
 

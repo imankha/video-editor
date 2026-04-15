@@ -144,6 +144,7 @@ export async function initSession() {
     let userId = null;
     let email = null;
     let pictureUrl = null;
+    let impersonator = null;
 
     try {
       const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, {
@@ -154,8 +155,9 @@ export async function initSession() {
         userId = meData.user_id;
         email = meData.email || null;
         pictureUrl = meData.picture_url || null;
+        impersonator = meData.impersonator || null;
         _currentUserId = userId;
-        console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}`);
+        console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}${impersonator ? ` [impersonated by ${impersonator.email}]` : ''}`);
       } else {
         console.log(`[Auth:Init] /me returned ${meResponse.status} — unauthenticated`);
         if (authExpected) {
@@ -174,7 +176,7 @@ export async function initSession() {
     }
 
     // Authenticated — load profile + mark session state
-    useAuthStore.getState().setSessionState(true, email, pictureUrl);
+    useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
 
     updatePreloader(25, 'Initializing profile...');
     const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {

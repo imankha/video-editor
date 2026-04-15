@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..database import USER_DATA_BASE
@@ -23,6 +23,12 @@ from ..services.auth_db import (
     is_admin,
     get_all_users_for_admin,
     get_user_by_id,
+    create_impersonation_session,
+    find_or_create_admin_restore_session,
+    log_impersonation,
+    invalidate_session,
+    validate_session,
+    IMPERSONATION_TTL_MINUTES,
 )
 from ..services.user_db import (
     get_credit_stats_for_admin,
@@ -458,3 +464,96 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
     from ..services.user_db import set_credits
     new_balance = set_credits(user_id, request.amount)
     return {"balance": new_balance}
+
+
+# ---------------------------------------------------------------------------
+# T1510: Impersonation
+# ---------------------------------------------------------------------------
+
+import os as _os  # local alias; module-level os not imported here
+
+_SECURE_COOKIES = _os.getenv("SECURE_COOKIES", "false").lower() == "true"
+_SAMESITE = "lax"
+
+
+def _set_session_cookie(response: Response, session_id: str) -> None:
+    response.set_cookie(
+        key="rb_session",
+        value=session_id,
+        max_age=30 * 24 * 60 * 60,
+        httponly=True,
+        samesite=_SAMESITE,
+        secure=_SECURE_COOKIES,
+        path="/",
+    )
+
+
+def _clear_machine_pin_cookie(response: Response) -> None:
+    """T1190 hook: clear fly_machine_id so the next request re-routes to the
+    correct Fly machine for whichever user we are now acting as. No-op until
+    T1190 ships — safe to call either way (set_cookie with empty value + max_age=0
+    deletes it on the browser)."""
+    response.delete_cookie("fly_machine_id", path="/")
+
+
+@router.post("/impersonate/stop")
+async def stop_impersonation(request: Request, response: Response):
+    """Stop impersonating and restore the admin's own session."""
+    session_id = request.cookies.get("rb_session")
+    sess = validate_session(session_id) if session_id else None
+
+    if not sess or not sess.get("impersonator_user_id"):
+        raise HTTPException(status_code=400, detail="not_impersonating")
+
+    admin_id = sess["impersonator_user_id"]
+    target_id = sess["user_id"]
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    log_impersonation(admin_id, target_id, "stop", ip, user_agent)
+
+    invalidate_session(session_id)
+    restore_sid = find_or_create_admin_restore_session(admin_id)
+    _set_session_cookie(response, restore_sid)
+    _clear_machine_pin_cookie(response)
+
+    return {"ok": True, "admin_user_id": admin_id}
+
+
+@router.post("/impersonate/{target_user_id}")
+async def impersonate(target_user_id: str, request: Request, response: Response):
+    """Start impersonating a target user. Admin only.
+
+    Target user_id comes from the path param only — never from a client store.
+    Admin cannot impersonate another admin (privilege laundering).
+    """
+    _require_admin()
+    admin_id = get_current_user_id()
+
+    if admin_id == target_user_id:
+        raise HTTPException(status_code=400, detail="cannot_impersonate_self")
+
+    target = get_user_by_id(target_user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="target_not_found")
+
+    if is_admin(target_user_id):
+        raise HTTPException(
+            status_code=403, detail="cannot_impersonate_another_admin"
+        )
+
+    ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    log_impersonation(admin_id, target_user_id, "start", ip, user_agent)
+
+    session_id = create_impersonation_session(
+        target_user_id, admin_id, ttl_minutes=IMPERSONATION_TTL_MINUTES
+    )
+    _set_session_cookie(response, session_id)
+    _clear_machine_pin_cookie(response)
+
+    return {
+        "ok": True,
+        "target_user_id": target_user_id,
+        "target_email": target.get("email"),
+        "ttl_minutes": IMPERSONATION_TTL_MINUTES,
+    }
