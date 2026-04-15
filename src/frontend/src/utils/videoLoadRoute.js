@@ -44,11 +44,28 @@ export function chooseLoadRoute({
 
   const ws = getWarmedStateFn(gameUrl);
   const clipEnd = clipDuration != null && clipOffset != null ? clipOffset + clipDuration : null;
-  const rangeCovered = !!(ws && clipEnd != null && ws.clipRanges.some(
-    r => r.startTime <= clipOffset && r.endTime >= clipEnd
-  ));
+  const matchedRange = ws && clipEnd != null
+    ? ws.clipRanges.find(r => r.startTime <= clipOffset && r.endTime >= clipEnd)
+    : null;
+  const rangeCovered = !!matchedRange;
 
   if (rangeCovered) {
+    // Diagnostic for range-overfetch investigation: log how much the warmed
+    // byte span exceeds the actual clip's byte span. Ratio >> 1 means the
+    // 10% padding (see cacheWarming.warmClipRange) is overshooting and the
+    // browser may still overbuffer on the direct path.
+    try {
+      const warmedBytes = matchedRange.endByte - matchedRange.startByte;
+      const warmedTimeSpan = matchedRange.endTime - matchedRange.startTime;
+      const clipTimeSpan = clipDuration;
+      const timeRatio = warmedTimeSpan > 0 ? (warmedBytes / warmedTimeSpan).toFixed(0) : 'n/a';
+      // eslint-disable-next-line no-console
+      console.info(
+        `[ROUTE] DIRECT_WARM clipOffset=${clipOffset?.toFixed(2)} clipDur=${clipTimeSpan?.toFixed(2)} ` +
+        `warmedTimeSpan=${warmedTimeSpan?.toFixed(2)} warmedBytes=${warmedBytes} bytesPerSec=${timeRatio} ` +
+        `warmStart=${matchedRange.startByte} warmEnd=${matchedRange.endByte}`
+      );
+    } catch { /* logging must never throw */ }
     return { loadUrl: gameUrl, warmLookupUrl: gameUrl, route: ROUTE.DIRECT_WARM, rangeCovered: true };
   }
   if (forceDirect) {

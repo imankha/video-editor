@@ -26,7 +26,9 @@ header so the frontend can show a warning indicator.
 import logging
 import os
 import re
+import threading
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -58,6 +60,25 @@ PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 # Thresholds for slow request warnings (in seconds)
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
 SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (profiling target)
+
+# Per-user in-flight request counter. Used to surface serialization: if a user
+# has multiple concurrent requests and one of them is slow, other requests
+# that wait behind it show up as "in_flight=N" at entry and exit times.
+_INFLIGHT: dict[str, int] = defaultdict(int)
+_INFLIGHT_LOCK = threading.Lock()
+
+def _inflight_enter(user_id: str) -> int:
+    with _INFLIGHT_LOCK:
+        _INFLIGHT[user_id] += 1
+        return _INFLIGHT[user_id]
+
+def _inflight_exit(user_id: str) -> int:
+    with _INFLIGHT_LOCK:
+        _INFLIGHT[user_id] = max(0, _INFLIGHT[user_id] - 1)
+        n = _INFLIGHT[user_id]
+        if n == 0:
+            _INFLIGHT.pop(user_id, None)
+        return n
 
 # T1152: Sync failure state is backed by the .sync_pending marker file on disk
 # (same marker used by T930 for crash-survival). This keeps a single source of
@@ -250,13 +271,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # --- Request with sync tracking ---
         request_start = time.perf_counter()
         sync_duration = 0.0
+        inflight_at_entry = _inflight_enter(user_id) if user_id else 0
 
         try:
             # Initialize request context for write tracking
             init_request_context()
 
             # Process the request
+            handler_start = time.perf_counter()
             response = await call_next(request)
+            handler_duration = time.perf_counter() - handler_start
 
             # After request, sync if writes occurred
             had_writes = get_request_has_writes()
@@ -374,6 +398,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             # Always clean up request context
             clear_request_context()
+            inflight_at_exit = _inflight_exit(user_id) if user_id else 0
 
             # Log warnings for slow operations
             total_duration = time.perf_counter() - request_start
@@ -391,6 +416,23 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
                     f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
                 )
+
+            # Structured timing for responsiveness analysis. Always emitted at
+            # INFO so we can grep across requests. Key field: inflight_entry
+            # reveals queueing (>1 means multiple concurrent requests for the
+            # same user — if one was slow, the others waited behind it).
+            try:
+                handler_ms = int(handler_duration * 1000)  # type: ignore[name-defined]
+            except NameError:
+                handler_ms = 0
+            logger.info(
+                f"[REQ_TIMING] {method} {path} user={user_id or 'none'} "
+                f"total_ms={int(total_duration * 1000)} "
+                f"handler_ms={handler_ms} "
+                f"sync_ms={int(sync_duration * 1000)} "
+                f"inflight_entry={inflight_at_entry} "
+                f"inflight_exit={inflight_at_exit}"
+            )
 
 
 # Keep old name for backward compatibility with imports
