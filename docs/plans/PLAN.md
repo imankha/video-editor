@@ -55,6 +55,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
 | T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | TODO | 1.6 | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests |
+| T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | TODO | 3.0 | POST /achievements/opened_framing_editor took 60.65s handler, blocked GET /projects/4 via per-user serializer — user-visible freeze on reel load |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)

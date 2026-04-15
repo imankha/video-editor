@@ -385,18 +385,31 @@ async def record_achievement(key: str):
     if key not in KNOWN_ACHIEVEMENT_KEYS:
         raise HTTPException(status_code=400, detail=f"Unknown achievement key: {key}")
 
+    t0 = time.perf_counter()
     with get_db_connection() as conn:
+        t_conn = time.perf_counter()
         cursor = conn.cursor()
         cursor.execute(
             "INSERT OR IGNORE INTO achievements (key) VALUES (?)",
             (key,),
         )
         conn.commit()
+        t_write = time.perf_counter()
 
         row = cursor.execute(
             "SELECT key, achieved_at FROM achievements WHERE key = ?",
             (key,),
         ).fetchone()
+        t_read = time.perf_counter()
 
-    logger.info(f"[Quests] Achievement recorded: {key}")
+    conn_ms = (t_conn - t0) * 1000
+    write_ms = (t_write - t_conn) * 1000
+    read_ms = (t_read - t_write) * 1000
+    total_ms = (t_read - t0) * 1000
+    if total_ms > 500:
+        logger.warning(
+            f"[SLOW ACHIEVEMENT] key={key} total_ms={total_ms:.0f} "
+            f"conn_ms={conn_ms:.0f} write_ms={write_ms:.0f} read_ms={read_ms:.0f}"
+        )
+    logger.info(f"[Quests] Achievement recorded: {key} ({total_ms:.0f}ms)")
     return {"key": row["key"], "achieved_at": row["achieved_at"]}
