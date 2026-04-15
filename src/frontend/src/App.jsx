@@ -522,7 +522,7 @@ function App() {
                 title="Home"
               />
               <Breadcrumb
-                type="Projects"
+                type="Reels"
                 itemName={getProjectDisplayName(selectedProject)}
               />
             </div>

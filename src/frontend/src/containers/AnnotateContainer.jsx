@@ -524,8 +524,8 @@ export function AnnotateContainer({
           setRawClipId(newRegion.id, result.raw_clip_id);
 
           if (result.project_created) {
-            toast.success('Project created for your 5-star clip!', {
-              message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+            toast.success('Reel created for your 5-star clip!', {
+              message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
               duration: 8000,
             });
           }
@@ -574,8 +574,8 @@ export function AnnotateContainer({
         setRawClipId(region.id, result.raw_clip_id);
 
         if (result.project_created) {
-          toast.success('Project created for your 5-star clip!', {
-            message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+          toast.success('Reel created for your 5-star clip!', {
+            message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
             duration: 8000,
           });
         }
@@ -601,8 +601,8 @@ export function AnnotateContainer({
       if (Object.keys(backendUpdates).length > 0) {
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {
-          toast.success('Project created for your 5-star clip!', {
-            message: 'We automatically create a highlight project for every brilliant play so you can export it anytime.',
+          toast.success('Reel created for your 5-star clip!', {
+            message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
             duration: 8000,
           });
         }

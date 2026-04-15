@@ -470,7 +470,7 @@ async function waitForExportComplete(page, progressCheckInterval = 30000) {
 
 async function navigateToProjectManager(page) {
   // Check if we're already on the project manager (Projects tab)
-  const newProjectButton = page.locator('button:has-text("New Project")');
+  const newProjectButton = page.locator('button:has-text("New Reel")');
   if (await newProjectButton.isVisible({ timeout: 1000 }).catch(() => false)) {
     return; // Already on project manager Projects tab
   }
@@ -483,7 +483,7 @@ async function navigateToProjectManager(page) {
   }
 
   // Switch to Projects tab (default might be Games tab)
-  const projectsTab = page.locator('button:has-text("Projects")').first();
+  const projectsTab = page.locator('button:has-text("Reels")').first();
   if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
     await projectsTab.click();
     await page.waitForTimeout(500);
@@ -613,7 +613,7 @@ async function navigateToProjectFromHome(page) {
   ]);
 
   // Click Projects tab to show "Your Projects" section
-  const projectsTab = page.locator('button:has-text("Projects")');
+  const projectsTab = page.locator('button:has-text("Reels")');
   if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
     await projectsTab.click();
     await page.waitForTimeout(500);
@@ -621,7 +621,7 @@ async function navigateToProjectFromHome(page) {
 
   // Click the first project card under "Your Projects" heading
   // The project card button contains the project name and clip counts
-  const yourProjects = page.locator('h2:has-text("Your Projects")');
+  const yourProjects = page.locator('h2:has-text("Your Reels")');
   if (await yourProjects.isVisible({ timeout: 3000 }).catch(() => false)) {
     // Click the first button after "Your Projects" heading (the project card)
     const projectCard = yourProjects.locator('..').locator('button').first();
@@ -795,7 +795,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Go to project manager first
       await page.goto('/');
       await page.waitForLoadState('networkidle');
-      await page.locator('button:has-text("Projects")').click();
+      await page.locator('button:has-text("Reels")').click();
       await page.waitForTimeout(500);
 
       // Click the first clip link that says "click to open" in its title/aria-label
@@ -840,11 +840,11 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   // Navigate to project manager and create project from clips
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  await page.locator('button:has-text("Projects")').click();
+  await page.locator('button:has-text("Reels")').click();
   await page.waitForTimeout(500);
 
   // Click New Project to open the modal
-  await page.locator('button:has-text("New Project")').click();
+  await page.locator('button:has-text("New Reel")').click();
   await page.waitForTimeout(500);
 
   // Wait for clips to load in the modal (should show clip buttons or "No clips" message)
@@ -882,7 +882,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   await createButton.click();
 
   // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-  await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+  await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
   // Navigate to the project in Framing mode
   await navigateToFramingAndWaitForVideo(page);
@@ -1215,11 +1215,11 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Projects")').click();
+    await page.locator('button:has-text("Reels")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Project")').click();
+    await page.locator('button:has-text("New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1229,7 +1229,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video to load
     await navigateToFramingAndWaitForVideo(page, { videoTimeout: 60000 });
@@ -1270,11 +1270,11 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Projects")').click();
+    await page.locator('button:has-text("Reels")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Project")').click();
+    await page.locator('button:has-text("New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1283,7 +1283,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
     await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
@@ -1314,11 +1314,11 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Projects")').click();
+    await page.locator('button:has-text("Reels")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
-    await page.locator('button:has-text("New Project")').click();
+    await page.locator('button:has-text("New Reel")').click();
     await page.waitForTimeout(500);
 
     // The "Create Project from Clips" modal should now show clips
@@ -1327,7 +1327,7 @@ test.describe('Smoke Tests @smoke', () => {
     await createButton.click();
 
     // Wait for modal to close - now stays on Projects page
-    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to framing and wait for video
     await navigateToFramingAndWaitForVideo(page, { waitForVideo: true, videoTimeout: 60000 });
@@ -1451,11 +1451,11 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full] Step 2: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Projects")').click();
+    await page.locator('button:has-text("Reels")').click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("New Project")').click();
+    await page.locator('button:has-text("New Reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library
@@ -1464,7 +1464,7 @@ test.describe('Full Coverage Tests @full', () => {
     await createProjectButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Verify project was created via API
     const projects = await page.evaluate(async () => {
@@ -1727,7 +1727,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("New Project")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("New Reel")')).toBeVisible({ timeout: 5000 });
 
     // Re-open the same project
     const projectCard = page.locator('.bg-gray-800').filter({ has: page.locator('text=/\\d+ clip/i') }).first();
@@ -2019,7 +2019,7 @@ test.describe('Full Coverage Tests @full', () => {
     await page.waitForTimeout(1000);
 
     // Verify we're at project manager
-    await expect(page.locator('button:has-text("New Project")')).toBeVisible({ timeout: 5000 });
+    await expect(page.locator('button:has-text("New Reel")')).toBeVisible({ timeout: 5000 });
 
     // STEP 5: Reload the same project
     console.log('[Full] Step 5: Reloading project...');
@@ -2230,11 +2230,11 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Projects")').click();
+    await page.locator('button:has-text("Reels")').click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
-    await page.locator('button:has-text("New Project")').click();
+    await page.locator('button:has-text("New Reel")').click();
     await page.waitForTimeout(500);
 
     // Modal should show clips from library - create project
@@ -2243,7 +2243,7 @@ test.describe('Full Coverage Tests @full', () => {
     await createProjectButton.click();
 
     // Wait for modal to close - now stays on Projects page (doesn't navigate to Framing)
-    await expect(page.locator('text="Create Project from Clips"')).not.toBeVisible({ timeout: 30000 });
+    await expect(page.locator('text="Create Reel from Clips"')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate to the project in Framing mode
     console.log('[Full Pipeline] Navigating to framing mode...');
