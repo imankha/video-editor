@@ -1,6 +1,6 @@
 # T1532: working_clips silently deleted for manual project after backend restart
 
-**Status:** TODO
+**Status:** CONFIRMED — ready to fix (RELEASE BLOCKER)
 **Impact:** 9 (silent user data loss)
 **Complexity:** 5
 **Created:** 2026-04-15
@@ -66,7 +66,20 @@ Other angles:
   treat manual-project working_clips as "old" when they share raw_clip_ids
   with auto-project working_clips.
 
-## Prime suspect
+## Confirmed root cause (investigation 2026-04-15)
+
+**Partition-key bug + cleanup-on-first-request.**
+
+1. [queries.py:91](src/backend/app/queries.py#L91) — `latest_working_clips_subquery` partitions by `COALESCE(rc.end_time, uploaded_filename)` with NO `project_id` in the PARTITION BY.
+2. [project_archive.py:397](src/backend/app/services/project_archive.py#L397) — `cleanup_database_bloat` calls the subquery with `project_filter=False` and runs `DELETE FROM working_clips WHERE id NOT IN (...)`. ROW_NUMBER is computed across the entire user DB.
+3. [session_init.py:130](src/backend/app/session_init.py#L130) — `cleanup_database_bloat()` is invoked from session init, which runs from [db_sync.py:249](src/backend/app/middleware/db_sync.py#L249) on the first authenticated request per user per server process. Restart → first request → DELETE fires.
+4. Manual multi-clip project creation at [projects.py:612-616](src/backend/app/routers/projects.py#L612) **inserts new working_clips rows that reuse the same `raw_clip_id`** as the auto-project's working_clip. Both rows have `version=1` and the same `rc.end_time` → same partition. ORDER BY is only `version DESC` → ties resolve arbitrarily (SQLite rowid-ASC) → older auto-project row wins → manual-project rows deleted.
+
+**Why auto projects survived:** they have exactly one working_clip per raw_clip, so partitions never collide.
+
+**Fix:** [queries.py:91](src/backend/app/queries.py#L91) — change `PARTITION BY COALESCE(rc2.end_time, wc2.uploaded_filename)` to `PARTITION BY wc2.project_id, COALESCE(rc2.end_time, wc2.uploaded_filename)`. Smallest correct change; preserves the `project_filter=False` call site. Add a regression test covering two projects sharing a raw_clip.
+
+## Prime suspect (superseded by confirmed analysis above)
 
 [src/backend/app/queries.py:63](src/backend/app/queries.py#L63)
 `latest_working_clips_subquery` partitions by

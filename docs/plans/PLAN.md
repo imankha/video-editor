@@ -56,7 +56,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
 | T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | TODO | 1.6 | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests |
 | T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | TODO | 3.0 | POST /achievements/opened_framing_editor took 60.65s handler, blocked GET /projects/4 via per-user serializer — user-visible freeze on reel load |
-| T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | TODO | 1.3 | Silent user data loss: manual project's working_clips deleted on backend after restart+load (no explicit user gesture) |
+| T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | CONFIRMED **RELEASE BLOCKER** | 1.3 | latest_working_clips_subquery partition missing project_id; cleanup_database_bloat on session init deletes manual-project working_clips sharing raw_clip with auto-project. Fix: add project_id to partition. |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
