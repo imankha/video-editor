@@ -302,10 +302,12 @@ async def local_framing(
                         .input(source_url, ss=source_start_time, to=source_end_time)
                         .output(input_path, c='copy')
                         .overwrite_output()
-                        .run(quiet=True)
+                        .run(capture_stdout=True, capture_stderr=True)
                     )
                 except ffmpeg_lib.Error as e:
-                    return {"status": "error", "error": f"Failed to extract clip range from R2: {e}"}
+                    stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else "(no stderr)"
+                    logger.error(f"[LocalProcessor] ffmpeg range extract failed. stderr:\n{stderr}")
+                    return {"status": "error", "error": f"Failed to extract clip range from R2: {stderr[-500:]}"}
             elif input_key.startswith("games/"):
                 # No range specified — fall back to presigned URL streaming full file
                 source_url = generate_presigned_url_global(input_key)
@@ -316,10 +318,12 @@ async def local_framing(
                         .input(source_url)
                         .output(input_path, c='copy')
                         .overwrite_output()
-                        .run(quiet=True)
+                        .run(capture_stdout=True, capture_stderr=True)
                     )
                 except ffmpeg_lib.Error as e:
-                    return {"status": "error", "error": f"Failed to stream video from R2: {e}"}
+                    stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else "(no stderr)"
+                    logger.error(f"[LocalProcessor] ffmpeg full-stream failed. stderr:\n{stderr}")
+                    return {"status": "error", "error": f"Failed to stream video from R2: {stderr[-500:]}"}
             else:
                 # User's own clip — small file, download directly
                 download_result = await asyncio.to_thread(download_from_r2, user_id, input_key, Path(input_path))
