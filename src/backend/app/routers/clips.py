@@ -1739,8 +1739,9 @@ async def update_working_clip(
             cursor.execute("""
                 INSERT INTO working_clips (
                     project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                    crop_data, timing_data, segments_data, raw_clip_version
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    crop_data, timing_data, segments_data, raw_clip_version,
+                    width, height, fps
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 project_id,
                 current_clip['raw_clip_id'],
@@ -1751,6 +1752,11 @@ async def update_working_clip(
                 normalize_json_data(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
                 normalize_json_data(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
                 raw_clip_version,
+                # T1500: carry dims forward; otherwise every new version starts NULL
+                # and re-triggers the probe-fallback path.
+                current_clip['width'] if 'width' in current_clip.keys() else None,
+                current_clip['height'] if 'height' in current_clip.keys() else None,
+                current_clip['fps'] if 'fps' in current_clip.keys() else None,
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()
