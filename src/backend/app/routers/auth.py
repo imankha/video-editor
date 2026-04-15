@@ -111,8 +111,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Secure cookies require HTTPS — false for local dev, true for staging/production
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
-# SameSite=lax is the correct default for our first-party auth flow.
-_SAMESITE = "lax"
+# Cross-site deployments (Pages <-> Fly) require SameSite=None; Secure so
+# the cookie is sent on post-login XHR. Local dev is same-site on localhost,
+# where Lax is fine and avoids needing HTTPS.
+_SAMESITE = "none" if _SECURE_COOKIES else "lax"
 
 
 class InitResponse(BaseModel):
