@@ -1287,9 +1287,10 @@ async def export_multi_clip(
                     rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
                     rc.end_time as raw_end_time,
                     (rc.end_time - rc.start_time) as raw_duration,
-                    gv.blake3_hash as game_blake3_hash
+                    COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
                 FROM working_clips wc
                 LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                LEFT JOIN games g ON rc.game_id = g.id
                 LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
                 WHERE wc.project_id = ?
                 AND wc.id IN ({latest_working_clips_subquery()})
