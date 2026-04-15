@@ -1,6 +1,6 @@
 # T1220: Modal + Local-GPU Processors Should Use Range Requests for R2 Videos
 
-**Status:** TESTING
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-08
