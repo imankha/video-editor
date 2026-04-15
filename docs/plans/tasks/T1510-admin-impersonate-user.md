@@ -64,7 +64,7 @@ working unchanged. Only new code reads `impersonator_id`.
 ### Frontend
 
 - [AdminScreen.jsx](src/frontend/src/screens/AdminScreen.jsx) user list: wrap email cell in a button that POSTs to impersonate endpoint, then navigates to `/` and refreshes auth state.
-- New `<ImpersonationBanner />` component, rendered app-wide (App.jsx near Breadcrumb). Shows target email + "Stop impersonating" button when `authStore.impersonator != null`.
+- New `<ImpersonationBanner />` component, rendered app-wide, **fixed to the bottom of the viewport** (not the top — the top bar has too much valuable UI to cover). Full-width red bar, sits above any bottom nav, uses safe-area-inset-bottom on mobile. Shows target email + "Stop impersonating" button when `authStore.impersonator != null`. Must not be dismissable.
 - [authStore.js](src/frontend/src/stores/authStore.js) extended with `impersonator` field populated from `/api/auth/me`.
 - On "stop", POST stop endpoint, clear local caches (editorStore, adminStore), reload to admin view.
 

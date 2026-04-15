@@ -16,7 +16,8 @@ export default function ImpersonationBanner() {
   return (
     <div
       role="alert"
-      className="sticky top-0 z-[9999] w-full bg-red-600 text-white px-4 py-2 flex items-center justify-between border-b-4 border-red-900 font-semibold shadow-lg"
+      className="fixed bottom-0 left-0 right-0 z-[9999] w-full bg-red-600 text-white px-4 py-2 flex items-center justify-between border-t-4 border-red-900 font-semibold shadow-lg"
+      style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
     >
       <span className="text-sm sm:text-base">
         Impersonating <strong>{email}</strong> as admin{' '}
