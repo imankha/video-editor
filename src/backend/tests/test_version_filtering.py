@@ -272,6 +272,60 @@ class TestLatestWorkingClipsSubquery:
         assert results[0]['version'] == 2
 
 
+    def test_t1532_cross_project_shared_raw_clip_preserves_both(self, test_db):
+        """T1532 regression: two projects that share a raw_clip_id must both keep
+        their working_clips when the subquery runs with project_filter=False
+        (used by cleanup_database_bloat's DELETE). Before the fix, the partition
+        omitted project_id so ROW_NUMBER collapsed both rows to one winner and
+        the DELETE removed the loser — silent multi-clip data loss."""
+        from app.queries import latest_working_clips_subquery
+
+        conn, _ = test_db
+        cursor = conn.cursor()
+
+        # Auto project (created first, older rowid) + manual multi-clip project
+        # (created later) both reuse the SAME raw_clip — this is how manual
+        # projects actually work (projects.py:612-616 inserts new working_clips
+        # rows referencing the auto-project's raw_clip_id).
+        cursor.execute("INSERT INTO projects (name) VALUES ('Auto')")
+        auto_project_id = cursor.lastrowid
+        cursor.execute("INSERT INTO projects (name) VALUES ('Manual Multi-Clip')")
+        manual_project_id = cursor.lastrowid
+
+        cursor.execute(
+            "INSERT INTO raw_clips (filename, rating, end_time) VALUES ('shared.mp4', 5, 100)"
+        )
+        raw_clip_id = cursor.lastrowid
+
+        # Both rows are version=1 — same as real-world fresh manual projects.
+        cursor.execute(
+            "INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (?, ?, 1)",
+            (auto_project_id, raw_clip_id),
+        )
+        cursor.execute(
+            "INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (?, ?, 1)",
+            (manual_project_id, raw_clip_id),
+        )
+        conn.commit()
+
+        # Simulate the cleanup DELETE from project_archive.py:397.
+        cursor.execute(f"""
+            DELETE FROM working_clips
+            WHERE id NOT IN ({latest_working_clips_subquery(project_filter=False)})
+        """)
+        conn.commit()
+
+        # Both projects must still have their working_clip.
+        cursor.execute(
+            "SELECT project_id FROM working_clips ORDER BY project_id"
+        )
+        remaining = [row['project_id'] for row in cursor.fetchall()]
+        assert remaining == [auto_project_id, manual_project_id], (
+            f"Cross-project data loss: expected both projects to keep their "
+            f"working_clip, got project_ids={remaining}"
+        )
+
+
 class TestLatestFinalVideosSubquery:
     """Test the latest_final_videos_subquery helper function."""
 

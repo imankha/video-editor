@@ -64,9 +64,12 @@ def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True
     """
     Returns SQL subquery for filtering to latest version per working clip identity.
 
-    The clip identity is determined by COALESCE(rc.end_time, wc.uploaded_filename),
-    which groups clips that originated from the same raw clip or have the same
-    uploaded filename.
+    The clip identity is determined by (project_id, COALESCE(rc.end_time,
+    wc.uploaded_filename)) — project_id MUST be in the partition because
+    manual multi-clip projects insert working_clips that reuse raw_clip_ids
+    from auto-projects (same rc.end_time). Omitting project_id would let
+    cross-project ROW_NUMBER tiebreaks delete one project's rows in favour
+    of another's (T1532 release-blocker).
 
     Args:
         alias: Table alias for working_clips (will use alias2 and rc2 internally)
@@ -88,7 +91,7 @@ def latest_working_clips_subquery(alias: str = "wc", project_filter: bool = True
     return f"""
         SELECT id FROM (
             SELECT {inner_alias}.id, ROW_NUMBER() OVER (
-                PARTITION BY COALESCE({rc_alias}.end_time, {inner_alias}.uploaded_filename)
+                PARTITION BY {inner_alias}.project_id, COALESCE({rc_alias}.end_time, {inner_alias}.uploaded_filename)
                 ORDER BY {inner_alias}.version DESC
             ) as rn
             FROM working_clips {inner_alias}
