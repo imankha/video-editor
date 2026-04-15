@@ -32,6 +32,7 @@ FastAPI backend patterns for the video editor. Covers endpoint design, storage p
 - `storage-r2-required` - All user files must be uploaded to R2
 - `storage-path-objects` - Use Path objects, not f-strings for file paths
 - `storage-presigned-urls` - Generate presigned URLs for client access
+- `storage-modal-range-extract` - Never full-download on Modal/local GPU; use presigned URL + FFmpeg pre-input -ss/-to scratch extract
 
 ### Query Patterns (HIGH)
 - `query-parameterized` - Always use parameterized queries

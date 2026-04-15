@@ -1,6 +1,6 @@
-# T1220: Modal Functions Should Use Range Requests for R2 Videos
+# T1220: Modal + Local-GPU Processors Should Use Range Requests for R2 Videos
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-08
@@ -12,6 +12,7 @@ The presigned-URL + FFmpeg range-seek pattern this task proposes is **already in
 
 - **f1cb8d8** (T1130 DONE) — multi-clip exports use presigned URLs instead of downloading full game videos.
 - **63cc3c8** — local framing processors (`local_framing`, `local_framing_mock`) extract only the clip range via presigned URL + FFmpeg, matching the multi-clip pattern.
+- **aa9dfa5 / fb11773** (T1500 DONE) — `app/services/video_probe.py` does boto3 byte-range fetch (1 MB head + 512 KB tail) + ffprobe-from-stdin for dimension capture at upload time. Different mechanism (boto3 range vs. FFmpeg pre-input seek) and not reusable inside the Modal image, but it's a third production data point that range-based R2 access is the right default.
 
 Helpers exist: `src/backend/app/storage.py :: generate_presigned_url()` is already used by the frontend and non-Modal export paths. This task is a port, not a rewrite.
 
@@ -37,7 +38,12 @@ Modal GPU functions still download the **entire source video** from R2 before pr
 - Lines 223, 597, 723, 992, 1393, 1622, 1797, 1893, 2094, 2508, 2520, 2746, 2962 — `r2.download_file()` calls
 - `-ss` placement is post-input across all FFmpeg commands in this file
 
-Every non-Modal extraction path has already migrated off this pattern (see Precedent).
+Every non-Modal **export** path has already migrated. The **local GPU substitutes** (used in dev to stand in for Modal) are partially migrated:
+
+- `src/backend/app/services/local_processors.py :: call_local_overlay` (line 171) — still does a full `download_from_r2` for overlay rendering. Not migrated.
+- `call_local_framing` (line 325) and `call_local_framing_mock` (line 531) — presigned-URL path landed in 63cc3c8 but retain a full-download fallback branch. Audit whether the fallback is still reachable; if yes, migrate it too, if no, delete it.
+
+These paths run in dev and any environment where Modal is disabled; leaving them on full-download makes the dev loop wasteful and means the two code paths diverge in performance characteristics.
 
 ## Solution
 
@@ -102,6 +108,8 @@ This requires knowing the byte offset for a given timestamp, which means parsing
 6. [ ] For multi-clip: pass one presigned URL per source video, with per-clip timestamps
 7. [ ] Test with large game videos (>1GB) and measure download time reduction
 8. [ ] Remove boto3 R2 credentials from Modal function environment (no longer needed for video access)
+9. [ ] Migrate `call_local_overlay` in `local_processors.py` to presigned URL + pre-input seek
+10. [ ] Audit and remove (or migrate) full-download fallbacks at `local_processors.py:325` and `:531`
 
 ## Acceptance Criteria
 
