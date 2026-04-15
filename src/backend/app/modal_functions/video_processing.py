@@ -990,6 +990,7 @@ def process_framing_ai(
         # Yield initial progress
         yield {"progress": 2, "phase": "initializing", "message": "Initializing..."}
 
+        r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
