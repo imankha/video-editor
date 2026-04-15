@@ -53,6 +53,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1250 | [Live Scrub in Annotate](tasks/for-alpha/T1250-annotate-live-scrub.md) | TODO | 2.0 | Video should update frame-by-frame during timeline/clip scrub drag, not just on release |
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | TESTING | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
+| T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)

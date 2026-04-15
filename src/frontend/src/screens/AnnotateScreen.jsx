@@ -482,15 +482,18 @@ export function AnnotateScreen({ onClearSelection }) {
                   ? (index === 0 ? 'First Half' : 'Second Half')
                   : `Part ${index + 1}`;
                 const isActive = index === activeVideoIndex;
+                const disabled = playback?.isPlaybackMode;
                 return (
                   <button
                     key={video.sequence}
                     onClick={() => handleVideoTabSwitch(index)}
+                    disabled={disabled}
+                    title={disabled ? 'Exit playback to switch halves' : undefined}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
+                    } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {label}
                   </button>
