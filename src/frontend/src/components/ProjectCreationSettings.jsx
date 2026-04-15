@@ -37,7 +37,7 @@ export function ProjectCreationSettings({
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-2">
             <Settings size={20} className="text-blue-400" />
-            <h2 className="text-lg font-bold text-white">Project Creation Settings</h2>
+            <h2 className="text-lg font-bold text-white">Reel Creation Settings</h2>
           </div>
           <Button
             variant="ghost"
@@ -83,7 +83,7 @@ export function ProjectCreationSettings({
           {/* Game Project Settings */}
           <div>
             <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-              Game Project
+              Game Reel
             </h3>
             <div className="bg-gray-750 rounded-lg p-4 border border-gray-700 space-y-4">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -94,7 +94,7 @@ export function ProjectCreationSettings({
                   className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
                 />
                 <div>
-                  <span className="text-white">Create combined "game" project</span>
+                  <span className="text-white">Create combined "game" reel</span>
                   <p className="text-xs text-gray-500">
                     Includes all clips meeting the minimum rating
                   </p>
@@ -129,7 +129,7 @@ export function ProjectCreationSettings({
           {/* Individual Clip Projects Settings */}
           <div>
             <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-3">
-              Individual Clip Projects
+              Individual Clip Reels
             </h3>
             <div className="bg-gray-750 rounded-lg p-4 border border-gray-700 space-y-4">
               <label className="flex items-center gap-3 cursor-pointer">
@@ -140,9 +140,9 @@ export function ProjectCreationSettings({
                   className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
                 />
                 <div>
-                  <span className="text-white">Create individual projects for top clips</span>
+                  <span className="text-white">Create individual reels for top clips</span>
                   <p className="text-xs text-gray-500">
-                    Each qualifying clip gets its own project
+                    Each qualifying clip gets its own reel
                   </p>
                 </div>
               </label>
@@ -151,7 +151,7 @@ export function ProjectCreationSettings({
                 <>
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
-                      Minimum rating for individual projects
+                      Minimum rating for individual reels
                     </label>
                     <div className="flex gap-2">
                       {[4, 5].map(rating => (

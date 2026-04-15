@@ -27,7 +27,7 @@ export const EDITOR_MODES = {
  * - Single source of truth for screen metadata
  */
 export const SCREENS = {
-  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: 'Projects' },
+  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: 'Reels' },
   FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Framing' },
   OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
   ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },

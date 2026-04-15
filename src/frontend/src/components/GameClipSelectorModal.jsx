@@ -468,7 +468,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.detail || 'Failed to create project');
+        throw new Error(error.detail || 'Failed to create reel');
       }
 
       const project = await response.json();
@@ -476,7 +476,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       onClose();
     } catch (err) {
       console.error('[GameClipSelectorModal] Failed to create project:', err);
-      alert(`Failed to create project: ${err.message}`);
+      alert(`Failed to create reel: ${err.message}`);
     } finally {
       setCreating(false);
     }
@@ -489,7 +489,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       <div className="bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden border border-gray-700">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-bold text-white">Create Project from Clips</h2>
+          <h2 className="text-xl font-bold text-white">Create Reel from Clips</h2>
           <Button
             variant="ghost"
             size="sm"
@@ -764,7 +764,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                   {/* Project Name */}
                   <div>
                     <label className="block text-sm text-gray-400 mb-2">
-                      Project Name
+                      Reel Name
                       {!isNameManuallySet && projectName && (
                         <span className="ml-2 text-xs text-purple-400">(auto)</span>
                       )}

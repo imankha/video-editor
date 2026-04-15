@@ -464,7 +464,7 @@ export function ProjectManager({
       <div className="text-center mb-6">
         <Logo size={48} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
-        <p className="text-gray-400">Manage your games and projects</p>
+        <p className="text-gray-400">Manage your games and reels</p>
       </div>
 
       {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
@@ -576,7 +576,7 @@ export function ProjectManager({
           }`}
         >
           <FolderOpen size={16} />
-          Projects
+          Reels
           {projects.length > 0 && (
             <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
               activeTab === 'projects' ? 'bg-purple-700' : 'bg-gray-700'
@@ -607,7 +607,7 @@ export function ProjectManager({
             title={!hasClips ? "Extract clips from a game first using Annotate mode" : undefined}
             onClick={() => setShowNewProjectModal(true)}
           >
-            New Project
+            New Reel
           </Button>
         )}
       </div>
@@ -716,12 +716,12 @@ export function ProjectManager({
       ) : (
         /* Projects List */
         loading ? (
-          <div className="text-gray-400">Loading projects...</div>
+          <div className="text-gray-400">Loading reels...</div>
         ) : error ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">Failed to load projects</span>
+              <span className="font-medium">Failed to load reels</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
               {error.includes('fetch') || error.includes('network')
@@ -734,8 +734,8 @@ export function ProjectManager({
           </div>
         ) : projects.length === 0 ? (
           <div className="text-gray-500 text-center">
-            <p className="mb-2">No projects yet</p>
-            <p className="text-sm">Create a new project or add a game to get started</p>
+            <p className="mb-2">No reels yet</p>
+            <p className="text-sm">Create a new reel or add a game to get started</p>
           </div>
         ) : (
           <div className="w-full max-w-2xl">
@@ -843,7 +843,7 @@ export function ProjectManager({
                             ? 'bg-purple-600 text-white'
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
-                        title="Manually created projects"
+                        title="Manually created reels"
                       >
                         <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : 'text-purple-400'} />
                         Custom ({filterCounts.custom})
@@ -857,14 +857,14 @@ export function ProjectManager({
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
                 {filteredProjects.length === projects.length
-                  ? `Your Projects`
-                  : `Showing ${filteredProjects.length} of ${projects.length} Projects`}
+                  ? `Your Reels`
+                  : `Showing ${filteredProjects.length} of ${projects.length} Reels`}
               </h2>
             </div>
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
-                  No projects match the current filters
+                  No reels match the current filters
                 </div>
               ) : (
                 <>
@@ -1455,7 +1455,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             {project.is_auto_created && (
-              <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created project" />
+              <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created reel" />
             )}
             {isRenaming ? (
               <input
@@ -1476,7 +1476,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 <button
                   onClick={handleStartRename}
                   className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 transition-opacity flex-shrink-0"
-                  title="Rename project"
+                  title="Rename reel"
                 >
                   <Pencil size={14} />
                 </button>
@@ -1534,7 +1534,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           iconOnly
           onClick={handleDelete}
           className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
-          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete project'}
+          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
         />
       </div>
 

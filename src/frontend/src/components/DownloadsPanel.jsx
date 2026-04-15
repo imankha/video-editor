@@ -12,7 +12,7 @@ import { useQuestStore } from '../stores/questStore';
 const FILTER_OPTIONS = [
   { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
   { value: SourceType.BRILLIANT_CLIP, label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
-  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Projects', icon: Folder, color: 'text-purple-400' },
+  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Reels', icon: Folder, color: 'text-purple-400' },
 ];
 
 /**
@@ -128,7 +128,7 @@ export function DownloadsPanel({
         });
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.detail || 'Failed to restore project');
+          throw new Error(error.detail || 'Failed to restore reel');
         }
         const result = await response.json();
         // Navigate to the project (project_id from response, may differ if restored)
@@ -136,7 +136,7 @@ export function DownloadsPanel({
         close();
       } catch (error) {
         console.error('[DownloadsPanel] Restore project error:', error);
-        alert(`Failed to open project: ${error.message}`);
+        alert(`Failed to open reel: ${error.message}`);
       } finally {
         setRestoringProjectId(null);
       }
@@ -152,7 +152,7 @@ export function DownloadsPanel({
   };
 
   // Get appropriate title for the folder button
-  const getOpenSourceTitle = () => 'Open project';
+  const getOpenSourceTitle = () => 'Open reel';
 
   const handleBeforeAfter = async (e, download) => {
     e.stopPropagation();

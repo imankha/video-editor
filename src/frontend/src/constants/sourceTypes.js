@@ -14,7 +14,7 @@ export const SourceType = Object.freeze({
  */
 export const SOURCE_TYPE_LABELS = Object.freeze({
   [SourceType.BRILLIANT_CLIP]: 'Brilliant Clip',
-  [SourceType.CUSTOM_PROJECT]: 'Custom Project',
+  [SourceType.CUSTOM_PROJECT]: 'Custom Reel',
 });
 
 /**

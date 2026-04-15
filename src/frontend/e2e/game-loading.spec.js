@@ -211,7 +211,7 @@ test.describe('Game Loading Debug', () => {
     // Step 7: Check what mode we're in
     // The annotate mode indicator shows "Annotate" in a green badge
     const isInAnnotateMode = await page.locator('.text-green-400:has-text("Annotate")').isVisible().catch(() => false);
-    const isInProjectManager = await page.locator('button:has-text("New Project")').isVisible().catch(() => false);
+    const isInProjectManager = await page.locator('button:has-text("New Reel")').isVisible().catch(() => false);
     const hasVideo = await page.locator('video').isVisible().catch(() => false);
 
     console.log(`State after click:`);

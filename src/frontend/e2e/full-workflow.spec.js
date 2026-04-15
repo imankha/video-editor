@@ -204,14 +204,14 @@ test.describe('Full Workflow Tests', () => {
 
     // Should see Project Manager tabs
     await expect(page.locator('button:has-text("Games")')).toBeVisible();
-    await expect(page.locator('button:has-text("Projects")')).toBeVisible();
+    await expect(page.locator('button:has-text("Reels")')).toBeVisible();
 
     // Games tab is the default for fresh users - verify it loads first
     await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
     // Switch to Projects tab and verify
-    await page.locator('button:has-text("Projects")').click();
-    await expect(page.locator('button:has-text("New Project")')).toBeVisible();
+    await page.locator('button:has-text("Reels")').click();
+    await expect(page.locator('button:has-text("New Reel")')).toBeVisible();
   });
 
   // Test 2 removed: "Annotate Mode - Upload video and import TSV" is fully covered
