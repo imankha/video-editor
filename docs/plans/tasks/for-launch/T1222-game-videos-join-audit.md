@@ -1,6 +1,6 @@
 # T1222: Audit game_videos JOIN Pattern Across Backend
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-04-14

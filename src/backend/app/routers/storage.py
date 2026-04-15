@@ -9,7 +9,10 @@ This reduces latency and backend bandwidth usage for video streaming.
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, List
+import logging
 import mimetypes
+
+logger = logging.getLogger(__name__)
 
 from ..user_context import get_current_user_id
 from ..storage import (
@@ -247,11 +250,16 @@ async def get_warmup_urls(
             if url:
                 gallery_urls.append(url)
 
-        # Game videos - use blake3_hash (global) or video_filename (legacy)
-        # Include video_size for tail warming of large non-faststart videos
+        # Game videos - use blake3_hash (global) or video_filename (legacy).
+        # Multi-video games (T1440) have games.blake3_hash=NULL and live in game_videos.
+        # UNION both so warmup covers all source videos.
         cursor.execute("""
             SELECT blake3_hash, video_filename, video_size FROM games
             WHERE blake3_hash IS NOT NULL OR video_filename IS NOT NULL
+            UNION
+            SELECT gv.blake3_hash, NULL AS video_filename, gv.video_size
+            FROM game_videos gv
+            WHERE gv.blake3_hash IS NOT NULL
         """)
         for row in cursor.fetchall():
             if row['blake3_hash']:
@@ -302,15 +310,18 @@ async def get_warmup_urls(
                    wc.id as clip_id,
                    rc.start_time,
                    rc.end_time,
-                   g.blake3_hash,
+                   rc.game_id,
+                   rc.video_sequence,
+                   COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
                    g.video_filename,
-                   g.video_duration,
-                   g.video_size
+                   COALESCE(gv.duration, g.video_duration) AS video_duration,
+                   COALESCE(gv.video_size, g.video_size) AS video_size
             FROM projects p
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
             JOIN working_clips wc ON wc.project_id = p.id
             JOIN raw_clips rc ON wc.raw_clip_id = rc.id
             JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
             WHERE p.final_video_id IS NULL
               AND wc.id IN ({latest_working_clips_subquery(project_filter=False)})
             ORDER BY p.id, wc.sort_order
@@ -339,6 +350,11 @@ async def get_warmup_urls(
 
             # Only include clip ranges for projects without a working video
             if not project_map[pid]["has_working_video"]:
+                if row['game_id'] and not row['blake3_hash']:
+                    logger.warning(
+                        f"[warmup] Clip {row['clip_id']} references game_id={row['game_id']} but "
+                        f"game_videos has no row for video_sequence={row['video_sequence']} — skipping warmup"
+                    )
                 # Generate presigned URL for the game video
                 if row['blake3_hash']:
                     game_url = generate_presigned_url_global(
