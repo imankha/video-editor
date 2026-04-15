@@ -2212,6 +2212,9 @@ def process_clips_ai(
         logger.info(f"[{job_id}] Starting AI upscaling for {total_clips} clip(s)")
         logger.info(f"[{job_id}] Target: {target_width}x{target_height} @ {fps}fps")
 
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
         yield {
             "progress": 2,
             "phase": "initializing",
