@@ -1284,13 +1284,13 @@ async def export_multi_clip(
                     wc.id, wc.raw_clip_id, wc.uploaded_filename,
                     wc.crop_data, wc.segments_data, wc.sort_order,
                     rc.filename as raw_filename, rc.name as clip_name,
-                    rc.game_id, rc.start_time as raw_start_time,
+                    rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
                     rc.end_time as raw_end_time,
                     (rc.end_time - rc.start_time) as raw_duration,
-                    g.blake3_hash as game_blake3_hash
+                    gv.blake3_hash as game_blake3_hash
                 FROM working_clips wc
                 LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                LEFT JOIN games g ON rc.game_id = g.id
+                LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
                 WHERE wc.project_id = ?
                 AND wc.id IN ({latest_working_clips_subquery()})
                 ORDER BY wc.sort_order
@@ -1334,7 +1334,12 @@ async def export_multi_clip(
                     clip_data['duration'] = db_clip['raw_duration']
 
                 # Resolve video source
-                if db_clip['game_id'] and db_clip['game_blake3_hash']:
+                if db_clip['game_id']:
+                    if not db_clip['game_blake3_hash']:
+                        raise RuntimeError(
+                            f"Clip references game_id={db_clip['game_id']} but game_videos has no row "
+                            f"for (game_id, video_sequence={db_clip['video_sequence']})"
+                        )
                     # Game clip: stream clip range from R2 via presigned URL (no full download)
                     extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
                     progress_data = {
