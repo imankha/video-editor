@@ -491,6 +491,11 @@ async def _run_local_framing_export(
 
         # --- Input/output keys ---
         if clip['game_id']:
+            if not clip['game_blake3_hash']:
+                raise RuntimeError(
+                    f"Clip references game_id={clip['game_id']} but game_videos has no row "
+                    f"for (game_id, video_sequence={clip.get('video_sequence')})"
+                )
             input_key = f"games/{clip['game_blake3_hash']}.mp4"
         else:
             input_key = f"raw_clips/{clip['raw_filename']}"
@@ -764,13 +769,14 @@ async def render_project(request: RenderRequest, http_request: Request):
                 rc.filename as raw_filename,
                 rc.name as clip_name,
                 rc.game_id,
+                rc.video_sequence,
                 rc.start_time as raw_start_time,
                 rc.end_time as raw_end_time,
                 (rc.end_time - rc.start_time) as raw_duration,
-                g.blake3_hash as game_blake3_hash
+                gv.blake3_hash as game_blake3_hash
             FROM working_clips wc
             LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
             ORDER BY wc.sort_order
@@ -947,6 +953,12 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     user_id = get_current_user_id()
     if clip['game_id']:
+        if not clip['game_blake3_hash']:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Clip references game_id={clip['game_id']} but game_videos has no row "
+                       f"for (game_id, video_sequence={clip.get('video_sequence')})",
+            )
         input_key = f"games/{clip['game_blake3_hash']}.mp4"
     else:
         input_key = f"raw_clips/{clip['raw_filename']}"

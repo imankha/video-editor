@@ -134,6 +134,21 @@ def get_r2_client():
     )
 
 
+def _presigned_source_url(key: str, expires_in: int = 14400) -> str:
+    """Generate a presigned GET URL for an R2 object from inside Modal.
+
+    Use with FFmpeg pre-input ``-ss``/``-to`` + ``-c copy`` to extract only the
+    needed range without downloading the full source video. See
+    ``src/backend/.claude/skills/api-guidelines/rules/storage-modal-range-extract.md``.
+    """
+    r2 = get_r2_client()
+    return r2.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": os.environ["R2_BUCKET_NAME"], "Key": key},
+        ExpiresIn=expires_in,
+    )
+
+
 def _has_audio_stream(video_path: str) -> bool:
     """
     Check if a video file has an audio stream using ffprobe.
@@ -979,39 +994,79 @@ def process_framing_ai(
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download source video from R2
-            # Game videos are global (no user prefix), uploaded clips are user-scoped
-            input_path = os.path.join(temp_dir, "input.mp4")
+            # Resolve full R2 key. Game videos are global (no user prefix),
+            # uploaded clips are user-scoped.
             if input_key.startswith("games/"):
                 full_input_key = input_key  # Global, no user prefix
             else:
                 full_input_key = f"{user_id}/{input_key}"
-            logger.info(f"[{job_id}] Downloading {full_input_key}")
 
-            yield {"progress": 3, "phase": "downloading", "message": "Downloading source video..."}
-            r2.download_file(bucket, full_input_key, input_path)
-            yield {"progress": 10, "phase": "downloading", "message": "Download complete"}
+            # Scratch-extract the clip range via presigned URL + FFmpeg pre-input
+            # -ss/-to + stream copy. See
+            # src/backend/.claude/skills/api-guidelines/rules/storage-modal-range-extract.md
+            # The scratch file covers [source_start_time, source_end_time] of the
+            # original source. ALL downstream time/frame math is scratch-relative
+            # (t=0 at the start of the scratch file).
+            input_path = os.path.join(temp_dir, "input.mp4")
+            source_url = _presigned_source_url(full_input_key)
 
-            # Get video properties
+            # If source_end_time is None we don't know the clip end yet; probe
+            # the source duration via the presigned URL with ffprobe so the
+            # extract has a finite -to. (Cheap: HEAD + small Range read.)
+            if source_end_time is None:
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries",
+                     "format=duration", "-of",
+                     "default=noprint_wrappers=1:nokey=1", source_url],
+                    capture_output=True, text=True, check=True,
+                )
+                probed_duration = float(probe.stdout.strip())
+                effective_end = probed_duration
+            else:
+                effective_end = source_end_time
+
+            logger.info(f"[{job_id}] Scratch-extracting {full_input_key} "
+                        f"[{source_start_time:.3f}s - {effective_end:.3f}s]")
+            yield {"progress": 3, "phase": "downloading",
+                   "message": "Extracting clip range from source..."}
+
+            extract_cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(source_start_time),
+                "-to", str(effective_end),
+                "-i", source_url,
+                "-c", "copy",
+                input_path,
+            ]
+            extract = subprocess.run(extract_cmd, capture_output=True, text=True)
+            if extract.returncode != 0:
+                logger.error(f"[{job_id}] Scratch extract failed: {extract.stderr[:500]}")
+                raise RuntimeError(f"Scratch extract failed: {extract.stderr[:500]}")
+            yield {"progress": 10, "phase": "downloading",
+                   "message": "Clip range extracted"}
+
+            # Get video properties from the SCRATCH file. Frame 0 of the scratch
+            # corresponds to source_start_time in the original source.
             cap = cv2.VideoCapture(input_path)
             if not cap.isOpened():
-                raise ValueError("Could not open video file")
+                raise ValueError("Could not open scratch video file")
 
             original_fps = cap.get(cv2.CAP_PROP_FPS)
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            video_duration = total_frames / original_fps
+            video_duration = total_frames / original_fps  # scratch duration
 
-            logger.info(f"[{job_id}] Source: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames, {video_duration:.1f}s")
+            logger.info(f"[{job_id}] Scratch: {original_width}x{original_height} @ {original_fps:.2f}fps, {total_frames} frames, {video_duration:.1f}s")
 
-            # Determine clip range in source video
-            clip_start = source_start_time
-            clip_end = source_end_time if source_end_time is not None else video_duration
-            clip_duration = clip_end - clip_start
+            # In scratch-relative coordinates, the clip starts at 0 and ends at
+            # the scratch duration. (External reporting still uses the original
+            # source_start_time/source_end_time for context.)
+            clip_duration = video_duration
 
-            # Combine extraction range with user trim to read only needed frames
-            # Trim times are relative to clip start (0-based)
+            # Combine extraction range with user trim to read only needed frames.
+            # Trim times are relative to clip start (0-based) — same as before,
+            # which now coincides with scratch-relative time.
             trim_start = 0.0
             trim_end = clip_duration
             if segment_data:
@@ -1020,16 +1075,16 @@ def process_framing_ai(
                 if 'trim_end' in segment_data:
                     trim_end = min(segment_data['trim_end'], clip_duration)
 
-            # Absolute range in source video
-            absolute_start = clip_start + trim_start
-            absolute_end = clip_start + trim_end
+            # Scratch-relative range to read frames from
+            scratch_start = trim_start
+            scratch_end = trim_end
 
-            start_frame = int(absolute_start * original_fps)
-            end_frame = min(int(absolute_end * original_fps), total_frames)
+            start_frame = int(scratch_start * original_fps)
+            end_frame = min(int(scratch_end * original_fps), total_frames)
 
             frames_to_process = end_frame - start_frame
-            logger.info(f"[{job_id}] Clip range: {clip_start:.2f}s-{clip_end:.2f}s, trim: {trim_start:.2f}s-{trim_end:.2f}s")
-            logger.info(f"[{job_id}] Absolute range: {absolute_start:.2f}s-{absolute_end:.2f}s")
+            logger.info(f"[{job_id}] Source range: {source_start_time:.2f}s-{effective_end:.2f}s, trim: {trim_start:.2f}s-{trim_end:.2f}s")
+            logger.info(f"[{job_id}] Scratch range: {scratch_start:.2f}s-{scratch_end:.2f}s")
             logger.info(f"[{job_id}] Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
 
             yield {"progress": 11, "phase": "seeking", "message": "Seeking to clip range..."}
@@ -1060,8 +1115,11 @@ def process_framing_ai(
                     logger.warning(f"[{job_id}] Could not read frame {frame_idx}")
                     continue
 
-                # Crop keyframe time is relative to clip start (0-based)
-                crop_time = (frame_idx / original_fps) - clip_start
+                # Crop keyframe time is relative to clip start (0-based).
+                # frame_idx is a scratch-file frame index, and the scratch file
+                # starts at the clip's start, so frame_idx/fps IS the
+                # clip-relative time (no clip_start subtraction needed).
+                crop_time = frame_idx / original_fps
                 crop = _interpolate_crop(sorted_keyframes, crop_time)
 
                 if crop:
@@ -1167,10 +1225,11 @@ def process_framing_ai(
                     output_labels.append(f"[v{i}]")
 
                     # Audio: apply atempo for speed change (from source input) - only if source has audio
-                    # Audio times must be absolute in the source video (add clip_start offset)
+                    # Scratch file is already trimmed to [clip_start, clip_end],
+                    # so audio times are scratch-relative (= clip-relative).
                     if has_audio:
-                        audio_start = seg['start'] + clip_start
-                        audio_end = seg['end'] + clip_start
+                        audio_start = seg['start']
+                        audio_end = seg['end']
                         if speed != 1.0:
                             # atempo supports 0.5-2.0, chain for extreme values
                             atempo_val = max(0.5, min(2.0, speed))
@@ -1236,7 +1295,8 @@ def process_framing_ai(
                             "ffmpeg", "-y",
                             "-framerate", str(fps),
                             "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                            "-ss", str(absolute_start),
+                            # Scratch-relative seek (scratch starts at clip start)
+                            "-ss", str(scratch_start),
                             "-t", str(output_frame_idx / fps),
                             "-i", input_path,
                             "-map", "0:v",
@@ -1265,13 +1325,14 @@ def process_framing_ai(
                         ]
             else:
                 # No speed changes - simple encoding
-                # Audio needs -ss to seek to the clip's start in the source video
+                # Audio needs -ss to seek to trim_start within the scratch file
+                # (scratch already covers exactly [clip_start, clip_end]).
                 if has_audio:
                     cmd = [
                         "ffmpeg", "-y",
                         "-framerate", str(fps),
                         "-i", os.path.join(frames_dir, "frame_%06d.png"),
-                        "-ss", str(absolute_start),
+                        "-ss", str(scratch_start),
                         "-t", str(output_frame_idx / fps),
                         "-i", input_path,  # For audio
                         "-map", "0:v",
@@ -1566,8 +1627,8 @@ def process_framing_ai_chunk(
     user_id: str,
     input_key: str,
     output_chunk_key: str,
-    start_frame: int,
-    end_frame: int,
+    chunk_start_time: float,
+    chunk_end_time: float,
     keyframes: list,
     output_width: int,
     output_height: int,
@@ -1577,8 +1638,10 @@ def process_framing_ai_chunk(
     """
     Process a single chunk of video with Real-ESRGAN upscaling.
 
-    This function processes frames [start_frame, end_frame) and uploads
-    the chunk to R2 for later concatenation.
+    Scratch-extracts its own time range from the source via presigned URL +
+    FFmpeg pre-input ``-ss``/``-to`` + stream copy, then decodes the local
+    scratch file. See
+    ``src/backend/.claude/skills/api-guidelines/rules/storage-modal-range-extract.md``.
 
     Args:
         job_id: Unique export job identifier
@@ -1587,8 +1650,8 @@ def process_framing_ai_chunk(
         user_id: User folder in R2
         input_key: R2 key for source video (games/{hash}.mp4 or raw_clips/{file})
         output_chunk_key: R2 key for output chunk video
-        start_frame: First frame to process (inclusive, absolute in source video)
-        end_frame: Last frame to process (exclusive, absolute in source video)
+        chunk_start_time: Start of this chunk in the original source video (seconds, source-absolute)
+        chunk_end_time: End of this chunk in the original source video (seconds, source-absolute)
         keyframes: Crop keyframes for interpolation (times relative to clip start, 0-based)
         output_width: Target width
         output_height: Target height
@@ -1606,25 +1669,47 @@ def process_framing_ai_chunk(
 
     try:
         logger.info(f"[{chunk_id}] Starting chunk {chunk_index+1}/{total_chunks}")
-        logger.info(f"[{chunk_id}] Frames: {start_frame}-{end_frame} ({end_frame - start_frame} frames)")
+        logger.info(f"[{chunk_id}] Source range: {chunk_start_time:.3f}s - {chunk_end_time:.3f}s")
 
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download source video from R2
-            input_path = os.path.join(temp_dir, "input.mp4")
+            # Resolve full R2 key. Game videos are global (no user prefix),
+            # uploaded clips are user-scoped.
             if input_key.startswith("games/"):
                 full_input_key = input_key
             else:
                 full_input_key = f"{user_id}/{input_key}"
-            logger.info(f"[{chunk_id}] Downloading {full_input_key}")
-            r2.download_file(bucket, full_input_key, input_path)
 
-            # Open video and seek to start
+            # Scratch-extract this chunk's time range via presigned URL +
+            # FFmpeg pre-input -ss/-to + stream copy. Transfers only the bytes
+            # in [chunk_start_time, chunk_end_time].
+            input_path = os.path.join(temp_dir, "input.mp4")
+            source_url = _presigned_source_url(full_input_key)
+
+            logger.info(f"[{chunk_id}] Scratch-extracting {full_input_key} "
+                        f"[{chunk_start_time:.3f}s - {chunk_end_time:.3f}s]")
+            extract_cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(chunk_start_time),
+                "-to", str(chunk_end_time),
+                "-i", source_url,
+                "-c", "copy",
+                input_path,
+            ]
+            extract = subprocess.run(extract_cmd, capture_output=True, text=True)
+            if extract.returncode != 0:
+                logger.error(f"[{chunk_id}] Scratch extract failed: {extract.stderr[:500]}")
+                raise RuntimeError(f"Scratch extract failed: {extract.stderr[:500]}")
+
+            # Open the local scratch file. Frame 0 of the scratch corresponds
+            # to chunk_start_time in the original source.
             cap = cv2.VideoCapture(input_path)
             if not cap.isOpened():
-                raise ValueError("Could not open video file")
+                raise ValueError("Could not open scratch video file")
+
+            scratch_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
             # Sort keyframes for interpolation
             sorted_keyframes = sorted(keyframes, key=lambda k: k['time'])
@@ -1637,19 +1722,20 @@ def process_framing_ai_chunk(
             frames_dir = os.path.join(temp_dir, "frames")
             os.makedirs(frames_dir, exist_ok=True)
 
-            # Seek once, read sequentially
-            cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+            # Read scratch sequentially from frame 0 - no seeking required.
             output_frame_idx = 0
-            frames_to_process = end_frame - start_frame
+            frames_to_process = scratch_total_frames
 
-            for frame_idx in range(start_frame, end_frame):
+            for local_idx in range(scratch_total_frames):
                 ret, frame = cap.read()
                 if not ret or frame is None:
-                    logger.warning(f"[{chunk_id}] Could not read frame {frame_idx}")
+                    logger.warning(f"[{chunk_id}] Could not read scratch frame {local_idx}")
                     continue
 
-                # Crop keyframe time is relative to clip start (0-based)
-                crop_time = (frame_idx / original_fps) - source_start_time
+                # Map scratch-local frame index back to source-absolute time,
+                # then subtract source_start_time to get clip-relative crop time.
+                source_time = chunk_start_time + (local_idx / original_fps)
+                crop_time = source_time - source_start_time
                 crop = _interpolate_crop(sorted_keyframes, crop_time)
 
                 if crop:
@@ -1674,7 +1760,7 @@ def process_framing_ai_chunk(
                 try:
                     upscaled, _ = upsampler.enhance(cropped, outscale=4)
                 except Exception as e:
-                    logger.warning(f"[{chunk_id}] Upscale failed for frame {frame_idx}: {e}")
+                    logger.warning(f"[{chunk_id}] Upscale failed for scratch frame {local_idx}: {e}")
                     upscaled = cv2.resize(cropped, (output_width, output_height), interpolation=cv2.INTER_LANCZOS4)
 
                 # Resize to target resolution
@@ -1775,56 +1861,66 @@ def process_framing_ai_parallel(
         Progress updates and final result
     """
     import subprocess
-    import cv2
 
     try:
         logger.info(f"[{job_id}] Starting parallel framing with {num_chunks} chunks")
         logger.info(f"[{job_id}] Source range: {source_start_time}s - {source_end_time}s")
         yield {"progress": 2, "phase": "initializing", "message": f"Starting {num_chunks}-GPU parallel processing..."}
 
-        r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
+        r2 = get_r2_client()
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Download source video
-            input_path = os.path.join(temp_dir, "input.mp4")
+            # Resolve full R2 key (global for games/, user-scoped otherwise).
             if input_key.startswith("games/"):
                 full_input_key = input_key
             else:
                 full_input_key = f"{user_id}/{input_key}"
-            logger.info(f"[{job_id}] Downloading {full_input_key} to analyze")
-            yield {"progress": 5, "phase": "downloading", "message": "Downloading video..."}
-            r2.download_file(bucket, full_input_key, input_path)
 
-            # Get video properties
-            cap = cv2.VideoCapture(input_path)
-            if not cap.isOpened():
-                raise ValueError("Could not open video file")
+            # Probe source via presigned URL to get fps (and duration if
+            # source_end_time is not provided). No full download. See
+            # src/backend/.claude/skills/api-guidelines/rules/storage-modal-range-extract.md
+            source_url = _presigned_source_url(full_input_key)
+            yield {"progress": 5, "phase": "analyzing", "message": "Probing source video..."}
 
-            original_fps = cap.get(cv2.CAP_PROP_FPS)
-            video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            video_duration = video_total_frames / original_fps
-            cap.release()
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error",
+                 "-select_streams", "v:0",
+                 "-show_entries", "stream=r_frame_rate",
+                 "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1",
+                 source_url],
+                capture_output=True, text=True, check=True,
+            )
+            probe_lines = [ln.strip() for ln in probe.stdout.strip().splitlines() if ln.strip()]
+            # ffprobe output order: stream r_frame_rate first, then format duration.
+            r_frame_rate = probe_lines[0]
+            probed_duration = float(probe_lines[1])
+            if "/" in r_frame_rate:
+                num, den = r_frame_rate.split("/")
+                original_fps = float(num) / float(den) if float(den) != 0 else float(num)
+            else:
+                original_fps = float(r_frame_rate)
 
-            # Determine clip frame range in source video
+            # Determine clip time range in source video (all source-absolute seconds).
             clip_start = source_start_time
-            clip_end = source_end_time if source_end_time is not None else video_duration
-            clip_start_frame = int(clip_start * original_fps)
-            clip_end_frame = min(int(clip_end * original_fps), video_total_frames)
-            total_frames = clip_end_frame - clip_start_frame
+            clip_end = source_end_time if source_end_time is not None else probed_duration
+            clip_duration = max(0.0, clip_end - clip_start)
+            total_frames = int(clip_duration * original_fps)
 
-            logger.info(f"[{job_id}] Video: {video_total_frames} frames @ {original_fps:.2f}fps")
-            logger.info(f"[{job_id}] Clip range: frames {clip_start_frame}-{clip_end_frame} ({total_frames} frames)")
+            logger.info(f"[{job_id}] Source: {probed_duration:.2f}s @ {original_fps:.2f}fps")
+            logger.info(f"[{job_id}] Clip range: {clip_start:.3f}s-{clip_end:.3f}s ({total_frames} frames)")
             yield {"progress": 8, "phase": "analyzing", "message": f"Processing {total_frames} frames"}
 
-            # Calculate chunk boundaries (within the clip frame range)
-            frames_per_chunk = total_frames // num_chunks
+            # Calculate chunk boundaries in TIME (source-absolute seconds).
+            # Workers scratch-extract their own range — no shared source download.
+            chunk_duration = clip_duration / num_chunks
             chunk_configs = []
             chunk_keys = []
 
             for i in range(num_chunks):
-                start_frame = clip_start_frame + i * frames_per_chunk
-                end_frame = clip_end_frame if i == num_chunks - 1 else clip_start_frame + (i + 1) * frames_per_chunk
+                c_start = clip_start + i * chunk_duration
+                c_end = clip_end if i == num_chunks - 1 else clip_start + (i + 1) * chunk_duration
 
                 chunk_key = f"temp_chunks/{job_id}_chunk{i}.mp4"
                 chunk_keys.append(chunk_key)
@@ -1836,8 +1932,8 @@ def process_framing_ai_parallel(
                     "user_id": user_id,
                     "input_key": input_key,
                     "output_chunk_key": chunk_key,
-                    "start_frame": start_frame,
-                    "end_frame": end_frame,
+                    "chunk_start_time": c_start,
+                    "chunk_end_time": c_end,
                     "keyframes": keyframes,
                     "output_width": output_width,
                     "output_height": output_height,
@@ -1845,7 +1941,7 @@ def process_framing_ai_parallel(
                     "source_start_time": source_start_time,
                 })
 
-                logger.info(f"[{job_id}] Chunk {i}: frames {start_frame}-{end_frame}")
+                logger.info(f"[{job_id}] Chunk {i}: {c_start:.3f}s-{c_end:.3f}s")
 
             yield {"progress": 10, "phase": "dispatching", "message": f"Dispatching to {num_chunks} GPUs..."}
 
@@ -1860,8 +1956,8 @@ def process_framing_ai_parallel(
                     cfg["user_id"],
                     cfg["input_key"],
                     cfg["output_chunk_key"],
-                    cfg["start_frame"],
-                    cfg["end_frame"],
+                    cfg["chunk_start_time"],
+                    cfg["chunk_end_time"],
                     cfg["keyframes"],
                     cfg["output_width"],
                     cfg["output_height"],
@@ -1913,18 +2009,33 @@ def process_framing_ai_parallel(
 
             yield {"progress": 85, "phase": "audio", "message": "Adding audio..."}
 
-            # Add audio from source (only if user wants it)
-            # Audio needs -ss to seek to the clip's start in the source video
+            # Audio scratch-extract: pull only the clip's audio range from the
+            # source via presigned URL + pre-input -ss/-to + stream copy. The
+            # scratch covers [clip_start, clip_end] so the remux reads from t=0.
             output_path = os.path.join(temp_dir, "output.mp4")
-            has_audio = _has_audio_stream(input_path) and include_audio
+            audio_scratch = os.path.join(temp_dir, "audio_src.m4a")
+            audio_url = _presigned_source_url(full_input_key)
+            has_audio = include_audio
+            if has_audio:
+                audio_extract_cmd = [
+                    "ffmpeg", "-y",
+                    "-ss", str(clip_start),
+                    "-to", str(clip_end),
+                    "-i", audio_url,
+                    "-vn",
+                    "-c:a", "copy",
+                    audio_scratch,
+                ]
+                a_ex = subprocess.run(audio_extract_cmd, capture_output=True, text=True)
+                if a_ex.returncode != 0:
+                    logger.warning(f"[{job_id}] Source has no audio or extract failed: {a_ex.stderr[:200]}")
+                    has_audio = False
 
             if has_audio:
                 audio_cmd = [
                     "ffmpeg", "-y",
                     "-i", concat_output,
-                    "-ss", str(clip_start),
-                    "-t", str(total_frames / original_fps),
-                    "-i", input_path,
+                    "-i", audio_scratch,
                     "-map", "0:v",
                     "-map", "1:a",
                     "-c:v", "copy",
@@ -2935,37 +3046,23 @@ def process_clips_ai(
             "total_clips": total_clips
         }
 
-        r2 = get_r2_client()
-        bucket = os.environ["R2_BUCKET_NAME"]
-
         with tempfile.TemporaryDirectory() as temp_dir:
-            # === PHASE 1: Download all source videos ===
-            # source_keys may include game videos (global) or uploaded clips (user-scoped)
-            logger.info(f"[{job_id}] Downloading {len(source_keys)} source video(s)...")
-            source_paths = []
-
-            for i, source_key in enumerate(source_keys):
-                yield {
-                    "progress": 2 + int((i / len(source_keys)) * 8),
-                    "phase": "downloading",
-                    "message": f"Downloading video {i+1}/{len(source_keys)}...",
-                    "clip": i + 1,
-                    "total_clips": total_clips
-                }
-
-                source_path = os.path.join(temp_dir, f"source_{i}.mp4")
+            # === PHASE 1: Resolve full R2 keys per source ===
+            # No full downloads. Each per-clip iteration below scratch-extracts
+            # only its required sub-range via presigned URL + FFmpeg pre-input
+            # -ss/-to + -c copy. See storage-modal-range-extract.md.
+            source_full_keys = []
+            for source_key in source_keys:
                 if source_key.startswith("games/"):
                     full_key = source_key  # Global, no user prefix
                 else:
                     full_key = f"{user_id}/{source_key}"
-                logger.info(f"[{job_id}] Downloading: {full_key}")
-                r2.download_file(bucket, full_key, source_path)
-                source_paths.append(source_path)
+                source_full_keys.append(full_key)
 
             yield {
                 "progress": 10,
-                "phase": "downloading",
-                "message": "Downloads complete",
+                "phase": "initializing",
+                "message": "Sources resolved",
                 "clip": 0,
                 "total_clips": total_clips
             }
@@ -3001,11 +3098,11 @@ def process_clips_ai(
                 clip_progress_start = upscale_progress_start + (clip_idx * upscale_progress_per_clip)
                 clip_progress_end = clip_progress_start + upscale_progress_per_clip
 
-                # Get source path (handle index mapping if needed)
+                # Get source key (handle index mapping if needed)
                 source_idx = clip_data.get('clipIndex', clip_idx)
-                if source_idx >= len(source_paths):
+                if source_idx >= len(source_full_keys):
                     source_idx = clip_idx
-                source_path = source_paths[source_idx]
+                full_source_key = source_full_keys[source_idx]
 
                 keyframes = clip_data.get('keyframes', [])
                 segment_data = clip_data.get('segment_data', {})
@@ -3020,35 +3117,58 @@ def process_clips_ai(
                     "total_clips": total_clips
                 }
 
-                # Open source video
-                cap = cv2.VideoCapture(source_path)
+                # Determine clip range in source video (needed before extraction)
+                clip_source_start = clip_data.get('source_start_time', 0.0)
+                clip_source_end = clip_data.get('source_end_time', None)
+
+                # === Scratch-extract the clip's sub-range from R2 ===
+                # Fresh presigned URL per iteration (signing is local, free).
+                # Never pass a presigned URL to cv2.VideoCapture — HTTPS seeks
+                # hang 30+s (T1220 tracer). Always use a local scratch file.
+                source_url = _presigned_source_url(full_source_key)
+                scratch_path = os.path.join(temp_dir, f"clip_source_{clip_idx}.mp4")
+
+                # Need a known end for extraction; if not provided, probe duration.
+                # We can ask ffmpeg to copy to EOF by omitting -to when end is None.
+                extract_cmd = ["ffmpeg", "-y", "-ss", str(clip_source_start)]
+                if clip_source_end is not None:
+                    extract_cmd += ["-to", str(clip_source_end)]
+                extract_cmd += ["-i", source_url, "-c", "copy", scratch_path]
+
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: scratch-extracting {full_source_key} "
+                            f"[{clip_source_start:.2f}s - {clip_source_end}]")
+                extract_result = subprocess.run(extract_cmd, capture_output=True, text=True)
+                if extract_result.returncode != 0:
+                    logger.error(f"[{job_id}] Scratch extract failed: {extract_result.stderr[:500]}")
+                    raise RuntimeError(f"Scratch extraction failed for clip {clip_idx+1}")
+
+                # Open scratch (local file, fast seeks)
+                cap = cv2.VideoCapture(scratch_path)
                 if not cap.isOpened():
-                    raise ValueError(f"Could not open source video: {source_path}")
+                    raise ValueError(f"Could not open scratch video: {scratch_path}")
 
                 original_fps = cap.get(cv2.CAP_PROP_FPS) or fps
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                duration = total_frames / original_fps if original_fps > 0 else 0
+                duration = total_frames / original_fps if original_fps > 0 else 0  # scratch duration
 
-                logger.info(f"[{job_id}] Clip {clip_idx+1}: {original_width}x{original_height} @ {original_fps:.1f}fps, {total_frames} frames")
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: {original_width}x{original_height} @ {original_fps:.1f}fps, {total_frames} frames (scratch)")
 
-                # Determine clip range in source video
-                clip_source_start = clip_data.get('source_start_time', 0.0)
-                clip_source_end = clip_data.get('source_end_time', None)
-                clip_start = clip_source_start
-                clip_end = clip_source_end if clip_source_end is not None else duration
-                clip_duration = clip_end - clip_start
+                # All times below are SCRATCH-RELATIVE (scratch frame 0 == original clip_source_start).
+                # clip_start is always 0 in scratch-space; clip_duration matches the scratch length.
+                clip_duration = duration
 
-                # Combine extraction range with user trim
+                # Combine extraction range with user trim (trim is already relative to clip start)
                 trim_start_rel, trim_end_rel = _get_trim_range(segment_data, clip_duration)
-                absolute_start = clip_start + trim_start_rel
-                absolute_end = clip_start + trim_end_rel
+                # "absolute" here now means scratch-absolute (== scratch-relative)
+                absolute_start = trim_start_rel
+                absolute_end = trim_end_rel
                 start_frame = int(absolute_start * original_fps)
                 end_frame = min(int(absolute_end * original_fps), total_frames)
                 frames_to_process = max(1, end_frame - start_frame)
 
-                logger.info(f"[{job_id}] Clip {clip_idx+1}: source range {clip_start:.2f}s-{clip_end:.2f}s, absolute {absolute_start:.2f}s-{absolute_end:.2f}s")
+                logger.info(f"[{job_id}] Clip {clip_idx+1}: scratch-relative trim {absolute_start:.2f}s-{absolute_end:.2f}s")
                 logger.info(f"[{job_id}] Clip {clip_idx+1}: Processing frames {start_frame}-{end_frame} ({frames_to_process} frames)")
 
                 # Sort keyframes by time (pre-sorted for _interpolate_crop)
@@ -3058,7 +3178,7 @@ def process_clips_ai(
                 frames_dir = os.path.join(temp_dir, f"frames_{clip_idx}")
                 os.makedirs(frames_dir, exist_ok=True)
 
-                # Seek once, read sequentially
+                # Seek once (scratch file, fast), read sequentially
                 cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                 output_frame_idx = 0
                 last_yield_frame = 0
@@ -3069,8 +3189,8 @@ def process_clips_ai(
                         logger.warning(f"[{job_id}] Could not read frame {frame_num}")
                         continue
 
-                    # Crop keyframe time is relative to clip start (0-based)
-                    frame_time = (frame_num / original_fps) - clip_start
+                    # Keyframe time is relative to clip start; scratch frame 0 IS clip start.
+                    frame_time = frame_num / original_fps
 
                     # Get interpolated crop or use smart center crop
                     if sorted_keyframes:
@@ -3158,8 +3278,8 @@ def process_clips_ai(
                 clip_output_path = os.path.join(temp_dir, f"clip_{clip_idx}.mp4")
                 frame_pattern = os.path.join(frames_dir, "frame_%06d.png")
 
-                # Check if source has audio
-                has_audio = _has_audio_stream(source_path) and include_audio
+                # Check if scratch has audio
+                has_audio = _has_audio_stream(scratch_path) and include_audio
 
                 # Check for speed changes
                 segments = segment_data.get('segments', []) if segment_data else []
@@ -3197,10 +3317,11 @@ def process_clips_ai(
                             )
                         output_labels.append(f"[v{seg_idx}]")
 
-                        # Audio speed — times must be absolute in source video
+                        # Audio speed — times are clip-relative; scratch file is
+                        # already trimmed to the clip, so no clip_start offset.
                         if has_audio:
-                            audio_start = seg['start'] + clip_start
-                            audio_end = seg['end'] + clip_start
+                            audio_start = seg['start']
+                            audio_end = seg['end']
                             if speed != 1.0:
                                 atempo_val = max(0.5, min(2.0, speed))
                                 audio_filter_parts.append(
@@ -3224,7 +3345,7 @@ def process_clips_ai(
                                 "ffmpeg", "-y",
                                 "-framerate", str(fps),
                                 "-i", frame_pattern,
-                                "-i", source_path,
+                                "-i", scratch_path,
                                 "-filter_complex", filter_complex,
                                 "-map", "[outv]",
                                 "-map", "[outa]",
@@ -3255,15 +3376,17 @@ def process_clips_ai(
                                 clip_output_path
                             ]
                     else:
-                        # Fallback to simple encoding
+                        # Fallback to simple encoding. absolute_start is
+                        # scratch-relative (== trim_start_rel).
                         ffmpeg_cmd = _build_simple_ffmpeg_cmd(
-                            frame_pattern, source_path, clip_output_path,
+                            frame_pattern, scratch_path, clip_output_path,
                             fps, has_audio, absolute_start, output_frame_idx
                         )
                 else:
-                    # Simple encoding (no speed changes)
+                    # Simple encoding (no speed changes). absolute_start is
+                    # scratch-relative (== trim_start_rel).
                     ffmpeg_cmd = _build_simple_ffmpeg_cmd(
-                        frame_pattern, source_path, clip_output_path,
+                        frame_pattern, scratch_path, clip_output_path,
                         fps, has_audio, absolute_start, output_frame_idx
                     )
 
@@ -3276,6 +3399,16 @@ def process_clips_ai(
 
                 processed_paths.append(clip_output_path)
                 logger.info(f"[{job_id}] Clip {clip_idx+1} encoded successfully")
+
+                # Clean up per-iteration scratch + frames to keep disk bounded
+                try:
+                    if os.path.exists(scratch_path):
+                        os.remove(scratch_path)
+                    if os.path.isdir(frames_dir):
+                        import shutil as _shutil
+                        _shutil.rmtree(frames_dir, ignore_errors=True)
+                except Exception as cleanup_err:
+                    logger.warning(f"[{job_id}] Clip {clip_idx+1} cleanup failed: {cleanup_err}")
 
             # === PHASE 4: Concatenate clips (if multiple) ===
             yield {
