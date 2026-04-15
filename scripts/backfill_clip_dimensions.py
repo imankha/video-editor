@@ -42,11 +42,12 @@ from dotenv import load_dotenv
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-load_dotenv(REPO / ".env")
 
-BUCKET = os.environ["R2_BUCKET"]
-APP_ENV = os.environ.get("APP_ENV", "dev")  # dev/staging/prod — nests DB keys under this prefix
-USER_PREFIX = f"{APP_ENV}/users/"
+# Env selection via --env is applied in main(); defaults to .env (dev).
+# BUCKET/APP_ENV/USER_PREFIX are resolved after load_dotenv runs.
+BUCKET = None
+APP_ENV = None
+USER_PREFIX = None
 HEAD_BYTES = 1024 * 1024       # 1 MB head fetch (covers moov for faststart MP4s)
 TAIL_BYTES = 512 * 1024        # 512 KB tail fetch (fallback for moov-at-end)
 
@@ -215,12 +216,34 @@ def main():
     parser.add_argument("--profile-id", help="Specific profile within user")
     parser.add_argument("--all-users", action="store_true", help="Iterate all users in R2")
     parser.add_argument("--dry-run", action="store_true", help="Probe but do not write")
+    parser.add_argument("--local", action="store_true",
+                        help="Backfill local user_data/ DBs in place (no R2 download/upload)")
+    parser.add_argument("--env", choices=["dev", "staging", "prod"], default="dev",
+                        help="Which .env file to load (default: dev)")
     args = parser.parse_args()
 
-    if not args.all_users and not (args.user_id and args.profile_id):
-        parser.error("Specify --all-users OR both --user-id and --profile-id")
+    env_file = REPO / (".env" if args.env == "dev" else f".env.{args.env}")
+    if not env_file.exists():
+        parser.error(f"env file not found: {env_file}")
+    load_dotenv(env_file, override=True)
+    global BUCKET, APP_ENV, USER_PREFIX
+    BUCKET = os.environ["R2_BUCKET"]
+    APP_ENV = os.environ.get("APP_ENV", args.env)
+    USER_PREFIX = f"{APP_ENV}/users/"
+    print(f"[backfill] env={args.env} APP_ENV={APP_ENV} bucket={BUCKET}")
+
+    if not args.all_users and not args.local and not (args.user_id and args.profile_id):
+        parser.error("Specify --all-users, --local, OR both --user-id and --profile-id")
 
     s3 = s3_client()
+
+    if args.local:
+        local_root = REPO / "user_data"
+        for db_path in local_root.glob("*/profiles/*/profile.sqlite"):
+            print(f"\n[local] {db_path.relative_to(REPO)}")
+            stats = backfill_profile(db_path, s3, args.dry_run)
+            print(f"  stats: {stats}")
+        return
 
     def _process(user_id: str, profile_id: str):
         db_key = f"{USER_PREFIX}{user_id}/profiles/{profile_id}/profile.sqlite"
@@ -235,8 +258,20 @@ def main():
             stats = backfill_profile(local, s3, args.dry_run)
             print(f"  stats: {stats}")
             if not args.dry_run and (stats["updated_gv"] or stats["updated_wc"]):
-                s3.upload_file(str(local), BUCKET, db_key)
-                print(f"  uploaded DB back to {db_key}")
+                # Bump db-version metadata so clients' sync_user_db_from_r2_if_newer
+                # pulls the backfilled DB down.
+                current_version = 0
+                try:
+                    head = s3.head_object(Bucket=BUCKET, Key=db_key)
+                    current_version = int(head.get("Metadata", {}).get("db-version", 0) or 0)
+                except Exception:
+                    pass
+                new_version = current_version + 1
+                s3.upload_file(
+                    str(local), BUCKET, db_key,
+                    ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+                )
+                print(f"  uploaded DB back to {db_key} (db-version {current_version}->{new_version})")
 
     if args.all_users:
         paginator = s3.get_paginator("list_objects_v2")
