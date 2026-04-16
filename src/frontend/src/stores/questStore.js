@@ -124,26 +124,31 @@ export const useQuestStore = create((set, get) => ({
     return data;
   },
 
-  recordAchievement: async (key) => {
+  recordAchievement: (key) => {
     // Dedup: skip if already recorded this session
     if (_recordedAchievements.has(key)) return;
     _recordedAchievements.add(key);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/quests/achievements/${key}`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        console.error(`[Quests] Achievement POST failed for '${key}': ${res.status}`);
+    // T1531: fire-and-forget. The achievement write is gesture-driven but its
+    // result does not gate the UI — never block the caller (e.g. opening the
+    // framing editor) on this POST. `keepalive: true` lets the request survive
+    // a navigation/unload, so dedup is safe even if the user routes away.
+    fetch(`${API_BASE}/api/quests/achievements/${key}`, {
+      method: 'POST',
+      credentials: 'include',
+      keepalive: true,
+    })
+      .then((res) => {
+        if (!res.ok) {
+          console.error(`[Quests] Achievement POST failed for '${key}': ${res.status}`);
+          _recordedAchievements.delete(key);
+          return;
+        }
+        get().fetchProgress({ force: true });
+      })
+      .catch(() => {
         _recordedAchievements.delete(key);
-        return;
-      }
-    } catch {
-      _recordedAchievements.delete(key);
-      return;
-    }
-    get().fetchProgress({ force: true });
+      });
   },
 
   reset: () => {
