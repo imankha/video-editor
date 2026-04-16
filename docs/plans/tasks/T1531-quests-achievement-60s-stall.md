@@ -68,3 +68,62 @@ so we can attribute.
 - [ ] Achievement writes no longer block `GET /api/projects/*` (either async
       handler, frontend fire-and-forget, or per-user lock bypass).
 - [ ] Regression test: project load latency when an achievement write is in-flight.
+
+## Progress log
+
+- 2026-04-15: Instrumentation shipped to master ahead of the architectural fix.
+  Scope expanded to T1530's full backend profiling story — when staging catches
+  the next `[SLOW ACHIEVEMENT]` or any other slow call, AI has everything it
+  needs to attribute without asking for additional logs.
+
+  **Landed:**
+  - `[R2_CALL] client=<default|sync|transfer> op=<Op> status=<code> elapsed_ms=<n>`
+    on every S3 call (all three R2 clients), including retry-sleep.
+    ([storage.py](src/backend/app/storage.py))
+  - Request-scoped cProfile middleware in
+    [db_sync.py](src/backend/app/middleware/db_sync.py) — wraps ALL paths
+    through `RequestContextMiddleware.dispatch`. Gated by
+    `PROFILE_ON_BREACH_ENABLED` (default false, staging true) or header
+    `X-Profile-Request: 1`. Dumps only on breach (`PROFILE_ON_BREACH_MS`,
+    default 1000) to `/tmp/profiles/{ts}_{method}_{pathslug}_{ms}ms_{user}.prof`
+    plus a paired `.txt` (pstats top-50 cumtime + tottime) that is readable
+    with `cat` alone.
+  - `[SLOW REQUEST]` log line augmented with `profile=<abs path>` — one grep
+    gives AI the path to the profile for that breach.
+  - `_sync_profile` / `_sync_user` ThreadPoolExecutor workers get their own
+    per-thread cProfile (cProfile only traces its own thread). Sibling dump
+    tagged `_syncthread_profile_{user}` / `_syncthread_user_{user}`.
+  - `[SLOW QUERY]` log (pre-existing in `TrackedCursor.execute`) now includes
+    `db=<profile|user>` and covers `executemany`. Attributes WAL contention /
+    slow SQL without opening a profile.
+  - Debug router `/api/_debug/profiles[/{name}]` gated on
+    `DEBUG_ENDPOINTS_ENABLED`. Lists dumps; reads the `.txt` sibling as
+    plain text. Lets staging diagnostics run via curl + cookie.
+  - Profile directory rotation (`PROFILE_KEEP_LAST`, default 100) on each
+    dump — bounded disk.
+  - Unit + integration tests in
+    [test_profiling.py](src/backend/tests/test_profiling.py) (5 pass).
+
+  **Removed:** the bespoke cProfile around `record_achievement` — the
+  middleware now covers it generically. Per-step `conn_ms`/`write_ms`/`read_ms`
+  timing stays in place.
+
+  **Frontend-to-backend correlation (QA workflow):**
+  - Frontend fetch/axios interceptors in
+    [sessionInit.js](src/frontend/src/utils/sessionInit.js) now send
+    `X-Request-ID: <8-hex>` on every API call and log
+    `[SLOW FETCH] <method> <path> <ms>ms req_id=<id> status=<code>` when
+    elapsed >= 500ms (user-perceptible threshold).
+  - Backend middleware reads `X-Request-ID` and includes it in
+    `[REQ_TIMING]`, `[SLOW REQUEST]`, `[SLOW DB SYNC]`, and the profile
+    filename (`{ts}_{method}_{path}_{ms}ms_{req_id}.prof`).
+  - QA workflow: user reports delay → copy browser console (`/logdump`) →
+    AI sees `[SLOW FETCH] ... req_id=abc12345` → greps backend log for
+    `req_id=abc12345` → finds matching `[SLOW REQUEST] ... profile=/tmp/profiles/..._abc12345.prof`
+    → reads the `.txt` sibling → attributes the time without needing
+    backend shell access.
+
+  **Next (blocked on evidence):** when a real `[SLOW ACHIEVEMENT]` fires,
+  attribute from per-step timing + `[R2_CALL]` lines + profile `.txt`,
+  then pick between 202 + BackgroundTask, `_INFLIGHT` bypass, or
+  per-event-type lock.

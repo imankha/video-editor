@@ -23,6 +23,7 @@ Also tracks sync failure state per user and surfaces it via X-Sync-Status
 header so the frontend can show a warning indicator.
 """
 
+import cProfile
 import logging
 import os
 import re
@@ -33,6 +34,12 @@ from concurrent.futures import ThreadPoolExecutor
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from ..profiling import (
+    dump_profile,
+    profile_on_breach_enabled,
+    profile_breach_ms,
+)
 
 from ..database import (
     init_request_context,
@@ -188,6 +195,73 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return any(path.startswith(prefix) for prefix in self.AUTH_ALLOWLIST_PREFIXES)
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        """Profile-wrapped entry point.
+
+        T1530/T1531: cProfile wraps ALL paths through the middleware (allowlisted,
+        sync-skipped, and main) so any slow call is captured. The inner
+        `_dispatch_impl` contains the original logic; this outer shell owns the
+        timing/profile/log emission so there is a single place that logs
+        `[SLOW REQUEST]` with the profile path attached.
+        """
+        method = request.method
+        path = request.url.path
+        req_id = request.headers.get("X-Request-ID", "")
+
+        force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
+        do_profile = profile_on_breach_enabled() or force_profile
+
+        prof = None
+        if do_profile:
+            prof = cProfile.Profile()
+            prof.enable()
+
+        request_start = time.perf_counter()
+        meta: dict = {"sync_duration": 0.0, "handler_duration": 0.0,
+                      "user_id": None, "inflight_entry": 0, "inflight_exit": 0}
+        try:
+            return await self._dispatch_impl(request, call_next, meta)
+        finally:
+            total_duration = time.perf_counter() - request_start
+            total_ms = total_duration * 1000.0
+            profile_path = None
+            req_id_suffix = f" req_id={req_id}" if req_id else ""
+            if prof is not None:
+                prof.disable()
+                if force_profile or total_ms >= profile_breach_ms():
+                    profile_path = dump_profile(
+                        prof,
+                        tag=f"{method}_{path}",
+                        elapsed_ms=total_ms,
+                        extra=req_id or meta.get("user_id"),
+                    )
+
+            sync_duration = meta["sync_duration"]
+            handler_duration = meta["handler_duration"]
+
+            if sync_duration >= SLOW_SYNC_THRESHOLD:
+                logger.warning(
+                    f"[SLOW DB SYNC] {method} {path} - sync took {sync_duration:.2f}s "
+                    f"(threshold: {SLOW_SYNC_THRESHOLD}s). Consider background sync."
+                    f"{req_id_suffix}"
+                )
+            if total_duration >= SLOW_REQUEST_THRESHOLD:
+                profile_suffix = f" profile={profile_path}" if profile_path else ""
+                logger.warning(
+                    f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
+                    f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
+                    f"{req_id_suffix}{profile_suffix}"
+                )
+            logger.info(
+                f"[REQ_TIMING] {method} {path} user={meta.get('user_id') or 'none'} "
+                f"total_ms={int(total_ms)} "
+                f"handler_ms={int(handler_duration * 1000)} "
+                f"sync_ms={int(sync_duration * 1000)} "
+                f"inflight_entry={meta['inflight_entry']} "
+                f"inflight_exit={meta['inflight_exit']}"
+                f"{req_id_suffix}"
+            )
+
+    async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
 
         # --- User context setup (T405: cookie-first, header-fallback) ---
@@ -238,6 +312,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             f"origin={request.headers.get('origin', '-')}"
         )
 
+        meta["user_id"] = user_id
         set_current_user_id(user_id)
 
         profile_id = request.headers.get('X-Profile-ID')
@@ -269,9 +344,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
 
         # --- Request with sync tracking ---
-        request_start = time.perf_counter()
         sync_duration = 0.0
         inflight_at_entry = _inflight_enter(user_id) if user_id else 0
+        meta["inflight_entry"] = inflight_at_entry
+
+        # Profiler enable/dispatch-level logging happens in dispatch() — see outer shell.
+        force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
+        do_profile = profile_on_breach_enabled() or force_profile
 
         try:
             # Initialize request context for write tracking
@@ -281,6 +360,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             handler_start = time.perf_counter()
             response = await call_next(request)
             handler_duration = time.perf_counter() - handler_start
+            meta["handler_duration"] = handler_duration
 
             # After request, sync if writes occurred
             had_writes = get_request_has_writes()
@@ -299,17 +379,49 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         _profile_id = get_current_profile_id()
                         timing = {}
 
+                        # T1530/T1531: these run on worker threads, so the
+                        # request-level cProfile (which only traces its own
+                        # thread) misses them. Install per-worker profilers
+                        # and dump siblings on breach.
+                        do_sync_profile = do_profile
+
                         def _sync_profile():
+                            sub_prof = cProfile.Profile() if do_sync_profile else None
+                            if sub_prof:
+                                sub_prof.enable()
                             t0 = time.perf_counter()
-                            result = sync_db_to_r2_explicit(_user_id, _profile_id)
-                            timing['profile_ms'] = (time.perf_counter() - t0) * 1000
-                            return result
+                            try:
+                                return sync_db_to_r2_explicit(_user_id, _profile_id)
+                            finally:
+                                elapsed_ms = (time.perf_counter() - t0) * 1000
+                                timing['profile_ms'] = elapsed_ms
+                                if sub_prof:
+                                    sub_prof.disable()
+                                    if force_profile or elapsed_ms >= profile_breach_ms():
+                                        dump_profile(
+                                            sub_prof,
+                                            tag=f"syncthread_profile_{_user_id}",
+                                            elapsed_ms=elapsed_ms,
+                                        )
 
                         def _sync_user():
+                            sub_prof = cProfile.Profile() if do_sync_profile else None
+                            if sub_prof:
+                                sub_prof.enable()
                             t0 = time.perf_counter()
-                            result = sync_user_db_to_r2_explicit(_user_id)
-                            timing['user_ms'] = (time.perf_counter() - t0) * 1000
-                            return result
+                            try:
+                                return sync_user_db_to_r2_explicit(_user_id)
+                            finally:
+                                elapsed_ms = (time.perf_counter() - t0) * 1000
+                                timing['user_ms'] = elapsed_ms
+                                if sub_prof:
+                                    sub_prof.disable()
+                                    if force_profile or elapsed_ms >= profile_breach_ms():
+                                        dump_profile(
+                                            sub_prof,
+                                            tag=f"syncthread_user_{_user_id}",
+                                            elapsed_ms=elapsed_ms,
+                                        )
 
                         with ThreadPoolExecutor(max_workers=2) as executor:
                             profile_future = executor.submit(_sync_profile)
@@ -398,41 +510,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             # Always clean up request context
             clear_request_context()
-            inflight_at_exit = _inflight_exit(user_id) if user_id else 0
-
-            # Log warnings for slow operations
-            total_duration = time.perf_counter() - request_start
-            path = request.url.path
-            method = request.method
-
-            if sync_duration >= SLOW_SYNC_THRESHOLD:
-                logger.warning(
-                    f"[SLOW DB SYNC] {method} {path} - sync took {sync_duration:.2f}s "
-                    f"(threshold: {SLOW_SYNC_THRESHOLD}s). Consider background sync."
-                )
-
-            if total_duration >= SLOW_REQUEST_THRESHOLD:
-                logger.warning(
-                    f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
-                    f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
-                )
-
-            # Structured timing for responsiveness analysis. Always emitted at
-            # INFO so we can grep across requests. Key field: inflight_entry
-            # reveals queueing (>1 means multiple concurrent requests for the
-            # same user — if one was slow, the others waited behind it).
-            try:
-                handler_ms = int(handler_duration * 1000)  # type: ignore[name-defined]
-            except NameError:
-                handler_ms = 0
-            logger.info(
-                f"[REQ_TIMING] {method} {path} user={user_id or 'none'} "
-                f"total_ms={int(total_duration * 1000)} "
-                f"handler_ms={handler_ms} "
-                f"sync_ms={int(sync_duration * 1000)} "
-                f"inflight_entry={inflight_at_entry} "
-                f"inflight_exit={inflight_at_exit}"
-            )
+            meta["sync_duration"] = sync_duration
+            meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
 
 
 # Keep old name for backward compatibility with imports

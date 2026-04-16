@@ -123,6 +123,11 @@ app.include_router(exports_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 
+# T1530/T1531: debug endpoints (profile listing/reading). Gated internally
+# by DEBUG_ENDPOINTS_ENABLED=true.
+from app.routers._debug import router as _debug_router
+app.include_router(_debug_router, prefix="/api")
+
 
 # WebSocket endpoint for export progress
 @app.websocket("/ws/export/{export_id}")

@@ -111,15 +111,34 @@ New middleware (or option inside `RequestContextMiddleware`) that:
 
 ## Acceptance Criteria
 
-- [ ] Backend: setting `PROFILE_REQUESTS=1` produces a `.prof` file for each request. `python -m pstats` reveals per-function time breakdown.
-- [ ] Backend: auto-profile on breach (>1000ms) produces a `.prof` file without dev intervention; verify by stalling R2 and hitting any write endpoint.
-- [ ] Backend: `[R2_CALL]` logs emitted for every S3 operation in sync path.
-- [ ] Backend: ThreadPoolExecutor-bound sync work is either included in the profile or explicitly timed alongside it.
+- [x] Backend: env-gated profiling produces a `.prof` file on breach.
+      **Landed under T1531** (2026-04-15). Final shape: `PROFILE_ON_BREACH_ENABLED`
+      (default false; staging true) enables cProfile wrap; dump fires when
+      request exceeds `PROFILE_ON_BREACH_MS` (default 1000) OR header
+      `X-Profile-Request: 1`. Output: `/tmp/profiles/{ts}_{method}_{path}_{ms}ms_{user}.{prof,txt}`.
+      The paired `.txt` is pstats top-50 by cumtime + tottime, readable with
+      `cat` alone (no snakeviz needed for first-pass diagnosis).
+- [x] Backend: auto-profile on breach produces a dump without dev intervention.
+      See above; `[SLOW REQUEST]` log line includes `profile=<abs path>`.
+- [x] Backend: `[R2_CALL]` logs emitted for every S3 operation in sync path.
+      Hook registered on all three R2 clients in
+      [storage.py](src/backend/app/storage.py) via `_register_r2_timing(client, label)`.
+      Format: `[R2_CALL] client=<default|sync|transfer> op=<Op> status=<code> elapsed_ms=<n>`.
+- [x] Backend: ThreadPoolExecutor-bound sync work included in profile.
+      `_sync_profile` / `_sync_user` workers get their own per-thread cProfile;
+      sibling dump tagged `syncthread_profile_{user}` / `syncthread_user_{user}`.
 - [ ] Frontend: `performance.getEntriesByType('measure')` shows named spans for fetch / load / export paths.
 - [ ] Frontend: DevTools Performance recording of a normal session shows named user-timing marks visible in the timeline.
 - [ ] Frontend: `[TIMING]` logs surface slow named operations with label + ms.
 - [ ] Runbook (`docs/runbooks/profiling.md`) documents how to: (a) enable profiling, (b) capture, (c) retrieve, (d) view in snakeviz / devtools.
 - [ ] Zero measurable overhead when profiling is disabled (verify with a before/after benchmark on a GET /api/games — < 1ms median delta).
+
+## Status (2026-04-15)
+
+Backend profiling infra landed under T1531's branch. Frontend spans, runbook,
+and overhead benchmark remain open — track here. Debug endpoints added at
+`/api/_debug/profiles[/{name}]` (gated on `DEBUG_ENDPOINTS_ENABLED`) so a
+curl + cookie session can pull the pstats text from staging without shell access.
 
 ## Out of Scope
 

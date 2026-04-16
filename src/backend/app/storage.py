@@ -45,6 +45,32 @@ R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 R2_BUCKET = os.getenv("R2_BUCKET", "reel-ballers-users")
 
 
+def _register_r2_timing(client, label: str):
+    """Register botocore event hooks to log per-S3-operation wall time.
+
+    Emits `[R2_CALL] client=<label> op=<op> status=<code> elapsed_ms=<n>` for
+    every S3 call. Captures retry-sleep latency (elapsed spans retries) so a
+    single slow op shows up as one long line, not many short ones.
+
+    T1531/T1530: this is the building block that attributes R2 time at the
+    operation level rather than requiring a cProfile dump.
+    """
+    def _before(context, **kwargs):
+        context["_r2_t0"] = time.perf_counter()
+
+    def _after(context, model=None, http_response=None, parsed=None, **kwargs):
+        t0 = context.get("_r2_t0")
+        if t0 is None:
+            return
+        elapsed_ms = (time.perf_counter() - t0) * 1000.0
+        op = getattr(model, "name", "?")
+        status = getattr(http_response, "status_code", "?")
+        logger.info(f"[R2_CALL] client={label} op={op} status={status} elapsed_ms={elapsed_ms:.0f}")
+
+    client.meta.events.register("before-call.s3", _before)
+    client.meta.events.register("after-call.s3", _after)
+
+
 @lru_cache(maxsize=1)
 def get_r2_client():
     """Get boto3 S3 client configured for R2. Cached for reuse."""
@@ -67,6 +93,7 @@ def get_r2_client():
             ),
             region_name="auto"
         )
+        _register_r2_timing(client, "default")
         logger.info(f"R2 client initialized for bucket: {R2_BUCKET}")
         return client
     except ImportError:
@@ -106,6 +133,7 @@ def get_r2_sync_client():
             ),
             region_name="auto"
         )
+        _register_r2_timing(client, "sync")
         return client
     except ImportError:
         return None
@@ -142,6 +170,7 @@ def get_r2_transfer_client():
             ),
             region_name="auto"
         )
+        _register_r2_timing(client, "transfer")
         return client
     except ImportError:
         return None

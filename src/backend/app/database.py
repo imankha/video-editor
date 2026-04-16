@@ -126,7 +126,7 @@ class TrackedCursor:
             if len(sql) > 100:
                 sql_preview += '...'
             logger.warning(
-                f"[SLOW QUERY] {duration:.3f}s - {sql_preview}"
+                f"[SLOW QUERY] db={self._connection._db_type} {duration * 1000:.0f}ms - {sql_preview}"
             )
         return self
 
@@ -136,7 +136,16 @@ class TrackedCursor:
         if sql_upper.startswith(('INSERT', 'UPDATE', 'DELETE', 'REPLACE')):
             self._connection._mark_write()
 
+        start = time.perf_counter()
         self._cursor.executemany(sql, seq_of_parameters)
+        duration = time.perf_counter() - start
+        if duration >= SLOW_QUERY_THRESHOLD:
+            sql_preview = sql[:100].replace('\n', ' ').strip()
+            if len(sql) > 100:
+                sql_preview += '...'
+            logger.warning(
+                f"[SLOW QUERY] db={self._connection._db_type} executemany {duration * 1000:.0f}ms - {sql_preview}"
+            )
         return self
 
     def fetchone(self):

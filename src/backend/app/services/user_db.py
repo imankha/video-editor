@@ -187,6 +187,7 @@ def get_user_db_connection(user_id: str = None):
     raw_conn.execute("PRAGMA journal_mode=WAL")
     raw_conn.execute("PRAGMA busy_timeout=30000")
     raw_conn.execute("PRAGMA foreign_keys=ON")
+
     conn = TrackedConnection(raw_conn, db_type='user')
     try:
         yield conn
