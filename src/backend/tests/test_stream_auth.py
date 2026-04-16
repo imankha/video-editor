@@ -21,6 +21,7 @@ from app.main import app
 
 
 STREAM_PATH = "/api/clips/projects/999999/clips/999999/stream"
+WORKING_VIDEO_STREAM_PATH = "/api/projects/999999/working_video/stream"
 
 
 def test_stream_without_auth_returns_401():
@@ -45,4 +46,41 @@ def test_stream_with_auth_header_is_not_401():
     # Clip 999999 does not exist → expect 404 from handler (not 401).
     assert r.status_code in (200, 206, 404, 416, 422), (
         f"unexpected status {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_stream_without_auth_returns_401():
+    """The working-video proxy endpoint must be auth-gated like the clip stream."""
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_STREAM_PATH, headers={})
+    assert r.status_code == 401, (
+        f"expected 401 for unauthenticated working_video stream, got {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_stream_with_auth_header_is_not_401():
+    """With X-User-ID the request passes middleware; handler 404s for missing project."""
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_STREAM_PATH, headers={"X-User-ID": "testdefault"})
+    assert r.status_code != 401, (
+        f"authenticated request should not be rejected by auth middleware, "
+        f"got 401: {r.text}"
+    )
+    assert r.status_code in (200, 206, 404, 416, 422), (
+        f"unexpected status {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_stream_supports_head():
+    """videoMetadata.js issues a HEAD probe before GET — the endpoint must accept it.
+
+    Regression: original endpoint registered only GET, so HEAD returned 405 from
+    the router (or 403 from middleware), making OverlayScreen mark the working
+    video unloadable on perfectly healthy projects.
+    """
+    client = TestClient(app)
+    r = client.head(WORKING_VIDEO_STREAM_PATH, headers={"X-User-ID": "testdefault"})
+    assert r.status_code != 405, "HEAD must be a registered method on /working_video/stream"
+    assert r.status_code in (200, 206, 404, 416, 422), (
+        f"unexpected HEAD status {r.status_code}: {r.text}"
     )

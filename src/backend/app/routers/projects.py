@@ -5,7 +5,7 @@ Projects organize clips for editing through Framing and Overlay modes.
 Each project has an aspect ratio (16:9 or 9:16) and contains working clips.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
@@ -20,11 +20,30 @@ from app.storage import R2_ENABLED, generate_presigned_url
 logger = logging.getLogger(__name__)
 
 
-def get_working_video_url(filename: str) -> Optional[str]:
-    """Get presigned URL for working video if R2 is enabled."""
+def get_working_video_url(project_id: int, filename: str) -> Optional[str]:
+    """
+    Return the URL the frontend should hand to its <video> element for a
+    project's working video.
+
+    Today this is the same-origin proxy at
+    `/api/projects/{project_id}/working_video/stream`, NOT a presigned R2
+    URL. Why: R2's S3-compat endpoint speaks HTTP/1.1, which Chrome caps at
+    6 sockets per origin. With the warmer + previous loads occupying that
+    pool, foreground fetches to R2 routinely sat in "Stalled" state forever.
+    Routing through localhost lets the browser use unlimited connections;
+    the backend (httpx) talks to R2 from a separate, server-side pool.
+
+    The proxy forwards Range requests to R2 so seek/scrub still works.
+    """
     if not R2_ENABLED or not filename:
         return None
+    return f"/api/projects/{project_id}/working_video/stream"
 
+
+def _generate_working_video_presigned_url(filename: str) -> Optional[str]:
+    """Internal: presigned R2 URL the proxy fetches from."""
+    if not R2_ENABLED or not filename:
+        return None
     user_id = get_current_user_id()
     return generate_presigned_url(
         user_id=user_id,
@@ -609,11 +628,19 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
 
         # Add all filtered clips as working clips
         # Capture the raw_clip's current boundaries_version for change detection
+        # T1500: copy width/height/fps from the parent game_video so the frontend
+        # never has to probe — without this, every newly-created project re-creates
+        # the dims-NULL gap that backfill keeps closing.
+        from app.routers.clips import _insert_working_clip_with_dims
         for sort_order, clip in enumerate(clips):
-            cursor.execute("""
-                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version)
-                VALUES (?, ?, ?, 1, ?)
-            """, (project_id, clip['id'], sort_order, clip['boundaries_version']))
+            _insert_working_clip_with_dims(
+                cursor,
+                project_id=project_id,
+                raw_clip_id=clip['id'],
+                sort_order=sort_order,
+                version=1,
+                raw_clip_version=clip['boundaries_version'],
+            )
 
         conn.commit()
 
@@ -727,10 +754,11 @@ async def get_project(project_id: int):
                 sort_order=clip['sort_order']
             ))
 
-        # Generate presigned URL for working video if it exists
+        # Hand the frontend the same-origin proxy URL (see get_working_video_url
+        # for rationale — this is not a presigned R2 URL).
         working_video_url = None
         if project['working_video_filename']:
-            working_video_url = get_working_video_url(project['working_video_filename'])
+            working_video_url = get_working_video_url(project_id, project['working_video_filename'])
 
         return ProjectDetailResponse(
             id=project['id'],
@@ -898,9 +926,11 @@ async def get_working_video(project_id: int):
         if not row or not row['filename']:
             raise HTTPException(status_code=404, detail="Working video not found")
 
-        # If R2 enabled, redirect to presigned URL
+        # If R2 enabled, redirect to presigned URL. (This /working-video endpoint
+        # is the legacy direct-download path; the streaming proxy below is what
+        # the player uses for in-browser playback.)
         if R2_ENABLED:
-            presigned_url = get_working_video_url(row['filename'])
+            presigned_url = _generate_working_video_presigned_url(row['filename'])
             if presigned_url:
                 return RedirectResponse(url=presigned_url, status_code=302)
             raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
@@ -915,6 +945,140 @@ async def get_working_video(project_id: int):
             media_type="video/mp4",
             filename=row['filename']
         )
+
+
+@router.api_route("/{project_id}/working_video/stream", methods=["GET", "HEAD"])
+async def stream_working_video(project_id: int, request: Request):
+    """
+    Same-origin streaming proxy for a project's working video.
+
+    Why a proxy instead of a presigned R2 URL: R2's S3-compat endpoint serves
+    HTTP/1.1 only, capping Chrome at 6 sockets per origin. Foreground video
+    fetches were sitting indefinitely in "Stalled" state when the warmer or
+    a previous load held those sockets. Proxying through localhost moves the
+    browser request off the R2 origin entirely (the backend's httpx pool
+    talks to R2 separately).
+
+    Pass-through behavior: forwards the client's Range header to R2 and
+    returns whatever R2 returned (200 for full file, 206 for partial). No
+    byte windowing — working_videos are self-contained MP4s that are small
+    enough to stream fully on demand. (Compare with stream_working_clip_bounded
+    in clips.py, which clamps bytes because clips are slices of GB-scale games.)
+    """
+    from fastapi.responses import StreamingResponse
+    import httpx
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT wv.filename
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        row = cursor.fetchone()
+
+    if not row or not row['filename']:
+        raise HTTPException(status_code=404, detail="Working video not found")
+
+    presigned_url = _generate_working_video_presigned_url(row['filename'])
+    if not presigned_url:
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+    # Learn upstream size with a 1-byte Range GET so we can compute
+    # Content-Length / Content-Range ourselves. We can't HEAD because
+    # generate_presigned_url signs for get_object — sig v4 binds the HTTP
+    # method, so HEAD on a GET-signed URL returns 403 SignatureDoesNotMatch.
+    # The 1-byte GET reuses the same signature and the Content-Range header
+    # ("bytes 0-0/TOTAL") tells us the full size.
+    #
+    # Mirrors clips.py:stream_working_clip_bounded — opening client.stream()
+    # OUTSIDE the body generator (so we can peek at headers) leaves httpx's
+    # response in a half-closed state and the body iterator ends early,
+    # causing uvicorn's "Response content shorter than Content-Length".
+    # Keeping the AsyncClient + stream inside `async with` is the proven pattern.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
+        size_probe = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
+    if size_probe.status_code not in (200, 206):
+        raise HTTPException(
+            status_code=size_probe.status_code,
+            detail=f"R2 size probe returned {size_probe.status_code}",
+        )
+    cr = size_probe.headers.get("content-range")
+    total_size: Optional[int] = None
+    if cr:
+        # "bytes 0-0/12345"
+        m = cr.rsplit("/", 1)
+        if len(m) == 2 and m[1].isdigit():
+            total_size = int(m[1])
+    if total_size is None:
+        # Fallback: full GET (200) with Content-Length
+        try:
+            total_size = int(size_probe.headers["content-length"])
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=502, detail="R2 probe missing size")
+
+    range_hdr = request.headers.get("range") or request.headers.get("Range")
+    if range_hdr:
+        # Parse "bytes=START-END" (END optional → to EOF)
+        try:
+            spec = range_hdr.split("=", 1)[1]
+            start_s, end_s = spec.split("-", 1)
+            req_start = int(start_s)
+            req_end = int(end_s) if end_s else total_size - 1
+        except (IndexError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Invalid Range header: {range_hdr}")
+        req_end = min(req_end, total_size - 1)
+        if req_start > req_end:
+            raise HTTPException(status_code=416, detail="Range Not Satisfiable")
+        status_code = 206
+        content_length = req_end - req_start + 1
+        response_headers = {
+            "Content-Range": f"bytes {req_start}-{req_end}/{total_size}",
+            "Content-Length": str(content_length),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        }
+        upstream_range = f"bytes={req_start}-{req_end}"
+    else:
+        status_code = 200
+        response_headers = {
+            "Content-Length": str(total_size),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        }
+        upstream_range = None
+
+    logger.info(
+        f"[working-video-stream] project_id={project_id} method={request.method} "
+        f"range={range_hdr or 'none'} status={status_code} "
+        f"content_length={response_headers['Content-Length']}"
+    )
+
+    # HEAD probe (videoMetadata.js:50) — return headers only, no body. Avoids
+    # opening a second R2 GET that we'd immediately discard.
+    if request.method == "HEAD":
+        from fastapi.responses import Response
+        return Response(status_code=status_code, headers=response_headers, media_type="video/mp4")
+
+    async def stream_body():
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+            stream_headers = {"Range": upstream_range} if upstream_range else {}
+            async with client.stream("GET", presigned_url, headers=stream_headers) as response:
+                if response.status_code not in (200, 206):
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"R2 returned {response.status_code}",
+                    )
+                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                    yield chunk
+
+    return StreamingResponse(
+        stream_body(),
+        status_code=status_code,
+        media_type="video/mp4",
+        headers=response_headers,
+    )
 
 
 class OutdatedClipInfo(BaseModel):

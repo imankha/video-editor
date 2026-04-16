@@ -125,33 +125,36 @@ def ensure_user_database(user_id: str) -> None:
             if last_fail and (time.time() - last_fail) < USER_RESTORE_COOLDOWN_SECONDS:
                 logger.debug(f"[Restore] Skipping user.sqlite R2 check for {user_id} — cooldown active")
             else:
-                logger.info(f"[Restore] First access for user.sqlite user={user_id}, checking R2...")
+                from ..user_context import get_current_req_id
+                req_id = get_current_req_id()
+                req_suffix = f" req_id={req_id}" if req_id else ""
+                logger.info(f"[Restore] First access for user.sqlite user={user_id}, checking R2...{req_suffix}")
                 restore_start = time.perf_counter()
                 was_synced, new_version, was_error = sync_user_db_from_r2_if_newer(user_id, db_path, local_version)
                 restore_elapsed = time.perf_counter() - restore_start
                 if was_synced:
                     logger.info(
                         f"[Restore] Downloaded user.sqlite from R2 for user={user_id}: "
-                        f"version={new_version}, took {restore_elapsed:.2f}s"
+                        f"version={new_version}, took {restore_elapsed:.2f}s{req_suffix}"
                     )
                     set_local_user_db_version(user_id, new_version)
                 elif was_error:
                     _r2_user_restore_cooldowns[user_id] = time.time()
                     logger.warning(
                         f"[Restore] R2 unreachable for user.sqlite user={user_id}, "
-                        f"will retry after {USER_RESTORE_COOLDOWN_SECONDS}s (took {restore_elapsed:.2f}s)"
+                        f"will retry after {USER_RESTORE_COOLDOWN_SECONDS}s (took {restore_elapsed:.2f}s){req_suffix}"
                     )
                 elif new_version is not None:
                     logger.info(
                         f"[Restore] user.sqlite up-to-date for user={user_id}: "
-                        f"version={new_version}, took {restore_elapsed:.2f}s"
+                        f"version={new_version}, took {restore_elapsed:.2f}s{req_suffix}"
                     )
                     set_local_user_db_version(user_id, new_version)
                 else:
                     # NOT_FOUND — genuinely new user
                     logger.info(
                         f"[Restore] No user.sqlite in R2 for user={user_id}, "
-                        f"starting fresh (took {restore_elapsed:.2f}s)"
+                        f"starting fresh (took {restore_elapsed:.2f}s){req_suffix}"
                     )
                     set_local_user_db_version(user_id, 0)
 
@@ -187,6 +190,7 @@ def get_user_db_connection(user_id: str = None):
     raw_conn.execute("PRAGMA journal_mode=WAL")
     raw_conn.execute("PRAGMA busy_timeout=30000")
     raw_conn.execute("PRAGMA foreign_keys=ON")
+
     conn = TrackedConnection(raw_conn, db_type='user')
     try:
         yield conn

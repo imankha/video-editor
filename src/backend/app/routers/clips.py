@@ -641,6 +641,7 @@ def _insert_working_clip_with_dims(
     raw_clip_id: int,
     sort_order: int,
     version: int = 1,
+    raw_clip_version: Optional[int] = None,
 ) -> int:
     """
     T1500: INSERT a working_clips row with width/height/fps copied from the parent
@@ -649,9 +650,9 @@ def _insert_working_clip_with_dims(
     """
     width, height, fps = _get_dims_from_raw_clip(cursor, raw_clip_id)
     cursor.execute("""
-        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, width, height, fps)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (project_id, raw_clip_id, sort_order, version, width, height, fps))
+        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version, width, height, fps)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (project_id, raw_clip_id, sort_order, version, raw_clip_version, width, height, fps))
     return cursor.lastrowid
 
 
@@ -1537,9 +1538,16 @@ async def stream_working_clip_bounded(
     - Moov tail window:  bytes [size - MOOV_TAIL_SIZE, size - 1] — covers
       moov for moov-at-end files (T1440: Trace uploads are not always
       faststart; browser reads near EOF looking for moov).
-    - Clip window:       bytes [clipStartByte * 0.9, clipEndByte * 1.15]
-      — the clip body with padding to guard against non-uniform bitrate in
-      the proportional estimate.
+    - Clip window:       bytes around the clip body, padded by PRE_PAD_SECONDS
+      before (for keyframe seek-back) and POST_PAD_SECONDS after (for the
+      final GOP), converted to bytes via the average bitrate. A 1MB floor
+      handles short clips where time-based padding rounds tiny.
+
+      The earlier formula `[start_byte * 0.9, end_byte * 1.15]` was a fraction
+      of the absolute byte position, not the clip size — for a clip 54%
+      into a 1GB file that produced ~134MB of slop bracketing a 6MB clip,
+      so the proxy was effectively a no-op (browser buffered ~840s for an
+      8s clip, the entire window).
 
     Any request outside all three windows returns 416. Content-Range reports
     the true source size so the browser's sample-table byte offsets resolve
@@ -1547,6 +1555,9 @@ async def stream_working_clip_bounded(
     """
     MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB covers any faststart moov
     MOOV_TAIL_SIZE = 10 * 1024 * 1024       # last 10 MB for moov-at-end files
+    PRE_PAD_SECONDS = 2.0                   # seek back to keyframe (≤2s GOP typical)
+    POST_PAD_SECONDS = 1.0                  # finish the current GOP after clip end
+    MIN_PAD_BYTES = 1024 * 1024             # floor for short clips / low-bitrate sources
     from fastapi.responses import StreamingResponse
     import httpx
 
@@ -1586,8 +1597,12 @@ async def stream_working_clip_bounded(
     # Three windows.
     moov_end = min(size - 1, MOOV_WINDOW_END)
     moov_tail_start = max(0, size - MOOV_TAIL_SIZE)
-    clip_start_byte = max(0, int((start_time / duration) * size * 0.9))
-    clip_end_byte = min(size - 1, int((end_time / duration) * size * 1.15))
+    clip_start_byte_raw = int((start_time / duration) * size)
+    clip_end_byte_raw = int((end_time / duration) * size)
+    pre_pad = max(int((PRE_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
+    post_pad = max(int((POST_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
+    clip_start_byte = max(0, clip_start_byte_raw - pre_pad)
+    clip_end_byte = min(size - 1, clip_end_byte_raw + post_pad)
 
     # Generate presigned URL for the game video.
     from app.routers.games import get_game_video_url

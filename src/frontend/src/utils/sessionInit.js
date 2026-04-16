@@ -58,6 +58,8 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
  * Install global fetch interceptor that adds X-Profile-ID and X-User-ID
  * to all API requests. Also ensures credentials: 'include' for cookies.
  */
+const SLOW_FETCH_MS = 500;
+
 function installFetchInterceptor() {
   if (_fetchPatched) return;
 
@@ -67,15 +69,34 @@ function installFetchInterceptor() {
     const isApiRequest = url.startsWith('/api') || url.startsWith('/storage') || url.startsWith(`${API_BASE}/api`) || url.startsWith(`${API_BASE}/storage`);
 
     if (isApiRequest) {
+      const reqId = crypto.randomUUID().slice(0, 8);
       init = { ...init };
       if (!init.credentials) {
         init.credentials = 'include';
       }
       init.headers = {
         ...(init.headers || {}),
+        'X-Request-ID': reqId,
         ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
         ...(_currentUserId ? { 'X-User-ID': _currentUserId } : {}),
       };
+
+      const t0 = performance.now();
+      const promise = originalFetch.call(window, input, init);
+      promise.then(
+        (response) => {
+          const elapsed = Math.round(performance.now() - t0);
+          if (elapsed >= SLOW_FETCH_MS) {
+            const method = (init.method || 'GET').toUpperCase();
+            const pathOnly = url.replace(API_BASE, '').split('?')[0];
+            console.warn(
+              `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
+            );
+          }
+        },
+        () => {},
+      );
+      return promise;
     }
     return originalFetch.call(window, input, init);
   };
@@ -96,6 +117,7 @@ function installAxiosInterceptor() {
 
     if (isApiRequest) {
       config.withCredentials = true;
+      config.headers['X-Request-ID'] = crypto.randomUUID().slice(0, 8);
       if (_currentProfileId) {
         config.headers['X-Profile-ID'] = _currentProfileId;
       }

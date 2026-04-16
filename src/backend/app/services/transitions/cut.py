@@ -80,6 +80,7 @@ class CutTransition(TransitionStrategy):
                 '-preset', 'fast',
                 '-crf', '18',
                 '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
             ]
 
             if include_audio:

@@ -385,6 +385,10 @@ async def record_achievement(key: str):
     if key not in KNOWN_ACHIEVEMENT_KEYS:
         raise HTTPException(status_code=400, detail=f"Unknown achievement key: {key}")
 
+    # Per-step timing attributes conn vs write vs read. Full cProfile dump
+    # is handled by the request middleware (see app/profiling.py) when
+    # PROFILE_ON_BREACH_ENABLED=true — grep the matching [SLOW REQUEST] line
+    # for the profile= path to open alongside this breakdown.
     t0 = time.perf_counter()
     with get_db_connection() as conn:
         t_conn = time.perf_counter()

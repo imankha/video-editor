@@ -125,6 +125,9 @@ export function OverlayScreen({
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
   const workingVideoFetchUrlRef = useRef(null); // Track which presigned URL we've started fetching
   const workingVideoRecoveryAttemptedRef = useRef(false); // Guard against infinite refresh loops
+  const workingVideoAttemptsRef = useRef(0); // Count metadata-load attempts for the current URL
+  const MAX_WORKING_VIDEO_ATTEMPTS = 2;
+  const [workingVideoLoadError, setWorkingVideoLoadError] = useState(null);
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -309,25 +312,37 @@ export function OverlayScreen({
     if (!workingVideo && project?.working_video_url && workingVideoFetchUrlRef.current !== project.working_video_url) {
       workingVideoFetchUrlRef.current = project.working_video_url;
       workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
+      workingVideoAttemptsRef.current = 0;
+      setWorkingVideoLoadError(null);
       setIsLoadingWorkingVideo(true);
 
-      (async () => {
+      const attemptLoad = async () => {
+        workingVideoAttemptsRef.current += 1;
+        const attempt = workingVideoAttemptsRef.current;
         try {
-          console.log('[OverlayScreen] Loading working video from presigned URL:', project.working_video_url.substring(0, 80));
+          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, project.working_video_url.substring(0, 80));
           const meta = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
           console.log('[OverlayScreen] Extracted metadata from streaming URL:', meta);
           setWorkingVideo({ file: null, url: project.working_video_url, metadata: meta });
+          setIsLoadingWorkingVideo(false);
         } catch (err) {
-          console.error('[OverlayScreen] Failed to load working video:', err.message, {
+          console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
             url: project.working_video_url?.substring(0, 80),
             projectId,
             workingVideoId: project?.working_video_id,
           });
-          workingVideoFetchUrlRef.current = null; // Allow retry on error
-        } finally {
-          setIsLoadingWorkingVideo(false);
+          if (attempt < MAX_WORKING_VIDEO_ATTEMPTS) {
+            attemptLoad();
+          } else {
+            // Exhausted attempts — surface failure to the user.
+            // Leave workingVideoFetchUrlRef set so this effect does not re-fire
+            // for the same URL; user must click retry to clear + re-attempt.
+            setWorkingVideoLoadError(err.message || 'Failed to load working video');
+            setIsLoadingWorkingVideo(false);
+          }
         }
-      })();
+      };
+      attemptLoad();
     } else if (!workingVideo && !project?.working_video_url && isLoadingWorkingVideo) {
       // Stuck state: isLoadingWorkingVideo was set externally (by FramingScreen) but
       // project data doesn't include working_video_url. This happens when React renders
@@ -852,6 +867,17 @@ export function OverlayScreen({
     }
   }, [projectId, workingVideo, project, clearError, loadVideoFromStreamingUrl, loadVideoFromUrl, effectiveOverlayMetadata]);
 
+  // Manual retry after working-video load has exhausted automatic attempts.
+  // Refresh the project to get a fresh presigned URL (in case the failure was
+  // due to URL expiry), then clear guards so the load effect re-runs.
+  const handleRetryWorkingVideo = useCallback(async () => {
+    console.log('[OverlayScreen] Manual retry of working video load');
+    setWorkingVideoLoadError(null);
+    workingVideoFetchUrlRef.current = null;
+    workingVideoAttemptsRef.current = 0;
+    await refreshProject();
+  }, [refreshProject]);
+
   const handleSwitchToFraming = useCallback(() => {
     // NOTE: Safety blob save removed - gesture-based actions sync immediately to backend.
     setEditorMode(EDITOR_MODES.FRAMING);
@@ -892,13 +918,13 @@ export function OverlayScreen({
       isPlaying={isPlaying}
       handlers={handlers}
       // Loading state
-      isLoading={isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo}
+      isLoading={!workingVideoLoadError && (isLoading || isLoadingWorkingVideo || shouldWaitForWorkingVideo)}
       isVideoElementLoading={isVideoElementLoading}
       loadingProgress={loadingProgress}
       loadingElapsedSeconds={loadingElapsedSeconds}
-      error={error}
-      isUrlExpiredError={isUrlExpiredError}
-      onRetryVideo={handleRetryVideo}
+      error={workingVideoLoadError || error}
+      isUrlExpiredError={workingVideoLoadError ? () => true : isUrlExpiredError}
+      onRetryVideo={workingVideoLoadError ? handleRetryWorkingVideo : handleRetryVideo}
       loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
       // Playback controls
       togglePlay={togglePlay}

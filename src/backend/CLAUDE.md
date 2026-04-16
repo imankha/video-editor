@@ -24,6 +24,7 @@ cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
 | [api-guidelines](.claude/skills/api-guidelines/SKILL.md) | CRITICAL | R2 storage, parameterized queries |
 | [persistence-model](.claude/skills/persistence-model/SKILL.md) | CRITICAL | SQLite + R2 sync, version tracking |
 | [bug-reproduction](.claude/skills/bug-reproduction/SKILL.md) | CRITICAL | Test-first bug fixing |
+| [performance-optimization](.claude/skills/performance-optimization/SKILL.md) | CRITICAL | Attribute slow requests via req_id grep-chain; fix instrumentation before optimizing |
 | [type-safety](.claude/skills/type-safety/SKILL.md) | HIGH | Use `str, Enum` classes, no magic strings |
 | [database-schema](.claude/skills/database-schema/SKILL.md) | HIGH | Version identity, latest queries, FK cascades |
 | [gesture-based-sync](.claude/skills/gesture-based-sync/SKILL.md) | HIGH | Action-based API instead of full blobs |

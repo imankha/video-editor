@@ -23,6 +23,9 @@ Also tracks sync failure state per user and surfaces it via X-Sync-Status
 header so the frontend can show a warning indicator.
 """
 
+import asyncio
+import cProfile
+import contextlib
 import logging
 import os
 import re
@@ -33,6 +36,12 @@ from concurrent.futures import ThreadPoolExecutor
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+from ..profiling import (
+    dump_profile,
+    profile_on_breach_enabled,
+    profile_breach_ms,
+)
 
 from ..database import (
     init_request_context,
@@ -51,7 +60,7 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED
-from ..user_context import set_current_user_id, get_current_user_id
+from ..user_context import set_current_user_id, get_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +88,48 @@ def _inflight_exit(user_id: str) -> int:
         if n == 0:
             _INFLIGHT.pop(user_id, None)
         return n
+
+
+# T1531: Per-user WRITE lock. Writers (POST/PUT/PATCH/DELETE) serialize per-user
+# so two concurrent writes can't race on the R2 db-version (last-write-wins
+# would silently lose data). Readers (GET/HEAD/OPTIONS) take no lock — SQLite
+# WAL handles read concurrency, and a stale read 200ms behind an in-flight
+# write is acceptable. The dict is keyed per user, so users don't block each
+# other. Locks are created lazily and never removed (one asyncio.Lock per
+# active user is negligible memory).
+WRITE_METHODS = frozenset(("POST", "PUT", "PATCH", "DELETE"))
+_USER_WRITE_LOCKS: dict[str, asyncio.Lock] = {}
+_USER_WRITE_LOCKS_GUARD = threading.Lock()
+WRITE_LOCK_WAIT_LOG_MS = 50  # log when a writer waited longer than this for the lock
+
+
+def _get_user_write_lock(user_id: str) -> asyncio.Lock:
+    """Return the asyncio.Lock for this user, creating it on first access."""
+    with _USER_WRITE_LOCKS_GUARD:
+        lock = _USER_WRITE_LOCKS.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _USER_WRITE_LOCKS[user_id] = lock
+        return lock
+
+
+@contextlib.asynccontextmanager
+async def _maybe_write_lock(user_id: str | None, method: str, path: str, req_id: str):
+    """Hold the per-user write lock for write methods; no-op for reads."""
+    if not user_id or method not in WRITE_METHODS:
+        yield
+        return
+    lock = _get_user_write_lock(user_id)
+    wait_start = time.perf_counter()
+    async with lock:
+        wait_ms = (time.perf_counter() - wait_start) * 1000.0
+        if wait_ms >= WRITE_LOCK_WAIT_LOG_MS:
+            req_id_suffix = f" req_id={req_id}" if req_id else ""
+            logger.info(
+                f"[WRITE_LOCK_WAIT] {method} {path} user={user_id} "
+                f"waited_ms={int(wait_ms)}{req_id_suffix}"
+            )
+        yield
 
 # T1152: Sync failure state is backed by the .sync_pending marker file on disk
 # (same marker used by T930 for crash-survival). This keeps a single source of
@@ -179,6 +230,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/openapi.json',            # OpenAPI spec
     )
 
+    # Routes that are authenticated but touch only auth.sqlite — they don't
+    # need the profile DB loaded, so skip the expensive user_session_init
+    # cold path (R2 HEAD/GET on user.sqlite + profile.sqlite + cleanup passes).
+    # /api/auth/init is intentionally NOT in this list — it runs session_init
+    # itself in its handler, which is the explicit bootstrap call.
+    SKIP_SESSION_INIT_PATHS = (
+        '/api/auth/me',
+        '/api/auth/whoami',
+        '/api/auth/logout',
+        '/api/auth/google',
+        '/api/auth/send-otp',
+        '/api/auth/verify-otp',
+        '/api/auth/test-login',
+    )
+
     def _is_allowlisted(self, request: Request) -> bool:
         """Check if this request can proceed without user context."""
         # OPTIONS preflight never needs user context
@@ -188,6 +254,78 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         return any(path.startswith(prefix) for prefix in self.AUTH_ALLOWLIST_PREFIXES)
 
     async def dispatch(self, request: Request, call_next) -> Response:
+        """Profile-wrapped entry point.
+
+        T1530/T1531: cProfile wraps ALL paths through the middleware (allowlisted,
+        sync-skipped, and main) so any slow call is captured. The inner
+        `_dispatch_impl` contains the original logic; this outer shell owns the
+        timing/profile/log emission so there is a single place that logs
+        `[SLOW REQUEST]` with the profile path attached.
+        """
+        method = request.method
+        path = request.url.path
+        req_id = request.headers.get("X-Request-ID", "")
+        # Publish req_id to a ContextVar so downstream log lines (R2_CALL,
+        # [Restore], slow-query traces) can attach it without being passed it
+        # explicitly. Safe to set before user_id is resolved — the ContextVar
+        # is request-scoped by Starlette.
+        set_current_req_id(req_id)
+
+        force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
+        do_profile = profile_on_breach_enabled() or force_profile
+
+        prof = None
+        if do_profile:
+            prof = cProfile.Profile()
+            prof.enable()
+
+        request_start = time.perf_counter()
+        meta: dict = {"sync_duration": 0.0, "handler_duration": 0.0,
+                      "user_id": None, "inflight_entry": 0, "inflight_exit": 0}
+        try:
+            return await self._dispatch_impl(request, call_next, meta)
+        finally:
+            total_duration = time.perf_counter() - request_start
+            total_ms = total_duration * 1000.0
+            profile_path = None
+            req_id_suffix = f" req_id={req_id}" if req_id else ""
+            if prof is not None:
+                prof.disable()
+                if force_profile or total_ms >= profile_breach_ms():
+                    profile_path = dump_profile(
+                        prof,
+                        tag=f"{method}_{path}",
+                        elapsed_ms=total_ms,
+                        extra=req_id or meta.get("user_id"),
+                    )
+
+            sync_duration = meta["sync_duration"]
+            handler_duration = meta["handler_duration"]
+
+            if sync_duration >= SLOW_SYNC_THRESHOLD:
+                logger.warning(
+                    f"[SLOW DB SYNC] {method} {path} - sync took {sync_duration:.2f}s "
+                    f"(threshold: {SLOW_SYNC_THRESHOLD}s). Consider background sync."
+                    f"{req_id_suffix}"
+                )
+            if total_duration >= SLOW_REQUEST_THRESHOLD:
+                profile_suffix = f" profile={profile_path}" if profile_path else ""
+                logger.warning(
+                    f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
+                    f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
+                    f"{req_id_suffix}{profile_suffix}"
+                )
+            logger.info(
+                f"[REQ_TIMING] {method} {path} user={meta.get('user_id') or 'none'} "
+                f"total_ms={int(total_ms)} "
+                f"handler_ms={int(handler_duration * 1000)} "
+                f"sync_ms={int(sync_duration * 1000)} "
+                f"inflight_entry={meta['inflight_entry']} "
+                f"inflight_exit={meta['inflight_exit']}"
+                f"{req_id_suffix}"
+            )
+
+    async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
 
         # --- User context setup (T405: cookie-first, header-fallback) ---
@@ -232,18 +370,27 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Authentication required. Please refresh the page to initialize a session."},
                 )
 
+        req_id = request.headers.get("X-Request-ID", "")
+        req_id_suffix = f" req_id={req_id}" if req_id else ""
         logger.info(
             f"[REQ] {request.method} {request.url.path} | "
             f"user={user_id} (via {auth_source}) | "
             f"origin={request.headers.get('origin', '-')}"
+            f"{req_id_suffix}"
         )
 
+        meta["user_id"] = user_id
         set_current_user_id(user_id)
+
+        # Identity-only routes (auth.sqlite only) skip session_init so /me stays
+        # cheap on cold cache. /api/auth/init and all non-auth paths still run it.
+        path = request.url.path
+        skip_session_init = path in self.SKIP_SESSION_INIT_PATHS
 
         profile_id = request.headers.get('X-Profile-ID')
         if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
             set_current_profile_id(profile_id)
-        else:
+        elif not skip_session_init:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
             user_session_init(user_id)
@@ -256,11 +403,39 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if not should_sync:
             return await call_next(request)
 
+        # T1531: serialize WRITE requests per user (R2 version race protection).
+        # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
+        # next request after a write will see locally-committed state since we
+        # commit BEFORE releasing the lock.
+        async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
+            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id)
+
+    async def _sync_aware_flow(
+        self,
+        request: Request,
+        call_next,
+        meta: dict,
+        user_id: str,
+        req_id: str,
+    ) -> Response:
+        """Original write-tracking + R2 sync flow. Held inside the per-user
+        write lock when the request is a writer; runs lock-free for readers."""
+
         # --- T930/T1150: Retry pending sync from previous failed request ---
-        if has_sync_pending(user_id):
+        # T1536: run on a worker thread so the sync boto3 call (200-1000ms)
+        # doesn't block the asyncio event loop.
+        # T1537: only retry on WRITE requests. A read changes nothing, so
+        # there is nothing for it to push to R2; running retry here just adds
+        # an unnecessary R2 PutObject (~300-1000ms) onto the read latency.
+        # Worse, when N concurrent reads all retry the same object, R2 returns
+        # 429 ("reduce concurrent request rate"), keeping the user stuck in
+        # degraded state. Writers run inside the per-user write lock, so only
+        # one retry runs at a time per user — no concurrent same-key uploads.
+        if request.method in WRITE_METHODS and has_sync_pending(user_id):
             logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
             try:
-                if retry_pending_sync(user_id):
+                ok = await asyncio.to_thread(retry_pending_sync, user_id)
+                if ok:
                     clear_sync_pending(user_id)
                     logger.info(f"[SYNC] Retry succeeded for user {user_id}")
                 else:
@@ -269,9 +444,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
 
         # --- Request with sync tracking ---
-        request_start = time.perf_counter()
         sync_duration = 0.0
         inflight_at_entry = _inflight_enter(user_id) if user_id else 0
+        meta["inflight_entry"] = inflight_at_entry
+
+        # Profiler enable/dispatch-level logging happens in dispatch() — see outer shell.
+        force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
+        do_profile = profile_on_breach_enabled() or force_profile
 
         try:
             # Initialize request context for write tracking
@@ -281,6 +460,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             handler_start = time.perf_counter()
             response = await call_next(request)
             handler_duration = time.perf_counter() - handler_start
+            meta["handler_duration"] = handler_duration
 
             # After request, sync if writes occurred
             had_writes = get_request_has_writes()
@@ -299,23 +479,63 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         _profile_id = get_current_profile_id()
                         timing = {}
 
+                        # T1530/T1531: these run on worker threads, so the
+                        # request-level cProfile (which only traces its own
+                        # thread) misses them. Install per-worker profilers
+                        # and dump siblings on breach.
+                        do_sync_profile = do_profile
+
                         def _sync_profile():
+                            sub_prof = cProfile.Profile() if do_sync_profile else None
+                            if sub_prof:
+                                sub_prof.enable()
                             t0 = time.perf_counter()
-                            result = sync_db_to_r2_explicit(_user_id, _profile_id)
-                            timing['profile_ms'] = (time.perf_counter() - t0) * 1000
-                            return result
+                            try:
+                                return sync_db_to_r2_explicit(_user_id, _profile_id)
+                            finally:
+                                elapsed_ms = (time.perf_counter() - t0) * 1000
+                                timing['profile_ms'] = elapsed_ms
+                                if sub_prof:
+                                    sub_prof.disable()
+                                    if force_profile or elapsed_ms >= profile_breach_ms():
+                                        dump_profile(
+                                            sub_prof,
+                                            tag=f"syncthread_profile_{_user_id}",
+                                            elapsed_ms=elapsed_ms,
+                                        )
 
                         def _sync_user():
+                            sub_prof = cProfile.Profile() if do_sync_profile else None
+                            if sub_prof:
+                                sub_prof.enable()
                             t0 = time.perf_counter()
-                            result = sync_user_db_to_r2_explicit(_user_id)
-                            timing['user_ms'] = (time.perf_counter() - t0) * 1000
-                            return result
+                            try:
+                                return sync_user_db_to_r2_explicit(_user_id)
+                            finally:
+                                elapsed_ms = (time.perf_counter() - t0) * 1000
+                                timing['user_ms'] = elapsed_ms
+                                if sub_prof:
+                                    sub_prof.disable()
+                                    if force_profile or elapsed_ms >= profile_breach_ms():
+                                        dump_profile(
+                                            sub_prof,
+                                            tag=f"syncthread_user_{_user_id}",
+                                            elapsed_ms=elapsed_ms,
+                                        )
 
-                        with ThreadPoolExecutor(max_workers=2) as executor:
-                            profile_future = executor.submit(_sync_profile)
-                            user_future = executor.submit(_sync_user)
-                            profile_ok = profile_future.result()
-                            user_ok = user_future.result()
+                        # T1536: run both syncs on worker threads via the
+                        # asyncio default executor and AWAIT them. The previous
+                        # implementation used `executor.submit().result()`
+                        # which is a synchronous blocking call inside an async
+                        # def — it froze the event loop for the duration of
+                        # the sync (~900ms in the worst case), so every other
+                        # in-flight request (including readers that took no
+                        # lock) waited the same amount.
+                        loop = asyncio.get_running_loop()
+                        profile_ok, user_ok = await asyncio.gather(
+                            loop.run_in_executor(None, _sync_profile),
+                            loop.run_in_executor(None, _sync_user),
+                        )
 
                         # T1154: distinguishing log for partial-success events so we can
                         # measure frequency before deciding on atomic-sync strategy.
@@ -340,12 +560,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
                             )
                     elif had_writes:
-                        db_status = sync_db_to_cloud_if_writes()
+                        # T1536: same blocking concern — wrap in to_thread.
+                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
                         user_sync_success = True
                     else:
                         # had_user_db_writes only
                         db_status = "ok"
-                        user_sync_success = sync_user_db_to_cloud_if_writes()
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
 
                     if db_status == "conflict":
                         sync_status = "conflict"
@@ -380,8 +601,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if had_writes or had_user_db_writes:
                     sync_start = time.perf_counter()
                     try:
-                        db_status = sync_db_to_cloud_if_writes()
-                        user_sync_success = sync_user_db_to_cloud_if_writes()
+                        # T1536: don't block the event loop on the recovery sync.
+                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
                         overall_ok = (db_status == "ok") and user_sync_success
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
@@ -398,41 +620,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             # Always clean up request context
             clear_request_context()
-            inflight_at_exit = _inflight_exit(user_id) if user_id else 0
-
-            # Log warnings for slow operations
-            total_duration = time.perf_counter() - request_start
-            path = request.url.path
-            method = request.method
-
-            if sync_duration >= SLOW_SYNC_THRESHOLD:
-                logger.warning(
-                    f"[SLOW DB SYNC] {method} {path} - sync took {sync_duration:.2f}s "
-                    f"(threshold: {SLOW_SYNC_THRESHOLD}s). Consider background sync."
-                )
-
-            if total_duration >= SLOW_REQUEST_THRESHOLD:
-                logger.warning(
-                    f"[SLOW REQUEST] {method} {path} - total {total_duration:.2f}s "
-                    f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
-                )
-
-            # Structured timing for responsiveness analysis. Always emitted at
-            # INFO so we can grep across requests. Key field: inflight_entry
-            # reveals queueing (>1 means multiple concurrent requests for the
-            # same user — if one was slow, the others waited behind it).
-            try:
-                handler_ms = int(handler_duration * 1000)  # type: ignore[name-defined]
-            except NameError:
-                handler_ms = 0
-            logger.info(
-                f"[REQ_TIMING] {method} {path} user={user_id or 'none'} "
-                f"total_ms={int(total_duration * 1000)} "
-                f"handler_ms={handler_ms} "
-                f"sync_ms={int(sync_duration * 1000)} "
-                f"inflight_entry={inflight_at_entry} "
-                f"inflight_exit={inflight_at_exit}"
-            )
+            meta["sync_duration"] = sync_duration
+            meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
 
 
 # Keep old name for backward compatibility with imports

@@ -393,11 +393,56 @@ def cleanup_database_bloat() -> dict:
             result["export_jobs_pruned"] = cursor.rowcount
 
             # 3. T1160: Delete old working_clips versions (keep only latest per identity)
+            # Pre-delete audit: identify exactly which rows will be removed and
+            # whether any project would end up with zero surviving working_clips.
+            # That's the T1532 data-loss signature — log it LOUDLY (ERROR) so a
+            # future regression in latest_working_clips_subquery is visible in logs.
             cursor.execute(f"""
-                DELETE FROM working_clips
-                WHERE id NOT IN ({latest_working_clips_subquery(project_filter=False)})
+                SELECT wc.id, wc.project_id, wc.raw_clip_id, wc.version
+                FROM working_clips wc
+                WHERE wc.id NOT IN ({latest_working_clips_subquery(project_filter=False)})
             """)
-            result["working_clips_pruned"] = cursor.rowcount
+            doomed = [dict(row) for row in cursor.fetchall()]
+
+            if doomed:
+                affected_projects = sorted({row['project_id'] for row in doomed})
+                placeholders = ','.join(['?'] * len(affected_projects))
+                cursor.execute(f"""
+                    SELECT p.id, p.name,
+                           (SELECT COUNT(*) FROM working_clips wc
+                            WHERE wc.project_id = p.id
+                            AND wc.id IN ({latest_working_clips_subquery(project_filter=False)})) AS surviving
+                    FROM projects p
+                    WHERE p.id IN ({placeholders})
+                """, tuple(affected_projects))
+                orphans = [dict(row) for row in cursor.fetchall() if row['surviving'] == 0]
+
+                if orphans:
+                    logger.error(
+                        f"[Cleanup] T1532 signature: pruning {len(doomed)} working_clips "
+                        f"will leave {len(orphans)} project(s) with zero surviving clips: "
+                        f"{orphans}. Doomed rows: {doomed[:10]}"
+                        f"{'...' if len(doomed) > 10 else ''}. "
+                        f"Check queries.latest_working_clips_subquery for partition-key regression"
+                    )
+                else:
+                    logger.info(
+                        f"[Cleanup] Pruning {len(doomed)} old working_clips "
+                        f"across projects {affected_projects}; "
+                        f"sample: {doomed[:5]}{'...' if len(doomed) > 5 else ''}"
+                    )
+
+                cursor.execute(f"""
+                    DELETE FROM working_clips
+                    WHERE id NOT IN ({latest_working_clips_subquery(project_filter=False)})
+                """)
+                if cursor.rowcount != len(doomed):
+                    logger.warning(
+                        f"[Cleanup] working_clips delete count mismatch: "
+                        f"predicted={len(doomed)} actual={cursor.rowcount} — "
+                        f"rows changed between audit and delete"
+                    )
+                result["working_clips_pruned"] = cursor.rowcount
 
             # 4. T1160: Delete before_after_tracks for non-current final_videos
             cursor.execute("""
