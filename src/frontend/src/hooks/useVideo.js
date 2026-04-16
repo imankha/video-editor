@@ -752,14 +752,17 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     // Build user-friendly error message
     let userMessage;
     if (kind === VideoErrorKind.NETWORK_ERROR) {
-      userMessage = 'Video connection lost. The link may have expired.';
+      userMessage = 'Video playback was interrupted. Please retry.';
       // Invalidate the URL cache so next load gets a fresh URL
       if (videoUrl && !videoUrl.startsWith('blob:')) {
         invalidateUrl(videoUrl);
       }
-      // T1490 sub-issue B: MediaError doesn't expose HTTP status. Probe with
-      // a credentialed HEAD so a 401 surfaces as auth_fail instead of a
-      // generic network error.
+      // MediaError code 2 doesn't expose HTTP status. Probe with a credentialed
+      // HEAD so we can refine the message when the cause is actually
+      // identifiable (401 auth, 404 missing, 5xx server error). Otherwise leave
+      // the generic "interrupted, please retry" message — the real cause is
+      // often a client-side network blip or a mid-stream server response the
+      // HEAD probe can't see.
       const probeUrl = videoUrl;
       if (probeUrl && !probeUrl.startsWith('blob:')) {
         fetch(probeUrl, { method: 'HEAD', credentials: 'include' })
@@ -767,6 +770,15 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
             if (resp.status === 401) {
               console.warn(`[VIDEO_LOAD] auth_fail id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Your session expired. Please refresh to sign in again.');
+            } else if (resp.status === 404) {
+              console.warn(`[VIDEO_LOAD] not_found id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
+              setError('Video not found. It may have been deleted or moved.');
+            } else if (resp.status >= 500) {
+              console.warn(`[VIDEO_LOAD] server_error id=${loadIdRef.current} status=${resp.status}`);
+              setError('Video server error. Please retry in a moment.');
+            } else if (resp.status === 403) {
+              console.warn(`[VIDEO_LOAD] forbidden id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
+              setError('Video link expired. Please retry to get a fresh link.');
             }
           })
           .catch(() => { /* probe failure is non-actionable */ });

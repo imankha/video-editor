@@ -1556,8 +1556,13 @@ async def stream_working_clip_bounded(
     MOOV_WINDOW_END = 10 * 1024 * 1024 - 1  # 10 MB covers any faststart moov
     MOOV_TAIL_SIZE = 10 * 1024 * 1024       # last 10 MB for moov-at-end files
     PRE_PAD_SECONDS = 2.0                   # seek back to keyframe (≤2s GOP typical)
-    POST_PAD_SECONDS = 1.0                  # finish the current GOP after clip end
-    MIN_PAD_BYTES = 1024 * 1024             # floor for short clips / low-bitrate sources
+    POST_PAD_SECONDS = 5.0                  # cover Chrome's ~5s forward read-ahead buffer
+    MIN_PAD_BYTES = 5 * 1024 * 1024         # 5 MB floor — covers 5s @ 8 Mbps for short clips
+    # If Chrome's forward-buffer request still overshoots the clip window, serve
+    # up to this many extra bytes past clip_end_byte before falling back to 416.
+    # Chrome abandons forward-buffering once it gets a short 206, so one extra
+    # window is enough to break the retry loop without serving the whole file.
+    GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
     from fastapi.responses import StreamingResponse
     import httpx
 
@@ -1637,6 +1642,20 @@ async def stream_working_clip_bounded(
     elif req_start >= moov_tail_start:
         window_end = size - 1
         window_kind = "moov_tail"
+    elif clip_end_byte < req_start <= clip_end_byte + GAP_OVERRUN_EXTRA:
+        # Chrome's forward-buffer read overshot the clip window. Serve real bytes
+        # up to +GAP_OVERRUN_EXTRA past clip_end so the browser finishes buffering
+        # naturally instead of retry-looping on 416. Clamp to moov_tail_start-1
+        # so we never collide with the tail-moov window.
+        window_end = min(
+            clip_end_byte + GAP_OVERRUN_EXTRA,
+            moov_tail_start - 1 if moov_tail_start > 0 else size - 1,
+        )
+        window_kind = "clip_overrun"
+        logger.info(
+            f"[clip-stream] overrun clip_id={clip_id} req={req_start}-{req_end} "
+            f"clip_end={clip_end_byte} overrun_end={window_end}"
+        )
     else:
         logger.info(
             f"[clip-stream] 416 gap clip_id={clip_id} req={req_start}-{req_end} "
