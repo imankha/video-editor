@@ -1,5 +1,6 @@
 /**
- * T1460: route decision for video loading (direct-warm / proxy / forced direct).
+ * Route decision for video loading. Game clips always go through the bounded
+ * proxy (see videoLoadRoute.js header for why DIRECT_WARM was removed).
  */
 import { describe, it, expect, vi } from 'vitest';
 import { chooseLoadRoute, ROUTE } from './videoLoadRoute';
@@ -11,7 +12,7 @@ function warmer(ranges) {
   return vi.fn(() => ranges == null ? null : { clipRanges: ranges, urlWarmed: false, tailWarmed: false, warmedAt: Date.now() });
 }
 
-describe('T1460 chooseLoadRoute', () => {
+describe('chooseLoadRoute', () => {
   it('returns PASSTHROUGH when gameUrl is null (non-game clip)', () => {
     const r = chooseLoadRoute({
       url: 'blob:xyz',
@@ -52,7 +53,7 @@ describe('T1460 chooseLoadRoute', () => {
     expect(r.rangeCovered).toBe(false);
   });
 
-  it('DIRECT_WARM when covering range is recorded', () => {
+  it('PROXY (still!) when covering range is recorded — warm bytes serve the proxy upstream, not the browser', () => {
     const r = chooseLoadRoute({
       url: PROXY_URL,
       gameUrl: GAME_URL,
@@ -60,13 +61,13 @@ describe('T1460 chooseLoadRoute', () => {
       forceDirect: false,
       getWarmedStateFn: warmer([{ startTime: 95, endTime: 115 }]),
     });
-    expect(r.route).toBe(ROUTE.DIRECT_WARM);
-    expect(r.loadUrl).toBe(GAME_URL);
+    expect(r.route).toBe(ROUTE.PROXY);
+    expect(r.loadUrl).toBe(PROXY_URL);
     expect(r.warmLookupUrl).toBe(GAME_URL);
     expect(r.rangeCovered).toBe(true);
   });
 
-  it('DIRECT_FORCED when forceDirect=true and not warm', () => {
+  it('DIRECT_FORCED when forceDirect=true (debug override, bypasses proxy)', () => {
     const r = chooseLoadRoute({
       url: PROXY_URL,
       gameUrl: GAME_URL,
@@ -78,7 +79,7 @@ describe('T1460 chooseLoadRoute', () => {
     expect(r.loadUrl).toBe(GAME_URL);
   });
 
-  it('DIRECT_WARM takes precedence over forceDirect (still direct, labeled warm)', () => {
+  it('DIRECT_FORCED preserves rangeCovered telemetry when warm', () => {
     const r = chooseLoadRoute({
       url: PROXY_URL,
       gameUrl: GAME_URL,
@@ -86,10 +87,11 @@ describe('T1460 chooseLoadRoute', () => {
       forceDirect: true,
       getWarmedStateFn: warmer([{ startTime: 95, endTime: 115 }]),
     });
-    expect(r.route).toBe(ROUTE.DIRECT_WARM);
+    expect(r.route).toBe(ROUTE.DIRECT_FORCED);
+    expect(r.rangeCovered).toBe(true);
   });
 
-  it('warm_status log uses gameUrl even when PROXY is chosen (the bug this fixes)', () => {
+  it('warm_status log uses gameUrl even when PROXY is chosen (telemetry parity)', () => {
     const r = chooseLoadRoute({
       url: PROXY_URL,
       gameUrl: GAME_URL,

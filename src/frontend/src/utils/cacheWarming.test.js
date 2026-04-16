@@ -78,7 +78,7 @@ describe('cacheWarming — T1410 foreground abort', () => {
     expect(result).toBe(false);
   });
 
-  it('getNextItem pause: workers do not pull new work while FOREGROUND_ACTIVE', async () => {
+  it('FOREGROUND_ACTIVE permanently disables the warmer for the rest of the session', async () => {
     // Prime queues via pushClipRanges (public API that touches tier1Queue).
     // Enter FOREGROUND_ACTIVE first so the worker loop no-ops on getNextItem.
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
@@ -98,44 +98,31 @@ describe('cacheWarming — T1410 foreground abort', () => {
     // No fetch should have been issued — worker loop sees FOREGROUND_ACTIVE.
     expect(fetchMock).not.toHaveBeenCalled();
 
-    // Clearing foreground should resume.
+    // Clearing is now a no-op — the warmer stays disabled.
     cacheWarming.clearForegroundActive();
     await Promise.resolve();
     await Promise.resolve();
 
-    // warmClipRange issues 2 parallel fetches: head-prewarm (0-1MB) + clip body range.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const ranges = fetchMock.mock.calls.map((c) => c[1]?.headers?.Range);
-    expect(new Set(ranges).size).toBe(2);
+    // Still no fetches: the warmer does not resume after a foreground load.
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // Even direct warm calls are gated.
+    const result = await cacheWarming.warmVideoCache('https://example.com/post-foreground.mp4');
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('StrictMode double-invoke: aborting first foreground load leaves exactly one survivor', async () => {
-    // Simulate two overlapping foreground loads triggered by React 18 StrictMode.
-    // At the warmup layer, both calls should leave the warmer in FOREGROUND_ACTIVE
-    // and abort any in-flight warms. The second call must remain a valid no-op
-    // (already in foreground mode) — i.e., it doesn't blow away the "prior"
-    // priority we stashed on first entry.
-
-    // Start from GAMES.
+  it('StrictMode double-invoke: two FOREGROUND_ACTIVE entries leave the warmer disabled', async () => {
+    // Two overlapping foreground loads (React 18 StrictMode) both trip the
+    // permanent disable latch. clearForegroundActive is a no-op afterwards.
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.GAMES);
-
-    // First foreground enter.
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
-    // Second enter (StrictMode re-run).
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
-
-    // Clearing should restore to GAMES — not to FOREGROUND_ACTIVE, which would
-    // indicate the second enter overwrote priorityBeforeForeground.
     cacheWarming.clearForegroundActive();
 
-    // Kick a warm — it should now run (priority is back to GAMES).
-    const warmPromise = cacheWarming.warmVideoCache('https://example.com/survivor.mp4');
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(pending.length).toBe(1);
-    // Finish it so the promise doesn't dangle.
-    pending[0].resolve(new Response(null, { status: 206 }));
-    await warmPromise;
+    // Direct warm calls should also no-op now.
+    const result = await cacheWarming.warmVideoCache('https://example.com/survivor.mp4');
+    expect(result).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

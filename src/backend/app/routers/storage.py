@@ -285,22 +285,18 @@ async def get_warmup_urls(
                     "size": row['video_size']
                 })
 
-        # Working videos only for incomplete projects
+        # Working videos only for incomplete projects. Returns the same-origin
+        # proxy URL the player will use (see projects.get_working_video_url),
+        # so the warmer warms the same path the foreground load takes.
         cursor.execute("""
-            SELECT wv.filename FROM working_videos wv
+            SELECT p.id AS project_id, wv.filename
+            FROM working_videos wv
             JOIN projects p ON p.working_video_id = wv.id
             WHERE wv.filename IS NOT NULL AND wv.filename != ''
             AND p.final_video_id IS NULL
         """)
         for row in cursor.fetchall():
-            url = generate_presigned_url(
-                user_id=user_id,
-                relative_path=f"working_videos/{row['filename']}",
-                expires_in=expires_in,
-                content_type="video/mp4"
-            )
-            if url:
-                working_urls.append(url)
+            working_urls.append(f"/api/projects/{row['project_id']}/working_video/stream")
 
         # Project clips for tier-1 warmup: incomplete projects with their clip ranges
         cursor.execute(f"""
@@ -333,14 +329,16 @@ async def get_warmup_urls(
             pid = row['project_id']
             if pid not in project_map:
                 has_wv = row['working_video_id'] is not None
-                wv_url = None
-                if has_wv and row['working_video_filename']:
-                    wv_url = generate_presigned_url(
-                        user_id=user_id,
-                        relative_path=f"working_videos/{row['working_video_filename']}",
-                        expires_in=expires_in,
-                        content_type="video/mp4"
-                    )
+                # The frontend warms whatever URL it will later play. Working
+                # videos play through the same-origin proxy (see
+                # projects.get_working_video_url for why), so we hand the
+                # warmer the proxy URL too. The proxy fetches R2 on the
+                # backend, which warms R2's edge cache as a side effect.
+                wv_url = (
+                    f"/api/projects/{pid}/working_video/stream"
+                    if has_wv and row['working_video_filename']
+                    else None
+                )
                 project_map[pid] = {
                     "project_id": pid,
                     "has_working_video": has_wv,

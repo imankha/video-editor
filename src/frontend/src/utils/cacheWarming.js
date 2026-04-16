@@ -135,9 +135,20 @@ let priorityBeforeForeground = null;
 // and worker slots with games. Flipped to false once tier1 drains.
 let tier1PhaseActive = false;
 
+// One-way latch: once any foreground <video> load fires we permanently stop the
+// warmer for the rest of the session. Prior heuristic (pause + restart on
+// priority clear) raced foreground loads against R2's HTTP/1.1 6-connection
+// limit and produced indefinite "Stalled" requests in DevTools when the user
+// switched between projects. Cheaper to just stop warming forever — the
+// foreground player owns the bandwidth from the first user gesture onward.
+let warmerDisabled = false;
 
-// Concurrency settings
-const CONCURRENCY = 5;
+
+// Single worker: R2's S3-compat endpoint serves HTTP/1.1 only, so Chrome caps
+// the origin at 6 sockets. With multiple warm workers we routinely saturated
+// that pool and stalled foreground loads. One worker keeps the pool open for
+// the user's video while still warming idle resources sequentially.
+const CONCURRENCY = 1;
 
 // Threshold for tail warming (100MB) - videos larger than this likely have moov at end
 const TAIL_WARM_SIZE_THRESHOLD = 100 * 1024 * 1024;
@@ -152,40 +163,35 @@ export function setWarmupPriority(priority) {
   if (priority === currentPriority) return { abortedCount: 0 };
   console.log(`[CacheWarming] Priority changed to: ${priority}`);
 
-  // T1410: entering FOREGROUND_ACTIVE aborts every in-flight warm fetch and
-  // pauses the worker loop (getNextItem returns null). Leaving it restarts
-  // workers against whatever is still queued.
+  // Entering FOREGROUND_ACTIVE permanently disables the warmer for the rest
+  // of the session. Aborts every in-flight warm fetch and prevents workers
+  // from picking up new items (getNextItem returns null when warmerDisabled).
+  // Once the user has touched a video, foreground bandwidth is more valuable
+  // than any future warming we could do.
   if (priority === WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
     if (currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
       priorityBeforeForeground = currentPriority;
     }
     currentPriority = priority;
+    warmerDisabled = true;
     const abortedCount = abortInFlightWarms();
     return { abortedCount };
   }
 
-  // Leaving FOREGROUND_ACTIVE — restore prior priority if caller passed one,
-  // else honor their explicit choice.
+  // Any other priority change is a no-op once the warmer is disabled — the
+  // latch only flips one way. (clearForegroundActive used to restart the
+  // worker loop here; that's the behavior we're explicitly removing.)
   currentPriority = priority;
-  // Resume workers if queues still have items and nothing is running.
-  if (!workersRunning) {
-    const remaining = tier1Queue.length + gamesQueue.length + galleryQueue.length + workingQueue.length;
-    if (remaining > 0) {
-      runWorkers();
-    }
-  }
   priorityBeforeForeground = null;
   return { abortedCount: 0 };
 }
 
 /**
- * T1410: clear FOREGROUND_ACTIVE without the caller needing to know the
- * previous priority. No-op if not currently in foreground mode.
+ * Kept for API compatibility. Since FOREGROUND_ACTIVE now permanently disables
+ * the warmer, "clearing" it just leaves the latch set — the warmer stays off.
  */
 export function clearForegroundActive() {
-  if (currentPriority !== WARMUP_PRIORITY.FOREGROUND_ACTIVE) return;
-  const restore = priorityBeforeForeground || WARMUP_PRIORITY.GAMES;
-  setWarmupPriority(restore);
+  // No-op: warmer is one-way disabled once any foreground load fires.
 }
 
 function abortInFlightWarms() {
@@ -206,9 +212,10 @@ function abortInFlightWarms() {
  * Tier 1 (project clips) always processes first, then games/gallery by priority.
  */
 function getNextItem() {
-  // T1410: while foreground video is loading, don't pull new work. Workers
-  // will drain out and runWorkers() will restart them when priority clears.
-  if (currentPriority === WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
+  // Warmer disabled (any foreground load has fired this session, or we're
+  // currently in FOREGROUND_ACTIVE). Workers drain naturally and runWorkers
+  // bails on its next entry.
+  if (warmerDisabled || currentPriority === WARMUP_PRIORITY.FOREGROUND_ACTIVE) {
     return null;
   }
   // Tier 1: project clips (highest priority)
@@ -262,7 +269,7 @@ function getNextItem() {
  * @param {boolean} options.warmTail - Whether to warm the tail of the file
  */
 async function warmUrl(url, options = {}) {
-  if (!url || url.startsWith('blob:') || warmedUrls.has(url)) {
+  if (!url || url.startsWith('blob:') || warmedUrls.has(url) || warmerDisabled) {
     return false;
   }
 
@@ -331,7 +338,7 @@ async function warmUrl(url, options = {}) {
  * Primes the Cloudflare edge cache for the clip's region of the game video.
  */
 async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, clipId = null) {
-  if (!url || !videoDuration || !videoSize) return false;
+  if (!url || !videoDuration || !videoSize || warmerDisabled) return false;
   const startMs = performance.now();
 
   const startByte = Math.floor((startTime / videoDuration) * videoSize);

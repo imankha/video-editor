@@ -1,22 +1,25 @@
 /**
- * T1460: decide, at video-load time, whether to stream direct from R2 or via
- * the T1430 bounded proxy.
+ * Decide, at video-load time, which URL to feed the <video> element.
  *
- * Why this is here and not in FramingScreen:
- *   Previously FramingScreen picked proxy-vs-direct at clip-select time based
- *   on `getWarmedState` at that instant. The warmer usually finishes ~1s
- *   later, so the decision was frozen before warm data arrived. This module
- *   runs inside useVideo.loadVideo so it reads the freshest warm state
- *   available, and `warm_status` telemetry is keyed on the R2 URL (the one
- *   the warmer actually warmed) rather than whichever URL was chosen.
+ * Game clips always go through T1430's bounded proxy. The proxy clamps
+ * Content-Length to the clip window + moov boxes — without it, the browser
+ * issues open-ended Range requests against the raw R2 URL and over-buffers
+ * by orders of magnitude (observed: 454s buffered for an 8s clip even when
+ * the byte range had been warmed). T1460 previously added a DIRECT_WARM
+ * bypass on the assumption that warming would prevent overbuffer; HAR
+ * evidence proved otherwise (the browser ignored the warmed cache entries),
+ * so the bypass was removed. Warming still helps — it warms the proxy's
+ * upstream R2 fetch — just not the browser's <video> request.
+ *
+ * `rangeCovered` is still computed and returned so warm-coverage telemetry
+ * survives even though it no longer changes the route.
  *
  * Pure by construction: takes `getWarmedStateFn` so tests can inject.
  */
 
 export const ROUTE = Object.freeze({
-  DIRECT_WARM: 'direct-warm',     // warm range covers clip → go direct
-  DIRECT_FORCED: 'direct-forced', // ?direct=1 override → go direct
-  PROXY: 'proxy',                 // not warm, no override → bounded proxy
+  DIRECT_FORCED: 'direct-forced', // ?direct=1 override → go direct (debug only)
+  PROXY: 'proxy',                 // game clip → bounded proxy (default)
   PASSTHROUGH: 'passthrough',     // no gameUrl supplied (non-game clip)
 });
 
@@ -44,34 +47,13 @@ export function chooseLoadRoute({
 
   const ws = getWarmedStateFn(gameUrl);
   const clipEnd = clipDuration != null && clipOffset != null ? clipOffset + clipDuration : null;
-  const matchedRange = ws && clipEnd != null
-    ? ws.clipRanges.find(r => r.startTime <= clipOffset && r.endTime >= clipEnd)
-    : null;
-  const rangeCovered = !!matchedRange;
+  const rangeCovered = !!(ws && clipEnd != null
+    && ws.clipRanges.find(r => r.startTime <= clipOffset && r.endTime >= clipEnd));
 
-  if (rangeCovered) {
-    // Diagnostic for range-overfetch investigation: log how much the warmed
-    // byte span exceeds the actual clip's byte span. Ratio >> 1 means the
-    // 10% padding (see cacheWarming.warmClipRange) is overshooting and the
-    // browser may still overbuffer on the direct path.
-    try {
-      const warmedBytes = matchedRange.endByte - matchedRange.startByte;
-      const warmedTimeSpan = matchedRange.endTime - matchedRange.startTime;
-      const clipTimeSpan = clipDuration;
-      const timeRatio = warmedTimeSpan > 0 ? (warmedBytes / warmedTimeSpan).toFixed(0) : 'n/a';
-      // eslint-disable-next-line no-console
-      console.info(
-        `[ROUTE] DIRECT_WARM clipOffset=${clipOffset?.toFixed(2)} clipDur=${clipTimeSpan?.toFixed(2)} ` +
-        `warmedTimeSpan=${warmedTimeSpan?.toFixed(2)} warmedBytes=${warmedBytes} bytesPerSec=${timeRatio} ` +
-        `warmStart=${matchedRange.startByte} warmEnd=${matchedRange.endByte}`
-      );
-    } catch { /* logging must never throw */ }
-    return { loadUrl: gameUrl, warmLookupUrl: gameUrl, route: ROUTE.DIRECT_WARM, rangeCovered: true };
-  }
   if (forceDirect) {
-    return { loadUrl: gameUrl, warmLookupUrl: gameUrl, route: ROUTE.DIRECT_FORCED, rangeCovered: false };
+    return { loadUrl: gameUrl, warmLookupUrl: gameUrl, route: ROUTE.DIRECT_FORCED, rangeCovered };
   }
-  return { loadUrl: url, warmLookupUrl: gameUrl, route: ROUTE.PROXY, rangeCovered: false };
+  return { loadUrl: url, warmLookupUrl: gameUrl, route: ROUTE.PROXY, rangeCovered };
 }
 
 /** Read `?direct=1` from window.location. Safe in SSR/tests. */
