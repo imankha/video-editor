@@ -139,20 +139,12 @@ export function useDownloads(isOpen = false) {
   }, []);
 
   /**
-   * Get streaming URL for video playback
-   * Uses R2 presigned URL directly for fast streaming (browsers handle CORS for video src)
-   * Falls back to backend proxy if R2 URL not available
-   * @param {number} downloadId - Download ID
-   * @param {Object} download - Download object with file_url
+   * Get streaming URL for video playback.
+   * Routes through same-origin proxy to avoid Chrome's 6-socket HTTP/1.1
+   * limit on the R2 origin (presigned URLs caused 15s+ "blocked" stalls).
    */
-  const getStreamingUrl = useCallback((downloadId, download = null) => {
-    // Use R2 presigned URL directly for video playback (much faster)
-    // Browsers can load cross-origin video sources without CORS issues
-    if (download?.file_url) {
-      return download.file_url;
-    }
-    // Fallback to backend proxy
-    return `${API_BASE_URL}/downloads/${downloadId}/file`;
+  const getStreamingUrl = useCallback((downloadId) => {
+    return `${API_BASE_URL}/downloads/${downloadId}/stream`;
   }, []);
 
   /**

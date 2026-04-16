@@ -5,7 +5,7 @@ Provides access to final videos that have been exported from Overlay mode.
 Users can list, download, and delete their final videos.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -652,6 +652,90 @@ async def download_file(download_id: int):
             media_type="video/mp4",
             filename=download_filename
         )
+
+
+@router.api_route("/{download_id}/stream", methods=["GET", "HEAD"])
+async def stream_download(download_id: int, request: Request):
+    """Same-origin streaming proxy for gallery video playback.
+
+    Same pattern as projects/{id}/working_video/stream — proxies R2
+    through localhost to avoid Chrome's 6-socket-per-origin HTTP/1.1 limit.
+    """
+    from fastapi.responses import StreamingResponse, Response
+    import httpx
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
+        row = cursor.fetchone()
+
+    if not row or not row['filename']:
+        raise HTTPException(status_code=404, detail="Download not found")
+
+    presigned_url = get_download_file_url(row['filename'])
+    if not presigned_url:
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
+        size_probe = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
+    if size_probe.status_code not in (200, 206):
+        raise HTTPException(status_code=size_probe.status_code, detail=f"R2 probe returned {size_probe.status_code}")
+
+    cr = size_probe.headers.get("content-range")
+    total_size = None
+    if cr:
+        m = cr.rsplit("/", 1)
+        if len(m) == 2 and m[1].isdigit():
+            total_size = int(m[1])
+    if total_size is None:
+        try:
+            total_size = int(size_probe.headers["content-length"])
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=502, detail="R2 probe missing size")
+
+    range_hdr = request.headers.get("range") or request.headers.get("Range")
+    if range_hdr:
+        try:
+            spec = range_hdr.split("=", 1)[1]
+            start_s, end_s = spec.split("-", 1)
+            req_start = int(start_s)
+            req_end = int(end_s) if end_s else total_size - 1
+        except (IndexError, ValueError):
+            raise HTTPException(status_code=400, detail=f"Invalid Range header: {range_hdr}")
+        req_end = min(req_end, total_size - 1)
+        if req_start > req_end:
+            raise HTTPException(status_code=416, detail="Range Not Satisfiable")
+        status_code = 206
+        content_length = req_end - req_start + 1
+        response_headers = {
+            "Content-Range": f"bytes {req_start}-{req_end}/{total_size}",
+            "Content-Length": str(content_length),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        }
+        upstream_range = f"bytes={req_start}-{req_end}"
+    else:
+        status_code = 200
+        response_headers = {
+            "Content-Length": str(total_size),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-cache",
+        }
+        upstream_range = None
+
+    if request.method == "HEAD":
+        return Response(status_code=status_code, headers=response_headers, media_type="video/mp4")
+
+    async def stream_body():
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+            stream_headers = {"Range": upstream_range} if upstream_range else {}
+            async with client.stream("GET", presigned_url, headers=stream_headers) as response:
+                if response.status_code not in (200, 206):
+                    raise HTTPException(status_code=response.status_code, detail=f"R2 returned {response.status_code}")
+                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                    yield chunk
+
+    return StreamingResponse(stream_body(), status_code=status_code, media_type="video/mp4", headers=response_headers)
 
 
 @router.delete("/{download_id}")

@@ -7,6 +7,7 @@ import { useDownloads } from '../hooks/useDownloads';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
+import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
@@ -92,6 +93,7 @@ export function DownloadsPanel({
 
   const handlePlay = (e, download) => {
     e.stopPropagation();
+    setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
     setPlayingVideo(download);
     close();
     // T540: Record achievements for viewing gallery video

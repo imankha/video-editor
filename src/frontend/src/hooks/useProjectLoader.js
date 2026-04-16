@@ -7,6 +7,7 @@ import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
 import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -101,6 +102,9 @@ export function useProjectLoader() {
     const projectId = project.id;
 
     try {
+      // Kill cache warmer permanently — user is loading real content now
+      setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+
       // Reset all stores for new project to clear stale data
       resetProjectData();
       resetFramingStore();
