@@ -757,16 +757,24 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (videoUrl && !videoUrl.startsWith('blob:')) {
         invalidateUrl(videoUrl);
       }
-      // MediaError code 2 doesn't expose HTTP status. Probe with a credentialed
-      // HEAD so we can refine the message when the cause is actually
-      // identifiable (401 auth, 404 missing, 5xx server error). Otherwise leave
-      // the generic "interrupted, please retry" message — the real cause is
-      // often a client-side network blip or a mid-stream server response the
-      // HEAD probe can't see.
+      // MediaError code 2 doesn't expose HTTP status. Probe with a 1-byte GET
+      // so we can refine the message when the cause is identifiable (401 auth,
+      // 404 missing, 5xx server error). GET Range:bytes=0-0 instead of HEAD:
+      // - R2 presigned URLs are signed for get_object; sigv4 binds the method,
+      //   so HEAD on a GET-signed URL returns 403 SignatureDoesNotMatch.
+      // - Our own clip-stream/working_video proxy routes define only GET; HEAD
+      //   returns 405 Method Not Allowed.
+      // GET Range:0-0 works for both and transfers one byte.
       const probeUrl = videoUrl;
       if (probeUrl && !probeUrl.startsWith('blob:')) {
-        fetch(probeUrl, { method: 'HEAD', credentials: 'include' })
+        fetch(probeUrl, {
+          method: 'GET',
+          headers: { Range: 'bytes=0-0' },
+          credentials: 'include',
+        })
           .then((resp) => {
+            // 206 (partial) or 200 (range ignored) both mean the URL works;
+            // leave the generic "interrupted, please retry" message in place.
             if (resp.status === 401) {
               console.warn(`[VIDEO_LOAD] auth_fail id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Your session expired. Please refresh to sign in again.');
@@ -780,6 +788,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
               console.warn(`[VIDEO_LOAD] forbidden id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
               setError('Video link expired. Please retry to get a fresh link.');
             }
+            // Release the 1-byte body so the connection isn't held open.
+            resp.body?.cancel?.();
           })
           .catch(() => { /* probe failure is non-actionable */ });
       }
