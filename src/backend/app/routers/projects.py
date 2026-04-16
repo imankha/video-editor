@@ -609,11 +609,19 @@ async def create_project_from_clips(request: ProjectFromClipsCreate):
 
         # Add all filtered clips as working clips
         # Capture the raw_clip's current boundaries_version for change detection
+        # T1500: copy width/height/fps from the parent game_video so the frontend
+        # never has to probe — without this, every newly-created project re-creates
+        # the dims-NULL gap that backfill keeps closing.
+        from app.routers.clips import _insert_working_clip_with_dims
         for sort_order, clip in enumerate(clips):
-            cursor.execute("""
-                INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version)
-                VALUES (?, ?, ?, 1, ?)
-            """, (project_id, clip['id'], sort_order, clip['boundaries_version']))
+            _insert_working_clip_with_dims(
+                cursor,
+                project_id=project_id,
+                raw_clip_id=clip['id'],
+                sort_order=sort_order,
+                version=1,
+                raw_clip_version=clip['boundaries_version'],
+            )
 
         conn.commit()
 

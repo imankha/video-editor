@@ -641,6 +641,7 @@ def _insert_working_clip_with_dims(
     raw_clip_id: int,
     sort_order: int,
     version: int = 1,
+    raw_clip_version: Optional[int] = None,
 ) -> int:
     """
     T1500: INSERT a working_clips row with width/height/fps copied from the parent
@@ -649,9 +650,9 @@ def _insert_working_clip_with_dims(
     """
     width, height, fps = _get_dims_from_raw_clip(cursor, raw_clip_id)
     cursor.execute("""
-        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, width, height, fps)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (project_id, raw_clip_id, sort_order, version, width, height, fps))
+        INSERT INTO working_clips (project_id, raw_clip_id, sort_order, version, raw_clip_version, width, height, fps)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (project_id, raw_clip_id, sort_order, version, raw_clip_version, width, height, fps))
     return cursor.lastrowid
 
 

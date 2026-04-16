@@ -23,7 +23,9 @@ Also tracks sync failure state per user and surfaces it via X-Sync-Status
 header so the frontend can show a warning indicator.
 """
 
+import asyncio
 import cProfile
+import contextlib
 import logging
 import os
 import re
@@ -86,6 +88,48 @@ def _inflight_exit(user_id: str) -> int:
         if n == 0:
             _INFLIGHT.pop(user_id, None)
         return n
+
+
+# T1531: Per-user WRITE lock. Writers (POST/PUT/PATCH/DELETE) serialize per-user
+# so two concurrent writes can't race on the R2 db-version (last-write-wins
+# would silently lose data). Readers (GET/HEAD/OPTIONS) take no lock — SQLite
+# WAL handles read concurrency, and a stale read 200ms behind an in-flight
+# write is acceptable. The dict is keyed per user, so users don't block each
+# other. Locks are created lazily and never removed (one asyncio.Lock per
+# active user is negligible memory).
+WRITE_METHODS = frozenset(("POST", "PUT", "PATCH", "DELETE"))
+_USER_WRITE_LOCKS: dict[str, asyncio.Lock] = {}
+_USER_WRITE_LOCKS_GUARD = threading.Lock()
+WRITE_LOCK_WAIT_LOG_MS = 50  # log when a writer waited longer than this for the lock
+
+
+def _get_user_write_lock(user_id: str) -> asyncio.Lock:
+    """Return the asyncio.Lock for this user, creating it on first access."""
+    with _USER_WRITE_LOCKS_GUARD:
+        lock = _USER_WRITE_LOCKS.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _USER_WRITE_LOCKS[user_id] = lock
+        return lock
+
+
+@contextlib.asynccontextmanager
+async def _maybe_write_lock(user_id: str | None, method: str, path: str, req_id: str):
+    """Hold the per-user write lock for write methods; no-op for reads."""
+    if not user_id or method not in WRITE_METHODS:
+        yield
+        return
+    lock = _get_user_write_lock(user_id)
+    wait_start = time.perf_counter()
+    async with lock:
+        wait_ms = (time.perf_counter() - wait_start) * 1000.0
+        if wait_ms >= WRITE_LOCK_WAIT_LOG_MS:
+            req_id_suffix = f" req_id={req_id}" if req_id else ""
+            logger.info(
+                f"[WRITE_LOCK_WAIT] {method} {path} user={user_id} "
+                f"waited_ms={int(wait_ms)}{req_id_suffix}"
+            )
+        yield
 
 # T1152: Sync failure state is backed by the .sync_pending marker file on disk
 # (same marker used by T930 for crash-survival). This keeps a single source of
@@ -358,6 +402,24 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         if not should_sync:
             return await call_next(request)
+
+        # T1531: serialize WRITE requests per user (R2 version race protection).
+        # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
+        # next request after a write will see locally-committed state since we
+        # commit BEFORE releasing the lock.
+        async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
+            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id)
+
+    async def _sync_aware_flow(
+        self,
+        request: Request,
+        call_next,
+        meta: dict,
+        user_id: str,
+        req_id: str,
+    ) -> Response:
+        """Original write-tracking + R2 sync flow. Held inside the per-user
+        write lock when the request is a writer; runs lock-free for readers."""
 
         # --- T930/T1150: Retry pending sync from previous failed request ---
         if has_sync_pending(user_id):
