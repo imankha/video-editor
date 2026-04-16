@@ -96,6 +96,8 @@ def get_r2_client():
                 signature_version="s3v4",
                 s3={"addressing_style": "path"},
                 max_pool_connections=25,  # 10 for upload threads + 15 headroom
+                connect_timeout=5,
+                read_timeout=30,
             ),
             region_name="auto"
         )
