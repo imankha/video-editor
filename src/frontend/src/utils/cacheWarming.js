@@ -18,7 +18,7 @@
  * - Call setWarmupPriority('games') when games/annotate is accessed
  */
 
-import { API_BASE } from '../config';
+import { API_BASE, resolveApiUrl } from '../config';
 
 // T1490: warm fetch options depend on URL origin. R2 presigned URLs don't
 // serve CORS headers — no-cors + credentials:omit is required. Same-origin
@@ -509,7 +509,7 @@ export async function warmAllUserVideos() {
     for (const project of (data.project_clips || [])) {
       if (project.has_working_video && project.working_video_url) {
         // Framed project: warm the working video (user's next step is Overlay)
-        tier1Queue.push({ url: project.working_video_url, warmTail: true });
+        tier1Queue.push({ url: resolveApiUrl(project.working_video_url), warmTail: true });
       } else {
         // Unframed project: warm clip byte ranges
         for (const clip of (project.clips || [])) {
@@ -532,7 +532,9 @@ export async function warmAllUserVideos() {
       const url = typeof item === 'object' ? item.url : item;
       return url && !warmedUrls.has(url);
     });
-    workingQueue = (data.working_urls || []).filter(url => url && !warmedUrls.has(url));
+    workingQueue = (data.working_urls || [])
+      .map(url => resolveApiUrl(url))
+      .filter(url => url && !warmedUrls.has(url));
 
     const total = tier1Queue.length + galleryQueue.length + gamesQueue.length + workingQueue.length;
 

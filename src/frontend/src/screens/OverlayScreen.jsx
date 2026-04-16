@@ -10,7 +10,7 @@ import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/vide
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { frameToTime } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
-import { API_BASE } from '../config';
+import { API_BASE, resolveApiUrl } from '../config';
 import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
@@ -319,15 +319,16 @@ export function OverlayScreen({
       const attemptLoad = async () => {
         workingVideoAttemptsRef.current += 1;
         const attempt = workingVideoAttemptsRef.current;
+        const workingVideoUrl = resolveApiUrl(project.working_video_url);
         try {
-          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, project.working_video_url.substring(0, 80));
-          const meta = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
+          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, workingVideoUrl.substring(0, 80));
+          const meta = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
           console.log('[OverlayScreen] Extracted metadata from streaming URL:', meta);
-          setWorkingVideo({ file: null, url: project.working_video_url, metadata: meta });
+          setWorkingVideo({ file: null, url: workingVideoUrl, metadata: meta });
           setIsLoadingWorkingVideo(false);
         } catch (err) {
           console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
-            url: project.working_video_url?.substring(0, 80),
+            url: workingVideoUrl?.substring(0, 80),
             projectId,
             workingVideoId: project?.working_video_id,
           });

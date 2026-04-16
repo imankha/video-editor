@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { API_BASE } from '../config';
+import { API_BASE, resolveApiUrl } from '../config';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
@@ -207,15 +207,16 @@ export function useProjectLoader() {
         setLoading(true, 'working-video');
 
         try {
-          const metadata = await extractVideoMetadataFromUrl(project.working_video_url, 'working_video.mp4');
+          const workingVideoUrl = resolveApiUrl(project.working_video_url);
+          const metadata = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
 
-          workingVideo = { file: null, url: project.working_video_url, metadata };
+          workingVideo = { file: null, url: workingVideoUrl, metadata };
           setWorkingVideo(workingVideo);
 
           if (onWorkingVideoLoaded) {
             await onWorkingVideoLoaded({
               file: null,
-              url: project.working_video_url,
+              url: workingVideoUrl,
               metadata,
               clipMetadata: overlayClipMetadata,
             });

@@ -10,3 +10,22 @@
  *   fetch(`${API_BASE}/api/health`)
  */
 export const API_BASE = import.meta.env.VITE_API_BASE || '';
+
+/**
+ * Resolve a backend-returned URL to one the browser can fetch directly.
+ *
+ * Some backend endpoints return relative paths like `/api/projects/1/working_video/stream`.
+ * In dev the frontend and backend share an origin (Vite proxy), so a relative path works.
+ * In staging/prod the frontend is served from a separate Cloudflare Pages domain whose SPA
+ * catch-all (`_redirects: /* /index.html 200`) swallows relative `/api/...` fetches and
+ * returns index.html — which then fails MP4 parsing with "No ftyp box at byte 4".
+ *
+ * Prepending API_BASE to relative `/api/...` paths routes them to the backend in every env.
+ * Absolute URLs (presigned R2, http/https) are returned unchanged.
+ */
+export function resolveApiUrl(url) {
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) return `${API_BASE}${url}`;
+  return url;
+}
