@@ -197,11 +197,15 @@ class TrackedConnection:
         # Also mark in request context for middleware to detect.
         # Uses mutable dict so the change is visible across BaseHTTPMiddleware's
         # context copy boundary (see _request_context comment above).
+        # `has_writes` tracks profile-DB writes only; user-DB writes set
+        # `has_user_db_writes`. The middleware routes user-only writes
+        # through the user-DB-only sync path, which doesn't need profile_id.
         ctx = _request_context.get()
         if ctx is not None:
-            ctx['has_writes'] = True
             if self._db_type == 'user':
                 ctx['has_user_db_writes'] = True
+            else:
+                ctx['has_writes'] = True
 
     @property
     def has_writes(self) -> bool:
