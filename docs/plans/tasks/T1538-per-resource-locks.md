@@ -1,4 +1,4 @@
-# T1535: Per-Resource Locks (finer-grained write serialization)
+# T1538: Per-Resource Locks (finer-grained write serialization)
 
 **Status:** TODO
 **Impact:** 4 (incremental win on top of T1531; meaningful only when contention persists)
