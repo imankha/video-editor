@@ -58,7 +58,7 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED
-from ..user_context import set_current_user_id, get_current_user_id
+from ..user_context import set_current_user_id, get_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +186,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/openapi.json',            # OpenAPI spec
     )
 
+    # Routes that are authenticated but touch only auth.sqlite — they don't
+    # need the profile DB loaded, so skip the expensive user_session_init
+    # cold path (R2 HEAD/GET on user.sqlite + profile.sqlite + cleanup passes).
+    # /api/auth/init is intentionally NOT in this list — it runs session_init
+    # itself in its handler, which is the explicit bootstrap call.
+    SKIP_SESSION_INIT_PATHS = (
+        '/api/auth/me',
+        '/api/auth/whoami',
+        '/api/auth/logout',
+        '/api/auth/google',
+        '/api/auth/send-otp',
+        '/api/auth/verify-otp',
+        '/api/auth/test-login',
+    )
+
     def _is_allowlisted(self, request: Request) -> bool:
         """Check if this request can proceed without user context."""
         # OPTIONS preflight never needs user context
@@ -206,6 +221,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         method = request.method
         path = request.url.path
         req_id = request.headers.get("X-Request-ID", "")
+        # Publish req_id to a ContextVar so downstream log lines (R2_CALL,
+        # [Restore], slow-query traces) can attach it without being passed it
+        # explicitly. Safe to set before user_id is resolved — the ContextVar
+        # is request-scoped by Starlette.
+        set_current_req_id(req_id)
 
         force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
         do_profile = profile_on_breach_enabled() or force_profile
@@ -306,19 +326,27 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Authentication required. Please refresh the page to initialize a session."},
                 )
 
+        req_id = request.headers.get("X-Request-ID", "")
+        req_id_suffix = f" req_id={req_id}" if req_id else ""
         logger.info(
             f"[REQ] {request.method} {request.url.path} | "
             f"user={user_id} (via {auth_source}) | "
             f"origin={request.headers.get('origin', '-')}"
+            f"{req_id_suffix}"
         )
 
         meta["user_id"] = user_id
         set_current_user_id(user_id)
 
+        # Identity-only routes (auth.sqlite only) skip session_init so /me stays
+        # cheap on cold cache. /api/auth/init and all non-auth paths still run it.
+        path = request.url.path
+        skip_session_init = path in self.SKIP_SESSION_INIT_PATHS
+
         profile_id = request.headers.get('X-Profile-ID')
         if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
             set_current_profile_id(profile_id)
-        else:
+        elif not skip_session_init:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
             user_session_init(user_id)

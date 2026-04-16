@@ -21,6 +21,21 @@ from typing import Optional
 # Must be explicitly set by middleware before any route handler runs.
 _current_user_id: ContextVar[str] = ContextVar('current_user_id')
 
+# Request-id ContextVar. Set by middleware from the X-Request-ID header so
+# downstream log lines (R2_CALL, session-init restores, slow DB queries) can
+# all be correlated to the originating HTTP request.
+_current_req_id: ContextVar[str] = ContextVar('current_req_id', default='')
+
+
+def get_current_req_id() -> str:
+    """Return the request id for the current context, or '' if none set."""
+    return _current_req_id.get()
+
+
+def set_current_req_id(req_id: str) -> None:
+    """Set the request id for this request context."""
+    _current_req_id.set(req_id or '')
+
 
 def get_current_user_id() -> str:
     """
