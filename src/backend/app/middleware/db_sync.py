@@ -423,9 +423,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         # --- T930/T1150: Retry pending sync from previous failed request ---
         # T1536: run on a worker thread so the sync boto3 call (200-1000ms)
-        # doesn't block the asyncio event loop and freeze every other in-flight
-        # request for this and every other user.
-        if has_sync_pending(user_id):
+        # doesn't block the asyncio event loop.
+        # T1537: only retry on WRITE requests. A read changes nothing, so
+        # there is nothing for it to push to R2; running retry here just adds
+        # an unnecessary R2 PutObject (~300-1000ms) onto the read latency.
+        # Worse, when N concurrent reads all retry the same object, R2 returns
+        # 429 ("reduce concurrent request rate"), keeping the user stuck in
+        # degraded state. Writers run inside the per-user write lock, so only
+        # one retry runs at a time per user — no concurrent same-key uploads.
+        if request.method in WRITE_METHODS and has_sync_pending(user_id):
             logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
             try:
                 ok = await asyncio.to_thread(retry_pending_sync, user_id)
