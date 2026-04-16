@@ -76,6 +76,31 @@ SLOW_REQUEST_THRESHOLD = 0.2  # 200ms - warn if total request takes this long (p
 _INFLIGHT: dict[str, int] = defaultdict(int)
 _INFLIGHT_LOCK = threading.Lock()
 
+# Users with a sync attempt currently executing. Distinct from the
+# `.sync_pending` marker file, which is set BEFORE a sync attempt for
+# crash-recovery and stays set until the attempt succeeds. During a
+# normal in-flight sync, concurrent readers would otherwise read that
+# marker and emit X-Sync-Status: failed, flashing the frontend warning
+# button. The header check AND-gates the marker with this set so only a
+# persistent failure (marker present, no sync in flight) surfaces.
+_SYNC_IN_PROGRESS: set[str] = set()
+_SYNC_IN_PROGRESS_LOCK = threading.Lock()
+
+
+def _begin_sync_attempt(user_id: str) -> None:
+    with _SYNC_IN_PROGRESS_LOCK:
+        _SYNC_IN_PROGRESS.add(user_id)
+
+
+def _end_sync_attempt(user_id: str) -> None:
+    with _SYNC_IN_PROGRESS_LOCK:
+        _SYNC_IN_PROGRESS.discard(user_id)
+
+
+def is_sync_attempt_in_progress(user_id: str) -> bool:
+    with _SYNC_IN_PROGRESS_LOCK:
+        return user_id in _SYNC_IN_PROGRESS
+
 def _inflight_enter(user_id: str) -> int:
     with _INFLIGHT_LOCK:
         _INFLIGHT[user_id] += 1
@@ -433,6 +458,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # one retry runs at a time per user — no concurrent same-key uploads.
         if request.method in WRITE_METHODS and has_sync_pending(user_id):
             logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
+            _begin_sync_attempt(user_id)
             try:
                 ok = await asyncio.to_thread(retry_pending_sync, user_id)
                 if ok:
@@ -442,6 +468,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     logger.warning(f"[SYNC] Retry still failing for user {user_id}")
             except Exception as e:
                 logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
+            finally:
+                _end_sync_attempt(user_id)
 
         # --- Request with sync tracking ---
         sync_duration = 0.0
@@ -468,6 +496,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             if had_writes or had_user_db_writes:
                 # T930: Mark pending BEFORE sync attempt — survives crash
                 mark_sync_pending(user_id)
+                _begin_sync_attempt(user_id)
 
                 sync_start = time.perf_counter()
                 sync_status = "ok"
@@ -575,6 +604,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 except Exception as sync_error:
                     logger.error(f"Sync to R2 raised exception: {sync_error}")
                     sync_status = "failed"
+                finally:
+                    _end_sync_attempt(user_id)
                 sync_duration = time.perf_counter() - sync_start
 
                 if sync_status == "ok":
@@ -587,8 +618,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 else:
                     logger.warning(f"[SYNC] {request.method} {request.url.path} -> R2 sync FAILED ({sync_duration:.2f}s)")
 
-            # T950: Distinguish conflict from failure in header
-            if is_sync_failed(user_id):
+            # T950: Distinguish conflict from failure in header.
+            # AND-gate with is_sync_attempt_in_progress: during a normal
+            # in-flight sync the .sync_pending marker exists (set BEFORE
+            # the attempt for crash-recovery), so concurrent readers would
+            # otherwise emit X-Sync-Status: failed and flicker the
+            # frontend warning button. Surface "failed" only when the
+            # marker is stale and no attempt is running.
+            if is_sync_failed(user_id) and not is_sync_attempt_in_progress(user_id):
                 response.headers["X-Sync-Status"] = sync_status if (had_writes or had_user_db_writes) else "failed"
 
             return response
@@ -600,6 +637,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 had_user_db_writes = get_request_has_user_db_writes()
                 if had_writes or had_user_db_writes:
                     sync_start = time.perf_counter()
+                    _begin_sync_attempt(user_id)
                     try:
                         # T1536: don't block the event loop on the recovery sync.
                         db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
@@ -608,6 +646,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
                         overall_ok = False
+                    finally:
+                        _end_sync_attempt(user_id)
                     sync_duration = time.perf_counter() - sync_start
 
                     set_sync_failed(user_id, not overall_ok)

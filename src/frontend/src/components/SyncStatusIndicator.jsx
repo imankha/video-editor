@@ -1,5 +1,12 @@
+import { useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { useSyncStore } from '../stores/syncStore';
+
+// Delay before surfacing the button so momentary sync-failed states
+// (automatic retries, races between an in-flight write and a concurrent
+// read) don't flash the UI. If the flag clears within this window, the
+// button never appears.
+const SHOW_DELAY_MS = 3000;
 
 /**
  * SyncStatusIndicator - Shows a warning when database sync to R2 has failed.
@@ -15,7 +22,18 @@ export function SyncStatusIndicator() {
   const isRetrying = useSyncStore(state => state.isRetrying);
   const retrySyncToR2 = useSyncStore(state => state.retrySyncToR2);
 
-  if (!syncFailed) return null;
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!syncFailed) {
+      setVisible(false);
+      return;
+    }
+    const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [syncFailed]);
+
+  if (!visible) return null;
 
   return (
     <button
