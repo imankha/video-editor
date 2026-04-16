@@ -122,7 +122,10 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
             # 7. Delete working data from DB, but KEEP projects and final_videos
             # rows so the gallery can still list and download completed exports.
-            cursor.execute("UPDATE projects SET working_video_id = NULL WHERE id = ?", (project_id,))
+            cursor.execute(
+                "UPDATE projects SET working_video_id = NULL, archived_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (project_id,),
+            )
 
             cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
             clips_deleted = cursor.rowcount
@@ -237,9 +240,9 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     values
                 )
 
-            # Now safe to set working_video_id FK and restored_at
+            # Now safe to set working_video_id FK, restored_at, and clear archived_at
             cursor.execute(
-                "UPDATE projects SET working_video_id = ?, restored_at = CURRENT_TIMESTAMP WHERE id = ?",
+                "UPDATE projects SET working_video_id = ?, restored_at = CURRENT_TIMESTAMP, archived_at = NULL WHERE id = ?",
                 (project.get("working_video_id"), project_id)
             )
             logger.info(f"Project {project_id} {'updated' if existing else 'inserted'} with working data")

@@ -674,7 +674,7 @@ async def get_project(project_id: int):
         # Get project with working video filename for URL generation
         cursor.execute("""
             SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
-                   p.is_auto_created,
+                   p.is_auto_created, p.archived_at,
                    wv.filename as working_video_filename
             FROM projects p
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
@@ -685,10 +685,9 @@ async def get_project(project_id: int):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Auto-restore archived projects: if working data was stripped but archive exists.
-        # Skip for brand-new projects (no final_video_id) — they were never rendered
-        # so no archive can exist, and the R2 HEAD check is wasted latency.
-        if not project['working_video_id'] and project['final_video_id']:
+        # Auto-restore archived projects: archived_at is set explicitly when
+        # working data is stripped, so this never fires for brand-new projects.
+        if project['archived_at']:
             from app.services.project_archive import is_project_archived, restore_project
             try:
                 if is_project_archived(project_id):
@@ -697,7 +696,7 @@ async def get_project(project_id: int):
                         # Re-fetch project with restored data
                         cursor.execute("""
                             SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
-                                   p.is_auto_created,
+                                   p.is_auto_created, p.archived_at,
                                    wv.filename as working_video_filename
                             FROM projects p
                             LEFT JOIN working_videos wv ON p.working_video_id = wv.id

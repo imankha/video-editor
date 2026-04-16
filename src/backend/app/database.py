@@ -829,6 +829,9 @@ def ensure_database():
             "ALTER TABLE working_clips ADD COLUMN width INTEGER",
             "ALTER TABLE working_clips ADD COLUMN height INTEGER",
             "ALTER TABLE working_clips ADD COLUMN fps REAL",
+            # Explicit archive tracking — distinguishes "new project, never
+            # rendered" from "archived project, working data stripped".
+            "ALTER TABLE projects ADD COLUMN archived_at TIMESTAMP DEFAULT NULL",
         ]
 
         for migration in migrations:
@@ -837,6 +840,19 @@ def ensure_database():
             except sqlite3.OperationalError:
                 # Column already exists, ignore
                 pass
+
+        # Backfill archived_at for projects that were archived before the column
+        # existed: working_video_id is NULL but a final_video exists (meaning
+        # the project was rendered and then stripped).
+        cursor.execute("""
+            UPDATE projects
+            SET archived_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+            WHERE archived_at IS NULL
+              AND working_video_id IS NULL
+              AND final_video_id IS NOT NULL
+        """)
+        if cursor.rowcount > 0:
+            logger.info(f"Backfilled archived_at for {cursor.rowcount} previously-archived projects")
 
         # T85a: Make project_id nullable in export_jobs and final_videos
         # Annotate exports have no project, so project_id must be NULL-able.
