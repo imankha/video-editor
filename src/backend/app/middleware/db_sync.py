@@ -422,10 +422,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         write lock when the request is a writer; runs lock-free for readers."""
 
         # --- T930/T1150: Retry pending sync from previous failed request ---
+        # T1536: run on a worker thread so the sync boto3 call (200-1000ms)
+        # doesn't block the asyncio event loop and freeze every other in-flight
+        # request for this and every other user.
         if has_sync_pending(user_id):
             logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
             try:
-                if retry_pending_sync(user_id):
+                ok = await asyncio.to_thread(retry_pending_sync, user_id)
+                if ok:
                     clear_sync_pending(user_id)
                     logger.info(f"[SYNC] Retry succeeded for user {user_id}")
                 else:
@@ -513,11 +517,19 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                             elapsed_ms=elapsed_ms,
                                         )
 
-                        with ThreadPoolExecutor(max_workers=2) as executor:
-                            profile_future = executor.submit(_sync_profile)
-                            user_future = executor.submit(_sync_user)
-                            profile_ok = profile_future.result()
-                            user_ok = user_future.result()
+                        # T1536: run both syncs on worker threads via the
+                        # asyncio default executor and AWAIT them. The previous
+                        # implementation used `executor.submit().result()`
+                        # which is a synchronous blocking call inside an async
+                        # def — it froze the event loop for the duration of
+                        # the sync (~900ms in the worst case), so every other
+                        # in-flight request (including readers that took no
+                        # lock) waited the same amount.
+                        loop = asyncio.get_running_loop()
+                        profile_ok, user_ok = await asyncio.gather(
+                            loop.run_in_executor(None, _sync_profile),
+                            loop.run_in_executor(None, _sync_user),
+                        )
 
                         # T1154: distinguishing log for partial-success events so we can
                         # measure frequency before deciding on atomic-sync strategy.
@@ -542,12 +554,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
                             )
                     elif had_writes:
-                        db_status = sync_db_to_cloud_if_writes()
+                        # T1536: same blocking concern — wrap in to_thread.
+                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
                         user_sync_success = True
                     else:
                         # had_user_db_writes only
                         db_status = "ok"
-                        user_sync_success = sync_user_db_to_cloud_if_writes()
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
 
                     if db_status == "conflict":
                         sync_status = "conflict"
@@ -582,8 +595,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if had_writes or had_user_db_writes:
                     sync_start = time.perf_counter()
                     try:
-                        db_status = sync_db_to_cloud_if_writes()
-                        user_sync_success = sync_user_db_to_cloud_if_writes()
+                        # T1536: don't block the event loop on the recovery sync.
+                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
                         overall_ok = (db_status == "ok") and user_sync_success
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
