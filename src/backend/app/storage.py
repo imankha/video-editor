@@ -65,7 +65,13 @@ def _register_r2_timing(client, label: str):
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
         op = getattr(model, "name", "?")
         status = getattr(http_response, "status_code", "?")
-        logger.info(f"[R2_CALL] client={label} op={op} status={status} elapsed_ms={elapsed_ms:.0f}")
+        try:
+            from .user_context import get_current_req_id
+            req_id = get_current_req_id()
+        except Exception:
+            req_id = ""
+        suffix = f" req_id={req_id}" if req_id else ""
+        logger.info(f"[R2_CALL] client={label} op={op} status={status} elapsed_ms={elapsed_ms:.0f}{suffix}")
 
     client.meta.events.register("before-call.s3", _before)
     client.meta.events.register("after-call.s3", _after)
@@ -405,6 +411,39 @@ async def download_from_r2_with_progress(
     return success
 
 
+def _probe_local_mp4_moov(local_path: Path) -> tuple[str, list[str]]:
+    """
+    Pre-upload moov placement check for MP4 files.
+
+    Reads the first 256 bytes and walks top-level boxes to find moov/mdat/moof.
+    Returns (verdict, box_list) where verdict is 'FASTSTART', 'MOOV-AT-END',
+    or 'UNKNOWN'. Cheap (~256 bytes, no subprocess).
+    """
+    try:
+        with open(local_path, "rb") as f:
+            buf = f.read(256)
+    except Exception:
+        return "UNKNOWN", []
+    boxes = []
+    offset = 0
+    while offset + 8 <= len(buf) and len(boxes) < 6:
+        size = int.from_bytes(buf[offset:offset + 4], "big")
+        btype = buf[offset + 4:offset + 8].decode("ascii", errors="replace")
+        if size == 1:
+            if offset + 16 > len(buf):
+                break
+            size = int.from_bytes(buf[offset + 8:offset + 16], "big")
+        if size < 8:
+            break
+        boxes.append(f"{btype}@{offset}")
+        if btype == "moov":
+            return "FASTSTART", boxes
+        if btype in ("mdat", "moof"):
+            return "MOOV-AT-END", boxes
+        offset += size
+    return "UNKNOWN", boxes
+
+
 def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
     """
     Upload a file from local filesystem to R2.
@@ -422,6 +461,18 @@ def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
         return False
 
     key = r2_key(user_id, relative_path)
+
+    if relative_path.startswith("working_videos/") and relative_path.endswith(".mp4"):
+        verdict, boxes = _probe_local_mp4_moov(local_path)
+        head = " ".join(boxes[:4]) if boxes else "-"
+        if verdict == "MOOV-AT-END":
+            logger.error(
+                f"[FaststartCheck] pre-upload verdict=MOOV-AT-END key={key} head=[{head}] "
+                f"— this file will cause slow browser loads. Fix the producer to emit +faststart."
+            )
+        else:
+            logger.info(f"[FaststartCheck] pre-upload verdict={verdict} key={key} head=[{head}]")
+
     try:
         from .utils.retry import retry_r2_call, TIER_1
         retry_r2_call(
@@ -454,6 +505,39 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes) -> bool:
         return False
 
     key = r2_key(user_id, relative_path)
+
+    if relative_path.startswith("working_videos/") and relative_path.endswith(".mp4"):
+        # Same moov probe as upload_to_r2 but operating on in-memory bytes.
+        buf = data[:256]
+        boxes = []
+        offset = 0
+        verdict = "UNKNOWN"
+        while offset + 8 <= len(buf) and len(boxes) < 6:
+            size = int.from_bytes(buf[offset:offset + 4], "big")
+            btype = buf[offset + 4:offset + 8].decode("ascii", errors="replace")
+            if size == 1:
+                if offset + 16 > len(buf):
+                    break
+                size = int.from_bytes(buf[offset + 8:offset + 16], "big")
+            if size < 8:
+                break
+            boxes.append(f"{btype}@{offset}")
+            if btype == "moov":
+                verdict = "FASTSTART"
+                break
+            if btype in ("mdat", "moof"):
+                verdict = "MOOV-AT-END"
+                break
+            offset += size
+        head = " ".join(boxes[:4]) if boxes else "-"
+        if verdict == "MOOV-AT-END":
+            logger.error(
+                f"[FaststartCheck] pre-upload verdict=MOOV-AT-END key={key} head=[{head}] "
+                f"— this file will cause slow browser loads. Fix the producer to emit +faststart."
+            )
+        else:
+            logger.info(f"[FaststartCheck] pre-upload verdict={verdict} key={key} head=[{head}]")
+
     try:
         from .utils.retry import retry_r2_call, TIER_1
 

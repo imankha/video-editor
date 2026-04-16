@@ -222,6 +222,7 @@ export function VideoPlayer({
               onError={handlers.onError}
               playsInline
               preload={clipRange ? "metadata" : "auto"}
+              fetchpriority="high"
               style={{ pointerEvents: 'none' }}
             />
           </div>
@@ -277,6 +278,22 @@ export function VideoPlayer({
               />
             );
           })()}
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-center h-[40vh] sm:h-[60vh] bg-black/70">
+          <div className="text-center max-w-md px-4">
+            <div className="text-red-500 text-4xl mb-4">⚠️</div>
+            <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
+            <p className="text-gray-400 text-sm mb-4">{error}</p>
+            {isUrlExpiredError() && onRetryVideo && (
+              <button
+                onClick={onRetryVideo}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+              >
+                Retry Loading Video
+              </button>
+            )}
+          </div>
         </div>
       ) : isLoading ? (
         <div className="flex items-center justify-center h-[40vh] sm:h-[60vh] text-gray-400">

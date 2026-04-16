@@ -126,7 +126,8 @@ class FadeTransition(TransitionStrategy):
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '18',
-                '-pix_fmt', 'yuv420p'
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
             ])
             cmd.append(output_path)
 
