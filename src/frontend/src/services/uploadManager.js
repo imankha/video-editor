@@ -517,7 +517,13 @@ export async function uploadGame(file, onProgress, options = {}) {
     // Step 1: Hash the file (accurate progress from sampled hash).
     const hashResult = await hashAndAnalyze(file, onProgress);
 
-    // Step 2: Create game atomically with the video reference.
+    // Step 2: Upload bytes to R2 (must be in R2 before game creation).
+    const r2Result = await ensureVideoInR2(file, onProgress, {
+      ...options,
+      precomputed: hashResult,
+    });
+
+    // Step 3: Create game atomically with the video reference.
     const gameResult = await createGame(options, [{
       blake3_hash: hashResult.blake3_hash,
       sequence: 1,
@@ -527,7 +533,7 @@ export async function uploadGame(file, onProgress, options = {}) {
       file_size: hashResult.file_size,
     }]);
 
-    // Notify caller of game_id so clip saves work during the R2 upload.
+    // Notify caller of game_id so clip saves work.
     if (options.onGameCreated) {
       options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
     }
@@ -536,12 +542,6 @@ export async function uploadGame(file, onProgress, options = {}) {
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
       useGamesDataStore.getState().invalidateGames()
     );
-
-    // Step 3: Upload bytes to R2 using the precomputed hash.
-    const r2Result = await ensureVideoInR2(file, onProgress, {
-      ...options,
-      precomputed: hashResult,
-    });
 
     notify(UPLOAD_PHASE.COMPLETE, 100, r2Result.uploaded ? 'Upload complete' : 'Game linked');
 
@@ -612,7 +612,16 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         file_size: hashResult.file_size,
       };
 
-      // Step B: First file creates the game atomically.
+      // Step B: Upload bytes to R2 (must be in R2 before game creation).
+      await ensureVideoInR2(file, perFileProgress, {
+        videoDuration: metadata.duration || null,
+        videoWidth: metadata.width || null,
+        videoHeight: metadata.height || null,
+        label: halfLabel,
+        precomputed: hashResult,
+      });
+
+      // Step C: First file creates the game atomically.
       //         Subsequent files attach to the existing game.
       if (i === 0) {
         gameResult = await createGame(options, [videoRef]);
@@ -626,15 +635,6 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       } else {
         lastAttach = await addVideosToGame(gameResult.game_id, [videoRef]);
       }
-
-      // Step C: Upload bytes to R2.
-      await ensureVideoInR2(file, perFileProgress, {
-        videoDuration: metadata.duration || null,
-        videoWidth: metadata.width || null,
-        videoHeight: metadata.height || null,
-        label: halfLabel,
-        precomputed: hashResult,
-      });
     }
 
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
