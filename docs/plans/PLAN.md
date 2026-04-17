@@ -2,9 +2,15 @@
 
 ## Current Focus
 
-**Phase: Performance milestone (NEXT UP)** — RC is green after T1532/T1534/dims-copy landed. The next block of work is systematic perf: make slow handlers visible, kill the worst offenders, then pick the remaining tail.
+**Phase: Bug fix** — T1540 is P0 data loss (clips lost during upload). Fix before resuming performance milestone.
 
 **Landing Page:** Already live at `reelballers.com`
+
+### Bug Fix (P0)
+
+| ID | Task | Impact | Cmplx | Pri | Status | Description |
+|----|------|--------|-------|-----|--------|-------------|
+| T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TODO | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
 
 ### Milestone: Performance (NEXT UP)
 
