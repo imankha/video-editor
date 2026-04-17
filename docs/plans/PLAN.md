@@ -26,6 +26,7 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 6 | 0.7 | TODO | Finer-grained writer serialization — writers to disjoint tables don't block each other. Built on T1531; gated on real `[WRITE_LOCK_WAIT]` evidence. May intersect T1539. |
 | T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; eliminates cold-DB-restore cost on every cross-machine request |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task so server stays responsive during exports |
+| T1560 | [Fetch-First Video Loading](tasks/T1560-fetch-first-video-loading.md) | 8 | 4 | 2.0 | TODO | Use fetch() for initial video chunk to bypass Chrome's 15s media scheduler defer on cross-origin R2 videos in Annotate mode |
 | T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | 6 | 2 | 1.3 | TODO | Start downloading game videos from R2 as soon as user logs in, so they load instantly later |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
