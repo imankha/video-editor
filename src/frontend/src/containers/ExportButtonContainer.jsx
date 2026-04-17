@@ -178,8 +178,7 @@ export function ExportButtonContainer({
     setGlobalExportProgress,
   } = useAppState();
 
-  // Get export store for persistent toast tracking and active exports
-  const setExportCompleteToastId = useExportStore(state => state.setExportCompleteToastId);
+  // Get export store for active exports
   const activeExports = useExportStore(state => state.activeExports);
   const completeExportInStore = useExportStore(state => state.completeExport);
   const failExportInStore = useExportStore(state => state.failExport);
@@ -648,12 +647,6 @@ export function ExportButtonContainer({
             });
           }
 
-          const toastId = toast.success('Video exported!', {
-            message: projectName ? `"${projectName}" is ready in your Gallery.` : 'Your video is ready in the Gallery.',
-            duration: 0
-          });
-          setExportCompleteToastId(toastId);
-
           setIsExporting(false);
           return;
         }
@@ -777,12 +770,6 @@ export function ExportButtonContainer({
         if (exportIdRef.current) {
           completeExportInStore(exportIdRef.current);
         }
-
-        const toastId = toast.success('Video exported!', {
-          message: projectName ? `"${projectName}" is ready in your Gallery.` : 'Your video is ready in the Gallery.',
-          duration: 0
-        });
-        setExportCompleteToastId(toastId);
 
         setTimeout(() => {
           setIsExporting(false);

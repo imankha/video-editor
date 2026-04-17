@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useExportStore } from '../stores/exportStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
-import { toast } from '../components/shared';
 import { API_BASE } from '../config';
 import { ExportStatus } from '../constants/exportStatus';
 import { initSession } from '../utils/sessionInit';
@@ -81,17 +80,9 @@ export function useExportRecovery() {
                 },
                 onComplete: () => {
                   clearSilenceTimeout(exp.job_id);
-                  toast.success('Export Complete', {
-                    message: `${exp.type} export finished successfully`,
-                    duration: 5000,
-                  });
                 },
-                onError: (error) => {
+                onError: () => {
                   clearSilenceTimeout(exp.job_id);
-                  toast.error('Export Failed', {
-                    message: error || 'An error occurred during export',
-                    duration: 8000,
-                  });
                 },
               });
             }
@@ -137,18 +128,10 @@ export function useExportRecovery() {
             : (exp.project_name || `Project ${exp.project_id}`);
 
           if (exp.status === ExportStatus.COMPLETE) {
-            toast.success('Export Completed', {
-              message: `${displayName} finished while you were away`,
-              duration: 5000,
-            });
-            // Update store with completed status
+            // Update store — GlobalExportIndicator handles the toast
             completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
           } else if (exp.status === ExportStatus.ERROR) {
-            toast.error('Export Failed', {
-              message: `${displayName}: ${exp.error || 'Unknown error'}`,
-              duration: 8000,
-            });
-            // Update store with failed status
+            // Update store — GlobalExportIndicator handles the toast
             failExport(exp.job_id, exp.error || 'Export failed');
           }
 
@@ -229,11 +212,8 @@ export function useExportRecovery() {
         if (data.status === ExportStatus.COMPLETE) {
           // Modal finished - backend already finalized
           console.log(`[ExportRecovery] Export ${exp.job_id} completed on Modal`);
+          // Update store — GlobalExportIndicator handles the toast
           completeExport(exp.job_id, data.working_video_id, data.output_filename);
-          toast.success('Export Complete', {
-            message: `${exp.type} export finished while you were away`,
-            duration: 5000,
-          });
           return false;
         } else if (data.status === 'running') {
           // Still running on Modal - resume progress simulation
@@ -263,20 +243,13 @@ export function useExportRecovery() {
         } else if (data.status === ExportStatus.ERROR) {
           // Modal job failed
           console.error(`[ExportRecovery] Export ${exp.job_id} failed on Modal:`, data.error);
+          // Update store — GlobalExportIndicator handles the toast
           failExport(exp.job_id, data.error || 'Export failed on cloud GPU');
-          toast.error('Export Failed', {
-            message: data.error || 'Export failed on cloud GPU',
-            duration: 8000,
-          });
           return false;
         } else if (data.status === 'expired') {
           // Modal job expired (too old to recover)
           console.warn(`[ExportRecovery] Export ${exp.job_id} expired:`, data.message);
           failExport(exp.job_id, data.message || 'Export job expired');
-          toast.warning('Export Expired', {
-            message: data.message || 'This export is too old to recover',
-            duration: 8000,
-          });
           return false;
         } else if (data.status === 'not_modal') {
           // Not a Modal job or no call_id - just show as processing

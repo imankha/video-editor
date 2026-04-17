@@ -67,9 +67,12 @@ function calculateETA(exp) {
  *
  * @see PARALLEL_EXPORT_PLAN.md for architecture details
  */
+
+// Module-level Set — persists across StrictMode remounts and shared across all instances
+const toastedExports = new Set();
+
 export function GlobalExportIndicator() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [completedExports, setCompletedExports] = useState([]);
 
   // Get export state from store (updated via WebSocket)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -80,22 +83,19 @@ export function GlobalExportIndicator() {
     (exp) => exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING
   );
 
-
-  // Filter to get recent completed/failed exports (last 10 seconds)
-  const recentCompletedExports = Object.values(activeExports).filter((exp) => {
-    if (exp.status !== ExportStatus.COMPLETE && exp.status !== ExportStatus.ERROR) return false;
-    const completedTime = new Date(exp.completedAt).getTime();
-    const now = Date.now();
-    return now - completedTime < 10000; // 10 seconds
-  });
-
-  // Show toast notification when export completes
+  // Show toast notification when export completes (exactly once per export)
   useEffect(() => {
-    const newlyCompleted = recentCompletedExports.filter(
-      (exp) => !completedExports.includes(exp.exportId)
-    );
+    Object.values(activeExports).forEach((exp) => {
+      if (exp.status !== ExportStatus.COMPLETE && exp.status !== ExportStatus.ERROR) return;
+      if (toastedExports.has(exp.exportId)) return;
 
-    newlyCompleted.forEach((exp) => {
+      // Only toast for recent completions (not old ones from store hydration)
+      const completedTime = new Date(exp.completedAt).getTime();
+      if (Date.now() - completedTime > 10000) return;
+
+      // Mark as toasted BEFORE showing — prevents any re-render race
+      toastedExports.add(exp.exportId);
+
       const projectLabel = getExportLabel(exp);
       if (exp.status === ExportStatus.COMPLETE) {
         toast.success('Export Complete', {
@@ -109,23 +109,15 @@ export function GlobalExportIndicator() {
         });
       }
     });
+  }, [activeExports]);
 
-    if (newlyCompleted.length > 0) {
-      setCompletedExports((prev) => [
-        ...prev,
-        ...newlyCompleted.map((exp) => exp.exportId),
-      ]);
-    }
-  }, [recentCompletedExports, completedExports]);
-
-  // Clean up old completed export IDs from tracking
+  // Clean up old toasted export IDs
   useEffect(() => {
     const interval = setInterval(() => {
-      setCompletedExports((prev) => {
-        // Keep only IDs that still exist in store
-        return prev.filter((id) => activeExports[id]);
+      toastedExports.forEach((id) => {
+        if (!activeExports[id]) toastedExports.delete(id);
       });
-    }, 30000); // Clean up every 30 seconds
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [activeExports]);
