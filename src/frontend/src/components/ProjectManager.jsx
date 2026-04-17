@@ -389,6 +389,14 @@ export function ProjectManager({
   // Switch to projects tab once projects load (initial state may be wrong since data isn't fetched yet at mount)
   const hasSetInitialTab = useRef(false);
   useEffect(() => {
+    // T1550: Check for tab hint from navigation (e.g., clicking "Games" breadcrumb in Annotate)
+    const hint = sessionStorage.getItem('projectManagerTab');
+    if (hint) {
+      sessionStorage.removeItem('projectManagerTab');
+      setActiveTab(hint);
+      hasSetInitialTab.current = true;
+      return;
+    }
     if (!hasSetInitialTab.current && !loading && projects.length > 0) {
       setActiveTab('projects');
       hasSetInitialTab.current = true;

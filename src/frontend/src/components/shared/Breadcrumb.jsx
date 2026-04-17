@@ -6,13 +6,23 @@ import { ChevronRight } from 'lucide-react';
  * Displays the current location in the app hierarchy.
  * Format: Type › Item Name
  *
- * @param {string} type - Category type ('Games' or 'Projects')
+ * @param {string} type - Category type ('Games' or 'Reels')
  * @param {string} itemName - Name of the selected item (optional)
+ * @param {function} onTypeClick - Callback when type label is clicked (navigates home)
  */
-export function Breadcrumb({ type, itemName }) {
+export function Breadcrumb({ type, itemName, onTypeClick }) {
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <span className="text-gray-400 text-sm">{type}</span>
+      {onTypeClick ? (
+        <button
+          onClick={onTypeClick}
+          className="text-gray-400 text-sm hover:text-white transition-colors cursor-pointer"
+        >
+          {type}
+        </button>
+      ) : (
+        <span className="text-gray-400 text-sm">{type}</span>
+      )}
       {itemName && (
         <>
           <ChevronRight className="w-4 h-4 text-gray-600" />

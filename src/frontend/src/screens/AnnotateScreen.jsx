@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Home, Scissors, List, X } from 'lucide-react';
+import { List, X } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
-import { CreditBalance } from '../components/CreditBalance';
-import { GalleryButton } from '../components/GalleryButton';
-import { SignInButton } from '../components/SignInButton';
-import { Breadcrumb, Button } from '../components/shared';
+import { UnifiedHeader } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useEditorStore } from '../stores/editorStore';
@@ -36,7 +33,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
-export function AnnotateScreen({ onClearSelection }) {
+export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdminClick }) {
   // Editor mode (for navigation between screens)
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
@@ -48,6 +45,7 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Projects — Zustand store
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const selectedProject = useProjectsStore(state => state.selectedProject);
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);
@@ -116,9 +114,26 @@ export function AnnotateScreen({ onClearSelection }) {
       const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
       finishAnnotation(gameIdRef.current, viewedDuration);
     }
+    // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
+    sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
   }, [finishAnnotation, onClearSelection, setEditorMode]);
+
+  // T1550: Unified mode change handler — fires finishAnnotation before delegating
+  const handleAnnotateModeChange = useCallback((newMode) => {
+    if (newMode === 'project-manager') {
+      handleBackToProjects();
+      return;
+    }
+    // Persist view progress before switching modes
+    if (gameIdRef.current) {
+      const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
+      finishAnnotation(gameIdRef.current, viewedDuration);
+    }
+    // Delegate to App.jsx mode change handler (handles project selection, confirmations)
+    onModeChange?.(newMode);
+  }, [handleBackToProjects, finishAnnotation, onModeChange]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -437,25 +452,20 @@ export function AnnotateScreen({ onClearSelection }) {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
-          {/* Header */}
-          <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-4 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 sm:flex-initial">
-              <Button
-                variant="ghost"
-                icon={Home}
-                iconOnly
-                onClick={handleBackToProjects}
-                title="Home"
-              />
-              <div className="min-w-0">
-                <Breadcrumb
-                  type="Games"
-                  itemName={annotateGameName}
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-4">
-              {/* Mobile clips toggle button */}
+          {/* T1550: Unified header */}
+          <UnifiedHeader
+            onHomeClick={handleBackToProjects}
+            breadcrumbType="Games"
+            breadcrumbItemName={annotateGameName}
+            editorMode="annotate"
+            onModeChange={handleAnnotateModeChange}
+            hasProject={!!selectedProject}
+            hasWorkingVideo={!!selectedProject?.working_video_id}
+            hasOverlayVideo={false}
+            hasAnnotateVideo={true}
+            isAdmin={isAdmin}
+            onAdminClick={onAdminClick}
+            extraControls={
               <button
                 onClick={() => setShowMobileSidebar(true)}
                 className="flex sm:hidden items-center gap-1.5 px-2.5 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300"
@@ -464,16 +474,8 @@ export function AnnotateScreen({ onClearSelection }) {
                 <List size={16} />
                 <span className="text-xs font-medium">{clipCountDisplay}</span>
               </button>
-              <CreditBalance />
-              <GalleryButton />
-              <SignInButton />
-              {/* Annotate mode indicator */}
-              <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600/20 border border-green-600/40 rounded-lg">
-                <Scissors size={16} className="text-green-400" />
-                <span className="text-sm font-medium text-green-400 hidden sm:inline">Annotate</span>
-              </div>
-            </div>
-          </div>
+            }
+          />
           {/* T82: Video switcher tabs for multi-video games */}
           {isMultiVideo && gameVideos && (
             <div className="flex gap-2 mb-4">

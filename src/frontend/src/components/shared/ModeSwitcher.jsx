@@ -40,8 +40,16 @@ export function ModeSwitcher({
   // Use props if provided, otherwise derive from context
   const hasProject = hasProjectProp ?? !!selectedProject;
   const hasWorkingVideo = hasWorkingVideoProp ?? (selectedProject?.working_video_id != null);
-  // Define mode configurations for project mode
+  // Define mode configurations
   const modes = [
+    {
+      id: 'annotate',
+      label: 'Annotate',
+      icon: Scissors,
+      description: 'Clip extraction',
+      available: hasAnnotateVideo || mode === 'annotate',
+      color: 'green',
+    },
     {
       id: 'framing',
       label: 'Framing',
@@ -61,18 +69,8 @@ export function ModeSwitcher({
     },
   ];
 
-  // If no project, don't show the mode switcher
-  // (Annotate is accessed via the Annotate button in Project Manager)
-  if (!hasProject) {
-    // If in annotate mode with a video, show a simple indicator
-    if (mode === 'annotate' && hasAnnotateVideo) {
-      return (
-        <div className="flex items-center gap-2 px-2 sm:px-4 py-2 bg-green-600 rounded-lg">
-          <Scissors size={16} />
-          <span className="font-medium text-sm text-white hidden sm:inline">Annotate Mode</span>
-        </div>
-      );
-    }
+  // If no project and not in annotate mode, don't show the mode switcher
+  if (!hasProject && !(mode === 'annotate' && hasAnnotateVideo)) {
     return null;
   }
 
@@ -82,6 +80,7 @@ export function ModeSwitcher({
     const isAvailable = modeOption.available;
 
     const activeColor = {
+      green: 'bg-green-600',
       blue: 'bg-blue-600',
       purple: 'bg-purple-600',
     }[modeOption.color] || 'bg-purple-600';
@@ -104,11 +103,13 @@ export function ModeSwitcher({
         title={
           isLoadingWorkingVideo && modeOption.id === 'overlay'
             ? 'Loading working video...'
-            : !isAvailable && modeOption.id === 'overlay'
-              ? 'Export from Framing first to enable Overlay mode'
-              : modeOption.showWarning
-                ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
-                : modeOption.description
+            : !isAvailable && modeOption.id === 'framing'
+              ? 'Select a reel first'
+              : !isAvailable && modeOption.id === 'overlay'
+                ? hasProject ? 'Export from Framing first to enable Overlay mode' : 'Select a reel first'
+                : modeOption.showWarning
+                  ? 'Previously exported video no longer matches your settings. Export to create latest video before overlaying.'
+                  : modeOption.description
         }
       >
         {isLoadingWorkingVideo && modeOption.id === 'overlay' ? (
