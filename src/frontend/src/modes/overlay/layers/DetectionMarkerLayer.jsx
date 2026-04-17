@@ -106,9 +106,12 @@ export default function DetectionMarkerLayer({
               }
 
               // Seek to the detection's timestamp
+              // Offset by half a frame (+0.5) so the seek lands mid-frame,
+              // avoiding clip-boundary ambiguity where the browser may resolve
+              // to the last frame of the previous clip.
               if (onSeek) {
                 if (marker.frame !== undefined && marker.fps) {
-                  const preciseTime = frameToTime(marker.frame, marker.fps);
+                  const preciseTime = (marker.frame + 0.5) / marker.fps;
                   onSeek(preciseTime);
                 } else {
                   console.warn(`[DetectionMarkerLayer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
