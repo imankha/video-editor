@@ -22,7 +22,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.database import get_db_connection, get_raw_clips_path, ensure_directories
-from app.constants import GameType, GameCreateStatus
+from app.constants import GameType, GameCreateStatus, GameStatus
 from app.storage import (
     generate_presigned_url_global,
     generate_presigned_url,
@@ -182,6 +182,7 @@ class CreateGameRequest(BaseModel):
     game_type: Optional[str] = Field(None, description="home, away, or tournament")
     tournament_name: Optional[str] = Field(None, description="Tournament name")
     videos: List[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
+    status: Optional[str] = Field(None, description="Game status: 'pending' (pre-upload) or 'ready' (default)")
 
 
 class AddVideosRequest(BaseModel):
@@ -226,12 +227,16 @@ def _probe_fps_from_r2(blake3_hash: str) -> Optional[float]:
         return None
 
 
-def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference]) -> None:
-    """Insert game_videos rows for a game. Shared by create and add-videos."""
+def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference], skip_fps_probe: bool = False) -> None:
+    """Insert game_videos rows for a game. Shared by create and add-videos.
+
+    skip_fps_probe: True for pending games (video not in R2 yet). FPS is
+    probed when the game is activated after upload completes.
+    """
     for video in videos:
         # T1500: capture fps server-side via byte-range ffprobe so project loads
         # can skip the per-clip metadata probe.
-        fps = _probe_fps_from_r2(video.blake3_hash.lower())
+        fps = None if skip_fps_probe else _probe_fps_from_r2(video.blake3_hash.lower())
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
                                      video_width, video_height, video_size, fps)
@@ -294,9 +299,13 @@ async def create_game(request: CreateGameRequest):
             detail="At least one video reference is required. Hash the first video before creating the game.",
         )
 
-    # Validate all video hashes exist in R2
-    for video in request.videos:
-        _validate_video_in_r2(video.blake3_hash.lower())
+    # Determine game status (pending = pre-upload, ready = default)
+    game_status = GameStatus.PENDING if request.status == GameStatus.PENDING else GameStatus.READY
+
+    # Skip R2 validation for pending games (video upload hasn't started yet)
+    if game_status == GameStatus.READY:
+        for video in request.videos:
+            _validate_video_in_r2(video.blake3_hash.lower())
 
     # Check if user already has a game with same video(s)
     if len(request.videos) == 1:
@@ -368,9 +377,10 @@ async def create_game(request: CreateGameRequest):
             INSERT INTO games (
                 name, blake3_hash, video_filename,
                 video_duration, video_width, video_height, video_size,
-                opponent_name, game_date, game_type, tournament_name
+                opponent_name, game_date, game_type, tournament_name,
+                status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             display_name,
             single_hash,
@@ -383,15 +393,17 @@ async def create_game(request: CreateGameRequest):
             request.game_date,
             request.game_type,
             request.tournament_name,
+            game_status.value,
         ))
         game_id = cursor.lastrowid
 
         # Insert game_videos rows (for ALL games, including single-video)
-        _insert_game_videos(cursor, game_id, request.videos)
+        _insert_game_videos(cursor, game_id, request.videos,
+                            skip_fps_probe=(game_status == GameStatus.PENDING))
 
         conn.commit()
 
-    logger.info(f"Created game {game_id}: {display_name} with {len(request.videos)} video(s)")
+    logger.info(f"Created game {game_id}: {display_name} with {len(request.videos)} video(s) status={game_status.value}")
 
     # Build response with video URLs
     with get_db_connection() as conn:
@@ -491,6 +503,71 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
     }
 
 
+@router.post("/{game_id:int}/activate")
+async def activate_game(game_id: int):
+    """
+    T1540: Flip a pending game to ready after video upload completes.
+
+    Validates all game_videos have their blake3_hash present in R2,
+    probes FPS for any videos missing it, then sets status='ready'.
+    Idempotent: returns success if game is already ready.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT id, status, blake3_hash FROM games WHERE id = ?", (game_id,))
+        game = cursor.fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        if game['status'] == GameStatus.READY:
+            return {"game_id": game_id, "status": GameStatus.READY}
+
+        # Validate all videos exist in R2
+        cursor.execute(
+            "SELECT blake3_hash FROM game_videos WHERE game_id = ?",
+            (game_id,)
+        )
+        video_rows = cursor.fetchall()
+
+        for row in video_rows:
+            _validate_video_in_r2(row['blake3_hash'])
+
+        # Also validate the legacy blake3_hash on the games row if present
+        if game['blake3_hash']:
+            _validate_video_in_r2(game['blake3_hash'])
+
+        # Backfill FPS for videos that were inserted without it (pending creation)
+        for row in video_rows:
+            cursor.execute(
+                "SELECT fps FROM game_videos WHERE game_id = ? AND blake3_hash = ?",
+                (game_id, row['blake3_hash'])
+            )
+            gv = cursor.fetchone()
+            if gv and not gv['fps']:
+                fps = _probe_fps_from_r2(row['blake3_hash'])
+                if fps:
+                    cursor.execute(
+                        "UPDATE game_videos SET fps = ? WHERE game_id = ? AND blake3_hash = ?",
+                        (fps, game_id, row['blake3_hash'])
+                    )
+                    # Also update legacy column on games table
+                    cursor.execute(
+                        "UPDATE games SET video_fps = ? WHERE id = ? AND video_fps IS NULL",
+                        (fps, game_id)
+                    )
+
+        # Flip status to ready
+        cursor.execute(
+            "UPDATE games SET status = ? WHERE id = ?",
+            (GameStatus.READY, game_id)
+        )
+        conn.commit()
+
+    logger.info(f"Activated game {game_id}: status=ready")
+    return {"game_id": game_id, "status": GameStatus.READY}
+
+
 @router.get("")
 async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
@@ -519,6 +596,7 @@ async def list_games():
                 FROM game_videos
                 GROUP BY game_id
             ) gv_sum ON gv_sum.game_id = g.id
+            WHERE g.status = 'ready'
             ORDER BY g.created_at DESC
         """)
         rows = cursor.fetchall()
@@ -578,6 +656,7 @@ async def list_tournaments():
             FROM games
             WHERE tournament_name IS NOT NULL
               AND tournament_name != ''
+              AND status = 'ready'
             ORDER BY tournament_name ASC
         """)
         rows = cursor.fetchall()

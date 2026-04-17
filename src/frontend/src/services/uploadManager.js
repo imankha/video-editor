@@ -450,19 +450,24 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
  *
  * @param {Object} options - Game details
  * @param {Array<Object>} videos - Video references [{ blake3_hash, sequence, duration, width, height, file_size }]
+ * @param {string} [status] - 'pending' for pre-upload creation, omit for ready (default)
  * @returns {Promise<Object>} - { status, game_id, name, video_url, videos }
  */
-async function createGame(options, videos) {
+async function createGame(options, videos, status) {
+  const body = {
+    opponent_name: options.opponentName || null,
+    game_date: options.gameDate || null,
+    game_type: options.gameType || null,
+    tournament_name: options.tournamentName || null,
+    videos,
+  };
+  if (status) {
+    body.status = status;
+  }
   const res = await fetch(`${API_BASE}/api/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      opponent_name: options.opponentName || null,
-      game_date: options.gameDate || null,
-      game_type: options.gameType || null,
-      tournament_name: options.tournamentName || null,
-      videos,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -490,16 +495,35 @@ async function addVideosToGame(gameId, videos) {
 }
 
 /**
+ * Activate a pending game after upload completes.
+ * Validates videos exist in R2, backfills FPS, flips status to 'ready'.
+ *
+ * @param {number} gameId - Game ID to activate
+ * @returns {Promise<Object>} - { game_id, status }
+ */
+async function activateGame(gameId) {
+  const res = await fetch(`${API_BASE}/api/games/${gameId}/activate`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.detail || `Activate game failed: ${res.status}`);
+  }
+  return await res.json();
+}
+
+/**
  * Upload a game with deduplication support (single video).
  *
- * Flow (T1180 — atomic create):
+ * Flow (T1540 — two-phase creation):
  * 1. Hash file (shows progress bar).
- * 2. Create game via POST /api/games with the video reference attached.
- *    Row is never committed with NULL video_filename.
+ * 2. Create game as 'pending' (provides game_id for clip persistence).
  * 3. Upload bytes to R2 (reuses the precomputed hash).
+ * 4. Activate game (flip status to 'ready').
  *
- * The game appears in the DB after hashing (few seconds), not instantly,
- * but never in a broken/orphan state.
+ * The game_id is available within seconds of hashing, so clips added
+ * during upload persist immediately. Downstream consumers only see
+ * 'ready' games.
  *
  * @param {File} file - Video file to upload
  * @param {function} onProgress - Progress callback: ({ phase, percent, message }) => void
@@ -513,30 +537,54 @@ export async function uploadGame(file, onProgress, options = {}) {
     }
   };
 
+  let gameResult = null;
+
   try {
     // Step 1: Hash the file (accurate progress from sampled hash).
     const hashResult = await hashAndAnalyze(file, onProgress);
 
-    // Step 2: Upload bytes to R2 (must be in R2 before game creation).
-    const r2Result = await ensureVideoInR2(file, onProgress, {
-      ...options,
-      precomputed: hashResult,
-    });
-
-    // Step 3: Create game atomically with the video reference.
-    const gameResult = await createGame(options, [{
+    const videoRef = {
       blake3_hash: hashResult.blake3_hash,
       sequence: 1,
       duration: options.videoDuration || null,
       width: options.videoWidth || null,
       height: options.videoHeight || null,
       file_size: hashResult.file_size,
-    }]);
+    };
 
-    // Notify caller of game_id so clip saves work.
+    // Step 2: Create game as 'pending' — game_id available for clip persistence.
+    gameResult = await createGame(options, [videoRef], 'pending');
+
+    // Dedup: if user already owns this video, game is already ready — skip upload.
+    if (gameResult.status === 'already_owned') {
+      if (options.onGameCreated) {
+        options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+      }
+      notify(UPLOAD_PHASE.COMPLETE, 100, 'Game linked');
+      return {
+        status: gameResult.status,
+        game_id: gameResult.game_id,
+        name: gameResult.name,
+        video_url: gameResult.video_url,
+        blake3_hash: hashResult.blake3_hash,
+        file_size: hashResult.file_size,
+        deduplicated: true,
+      };
+    }
+
+    // Notify caller of game_id so clip saves work immediately.
     if (options.onGameCreated) {
       options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
     }
+
+    // Step 3: Upload bytes to R2.
+    const r2Result = await ensureVideoInR2(file, onProgress, {
+      ...options,
+      precomputed: hashResult,
+    });
+
+    // Step 4: Activate game (validates R2, backfills FPS, flips to 'ready').
+    await activateGame(gameResult.game_id);
 
     useQuestStore.getState().fetchProgress({ force: true });
     import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
@@ -555,6 +603,15 @@ export async function uploadGame(file, onProgress, options = {}) {
       deduplicated: !r2Result.uploaded,
     };
   } catch (error) {
+    // If game was created as pending but upload/activation failed, clean up.
+    if (gameResult?.game_id) {
+      try {
+        await fetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+      } catch (cleanupErr) {
+        // Best-effort cleanup — log but don't mask the original error.
+        console.warn('[uploadGame] Failed to clean up pending game:', cleanupErr);
+      }
+    }
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
     throw error;
   }
@@ -579,15 +636,15 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     }
   };
 
+  let gameResult = null;
+
   try {
     const fileCount = files.length;
     const fileWeight = 1 / fileCount;
-    let gameResult = null;
     let lastAttach = null;
 
-    // Per T1180: create the game only once the first video's hash is known,
-    // then process each subsequent file independently (hash → upload → attach)
-    // so per-file progress stays visible to the user.
+    // T1540: Hash first file → create game as pending → upload all → activate.
+    // game_id is available within seconds so clips persist during upload.
     for (let i = 0; i < fileCount; i++) {
       const file = files[i];
       const sequence = i + 1;
@@ -612,7 +669,15 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         file_size: hashResult.file_size,
       };
 
-      // Step B: Upload bytes to R2 (must be in R2 before game creation).
+      // Step B: First file — create game as pending before upload.
+      if (i === 0) {
+        gameResult = await createGame(options, [videoRef], 'pending');
+        if (options.onGameCreated) {
+          options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
+        }
+      }
+
+      // Step C: Upload bytes to R2.
       await ensureVideoInR2(file, perFileProgress, {
         videoDuration: metadata.duration || null,
         videoWidth: metadata.width || null,
@@ -621,21 +686,19 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
         precomputed: hashResult,
       });
 
-      // Step C: First file creates the game atomically.
-      //         Subsequent files attach to the existing game.
-      if (i === 0) {
-        gameResult = await createGame(options, [videoRef]);
-        if (options.onGameCreated) {
-          options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
-        }
-        useQuestStore.getState().fetchProgress({ force: true });
-        import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
-          useGamesDataStore.getState().invalidateGames()
-        );
-      } else {
+      // Step D: Subsequent files — attach to existing game after upload.
+      if (i > 0) {
         lastAttach = await addVideosToGame(gameResult.game_id, [videoRef]);
       }
     }
+
+    // Step E: Activate game (validates R2, backfills FPS, flips to 'ready').
+    await activateGame(gameResult.game_id);
+
+    useQuestStore.getState().fetchProgress({ force: true });
+    import('../stores/gamesDataStore').then(({ useGamesDataStore }) =>
+      useGamesDataStore.getState().invalidateGames()
+    );
 
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
@@ -648,6 +711,14 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
       deduplicated: false,
     };
   } catch (error) {
+    // If game was created as pending but upload/activation failed, clean up.
+    if (gameResult?.game_id) {
+      try {
+        await fetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+      } catch (cleanupErr) {
+        console.warn('[uploadMultiVideoGame] Failed to clean up pending game:', cleanupErr);
+      }
+    }
     notify(UPLOAD_PHASE.ERROR, 0, error.message);
     throw error;
   }

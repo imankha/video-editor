@@ -10,7 +10,7 @@
 
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
-| T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TODO | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
+| T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TESTING | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
 
 ### Milestone: Performance (NEXT UP)
 

@@ -654,7 +654,8 @@ def ensure_database():
                 opponent_name TEXT,
                 game_date TEXT,
                 game_type TEXT,
-                tournament_name TEXT
+                tournament_name TEXT,
+                status TEXT DEFAULT 'ready'
             )
         """)
 
@@ -832,6 +833,11 @@ def ensure_database():
             # Explicit archive tracking — distinguishes "new project, never
             # rendered" from "archived project, working data stripped".
             "ALTER TABLE projects ADD COLUMN archived_at TIMESTAMP DEFAULT NULL",
+            # T1540: Two-phase game creation (pending -> ready).
+            # pending = FK anchor for clips during upload, not visible downstream.
+            # ready = video confirmed in R2, visible to framing/export/gallery.
+            # DEFAULT 'ready' so existing games are already ready.
+            "ALTER TABLE games ADD COLUMN status TEXT DEFAULT 'ready'",
         ]
 
         for migration in migrations:

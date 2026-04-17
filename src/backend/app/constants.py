@@ -240,6 +240,17 @@ class UploadStatus(str, Enum):
     SUCCESS = "success"
 
 
+class GameStatus(str, Enum):
+    """Lifecycle status for a game record.
+
+    pending — created before video upload completes. Provides game_id as FK
+              anchor for clip persistence. Not visible to downstream consumers.
+    ready   — video confirmed in R2. Downstream consumers only see ready games.
+    """
+    PENDING = "pending"
+    READY = "ready"
+
+
 class GameCreateStatus(str, Enum):
     """Status returned from POST /api/games (game management layer)."""
     ALREADY_OWNED = "already_owned"
