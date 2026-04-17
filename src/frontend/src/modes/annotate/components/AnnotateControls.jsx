@@ -161,11 +161,11 @@ export function AnnotateControls({
       <div className="flex items-center gap-2">
         {/* Add/Edit Clip button visibility:
             Non-fullscreen: show only when no clip selected (NONE) — sidebar handles editing
-            Fullscreen: "Edit Clip" when SELECTED (always), "Add Clip" when NONE (paused only)
+            Fullscreen: always visible (clicking pauses video and opens overlay)
             Hidden when overlay is open (onAddClip will be undefined) */}
         {onAddClip && (
           isFullscreen
-            ? (isEditMode || !isPlaying) // FS: Edit always, Add only when paused
+            ? true                      // FS: always show Add/Edit
             : !isEditMode               // Non-FS: only show Add (not Edit)
         ) && (
           <Button
@@ -182,7 +182,7 @@ export function AnnotateControls({
         {/* Mobile: icon-only Add/Edit Clip */}
         {onAddClip && (
           isFullscreen
-            ? (isEditMode || !isPlaying)
+            ? true
             : !isEditMode
         ) && (
           <Button
