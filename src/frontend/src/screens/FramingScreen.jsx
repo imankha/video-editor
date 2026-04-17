@@ -8,7 +8,7 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useVideo } from '../hooks/useVideo';
 import { useClipManager } from '../hooks/useClipManager';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ClipSelectorSidebar } from '../components/ClipSelectorSidebar';
 import { FileUpload } from '../components/FileUpload';
@@ -102,8 +102,8 @@ export function FramingScreen({
     getExportData: getClipExportData,
   } = useClipManager();
 
-  // Games — Zustand store
-  const games = useGamesDataStore(state => state.games);
+  // Games — Zustand store (ready-only: pending uploads excluded)
+  const games = useReadyGames();
   const fetchGames = useGamesDataStore(state => state.fetchGames);
 
   // Helper: fetch and refresh clips from backend

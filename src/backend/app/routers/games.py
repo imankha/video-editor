@@ -588,7 +588,7 @@ async def list_games():
                    g.clip_count, g.brilliant_count, g.good_count, g.interesting_count,
                    g.mistake_count, g.blunder_count, g.aggregate_score,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
-                   g.video_duration, g.viewed_duration,
+                   g.video_duration, g.viewed_duration, g.status,
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -596,7 +596,6 @@ async def list_games():
                 FROM game_videos
                 GROUP BY game_id
             ) gv_sum ON gv_sum.game_id = g.id
-            WHERE g.status = 'ready'
             ORDER BY g.created_at DESC
         """)
         rows = cursor.fetchall()
@@ -637,6 +636,7 @@ async def list_games():
                 'created_at': row['created_at'],
                 'video_duration': row['effective_duration'],
                 'viewed_duration': row['viewed_duration'] or 0,
+                'status': row['status'] or 'ready',
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
@@ -675,7 +675,7 @@ async def get_game(game_id: int):
             SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name,
-                   viewed_duration
+                   viewed_duration, status
             FROM games
             WHERE id = ?
         """, (game_id,))

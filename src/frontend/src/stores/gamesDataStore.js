@@ -331,5 +331,9 @@ export const useGamesDataStore = create((set, get) => ({
 
 // Selector hooks
 export const useGames = () => useGamesDataStore(state => state.games);
+/** Games with status='ready' only — use in framing, projects, downloads (not annotate). */
+export const useReadyGames = () => useGamesDataStore(state =>
+  state.games.filter(g => g.status !== 'pending')
+);
 export const useSelectedGame = () => useGamesDataStore(state => state.selectedGame);
 export const useGamesLoading = () => useGamesDataStore(state => state.isLoading);
