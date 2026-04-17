@@ -153,7 +153,7 @@ Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
-| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | TODO | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
+| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | TESTING | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | "Install app" prompt, offline shell, home screen icon — feels native on phones |
 | T1073 | [Team + Athlete Name on Profile](tasks/for-launch/T1073-team-athlete-name-profile.md) | 7 | 2 | 3.5 | TODO | Let users set team name and athlete name per profile; feeds downstream branding/overlays and personalizes quest copy |
