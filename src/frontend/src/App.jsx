@@ -1,18 +1,15 @@
 import { useMemo, useRef, useCallback, useEffect } from 'react';
-import { Home, Scissors, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
-import { CreditBalance } from './components/CreditBalance';
-import { GalleryButton } from './components/GalleryButton';
-import { SignInButton } from './components/SignInButton';
 import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
-import { Breadcrumb, Button, ConfirmationDialog, ModeSwitcher, ToastContainer } from './components/shared';
+import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/shared';
 import DebugInfo from './components/DebugInfo';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
@@ -339,7 +336,7 @@ function App() {
   // Check if we can edit in annotate (clip has game association)
   const canEditInAnnotate = !!selectedClipForAnnotate?.game_id;
 
-  // Handle mode change between Framing, Overlay, and Project Manager
+  // Handle mode change between Framing, Overlay, Annotate, and Project Manager
   const handleModeChange = useCallback((newMode) => {
     if (newMode === editorMode) return;
 
@@ -362,6 +359,12 @@ function App() {
       return;
     }
 
+    // T1550: Switching from framing/overlay to annotate — use existing edit-in-annotate logic
+    if (newMode === EDITOR_MODES.ANNOTATE && editorMode !== EDITOR_MODES.ANNOTATE) {
+      handleEditInAnnotate();
+      return;
+    }
+
     // For project-manager, also clear selection and refresh projects
     if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
@@ -373,7 +376,7 @@ function App() {
     useVideoStore.getState().reset();
 
     setEditorMode(newMode);
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects]);
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects, handleEditInAnnotate]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {
@@ -508,60 +511,35 @@ function App() {
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
-      {editorMode === EDITOR_MODES.ANNOTATE && <AnnotateScreen onClearSelection={clearSelection} />}
+      {editorMode === EDITOR_MODES.ANNOTATE && (
+        <AnnotateScreen
+          onClearSelection={clearSelection}
+          onModeChange={handleModeChange}
+          isAdmin={isAdmin}
+          onAdminClick={() => setEditorMode(EDITOR_MODES.ADMIN)}
+        />
+      )}
 
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== EDITOR_MODES.ANNOTATE && (
       <div className="flex-1 overflow-auto">
         <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
-          {/* Header */}
-          <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-4 sm:mb-8">
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-              {/* Back to Home button */}
-              <Button
-                variant="ghost"
-                icon={Home}
-                iconOnly
-                onClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
-                title="Home"
-              />
-              <Breadcrumb
-                type="Reels"
-                itemName={getProjectDisplayName(selectedProject)}
-              />
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2">
-              <CreditBalance />
-              <GalleryButton />
-              <SignInButton />
-              {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
-              {/* Combined mode switcher with Annotate button */}
-              <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1">
-                {/* Edit in Annotate button - styled like mode tabs */}
-                {canEditInAnnotate && (
-                  <button
-                    onClick={handleEditInAnnotate}
-                    className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-md transition-all duration-200 text-gray-400 hover:text-white hover:bg-white/10"
-                    title="Edit source clip in Annotate mode"
-                  >
-                    <Scissors size={16} />
-                    <span className="font-medium text-sm hidden sm:inline">Annotate</span>
-                  </button>
-                )}
-                {/* Framing/Overlay mode toggle - rendered inline */}
-                <ModeSwitcher
-                  mode={editorMode}
-                  onModeChange={handleModeChange}
-                  disabled={false}
-                  hasOverlayVideo={hasOverlayVideo}
-                  framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
-                  hasAnnotateVideo={false}
-                  isLoadingWorkingVideo={isLoadingWorkingVideo}
-                  inline={true}
-                />
-              </div>
-            </div>
-          </div>
+          {/* T1550: Unified header */}
+          <UnifiedHeader
+            onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
+            breadcrumbType="Reels"
+            breadcrumbItemName={getProjectDisplayName(selectedProject)}
+            editorMode={editorMode}
+            onModeChange={handleModeChange}
+            hasProject={true}
+            hasWorkingVideo={!!selectedProject?.working_video_id}
+            hasOverlayVideo={hasOverlayVideo}
+            framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
+            hasAnnotateVideo={canEditInAnnotate}
+            isLoadingWorkingVideo={isLoadingWorkingVideo}
+            isAdmin={isAdmin}
+            onAdminClick={() => setEditorMode(EDITOR_MODES.ADMIN)}
+          />
 
           {/* Mode-specific views */}
           {editorMode === EDITOR_MODES.FRAMING && (
