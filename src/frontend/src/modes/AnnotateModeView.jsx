@@ -172,6 +172,7 @@ export function AnnotateModeView({
                 }}
                 playsInline
                 preload="auto"
+                fetchpriority="high"
               />
               {/* Video B */}
               <video
@@ -184,6 +185,7 @@ export function AnnotateModeView({
                 }}
                 playsInline
                 preload="auto"
+                fetchpriority="high"
               />
 
               {/* Loading overlay */}
