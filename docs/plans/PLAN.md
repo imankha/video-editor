@@ -77,7 +77,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | DONE | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
-| T1550 | [Unified Mode Navigation](tasks/T1550-unified-mode-navigation.md) | TODO | 2.0 | Annotate indicator looks like a button but isn't clickable; unify Annotate/Framing/Overlay into consistent tab bar with clear active/inactive/disabled states |
+| T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | TODO | 2.0 | Clickable breadcrumbs (Games/Reels → Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | DONE | 3.0 | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin → BrokenPipe. |
 
