@@ -473,7 +473,8 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
 import os as _os  # local alias; module-level os not imported here
 
 _SECURE_COOKIES = _os.getenv("SECURE_COOKIES", "false").lower() == "true"
-_SAMESITE = "lax"
+# Must match auth.py: cross-site deploys (Pages ↔ Fly) need SameSite=None
+_SAMESITE = "none" if _SECURE_COOKIES else "lax"
 
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
