@@ -538,7 +538,7 @@ export function AnnotateScreen({ onClearSelection }) {
         onSelectRegion={handleSelectAnnotateRegion}
         onDeleteRegion={deleteClipRegion}
         onToggleFullscreen={handleToggleFullscreen}
-        onAddClip={showAnnotateOverlay ? undefined : handleAddClipFromButton}
+        onAddClip={handleAddClipFromButton}
         getAnnotateRegionAtTime={getAnnotateRegionAtTime}
         // Fullscreen overlay handlers
         onFullscreenCreateClip={handleFullscreenCreateClip}
