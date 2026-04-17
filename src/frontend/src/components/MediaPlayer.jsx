@@ -146,6 +146,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black flex items-center justify-center"
+      onClick={togglePlay}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
@@ -155,8 +156,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
         src={src}
         autoPlay={autoPlay}
         className="w-full h-full object-contain"
-        style={{ maxHeight: '100%', maxWidth: '100%' }}
-        onClick={togglePlay}
+        style={{ maxHeight: '100%', maxWidth: '100%', pointerEvents: 'none' }}
         {...handlers}
       >
         Your browser does not support the video tag.

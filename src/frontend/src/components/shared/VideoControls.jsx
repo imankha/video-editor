@@ -62,6 +62,7 @@ export function VideoControls({
       className={`absolute inset-x-0 bottom-0 flex flex-col transition-opacity duration-300 ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
+      onClick={(e) => e.stopPropagation()}
     >
       {/* Gradient Background */}
       <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
