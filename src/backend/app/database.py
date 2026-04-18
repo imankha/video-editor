@@ -562,6 +562,8 @@ def ensure_database():
                 auto_project_id INTEGER,
                 default_highlight_regions TEXT,
                 video_sequence INTEGER,
+                boundaries_version INTEGER DEFAULT 1,
+                boundaries_updated_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
                 FOREIGN KEY (auto_project_id) REFERENCES projects(id) ON DELETE SET NULL
@@ -577,6 +579,10 @@ def ensure_database():
                 working_video_id INTEGER,
                 final_video_id INTEGER,
                 is_auto_created INTEGER DEFAULT 0,
+                last_opened_at TIMESTAMP,
+                current_mode TEXT DEFAULT 'framing',
+                archived_at TIMESTAMP DEFAULT NULL,
+                restored_at TIMESTAMP DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
                 FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
@@ -596,6 +602,10 @@ def ensure_database():
                 crop_data TEXT,
                 timing_data TEXT,
                 segments_data TEXT,
+                raw_clip_version INTEGER,
+                width INTEGER,
+                height INTEGER,
+                fps REAL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
@@ -611,6 +621,10 @@ def ensure_database():
                 version INTEGER NOT NULL DEFAULT 1,
                 highlights_data TEXT,
                 text_overlays TEXT,
+                duration REAL,
+                effect_type TEXT DEFAULT 'original',
+                overlay_version INTEGER DEFAULT 0,
+                highlight_color TEXT DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
@@ -623,6 +637,11 @@ def ensure_database():
                 project_id INTEGER,
                 filename TEXT NOT NULL,
                 version INTEGER NOT NULL DEFAULT 1,
+                duration REAL,
+                source_type TEXT,
+                game_id INTEGER,
+                name TEXT,
+                rating_counts TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
@@ -655,6 +674,8 @@ def ensure_database():
                 game_date TEXT,
                 game_type TEXT,
                 tournament_name TEXT,
+                viewed_duration REAL DEFAULT 0,
+                video_fps REAL,
                 status TEXT DEFAULT 'ready'
             )
         """)
@@ -677,15 +698,14 @@ def ensure_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 started_at TIMESTAMP,
                 completed_at TIMESTAMP,
+                game_id INTEGER,
+                game_name TEXT,
+                acknowledged_at TIMESTAMP,
+                gpu_seconds REAL,
+                modal_function TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
-
-        # Migration: Add modal_call_id column if missing (for existing databases)
-        try:
-            cursor.execute("SELECT modal_call_id FROM export_jobs LIMIT 1")
-        except Exception:
-            cursor.execute("ALTER TABLE export_jobs ADD COLUMN modal_call_id TEXT")
 
         # Indexes for export_jobs
         cursor.execute("""
@@ -731,298 +751,39 @@ def ensure_database():
             )
         """)
 
-        # Migration: Add new columns to existing tables (silently ignore if already exists)
-        migrations = [
-            # raw_clips new columns
-            "ALTER TABLE raw_clips ADD COLUMN name TEXT",
-            "ALTER TABLE raw_clips ADD COLUMN notes TEXT",
-            "ALTER TABLE raw_clips ADD COLUMN start_time REAL",
-            "ALTER TABLE raw_clips ADD COLUMN end_time REAL",
-            # working_clips framing edit storage
-            "ALTER TABLE working_clips ADD COLUMN crop_data TEXT",
-            "ALTER TABLE working_clips ADD COLUMN timing_data TEXT",
-            "ALTER TABLE working_clips ADD COLUMN segments_data TEXT",
-            # working_videos overlay edit storage
-            "ALTER TABLE working_videos ADD COLUMN highlights_data TEXT",
-            "ALTER TABLE working_videos ADD COLUMN text_overlays TEXT",
-            # games video metadata (for faster loading without re-extracting)
-            "ALTER TABLE games ADD COLUMN video_duration REAL",
-            "ALTER TABLE games ADD COLUMN video_width INTEGER",
-            "ALTER TABLE games ADD COLUMN video_height INTEGER",
-            "ALTER TABLE games ADD COLUMN video_size INTEGER",
-            # Downloads & overlay persistence (added for downloads navigation feature)
-            "ALTER TABLE final_videos ADD COLUMN duration REAL",
-            "ALTER TABLE working_videos ADD COLUMN duration REAL",
-            "ALTER TABLE working_videos ADD COLUMN effect_type TEXT DEFAULT 'original'",
-            "ALTER TABLE projects ADD COLUMN last_opened_at TIMESTAMP",
-            # Project state persistence (current mode for resume)
-            "ALTER TABLE projects ADD COLUMN current_mode TEXT DEFAULT 'framing'",
-            # Version-based tracking (replaces abandoned flag approach)
-            "ALTER TABLE working_clips ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
-            "ALTER TABLE working_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
-            "ALTER TABLE final_videos ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
-            # Replace progress flag with exported_at timestamp
-            "ALTER TABLE working_clips ADD COLUMN exported_at TEXT DEFAULT NULL",
-            # Annotations refactor: aggregate columns on games table
-            "ALTER TABLE games ADD COLUMN clip_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN brilliant_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN good_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN interesting_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN mistake_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN blunder_count INTEGER DEFAULT 0",
-            "ALTER TABLE games ADD COLUMN aggregate_score INTEGER DEFAULT 0",
-            # Default highlight data for raw clips (cross-project reuse)
-            "ALTER TABLE raw_clips ADD COLUMN default_highlight_regions TEXT",
-            # Raw clips source tracking (for real-time save from annotation)
-            "ALTER TABLE raw_clips ADD COLUMN game_id INTEGER",
-            "ALTER TABLE raw_clips ADD COLUMN auto_project_id INTEGER",
-            # Gallery source type tracking (brilliant_clip, custom_project, annotated_game)
-            "ALTER TABLE final_videos ADD COLUMN source_type TEXT",
-            # Source game ID for annotated exports (to navigate back to annotate mode)
-            "ALTER TABLE final_videos ADD COLUMN game_id INTEGER",
-            # Name for annotated exports (when no project is associated)
-            "ALTER TABLE final_videos ADD COLUMN name TEXT",
-            # Rating counts snapshot for annotated exports (frozen at export time, JSON)
-            "ALTER TABLE final_videos ADD COLUMN rating_counts TEXT",
-            # Game details for display name generation
-            "ALTER TABLE games ADD COLUMN opponent_name TEXT",
-            "ALTER TABLE games ADD COLUMN game_date TEXT",
-            "ALTER TABLE games ADD COLUMN game_type TEXT",  # 'home', 'away', 'tournament'
-            "ALTER TABLE games ADD COLUMN tournament_name TEXT",
-            # Auto-created projects (from 5-star clips)
-            "ALTER TABLE projects ADD COLUMN is_auto_created INTEGER DEFAULT 0",
-            # Track when raw clip boundaries (start_time/end_time) were last changed
-            "ALTER TABLE raw_clips ADD COLUMN boundaries_version INTEGER DEFAULT 1",
-            "ALTER TABLE raw_clips ADD COLUMN boundaries_updated_at TIMESTAMP",
-            # Track which version of raw clip boundaries was used when framing was done
-            "ALTER TABLE working_clips ADD COLUMN raw_clip_version INTEGER",
-            # Version tracking for gesture-based overlay sync (Task 19)
-            "ALTER TABLE working_videos ADD COLUMN overlay_version INTEGER DEFAULT 0",
-            # Export jobs: game_id for annotate exports (T12: Progress Recovery)
-            "ALTER TABLE export_jobs ADD COLUMN game_id INTEGER",
-            # Export jobs: game_name for display in progress UI (T12)
-            "ALTER TABLE export_jobs ADD COLUMN game_name TEXT",
-            # Export jobs: acknowledged_at for preventing duplicate notifications (T12)
-            "ALTER TABLE export_jobs ADD COLUMN acknowledged_at TIMESTAMP",
-            # Highlight color preference for overlay mode (T67)
-            "ALTER TABLE working_videos ADD COLUMN highlight_color TEXT DEFAULT NULL",
-            # T66: Track when project was restored from archive (for stale cleanup)
-            "ALTER TABLE projects ADD COLUMN restored_at TIMESTAMP DEFAULT NULL",
-            # T80: Global game deduplication - store BLAKE3 hash for global storage
-            "ALTER TABLE games ADD COLUMN blake3_hash TEXT",
-            # T80: Track last access time for future cleanup of unused games
-            "ALTER TABLE games ADD COLUMN last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            # T82: Track which video a clip belongs to in multi-video games (1-based sequence)
-            "ALTER TABLE raw_clips ADD COLUMN video_sequence INTEGER",
-            # T82: Replace unique index to include video_sequence (allows same end_time on different videos)
-            "DROP INDEX IF EXISTS idx_raw_clips_game_end_time",
-            # T249: Extraction recovery — track retry attempts
-            "ALTER TABLE modal_tasks ADD COLUMN retry_count INTEGER DEFAULT 0",
-            # T251: Track how much video the user has watched/scrubbed in annotate mode
-            "ALTER TABLE games ADD COLUMN viewed_duration REAL DEFAULT 0",
-            # T550: GPU cost tracking per export job
-            "ALTER TABLE export_jobs ADD COLUMN gpu_seconds REAL",
-            "ALTER TABLE export_jobs ADD COLUMN modal_function TEXT",
-            # T1500: persist clip source dimensions (eliminate per-load metadata probe)
-            # NB: game_videos.fps runs in the late-migration block (game_videos is created
-            # after this main migration list).
-            "ALTER TABLE games ADD COLUMN video_fps REAL",
-            "ALTER TABLE working_clips ADD COLUMN width INTEGER",
-            "ALTER TABLE working_clips ADD COLUMN height INTEGER",
-            "ALTER TABLE working_clips ADD COLUMN fps REAL",
-            # Explicit archive tracking — distinguishes "new project, never
-            # rendered" from "archived project, working data stripped".
-            "ALTER TABLE projects ADD COLUMN archived_at TIMESTAMP DEFAULT NULL",
-            # T1540: Two-phase game creation (pending -> ready).
-            # pending = FK anchor for clips during upload, not visible downstream.
-            # ready = video confirmed in R2, visible to framing/export/gallery.
-            # DEFAULT 'ready' so existing games are already ready.
-            "ALTER TABLE games ADD COLUMN status TEXT DEFAULT 'ready'",
-        ]
-
-        for migration in migrations:
-            try:
-                cursor.execute(migration)
-            except sqlite3.OperationalError:
-                # Column already exists, ignore
-                pass
-
-        # Backfill archived_at for projects that were archived before the column
-        # existed: working_video_id is NULL but a final_video exists (meaning
-        # the project was rendered and then stripped).
+        # Indexes for efficient version queries
         cursor.execute("""
-            UPDATE projects
-            SET archived_at = COALESCE(created_at, CURRENT_TIMESTAMP)
-            WHERE archived_at IS NULL
-              AND working_video_id IS NULL
-              AND final_video_id IS NOT NULL
+            CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
+            ON working_clips(project_id, version DESC)
         """)
-        if cursor.rowcount > 0:
-            logger.info(f"Backfilled archived_at for {cursor.rowcount} previously-archived projects")
-
-        # T85a: Make project_id nullable in export_jobs and final_videos
-        # Annotate exports have no project, so project_id must be NULL-able.
-        # SQLite doesn't support ALTER COLUMN, so we recreate the table if needed.
-        # Uses the "create new, copy, drop old, rename new" pattern to avoid
-        # ALTER TABLE RENAME corrupting FK references in other tables.
-        _new_schemas = {
-            'export_jobs': """
-                CREATE TABLE _export_jobs_new (
-                    id TEXT PRIMARY KEY,
-                    project_id INTEGER,
-                    type TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    error TEXT,
-                    input_data TEXT NOT NULL,
-                    output_video_id INTEGER,
-                    output_filename TEXT,
-                    modal_call_id TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    started_at TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    game_id INTEGER,
-                    game_name TEXT,
-                    acknowledged_at TIMESTAMP,
-                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-                )
-            """,
-            'final_videos': """
-                CREATE TABLE _final_videos_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_id INTEGER,
-                    filename TEXT NOT NULL,
-                    version INTEGER NOT NULL DEFAULT 1,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    duration REAL,
-                    source_type TEXT,
-                    game_id INTEGER,
-                    name TEXT,
-                    rating_counts TEXT,
-                    FOREIGN KEY (project_id) REFERENCES projects(id)
-                )
-            """,
-        }
-        for table_name, new_ddl in _new_schemas.items():
-            try:
-                col_info = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
-                needs_migration = any(c['name'] == 'project_id' and c['notnull'] for c in col_info)
-                if not needs_migration:
-                    continue
-                logger.info(f"[Migration] Recreating {table_name}: project_id NOT NULL -> nullable")
-                old_cols = [c['name'] for c in col_info]
-                # Create new table with temp name (avoids ALTER TABLE RENAME corruption)
-                cursor.execute(new_ddl)
-                new_col_info = cursor.execute(f"PRAGMA table_info(_{table_name}_new)").fetchall()
-                new_cols = {c['name'] for c in new_col_info}
-                common_cols = [c for c in old_cols if c in new_cols]
-                cols_str = ', '.join(common_cols)
-                select_cols = ', '.join(
-                    'NULLIF(project_id, 0)' if c == 'project_id' else c
-                    for c in common_cols
-                )
-                cursor.execute(f"INSERT INTO _{table_name}_new ({cols_str}) SELECT {select_cols} FROM {table_name}")
-                cursor.execute(f"DROP TABLE {table_name}")
-                cursor.execute(f"ALTER TABLE _{table_name}_new RENAME TO {table_name}")
-                logger.info(f"[Migration] {table_name} recreated successfully")
-            except Exception as e:
-                logger.warning(f"[Migration] Failed to migrate {table_name}: {e}")
-
-        # Migrate progress flag to exported_at timestamp
-        # Set exported_at to current timestamp for clips that were previously exported (progress >= 1)
-        try:
-            cursor.execute("""
-                UPDATE working_clips
-                SET exported_at = datetime('now')
-                WHERE exported_at IS NULL AND progress >= 1
-            """)
-        except sqlite3.OperationalError:
-            # progress column doesn't exist (fresh install), ignore
-            pass
-
-        # Initialize version numbers for existing records (if version is NULL or 0)
-        # Assign versions based on created_at order per project
-        try:
-            # Working clips: Assign version numbers
-            cursor.execute("""
-                UPDATE working_clips
-                SET version = (
-                    SELECT COUNT(*)
-                    FROM working_clips wc2
-                    WHERE wc2.project_id = working_clips.project_id
-                    AND wc2.created_at <= working_clips.created_at
-                )
-                WHERE version IS NULL OR version = 0
-            """)
-
-            # Working videos: Assign version numbers
-            cursor.execute("""
-                UPDATE working_videos
-                SET version = (
-                    SELECT COUNT(*)
-                    FROM working_videos w2
-                    WHERE w2.project_id = working_videos.project_id
-                    AND w2.created_at <= working_videos.created_at
-                )
-                WHERE version IS NULL OR version = 0
-            """)
-
-            # Final videos: Assign version numbers
-            cursor.execute("""
-                UPDATE final_videos
-                SET version = (
-                    SELECT COUNT(*)
-                    FROM final_videos f2
-                    WHERE f2.project_id = final_videos.project_id
-                    AND f2.created_at <= final_videos.created_at
-                )
-                WHERE version IS NULL OR version = 0
-            """)
-        except sqlite3.OperationalError:
-            # Migration already done, ignore
-            pass
-
-        # Create indexes for efficient version queries
-        try:
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
-                ON working_clips(project_id, version DESC)
-            """)
-            # Index for version lookup by raw_clip_id (for the NOT EXISTS anti-join)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
-                ON working_clips(project_id, raw_clip_id, version DESC)
-            """)
-            # Index for version lookup by uploaded_filename
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
-                ON working_clips(project_id, uploaded_filename, version DESC)
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
-                ON working_videos(project_id, version DESC)
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
-                ON final_videos(project_id, version DESC)
-            """)
-            # Index for raw_clips game filtering
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
-                ON raw_clips(game_id)
-            """)
-            # Index for quest progress rating queries
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_raw_clips_rating
-                ON raw_clips(rating)
-            """)
-            # Composite index for natural key lookup (game_id + end_time + video_sequence)
-            cursor.execute("""
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time_seq
-                ON raw_clips(game_id, end_time, video_sequence)
-            """)
-        except sqlite3.OperationalError:
-            # Index already exists, ignore
-            pass
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
+            ON working_clips(project_id, raw_clip_id, version DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
+            ON working_clips(project_id, uploaded_filename, version DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
+            ON working_videos(project_id, version DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_final_videos_project_version
+            ON final_videos(project_id, version DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id
+            ON raw_clips(game_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_raw_clips_rating
+            ON raw_clips(rating)
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time_seq
+            ON raw_clips(game_id, end_time, video_sequence)
+        """)
 
         # Modal tasks table - tracks background GPU tasks for resumability
         cursor.execute("""
@@ -1092,17 +853,6 @@ def ensure_database():
             CREATE INDEX IF NOT EXISTS idx_game_videos_game
             ON game_videos(game_id)
         """)
-
-        # T1500: post-creation migrations for tables defined after the main migration block.
-        # game_videos is created here (not in the initial table block), so ALTER TABLE
-        # for existing DBs must run after its creation.
-        for late_migration in [
-            "ALTER TABLE game_videos ADD COLUMN fps REAL",
-        ]:
-            try:
-                cursor.execute(late_migration)
-            except sqlite3.OperationalError:
-                pass
 
         # T80: Track in-progress multipart uploads
         # Allows resuming interrupted uploads
