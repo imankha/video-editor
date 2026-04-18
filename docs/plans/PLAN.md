@@ -11,7 +11,7 @@
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
 | T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TESTING | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
-| T1570 | [Admin Panel Missing Users](tasks/T1570-admin-panel-missing-users.md) | 5 | 3 | P1 | TODO | Some users (e.g., sarkarati@gmail.com) don't appear in admin panel even though they exist in auth.sqlite |
+| T1570 | [Admin Panel Missing Users](tasks/T1570-admin-panel-missing-users.md) | 5 | 3 | P1 | DONE | Some users (e.g., sarkarati@gmail.com) don't appear in admin panel even though they exist in auth.sqlite |
 
 ### Milestone: Performance (NEXT UP)
 
@@ -19,7 +19,7 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
-| T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | 8 | 5 | 1.6 | TODO | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests. **Do first — unblocks measurement for the rest.** |
+| T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | 8 | 5 | 1.6 | TESTING | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests. Backend landed T1531, frontend landed T1570. |
 | T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | 9 | 3 | 3.0 | TODO | `POST /achievements/opened_framing_editor` took 60.65s handler, blocked `GET /projects/4` via per-user serializer — user-visible freeze on reel load |
 | T1533 | [Overlay Working Video Slow First-Load](tasks/T1533-overlay-working-video-slow-load.md) | 7 | 3 | 2.0 | TESTING | Root cause was Chrome's Low-priority `<video>` defer (~15s `_blocked_queueing`), NOT moov placement. Fixed by `fetchpriority="high"` on VideoPlayer + fetch-based metadata extractor (bypasses video-element defer entirely). Desktop verified via HAR. |
 | T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | TODO | After staging push, verify T1533 fix holds on iOS Safari + Chrome Android — Priority Hints behave differently on mobile browsers. Fallback plan if regression: drop hidden extractor on mobile (T1500 persists dims). |

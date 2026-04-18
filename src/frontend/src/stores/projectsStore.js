@@ -13,6 +13,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { useQuestStore } from './questStore';
+import { profiledFetch, PROFILING_ENABLED } from '../utils/profiling';
 import { useAuthStore } from './authStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -74,9 +75,10 @@ export const useProjectsStore = create((set, get) => ({
    * Fetch a single project's details
    */
   fetchProject: async (projectId) => {
+    if (PROFILING_ENABLED) performance.mark('project:load:start');
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      const response = await profiledFetch('project:load', `${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       set({ loading: false });
@@ -85,6 +87,19 @@ export const useProjectsStore = create((set, get) => ({
       set({ error: err.message, loading: false });
       console.error('[projectsStore] fetchProject error:', err);
       return null;
+    } finally {
+      if (PROFILING_ENABLED) {
+        performance.mark('project:load:end');
+        try {
+          const m = performance.measure('project:load', 'project:load:start', 'project:load:end');
+          if (m.duration >= 1000) {
+            // eslint-disable-next-line no-console
+            console.warn(`[TIMING] project:load duration=${Math.round(m.duration)}ms threshold=1000ms`);
+          }
+        } catch { /* marks cleared */ }
+        performance.clearMarks('project:load:start');
+        performance.clearMarks('project:load:end');
+      }
     }
   },
 

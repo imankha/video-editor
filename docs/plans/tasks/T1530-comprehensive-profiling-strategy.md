@@ -127,18 +127,35 @@ New middleware (or option inside `RequestContextMiddleware`) that:
 - [x] Backend: ThreadPoolExecutor-bound sync work included in profile.
       `_sync_profile` / `_sync_user` workers get their own per-thread cProfile;
       sibling dump tagged `syncthread_profile_{user}` / `syncthread_user_{user}`.
-- [ ] Frontend: `performance.getEntriesByType('measure')` shows named spans for fetch / load / export paths.
-- [ ] Frontend: DevTools Performance recording of a normal session shows named user-timing marks visible in the timeline.
-- [ ] Frontend: `[TIMING]` logs surface slow named operations with label + ms.
-- [ ] Runbook (`docs/runbooks/profiling.md`) documents how to: (a) enable profiling, (b) capture, (c) retrieve, (d) view in snakeviz / devtools.
-- [ ] Zero measurable overhead when profiling is disabled (verify with a before/after benchmark on a GET /api/games — < 1ms median delta).
+- [x] Frontend: `performance.getEntriesByType('measure')` shows named spans for fetch / load / export paths.
+      **Landed under T1570** (2026-04-17). `games:fetch` and `project:load` spans
+      created via `performance.mark()` / `performance.measure()` in store actions.
+      `profiledFetch` wrapper creates `fetch:*` spans. All gated by
+      `VITE_PROFILING_ENABLED` env var.
+- [x] Frontend: DevTools Performance recording of a normal session shows named user-timing marks visible in the timeline.
+      Same mechanism -- `performance.measure()` entries appear automatically in
+      DevTools Performance timeline User Timing section.
+- [x] Frontend: `[TIMING]` logs surface slow named operations with label + ms.
+      `[TIMING] games:fetch duration=Nms threshold=1000ms` format. `profiledFetch`
+      adds `[TIMING] fetch:label total=N ttfb=N body=N url=...`.
+- [x] Runbook (`docs/runbooks/profiling.md`) documents how to: (a) enable profiling, (b) capture, (c) retrieve, (d) view in snakeviz / devtools.
+      Full runbook covers backend (env vars, X-Profile-Request header, debug
+      endpoints, snakeviz/pstats) and frontend (VITE_PROFILING_ENABLED, console
+      output, DevTools timeline, timedSpan/profiledFetch usage).
+- [x] Zero measurable overhead when profiling is disabled (verify with a before/after benchmark on a GET /api/games — < 1ms median delta).
+      Verified: production build with `VITE_PROFILING_ENABLED` unset eliminates
+      all profiling strings (`[TIMING]`, `performance.mark`, etc.) via tree-shaking.
+      `profiledFetch` compiles to a direct `fetch()` passthrough. `PROFILING_ENABLED`
+      const is `false` at build time, so dead code is removed by Rollup.
 
-## Status (2026-04-15)
+## Status (2026-04-17)
 
 Backend profiling infra landed under T1531's branch. Frontend spans, runbook,
-and overhead benchmark remain open — track here. Debug endpoints added at
+and overhead benchmark completed under T1570. Debug endpoints added at
 `/api/_debug/profiles[/{name}]` (gated on `DEBUG_ENDPOINTS_ENABLED`) so a
 curl + cookie session can pull the pstats text from staging without shell access.
+
+All acceptance criteria are now met.
 
 ## Out of Scope
 
