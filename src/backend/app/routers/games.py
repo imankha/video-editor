@@ -307,13 +307,39 @@ async def create_game(request: CreateGameRequest):
         for video in request.videos:
             _validate_video_in_r2(video.blake3_hash.lower())
 
-    # Check if user already has a game with same video(s)
+    # If a pending game already exists for this hash, return it so the
+    # frontend can resume the upload and activate it.
+    if game_status == GameStatus.PENDING and len(request.videos) == 1:
+        blake3_hash = request.videos[0].blake3_hash.lower()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, name FROM games WHERE blake3_hash = ? AND status = 'pending'",
+                (blake3_hash,)
+            )
+            existing_pending = cursor.fetchone()
+            if existing_pending:
+                logger.info(f"Reusing pending game {existing_pending['id']} for hash {blake3_hash}")
+                return {
+                    "status": GameCreateStatus.CREATED,
+                    "game_id": existing_pending['id'],
+                    "name": existing_pending['name'],
+                    "video_url": None,
+                    "videos": [],
+                }
+
+    # Check if user already has a READY game with same video(s).
+    # Pending games are excluded — they represent an in-progress upload that
+    # needs to complete, not a duplicate to skip.
     if len(request.videos) == 1:
         blake3_hash = request.videos[0].blake3_hash.lower()
         with get_db_connection() as conn:
             cursor = conn.cursor()
             # Check games.blake3_hash (legacy single-video)
-            cursor.execute("SELECT id, name FROM games WHERE blake3_hash = ?", (blake3_hash,))
+            cursor.execute(
+                "SELECT id, name FROM games WHERE blake3_hash = ? AND status = 'ready'",
+                (blake3_hash,)
+            )
             existing = cursor.fetchone()
             if existing:
                 video_url = generate_presigned_url_global(
@@ -329,7 +355,7 @@ async def create_game(request: CreateGameRequest):
             cursor.execute("""
                 SELECT gv.game_id, g.name FROM game_videos gv
                 JOIN games g ON g.id = gv.game_id
-                WHERE gv.blake3_hash = ?
+                WHERE gv.blake3_hash = ? AND g.status = 'ready'
             """, (blake3_hash,))
             existing = cursor.fetchone()
             if existing:
