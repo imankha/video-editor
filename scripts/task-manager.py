@@ -303,7 +303,17 @@ HTML = r"""<!DOCTYPE html>
   .task-card.expanded { background: rgba(255,255,255,0.02); }
 
   .drag-handle { color: var(--text-dim); cursor: grab; font-size: 14px; }
-  .task-id { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .task-id {
+    font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600;
+    cursor: pointer; position: relative;
+  }
+  .task-id:hover { text-decoration: underline; }
+  .task-id .copy-hint {
+    display: none; position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+    background: var(--border); color: var(--text); padding: 2px 6px; border-radius: 4px;
+    font-size: 10px; white-space: nowrap; pointer-events: none;
+  }
+  .task-id:hover .copy-hint { display: block; }
   .task-name { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 
   .task-detail {
@@ -321,12 +331,17 @@ HTML = r"""<!DOCTYPE html>
     padding: 12px 16px; font-size: 13px; white-space: pre-wrap; max-height: 400px;
     overflow-y: auto; margin-top: 8px; line-height: 1.6; color: var(--text-dim);
   }
-  .task-detail .load-btn {
+  .task-detail .load-btn, .task-detail .copy-details-btn, .task-detail .gen-prompt-btn {
     background: none; border: 1px solid var(--border); color: var(--accent);
     padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
     margin-top: 4px;
   }
-  .task-detail .load-btn:hover { border-color: var(--accent); background: rgba(88,166,255,0.05); }
+  .task-detail .load-btn:hover, .task-detail .copy-details-btn:hover, .task-detail .gen-prompt-btn:hover {
+    border-color: var(--accent); background: rgba(88,166,255,0.05);
+  }
+  .task-detail .gen-prompt-btn { color: var(--green); border-color: var(--green); }
+  .task-detail .gen-prompt-btn:hover { background: rgba(63,185,80,0.1); }
+  .detail-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 
   .badge {
     font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
@@ -450,7 +465,7 @@ function render() {
 
       card.innerHTML = `
         <span class="drag-handle">&#9776;</span>
-        <span class="task-id">${esc(t.id)}</span>
+        <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
         <span class="task-name">${esc(t.name)}</span>
         <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
         <span class="meta" title="Priority">${esc(pri)}</span>
@@ -464,7 +479,12 @@ function render() {
             ${cmplx ? '<span>Complexity: ' + esc(cmplx) + '</span>' : ''}
             ${pri ? '<span>Priority: ' + esc(pri) + '</span>' : ''}
           </div>
-          ${t.link ? '<div class="detail-content">Click "Load details" to view task file</div><button class="load-btn">Load details</button>' : ''}
+          ${t.link ? '<div class="detail-content">Click "Load details" to view task file</div>' : ''}
+          <div class="detail-actions">
+            ${t.link ? '<button class="load-btn">Load details</button>' : ''}
+            ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
+            ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
+          </div>
         </div>
       `;
 
@@ -477,8 +497,14 @@ function render() {
         render();
       };
 
+      // Click task ID to copy
+      card.querySelector('.task-id').onclick = (e) => {
+        e.stopPropagation();
+        copyToClipboard(t.id, e.currentTarget);
+      };
+
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn')) return;
+        if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn')) return;
         card.classList.toggle('expanded');
       });
 
@@ -495,6 +521,36 @@ function render() {
           } else {
             loadTaskFile(t.link, detail);
             loadBtn.textContent = 'Hide details';
+          }
+        };
+      }
+
+      const copyDetailsBtn = card.querySelector('.copy-details-btn');
+      if (copyDetailsBtn) {
+        copyDetailsBtn.onclick = async (e) => {
+          e.stopPropagation();
+          const content = await fetchTaskContent(t.link);
+          if (content) {
+            const text = `## ${t.id}: ${t.name}\n\n${content}`;
+            copyToClipboard(text, copyDetailsBtn);
+          }
+        };
+      }
+
+      const genPromptBtn = card.querySelector('.gen-prompt-btn');
+      if (genPromptBtn) {
+        genPromptBtn.onclick = async (e) => {
+          e.stopPropagation();
+          genPromptBtn.textContent = 'Loading...';
+          const content = await fetchTaskContent(t.link);
+          if (content) {
+            const prompt = buildKickoffPrompt(t.id, t.name, content);
+            copyToClipboard(prompt, genPromptBtn);
+            genPromptBtn.textContent = 'Copied!';
+            setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
+          } else {
+            genPromptBtn.textContent = 'Failed to load';
+            setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
           }
         };
       }
@@ -574,6 +630,49 @@ async function loadTaskFile(link, detailEl) {
   } catch(e) {
     contentEl.textContent = 'Error: ' + e.message;
   }
+}
+
+function copyToClipboard(text, el) {
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Copied to clipboard!');
+  }).catch(() => {
+    // Fallback for non-secure contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('Copied to clipboard!');
+  });
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => { toast.classList.remove('show'); toast.textContent = 'Saved!'; }, 2000);
+}
+
+async function fetchTaskContent(link) {
+  try {
+    const resp = await fetch('/api/task-file?path=' + encodeURIComponent(link));
+    if (resp.ok) {
+      const d = await resp.json();
+      return d.content;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function buildKickoffPrompt(id, name, taskContent) {
+  return `Create a detailed kickoff prompt I can use in a fresh AI session to implement the following task. Read CLAUDE.md for project context, coding standards, and workflow rules.
+
+## Task: ${id} -- ${name}
+
+${taskContent}`;
 }
 
 async function load() {
