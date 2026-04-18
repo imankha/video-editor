@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import { API_BASE } from '../config';
+import { PROFILING_ENABLED } from './profiling';
 
 let _profileId = null;
 let _currentProfileId = null;
@@ -82,16 +83,42 @@ function installFetchInterceptor() {
       };
 
       const t0 = performance.now();
+      const method = (init.method || 'GET').toUpperCase();
+      const pathOnly = url.replace(API_BASE, '').split('?')[0];
       const promise = originalFetch.call(window, input, init);
       promise.then(
         (response) => {
-          const elapsed = Math.round(performance.now() - t0);
-          if (elapsed >= SLOW_FETCH_MS) {
-            const method = (init.method || 'GET').toUpperCase();
-            const pathOnly = url.replace(API_BASE, '').split('?')[0];
-            console.warn(
-              `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
-            );
+          const ttfb = Math.round(performance.now() - t0);
+          // Clone + read body to measure body transfer time
+          if (PROFILING_ENABLED) {
+            const tBody0 = performance.now();
+            response.clone().text().then(() => {
+              const bodyMs = Math.round(performance.now() - tBody0);
+              const total = Math.round(performance.now() - t0);
+              if (total >= SLOW_FETCH_MS) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms req_id=${reqId} status=${response.status}`
+                );
+              }
+              // User Timing mark for DevTools Performance timeline
+              try {
+                const markName = `api:${method}:${pathOnly}`;
+                performance.mark(`${markName}:start`, { startTime: t0 });
+                performance.mark(`${markName}:end`);
+                performance.measure(markName, `${markName}:start`, `${markName}:end`);
+                performance.clearMarks(`${markName}:start`);
+                performance.clearMarks(`${markName}:end`);
+              } catch { /* timing API unavailable */ }
+            }, () => {});
+          } else {
+            const elapsed = Math.round(performance.now() - t0);
+            if (elapsed >= SLOW_FETCH_MS) {
+              // eslint-disable-next-line no-console
+              console.warn(
+                `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
+              );
+            }
           }
         },
         () => {},
