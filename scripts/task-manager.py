@@ -818,7 +818,32 @@ class Handler(BaseHTTPRequestHandler):
 
 # --- Main ---
 
+def kill_existing():
+    """Kill any existing task-manager process on our port."""
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ['netstat', '-ano'], text=True, stderr=subprocess.DEVNULL
+        )
+        pids = set()
+        for line in out.splitlines():
+            if f':{PORT}' in line and 'LISTENING' in line:
+                parts = line.split()
+                if parts:
+                    try:
+                        pids.add(int(parts[-1]))
+                    except ValueError:
+                        pass
+        my_pid = os.getpid()
+        for pid in pids:
+            if pid != my_pid and pid > 0:
+                subprocess.run(['taskkill', '/PID', str(pid), '/F'],
+                               capture_output=True)
+    except Exception:
+        pass
+
 if __name__ == '__main__':
+    kill_existing()
     print(f"Task Manager serving PLAN.md: {PLAN_PATH}")
     print(f"Open http://localhost:{PORT}")
     server = HTTPServer(('127.0.0.1', PORT), Handler)
