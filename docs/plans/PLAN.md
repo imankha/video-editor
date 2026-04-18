@@ -11,6 +11,7 @@
 | ID | Task | Impact | Cmplx | Pri | Status | Description |
 |----|------|--------|-------|-----|--------|-------------|
 | T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TESTING | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
+| T1570 | [Admin Panel Missing Users](tasks/T1570-admin-panel-missing-users.md) | 5 | 3 | P1 | TODO | Some users (e.g., sarkarati@gmail.com) don't appear in admin panel even though they exist in auth.sqlite |
 
 ### Milestone: Performance (NEXT UP)
 
