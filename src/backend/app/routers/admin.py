@@ -321,6 +321,26 @@ async def _compute_gpu_total(user_id: str) -> Optional[float]:
     return round(total, 2) if found_any else None
 
 
+def _default_user_stats(user: dict) -> dict:
+    """Return a user dict with zeroed-out stats (used when stat computation fails)."""
+    default_quests = {
+        qdef["id"]: {"completed": 0, "total": len(qdef["step_ids"]), "reward_claimed": False}
+        for qdef in QUEST_DEFINITIONS
+    }
+    return {
+        **user,
+        "quest_progress": default_quests,
+        "gpu_seconds_total": None,
+        "credits_spent": 0,
+        "credits_purchased": 0,
+        "money_spent_cents": 0,
+        "games_annotated": 0,
+        "clips_annotated": 0,
+        "projects_framed": 0,
+        "projects_completed": 0,
+    }
+
+
 async def _get_user_stats(user: dict, credit_stats: dict) -> dict:
     """Fetch per-user stats in parallel (quest progress + GPU total + activity counts)."""
     user_id = user["user_id"]
@@ -363,8 +383,20 @@ async def list_users():
 
     users = get_all_users_for_admin()
     credit_stats = get_credit_stats_for_admin()
-    results = await asyncio.gather(*[_get_user_stats(u, credit_stats) for u in users])
-    return list(results)
+    results = await asyncio.gather(
+        *[_get_user_stats(u, credit_stats) for u in users],
+        return_exceptions=True,
+    )
+
+    # If any individual user's stats failed, still include them with defaults
+    final = []
+    for user, result in zip(users, results):
+        if isinstance(result, BaseException):
+            logger.warning(f"[Admin] Stats failed for {user.get('email', user['user_id'])}: {result}")
+            final.append(_default_user_stats(user))
+        else:
+            final.append(result)
+    return final
 
 
 @router.get("/users/{user_id}/gpu-usage")
