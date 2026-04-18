@@ -393,10 +393,13 @@ export function keyframeReducer(state, action) {
       const { keyframes } = state;
 
       const updated = keyframes.map(updateFn).filter(kf => kf !== null);
+      const sorted = sortKeyframes(updated);
 
       return {
         ...state,
-        keyframes: sortKeyframes(updated)
+        keyframes: state.endFrame !== null
+          ? ensurePermanentKeyframes(sorted, state.endFrame)
+          : sorted
       };
     }
 
