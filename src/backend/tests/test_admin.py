@@ -138,6 +138,55 @@ class TestAdminUsers:
             assert "gpu_seconds_total" in user
 
 
+    def test_user_without_local_profile_still_listed(self, client, isolated_auth_db):
+        """Users in auth.sqlite but with no local profile DB should still appear (T1570)."""
+        # Add a user with no local profile directory at all
+        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
+             patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True):
+            from app.services.auth_db import create_user
+            create_user("no-profile-user", email="sarkarati@gmail.com")
+
+        resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 200
+        users = resp.json()
+        emails = [u["email"] for u in users]
+        assert "sarkarati@gmail.com" in emails
+
+        # Verify the user has default stats (not missing fields)
+        no_profile = next(u for u in users if u["email"] == "sarkarati@gmail.com")
+        assert "quest_progress" in no_profile
+        assert no_profile["games_annotated"] == 0
+        assert no_profile["gpu_seconds_total"] is None
+
+    def test_user_stats_failure_does_not_hide_other_users(self, client, isolated_auth_db, tmp_path):
+        """If one user's stats computation raises, all users still appear (T1570)."""
+        original_fn = None
+
+        async def _broken_stats(user, credit_stats):
+            if user["user_id"] == "regular-user":
+                raise RuntimeError("simulated profile DB corruption")
+            return await original_fn(user, credit_stats)
+
+        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
+             patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
+             patch("app.database.USER_DATA_BASE", tmp_path):
+            from app.routers import admin as admin_mod
+            original_fn = admin_mod._get_user_stats
+            with patch.object(admin_mod, "_get_user_stats", side_effect=_broken_stats):
+                resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
+
+        assert resp.status_code == 200
+        users = resp.json()
+        user_ids = [u["user_id"] for u in users]
+        # Both users appear even though regular-user's stats failed
+        assert "admin-user" in user_ids
+        assert "regular-user" in user_ids
+
+        # The failed user has default stats
+        failed_user = next(u for u in users if u["user_id"] == "regular-user")
+        assert failed_user["games_annotated"] == 0
+
+
 class TestAdminGrantCredits:
     def test_non_admin_gets_403(self, client):
         resp = client.post(
