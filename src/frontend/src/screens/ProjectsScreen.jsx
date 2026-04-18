@@ -7,7 +7,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useGamesDataStore } from '../stores/gamesDataStore';
+import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -69,8 +69,8 @@ export function ProjectsScreen({
   const createProject = useProjectsStore(state => state.createProject);
   const deleteProject = useProjectsStore(state => state.deleteProject);
 
-  // Games management — Zustand store (reactive to profile switches)
-  const games = useGamesDataStore(state => state.games);
+  // Games management — Zustand store (ready-only: pending uploads excluded)
+  const games = useReadyGames();
   const gamesLoading = useGamesDataStore(state => state.isLoading);
   const gamesError = useGamesDataStore(state => state.error);
   const fetchGames = useGamesDataStore(state => state.fetchGames);

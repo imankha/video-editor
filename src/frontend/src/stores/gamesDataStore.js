@@ -24,6 +24,7 @@ let _fetchPromise = null;
 
 export const useGamesDataStore = create((set, get) => ({
   games: [],
+  readyGames: [],  // Derived: games with status != 'pending' (cached to avoid infinite re-renders)
   selectedGame: null,
   isLoading: false,
   error: null,
@@ -50,7 +51,7 @@ export const useGamesDataStore = create((set, get) => ({
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
     if (!useAuthStore.getState().isAuthenticated) {
-      set({ games: [], isLoading: false });
+      set({ games: [], readyGames: [], isLoading: false });
       return [];
     }
     // Dedup: if a fetch is already in flight, return the existing promise
@@ -69,7 +70,8 @@ export const useGamesDataStore = create((set, get) => ({
         }
         const data = await response.json();
         const gamesList = data.games || [];
-        set({ games: gamesList, isLoading: false });
+        const readyGames = gamesList.filter(g => g.status !== 'pending');
+        set({ games: gamesList, readyGames, isLoading: false });
         return gamesList;
       } catch (err) {
         if (err.name === 'AbortError') return get().games;
@@ -321,6 +323,7 @@ export const useGamesDataStore = create((set, get) => ({
     _fetchPromise = null;
     set({
       games: [],
+      readyGames: [],
       selectedGame: null,
       isLoading: false,
       error: null,
@@ -331,5 +334,7 @@ export const useGamesDataStore = create((set, get) => ({
 
 // Selector hooks
 export const useGames = () => useGamesDataStore(state => state.games);
+/** Games with status='ready' only — use in framing, projects, downloads (not annotate). */
+export const useReadyGames = () => useGamesDataStore(state => state.readyGames);
 export const useSelectedGame = () => useGamesDataStore(state => state.selectedGame);
 export const useGamesLoading = () => useGamesDataStore(state => state.isLoading);

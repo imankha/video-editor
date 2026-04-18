@@ -1,6 +1,6 @@
 # T1540: Gestures silently lost during game upload
 
-**Status:** TODO
+**Status:** TESTING
 **Priority:** P0 (data loss)
 **Impact:** 9 (silent user data loss — clips added during upload vanish)
 **Complexity:** 5

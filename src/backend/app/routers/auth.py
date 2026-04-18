@@ -45,6 +45,7 @@ from app.services.auth_db import (
     create_session,
     validate_session,
     invalidate_session,
+    invalidate_user_sessions,
     generate_user_id,
     get_user_by_id,
     update_last_seen,
@@ -475,6 +476,22 @@ async def logout(request: Request):
         path="/",
     )
     return response
+
+
+@router.post("/invalidate-sessions/{user_id}")
+async def invalidate_sessions(user_id: str, request: Request):
+    """Invalidate all sessions for a user. Dev/staging only.
+
+    Called by reset scripts to flush the in-memory session cache
+    so deleted users can't access data via stale cookies.
+    """
+    env = os.getenv("ENV", "development")
+    if env == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
+    invalidate_user_sessions(user_id)
+    logger.info(f"[Auth] Invalidated all sessions for user {user_id}")
+    return {"invalidated": True, "user_id": user_id}
 
 
 @router.post("/test-login")

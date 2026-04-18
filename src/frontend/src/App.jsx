@@ -19,6 +19,7 @@ import { AccountSettings } from './components/AccountSettings';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
+import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
 import { toast } from './components/shared';
@@ -266,6 +267,19 @@ function App() {
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
+
+  // T1540: Warn user before leaving during an active upload
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (useUploadStore.getState().isUploading()) {
+        e.preventDefault();
+        e.returnValue = 'An upload is in progress. Leaving will cancel it.';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   // T525: Payment return is handled inside initSession().then(...) above
   // so the session cookie is ready before the verify API call.
