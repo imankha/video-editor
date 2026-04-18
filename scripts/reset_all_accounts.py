@@ -36,6 +36,7 @@ TABLES_TO_CLEAR = [
     "export_jobs",
     "achievements",
     "before_after_tracks",
+    "pending_uploads",
 ]
 
 # Safety: only these environments are allowed. Prod is never touched.

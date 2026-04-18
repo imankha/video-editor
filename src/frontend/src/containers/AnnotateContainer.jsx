@@ -160,13 +160,24 @@ export function AnnotateContainer({
 
   // T1540: Restore annotateGameId from upload store on remount during active upload.
   // When user navigates away and back, React state resets but the upload store persists.
+  // Also fetch and import any clips saved in a previous session.
   useEffect(() => {
     if (!annotateGameId && uploadStore.uploadGameId && isUploadingFromStore) {
-      console.log('[AnnotateContainer] Restoring game ID from upload store:', uploadStore.uploadGameId);
-      setAnnotateGameId(uploadStore.uploadGameId);
+      const gameId = uploadStore.uploadGameId;
+      console.log('[AnnotateContainer] Restoring game ID from upload store:', gameId);
+      setAnnotateGameId(gameId);
       if (uploadStore.uploadGameName) {
         setAnnotateGameName(uploadStore.uploadGameName);
       }
+      // Fetch existing clips for this game (may have been added before navigation)
+      getGame(gameId).then(gameData => {
+        if (gameData.annotations?.length > 0) {
+          const duration = annotateVideoMetadata?.duration || gameData.video_duration;
+          importAnnotations(gameData.annotations, duration);
+        }
+      }).catch(err => {
+        console.warn('[AnnotateContainer] Could not load existing clips on restore:', err.message);
+      });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- one-time restore on mount
 
@@ -274,10 +285,22 @@ export function AnnotateContainer({
 
       // Early callback: set game ID as soon as the game record is created (before upload finishes).
       // This enables clip saves during the upload window — the game exists in the DB from step 1.
-      const onGameCreated = ({ game_id, name }) => {
+      const onGameCreated = async ({ game_id, name }) => {
         annotateGameIdRef.current = game_id;
         setAnnotateGameId(game_id);
         setAnnotateGameName(name);
+
+        // T1540: If resuming a pending game that already has clips (e.g., page refresh
+        // during upload), fetch and import them so they appear in the UI.
+        try {
+          const gameData = await getGame(game_id);
+          if (gameData.annotations?.length > 0) {
+            const duration = combinedMetadata?.duration || gameData.video_duration;
+            importAnnotations(gameData.annotations, duration);
+          }
+        } catch (err) {
+          console.warn('[AnnotateContainer] Could not load existing clips for game:', err.message);
+        }
       };
 
       // Start upload

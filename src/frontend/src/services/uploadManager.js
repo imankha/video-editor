@@ -401,7 +401,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     file,
     prepareData.parts,
     (p) => {
-      notify(UPLOAD_PHASE.UPLOADING, p, `Uploading... ${p}%`);
+      notify(UPLOAD_PHASE.UPLOADING, p, 'Uploading...');
     },
     prepareData.upload_session_id,
     completedParts,
@@ -553,6 +553,7 @@ export async function uploadGame(file, onProgress, options = {}) {
     };
 
     // Step 2: Create game as 'pending' — game_id available for clip persistence.
+    console.log('[T1540] Creating pending game BEFORE upload');
     gameResult = await createGame(options, [videoRef], 'pending');
 
     // Dedup: if user already owns this video, game is already ready — skip upload.
@@ -573,6 +574,7 @@ export async function uploadGame(file, onProgress, options = {}) {
     }
 
     // Notify caller of game_id so clip saves work immediately.
+    console.log('[T1540] Game created, firing onGameCreated:', gameResult.game_id);
     if (options.onGameCreated) {
       options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
     }

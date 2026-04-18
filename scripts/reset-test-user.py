@@ -26,6 +26,7 @@ import argparse
 import sqlite3
 import subprocess
 import sys
+import urllib.request
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -42,6 +43,7 @@ TABLES_TO_CLEAR = [
     "export_jobs",
     "achievements",
     "before_after_tracks",
+    "pending_uploads",
 ]
 
 AUTH_TABLES_TO_CLEAR = [
@@ -264,6 +266,20 @@ def main():
     # Upload cleaned auth.sqlite to R2
     auth_r2_key = f"{app_env}/auth/auth.sqlite"
     checkpoint_and_upload(AUTH_DB, r2_client, bucket, auth_r2_key)
+
+    # Flush in-memory session cache so stale cookies can't access data
+    backend_url = "http://localhost:8000" if args.env == "dev" else None
+    if backend_url:
+        try:
+            req = urllib.request.Request(
+                f"{backend_url}/api/auth/invalidate-sessions/{user_id}",
+                method="POST",
+                data=b"",
+            )
+            urllib.request.urlopen(req, timeout=5)
+            print(f"  Flushed session cache for '{user_id}'")
+        except Exception as e:
+            print(f"  Warning: Could not flush session cache ({e}) — restart backend manually")
 
     # Restart Fly.io machines to clear cached state
     if is_remote and not args.no_restart:

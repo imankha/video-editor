@@ -100,7 +100,7 @@ export const useUploadStore = create((set, get) => ({
           ...state.activeUpload,
           progress: overallPercent,
           phase: progress.phase,
-          message: progress.message,
+          message: 'Uploading...',
         } : null,
       }));
     };
