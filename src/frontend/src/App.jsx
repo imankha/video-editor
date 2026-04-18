@@ -359,14 +359,6 @@ function App() {
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
 
-    // T1540: Warn when leaving annotate during an active upload
-    if (editorMode === EDITOR_MODES.ANNOTATE && useUploadStore.getState().isUploading()) {
-      const leave = window.confirm(
-        'An upload is in progress. Leaving will cancel it and any clips added during this upload may be lost.\n\nAre you sure you want to leave?'
-      );
-      if (!leave) return;
-    }
-
     // Check if leaving framing with uncommitted changes
     // Only show confirmation when there's a working video that would be invalidated
     // With gesture-based sync, framing data is auto-saved, so we only need to warn about
