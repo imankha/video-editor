@@ -25,7 +25,7 @@ Charge credits for game uploads and storage renewals. Games are stored for 30 da
 | Renew button appears | <=14 days remaining |
 | What expires | Game video only (`games/{hash}.mp4`) |
 | What persists | Clips, working videos, final videos, metadata |
-| Expired game state | Visible, clips work, can't re-annotate |
+| Expired game state | Hidden from user, clips still work, can't re-annotate |
 
 ### R2 Cost Basis
 
@@ -91,11 +91,20 @@ When teammates upload the same game, the raw video is stored once. 5 teammates s
 
 ### Technical Notes
 
-**Game video reference counting:** Shared game videos (`games/{hash}.mp4`) are deduped in R2. When a user's game expires, decrement the reference count. Only delete from R2 when the last user reference expires. Implementation: count active (non-expired) games across all users with the same `blake3_hash`.
+**Game video reference counting:** Shared game videos (`games/{hash}.mp4`) are deduped in R2. Multiple users can reference the same game video. When a user's game expires, that user loses access (game hidden from their list), but the R2 video is NOT deleted if other users still have active references.
 
-**Cleanup execution:** Run expiry check on user login / session init (lazy, per-user). No global cron needed for MVP. Mark expired, delete R2 files for that user's game reference.
+**R2 lifecycle-based cleanup:** No cron or lazy sweep needed. R2 manages deletion automatically via object-level expiry metadata. The flow:
 
-**Extension stacking:** If a user extends before expiry, new_expires = current_expires + 30 days. If they extend after expiry, it's too late -- game video is gone, they'd need to re-upload.
+1. **On upload:** Set the R2 object's expiry (`Expires` header or custom metadata) to `storage_expires_at` (now + 30 days).
+2. **On renewal:** Query all users' `storage_expires_at` for this `blake3_hash`, take the MAX, and update the R2 object's expiry to that date.
+3. **On user expiry:** User loses access (lazy check on login). Update the R2 object's expiry to the MAX of remaining active references. If no active references remain, the object already has the correct expiry from step 2 — R2 deletes it automatically.
+4. **No orphans possible:** The R2 object always knows when it should die. Even if every user abandons the app, the object expires on schedule.
+
+Note: R2 lifecycle rules operate on prefixes/filters, not per-object expiry headers. If R2 doesn't support per-object expiry natively, store `max_expires_at` as custom metadata and run a lightweight daily lifecycle sweep that deletes objects past their `max_expires_at`. Still simpler than cross-user ref counting on every login.
+
+**Access check (lazy, per-user):** On user login / session init, mark games as expired where `storage_expires_at < now`. Expired games are hidden from the user's game list. No R2 deletion happens here — that's handled by the lifecycle mechanism above.
+
+**Extension stacking:** If a user extends before expiry, new_expires = current_expires + 30 days. Update the R2 object's expiry if this is now the MAX across all users. If they extend after expiry, it's too late -- game video may be gone, they'd need to re-upload.
 
 ## Implementation
 
@@ -122,7 +131,7 @@ When teammates upload the same game, the raw video is stored once. 5 teammates s
     - `>14 days`: muted "N days" text
     - `<=14 days`: "Renew - 2cr" button
     - `<=2 days`: same button with red accent
-    - `expired`: "Game film removed - Upload to restore" grey text
+    - `expired`: game hidden from list entirely
 14. [ ] Add inline renew handler on game card button -- deduct credits, update expiry, show confirmation
 15. [ ] Update `creditStore` to refresh after upload and renewal
 
@@ -143,7 +152,7 @@ Urgent (<=2 days):
   [ Renew - 2cr ] (same button, red accent)
 
 Expired:
-  "Game film removed - Upload to restore" (grey text)
+  Game hidden from user's game list entirely. If they re-upload (same hash), treated as new upload (2 credits, fresh 30-day window).
 ```
 
 ### Upload Button Tooltip
@@ -165,8 +174,9 @@ Expired:
 - [ ] Games show expiry countdown on cards
 - [ ] Games expiring within 14 days show "Renew" button
 - [ ] Renew button deducts 2 credits and extends by 30 days
-- [ ] Expired games have video removed from R2 but clips/exports persist
-- [ ] Shared game videos only deleted when last user reference expires
+- [ ] Expired games are hidden from the user's game list (even if video still exists in R2 for other users)
+- [ ] Expired user's clips/exports still persist and work
+- [ ] Shared game videos only deleted from R2 when last user reference expires
 - [ ] Upload button shows cost on hover
 - [ ] No new popups or banners -- all messaging is inline/passive
 - [ ] Credit transactions logged for all upload/renewal deductions
