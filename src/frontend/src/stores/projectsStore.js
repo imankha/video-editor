@@ -13,7 +13,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { useQuestStore } from './questStore';
-import { profiledFetch, PROFILING_ENABLED } from '../utils/profiling';
+import { PROFILING_ENABLED } from '../utils/profiling';
 import { useAuthStore } from './authStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -78,7 +78,7 @@ export const useProjectsStore = create((set, get) => ({
     if (PROFILING_ENABLED) performance.mark('project:load:start');
     set({ loading: true, error: null });
     try {
-      const response = await profiledFetch('project:load', `${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       set({ loading: false });

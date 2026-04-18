@@ -25,10 +25,10 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | TODO | After staging push, verify T1533 fix holds on iOS Safari + Chrome Android — Priority Hints behave differently on mobile browsers. Fallback plan if regression: drop hidden extractor on mobile (T1500 persists dims). |
 | T1539 | [R2 Concurrent-Write Rate Limit](tasks/T1539-r2-concurrent-write-rate-limit.md) | 7 | ? | ? | TODO | Cloudflare R2 returns 429 ("reduce concurrent request rate for the same object") when concurrent PutObjects hit the same `profile.sqlite` key, putting the user in degraded state. Must solve **without** breaking the gesture-based persistence paradigm (no debouncing, no batching, no background-only sync). Explore per-resource locks (T1538) and other approaches. |
 | T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 6 | 0.7 | TODO | Finer-grained writer serialization — writers to disjoint tables don't block each other. Built on T1531; gated on real `[WRITE_LOCK_WAIT]` evidence. May intersect T1539. |
+| T1590 | [Project State Save Slow](tasks/T1590-project-state-save-slow.md) | 6 | 3 | 2.0 | TODO | `PATCH /api/projects/{id}/state` takes 1000-1100ms (handler ~400ms + R2 sync ~600ms) on every mode transition. Profile shows R2 round trip dominates for a small metadata update. |
 | T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; eliminates cold-DB-restore cost on every cross-machine request |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task so server stays responsive during exports |
 | T1560 | [Fetch-First Video Loading](tasks/T1560-fetch-first-video-loading.md) | 8 | 4 | 2.0 | TODO | Use fetch() for initial video chunk to bypass Chrome's 15s media scheduler defer on cross-origin R2 videos in Annotate mode |
-| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | 6 | 2 | 1.3 | TODO | Start downloading game videos from R2 as soon as user logs in, so they load instantly later |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 ---
@@ -79,7 +79,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | DONE | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
-| T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | TODO | 2.0 | Clickable breadcrumbs (Games/Reels → Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
+| T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | Clickable breadcrumbs (Games/Reels → Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | DONE | 3.0 | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin → BrokenPipe. |
 
@@ -110,7 +110,6 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
 | T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | DONE | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
-| T1151 | [Background Sync Retry Worker](tasks/T1151-background-sync-retry-worker.md) | NOT RECOMMENDED | 0.8 | Sweep `.sync_pending` markers on an interval. Rejected: contention risk (SQLite writer lock, version races) outweighs narrow idle-after-failure benefit |
 | T1152 | [Persist Sync-Failed State](tasks/T1152-persist-sync-failed-state.md) | DONE | 2.5 | `_sync_failed` dict resets on restart — use `.sync_pending` marker as source of truth so degraded state survives |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | TODO | 0.9 | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task, not impl |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | MEASURING | 0.8 | precursor log line landed; wait 30d for partial-sync frequency data before recommending |
@@ -178,8 +177,8 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
-| T40 | [Stale Session Detection](tasks/T40-stale-session-detection.md) | TODO | 1.3 | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
-| T230 | [Pre-warm R2 on Login](tasks/T230-prewarm-r2-on-login.md) | TODO | 1.3 | Start downloading game videos from R2 as soon as user logs in, so they load instantly later |
+| T40 | [1 User 2 Tabs](tasks/T40-stale-session-detection.md) | TODO | 1.3 | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
+| T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | User shares annotated video with a coach via email; coach views under a coach profile, changes clip ratings, adds notes, and sends back — updates flow back to the original user's game |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 | T620 | [Account Cleanup](tasks/T620-account-cleanup.md) | TODO | 1.0 | Auto-delete abandoned guest accounts and dormant free accounts to reduce R2 storage costs |
 | T1100 | [Remove Dead Overlay Debounce](tasks/T1100-remove-dead-overlay-debounce.md) | TODO | 1.5 | Dead `saveOverlayData` with 2s debounce in OverlayContainer; remove + audit overlay persistence |

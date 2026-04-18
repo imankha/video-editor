@@ -487,8 +487,15 @@ function render() {
         loadBtn.onclick = (e) => {
           e.stopPropagation();
           const detail = card.querySelector('.task-detail');
-          if (detail.dataset.loaded) return;
-          loadTaskFile(t.link, detail);
+          const contentEl = detail.querySelector('.detail-content');
+          if (detail.dataset.loaded) {
+            const visible = contentEl.style.display !== 'none';
+            contentEl.style.display = visible ? 'none' : 'block';
+            loadBtn.textContent = visible ? 'Show details' : 'Hide details';
+          } else {
+            loadTaskFile(t.link, detail);
+            loadBtn.textContent = 'Hide details';
+          }
         };
       }
 

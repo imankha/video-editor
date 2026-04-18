@@ -127,3 +127,15 @@ so we can attribute.
   attribute from per-step timing + `[R2_CALL]` lines + profile `.txt`,
   then pick between 202 + BackgroundTask, `_INFLIGHT` bypass, or
   per-event-type lock.
+
+- 2026-04-18: New benchmark data from frontend profiling (T1570):
+  ```
+  [SLOW FETCH] POST /api/quests/achievements/opened_framing_editor
+    total=768ms ttfb=767ms body=1ms req_id=<id> status=200
+  ```
+  This is not the 60s stall (no R2 flakiness this time) but still 768ms for
+  a trivial achievement write -- well above the 500ms perceptible threshold.
+  The time is all TTFB (handler + R2 sync), not body transfer. Confirms this
+  endpoint is consistently slow even without the pathological 60s case, and
+  should be made non-blocking (fire-and-forget from frontend, or 202 +
+  BackgroundTask on backend).

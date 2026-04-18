@@ -259,6 +259,18 @@ async def startup_event():
     logger.info(f"Python version: {sys.version.split()[0]}")
     logger.info("=" * 80)
 
+    # T1570: Clear stale profiles on startup, auto-enable profiling in dev/staging
+    from app.profiling import clear_profile_dir, profile_on_breach_enabled
+    clear_profile_dir()
+    if ENV in ("development", "staging") and not os.getenv("PROFILE_ON_BREACH_ENABLED"):
+        os.environ["PROFILE_ON_BREACH_ENABLED"] = "true"
+        os.environ.setdefault("PROFILE_ON_BREACH_MS", "500")
+        os.environ.setdefault("DEBUG_ENDPOINTS_ENABLED", "true")
+        logger.info("[PROFILE] Auto-enabled profiling for dev/staging (threshold=500ms)")
+    if profile_on_breach_enabled():
+        from app.profiling import profile_breach_ms
+        logger.info(f"[PROFILE] Profiling enabled (breach threshold={profile_breach_ms()}ms)")
+
     # Register SIGTERM handler for graceful shutdown (Fly.io sends SIGTERM before stopping)
     if not IS_DEV:
         signal.signal(signal.SIGTERM, _graceful_shutdown)

@@ -26,8 +26,6 @@ from app.constants import GameType, GameCreateStatus, GameStatus
 from app.storage import (
     generate_presigned_url_global,
     generate_presigned_url,
-    r2_get_object_metadata_global,
-    r2_set_object_metadata_global,
     r2_head_object_global,
 )
 from app.user_context import get_current_user_id
@@ -36,27 +34,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/games", tags=["games"])
 
-
-def update_global_access_time(blake3_hash: str) -> None:
-    """
-    Update last_accessed_at in R2 object metadata.
-
-    This tracks global access time across all users - enables future
-    cleanup cron to identify truly unused games (not accessed by ANY user).
-    """
-    if not blake3_hash:
-        return
-
-    r2_key = f"games/{blake3_hash}.mp4"
-    try:
-        # Get existing metadata to preserve other fields
-        existing = r2_get_object_metadata_global(r2_key) or {}
-        existing['last_accessed_at'] = datetime.utcnow().isoformat() + 'Z'
-        r2_set_object_metadata_global(r2_key, existing)
-        logger.debug(f"Updated global access time for {blake3_hash}")
-    except Exception as e:
-        # Non-fatal - don't fail the request if metadata update fails
-        logger.warning(f"Failed to update global access time for {blake3_hash}: {e}")
 
 
 def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
@@ -717,11 +694,6 @@ async def get_game(game_id: int):
         )
         conn.commit()
 
-        # Update global access time in R2 metadata (for cross-user cleanup)
-        # Only for new global storage (blake3_hash)
-        if row['blake3_hash']:
-            update_global_access_time(row['blake3_hash'])
-
         annotations = load_annotations_from_db(game_id)
 
         display_name = generate_game_display_name(
@@ -875,11 +847,6 @@ async def get_game_video(game_id: int):
             (game_id,)
         )
         conn.commit()
-
-        # Update global access time in R2 metadata (for cross-user cleanup)
-        # Only for new global storage (blake3_hash)
-        if row['blake3_hash']:
-            update_global_access_time(row['blake3_hash'])
 
         # Support both new (blake3_hash) and old (video_filename) storage
         presigned_url = get_game_video_url(row['blake3_hash'], row['video_filename'])

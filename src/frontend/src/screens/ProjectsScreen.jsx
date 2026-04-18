@@ -11,6 +11,7 @@ import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
+import { PROFILING_ENABLED } from '../utils/profiling';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -133,6 +134,7 @@ export function ProjectsScreen({
   // Handle project selection
   const handleSelectProject = useCallback(async (projectId) => {
     console.log('[ProjectsScreen] Selecting project:', projectId);
+    if (PROFILING_ENABLED) performance.mark('gesture:open-project:start');
     setLoadingProjectId(projectId);
 
     try {
@@ -155,6 +157,16 @@ export function ProjectsScreen({
     } catch (err) {
       console.error('[ProjectsScreen] Failed to select project:', err);
     } finally {
+      if (PROFILING_ENABLED) {
+        performance.mark('gesture:open-project:end');
+        try {
+          const m = performance.measure('gesture:open-project', 'gesture:open-project:start', 'gesture:open-project:end');
+          // eslint-disable-next-line no-console
+          console.info(`[GESTURE] open-project duration=${Math.round(m.duration)}ms`);
+        } catch { /* marks cleared */ }
+        performance.clearMarks('gesture:open-project:start');
+        performance.clearMarks('gesture:open-project:end');
+      }
       setLoadingProjectId(null);
     }
   }, [selectProject, loadProject, setEditorMode, onStateReset]);

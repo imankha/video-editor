@@ -9,6 +9,7 @@ import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { VideoMode, GameType } from '../constants/gameConstants';
+import { PROFILING_ENABLED } from '../utils/profiling';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -343,7 +344,7 @@ export function AnnotateContainer({
    * Supports both single-video and multi-video games.
    */
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
-
+    if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     try {
       const gameData = await getGame(gameId);
 
@@ -467,6 +468,17 @@ export function AnnotateContainer({
       if (err.message?.includes('not found')) {
         toast.error('Game not found — it may have been deleted');
         setEditorMode('projects');
+      }
+    } finally {
+      if (PROFILING_ENABLED) {
+        performance.mark('gesture:load-game:end');
+        try {
+          const m = performance.measure('gesture:load-game', 'gesture:load-game:start', 'gesture:load-game:end');
+          // eslint-disable-next-line no-console
+          console.info(`[GESTURE] load-game duration=${Math.round(m.duration)}ms`);
+        } catch { /* marks cleared */ }
+        performance.clearMarks('gesture:load-game:start');
+        performance.clearMarks('gesture:load-game:end');
       }
     }
   }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
