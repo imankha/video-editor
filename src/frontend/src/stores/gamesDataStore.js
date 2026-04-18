@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 import { useAuthStore } from './authStore';
+import { profiledFetch, PROFILING_ENABLED } from '../utils/profiling';
 
 // Module-level refs for fetch cancellation
 let _fetchController = null;
@@ -63,8 +64,9 @@ export const useGamesDataStore = create((set, get) => ({
 
     set({ isLoading: true, error: null });
     _fetchPromise = (async () => {
+      if (PROFILING_ENABLED) performance.mark('games:fetch:start');
       try {
-        const response = await fetch(`${API_BASE}/api/games`, { signal });
+        const response = await profiledFetch('games:fetch', `${API_BASE}/api/games`, { signal });
         if (!response.ok) {
           throw new Error(`Failed to fetch games: ${response.status}`);
         }
@@ -79,6 +81,18 @@ export const useGamesDataStore = create((set, get) => ({
         set({ error: err.message, isLoading: false });
         return [];
       } finally {
+        if (PROFILING_ENABLED) {
+          performance.mark('games:fetch:end');
+          try {
+            const m = performance.measure('games:fetch', 'games:fetch:start', 'games:fetch:end');
+            if (m.duration >= 1000) {
+              // eslint-disable-next-line no-console
+              console.warn(`[TIMING] games:fetch duration=${Math.round(m.duration)}ms threshold=1000ms`);
+            }
+          } catch { /* marks cleared */ }
+          performance.clearMarks('games:fetch:start');
+          performance.clearMarks('games:fetch:end');
+        }
         _fetchPromise = null;
       }
     })();
