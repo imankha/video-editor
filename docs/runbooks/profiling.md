@@ -6,24 +6,31 @@ How to profile slow requests end-to-end (backend + frontend).
 
 ### Enable
 
-Set env vars on the target environment:
+**Auto-enabled in dev and staging.** On startup, if `ENV` is `development` or
+`staging` and `PROFILE_ON_BREACH_ENABLED` is not explicitly set, the server
+auto-enables profiling with a 500ms threshold and clears stale profiles.
+
+To override or configure manually:
 
 ```bash
-# Staging (fly.io)
+# Staging (fly.io) -- auto-enabled, but you can adjust threshold
 fly secrets set --app reel-ballers-api-staging \
-  PROFILE_ON_BREACH_ENABLED=true \
-  PROFILE_ON_BREACH_MS=1000 \
-  DEBUG_ENDPOINTS_ENABLED=true
+  PROFILE_ON_BREACH_MS=1000
 
-# Local dev
-PROFILE_ON_BREACH_ENABLED=true PROFILE_ON_BREACH_MS=500 uvicorn app.main:app --reload
+# Production (explicitly enable if needed)
+fly secrets set --app reel-ballers-api \
+  PROFILE_ON_BREACH_ENABLED=true \
+  PROFILE_ON_BREACH_MS=2000 \
+  DEBUG_ENDPOINTS_ENABLED=true
 ```
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `PROFILE_ON_BREACH_ENABLED` | `false` | Enable cProfile wrapping on every request |
-| `PROFILE_ON_BREACH_MS` | `1000` | Threshold (ms) -- only dump profiles for requests slower than this |
-| `DEBUG_ENDPOINTS_ENABLED` | `false` | Gate the `/api/_debug/profiles` endpoints |
+| `PROFILE_ON_BREACH_ENABLED` | `false` (auto `true` in dev/staging) | Enable cProfile wrapping on every request |
+| `PROFILE_ON_BREACH_MS` | `1000` (auto `500` in dev/staging) | Threshold (ms) -- only dump profiles for requests slower than this |
+| `DEBUG_ENDPOINTS_ENABLED` | `false` (auto `true` in dev/staging) | Gate the `/api/_debug/profiles` endpoints |
+
+Profile files are cleared on every server restart -- no stale data accumulates.
 
 ### On-demand profiling
 
@@ -50,9 +57,25 @@ curl -b cookies.txt https://staging.reelballers.com/api/_debug/profiles/<name>
 **Via disk** (SSH/console access):
 
 ```
-/tmp/profiles/{timestamp}_{method}_{path}_{ms}ms_{user}.prof   # binary pstats
-/tmp/profiles/{timestamp}_{method}_{path}_{ms}ms_{user}.txt    # human-readable top-50
+/tmp/profiles/{timestamp}_{method}_{path}_{ms}ms_{req_id}_{user}.prof   # binary pstats
+/tmp/profiles/{timestamp}_{method}_{path}_{ms}ms_{req_id}_{user}.txt    # human-readable top-50
 ```
+
+### Tracing frontend to backend profile
+
+1. Find the slow call in browser console:
+   ```
+   [SLOW FETCH] GET /api/games/2 total=1858ms ttfb=1855ms body=3ms req_id=abc12345
+   ```
+2. The `req_id` appears in the profile filename and in backend logs:
+   ```
+   [REQ_TIMING] GET /api/games/2 ... req_id=abc12345 profile=/tmp/profiles/1234_GET_api_games_2_1840ms_abc12345.prof
+   ```
+3. Find the matching profile file by req_id:
+   ```bash
+   ls /tmp/profiles/*abc12345*
+   cat /tmp/profiles/*abc12345*.txt
+   ```
 
 ### View with snakeviz / pstats
 

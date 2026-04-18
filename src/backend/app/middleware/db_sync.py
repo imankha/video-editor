@@ -321,7 +321,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         prof,
                         tag=f"{method}_{path}",
                         elapsed_ms=total_ms,
-                        extra=req_id or meta.get("user_id"),
+                        req_id=req_id,
+                        extra=meta.get("user_id"),
                     )
 
             sync_duration = meta["sync_duration"]
@@ -340,6 +341,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     f"(sync: {sync_duration:.2f}s, handler: {total_duration - sync_duration:.2f}s)"
                     f"{req_id_suffix}{profile_suffix}"
                 )
+            profile_timing_suffix = f" profile={profile_path}" if profile_path else ""
             logger.info(
                 f"[REQ_TIMING] {method} {path} user={meta.get('user_id') or 'none'} "
                 f"total_ms={int(total_ms)} "
@@ -347,7 +349,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 f"sync_ms={int(sync_duration * 1000)} "
                 f"inflight_entry={meta['inflight_entry']} "
                 f"inflight_exit={meta['inflight_exit']}"
-                f"{req_id_suffix}"
+                f"{req_id_suffix}{profile_timing_suffix}"
             )
 
     async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
@@ -531,6 +533,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                             sub_prof,
                                             tag=f"syncthread_profile_{_user_id}",
                                             elapsed_ms=elapsed_ms,
+                                            req_id=req_id,
                                         )
 
                         def _sync_user():
@@ -550,6 +553,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                             sub_prof,
                                             tag=f"syncthread_user_{_user_id}",
                                             elapsed_ms=elapsed_ms,
+                                            req_id=req_id,
                                         )
 
                         # T1536: run both syncs on worker threads via the

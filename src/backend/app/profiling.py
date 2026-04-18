@@ -91,6 +91,24 @@ def ensure_profile_dir() -> Path:
     return PROFILE_DIR
 
 
+def clear_profile_dir() -> int:
+    """Delete all profiles from PROFILE_DIR. Called on server startup.
+
+    Returns the number of files deleted.
+    """
+    if not PROFILE_DIR.exists():
+        return 0
+    count = 0
+    for f in PROFILE_DIR.iterdir():
+        try:
+            f.unlink()
+            count += 1
+        except OSError:
+            pass
+    logger.info(f"[PROFILE] Cleared {count} stale profile files from {PROFILE_DIR}")
+    return count
+
+
 def _format_pstats(prof: cProfile.Profile, top: int = 50) -> str:
     """Produce a human/AI-readable summary of a cProfile.Profile."""
     buf = io.StringIO()
@@ -112,8 +130,9 @@ def dump_profile(
     tag: str,
     elapsed_ms: float,
     extra: Optional[str] = None,
+    req_id: Optional[str] = None,
 ) -> Optional[Path]:
-    """Write `{dir}/{ts}_{tag}_{ms}ms[.{extra}].prof` plus a sibling .txt.
+    """Write `{dir}/{ts}_{tag}_{ms}ms_{req_id}[.{extra}].prof` plus a sibling .txt.
 
     Returns the .prof path (absolute) or None on failure. Errors are logged
     but never raised — profiling must never break the caller.
@@ -122,8 +141,9 @@ def dump_profile(
         d = ensure_profile_dir()
         ts = int(time.time())
         tag_slug = _slug(tag)
+        req_slug = f"_{_slug(req_id, 12)}" if req_id else ""
         extra_slug = f"_{_slug(extra, 24)}" if extra else ""
-        stem = f"{ts}_{tag_slug}_{int(elapsed_ms)}ms{extra_slug}"
+        stem = f"{ts}_{tag_slug}_{int(elapsed_ms)}ms{req_slug}{extra_slug}"
         prof_path = d / f"{stem}.prof"
         txt_path = d / f"{stem}.txt"
         prof.dump_stats(str(prof_path))
