@@ -234,12 +234,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     """
 
     # Skip sync for these path prefixes (static files, health checks, auth, etc.)
+    # T1531: /api/quests/achievements — idempotent INSERT OR IGNORE writes that
+    # don't need immediate R2 sync. Skipping avoids the ~768ms R2 upload (and
+    # the per-user write lock) on a fire-and-forget POST. The local SQLite
+    # commit is durable; data syncs to R2 on the next non-achievement write.
     SKIP_SYNC_PATHS = (
         '/docs',
         '/redoc',
         '/openapi.json',
         '/api/health',
         '/api/auth',
+        '/api/quests/achievements',
         '/static',
     )
 
