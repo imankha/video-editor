@@ -158,6 +158,18 @@ export function AnnotateContainer({
   // Track whether we initiated the upload from this component (vs navigating back)
   const uploadInitiatedHereRef = useRef(false);
 
+  // T1540: Restore annotateGameId from upload store on remount during active upload.
+  // When user navigates away and back, React state resets but the upload store persists.
+  useEffect(() => {
+    if (!annotateGameId && uploadStore.uploadGameId && isUploadingFromStore) {
+      console.log('[AnnotateContainer] Restoring game ID from upload store:', uploadStore.uploadGameId);
+      setAnnotateGameId(uploadStore.uploadGameId);
+      if (uploadStore.uploadGameName) {
+        setAnnotateGameName(uploadStore.uploadGameName);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- one-time restore on mount
+
   // Keep a ref to annotateGameId so async callbacks always read the latest value.
   // useCallback closures capture state at creation time, but the ref is always current.
   const annotateGameIdRef = useRef(annotateGameId);

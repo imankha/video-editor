@@ -15,6 +15,10 @@ export const useUploadStore = create((set, get) => ({
   // Active upload state
   activeUpload: null, // { id, file/files, fileName, fileSize, progress, phase, message, startedAt, blobUrl, gameName, isMultiVideo }
 
+  // T1540: Game ID created during upload (persists across component remounts)
+  uploadGameId: null,
+  uploadGameName: null,
+
   // Callbacks to notify when upload completes
   onCompleteCallbacks: [],
 
@@ -119,7 +123,7 @@ export const useUploadStore = create((set, get) => ({
         }
       });
       const gameName = get().activeUpload?.gameName;
-      set({ activeUpload: null, onCompleteCallbacks: [] });
+      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
       toast.success('Game ready!', {
         message: result.deduplicated
           ? `${gameName || 'Video'} was already uploaded`
@@ -140,10 +144,12 @@ export const useUploadStore = create((set, get) => ({
       }));
     };
 
-    // Thread onGameCreated into upload options so clip saves work during upload
-    if (onGameCreated) {
-      options.onGameCreated = onGameCreated;
-    }
+    // Thread onGameCreated into upload options so clip saves work during upload.
+    // Also persist game ID in the store so it survives component remounts.
+    options.onGameCreated = ({ game_id, name }) => {
+      set({ uploadGameId: game_id, uploadGameName: name });
+      if (onGameCreated) onGameCreated({ game_id, name });
+    };
 
     if (isMultiVideo) {
       // Multi-video upload
@@ -184,7 +190,7 @@ export const useUploadStore = create((set, get) => ({
   clearFailedUpload: () => {
     const state = get();
     if (state.activeUpload?.phase === UPLOAD_PHASE.ERROR) {
-      set({ activeUpload: null, onCompleteCallbacks: [] });
+      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
     }
   },
 
@@ -210,7 +216,7 @@ export const useUploadStore = create((set, get) => ({
    */
   cancelUpload: () => {
     if (!get().activeUpload) return;
-    set({ activeUpload: null, onCompleteCallbacks: [] });
+    set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
     toast.info('Upload cancelled');
   },
 
@@ -219,7 +225,7 @@ export const useUploadStore = create((set, get) => ({
    * In-flight XHR continues (aborting multipart R2 uploads is complex),
    * but the completion callback is discarded so it won't affect the new profile.
    */
-  reset: () => set({ activeUpload: null, onCompleteCallbacks: [] }),
+  reset: () => set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null }),
 }));
 
 export default useUploadStore;
