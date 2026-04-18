@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 
 /**
@@ -56,7 +56,73 @@ export function VideoPlayer({
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [perfCopied, setPerfCopied] = useState(false);
   const containerRef = useRef(null);
+
+  // T1535: perf debug mode — ?debug=perf in URL
+  const debugPerf = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).has('debug');
+  }, []);
+
+  // Initialize global timing array when debug mode is active
+  useEffect(() => {
+    if (!debugPerf) return;
+    if (!window.__videoPerfTimings) window.__videoPerfTimings = [];
+    window.__videoPerfTimings.push({ event: 'video-player-mount', t: performance.now() });
+    return () => { window.__videoPerfTimings?.push({ event: 'video-player-unmount', t: performance.now() }); };
+  }, [debugPerf]);
+
+  // Wrap handlers to inject perf timing
+  const perfHandlers = useMemo(() => {
+    if (!debugPerf || !handlers) return handlers;
+    const wrap = (name, original) => (e) => {
+      window.__videoPerfTimings?.push({ event: `video-${name}`, t: performance.now() });
+      original?.(e);
+    };
+    return {
+      ...handlers,
+      onLoadStart: wrap('loadstart', handlers.onLoadStart),
+      onLoadedMetadata: wrap('loadedmetadata', handlers.onLoadedMetadata),
+      onLoadedData: wrap('loadeddata', handlers.onLoadedData),
+      onCanPlay: wrap('canplay', handlers.onCanPlay),
+      onPlaying: wrap('playing', handlers.onPlaying),
+      onWaiting: wrap('waiting', handlers.onWaiting),
+      onError: wrap('error', handlers.onError),
+    };
+  }, [debugPerf, handlers]);
+
+  const activeHandlers = debugPerf ? perfHandlers : handlers;
+
+  const copyPerfTimings = useCallback(async () => {
+    const timings = window.__videoPerfTimings || [];
+    if (!timings.length) return;
+    const t0 = timings[0].t;
+    const lines = [
+      `=== Video Perf Timings (T1535) ===`,
+      `Captured: ${new Date().toISOString()}`,
+      `UA: ${navigator.userAgent}`,
+      `URL: ${videoUrl?.substring(0, 120)}`,
+      `Connection: ${navigator.connection ? `${navigator.connection.effectiveType} downlink=${navigator.connection.downlink}Mbps rtt=${navigator.connection.rtt}ms` : 'N/A'}`,
+      ``,
+      ...timings.map(t => {
+        const rel = `+${(t.t - t0).toFixed(1)}ms`;
+        const extra = Object.entries(t).filter(([k]) => k !== 'event' && k !== 't').map(([k, v]) => `${k}=${v}`).join(' ');
+        return `${rel.padStart(12)} ${t.event}${extra ? '  ' + extra : ''}`;
+      }),
+      ``,
+      `Total: ${(timings[timings.length - 1].t - t0).toFixed(1)}ms`,
+    ];
+    const text = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setPerfCopied(true);
+      setTimeout(() => setPerfCopied(false), 2000);
+    } catch {
+      // Fallback for mobile browsers that block clipboard API
+      window.prompt('Copy this text:', text);
+    }
+  }, [videoUrl]);
 
   // Setup wheel event listener with passive: false to allow preventDefault
   React.useEffect(() => {
@@ -207,19 +273,19 @@ export function VideoPlayer({
               className={`object-contain ${
                 isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
               }`}
-              onLoadStart={handlers.onLoadStart}
-              onTimeUpdate={handlers.onTimeUpdate}
-              onPlay={handlers.onPlay}
-              onPause={handlers.onPause}
-              onSeeking={handlers.onSeeking}
-              onSeeked={handlers.onSeeked}
-              onLoadedMetadata={handlers.onLoadedMetadata}
-              onLoadedData={handlers.onLoadedData}
-              onProgress={handlers.onProgress}
-              onWaiting={handlers.onWaiting}
-              onPlaying={handlers.onPlaying}
-              onCanPlay={handlers.onCanPlay}
-              onError={handlers.onError}
+              onLoadStart={activeHandlers.onLoadStart}
+              onTimeUpdate={activeHandlers.onTimeUpdate}
+              onPlay={activeHandlers.onPlay}
+              onPause={activeHandlers.onPause}
+              onSeeking={activeHandlers.onSeeking}
+              onSeeked={activeHandlers.onSeeked}
+              onLoadedMetadata={activeHandlers.onLoadedMetadata}
+              onLoadedData={activeHandlers.onLoadedData}
+              onProgress={activeHandlers.onProgress}
+              onWaiting={activeHandlers.onWaiting}
+              onPlaying={activeHandlers.onPlaying}
+              onCanPlay={activeHandlers.onCanPlay}
+              onError={activeHandlers.onError}
               playsInline
               preload={clipRange ? "metadata" : "auto"}
               fetchpriority="high"
@@ -238,6 +304,16 @@ export function VideoPlayer({
 
           {/* Render any overlays passed by the mode */}
           {overlays}
+
+          {/* T1535: perf debug copy button */}
+          {debugPerf && (
+            <button
+              onClick={(e) => { e.stopPropagation(); copyPerfTimings(); }}
+              className="absolute top-2 right-2 z-50 px-3 py-1.5 bg-yellow-500 text-black text-xs font-bold rounded shadow-lg active:bg-yellow-400"
+            >
+              {perfCopied ? 'Copied!' : 'Copy Perf'}
+            </button>
+          )}
 
           {/* Video error overlay */}
           {error && (
