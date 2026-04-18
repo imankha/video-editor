@@ -111,6 +111,14 @@ export function AnnotateScreen({ onClearSelection }) {
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
+    // T1540: Warn when leaving annotate during an active upload
+    if (useUploadStore.getState().isUploading()) {
+      const leave = window.confirm(
+        'An upload is in progress. Leaving will cancel it and any clips added during this upload may be lost.\n\nAre you sure you want to leave?'
+      );
+      if (!leave) return;
+    }
+
     // Persist view progress and trigger finish-annotation
     if (gameIdRef.current) {
       const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
