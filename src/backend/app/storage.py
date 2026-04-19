@@ -27,6 +27,25 @@ logger = logging.getLogger(__name__)
 
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
+# T1539: Per-user, per-db-type upload locks. Prevents concurrent PutObject on
+# the same R2 key from different code paths (middleware sync vs export worker
+# vs shutdown sync). threading.Lock because callers run on different thread
+# types (asyncio executor threads, background task threads, main thread).
+_USER_UPLOAD_LOCKS: dict[str, threading.Lock] = {}
+_USER_UPLOAD_LOCKS_GUARD = threading.Lock()
+UPLOAD_LOCK_WAIT_LOG_MS = 50  # log when upload waited longer than this for the lock
+
+
+def get_upload_lock(user_id: str, db_type: str) -> threading.Lock:
+    """Return the per-(user, db_type) upload lock, creating on first access."""
+    lock_key = f"{user_id}:{db_type}"
+    with _USER_UPLOAD_LOCKS_GUARD:
+        lock = _USER_UPLOAD_LOCKS.get(lock_key)
+        if lock is None:
+            lock = threading.Lock()
+            _USER_UPLOAD_LOCKS[lock_key] = lock
+        return lock
+
 
 class R2VersionResult(Enum):
     """Distinguishes 'not found' (genuinely new user) from 'error' (transient failure)."""
@@ -821,12 +840,22 @@ def sync_database_to_r2_with_version(
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import retry_r2_call, TIER_1
-        retry_r2_call(
-            client.upload_file,
-            str(local_db_path), R2_BUCKET, key,
-            ExtraArgs={"Metadata": {"db-version": str(new_version)}},
-            operation=f"db_sync_upload {user_id}", **TIER_1,
-        )
+        # T1539: serialize PutObject per user+key to prevent R2 429s
+        upload_lock = get_upload_lock(user_id, "profile")
+        lock_wait_start = time.perf_counter()
+        with upload_lock:
+            lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
+            if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
+                logger.info(
+                    f"[UPLOAD_LOCK_WAIT] user={user_id} db=profile "
+                    f"waited_ms={int(lock_wait_ms)}"
+                )
+            retry_r2_call(
+                client.upload_file,
+                str(local_db_path), R2_BUCKET, key,
+                ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+                operation=f"db_sync_upload {user_id}", **TIER_1,
+            )
         if PROFILING_ENABLED:
             upload_ms = (time.perf_counter() - t_upload) * 1000
             total_ms = (time.perf_counter() - t_total) * 1000
@@ -1039,12 +1068,22 @@ def sync_user_db_to_r2_with_version(
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import retry_r2_call, TIER_1
-        retry_r2_call(
-            client.upload_file,
-            str(local_db_path), R2_BUCKET, key,
-            ExtraArgs={"Metadata": {"db-version": str(new_version)}},
-            operation=f"user_db_sync_upload {user_id}", **TIER_1,
-        )
+        # T1539: serialize PutObject per user+key to prevent R2 429s
+        upload_lock = get_upload_lock(user_id, "user")
+        lock_wait_start = time.perf_counter()
+        with upload_lock:
+            lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
+            if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
+                logger.info(
+                    f"[UPLOAD_LOCK_WAIT] user={user_id} db=user "
+                    f"waited_ms={int(lock_wait_ms)}"
+                )
+            retry_r2_call(
+                client.upload_file,
+                str(local_db_path), R2_BUCKET, key,
+                ExtraArgs={"Metadata": {"db-version": str(new_version)}},
+                operation=f"user_db_sync_upload {user_id}", **TIER_1,
+            )
         if PROFILING_ENABLED:
             upload_ms = (time.perf_counter() - t_upload) * 1000
             total_ms = (time.perf_counter() - t_total) * 1000
