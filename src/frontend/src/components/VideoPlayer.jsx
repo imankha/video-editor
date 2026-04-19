@@ -59,11 +59,8 @@ export function VideoPlayer({
   const [perfCopied, setPerfCopied] = useState(false);
   const containerRef = useRef(null);
 
-  // T1535: perf debug mode — ?debug in URL OR localStorage flag
-  const debugPerf = typeof window !== 'undefined' && (
-    new URLSearchParams(window.location.search).has('debug') ||
-    localStorage.getItem('debugPerf') === '1'
-  );
+  // T1535: perf debug mode — always on (temporary, remove after verification)
+  const debugPerf = true;
 
   // Initialize global timing array when debug mode is active
   useEffect(() => {
@@ -399,10 +396,10 @@ export function VideoPlayer({
       )}
 
       {/* T1535: perf debug copy button — outside overflow-hidden children */}
-      {debugPerf && videoUrl && (
+      {debugPerf && (
         <button
           onClick={(e) => { e.stopPropagation(); copyPerfTimings(); }}
-          style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, padding: '12px 20px', backgroundColor: '#eab308', color: '#000', fontWeight: 'bold', fontSize: '14px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}
+          style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999, padding: '12px 20px', backgroundColor: '#eab308', color: '#000', fontWeight: 'bold', fontSize: '14px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}
         >
           {perfCopied ? 'Copied!' : 'Copy Perf'}
         </button>
