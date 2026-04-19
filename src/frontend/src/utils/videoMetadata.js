@@ -236,10 +236,6 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     (typeof window !== 'undefined' && url.startsWith(window.location.origin));
   const fetchOpts = isSameOrigin ? { credentials: 'include' } : {};
 
-  // T1535: perf timing for mobile verification
-  const __perfActive = typeof window !== 'undefined' && window.__videoPerfTimings;
-  if (__perfActive) window.__videoPerfTimings.push({ event: 'metadata-fetch-start', t: performance.now(), url: url?.substring(0, 80) });
-
   const __diagStart = performance.now();
   let __diagWarmState = null;
   try {
@@ -349,8 +345,6 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     format: fileName.split('.').pop().toLowerCase() || 'mp4',
     framerate: 30,
   };
-
-  if (__perfActive) window.__videoPerfTimings.push({ event: 'metadata-fetch-done', t: performance.now(), moovLocation, elapsedMs: Math.round(performance.now() - __diagStart) });
 
   const elapsedMs = Math.round(performance.now() - __diagStart);
   if (elapsedMs > 3000) {

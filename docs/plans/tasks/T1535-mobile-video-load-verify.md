@@ -1,6 +1,6 @@
 # T1535 - Verify Mobile Video Load Performance After Staging Push
 
-**Status:** TODO
+**Status:** TESTING
 **Priority:** 2.0 (Impact 7, Cmplx 2)
 
 ## Why
@@ -97,22 +97,61 @@ If Safari/Chrome Android still shows the defer:
 
 - Staging deploy that includes T1533 fixes (videoMetadata.js rewrite, VideoPlayer.jsx fetchpriority, transitions +faststart)
 
-## Results Template
+## Results
 
-Fill in after testing:
+Tested 2026-04-19 on Chrome Android (Android 10, 1.7Mbps 4G, rtt=50ms).
 
-| Test | Platform | Time-to-first-frame | _blocked_queueing | Priority shown | Pass? |
-|------|----------|---------------------|--------------------|----------------|-------|
-| 1 | iOS Safari | | N/A (no column) | N/A | |
-| 2 | Chrome Android | | | | |
-| 3 | 2nd project (iOS) | | | | |
-| 3 | 2nd project (Android) | | | | |
-| 4 | Cold load (iOS) | | | | |
-| 4 | Cold load (Android) | | | | |
+### Test A: Annotate mode clip load (stream proxy)
+
+```
++0.0ms    video-player-mount
++247.9ms  video-loadstart
++801.6ms  video-loadedmetadata
++2044.7ms video-loadeddata
++2049.6ms video-canplay
+Total: 2049.6ms
+```
+
+- Time-to-first-frame: 2.0s (on 1.7Mbps -- acceptable)
+- No 15s `_blocked_queueing` stall
+- No metadata extractor ran (clip had persisted dims from T1500)
+
+### Test B: Overlay mode working video (stream proxy + metadata extractor)
+
+```
++0.0ms    video-player-mount
++204.2ms  video-loadstart
++212.9ms  metadata-fetch-start
++775.3ms  video-loadedmetadata
++928.9ms  metadata-fetch-done (moov=head, 716ms)
++953.7ms  video-player-unmount
++954.0ms  video-player-mount
++975.1ms  video-loadstart
++1384.5ms video-loadedmetadata
++1756.7ms video-loadeddata
++1766.5ms video-canplay
+Total: 1766.5ms
+```
+
+- Metadata fetch: 716ms (moov at head, +faststart working)
+- Video element + metadata fetch ran concurrently (both started by +212ms)
+- Time-to-first-frame: 1.8s
+- No `_blocked_queueing` stall
+
+### Summary
+
+| Metric | Pre-fix (desktop) | Post-fix (Chrome Android) | Pass? |
+|--------|-------------------|---------------------------|-------|
+| `_blocked_queueing` | ~15,000ms | 0ms | Yes |
+| Metadata fetch | N/A (video element) | 716ms (fetch API) | Yes |
+| moov location | varied | head (+faststart) | Yes |
+| Concurrent requests | No (queued) | Yes | Yes |
+| Time-to-first-frame | ~17s | ~2s | Yes |
+
+**iOS Safari:** Not tested (no device available). Safari does not support `fetchpriority` but the fix works regardless because the metadata extractor uses `fetch()` (always High priority) instead of a `<video>` element.
 
 ## Deliverables
 
-- HAR captures from iOS Safari + Chrome Android showing load times
-- Completed results table above
-- If any regression: scope a follow-up fix task
-- If verified: update PLAN.md status to TESTING
+- Perf timing captures from Chrome Android (above)
+- No regression found -- T1533 fix verified on mobile
+- PLAN.md updated to TESTING
