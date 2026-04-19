@@ -305,16 +305,6 @@ export function VideoPlayer({
           {/* Render any overlays passed by the mode */}
           {overlays}
 
-          {/* T1535: perf debug copy button */}
-          {debugPerf && (
-            <button
-              onClick={(e) => { e.stopPropagation(); copyPerfTimings(); }}
-              className="absolute top-2 right-2 z-50 px-3 py-1.5 bg-yellow-500 text-black text-xs font-bold rounded shadow-lg active:bg-yellow-400"
-            >
-              {perfCopied ? 'Copied!' : 'Copy Perf'}
-            </button>
-          )}
-
           {/* Video error overlay */}
           {error && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
@@ -406,6 +396,16 @@ export function VideoPlayer({
             </p>
           </div>
         </div>
+      )}
+
+      {/* T1535: perf debug copy button — outside overflow-hidden children */}
+      {debugPerf && videoUrl && (
+        <button
+          onClick={(e) => { e.stopPropagation(); copyPerfTimings(); }}
+          style={{ position: 'fixed', bottom: 20, right: 20, zIndex: 9999, padding: '12px 20px', backgroundColor: '#eab308', color: '#000', fontWeight: 'bold', fontSize: '14px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}
+        >
+          {perfCopied ? 'Copied!' : 'Copy Perf'}
+        </button>
       )}
     </div>
   );
