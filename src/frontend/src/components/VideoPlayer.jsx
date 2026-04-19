@@ -59,11 +59,11 @@ export function VideoPlayer({
   const [perfCopied, setPerfCopied] = useState(false);
   const containerRef = useRef(null);
 
-  // T1535: perf debug mode — ?debug=perf in URL
-  const debugPerf = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).has('debug');
-  }, []);
+  // T1535: perf debug mode — ?debug in URL OR localStorage flag
+  const debugPerf = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).has('debug') ||
+    localStorage.getItem('debugPerf') === '1'
+  );
 
   // Initialize global timing array when debug mode is active
   useEffect(() => {
