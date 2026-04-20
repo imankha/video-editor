@@ -428,22 +428,6 @@ export function ProjectManager({
     useQuestStore.getState().fetchProgress({ force: true });
   }, [onRefreshProjects]);
 
-  // Unauthenticated: show clean landing with just logo + sign-in prompt.
-  // No games, reels, credits, or gallery — those require a user session.
-  if (!isAuthenticated) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 bg-gray-900 min-h-screen">
-        <Logo size={64} className="mx-auto mb-6" />
-        <h1 className="text-3xl font-bold text-white mb-3">Reel Ballers</h1>
-        <p className="text-gray-400 mb-8 text-center max-w-sm">
-          Create highlight reels from your game footage. Sign in to get started.
-        </p>
-        <SignInButton />
-        <ReportProblemButton className="mt-8" />
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
       {/* Hidden file input for game video selection */}
@@ -464,10 +448,10 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Top right controls - Quests + Credits + Gallery + Profile switcher */}
+      {/* Top right controls - Credits + Gallery (auth only) + Sign-in/Profile */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
-        <CreditBalance />
-        {onOpenDownloads && (
+        {isAuthenticated && <CreditBalance />}
+        {isAuthenticated && onOpenDownloads && (
           <Button
             variant="outline"
             icon={Image}

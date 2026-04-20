@@ -168,10 +168,9 @@ export function QuestPanel() {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  // Don't render if not authenticated, hidden, not loaded, definitions not fetched, or all quests done
+  // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if (!isAuthenticated) return null;
-  if ((hidden || !loaded || !definitions || !questDef || allQuestsDone) && !showCompletionModal) {
+  if ((hidden || !loaded || !definitions || !questDef || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
