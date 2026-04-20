@@ -24,7 +24,7 @@ export function GoogleOneTap() {
 
     const gis = ensureGisInitialized();
     if (!gis) {
-      console.warn('[Auth:OneTap] Google Identity Services not loaded');
+      console.warn(`[Auth:OneTap] Google Identity Services not loaded. Possible ad blocker or network issue. Browser: ${navigator.userAgent}`);
       return;
     }
     gis.prompt();

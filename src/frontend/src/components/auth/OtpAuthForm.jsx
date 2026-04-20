@@ -136,7 +136,7 @@ export function OtpAuthForm({ resetKey = null }) {
         ? 'Network error — check your internet connection and try again.'
         : (err.message || 'Failed to send code. Please try again.');
       setError(msg);
-      console.error('[Auth:OTP] send-otp failed:', err.message, `browser=${navigator.userAgent}`);
+      console.error(`[Auth:OTP] send-otp failed: email=${target}, error=${err.message}, browser=${navigator.userAgent}`);
     } finally {
       setLoading(false);
     }
@@ -165,7 +165,7 @@ export function OtpAuthForm({ resetKey = null }) {
         ? 'Network error — check your internet connection and try again.'
         : (err.message || 'Verification failed. Please try again.');
       setError(msg);
-      console.error('[Auth:OTP] verify-otp failed:', err.message, `browser=${navigator.userAgent}`);
+      console.error(`[Auth:OTP] verify-otp failed: email=${email.trim()}, error=${err.message}, browser=${navigator.userAgent}`);
     } finally {
       setLoading(false);
     }
