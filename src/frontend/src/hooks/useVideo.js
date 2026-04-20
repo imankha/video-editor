@@ -477,16 +477,27 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handleStalled = () => {
-    // No-op handler kept for diagnostic attachment symmetry.
+    if (!videoRef.current) return;
+    const v = videoRef.current;
+    const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    console.warn(`[VIDEO] Stalled: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
   };
 
   const handleSuspend = () => {
-    // No-op handler kept for diagnostic attachment symmetry.
+    if (!videoRef.current) return;
+    const v = videoRef.current;
+    const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
+    console.warn(`[VIDEO] Suspend: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
   };
 
   // Buffering event handlers - pause time updates when video is waiting for data
   const handleWaiting = () => {
     setIsBuffering(true);
+    if (videoRef.current) {
+      const v = videoRef.current;
+      const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
+      console.warn(`[VIDEO] Waiting: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
+    }
   };
 
   const handlePlaying = () => {
