@@ -23,7 +23,9 @@ import { OtpAuthForm } from './auth/OtpAuthForm';
 export function AuthGateModal() {
   const showAuthModal = useAuthStore((s) => s.showAuthModal);
   const closeAuthModal = useAuthStore((s) => s.closeAuthModal);
+  const authError = useAuthStore((s) => s.authError);
   const [error, setError] = useState(null);
+  const [gisAvailable, setGisAvailable] = useState(true);
   const googleButtonRef = useRef(null);
 
   useEffect(() => {
@@ -33,19 +35,23 @@ export function AuthGateModal() {
       return;
     }
     // Show any error that occurred before the modal opened (e.g. a failed
-    // One Tap credential verification).
-    setError(getLastAuthError());
+    // One Tap credential verification, or a cookie-blocked error from reload).
+    setError(getLastAuthError() || authError || null);
     const unsub = onAuthError((msg) => setError(msg));
     return unsub;
-  }, [showAuthModal]);
+  }, [showAuthModal, authError]);
 
   useEffect(() => {
     if (!showAuthModal || !googleButtonRef.current) return;
     const gis = ensureGisInitialized();
     if (!gis) {
-      console.error('[Auth:Modal] Google Identity Services not loaded');
+      console.error('[Auth:Modal] Google Identity Services not loaded. ' +
+        'This may be caused by an ad blocker, script blocker, or network issue. ' +
+        `Browser: ${navigator.userAgent}`);
+      setGisAvailable(false);
       return;
     }
+    setGisAvailable(true);
     gis.renderButton(googleButtonRef.current, {
       type: 'standard',
       theme: 'filled_black',
@@ -81,6 +87,13 @@ export function AuthGateModal() {
           <div className="flex justify-center">
             <div ref={googleButtonRef} />
           </div>
+
+          {!gisAvailable && (
+            <p className="text-xs text-yellow-400 text-center">
+              Google sign-in unavailable. An ad blocker or browser setting may be
+              blocking it. Use email sign-in below instead.
+            </p>
+          )}
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-gray-700" />

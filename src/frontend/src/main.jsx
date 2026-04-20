@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { GoogleOneTap } from './components/GoogleOneTap.jsx'
 import { AuthGateModal } from './components/AuthGateModal.jsx'
+import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
 import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 
@@ -15,5 +16,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
     <GoogleOneTap />
     <AuthGateModal />
+    <AuthErrorBanner />
   </React.StrictMode>,
 )

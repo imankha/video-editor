@@ -210,8 +210,16 @@ export async function initSession() {
       } else {
         console.log(`[Auth:Init] /me returned ${meResponse.status} — unauthenticated`);
         if (authExpected) {
+          // The user just completed sign-in but the session cookie didn't
+          // survive the page reload. Most common cause: the browser is
+          // blocking cross-site cookies (third-party cookie settings,
+          // privacy mode, or SameSite/Secure mismatch).
+          const errorMsg = 'Sign-in completed but your browser blocked the session cookie. ' +
+            'Please disable "Block third-party cookies" in your browser settings, or try a different browser.';
           console.error(`[Auth:Init] Session cookie lost after sign-in for ${authExpected}. ` +
-            'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config.');
+            'Cross-origin cookie blocked? Check SameSite/Secure settings and CORS config. ' +
+            `Browser: ${navigator.userAgent}`);
+          useAuthStore.setState({ authError: errorMsg });
         }
       }
     } catch (err) {

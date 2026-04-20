@@ -266,9 +266,19 @@ def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
 @router.post("/google", response_model=AuthResponse)
 async def google_auth(body: GoogleAuthRequest, request: Request):
     """Verify Google ID token, find-or-create user by email, issue session."""
-    token_data = await _verify_google_token(body.token)
+    user_agent = request.headers.get("user-agent", "unknown")
+    req_id = request.headers.get("x-request-id", "?")
+    logger.info(f"[Auth] Google auth attempt: req_id={req_id}, ua={user_agent}")
+
+    try:
+        token_data = await _verify_google_token(body.token)
+    except HTTPException:
+        logger.warning(f"[Auth] Google token verification failed: req_id={req_id}, ua={user_agent}")
+        raise
+
     email = token_data["email"]
     google_id = token_data.get("sub")
+    logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
     user_id = _find_or_create_user(email, google_id=google_id)
 
@@ -361,10 +371,13 @@ class VerifyOtpRequest(BaseModel):
 
 
 @router.post("/send-otp")
-async def send_otp(body: SendOtpRequest):
+async def send_otp(body: SendOtpRequest, request: Request):
     """Generate a 6-digit OTP code and send it via email (Resend)."""
+    user_agent = request.headers.get("user-agent", "unknown")
+    req_id = request.headers.get("x-request-id", "?")
     email = body.email.strip().lower()
     if not _EMAIL_RE.match(email):
+        logger.warning(f"[Auth] OTP send rejected — invalid email: '{email}', req_id={req_id}, ua={user_agent}")
         raise HTTPException(status_code=400, detail="Invalid email address")
 
     one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
@@ -406,13 +419,17 @@ async def send_otp(body: SendOtpRequest):
 @router.post("/verify-otp")
 async def verify_otp(body: VerifyOtpRequest, request: Request):
     """Verify a 6-digit OTP code, find-or-create user by email, issue session."""
+    user_agent = request.headers.get("user-agent", "unknown")
+    req_id = request.headers.get("x-request-id", "?")
     email = body.email.strip().lower()
     code = body.code.strip()
 
     if not _EMAIL_RE.match(email):
+        logger.warning(f"[Auth] OTP verify rejected — invalid email: '{email}', req_id={req_id}, ua={user_agent}")
         raise HTTPException(status_code=400, detail="Invalid email address")
 
     if not re.match(r'^\d{6}$', code):
+        logger.warning(f"[Auth] OTP verify rejected — invalid code format: '{code}', email={email}, req_id={req_id}, ua={user_agent}")
         raise HTTPException(status_code=400, detail="Invalid code format")
 
     with get_auth_db() as db:
@@ -441,6 +458,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             )
             db.commit()
         remaining = _MAX_ATTEMPTS_PER_CODE - row["attempts"] - 1
+        logger.warning(f"[Auth] OTP code mismatch for {email}: {remaining} attempts left, req_id={req_id}, ua={user_agent}")
         raise HTTPException(
             status_code=400,
             detail=f"Invalid code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
@@ -454,6 +472,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
         db.commit()
 
     user_id = _find_or_create_user(email)
+    logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     return _issue_session_cookie(
         user_id,

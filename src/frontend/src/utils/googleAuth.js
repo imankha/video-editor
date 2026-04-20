@@ -46,7 +46,9 @@ async function handleCredential(response) {
   // which is fine, but this module shouldn't statically pull authStore).
   const { useAuthStore } = await import('../stores/authStore');
   if (!response?.credential) {
-    emitError('Google sign-in failed — no credential received.');
+    const reason = response ? `response keys: ${Object.keys(response).join(',')}` : 'response is null/undefined';
+    console.error(`[Auth:Google] No credential in callback. ${reason}. Browser: ${navigator.userAgent}`);
+    emitError('Google sign-in failed. Please try again, or use email sign-in below.');
     return;
   }
   try {
@@ -59,14 +61,19 @@ async function handleCredential(response) {
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const detail = data.detail || data.message || 'Authentication failed';
-      emitError(detail);
+      console.error(`[Auth:Google] Backend rejected token: status=${res.status}, detail=${detail}, browser=${navigator.userAgent}`);
+      emitError(`Sign-in failed: ${detail}. Please try again, or use email sign-in.`);
       return;
     }
     const data = await res.json();
     clearLastAuthError();
     useAuthStore.getState().onAuthSuccess(data.email, data.user_id, data.picture_url);
   } catch (err) {
-    emitError(err.message || 'Network error');
+    const msg = err.name === 'TypeError'
+      ? 'Network error — check your internet connection and try again.'
+      : (err.message || 'Network error');
+    console.error(`[Auth:Google] Credential exchange failed: ${err.message}, browser=${navigator.userAgent}`);
+    emitError(msg);
   }
 }
 

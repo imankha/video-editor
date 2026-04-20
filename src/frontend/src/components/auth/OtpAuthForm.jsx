@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '../shared';
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';
@@ -7,15 +7,39 @@ import { API_BASE } from '../../config';
  * OtpCodeInput — 6-digit code entry with auto-advance and paste support.
  * Internal helper for OtpAuthForm.
  */
-function OtpCodeInput({ value, onChange, disabled }) {
+function OtpCodeInput({ value, onChange, disabled, autoFocusFirst }) {
   const inputRefs = useRef([]);
 
-  const handleChange = (index, e) => {
-    const digit = e.target.value.replace(/\D/g, '').slice(-1);
+  // Auto-focus the first input when the code step appears
+  useEffect(() => {
+    if (autoFocusFirst && inputRefs.current[0] && !disabled) {
+      // Small delay to ensure the DOM is ready (fixes focus issues in some browsers)
+      const timer = setTimeout(() => inputRefs.current[0]?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [autoFocusFirst, disabled]);
+
+  const processDigit = (index, rawValue) => {
+    const digit = rawValue.replace(/\D/g, '').slice(-1);
     const newCode = [...value];
     newCode[index] = digit;
     onChange(newCode);
     if (digit && index < 5) inputRefs.current[index + 1]?.focus();
+  };
+
+  const handleChange = (index, e) => {
+    processDigit(index, e.target.value);
+  };
+
+  // onInput fires more reliably than onChange in some browsers (older Safari,
+  // some Android keyboards). We use it as a fallback — if onChange already
+  // processed the value, this is a no-op because the value matches state.
+  const handleInput = (index, e) => {
+    const raw = e.target.value || '';
+    const digit = raw.replace(/\D/g, '').slice(-1);
+    if (digit !== value[index]) {
+      processDigit(index, raw);
+    }
   };
 
   const handleKeyDown = (index, e) => {
@@ -26,7 +50,10 @@ function OtpCodeInput({ value, onChange, disabled }) {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    const pasted = (e.clipboardData || window.clipboardData || { getData: () => '' })
+      .getData('text')
+      .replace(/\D/g, '')
+      .slice(0, 6);
     if (!pasted) return;
     const newCode = [...value];
     for (let i = 0; i < 6; i++) newCode[i] = pasted[i] || '';
@@ -44,14 +71,16 @@ function OtpCodeInput({ value, onChange, disabled }) {
           ref={el => inputRefs.current[i] = el}
           type="text"
           inputMode="numeric"
+          pattern="[0-9]*"
           maxLength={1}
           value={digit}
           onChange={e => handleChange(i, e)}
+          onInput={e => handleInput(i, e)}
           onKeyDown={e => handleKeyDown(i, e)}
-          onPaste={i === 0 ? handlePaste : undefined}
+          onPaste={handlePaste}
           disabled={disabled}
           className="w-10 h-12 text-center text-lg font-mono bg-gray-900 border border-gray-600 rounded text-white focus:border-blue-500 focus:outline-none disabled:opacity-50"
-          autoComplete="one-time-code"
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
         />
       ))}
     </div>
@@ -98,12 +127,16 @@ export function OtpAuthForm({ resetKey = null }) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Failed to send code');
+        throw new Error(data.detail || `Failed to send code (${res.status})`);
       }
       setStep('code');
       setCode(['', '', '', '', '', '']);
     } catch (err) {
-      setError(err.message);
+      const msg = err.name === 'TypeError'
+        ? 'Network error — check your internet connection and try again.'
+        : (err.message || 'Failed to send code. Please try again.');
+      setError(msg);
+      console.error('[Auth:OTP] send-otp failed:', err.message, `browser=${navigator.userAgent}`);
     } finally {
       setLoading(false);
     }
@@ -123,12 +156,16 @@ export function OtpAuthForm({ resetKey = null }) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || 'Verification failed');
+        throw new Error(data.detail || `Verification failed (${res.status})`);
       }
       const data = await res.json();
       onAuthSuccess(data.email, data.user_id, data.picture_url);
     } catch (err) {
-      setError(err.message);
+      const msg = err.name === 'TypeError'
+        ? 'Network error — check your internet connection and try again.'
+        : (err.message || 'Verification failed. Please try again.');
+      setError(msg);
+      console.error('[Auth:OTP] verify-otp failed:', err.message, `browser=${navigator.userAgent}`);
     } finally {
       setLoading(false);
     }
@@ -183,7 +220,7 @@ export function OtpAuthForm({ resetKey = null }) {
       <p className="text-sm text-gray-400 text-center">
         Enter the 6-digit code sent to <span className="text-white">{email}</span>
       </p>
-      <OtpCodeInput value={code} onChange={handleCodeChange} disabled={loading} />
+      <OtpCodeInput value={code} onChange={handleCodeChange} disabled={loading} autoFocusFirst />
       {error && (
         <div className="px-3 py-2 bg-red-900/30 border border-red-700 rounded text-sm text-red-300">
           {error}

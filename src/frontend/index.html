@@ -86,6 +86,27 @@
         if (fill) fill.style.width = percent + '%';
         if (status) status.textContent = message;
       };
+
+      // Unsupported browser detection — runs before React loads.
+      // IE lacks ES module support so <script type="module"> won't even execute.
+      // This catches IE and other legacy browsers early with a helpful message.
+      (function() {
+        var isIE = /*@cc_on!@*/false || !!document.documentMode;
+        var hasModules = 'noModule' in HTMLScriptElement.prototype;
+        if (isIE || !hasModules) {
+          var preloader = document.getElementById('preloader');
+          if (preloader) {
+            var status = document.getElementById('preloader-status');
+            if (status) {
+              status.innerHTML = '<strong style="color:#f87171">Your browser is not supported.</strong><br>' +
+                '<span style="margin-top:8px;display:inline-block">' +
+                'Please use a modern browser like Chrome, Firefox, Safari, or Edge.</span>';
+            }
+            var bar = document.getElementById('preloader-bar');
+            if (bar) bar.style.display = 'none';
+          }
+        }
+      })();
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>

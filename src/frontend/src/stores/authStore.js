@@ -19,6 +19,8 @@ export const useAuthStore = create((set, get) => ({
   isCheckingSession: true,  // true until initial session check completes
   // T1510: impersonation state — { id, email, expires_at } | null
   impersonator: null,
+  // Auth error surfaced to the user (e.g. cookie blocked after reload)
+  authError: null,
 
   // T550: Check if the current user is an admin
   checkAdmin: async () => {
@@ -50,10 +52,15 @@ export const useAuthStore = create((set, get) => ({
     const { pendingAction } = get();
     console.log(`[Auth] onAuthSuccess: email=${email}, userId=${userId}, hasPendingAction=${!!pendingAction}`);
 
-    // T405: If the server returned a different user_id (cross-device recovery),
-    // update the session headers and reload to pick up the recovered user's data
     const currentUserId = getUserId();
-    if (userId && userId !== currentUserId) {
+    // Cross-device recovery: the server returned a DIFFERENT user_id than what
+    // we already have loaded in memory. We must reload to re-initialize stores
+    // with the recovered user's data. This only applies when we already have a
+    // user_id loaded (i.e. switching between two known accounts), NOT on first
+    // login from unauthenticated state where currentUserId is null.
+    const needsReload = currentUserId && userId && userId !== currentUserId;
+
+    if (needsReload) {
       console.log(`[Auth] Cross-device recovery: switching ${currentUserId} → ${userId}, reloading`);
       setUserId(userId);
       set({
@@ -62,6 +69,7 @@ export const useAuthStore = create((set, get) => ({
         pictureUrl,
         showAuthModal: false,
         pendingAction: null,
+        authError: null,
       });
       // Save navigation state so the user returns to the same screen after reload
       const editorMode = useEditorStore.getState().editorMode;
@@ -73,32 +81,28 @@ export const useAuthStore = create((set, get) => ({
       // T415: Save game context for annotation mode return
       const selectedGame = useGamesDataStore.getState().selectedGame;
       if (selectedGame) {
-        // blake3_hash is stable across merge (game ID may differ in target DB)
-        // Falls back to name for multi-video games where blake3_hash is null
         sessionStorage.setItem('authReturnGameHash', selectedGame.blake3_hash || '');
         sessionStorage.setItem('authReturnGameName', selectedGame.name || '');
       }
-      // Reload to initialize with the recovered user's data.
-      // Set flag so initSession can detect if the cookie didn't survive the reload.
       sessionStorage.setItem('authExpected', email);
       window.location.reload();
       return;
     }
 
-    console.log(`[Auth] Same-device login: ${email} (user=${userId || currentUserId})`);
+    // First login or same-device login — no reload needed
+    console.log(`[Auth] Login success: ${email} (user=${userId || currentUserId})`);
+    if (userId) setUserId(userId);
     set({
       isAuthenticated: true,
       email,
       pictureUrl,
       showAuthModal: false,
       pendingAction: null,
+      authError: null,
     });
     track('login');
-    // T530: Fetch credit balance after auth
     useCreditStore.getState().fetchCredits();
-    // T550: Check admin status after auth
     get().checkAdmin();
-    // Run the action that was blocked by the auth gate
     if (pendingAction) {
       console.log('[Auth] Running pending action');
       pendingAction();
