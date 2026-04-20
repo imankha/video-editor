@@ -17,6 +17,7 @@ import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
+import { ReportProblemButton } from './ReportProblemButton';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -438,6 +439,7 @@ export function ProjectManager({
           Create highlight reels from your game footage. Sign in to get started.
         </p>
         <SignInButton />
+        <ReportProblemButton className="mt-8" />
       </div>
     );
   }

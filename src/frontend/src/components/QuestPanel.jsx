@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
+import { useAuthStore } from '../stores/authStore';
 import { STEP_TITLES, STEP_DESCRIPTIONS } from '../config/questDefinitions.jsx';
 import { toast } from './shared/Toast';
 
@@ -165,8 +166,11 @@ export function QuestPanel() {
     prevCompletedRef.current = currentCompleted;
   }, [currentCompleted]);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Don't render if hidden, not loaded, definitions not fetched, or all quests done
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // Don't render if not authenticated, hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
+  if (!isAuthenticated) return null;
   if ((hidden || !loaded || !definitions || !questDef || allQuestsDone) && !showCompletionModal) {
     return null;
   }
