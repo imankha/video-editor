@@ -19,8 +19,8 @@ deploy_backend=true
 
 case "${1:-}" in
   --all|"")           deploy_frontend=true;  deploy_backend=true  ;;
+  --frontend-only)    deploy_frontend=true;  deploy_backend=false ;;
   --backend-only)     deploy_frontend=false; deploy_backend=true  ;;
-  --all)              deploy_frontend=true;  deploy_backend=true  ;;
   *)
     echo "Unknown flag: $1"
     echo "Usage: $0 [--frontend-only | --backend-only | --all]"
