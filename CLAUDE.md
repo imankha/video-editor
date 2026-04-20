@@ -161,6 +161,46 @@ For roadmap decisions, use the [Project Manager agent](.claude/agents/project-ma
 
 Current plan: [docs/plans/PLAN.md](docs/plans/PLAN.md)
 
+## Epic Implementation Rules
+
+Epics are groups of related tasks that must be implemented together in sequence. Each epic has an `EPIC.md` file with shared context, goals, and completion criteria.
+
+### Sequencing
+
+Epic tasks are **implemented in order** (top to bottom in PLAN.md). Do not start task N+1 until task N is complete. The ordering reflects dependencies between tasks within the epic.
+
+### Agent Handoff
+
+Each epic task **must be handed off to its own agent** (via the standard workflow: classify, branch, implement, test). When handing off the next task in an epic:
+
+1. **Include all relevant learnings** from the previous task(s) in the handoff context
+2. Reference files that were created or modified in prior tasks
+3. Note any gotchas, edge cases, or architectural decisions discovered during prior tasks
+4. Include the EPIC.md shared context so the agent understands the broader goal
+
+**Handoff template for epic tasks:**
+```
+Implement T{id}: {name}
+
+## Epic Context
+This is task {N} of {total} in the {epic name} epic.
+Read: {path to EPIC.md}
+
+## Prior Task Learnings
+- T{prev_id} ({prev_name}): {key decisions, files changed, gotchas discovered}
+- {any other relevant prior task learnings}
+
+## Task Details
+{task file content or link}
+```
+
+### PLAN.md Format
+
+Epics appear inside milestone tables as:
+- **Epic header row**: Empty ID, bold name linking to EPIC.md, description in last column
+- **Child task rows**: Prefixed with `↳`, immediately follow the header row
+- Epic tasks are moved together as a unit when reordering in the task board
+
 ## Coding Principles
 
 ### No Silent Fallbacks for Internal Data

@@ -76,6 +76,21 @@ def parse_task_link(cell):
         return m.group(1), m.group(2)
     return cell.strip(), ''
 
+def detect_epic_row(task):
+    """Detect if a task row is an epic header (empty ID, bold name linking to EPIC.md)."""
+    if task.get('id', '').strip():
+        return None
+    raw_task = task.get('_raw_task', '')
+    m = re.match(r'\*\*\[(.+?)\]\((.+?EPIC\.md)\)\*\*', raw_task)
+    if m:
+        return {'name': m.group(1), 'link': m.group(2), 'id': slugify(m.group(1))}
+    return None
+
+def detect_epic_child(task):
+    """Detect if a task row is a child of an epic (has ↳ prefix)."""
+    raw_task = task.get('_raw_task', '')
+    return '↳' in raw_task
+
 def parse_plan(content):
     """Parse PLAN.md into a list of milestones, each with headers and tasks."""
     lines = content.split('\n')
@@ -118,8 +133,9 @@ def parse_plan(content):
             if i < len(lines) and re.match(r'^\|[-\s:|]+\|$', lines[i]):
                 i += 1
 
-            # Parse task rows
+            # Parse task rows and detect epic groupings
             tasks = []
+            current_epic = None
             while i < len(lines) and lines[i].startswith('|'):
                 cells = parse_table_cells(lines[i])
                 task = {}
@@ -136,6 +152,20 @@ def parse_plan(content):
                 task['name'] = name
                 task['link'] = link
                 task['_raw_task'] = task_cell
+
+                # Detect epic header rows and child tasks
+                epic_info = detect_epic_row(task)
+                if epic_info:
+                    current_epic = epic_info['id']
+                    task['_is_epic_header'] = True
+                    task['_epic_id'] = current_epic
+                    task['_epic_name'] = epic_info['name']
+                    task['_epic_link'] = epic_info['link']
+                elif current_epic and detect_epic_child(task):
+                    task['_epic_id'] = current_epic
+                else:
+                    current_epic = None
+
                 tasks.append(task)
                 i += 1
 
@@ -290,6 +320,34 @@ HTML = r"""<!DOCTYPE html>
   .task-list { min-height: 8px; }
   .task-list.collapsed { display: none; }
 
+  /* Epic group styling */
+  .epic-group {
+    border-left: 3px solid var(--purple);
+    margin: 4px 0; background: rgba(188,140,255,0.03);
+    border-radius: 0 6px 6px 0;
+  }
+  .epic-header {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    cursor: pointer; user-select: none; border-bottom: 1px solid var(--border);
+    background: rgba(188,140,255,0.06);
+  }
+  .epic-header:hover { background: rgba(188,140,255,0.1); }
+  .epic-header .epic-arrow { transition: transform 0.2s; font-size: 10px; color: var(--purple); }
+  .epic-header .epic-arrow.collapsed { transform: rotate(-90deg); }
+  .epic-header .epic-icon { font-size: 14px; color: var(--purple); }
+  .epic-header .epic-name { font-size: 14px; font-weight: 600; color: var(--purple); flex: 1; }
+  .epic-header .epic-desc { font-size: 12px; color: var(--text-dim); max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .epic-header .epic-count {
+    font-size: 11px; background: rgba(188,140,255,0.15); padding: 1px 7px;
+    border-radius: 8px; color: var(--purple); font-weight: 600;
+  }
+  .epic-header .epic-drag-handle { color: var(--text-dim); cursor: grab; font-size: 14px; }
+  .epic-children { padding-left: 12px; }
+  .epic-children.collapsed { display: none; }
+  .epic-children .task-card { border-left: none; }
+  .epic-group.sortable-ghost { opacity: 0.4; background: rgba(188,140,255,0.1); }
+  .epic-group.sortable-chosen { background: rgba(188,140,255,0.08); }
+
   .task-card {
     display: grid; grid-template-columns: 24px 64px 1fr auto auto auto auto 32px;
     align-items: center; gap: 8px; padding: 10px 16px;
@@ -382,6 +440,7 @@ HTML = r"""<!DOCTYPE html>
   <div class="controls">
     <label><input type="checkbox" id="hide-done" checked> Hide done</label>
     <label><input type="checkbox" id="hide-ice" checked> Hide ice</label>
+    <button class="btn" id="sort-btn" title="Sort tasks by priority (highest first) within each milestone">Sort by Pri</button>
   </div>
   <button class="btn btn-primary" id="save-btn" disabled>Save</button>
   <button class="btn" id="reload-btn">Reload</button>
@@ -411,10 +470,152 @@ function markDirty() {
   document.getElementById('save-btn').disabled = false;
 }
 
-function render() {
-  const app = document.getElementById('app');
+// Group tasks into a list of items: standalone tasks and epic groups
+function groupTasksWithEpics(tasks) {
+  const items = [];
+  let i = 0;
+  while (i < tasks.length) {
+    const t = tasks[i];
+    if (t._is_epic_header) {
+      const epicId = t._epic_id;
+      const epicGroup = {
+        type: 'epic',
+        epicId: epicId,
+        epicName: t._epic_name || t.name,
+        epicLink: t._epic_link || t.link,
+        epicDesc: t.description || '',
+        header: t,
+        children: []
+      };
+      i++;
+      while (i < tasks.length && tasks[i]._epic_id === epicId && !tasks[i]._is_epic_header) {
+        epicGroup.children.push(tasks[i]);
+        i++;
+      }
+      items.push(epicGroup);
+    } else {
+      items.push({ type: 'task', task: t });
+      i++;
+    }
+  }
+  return items;
+}
+
+// Build a task card element (reused for standalone and epic children)
+function buildTaskCard(t, ms) {
+  const card = document.createElement('div');
+  card.className = 'task-card';
+  card.dataset.taskId = t.id;
+
+  const impact = t.impact || '';
+  const cmplx = t.complexity || '';
+  const pri = t.pri || '';
+
+  card.innerHTML = `
+    <span class="drag-handle">&#9776;</span>
+    <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
+    <span class="task-name">${esc(t.name)}</span>
+    <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
+    <span class="meta" title="Priority">${esc(pri)}</span>
+    <span class="meta meta-extra" title="Impact">${impact ? 'I:' + esc(impact) : ''}</span>
+    <span class="meta meta-extra" title="Complexity">${cmplx ? 'C:' + esc(cmplx) : ''}</span>
+    <button class="delete-btn" title="Delete task">&times;</button>
+    <div class="task-detail">
+      <p class="detail-desc">${esc(t.description || 'No description.')}</p>
+      <div class="detail-meta">
+        ${impact ? '<span>Impact: ' + esc(impact) + '</span>' : ''}
+        ${cmplx ? '<span>Complexity: ' + esc(cmplx) + '</span>' : ''}
+        ${pri ? '<span>Priority: ' + esc(pri) + '</span>' : ''}
+      </div>
+      ${t.link ? '<div class="detail-content">Click "Load details" to view task file</div>' : ''}
+      <div class="detail-actions">
+        ${t.link ? '<button class="load-btn">Load details</button>' : ''}
+        ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
+        ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
+      </div>
+    </div>
+  `;
+
+  card.querySelector('.delete-btn').onclick = (e) => {
+    e.stopPropagation();
+    if (!confirm(`Delete ${t.id} "${t.name}"?`)) return;
+    const realIdx = ms.tasks.findIndex(x => x.id === t.id);
+    if (realIdx >= 0) ms.tasks.splice(realIdx, 1);
+    markDirty();
+    render();
+  };
+
+  card.querySelector('.task-id').onclick = (e) => {
+    e.stopPropagation();
+    copyToClipboard(t.id, e.currentTarget);
+  };
+
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn')) return;
+    card.classList.toggle('expanded');
+  });
+
+  const loadBtn = card.querySelector('.load-btn');
+  if (loadBtn) {
+    loadBtn.onclick = (e) => {
+      e.stopPropagation();
+      const detail = card.querySelector('.task-detail');
+      const contentEl = detail.querySelector('.detail-content');
+      if (detail.dataset.loaded) {
+        const visible = contentEl.style.display !== 'none';
+        contentEl.style.display = visible ? 'none' : 'block';
+        loadBtn.textContent = visible ? 'Show details' : 'Hide details';
+      } else {
+        loadTaskFile(t.link, detail);
+        loadBtn.textContent = 'Hide details';
+      }
+    };
+  }
+
+  const copyDetailsBtn = card.querySelector('.copy-details-btn');
+  if (copyDetailsBtn) {
+    copyDetailsBtn.onclick = async (e) => {
+      e.stopPropagation();
+      const content = await fetchTaskContent(t.link);
+      if (content) {
+        const text = `## ${t.id}: ${t.name}\n\n${content}`;
+        copyToClipboard(text, copyDetailsBtn);
+      }
+    };
+  }
+
+  const genPromptBtn = card.querySelector('.gen-prompt-btn');
+  if (genPromptBtn) {
+    genPromptBtn.onclick = async (e) => {
+      e.stopPropagation();
+      genPromptBtn.textContent = 'Loading...';
+      const content = await fetchTaskContent(t.link);
+      if (content) {
+        const prompt = buildKickoffPrompt(t.id, t.name, content);
+        copyToClipboard(prompt, genPromptBtn);
+        genPromptBtn.textContent = 'Copied!';
+        setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
+      } else {
+        genPromptBtn.textContent = 'Failed to load';
+        setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
+      }
+    };
+  }
+
+  return card;
+}
+
+function isTaskHidden(t) {
   const hideDone = document.getElementById('hide-done').checked;
   const hideIce = document.getElementById('hide-ice').checked;
+  const st = (t.status || '').toLowerCase();
+  if (hideDone && st === 'done') return true;
+  if (hideIce && (st === 'ice' || st === 'obsolete')) return true;
+  return false;
+}
+
+function render() {
+  const app = document.getElementById('app');
   app.innerHTML = '';
 
   data.forEach((ms, msIdx) => {
@@ -422,14 +623,9 @@ function render() {
     div.className = 'milestone';
     div.dataset.msIdx = msIdx;
 
-    const filteredTasks = ms.tasks.filter(t => {
-      const st = (t.status || '').toLowerCase();
-      if (hideDone && st === 'done') return false;
-      if (hideIce && (st === 'ice' || st === 'obsolete')) return false;
-      return true;
-    });
-
-    if (filteredTasks.length === 0) return;
+    // Filter: count visible tasks (non-epic-header, not hidden)
+    const visibleTasks = ms.tasks.filter(t => !t._is_epic_header && !isTaskHidden(t));
+    if (visibleTasks.length === 0) return;
 
     // Header
     const hdr = document.createElement('div');
@@ -437,7 +633,7 @@ function render() {
     hdr.innerHTML = `
       <span class="arrow">&#9660;</span>
       <h2>${esc(ms.name)}</h2>
-      <span class="count">${filteredTasks.length}</span>
+      <span class="count">${visibleTasks.length}</span>
     `;
     hdr.onclick = () => {
       const list = div.querySelector('.task-list');
@@ -447,119 +643,104 @@ function render() {
     };
     div.appendChild(hdr);
 
-    // Task list
+    // Task list — group into epics and standalone tasks
     const list = document.createElement('div');
     list.className = 'task-list';
     list.dataset.msId = ms.id;
 
-    filteredTasks.forEach(t => {
-      const card = document.createElement('div');
-      card.className = 'task-card';
-      card.dataset.taskId = t.id;
+    const grouped = groupTasksWithEpics(ms.tasks);
 
-      const impact = t.impact || '';
-      const cmplx = t.complexity || '';
-      const pri = t.pri || '';
+    grouped.forEach(item => {
+      if (item.type === 'epic') {
+        const visibleChildren = item.children.filter(c => !isTaskHidden(c));
+        if (visibleChildren.length === 0) return;
 
-      card.innerHTML = `
-        <span class="drag-handle">&#9776;</span>
-        <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
-        <span class="task-name">${esc(t.name)}</span>
-        <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
-        <span class="meta" title="Priority">${esc(pri)}</span>
-        <span class="meta meta-extra" title="Impact">${impact ? 'I:' + esc(impact) : ''}</span>
-        <span class="meta meta-extra" title="Complexity">${cmplx ? 'C:' + esc(cmplx) : ''}</span>
-        <button class="delete-btn" title="Delete task">&times;</button>
-        <div class="task-detail">
-          <p class="detail-desc">${esc(t.description || 'No description.')}</p>
-          <div class="detail-meta">
-            ${impact ? '<span>Impact: ' + esc(impact) + '</span>' : ''}
-            ${cmplx ? '<span>Complexity: ' + esc(cmplx) + '</span>' : ''}
-            ${pri ? '<span>Priority: ' + esc(pri) + '</span>' : ''}
-          </div>
-          ${t.link ? '<div class="detail-content">Click "Load details" to view task file</div>' : ''}
-          <div class="detail-actions">
-            ${t.link ? '<button class="load-btn">Load details</button>' : ''}
-            ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
-            ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
-          </div>
-        </div>
-      `;
+        const epicDiv = document.createElement('div');
+        epicDiv.className = 'epic-group';
+        epicDiv.dataset.epicId = item.epicId;
 
-      card.querySelector('.delete-btn').onclick = (e) => {
-        e.stopPropagation();
-        if (!confirm(`Delete ${t.id} "${t.name}"?`)) return;
-        const realIdx = ms.tasks.findIndex(x => x.id === t.id);
-        if (realIdx >= 0) ms.tasks.splice(realIdx, 1);
-        markDirty();
-        render();
-      };
-
-      // Click task ID to copy
-      card.querySelector('.task-id').onclick = (e) => {
-        e.stopPropagation();
-        copyToClipboard(t.id, e.currentTarget);
-      };
-
-      card.addEventListener('click', (e) => {
-        if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn')) return;
-        card.classList.toggle('expanded');
-      });
-
-      const loadBtn = card.querySelector('.load-btn');
-      if (loadBtn) {
-        loadBtn.onclick = (e) => {
-          e.stopPropagation();
-          const detail = card.querySelector('.task-detail');
-          const contentEl = detail.querySelector('.detail-content');
-          if (detail.dataset.loaded) {
-            const visible = contentEl.style.display !== 'none';
-            contentEl.style.display = visible ? 'none' : 'block';
-            loadBtn.textContent = visible ? 'Show details' : 'Hide details';
-          } else {
-            loadTaskFile(t.link, detail);
-            loadBtn.textContent = 'Hide details';
-          }
+        // Epic header
+        const epicHdr = document.createElement('div');
+        epicHdr.className = 'epic-header';
+        epicHdr.innerHTML = `
+          <span class="epic-drag-handle drag-handle">&#9776;</span>
+          <span class="epic-arrow">&#9660;</span>
+          <span class="epic-icon">&#9671;</span>
+          <span class="epic-name">${esc(item.epicName)}</span>
+          <span class="epic-desc">${esc(item.epicDesc)}</span>
+          <span class="epic-count">${visibleChildren.length}</span>
+        `;
+        epicHdr.onclick = (e) => {
+          if (e.target.closest('.epic-drag-handle')) return;
+          const childList = epicDiv.querySelector('.epic-children');
+          const arrow = epicHdr.querySelector('.epic-arrow');
+          childList.classList.toggle('collapsed');
+          arrow.classList.toggle('collapsed');
         };
-      }
+        epicDiv.appendChild(epicHdr);
 
-      const copyDetailsBtn = card.querySelector('.copy-details-btn');
-      if (copyDetailsBtn) {
-        copyDetailsBtn.onclick = async (e) => {
-          e.stopPropagation();
-          const content = await fetchTaskContent(t.link);
-          if (content) {
-            const text = `## ${t.id}: ${t.name}\n\n${content}`;
-            copyToClipboard(text, copyDetailsBtn);
+        // Epic children
+        const childList = document.createElement('div');
+        childList.className = 'epic-children';
+        visibleChildren.forEach(c => {
+          childList.appendChild(buildTaskCard(c, ms));
+        });
+        epicDiv.appendChild(childList);
+
+        // Sortable within epic children (reorder within epic only)
+        new Sortable(childList, {
+          group: { name: 'epic-' + item.epicId, pull: false, put: false },
+          animation: 150,
+          handle: '.drag-handle',
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          onEnd: function(evt) {
+            // Reorder children within the epic in ms.tasks
+            const epicChildren = ms.tasks.filter(t => t._epic_id === item.epicId && !t._is_epic_header);
+            const taskId = evt.item.dataset.taskId;
+            const movedIdx = epicChildren.findIndex(t => t.id === taskId);
+            if (movedIdx < 0) return;
+            const [moved] = epicChildren.splice(movedIdx, 1);
+
+            // Insert at new visible position
+            let visCount = 0;
+            let insertIdx = epicChildren.length;
+            for (let ri = 0; ri < epicChildren.length; ri++) {
+              if (!isTaskHidden(epicChildren[ri])) {
+                if (visCount === evt.newIndex) { insertIdx = ri; break; }
+                visCount++;
+              }
+            }
+            epicChildren.splice(insertIdx, 0, moved);
+
+            // Write reordered children back to ms.tasks
+            const headerIdx = ms.tasks.findIndex(t => t._is_epic_header && t._epic_id === item.epicId);
+            if (headerIdx < 0) return;
+            // Remove old children
+            let removeStart = headerIdx + 1;
+            let removeCount = 0;
+            for (let k = removeStart; k < ms.tasks.length; k++) {
+              if (ms.tasks[k]._epic_id === item.epicId && !ms.tasks[k]._is_epic_header) removeCount++;
+              else break;
+            }
+            ms.tasks.splice(removeStart, removeCount, ...epicChildren);
+            markDirty();
+            render();
           }
-        };
-      }
+        });
 
-      const genPromptBtn = card.querySelector('.gen-prompt-btn');
-      if (genPromptBtn) {
-        genPromptBtn.onclick = async (e) => {
-          e.stopPropagation();
-          genPromptBtn.textContent = 'Loading...';
-          const content = await fetchTaskContent(t.link);
-          if (content) {
-            const prompt = buildKickoffPrompt(t.id, t.name, content);
-            copyToClipboard(prompt, genPromptBtn);
-            genPromptBtn.textContent = 'Copied!';
-            setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
-          } else {
-            genPromptBtn.textContent = 'Failed to load';
-            setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
-          }
-        };
+        list.appendChild(epicDiv);
+      } else {
+        const t = item.task;
+        if (isTaskHidden(t)) return;
+        list.appendChild(buildTaskCard(t, ms));
       }
-
-      list.appendChild(card);
     });
 
     div.appendChild(list);
     app.appendChild(div);
 
-    // Init SortableJS
+    // Init SortableJS for milestone-level (standalone tasks + epic groups)
     new Sortable(list, {
       group: 'tasks',
       animation: 150,
@@ -567,44 +748,69 @@ function render() {
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       emptyInsertThreshold: 30,
+      draggable: '> .task-card, > .epic-group',
       onEnd: function(evt) {
-        const taskId = evt.item.dataset.taskId;
+        const draggedEl = evt.item;
         const fromMsId = evt.from.dataset.msId;
         const toMsId = evt.to.dataset.msId;
-
         const fromMs = data.find(m => m.id === fromMsId);
         const toMs = data.find(m => m.id === toMsId);
         if (!fromMs || !toMs) return;
 
-        // Remove from source
-        const taskIdx = fromMs.tasks.findIndex(t => t.id === taskId);
-        if (taskIdx < 0) return;
-        const [task] = fromMs.tasks.splice(taskIdx, 1);
+        if (draggedEl.classList.contains('epic-group')) {
+          // Move entire epic group
+          const epicId = draggedEl.dataset.epicId;
+          const epicTasks = fromMs.tasks.filter(t => t._epic_id === epicId);
+          fromMs.tasks = fromMs.tasks.filter(t => t._epic_id !== epicId);
 
-        // Compute visible insert index -> real index in toMs.tasks
-        // evt.newIndex is the index among visible (filtered) items
-        const hideDone = document.getElementById('hide-done').checked;
-        const hideIce = document.getElementById('hide-ice').checked;
-        let visibleCount = 0;
-        let realInsertIdx = toMs.tasks.length; // default: append
-        for (let ri = 0; ri < toMs.tasks.length; ri++) {
-          const st = (toMs.tasks[ri].status || '').toLowerCase();
-          const hidden = (hideDone && st === 'done') || (hideIce && (st === 'ice' || st === 'obsolete'));
-          if (!hidden) {
-            if (visibleCount === evt.newIndex) {
-              realInsertIdx = ri;
-              break;
-            }
-            visibleCount++;
-          }
+          // Find insert position in target
+          const insertIdx = getInsertIndex(toMs, evt.newIndex);
+          toMs.tasks.splice(insertIdx, 0, ...epicTasks);
+        } else {
+          // Move single task
+          const taskId = draggedEl.dataset.taskId;
+          const taskIdx = fromMs.tasks.findIndex(t => t.id === taskId);
+          if (taskIdx < 0) return;
+          const [task] = fromMs.tasks.splice(taskIdx, 1);
+          const insertIdx = getInsertIndex(toMs, evt.newIndex);
+          toMs.tasks.splice(insertIdx, 0, task);
         }
 
-        toMs.tasks.splice(realInsertIdx, 0, task);
         markDirty();
         render();
       }
     });
   });
+}
+
+// Convert a visible index to a real index in ms.tasks
+function getInsertIndex(ms, visibleIdx) {
+  const grouped = groupTasksWithEpics(ms.tasks);
+  let visCount = 0;
+  let realIdx = ms.tasks.length;
+
+  for (const item of grouped) {
+    if (item.type === 'epic') {
+      const visibleChildren = item.children.filter(c => !isTaskHidden(c));
+      if (visibleChildren.length === 0) continue;
+      if (visCount === visibleIdx) {
+        // Insert before this epic's header
+        realIdx = ms.tasks.findIndex(t => t._is_epic_header && t._epic_id === item.epicId);
+        if (realIdx < 0) realIdx = ms.tasks.length;
+        return realIdx;
+      }
+      visCount++;
+    } else {
+      if (isTaskHidden(item.task)) continue;
+      if (visCount === visibleIdx) {
+        realIdx = ms.tasks.findIndex(t => t.id === item.task.id);
+        if (realIdx < 0) realIdx = ms.tasks.length;
+        return realIdx;
+      }
+      visCount++;
+    }
+  }
+  return realIdx;
 }
 
 function esc(s) {
@@ -717,6 +923,42 @@ document.getElementById('reload-btn').onclick = () => {
 document.getElementById('hide-done').onchange = render;
 document.getElementById('hide-ice').onchange = render;
 
+// Sort by priority within each milestone (epics stay grouped)
+function sortByPri() {
+  data.forEach(ms => {
+    // Group tasks into epics and standalone
+    const grouped = groupTasksWithEpics(ms.tasks);
+
+    // Sort grouped items by the highest Pri in each group
+    grouped.sort((a, b) => {
+      const priA = a.type === 'epic'
+        ? Math.max(...a.children.map(c => parseFloat(c.pri) || 0), 0)
+        : (parseFloat(a.task.pri) || 0);
+      const priB = b.type === 'epic'
+        ? Math.max(...b.children.map(c => parseFloat(c.pri) || 0), 0)
+        : (parseFloat(b.task.pri) || 0);
+      return priB - priA; // descending
+    });
+
+    // Flatten back and also sort within epic children
+    const newTasks = [];
+    grouped.forEach(item => {
+      if (item.type === 'epic') {
+        newTasks.push(item.header);
+        const sorted = [...item.children].sort((a, b) => (parseFloat(b.pri) || 0) - (parseFloat(a.pri) || 0));
+        newTasks.push(...sorted);
+      } else {
+        newTasks.push(item.task);
+      }
+    });
+    ms.tasks = newTasks;
+  });
+  markDirty();
+  render();
+}
+
+document.getElementById('sort-btn').onclick = sortByPri;
+
 // Warn on leave
 window.onbeforeunload = (e) => { if (dirty) { e.preventDefault(); return ''; } };
 
@@ -780,7 +1022,7 @@ class Handler(BaseHTTPRequestHandler):
             for ms in milestones:
                 tasks = []
                 for t in ms['tasks']:
-                    tasks.append({
+                    task_data = {
                         'id': t.get('id', ''),
                         'name': t.get('name', ''),
                         'link': t.get('link', ''),
@@ -790,7 +1032,18 @@ class Handler(BaseHTTPRequestHandler):
                         'complexity': t.get('complexity', ''),
                         'description': t.get('description', ''),
                         '_raw_task': t.get('_raw_task', ''),
-                    })
+                    }
+                    if t.get('_is_epic_header'):
+                        task_data['_is_epic_header'] = True
+                        task_data['_epic_id'] = t['_epic_id']
+                        task_data['_epic_name'] = t['_epic_name']
+                        task_data['_epic_link'] = t['_epic_link']
+                        # Strip markdown bold from epic description
+                        desc = task_data.get('description', '')
+                        task_data['description'] = re.sub(r'\*\*(.+?)\*\*', r'\1', desc)
+                    elif t.get('_epic_id'):
+                        task_data['_epic_id'] = t['_epic_id']
+                    tasks.append(task_data)
                 result.append({
                     'id': ms['id'],
                     'name': ms['name'],
