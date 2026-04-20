@@ -464,19 +464,28 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # degraded state. Writers run inside the per-user write lock, so only
         # one retry runs at a time per user — no concurrent same-key uploads.
         if request.method in WRITE_METHODS and has_sync_pending(user_id):
-            logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
-            _begin_sync_attempt(user_id)
-            try:
-                ok = await asyncio.to_thread(retry_pending_sync, user_id)
-                if ok:
-                    clear_sync_pending(user_id)
-                    logger.info(f"[SYNC] Retry succeeded for user {user_id}")
-                else:
-                    logger.warning(f"[SYNC] Retry still failing for user {user_id}")
-            except Exception as e:
-                logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
-            finally:
-                _end_sync_attempt(user_id)
+            # T1539: Skip retry if another sync (e.g. export worker) is already
+            # uploading for this user. Their upload will either succeed (making
+            # our retry redundant) or fail (leaving the marker for next request).
+            from ..storage import get_upload_lock
+            profile_lock = get_upload_lock(user_id, "profile")
+            if not profile_lock.acquire(blocking=False):
+                logger.info(f"[SYNC] Skipping retry - upload in progress for user {user_id}")
+            else:
+                profile_lock.release()
+                logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
+                _begin_sync_attempt(user_id)
+                try:
+                    ok = await asyncio.to_thread(retry_pending_sync, user_id)
+                    if ok:
+                        clear_sync_pending(user_id)
+                        logger.info(f"[SYNC] Retry succeeded for user {user_id}")
+                    else:
+                        logger.warning(f"[SYNC] Retry still failing for user {user_id}")
+                except Exception as e:
+                    logger.warning(f"[SYNC] Retry failed for user {user_id}: {e}")
+                finally:
+                    _end_sync_attempt(user_id)
 
         # --- Request with sync tracking ---
         sync_duration = 0.0
