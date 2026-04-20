@@ -24,12 +24,7 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T1533 | [Overlay Working Video Slow First-Load](tasks/T1533-overlay-working-video-slow-load.md) | 7 | 3 | 2.0 | TESTING | Root cause was Chrome's Low-priority `<video>` defer (~15s `_blocked_queueing`), NOT moov placement. Fixed by `fetchpriority="high"` on VideoPlayer + fetch-based metadata extractor (bypasses video-element defer entirely). Desktop verified via HAR. |
 | T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | TESTING | Verified on Chrome Android (1.7Mbps 4G): time-to-first-frame 2.0s, metadata fetch 716ms (moov at head), no 15s stall. Metadata extractor + video element run concurrently. No iOS Safari device available. |
 | T1539 | [R2 Concurrent-Write Rate Limit](tasks/T1539-r2-concurrent-write-rate-limit.md) | 7 | 2 | 3.5 | TESTING | Per-user per-key upload lock (`threading.Lock`) inside `sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` serializes PutObject calls. Prevents export worker vs middleware sync race (the actual 429 source -- not request-to-request races, which the asyncio write lock already prevents). tryLock optimization skips redundant retry_pending_sync when upload already in progress. |
-| T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 4 | 1.0 | TODO | Finer-grained writer serialization — writers to disjoint tables don't block each other. Built on T1531; T1539 already shipped the R2 push lock (`get_upload_lock`), so only handler-level parallelism + `@writes_tables` decorator remain. Gated on real `[WRITE_LOCK_WAIT]` evidence. |
-| T1590 | [Project State Save Slow](tasks/T1590-project-state-save-slow.md) | 6 | 3 | 2.0 | TODO | `PATCH /api/projects/{id}/state` takes 1000-1100ms (handler ~400ms + R2 sync ~600ms) on every mode transition. Profile shows R2 round trip dominates for a small metadata update. |
-| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | Pin sessions to machines via fly-replay; eliminates cold-DB-restore cost on every cross-machine request |
-| T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task so server stays responsive during exports |
-| T1560 | [Fetch-First Video Loading](tasks/T1560-fetch-first-video-loading.md) | 8 | 4 | 2.0 | TODO | Use fetch() for initial video chunk to bypass Chrome's 15s media scheduler defer on cross-origin R2 videos in Annotate mode |
-| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
+| T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 4 | 1.0 | DONE | T1539 shipped the R2 push lock; remaining handler-level parallelism gated on `[WRITE_LOCK_WAIT]` evidence that hasn't materialized. |
 
 ---
 
@@ -79,6 +74,13 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | DONE | 3.0 | Users understood "Games" but not "Projects" — rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
+| T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | TODO | 1.3 | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
+| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
+| T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | Clickable email in admin user list → "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
+| | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
+| T1610 | [↳ Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby |
+| T1620 | [↳ Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | 2.0 | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
+| T1630 | [↳ Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | 1.4 | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
 | T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | Clickable breadcrumbs (Games/Reels → Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | DONE | 3.0 | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin → BrokenPipe. |
@@ -105,24 +107,6 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 | T1490 | [First clip-stream request returns 401, frontend hangs](tasks/T1490-video-stream-first-request-401.md) | DONE | 5.0 | Fix: crossOrigin=use-credentials on same-origin proxy URLs in detached video probe; cacheWarming fetches branched on origin. Backend log confirmed zero 401s on /stream |
 | T1500 | [Persist clip dimensions, eliminate metadata probe](tasks/video-load-reliability/T1500-persist-clip-dimensions.md) | DONE | 2.5 | Follow-up to T1490: persist width/height/fps on working_clips, backfill existing rows, skip frontend metadata probe when fields present. Removes N media probes per project load |
 
-### Standalone Tasks
-
-| ID | Task | Status | Pri | Description |
-|----|------|--------|-----|-------------|
-| T1150 | [Fix Pending Sync Retry No-Op](tasks/T1150-fix-pending-sync-retry-noop.md) | DONE | 3.0 | T930 retry calls `_if_writes` before `init_request_context` — always short-circuits, never actually uploads |
-| T1152 | [Persist Sync-Failed State](tasks/T1152-persist-sync-failed-state.md) | DONE | 2.5 | `_sync_failed` dict resets on restart — use `.sync_pending` marker as source of truth so degraded state survives |
-| T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | TODO | 0.9 | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task, not impl |
-| T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | MEASURING | 0.8 | precursor log line landed; wait 30d for partial-sync frequency data before recommending |
-| T1160 | [Clean Up Unused DB Rows](tasks/T1160-cleanup-unused-db-rows.md) | DONE | 2.5 | Prune old working_clips versions, orphaned before_after_tracks, stale modal_tasks to keep DB small for R2 sync |
-| T1170 | [Size-Based VACUUM on Init](tasks/T1170-size-based-vacuum-on-init.md) | DONE | 2.5 | Only VACUUM profile.sqlite when size exceeds 400KB threshold; skip for small DBs |
-| T1180 | [Fix NULL video_filename Root Cause](tasks/T1180-design.md) | DONE | 3.0 | Root cause: frontend created `games` row with `videos=[]` then attached in separate step — orphaned on failure. Fix: backend rejects empty videos; frontend hashes first, then creates game atomically with video ref |
-| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
-| T1200 | [Modal Job ID Logging & Retry](tasks/T1200-modal-job-logging-retry.md) | DONE | 1.4 | Log Modal call IDs across all paths (framing/overlay); classify failures and retry transient ones only |
-| T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | TODO | 2.3 | Test coverage for R2 restore retry/cooldown — NOT_FOUND vs ERROR handling, cooldown expiry |
-| T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | Clickable email in admin user list → "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
-| T1380 | [Recover Orphaned Jobs Per-User at Startup](tasks/T1380-startup-recover-orphaned-jobs-per-user.md) | DONE | 1.7 | Moved to lazy per-user recovery in user_session_init (once per user per process) — scales to millions of users |
-| T1390 | [Process Modal Queue Per-User at Startup](tasks/T1390-startup-modal-queue-per-user.md) | DONE | 1.7 | Same fix as T1380: modal queue drain runs lazily on first request under correct user context |
-
 ### Epic: For Launch (IN_PROGRESS)
 [tasks/for-launch/EPIC.md](tasks/for-launch/EPIC.md)
 
@@ -148,6 +132,9 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1221 | [Dead Modal Code Removal](tasks/for-launch/T1221-dead-modal-code-removal.md) | 3 | 2 | 1.5 | DONE | Delete extract_clip_modal, process_multi_clip_modal, create_annotated_compilation — no callers (follow-up from T1220 audit) |
 | T1222 | [game_videos JOIN Audit](tasks/for-launch/T1222-game-videos-join-audit.md) | 5 | 3 | 1.7 | DONE | Multi-video games have NULL games.blake3_hash; audit storage.py/games_upload.py/other exporters to JOIN game_videos instead |
 | T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | Modal path is synchronous (async but holds connection); return 202 + background task |
+| T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
+| T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |
+| T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | 5 | 2 | 2.3 | TODO | Test coverage for R2 restore retry/cooldown -- NOT_FOUND vs ERROR handling, cooldown expiry |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 #### Features
@@ -163,14 +150,21 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1581 | [↳ Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 8 | 5 | 1.6 | TODO | ExpirationBadge on game cards + date-slider extension modal |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | 6 | 5 | 1.3 | TODO | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API |
-| T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | 5 | 6 | 1.0 | TODO | Coach account type: roster uploads, assign annotations to players, own NUF flow |
 
 #### Completed
 
+- T1150 Fix Pending Sync Retry No-Op — DONE
+- T1152 Persist Sync-Failed State — DONE
+- T1160 Clean Up Unused DB Rows — DONE
+- T1170 Size-Based VACUUM on Init — DONE
+- T1180 Fix NULL video_filename Root Cause — DONE
+- T1200 Modal Job ID Logging & Retry — DONE
+- T1380 Recover Orphaned Jobs Per-User at Startup — DONE
+- T1390 Process Modal Queue Per-User at Startup — DONE
 - T1130 Multi-Clip Stream Not Download — DONE
 - T1120 Framing Video Cold Cache — DONE
 - T1020 Fast R2 Sync — DONE
-- T1010 Slow fetchProgress Response — DONE
+- T1010 Slow fetchProgress Response -- DONE
 
 ### Epic: Post Launch (TODO)
 [tasks/post-launch/EPIC.md](tasks/post-launch/EPIC.md)
@@ -180,9 +174,8 @@ Improvements after real user traffic.
 | ID | Task | Status | Pri | Description |
 |----|------|--------|-----|-------------|
 | T40 | [1 User 2 Tabs](tasks/T40-stale-session-detection.md) | TODO | 1.3 | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
-| T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | User shares annotated video with a coach via email; coach views under a coach profile, changes clip ratings, adds notes, and sends back — updates flow back to the original user's game |
+| T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
-| T620 | [Account Cleanup](tasks/T620-account-cleanup.md) | TODO | 1.0 | Auto-delete abandoned guest accounts and dormant free accounts to reduce R2 storage costs |
 | T1100 | [Remove Dead Overlay Debounce](tasks/T1100-remove-dead-overlay-debounce.md) | TODO | 1.5 | Dead `saveOverlayData` with 2s debounce in OverlayContainer; remove + audit overlay persistence |
 
 ---
