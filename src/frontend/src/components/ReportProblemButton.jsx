@@ -5,24 +5,44 @@ import { useAuthStore } from '../stores/authStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 
 /**
- * Capture a screenshot of the current page as a base64 JPEG.
+ * Capture a screenshot as a base64 JPEG.
  *
- * Strategy: draw the first visible <video> element onto an offscreen canvas
- * (this works cross-origin-free since the video src is same-origin or CORS).
- * Falls back to null if no video is playing or canvas capture fails.
+ * 1. If a <video> element has data, capture its current frame via canvas
+ *    (fast, no library needed, most useful for playback bugs).
+ * 2. Otherwise, use html2canvas to capture the full page DOM
+ *    (catches UI bugs, layout issues, empty states).
+ *
+ * Returns a Promise<string|null>.
  */
-function captureScreenshot() {
+async function captureScreenshot() {
+  // Try video frame first (instant, lightweight)
   try {
     const video = document.querySelector('video');
-    if (!video || video.readyState < 2) return null; // HAVE_CURRENT_DATA
-    const canvas = document.createElement('canvas');
-    // Cap resolution to keep the payload small
-    const scale = Math.min(1, 1280 / video.videoWidth);
-    canvas.width = Math.round(video.videoWidth * scale);
-    canvas.height = Math.round(video.videoHeight * scale);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL('image/jpeg', 0.6); // ~50-100KB
+    if (video && video.readyState >= 2) {
+      const canvas = document.createElement('canvas');
+      const scale = Math.min(1, 1280 / video.videoWidth);
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL('image/jpeg', 0.6);
+    }
+  } catch { /* fall through to full-page */ }
+
+  // Full-page screenshot via html2canvas (lazy-loaded -- only fetched on first report)
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const canvas = await html2canvas(document.body, {
+      scale: 0.75,           // 75% res keeps payload reasonable
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#111827', // match app bg
+      ignoreElements: (el) => {
+        // Skip the report modal itself so it doesn't appear in the screenshot
+        return el.closest?.('[data-report-modal]') != null;
+      },
+    });
+    return canvas.toDataURL('image/jpeg', 0.6);
   } catch {
     return null;
   }
@@ -45,13 +65,14 @@ export function ReportProblemButton({ className = '' }) {
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
-  const handleOpen = () => {
+  const handleOpen = async () => {
+    // Capture screenshot BEFORE opening the modal so the modal overlay
+    // doesn't appear in the screenshot and the current UI state is preserved.
+    const img = await captureScreenshot();
+    setScreenshot(img);
     setOpen(true);
     setDescription('');
     setState('idle');
-    // Capture screenshot immediately when user clicks -- this preserves
-    // the current video frame before they start typing.
-    setScreenshot(captureScreenshot());
   };
 
   const handleClose = () => {
