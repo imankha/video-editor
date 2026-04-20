@@ -12,6 +12,7 @@
 |----|------|--------|-------|-----|--------|-------------|
 | T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TESTING | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
 | T1570 | [Admin Panel Missing Users](tasks/T1570-admin-panel-missing-users.md) | 5 | 3 | P1 | DONE | Some users (e.g., sarkarati@gmail.com) don't appear in admin panel even though they exist in auth.sqlite |
+| T1590 | [Admin Panel Data Accuracy](tasks/T1590-admin-panel-data-accuracy.md) | 5 | 4 | P2 | TODO | Activity/quest/GPU stats wrong on staging/prod: admin endpoint reads local filesystem but user DBs only sync from R2 on user request. Display bug (0 shown as dash) fixed. |
 
 ### Milestone: Performance (NEXT UP)
 
@@ -81,6 +82,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1610 | [↳ Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby |
 | T1620 | [↳ Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | 2.0 | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
 | T1630 | [↳ Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | 1.4 | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | TODO | 1.3 | User clicks "approve" on completed project card in gallery → card animates out → project archived to R2 |
 | T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | Clickable breadcrumbs (Games/Reels → Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | DONE | 3.0 | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin → BrokenPipe. |
