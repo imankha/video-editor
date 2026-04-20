@@ -42,6 +42,14 @@ export default function useKeyframeController({
         if (key !== lastViolationsRef.current) {
           lastViolationsRef.current = key;
           console.error('Keyframe invariant violations:', violations);
+          console.warn('[Keyframe] State dump:', {
+            machineState: state.machineState,
+            endFrame: state.endFrame,
+            keyframeCount: state.keyframes?.length,
+            firstFrame: state.keyframes?.[0]?.frame,
+            lastFrame: state.keyframes?.[state.keyframes.length - 1]?.frame,
+            lastOrigin: state.keyframes?.[state.keyframes.length - 1]?.origin,
+          });
         }
       } else {
         lastViolationsRef.current = null;

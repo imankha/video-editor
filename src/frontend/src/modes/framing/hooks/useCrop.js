@@ -181,6 +181,10 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           if (!effectiveDuration) return;
           const endFrame = timeToFrame(effectiveDuration, framerate);
 
+          const lastSavedFrame = frameKeyframes[frameKeyframes.length - 1]?.frame;
+          if (lastSavedFrame !== endFrame) {
+            console.warn(`[useCrop] Restore: saved keyframes end at frame ${lastSavedFrame} but clip endFrame=${endFrame} (trimEnd=${trimRange?.end} duration=${videoMetadata?.duration} fps=${framerate})`);
+          }
           lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }
