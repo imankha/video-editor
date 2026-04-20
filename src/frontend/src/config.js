@@ -11,6 +11,10 @@
  */
 export const API_BASE = import.meta.env.VITE_API_BASE || '';
 
+// T1650: Feature gate for "Report a problem" button. Defaults to enabled;
+// set VITE_ENABLE_PROBLEM_REPORT=false to hide it.
+export const ENABLE_PROBLEM_REPORT = import.meta.env.VITE_ENABLE_PROBLEM_REPORT !== 'false';
+
 /**
  * Resolve a backend-returned URL to one the browser can fetch directly.
  *

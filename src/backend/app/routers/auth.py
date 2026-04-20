@@ -497,6 +497,80 @@ async def logout(request: Request):
     return response
 
 
+# --- T1650: Report a Problem ---
+
+# Backend gate: set ENABLE_PROBLEM_REPORT=false to disable
+_ENABLE_PROBLEM_REPORT = os.getenv("ENABLE_PROBLEM_REPORT", "true").lower() != "false"
+_MAX_REPORTS_PER_HOUR = 3
+# In-memory rate limit tracker: {ip_or_email: [timestamps]}
+_report_rate_tracker: dict[str, list[datetime]] = {}
+
+
+class ProblemReportRequest(BaseModel):
+    logs: list[dict]   # [{level, message, ts}, ...]
+    user_agent: str
+    page_url: str
+    email: str | None = None
+
+
+@router.post("/report-problem")
+async def report_problem(body: ProblemReportRequest, request: Request):
+    """Accept a client-side problem report and email it to all admins.
+
+    Rate limited to 3 reports per source per hour. Gated by
+    ENABLE_PROBLEM_REPORT env var (default: enabled).
+    """
+    if not _ENABLE_PROBLEM_REPORT:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    req_id = request.headers.get("x-request-id", "?")
+
+    # Rate limit by email (if provided) or client IP
+    rate_key = (body.email or request.client.host or "unknown").lower()
+    now = datetime.utcnow()
+    one_hour_ago = now - timedelta(hours=1)
+
+    if rate_key not in _report_rate_tracker:
+        _report_rate_tracker[rate_key] = []
+    # Prune old entries
+    _report_rate_tracker[rate_key] = [
+        ts for ts in _report_rate_tracker[rate_key] if ts > one_hour_ago
+    ]
+    if len(_report_rate_tracker[rate_key]) >= _MAX_REPORTS_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many reports submitted. Please try again later.",
+        )
+    _report_rate_tracker[rate_key].append(now)
+
+    # Get admin recipients
+    from app.services.auth_db import get_admin_emails
+    admin_emails = get_admin_emails()
+    if not admin_emails:
+        logger.error(f"[Auth] Problem report has no admin recipients! req_id={req_id}")
+        raise HTTPException(status_code=500, detail="No admin recipients configured")
+
+    # Send the report
+    from app.services.email import send_problem_report_email
+    try:
+        await send_problem_report_email(
+            to_emails=admin_emails,
+            reporter_email=body.email,
+            user_agent=body.user_agent,
+            page_url=body.page_url,
+            logs=body.logs,
+        )
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Email service not configured")
+    except Exception as e:
+        logger.error(f"[Auth] Failed to send problem report: {e}, req_id={req_id}")
+        raise HTTPException(status_code=503, detail="Failed to send report. Please try again.")
+
+    logger.info(f"[Auth] Problem report sent: from={body.email or 'anonymous'}, "
+                f"log_count={len(body.logs)}, admins={admin_emails}, req_id={req_id}")
+    return {"sent": True}
+
+
 @router.post("/invalidate-sessions/{user_id}")
 async def invalidate_sessions(user_id: str, request: Request):
     """Invalidate all sessions for a user. Dev/staging only.

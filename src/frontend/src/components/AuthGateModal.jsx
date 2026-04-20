@@ -8,6 +8,7 @@ import {
   onAuthError,
 } from '../utils/googleAuth';
 import { OtpAuthForm } from './auth/OtpAuthForm';
+import { ReportProblemButton } from './ReportProblemButton';
 
 /**
  * AuthGateModal — mid-session auth prompt shown when an authenticated-only
@@ -103,6 +104,11 @@ export function AuthGateModal() {
 
           {/* Shared OTP flow — resetKey forces internal state reset when modal reopens */}
           <OtpAuthForm resetKey={showAuthModal} />
+
+          {/* T1650: Report a problem — sends console logs to admins */}
+          <div className="flex justify-center pt-2">
+            <ReportProblemButton />
+          </div>
         </div>
       </div>
     </div>

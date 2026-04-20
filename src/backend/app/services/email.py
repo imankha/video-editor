@@ -58,3 +58,79 @@ async def send_otp_email(to_email: str, code: str) -> None:
         raise RuntimeError(f"Failed to send email: {resp.status_code}")
 
     logger.info(f"[Email] OTP sent to {to_email}")
+
+
+async def send_problem_report_email(
+    to_emails: list[str],
+    reporter_email: str | None,
+    user_agent: str,
+    page_url: str,
+    logs: list[dict],
+) -> None:
+    """Send a problem report (client console logs) to admin emails via Resend.
+
+    T1650: "Report a problem" button. Each log entry is {level, message, ts}.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        raise ValueError("RESEND_API_KEY not configured")
+
+    log_rows = "\n".join(
+        f'<tr style="border-bottom:1px solid #374151">'
+        f'<td style="padding:4px 8px;color:{"#f87171" if entry.get("level") == "error" else "#fbbf24"};font-size:12px">{entry.get("level", "?")}</td>'
+        f'<td style="padding:4px 8px;color:#9ca3af;font-size:11px;white-space:nowrap">{entry.get("ts", "")}</td>'
+        f'<td style="padding:4px 8px;color:#e5e7eb;font-size:12px;font-family:monospace;word-break:break-all">{_html_escape(entry.get("message", ""))}</td>'
+        f'</tr>'
+        for entry in logs[-100:]  # cap at 100 even if client sends more
+    )
+
+    html_body = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 24px; background: #1f2937; color: #e5e7eb;">
+      <h2 style="color: #f87171; margin-bottom: 16px;">Problem Report</h2>
+      <table style="margin-bottom: 16px; font-size: 13px;">
+        <tr><td style="color:#9ca3af;padding-right:12px">Reporter:</td><td style="color:#e5e7eb">{_html_escape(reporter_email or '(not logged in)')}</td></tr>
+        <tr><td style="color:#9ca3af;padding-right:12px">Page:</td><td style="color:#e5e7eb">{_html_escape(page_url)}</td></tr>
+        <tr><td style="color:#9ca3af;padding-right:12px">Browser:</td><td style="color:#e5e7eb;font-size:11px">{_html_escape(user_agent)}</td></tr>
+        <tr><td style="color:#9ca3af;padding-right:12px">Time:</td><td style="color:#e5e7eb">{_html_escape(logs[-1]["ts"] if logs else "N/A")}</td></tr>
+      </table>
+      <h3 style="color:#fbbf24;margin-bottom:8px">Console Logs ({len(logs)} entries)</h3>
+      <table style="width:100%;border-collapse:collapse;background:#111827;border-radius:4px">
+        <tr style="border-bottom:2px solid #374151">
+          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Level</th>
+          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Time</th>
+          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Message</th>
+        </tr>
+        {log_rows or '<tr><td colspan="3" style="padding:12px;color:#6b7280;text-align:center">No logs captured</td></tr>'}
+      </table>
+    </div>
+    """
+
+    async def _send():
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.post(
+                RESEND_API_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "from": FROM_ADDRESS,
+                    "to": to_emails,
+                    "subject": f"Problem Report: {reporter_email or 'anonymous'} - {page_url}",
+                    "html": html_body,
+                },
+            )
+
+    resp = await retry_async_call(_send, operation="resend_problem_report", **TIER_1)
+    if resp.status_code not in (200, 201):
+        logger.error(f"[Email] Problem report send failed: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Failed to send problem report: {resp.status_code}")
+
+    logger.info(f"[Email] Problem report sent to {to_emails} from {reporter_email or 'anonymous'}")
+
+
+def _html_escape(s: str) -> str:
+    """Minimal HTML escape for email content."""
+    return (s
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )

@@ -692,6 +692,13 @@ def is_admin(user_id: str) -> bool:
         ).fetchone() is not None
 
 
+def get_admin_emails() -> list[str]:
+    """Return all admin email addresses from admin_users table."""
+    with get_auth_db() as db:
+        rows = db.execute("SELECT email FROM admin_users").fetchall()
+    return [row["email"] for row in rows]
+
+
 # ---------------------------------------------------------------------------
 # T1510: Impersonation
 # ---------------------------------------------------------------------------

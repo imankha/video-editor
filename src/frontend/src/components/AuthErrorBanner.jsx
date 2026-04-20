@@ -1,4 +1,5 @@
 import { useAuthStore } from '../stores/authStore';
+import { ReportProblemButton } from './ReportProblemButton';
 
 /**
  * AuthErrorBanner — shows a dismissible error banner at the top of the page
@@ -21,6 +22,8 @@ export function AuthErrorBanner() {
       >
         Dismiss
       </button>
+      <span className="mx-2 text-red-700">|</span>
+      <ReportProblemButton className="inline text-red-300 hover:text-white" />
     </div>
   );
 }
