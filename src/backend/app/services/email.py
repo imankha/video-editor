@@ -66,6 +66,8 @@ async def send_problem_report_email(
     user_agent: str,
     page_url: str,
     logs: list[dict],
+    description: str | None = None,
+    screenshot: str | None = None,
 ) -> None:
     """Send a problem report (client console logs) to admin emails via Resend.
 
@@ -84,6 +86,32 @@ async def send_problem_report_email(
         for entry in logs[-100:]  # cap at 100 even if client sends more
     )
 
+    # User description section
+    description_html = ""
+    if description:
+        description_html = f"""
+      <div style="margin-bottom:16px;padding:12px;background:#111827;border-radius:6px;border-left:3px solid #3b82f6">
+        <div style="color:#9ca3af;font-size:11px;margin-bottom:4px">User description:</div>
+        <div style="color:#e5e7eb;font-size:14px;white-space:pre-wrap">{_html_escape(description[:2000])}</div>
+      </div>"""
+
+    # Screenshot section (inline base64 image)
+    screenshot_html = ""
+    if screenshot and screenshot.startswith("data:image/"):
+        screenshot_html = f"""
+      <div style="margin-bottom:16px">
+        <div style="color:#9ca3af;font-size:11px;margin-bottom:4px">Screenshot:</div>
+        <img src="{screenshot}" style="max-width:100%;border-radius:6px;border:1px solid #374151" />
+      </div>"""
+
+    # Email subject includes description preview if available
+    subject_preview = ""
+    if description:
+        preview = description[:60].replace("\n", " ")
+        if len(description) > 60:
+            preview += "..."
+        subject_preview = f" - {preview}"
+
     html_body = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 700px; margin: 0 auto; padding: 24px; background: #1f2937; color: #e5e7eb;">
       <h2 style="color: #f87171; margin-bottom: 16px;">Problem Report</h2>
@@ -93,6 +121,8 @@ async def send_problem_report_email(
         <tr><td style="color:#9ca3af;padding-right:12px">Browser:</td><td style="color:#e5e7eb;font-size:11px">{_html_escape(user_agent)}</td></tr>
         <tr><td style="color:#9ca3af;padding-right:12px">Time:</td><td style="color:#e5e7eb">{_html_escape(logs[-1]["ts"] if logs else "N/A")}</td></tr>
       </table>
+      {description_html}
+      {screenshot_html}
       <h3 style="color:#fbbf24;margin-bottom:8px">Console Logs ({len(logs)} entries)</h3>
       <table style="width:100%;border-collapse:collapse;background:#111827;border-radius:4px">
         <tr style="border-bottom:2px solid #374151">
@@ -113,7 +143,7 @@ async def send_problem_report_email(
                 json={
                     "from": FROM_ADDRESS,
                     "to": to_emails,
-                    "subject": f"Problem Report: {reporter_email or 'anonymous'} - {page_url}",
+                    "subject": f"Problem Report: {reporter_email or 'anonymous'}{subject_preview}",
                     "html": html_body,
                 },
             )

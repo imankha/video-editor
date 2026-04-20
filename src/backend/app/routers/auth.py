@@ -511,6 +511,8 @@ class ProblemReportRequest(BaseModel):
     user_agent: str
     page_url: str
     email: str | None = None
+    description: str | None = None
+    screenshot: str | None = None  # base64 data URL (image/jpeg)
 
 
 @router.post("/report-problem")
@@ -559,6 +561,8 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             user_agent=body.user_agent,
             page_url=body.page_url,
             logs=body.logs,
+            description=body.description,
+            screenshot=body.screenshot,
         )
     except ValueError:
         raise HTTPException(status_code=500, detail="Email service not configured")

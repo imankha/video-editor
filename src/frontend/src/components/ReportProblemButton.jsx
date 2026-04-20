@@ -1,22 +1,67 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
 import { useAuthStore } from '../stores/authStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 
 /**
- * ReportProblemButton — sends captured console errors/warnings to admins.
+ * Capture a screenshot of the current page as a base64 JPEG.
+ *
+ * Strategy: draw the first visible <video> element onto an offscreen canvas
+ * (this works cross-origin-free since the video src is same-origin or CORS).
+ * Falls back to null if no video is playing or canvas capture fails.
+ */
+function captureScreenshot() {
+  try {
+    const video = document.querySelector('video');
+    if (!video || video.readyState < 2) return null; // HAVE_CURRENT_DATA
+    const canvas = document.createElement('canvas');
+    // Cap resolution to keep the payload small
+    const scale = Math.min(1, 1280 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', 0.6); // ~50-100KB
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ReportProblemButton -- opens a small modal for the user to describe
+ * their problem, auto-captures a video screenshot, and sends everything
+ * (description + screenshot + console logs) to admins.
  *
  * T1650: Gated by VITE_ENABLE_PROBLEM_REPORT env var (default: enabled).
- * Collects logs from the clientLogger ring buffer and POSTs them to
- * /api/auth/report-problem, which emails all admin_users.
  */
 export function ReportProblemButton({ className = '' }) {
   const email = useAuthStore((s) => s.email);
+  const [open, setOpen] = useState(false);
+  const [description, setDescription] = useState('');
+  const [screenshot, setScreenshot] = useState(null);
   const [state, setState] = useState('idle'); // idle | sending | sent | error
+  const textareaRef = useRef(null);
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
-  const handleReport = async () => {
+  const handleOpen = () => {
+    setOpen(true);
+    setDescription('');
+    setState('idle');
+    // Capture screenshot immediately when user clicks -- this preserves
+    // the current video frame before they start typing.
+    setScreenshot(captureScreenshot());
+  };
+
+  const handleClose = () => {
+    setOpen(false);
+    setDescription('');
+    setScreenshot(null);
+    setState('idle');
+  };
+
+  const handleSend = async () => {
     setState('sending');
     try {
       const logs = getClientLogs();
@@ -29,6 +74,8 @@ export function ReportProblemButton({ className = '' }) {
           user_agent: navigator.userAgent,
           page_url: window.location.href,
           email: email || null,
+          description: description.trim() || null,
+          screenshot: screenshot || null,
         }),
       });
       if (!res.ok) {
@@ -37,36 +84,118 @@ export function ReportProblemButton({ className = '' }) {
       }
       clearClientLogs();
       setState('sent');
-      setTimeout(() => setState('idle'), 5000);
     } catch (err) {
       console.error('[ReportProblem] Failed to send report:', err.message);
       setState('error');
-      setTimeout(() => setState('idle'), 5000);
     }
   };
 
-  const label = {
-    idle: 'Report a problem',
-    sending: 'Sending...',
-    sent: 'Report sent!',
-    error: 'Failed to send',
-  }[state];
+  // Focus textarea when modal opens
+  useEffect(() => {
+    if (open && textareaRef.current) {
+      const timer = setTimeout(() => textareaRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
-  const color = {
-    idle: 'text-gray-400 hover:text-gray-200',
-    sending: 'text-gray-500',
-    sent: 'text-green-400',
-    error: 'text-red-400',
-  }[state];
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={handleOpen}
+        className={`text-xs text-gray-400 hover:text-gray-200 ${className}`}
+      >
+        Report a problem
+      </button>
+    );
+  }
 
   return (
-    <button
-      type="button"
-      onClick={handleReport}
-      disabled={state === 'sending'}
-      className={`text-xs ${color} disabled:cursor-wait ${className}`}
-    >
-      {label}
-    </button>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={handleClose}>
+      <div
+        className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md mx-4 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
+          <h3 className="text-sm font-semibold text-white">Report a problem</h3>
+          <button onClick={handleClose} className="text-gray-400 hover:text-white">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-4 space-y-3">
+          {state === 'sent' ? (
+            <div className="text-center py-6">
+              <p className="text-green-400 font-medium mb-1">Report sent!</p>
+              <p className="text-gray-400 text-sm">Thanks -- we'll look into it.</p>
+              <button
+                onClick={handleClose}
+                className="mt-4 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"
+              >
+                Close
+              </button>
+            </div>
+          ) : state === 'error' ? (
+            <div className="text-center py-6">
+              <p className="text-red-400 font-medium mb-1">Failed to send report</p>
+              <p className="text-gray-400 text-sm">Please try again.</p>
+              <button
+                onClick={() => setState('idle')}
+                className="mt-4 px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg"
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <>
+              <textarea
+                ref={textareaRef}
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                placeholder="What went wrong? Describe what you were doing..."
+                rows={4}
+                disabled={state === 'sending'}
+                className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50"
+              />
+
+              {/* Screenshot preview */}
+              {screenshot && (
+                <div className="relative">
+                  <img
+                    src={screenshot}
+                    alt="Screenshot"
+                    className="w-full rounded-lg border border-gray-700 opacity-80"
+                  />
+                  <span className="absolute top-1.5 left-2 text-[10px] text-gray-400 bg-gray-900/80 px-1.5 py-0.5 rounded">
+                    Screenshot attached
+                  </span>
+                  <button
+                    onClick={() => setScreenshot(null)}
+                    className="absolute top-1.5 right-2 text-gray-400 hover:text-white bg-gray-900/80 rounded p-0.5"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-500">
+                  Console logs will be included automatically
+                </span>
+                <button
+                  onClick={handleSend}
+                  disabled={state === 'sending'}
+                  className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-wait text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  {state === 'sending' ? 'Sending...' : 'Send report'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
