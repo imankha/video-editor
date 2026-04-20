@@ -370,6 +370,7 @@ export function ProjectManager({
 
   // Auth gate — force login before creating persistent data
   const requireAuth = useAuthStore((s) => s.requireAuth);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {
@@ -425,6 +426,21 @@ export function ProjectManager({
     // Refresh quest progress — new project with multi-game clips may complete create_reel step
     useQuestStore.getState().fetchProgress({ force: true });
   }, [onRefreshProjects]);
+
+  // Unauthenticated: show clean landing with just logo + sign-in prompt.
+  // No games, reels, credits, or gallery — those require a user session.
+  if (!isAuthenticated) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 bg-gray-900 min-h-screen">
+        <Logo size={64} className="mx-auto mb-6" />
+        <h1 className="text-3xl font-bold text-white mb-3">Reel Ballers</h1>
+        <p className="text-gray-400 mb-8 text-center max-w-sm">
+          Create highlight reels from your game footage. Sign in to get started.
+        </p>
+        <SignInButton />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center p-4 sm:p-8 bg-gray-900">
