@@ -955,6 +955,9 @@ export function ProjectManager({
         onClose={() => setShowGameDetailsModal(false)}
         onCreateGame={handleCreateGame}
       />
+
+      {/* Report a problem — subtle footer link for authenticated users */}
+      <ReportProblemButton className="fixed bottom-3 right-3 z-30 text-xs text-gray-500 hover:text-gray-300" />
     </div>
   );
 }
