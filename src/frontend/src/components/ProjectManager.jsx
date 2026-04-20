@@ -17,7 +17,6 @@ import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
-import { ReportProblemButton } from './ReportProblemButton';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -940,8 +939,6 @@ export function ProjectManager({
         onCreateGame={handleCreateGame}
       />
 
-      {/* Report a problem — subtle footer link for authenticated users */}
-      <ReportProblemButton className="fixed bottom-3 right-3 z-30 text-xs text-gray-500 hover:text-gray-300" />
     </div>
   );
 }
