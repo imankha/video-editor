@@ -237,13 +237,18 @@ def render_overlay(
             r2.download_file(bucket, full_input_key, input_path)
             yield {"progress": 20, "phase": "downloading", "message": "Download complete"}
 
-            # Process overlay
+            # Process overlay with granular progress
             output_path = os.path.join(temp_dir, "output.mp4")
             yield {"progress": 25, "phase": "processing", "message": "Applying highlights..."}
-            _process_overlay(job_id, input_path, output_path, {
+
+            for frame_progress in _process_overlay_gen(job_id, input_path, output_path, {
                 "highlight_regions": highlight_regions,
                 "effect_type": effect_type,
-            })
+            }):
+                # Map frame processing 0-100% to overall 25-80%
+                overall = 25 + int(frame_progress * 0.55)
+                yield {"progress": overall, "phase": "processing", "message": "Applying highlights..."}
+
             yield {"progress": 80, "phase": "processing", "message": "Processing complete"}
 
             # Upload result to R2
@@ -269,6 +274,142 @@ def render_overlay(
     except Exception as e:
         logger.error(f"[{job_id}] Overlay render failed: {e}", exc_info=True)
         yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
+
+
+def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params: dict):
+    """
+    Generator wrapper around _process_overlay that yields progress (0-100).
+    Yields every ~5% so the caller can forward updates to the client.
+    """
+    progress_updates = []
+
+    def on_progress(pct):
+        progress_updates.append(pct)
+
+    # _process_overlay is blocking, so we can't yield during it.
+    # Instead, refactor: inline the processing loop here as a generator.
+    import subprocess
+    import cv2
+    import numpy as np
+
+    highlight_regions = params.get("highlight_regions", [])
+    effect_type = params.get("effect_type", "dark_overlay")
+
+    if not highlight_regions:
+        logger.info(f"[{job_id}] No highlights - copying video")
+        cmd = ["ffmpeg", "-y", "-i", input_path, "-c", "copy", output_path]
+        subprocess.run(cmd, check=True)
+        return
+
+    cap = cv2.VideoCapture(input_path)
+    if not cap.isOpened():
+        raise ValueError(f"Could not open video: {input_path}")
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    logger.info(f"[{job_id}] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
+
+    sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
+
+    ffmpeg_cmd = [
+        "ffmpeg", "-y",
+        "-f", "rawvideo", "-pix_fmt", "bgr24",
+        "-s", f"{width}x{height}", "-r", str(fps),
+        "-i", "pipe:0", "-i", input_path,
+        "-map", "0:v", "-map", "1:a?",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-preset", "fast", "-crf", "23",
+        "-movflags", "+faststart",
+        "-c:a", "aac", "-b:a", "192k",
+        output_path,
+    ]
+
+    ffmpeg_proc = subprocess.Popen(
+        ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+
+    frame_idx = 0
+    write_error = None
+    last_yielded_pct = 0
+
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            current_time = frame_idx / fps
+
+            active_region = None
+            for region in sorted_regions:
+                if region["start_time"] <= current_time <= region["end_time"]:
+                    active_region = region
+                    break
+
+            if active_region:
+                detection_width = active_region.get('videoWidth')
+                detection_height = active_region.get('videoHeight')
+                if detection_width and detection_height and (detection_width != width or detection_height != height):
+                    scale_x = width / detection_width
+                    scale_y = height / detection_height
+                    scaled_keyframes = [{
+                        **kf,
+                        'x': kf['x'] * scale_x, 'y': kf['y'] * scale_y,
+                        'radiusX': kf['radiusX'] * scale_x, 'radiusY': kf['radiusY'] * scale_y,
+                    } for kf in active_region.get('keyframes', [])]
+                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type)
+                else:
+                    frame = _render_highlight(frame, active_region, current_time, effect_type)
+
+            try:
+                if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
+                    ffmpeg_proc.stdin.write(frame.tobytes())
+                    ffmpeg_proc.stdin.flush()
+                else:
+                    write_error = "FFmpeg stdin closed unexpectedly"
+                    break
+            except (BrokenPipeError, OSError) as e:
+                write_error = f"Pipe error at frame {frame_idx}: {e}"
+                break
+
+            frame_idx += 1
+
+            if frame_count > 0 and frame_idx % 100 == 0:
+                pct = int((frame_idx / frame_count) * 100)
+                logger.info(f"[{job_id}] Progress: {pct}% ({frame_idx}/{frame_count})")
+                if pct >= last_yielded_pct + 5:
+                    last_yielded_pct = pct
+                    yield pct
+
+    finally:
+        cap.release()
+        try:
+            if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
+                ffmpeg_proc.stdin.close()
+        except Exception as e:
+            logger.warning(f"[{job_id}] Error closing stdin: {e}")
+
+    ffmpeg_proc.wait()
+
+    stderr_text = ""
+    try:
+        if ffmpeg_proc.stderr:
+            stderr_text = ffmpeg_proc.stderr.read().decode() if ffmpeg_proc.stderr else ""
+    except Exception as e:
+        logger.warning(f"[{job_id}] Error reading stderr: {e}")
+
+    if ffmpeg_proc.returncode != 0:
+        logger.error(f"[{job_id}] FFmpeg stderr (tail): {stderr_text[-2000:]}")
+        raise RuntimeError(f"FFmpeg encoding failed (code {ffmpeg_proc.returncode}): {stderr_text[-500:]}")
+
+    if write_error:
+        logger.error(f"[{job_id}] FFmpeg stderr (tail): {stderr_text[-2000:]}")
+        raise RuntimeError(f"Frame writing failed: {write_error}")
+
+    logger.info(f"[{job_id}] Overlay export complete: {frame_idx} frames")
 
 
 def _process_overlay(job_id: str, input_path: str, output_path: str, params: dict):
