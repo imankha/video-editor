@@ -2,9 +2,9 @@
 
 **Status:** TODO
 **Impact:** 4 (incremental win on top of T1531; meaningful only when contention persists)
-**Complexity:** 6
+**Complexity:** 4
 **Created:** 2026-04-16
-**Updated:** 2026-04-16
+**Updated:** 2026-04-20
 
 ## Problem
 
@@ -95,12 +95,36 @@ Likely candidates if it does become real:
 - Replacing R2 full-DB sync with per-table sync (would require a different
   storage shape — track separately if ever needed).
 
+## Relationship to T1539 (R2 Concurrent-Write Rate Limit)
+
+T1539 shipped a **per-user, per-db-type upload lock** (`threading.Lock`) inside
+`sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` in
+`storage.py`. This is exactly the "R2 push lock" described in Option 2(b) above.
+
+**What T1539 already provides:**
+- `get_upload_lock(user_id, db_type)` in `storage.py` — per-(user, key) `threading.Lock`
+- All sync paths (middleware, export worker, shutdown) already serialize through it
+- `[UPLOAD_LOCK_WAIT]` log line for measuring contention
+- Separate locks for `"profile"` vs `"user"` keys — parallel upload preserved
+
+**What T1538 still needs to add on top:**
+- `@writes_tables(...)` decorator on handlers to declare write scope
+- Per-`(user, frozenset(tables))` handler-level locks so disjoint writers run in parallel
+- The R2 push serialization is already handled — handlers just need to commit to
+  SQLite in parallel, then the existing upload lock serializes the R2 push automatically
+
+This significantly reduces T1538's complexity. The hard part (R2 push lock without
+reintroducing T1531 serialization) is solved. What remains is the handler-level
+parallelism and the decorator infrastructure.
+
 ## Notes for AI handoff
 
 - Built on top of T1531's `_USER_WRITE_LOCKS` infra in
   [src/backend/app/middleware/db_sync.py](../../../src/backend/app/middleware/db_sync.py).
+- **T1539's `get_upload_lock()` in `storage.py` is the R2 push lock** — reuse it,
+  don't create a separate one. It already covers all sync paths.
 - The decorator approach lets us declare write scope close to the handler;
   alternative (sniffing TrackedConnection writes) is more magical but loses
   the upfront declaration.
-- The hard part is making sure the R2 push lock doesn't reintroduce the
-  T1531 serialization. Measure before and after with `[REQ_TIMING]`.
+- The hard part (R2 push lock) is solved by T1539. What remains is measuring
+  `[WRITE_LOCK_WAIT]` evidence and building the handler-level parallelism.

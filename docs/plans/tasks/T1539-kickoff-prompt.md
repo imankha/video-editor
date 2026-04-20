@@ -6,125 +6,109 @@ Copy everything below the line into a fresh Claude Code session.
 
 ## Task
 
-Implement T1539: R2 Concurrent-Write Rate Limit. Read the task file at `docs/plans/tasks/T1539-r2-concurrent-write-rate-limit.md` and CLAUDE.md before doing anything.
+Verify and test T1539: R2 Concurrent-Write Rate Limit. This task is in TESTING status -- implementation is complete, unit tests pass. Read `CLAUDE.md` before doing anything.
+
+## Status
+
+- **Branch:** `feature/T1539-r2-concurrent-write-rate-limit` (merged to master)
+- **Status:** TESTING
+- **Design doc:** `docs/plans/tasks/T1539-design.md`
+- **Task file:** `docs/plans/tasks/T1539-r2-concurrent-write-rate-limit.md`
+- **Tests:** `src/backend/tests/test_upload_lock.py` (11 tests, all passing)
 
 ## Problem Summary
 
-Cloudflare R2 returns 429 ("Reduce your concurrent request rate for the same object") when multiple PutObject calls land on the same `profile.sqlite` key within a short window. This puts the user in degraded state (`.sync_pending` marker), and subsequent writes trigger `retry_pending_sync` on top of their own sync — failure begets more concurrency begets more 429s. A single unlucky 429 can cascade into multi-second stalls.
+Cloudflare R2 returns 429 ("Reduce your concurrent request rate for the same object") when multiple PutObject calls land on the same `profile.sqlite` key within a short window. This puts the user in degraded state (`.sync_pending` marker), and subsequent writes trigger `retry_pending_sync` on top of their own sync -- failure begets more concurrency begets more 429s. A single unlucky 429 can cascade into multi-second stalls.
 
-## Architecture You Must Understand First
+## Root Cause (discovered during investigation)
 
-Read these files before designing anything:
+**The original hypothesis was wrong.** The kickoff prompt assumed the per-user asyncio.Lock released before the R2 upload completed, allowing request-to-request races. Investigation proved this false:
 
-| File | What to look for |
-|------|-----------------|
-| `CLAUDE.md` | "Persistence: Gesture-Based, Never Reactive" section — **non-negotiable constraints** |
-| `src/backend/app/middleware/db_sync.py` | The full request sync pipeline — per-user write lock (lines ~118-139), retry_pending_sync (lines ~466-479), parallel upload via asyncio.gather (lines ~573-576), sync_pending marker lifecycle |
-| `src/backend/app/storage.py` | `sync_database_to_r2_with_version()` (lines ~748-841) — optimistic locking with HEAD check, `retry_r2_call()` with TIER_1 (4 attempts, exponential backoff), fast-timeout sync client (3s connect, 10s read) |
-| `.claude/references/coding-standards.md` | Persistence rules (lines ~286-352) |
+- `_maybe_write_lock` (db_sync.py:142-157) uses `async with lock:` which holds through the entire `_sync_aware_flow`
+- `_sync_aware_flow` `await`s `asyncio.gather` for the uploads (db_sync.py:573)
+- Therefore the lock holds through the R2 upload -- **request-to-request races are impossible**
 
-### How sync works today (simplified)
+**The actual race is export worker vs middleware sync:**
 
-```
-RequestContextMiddleware.dispatch()
-  -> _maybe_write_lock()          # per-user asyncio.Lock, serializes WRITE methods
-     -> _sync_aware_flow()
-        1. If has_sync_pending AND method is WRITE:
-           -> asyncio.to_thread(retry_pending_sync)
-              -> sync_database_to_r2_with_version()  # PutObject to same key
-              -> sync_user_db_to_r2_with_version()
-        2. Process the actual request (call_next)
-        3. If handler wrote to DB (has_writes flag):
-           -> mark_sync_pending()
-           -> asyncio.gather(
-                asyncio.to_thread(sync_db_to_r2_explicit),    # PutObject #1
-                asyncio.to_thread(sync_user_db_to_r2_explicit) # PutObject #2
-              )
-           -> Clear marker on success, set on failure
-```
+- `export_worker.py` calls `sync_db_to_r2_explicit()` directly after completing an export job (lines 129, 229)
+- This runs in a FastAPI `BackgroundTask` -- outside the request middleware, outside the per-user write lock
+- When an export finishes while the user is making edits, both hit PutObject on the same `profile.sqlite` key concurrently -> R2 429
 
-### Why 429s happen despite the per-user lock
+**Secondary race:** Shutdown sync in `main.py` (lines 206-227) also runs outside the lock, but this is low risk since shutdown is rare.
 
-The per-user asyncio.Lock serializes *handler execution*, but R2 uploads run in worker threads via `asyncio.to_thread()`. The critical issue: **step 1 (retry_pending_sync) and step 3 (post-handler sync) can overlap** in specific scenarios:
+**The two parallel PutObjects in asyncio.gather target different R2 keys** -- confirmed safe:
+- profile.sqlite: `{env}/users/{uid}/profiles/{pid}/profile.sqlite`
+- user.sqlite: `{env}/users/{uid}/user.sqlite`
 
-- Request A finishes handler, starts uploading (step 3) in a worker thread
-- The asyncio lock releases after step 3 starts but before the upload completes
-- Request B acquires the lock, sees `.sync_pending` (from A's mark), starts retry_pending_sync (step 1) in another worker thread
-- Both threads hit PutObject on the same R2 key simultaneously -> 429
+## What Was Implemented
 
-Also: the asyncio.gather in step 3 fires TWO concurrent PutObjects (profile.sqlite + user.sqlite) — these target different keys so shouldn't 429 each other, but confirm this assumption.
+### Per-user per-key upload lock (`threading.Lock`)
 
-### Key log markers
+A `threading.Lock` per `(user_id, db_type)` inside the two upload functions. Every sync path (middleware, export worker, shutdown, retry) goes through these functions, so the lock is universal.
 
-- `[WRITE_LOCK_WAIT]` — writer waited >50ms for per-user lock
-- `[R2_CALL]` — individual R2 operation with client, op, status, elapsed_ms
-- `[SYNC]` — retry attempts, success/failure, conflict detection
-- `[SYNC_PARTIAL]` — profile sync result != user sync result
-- `[SLOW DB SYNC]` — sync took >500ms
+**Why `threading.Lock` not `asyncio.Lock`:** Callers run on different thread types -- asyncio executor threads (middleware sync), background task threads (export worker), and main thread (shutdown). `threading.Lock` works across all of them.
 
-### Retry strategy
+### Files Changed
 
-- `retry_r2_call()` in `app/utils/retry.py` — TIER_1 = 4 attempts, 1s initial backoff, 2x exponential, 50-150% jitter
-- Transient errors retried: timeout, 429, 500/502/503
-- Non-transient errors fail fast: 404, 403
+| File | What changed |
+|------|-------------|
+| `src/backend/app/storage.py` | Added `get_upload_lock(user_id, db_type)` factory. Wrapped the `retry_r2_call(client.upload_file, ...)` call in both `sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` with the upload lock. Added `[UPLOAD_LOCK_WAIT]` logging when lock wait exceeds 50ms. |
+| `src/backend/app/middleware/db_sync.py` | Added tryLock optimization to `retry_pending_sync` path -- if the upload lock is already held (export worker uploading), skip the retry instead of blocking. Avoids redundant PutObject. |
+| `src/backend/tests/test_upload_lock.py` | 11 unit tests covering lock identity, serialization, parallel different-key uploads, lock-held-during-upload, lock-released-on-failure, and tryLock optimization. |
+
+### Key Design Decisions
+
+1. **Separate locks for profile vs user keys** -- preserves `asyncio.gather` parallelism in the middleware. A single per-user lock would serialize profile + user uploads, adding ~300-1000ms to every write.
+
+2. **Lock inside the upload function, not at the caller level** -- minimal scope (only PutObject is serialized, not HEAD check or version calculation), and universal (every sync path goes through these functions automatically).
+
+3. **tryLock optimization** -- `retry_pending_sync` does `profile_lock.acquire(blocking=False)`. If it fails (someone else is uploading), skip the retry. The in-progress upload will either succeed (clearing the pending state) or fail (leaving the marker for the next request). This avoids blocking a write request behind a potentially slow export upload.
+
+### New Observability
+
+- `[UPLOAD_LOCK_WAIT] user={user_id} db={profile|user} waited_ms={N}` -- logged when a sync waited for the upload lock (threshold: 50ms)
+- Existing `[R2_CALL]`, `[SYNC]`, `[WRITE_LOCK_WAIT]` logs unchanged
+
+### How It Handles Key Scenarios
+
+| Scenario | Behavior |
+|----------|----------|
+| Normal single write | Lock uncontested, no latency change |
+| Two rapid writes from same user | Already serialized by asyncio write lock; upload lock is uncontested |
+| Export worker sync races with request sync | Upload lock serializes them; request waits ~300-1000ms instead of 429 |
+| Write fails mid-upload | `with` statement guarantees lock release; `.sync_pending` marker remains for next request retry |
+| Stale `.sync_pending` + export uploading | tryLock skips retry; export upload handles it |
+
+### Worst Case
+
+If `retry_r2_call` exhausts all TIER_1 retries (4 attempts, exponential backoff, 3s connect / 10s read timeouts), the lock could be held for ~30-50s. Other uploads for that same user+key wait. This is still better than the 429 cascade it replaces.
+
+## Relationship to T1538 (Per-Resource Locks)
+
+T1539's `get_upload_lock()` is the "R2 push lock" that T1538 needs for its Option 2b. T1538 can reuse it directly for handler-level parallelism without building a separate R2 serialization mechanism. T1538 has been updated to reflect this (complexity reduced from 6 to 4).
 
 ## Hard Constraints (from CLAUDE.md, non-negotiable)
 
-1. **Atomic gesture commit.** When a write request returns 200, the change is durably in R2 — readable by the next request from any client. No "will be saved soon."
+1. **Atomic gesture commit.** When a write request returns 200, the change is durably in R2 -- readable by the next request from any client.
 2. **No silent loss under crash.** `.sync_pending` marker behavior is the floor.
-3. **No new write paths.** Solution applies uniformly to all write handlers. No "fast" vs "slow" modes.
-4. **Cross-user fairness.** A hot user must not stall unrelated users. Per-user lock granularity is the minimum.
-5. **Per-user serialization at least as strong as today.** Two writes from the same user need correct ordering.
-6. **Observable.** Keep `[R2_CALL]` / `[SYNC]` / `[WRITE_LOCK_WAIT]` logs or equivalents.
+3. **No new write paths.** Solution applies uniformly to all write handlers.
+4. **Cross-user fairness.** A hot user must not stall unrelated users.
+5. **Per-user serialization at least as strong as today.**
+6. **Observable.** Keep `[R2_CALL]` / `[SYNC]` / `[WRITE_LOCK_WAIT]` / `[UPLOAD_LOCK_WAIT]` logs.
 
-## What is NOT allowed
+## Testing Checklist
 
-- Background-only sync (violates constraint 1)
-- Debouncing writes across gestures (violates constraint 1)
-- Batching/coalescing pending writes in a queue (violates constraint 1, crash risk)
-- "Ack then flush" pattern (violates constraint 1)
-- Replacing SQLite or moving off R2 (out of scope)
-- Per-row locking (out of scope, see T1538)
+- [x] Unit tests pass: `cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_upload_lock.py -v`
+- [x] Import check passes: `cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"`
+- [ ] Manual test: trigger export while making rapid edits, watch logs for `[UPLOAD_LOCK_WAIT]` (lock working) and absence of `[R2_CALL].*status=429`
+- [ ] Verify existing sync tests still pass: `cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_sync_pending.py tests/test_sync_retry.py tests/test_export_worker_sync.py tests/test_sync_status.py -v`
+- [ ] Deploy to staging and monitor `[UPLOAD_LOCK_WAIT]` frequency and `[R2_CALL]` 429 rate
 
-## Investigation Phase (do this FIRST)
+## Log Markers to Watch
 
-Before designing, gather evidence:
-
-1. **Re-read `[R2_CALL]` logging** in storage.py (lines ~48-77) to understand what's already instrumented
-2. **Trace the lock lifecycle** in db_sync.py — does the asyncio.Lock hold through the R2 upload, or release before? This is the key question. Find the exact lines where the lock acquires and releases relative to the asyncio.to_thread upload calls
-3. **Check if retry_pending_sync can race with post-handler sync** — trace through the code to confirm or deny the race condition described above
-4. **Check the asyncio.gather call** — do the two PutObjects target different R2 keys? (profile.sqlite vs user.sqlite at different paths)
-5. **Look at T1538 (Per-Resource Locks) task file** at `docs/plans/tasks/T1538-per-resource-locks.md` — understand how it intersects
-
-## Design Considerations
-
-The core insight is likely: **the per-user lock must hold through the R2 upload, not just through the handler.** If the lock releases before the upload thread completes, that's the race window.
-
-Possible approaches to explore (not prescriptive — investigate first):
-
-- **Extend lock scope** to cover the full upload, not just the handler. Trade-off: higher lock contention = higher `[WRITE_LOCK_WAIT]` times, but eliminates concurrent PutObject on the same key entirely.
-- **Upload serialization separate from handler lock** — a per-user upload semaphore/lock that ensures only one PutObject per key at a time, without blocking handler execution.
-- **Eliminate retry_pending_sync as a separate code path** — if the post-handler sync already handles pending state, the retry path may be redundant and a source of races.
-
-Whatever you propose, show how it handles these scenarios:
-1. Normal single write (happy path)
-2. Two rapid writes from same user (lock contention)
-3. Write fails mid-upload (crash recovery)
-4. Write succeeds but retry_pending_sync fires on next request (stale marker)
-
-## Workflow
-
-Follow the project workflow in CLAUDE.md:
-
-1. **Classify** the task (stack layers, files, LOC, test scope, agents)
-2. **Branch**: `git checkout -b feature/T1539-r2-concurrent-write-rate-limit`
-3. **Code Expert phase**: Read the files listed above, trace the exact race condition
-4. **Architecture phase**: Produce a design doc at `docs/plans/tasks/T1539-design.md` with current-state diagrams, target-state diagrams, and implementation plan — then STOP and wait for approval
-5. Do NOT implement until the design is approved
-
-## Files likely touched
-
-- `src/backend/app/middleware/db_sync.py` — lock lifecycle, sync pipeline
-- `src/backend/app/storage.py` — upload functions, retry config
-- `src/backend/app/utils/retry.py` — retry tiers if tuning needed
-- Tests: `src/backend/tests/` — look for existing sync/middleware tests to extend
+```
+[UPLOAD_LOCK_WAIT]    # NEW -- proves lock contention occurred (export vs request race caught)
+[R2_CALL].*status=429 # OLD -- should no longer appear for same-user same-key races
+[SYNC] Skipping retry  # NEW -- tryLock optimization fired
+[WRITE_LOCK_WAIT]     # EXISTING -- per-user asyncio write lock contention
+```
