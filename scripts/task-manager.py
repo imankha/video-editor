@@ -429,6 +429,8 @@ function render() {
       return true;
     });
 
+    if (filteredTasks.length === 0) return;
+
     // Header
     const hdr = document.createElement('div');
     hdr.className = 'milestone-header';
@@ -449,10 +451,6 @@ function render() {
     const list = document.createElement('div');
     list.className = 'task-list';
     list.dataset.msId = ms.id;
-
-    if (filteredTasks.length === 0) {
-      list.innerHTML = '<div class="empty-state">No tasks — drag tasks here to add</div>';
-    }
 
     filteredTasks.forEach(t => {
       const card = document.createElement('div');

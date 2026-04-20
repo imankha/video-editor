@@ -158,7 +158,9 @@ Scale, performance, and reliability — must be solid before feature work.
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | "Install app" prompt, offline shell, home screen icon — feels native on phones |
 | T1073 | [Team + Athlete Name on Profile](tasks/for-launch/T1073-team-athlete-name-profile.md) | 7 | 2 | 3.5 | TODO | Let users set team name and athlete name per profile; feeds downstream branding/overlays and personalizes quest copy |
-| T1580 | [Upload & Storage Credits](tasks/for-launch/T1580-upload-storage-credits.md) | 8 | 6 | 1.3 | TODO | R2 cost recovery: 2cr per game upload (30-day storage), 2cr renewal, 8cr for new accounts, passive expiry messaging on game cards |
+| | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | | | | **No free tenants on R2 — games metered, final/working prepaid at export** |
+| T1580 | [↳ Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 8 | 6 | 1.3 | TODO | Size-based upload cost, 30-day expiry, 8cr new accounts |
+| T1581 | [↳ Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 8 | 5 | 1.6 | TODO | ExpirationBadge on game cards + date-slider extension modal |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | 6 | 5 | 1.3 | TODO | "Upload Team" — invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | "Share to Social" from gallery — one form posts to IG, TikTok, YouTube, FB via aggregator API |
 | T1060 | [Coaches View](tasks/for-launch/T1060-coaches-view.md) | 5 | 6 | 1.0 | TODO | Coach account type: roster uploads, assign annotations to players, own NUF flow |
