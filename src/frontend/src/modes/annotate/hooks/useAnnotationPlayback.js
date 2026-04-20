@@ -3,9 +3,9 @@ import { buildVirtualTimeline } from './useVirtualTimeline';
 import { useQuestStore } from '../../../stores/questStore';
 
 /**
- * Default playback rate for annotated clips — 0.5x slow-motion for study/coaching.
+ * Default playback rate for annotated clips.
  */
-const DEFAULT_PLAYBACK_RATE = 0.5;
+const DEFAULT_PLAYBACK_RATE = 1;
 
 /**
  * How far before segment end (in seconds of actual video time) to trigger preload

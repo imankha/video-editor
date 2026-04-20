@@ -125,9 +125,7 @@ export const useUploadStore = create((set, get) => ({
       const gameName = get().activeUpload?.gameName;
       set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
       toast.success('Game ready!', {
-        message: result.deduplicated
-          ? `${gameName || 'Video'} was already uploaded`
-          : `${gameName || 'Video'} uploaded successfully`,
+        message: `${gameName || 'Video'} uploaded successfully`,
       });
       // T540: Refresh quest progress after game upload
       useQuestStore.getState().fetchProgress({ force: true });

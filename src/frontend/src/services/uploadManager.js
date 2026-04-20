@@ -368,9 +368,17 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   const prepareData = await prepareRes.json();
 
-  // Video already exists in R2 - skip upload
+  // Video already exists in R2 - skip upload.
+  // Simulate upload progress so UX is identical to a real upload (dedup is invisible).
   if (prepareData.status === UPLOAD_STATUS.EXISTS) {
-    notify(UPLOAD_PHASE.COMPLETE, 100, 'Video already uploaded');
+    console.log('[ensureVideoInR2] Dedup: video already in R2, skipping upload');
+    notify(UPLOAD_PHASE.UPLOADING, 30, 'Uploading...');
+    await new Promise(r => setTimeout(r, 400));
+    notify(UPLOAD_PHASE.UPLOADING, 70, 'Uploading...');
+    await new Promise(r => setTimeout(r, 400));
+    notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
+    await new Promise(r => setTimeout(r, 300));
+    notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
     return {
       blake3_hash: hash,
       file_size: prepareData.file_size || file.size,
@@ -557,11 +565,19 @@ export async function uploadGame(file, onProgress, options = {}) {
     gameResult = await createGame(options, [videoRef], 'pending');
 
     // Dedup: if user already owns this video, game is already ready — skip upload.
+    // Simulate upload progress so UX is identical to a real upload (dedup is invisible).
     if (gameResult.status === 'already_owned') {
+      console.log('[uploadGame] Dedup: user already owns this video, skipping upload');
       if (options.onGameCreated) {
         options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
       }
-      notify(UPLOAD_PHASE.COMPLETE, 100, 'Game linked');
+      notify(UPLOAD_PHASE.UPLOADING, 30, 'Uploading...');
+      await new Promise(r => setTimeout(r, 400));
+      notify(UPLOAD_PHASE.UPLOADING, 70, 'Uploading...');
+      await new Promise(r => setTimeout(r, 400));
+      notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
+      await new Promise(r => setTimeout(r, 300));
+      notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
       return {
         status: gameResult.status,
         game_id: gameResult.game_id,
