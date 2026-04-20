@@ -313,25 +313,25 @@ export function UserTable({ users, allUsers }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.credits_spent || '—'}
+                  {user.credits_spent ?? '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.credits_purchased || '—'}
+                  {user.credits_purchased ?? '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
                   {fmtMoney(user.money_spent_cents)}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.games_annotated || '—'}
+                  {user.games_annotated ?? '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.clips_annotated || '—'}
+                  {user.clips_annotated ?? '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.projects_framed || '—'}
+                  {user.projects_framed ?? '—'}
                 </td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.projects_completed || '—'}
+                  {user.projects_completed ?? '—'}
                 </td>
 
                 {(definitions || []).map(q => (
