@@ -501,7 +501,7 @@ async def logout(request: Request):
 
 # Backend gate: set ENABLE_PROBLEM_REPORT=false to disable
 _ENABLE_PROBLEM_REPORT = os.getenv("ENABLE_PROBLEM_REPORT", "true").lower() != "false"
-_MAX_REPORTS_PER_HOUR = 3
+_MAX_REPORTS_PER_HOUR = 20
 # In-memory rate limit tracker: {ip_or_email: [timestamps]}
 _report_rate_tracker: dict[str, list[datetime]] = {}
 
@@ -520,31 +520,13 @@ class ProblemReportRequest(BaseModel):
 async def report_problem(body: ProblemReportRequest, request: Request):
     """Accept a client-side problem report and email it to all admins.
 
-    Rate limited to 3 reports per source per hour. Gated by
-    ENABLE_PROBLEM_REPORT env var (default: enabled).
+    Gated by ENABLE_PROBLEM_REPORT env var (default: enabled).
+    TODO: Re-enable rate limiting (20/hour) once feature is approved.
     """
     if not _ENABLE_PROBLEM_REPORT:
         raise HTTPException(status_code=404, detail="Not found")
 
     req_id = request.headers.get("x-request-id", "?")
-
-    # Rate limit by email (if provided) or client IP
-    rate_key = (body.email or request.client.host or "unknown").lower()
-    now = datetime.utcnow()
-    one_hour_ago = now - timedelta(hours=1)
-
-    if rate_key not in _report_rate_tracker:
-        _report_rate_tracker[rate_key] = []
-    # Prune old entries
-    _report_rate_tracker[rate_key] = [
-        ts for ts in _report_rate_tracker[rate_key] if ts > one_hour_ago
-    ]
-    if len(_report_rate_tracker[rate_key]) >= _MAX_REPORTS_PER_HOUR:
-        raise HTTPException(
-            status_code=429,
-            detail="Too many reports submitted. Please try again later.",
-        )
-    _report_rate_tracker[rate_key].append(now)
 
     # Get admin recipients
     from app.services.auth_db import get_admin_emails

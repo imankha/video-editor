@@ -91,7 +91,7 @@ export function ReportProblemButton({ className = '' }) {
           : res.status >= 500
           ? ' (backend error -- check server logs)'
           : '';
-        console.error(`[ReportProblem] ${res.status} ${url}:`, data, hint);
+        console.error(`[ReportProblem] ${res.status} ${res.url}:`, data, hint);
         throw new Error(data.detail || `Failed (${res.status})`);
       }
       clearClientLogs();

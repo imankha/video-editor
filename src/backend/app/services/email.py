@@ -4,6 +4,7 @@ Email service — sends transactional emails via Resend API.
 Used by the OTP auth flow (T401) to send 6-digit verification codes.
 """
 
+import base64
 import logging
 import os
 
@@ -78,14 +79,39 @@ async def send_problem_report_email(
     if not api_key:
         raise ValueError("RESEND_API_KEY not configured")
 
-    log_rows = "\n".join(
-        f'<tr style="border-bottom:1px solid #374151">'
-        f'<td style="padding:4px 8px;color:{"#f87171" if entry.get("level") == "error" else "#fbbf24"};font-size:12px">{entry.get("level", "?")}</td>'
-        f'<td style="padding:4px 8px;color:#9ca3af;font-size:11px;white-space:nowrap">{entry.get("ts", "")}</td>'
-        f'<td style="padding:4px 8px;color:#e5e7eb;font-size:12px;font-family:monospace;word-break:break-all">{_html_escape(entry.get("message", ""))}</td>'
-        f'</tr>'
-        for entry in logs[-100:]  # cap at 100 even if client sends more
-    )
+    # Build plain-text log content for .txt attachment
+    # 1. Collapse consecutive identical messages (e.g. error loops)
+    deduped = []
+    prev_key = None
+    repeat_count = 0
+    for entry in logs[-200:]:
+        key = (entry.get("level"), entry.get("message"))
+        if key == prev_key:
+            repeat_count += 1
+            continue
+        if repeat_count > 0:
+            deduped.append({"_repeat": repeat_count})
+        prev_key = key
+        repeat_count = 0
+        deduped.append(entry)
+    if repeat_count > 0:
+        deduped.append({"_repeat": repeat_count})
+    # 2. If still over 50 unique lines, drop info-level
+    if len([e for e in deduped if "level" in e]) > 50:
+        deduped = [e for e in deduped if e.get("level") != "info"]
+    # 3. Format
+    log_lines = []
+    for entry in deduped:
+        if "_repeat" in entry:
+            n = entry["_repeat"]
+            log_lines.append(f"         ... repeated {n} more time{'s' if n > 1 else ''}")
+        else:
+            level = entry.get("level", "?").upper().ljust(5)
+            ts = entry.get("ts", "")
+            msg = entry.get("message", "")
+            log_lines.append(f"[{level}] {ts}  {msg}")
+    log_text = "\n".join(log_lines) if log_lines else "(no logs captured)"
+    log_attachment_b64 = base64.b64encode(log_text.encode("utf-8")).decode("ascii")
 
     # User description section
     description_html = ""
@@ -96,14 +122,19 @@ async def send_problem_report_email(
         <div style="color:#e5e7eb;font-size:14px;white-space:pre-wrap">{_html_escape(description[:2000])}</div>
       </div>"""
 
-    # Screenshot section (inline base64 image)
+    # Screenshot: attach as image file, reference via cid: for inline display
+    # (Gmail strips data: URLs from emails, so inline base64 won't render)
     screenshot_html = ""
+    screenshot_attachment = None
     if screenshot and screenshot.startswith("data:image/"):
-        screenshot_html = f"""
-      <div style="margin-bottom:16px">
-        <div style="color:#9ca3af;font-size:11px;margin-bottom:4px">Screenshot:</div>
-        <img src="{screenshot}" style="max-width:100%;border-radius:6px;border:1px solid #374151" />
-      </div>"""
+        # Strip the data URL prefix to get raw base64
+        # Format: data:image/jpeg;base64,/9j/4AAQ...
+        _header, screenshot_b64 = screenshot.split(",", 1)
+        screenshot_attachment = {
+            "filename": "screenshot.jpg",
+            "content": screenshot_b64,
+        }
+        screenshot_html = ""
 
     # Email subject includes description preview if available
     subject_preview = ""
@@ -124,18 +155,12 @@ async def send_problem_report_email(
         <tr><td style="color:#9ca3af;padding-right:12px">Build:</td><td style="color:#e5e7eb;font-family:monospace;font-size:12px">{_html_escape(build or 'unknown')}</td></tr>
       </table>
       {description_html}
-      {screenshot_html}
-      <h3 style="color:#fbbf24;margin-bottom:8px">Console Logs ({len(logs)} entries)</h3>
-      <table style="width:100%;border-collapse:collapse;background:#111827;border-radius:4px">
-        <tr style="border-bottom:2px solid #374151">
-          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Level</th>
-          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Time</th>
-          <th style="padding:6px 8px;text-align:left;color:#9ca3af;font-size:11px">Message</th>
-        </tr>
-        {log_rows or '<tr><td colspan="3" style="padding:12px;color:#6b7280;text-align:center">No logs captured</td></tr>'}
-      </table>
     </div>
     """
+
+    attachments = [{"filename": "console-logs.txt", "content": log_attachment_b64}]
+    if screenshot_attachment:
+        attachments.append(screenshot_attachment)
 
     async def _send():
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -147,6 +172,7 @@ async def send_problem_report_email(
                     "to": to_emails,
                     "subject": f"Problem Report: {reporter_email or 'anonymous'}{subject_preview}",
                     "html": html_body,
+                    "attachments": attachments,
                 },
             )
 

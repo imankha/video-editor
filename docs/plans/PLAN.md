@@ -77,7 +77,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TODO | 2.3 | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
 | T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | TESTING | 1.8 | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
 | T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | TODO | 1.3 | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
-| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | TODO | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
+| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | DONE | 2.0 | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | Clickable email in admin user list → "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
 | T1610 | [↳ Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby |

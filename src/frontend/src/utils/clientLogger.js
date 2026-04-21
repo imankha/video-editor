@@ -1,6 +1,6 @@
 /**
- * Client-side log ring buffer — captures console.error and console.warn
- * calls so they can be sent to admins via the "Report a problem" button.
+ * Client-side log ring buffer — captures console.error, console.warn,
+ * and console.info so they can be sent to admins via "Report a problem".
  *
  * Install once at app boot (top of main.jsx). The buffer is capped at
  * MAX_ENTRIES to prevent unbounded memory growth.
@@ -8,12 +8,12 @@
  * T1650: Report a Problem Button
  */
 
-const MAX_ENTRIES = 100;
+const MAX_ENTRIES = 200;
 const _buffer = [];
 let _installed = false;
 
 /**
- * Install console.error/warn interceptors. Safe to call multiple times
+ * Install console interceptors. Safe to call multiple times
  * (second call is a no-op). Call as early as possible in the app boot
  * so pre-React errors are captured.
  */
@@ -23,6 +23,7 @@ export function installClientLogger() {
 
   const originalError = console.error;
   const originalWarn = console.warn;
+  const originalInfo = console.info;
 
   console.error = function (...args) {
     _push('error', args);
@@ -32,6 +33,11 @@ export function installClientLogger() {
   console.warn = function (...args) {
     _push('warn', args);
     originalWarn.apply(console, args);
+  };
+
+  console.info = function (...args) {
+    _push('info', args);
+    originalInfo.apply(console, args);
   };
 }
 

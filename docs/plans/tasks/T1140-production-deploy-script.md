@@ -1,10 +1,10 @@
 # T1140: Production Deploy Script
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-04-08
-**Updated:** 2026-04-08
+**Updated:** 2026-04-20
 
 ## Problem
 
@@ -14,32 +14,15 @@ The CI/CD pipeline (GitHub Actions) currently only deploys to **staging**. Produ
 
 ## Solution
 
-Create a `scripts/deploy_production.sh` script that automates the full production deploy with verification.
+Created `scripts/deploy_production.sh` script that automates the full production deploy with verification. Also created a `/deploy` Claude skill so deploys can be triggered with a single command.
 
 ## Context
 
-### Current Deploy Commands
-
-**Frontend (Cloudflare Pages):**
-```bash
-cd src/frontend
-npm run build:production
-npx wrangler pages deploy dist --project-name reel-ballers-prod --branch main
-```
-
-**Backend (Fly.io):**
-```bash
-cd src/backend
-fly deploy --config fly.production.toml
-```
-
 ### Relevant Files
-- `scripts/deploy_production.sh` - New script to create
+- `scripts/deploy_production.sh` - Deploy script with pre-flight checks, health verification, git tagging
+- `.claude/skills/deploy/SKILL.md` - Claude skill wrapping the deploy script
 - `src/frontend/package.json` - Has `build:production` and `deploy:production` scripts
 - `src/backend/fly.production.toml` - Backend production Fly config
-- `scripts/release.bat` - Existing Windows release script (reference for validation logic)
-- `.github/workflows/deploy-frontend.yml` - Staging CI (reference)
-- `.github/workflows/deploy-backend.yml` - Staging CI (reference)
 
 ### Related Tasks
 - None
@@ -47,42 +30,27 @@ fly deploy --config fly.production.toml
 ### Technical Notes
 - Frontend: Cloudflare Pages project `reel-ballers-prod`, served at `app.reelballers.com`
 - Backend: Fly.io app `reel-ballers-api`, served at `reel-ballers-api.fly.dev`
-- `wrangler` is not globally installed; use `npx wrangler`
-- Script should work in bash (the dev environment uses Git Bash on Windows)
-- Consider also updating GitHub Actions to support production deploys (manual trigger)
+- Default deploys both backend + frontend (changed from original spec of frontend-only default)
+- Successful deploys are git-tagged (e.g., `deploy/frontend/2026-04-20`)
 
 ## Implementation
 
 ### Steps
-1. [ ] Create `scripts/deploy_production.sh`
-2. [ ] Pre-flight checks: on master, clean working tree, up-to-date with origin
-3. [ ] Accept flags: `--frontend-only`, `--backend-only`, `--all` (default: frontend only)
-4. [ ] Frontend deploy: build with production mode, deploy via wrangler, verify health
-5. [ ] Backend deploy: `fly deploy --config fly.production.toml`, verify health
-6. [ ] Post-deploy verification: curl health endpoints, report success/failure with URLs
-7. [ ] Optional: add `workflow_dispatch` trigger to GitHub Actions for production deploy
-
-### Script Behavior
-```
-$ ./scripts/deploy_production.sh
-[pre-flight] On master, clean tree, up-to-date with origin ✓
-[frontend]   Building with production env...
-[frontend]   Deploying to Cloudflare Pages (reel-ballers-prod)...
-[frontend]   Verifying https://app.reelballers.com ... ✓
-[done]       Frontend deployed successfully.
-
-$ ./scripts/deploy_production.sh --all
-[pre-flight] ...
-[backend]    Deploying to Fly.io (reel-ballers-api)...
-[backend]    Verifying https://reel-ballers-api.fly.dev/api/health ... ✓
-[frontend]   ...
-[done]       Frontend + Backend deployed successfully.
-```
+1. [x] Create `scripts/deploy_production.sh`
+2. [x] Pre-flight checks: on master, clean working tree, up-to-date with origin
+3. [x] Accept flags: `--frontend-only`, `--backend-only`, `--all` (default: all)
+4. [x] Frontend deploy: build with production mode, deploy via wrangler, verify health
+5. [x] Backend deploy: `fly deploy --config fly.production.toml`, verify health
+6. [x] Post-deploy verification: curl health endpoints, report success/failure with URLs
+7. [x] Git tagging of successful deploys
+8. [x] Create `/deploy` Claude skill for one-command deploys
 
 ## Acceptance Criteria
 
-- [ ] Single command deploys frontend to production
-- [ ] `--all` flag also deploys backend
-- [ ] Pre-flight rejects dirty working tree or non-master branch
-- [ ] Health check verifies deployment is live
-- [ ] Clear success/failure output with URLs
+- [x] Single command deploys frontend to production
+- [x] `--all` flag also deploys backend (default behavior)
+- [x] `--frontend-only` and `--backend-only` flags for partial deploys
+- [x] Pre-flight rejects dirty working tree or non-master branch
+- [x] Health check verifies deployment is live
+- [x] Clear success/failure output with URLs
+- [x] `/deploy` skill automates the workflow from Claude
