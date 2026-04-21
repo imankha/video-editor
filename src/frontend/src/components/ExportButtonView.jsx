@@ -24,6 +24,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   displayMessage,
   error,
   disconnected,
+  reconnectionFailed,
   isFramingMode,
   isDarkOverlay,
 
@@ -43,6 +44,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
   // Handlers
   onExport,
+  onRetryConnection,
+  onDismissExport,
   onAudioToggle,
   onHighlightEffectTypeChange,
   onHighlightColorChange,
@@ -223,9 +226,39 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
       {/* Disconnected state - recoverable, not an error */}
       {disconnected && !error && (
-        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-800 rounded p-2 flex items-center gap-2">
-          <Loader size={14} className="animate-spin" />
-          <span>Connection lost — export continues on server. Reconnecting...</span>
+        <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-800 rounded p-2">
+          {reconnectionFailed ? (
+            <>
+              <span>Could not reconnect to server. Export may still be running.</span>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={onRetryConnection}
+                  className="px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors"
+                >
+                  Check status
+                </button>
+                <button
+                  onClick={onDismissExport}
+                  className="px-3 py-1 text-xs bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600 rounded transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <Loader size={14} className="animate-spin" />
+                <span>Connection lost — export continues on server. Reconnecting...</span>
+              </div>
+              <button
+                onClick={onRetryConnection}
+                className="mt-2 px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors"
+              >
+                Retry connection
+              </button>
+            </>
+          )}
         </div>
       )}
 

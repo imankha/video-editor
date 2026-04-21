@@ -297,6 +297,16 @@ class ExportWebSocketManager {
 
     if (reconnectAttempt >= RECONNECT_CONFIG.maxAttempts) {
       console.warn(`[ExportWSManager] Max reconnect attempts reached for ${exportId}, switching to periodic polling`);
+
+      // Notify that WS reconnection is exhausted (periodic REST polling continues)
+      if (callbacks.onReconnectExhausted) {
+        try {
+          callbacks.onReconnectExhausted();
+        } catch (e) {
+          console.warn(`[ExportWSManager] onReconnectExhausted callback error:`, e);
+        }
+      }
+
       this._startPeriodicPolling(exportId, connectionInfo.callbacks);
       return;
     }
@@ -559,6 +569,25 @@ class ExportWebSocketManager {
     } catch (e) {
       console.warn(`[ExportWSManager] Failed to poll status for ${exportId}:`, e);
       return null;
+    }
+  }
+
+  /**
+   * Reset reconnect state and immediately attempt a new connection.
+   * Used by the manual "Retry connection" button to bypass backoff.
+   *
+   * @param {string} exportId - Export to reconnect
+   */
+  resetReconnect(exportId) {
+    const connectionInfo = this.connections.get(exportId);
+    if (connectionInfo) {
+      // Clear any pending reconnect/polling timeout
+      if (connectionInfo.reconnectTimeout) {
+        clearTimeout(connectionInfo.reconnectTimeout);
+        connectionInfo.reconnectTimeout = null;
+      }
+      // Reset attempt counter so onReconnect fires on success
+      connectionInfo.reconnectAttempt = 1;
     }
   }
 

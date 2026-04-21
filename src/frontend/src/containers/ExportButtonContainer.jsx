@@ -230,6 +230,7 @@ export function ExportButtonContainer({
   const [error, setError] = useState(null);
   const [audioExplicitlySet, setAudioExplicitlySet] = useState(false);
   const [disconnected, setDisconnected] = useState(false);
+  const [reconnectionFailed, setReconnectionFailed] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
 
@@ -239,6 +240,7 @@ export function ExportButtonContainer({
   const handleExportRef = useRef(null);
   const exportTimingRef = useRef(null);
   const backgroundExportRef = useRef(false); // T760: tracks if export was dispatched as 202 background
+  const disconnectedRef = useRef(false); // Sync mirror of `disconnected` state for catch-block reads
 
   // Get progress from the global export store for this project
   const currentExportFromStore = Object.values(activeExports)
@@ -339,17 +341,86 @@ export function ExportButtonContainer({
         handleExportEnd();
       },
       onDisconnect: () => {
+        disconnectedRef.current = true;
         setDisconnected(true);
         setProgressMessage('Connection lost — export continues on server...');
       },
       onReconnect: () => {
+        disconnectedRef.current = false;
         setDisconnected(false);
+        setReconnectionFailed(false);
         setProgressMessage('Reconnected — resuming progress...');
+      },
+      onReconnectExhausted: () => {
+        setReconnectionFailed(true);
       },
     });
 
     return { connected };
   }, [editorMode, projectId, projectName, clips, onProceedToOverlay, onExportComplete]);
+
+  /**
+   * Retry connection: manually check Modal status and re-establish WS.
+   * Triggered by user clicking "Retry connection" / "Check status" button.
+   */
+  const handleRetryConnection = useCallback(async () => {
+    const exportId = exportIdRef.current;
+    if (!exportId) return;
+
+    setProgressMessage('Checking export status...');
+
+    try {
+      const response = await axios.get(`${API_BASE}/api/exports/${exportId}/modal-status`);
+      const { status, modal_status } = response.data;
+
+      if (status === 'complete' || modal_status === 'complete') {
+        disconnectedRef.current = false;
+        setDisconnected(false);
+        setReconnectionFailed(false);
+        setLocalProgress(100);
+        setProgressMessage('Export complete!');
+        setIsExporting(false);
+        handleExportEnd();
+        completeExportInStore(exportId,
+          response.data.working_video_id || response.data.output_video_id,
+          response.data.output_filename
+        );
+        if (onExportComplete) onExportComplete();
+      } else if (status === 'error' || modal_status === 'error') {
+        disconnectedRef.current = false;
+        setDisconnected(false);
+        setReconnectionFailed(false);
+        setError(response.data.error || 'Export failed on server');
+        setIsExporting(false);
+        handleExportEnd();
+      } else {
+        // Still running — reset WS backoff and reconnect
+        setProgressMessage('Export still running — reconnecting...');
+        setReconnectionFailed(false);
+        exportWebSocketManager.resetReconnect(exportId);
+        await connectWebSocket(exportId);
+      }
+    } catch (retryErr) {
+      console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
+      setProgressMessage('Could not reach server — will keep trying...');
+    }
+  }, [connectWebSocket, completeExportInStore, onExportComplete]);
+
+  /**
+   * Dismiss export UI when reconnection has failed and user gives up.
+   */
+  const handleDismissExport = useCallback(() => {
+    const exportId = exportIdRef.current;
+    if (exportId) {
+      exportWebSocketManager.disconnect(exportId);
+    }
+    disconnectedRef.current = false;
+    setDisconnected(false);
+    setReconnectionFailed(false);
+    setIsExporting(false);
+    setProgressMessage('');
+    handleExportEnd();
+  }, []);
 
   /**
    * Wait for export job to complete by polling status
@@ -442,6 +513,8 @@ export function ExportButtonContainer({
     setProgressMessage('Checking server...');
     setError(null);
     setDisconnected(false);
+    setReconnectionFailed(false);
+    disconnectedRef.current = false;
     uploadCompleteRef.current = false;
 
     // Health check
@@ -839,6 +912,14 @@ export function ExportButtonContainer({
         );
 
         if (isNetworkError) {
+          // If the WS onDisconnect already fired, the server connection existed —
+          // the export may be running even though the POST response was lost.
+          // Don't show a terminal error; show the recoverable disconnected state.
+          if (disconnectedRef.current) {
+            setDisconnected(true);
+            setProgressMessage('Connection lost — export continues on server...');
+            return;
+          }
           setError('Export failed due to a network error. Please check your connection and try again.');
           setProgressMessage('Network error');
         } else if (err.response) {
@@ -959,6 +1040,7 @@ export function ExportButtonContainer({
     displayMessage,
     error,
     disconnected,
+    reconnectionFailed,
     isFramingMode,
     isDarkOverlay,
 
@@ -974,6 +1056,8 @@ export function ExportButtonContainer({
 
     // Handlers
     handleExport: () => requireAuth(() => handleExport()),
+    handleRetryConnection,
+    handleDismissExport,
     handleAudioToggle,
 
     // Effect labels
