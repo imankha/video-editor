@@ -514,11 +514,18 @@ def get_credit_stats_for_admin() -> dict:
                    WHERE source = 'stripe_purchase' AND amount > 0"""
             ).fetchall()
 
+            # Current balance (source of truth, replaces stale credit_summary in auth.sqlite)
+            balance_row = conn.execute(
+                "SELECT balance FROM credits WHERE user_id = ?",
+                (user_id,)
+            ).fetchone()
+
             conn.close()
 
             user_stats = {
                 "credits_spent": spent_rows["total_spent"] or 0 if spent_rows else 0,
                 "credits_purchased": purchased_row["total_purchased"] or 0 if purchased_row else 0,
+                "credits_balance": balance_row["balance"] if balance_row else 0,
                 "purchase_credit_amounts": [r["amount"] for r in purchase_detail_rows],
             }
             if any(v for k, v in user_stats.items() if k != "purchase_credit_amounts") or user_stats["purchase_credit_amounts"]:

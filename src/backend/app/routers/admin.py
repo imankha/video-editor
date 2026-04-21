@@ -330,12 +330,13 @@ async def _get_user_stats(user: dict, credit_stats: dict) -> dict:
         _compute_activity_counts(user_id),
     )
 
-    # Credit stats from auth DB (pre-fetched in batch)
-    user_credit = credit_stats.get(user_id, {"credits_spent": 0, "credits_purchased": 0, "purchase_credit_amounts": []})
+    # Credit stats from per-user DBs (pre-fetched in batch, source of truth)
+    user_credit = credit_stats.get(user_id, {"credits_spent": 0, "credits_purchased": 0, "credits_balance": 0, "purchase_credit_amounts": []})
     money_spent_cents = _compute_money_spent_cents(user_credit["purchase_credit_amounts"])
 
     return {
         **user,
+        "credits": user_credit["credits_balance"],  # Override auth.sqlite's stale credit_summary
         "quest_progress": quest_progress,
         "gpu_seconds_total": gpu_total,
         "credits_spent": user_credit["credits_spent"],
