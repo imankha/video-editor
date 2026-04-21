@@ -6,12 +6,7 @@ import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 
 /**
  * Capture a full-page screenshot as a base64 JPEG via html2canvas.
- *
- * Paints the current video frame onto the <video> element's canvas layer
- * first (html2canvas can't read cross-origin video pixels directly),
- * then renders the entire page DOM including all UI controls, overlays,
- * and the video frame.
- *
+ * Sent silently with the report (not shown to user).
  * Returns a Promise<string|null>.
  */
 async function captureScreenshot() {
@@ -19,10 +14,10 @@ async function captureScreenshot() {
     const mod = await import('html2canvas');
     const html2canvas = mod.default || mod;
     const canvas = await html2canvas(document.body, {
-      scale: 0.75,           // 75% res keeps payload reasonable
+      scale: 0.75,
       useCORS: true,
       logging: false,
-      backgroundColor: '#111827', // match app bg
+      backgroundColor: '#111827',
     });
     return canvas.toDataURL('image/jpeg', 0.6);
   } catch (err) {
@@ -33,8 +28,8 @@ async function captureScreenshot() {
 
 /**
  * ReportProblemButton -- opens a small modal for the user to describe
- * their problem, auto-captures a video screenshot, and sends everything
- * (description + screenshot + console logs) to admins.
+ * their problem. Auto-captures a screenshot and console logs, sends
+ * everything to admins silently.
  *
  * T1650: Gated by VITE_ENABLE_PROBLEM_REPORT env var (default: enabled).
  */
@@ -42,27 +37,24 @@ export function ReportProblemButton({ className = '' }) {
   const email = useAuthStore((s) => s.email);
   const [open, setOpen] = useState(false);
   const [description, setDescription] = useState('');
-  const [screenshot, setScreenshot] = useState(null);
   const [state, setState] = useState('idle'); // idle | sending | sent | error
+  const screenshotRef = useRef(null);
   const textareaRef = useRef(null);
 
   if (!ENABLE_PROBLEM_REPORT) return null;
 
   const handleOpen = async () => {
+    // Capture screenshot before modal opens (so modal isn't in the shot)
+    screenshotRef.current = await captureScreenshot();
     setDescription('');
     setState('idle');
-    setScreenshot(null);
-    // Capture screenshot BEFORE opening the modal so the modal overlay
-    // doesn't appear in the full-page capture.
-    const img = await captureScreenshot();
-    setScreenshot(img);
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
     setDescription('');
-    setScreenshot(null);
+    screenshotRef.current = null;
     setState('idle');
   };
 
@@ -80,7 +72,7 @@ export function ReportProblemButton({ className = '' }) {
           page_url: window.location.href,
           email: email || null,
           description: description.trim() || null,
-          screenshot: screenshot || null,
+          screenshot: screenshotRef.current,
           build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         }),
       });
@@ -166,29 +158,9 @@ export function ReportProblemButton({ className = '' }) {
                 className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none resize-none disabled:opacity-50"
               />
 
-              {/* Screenshot preview */}
-              {screenshot && (
-                <div className="relative">
-                  <img
-                    src={screenshot}
-                    alt="Screenshot"
-                    className="w-full rounded-lg border border-gray-700 opacity-80"
-                  />
-                  <span className="absolute top-1.5 left-2 text-[10px] text-gray-400 bg-gray-900/80 px-1.5 py-0.5 rounded">
-                    Screenshot attached
-                  </span>
-                  <button
-                    onClick={() => setScreenshot(null)}
-                    className="absolute top-1.5 right-2 text-gray-400 hover:text-white bg-gray-900/80 rounded p-0.5"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-gray-500">
-                  Console logs will be included automatically
+                  A screenshot and logs are included automatically
                 </span>
                 <button
                   onClick={handleSend}
