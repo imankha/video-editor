@@ -5,31 +5,16 @@ import { useAuthStore } from '../stores/authStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
 
 /**
- * Capture a screenshot as a base64 JPEG.
+ * Capture a full-page screenshot as a base64 JPEG via html2canvas.
  *
- * 1. If a <video> element has data, capture its current frame via canvas
- *    (fast, no library needed, most useful for playback bugs).
- * 2. Otherwise, use html2canvas to capture the full page DOM
- *    (catches UI bugs, layout issues, empty states).
+ * Paints the current video frame onto the <video> element's canvas layer
+ * first (html2canvas can't read cross-origin video pixels directly),
+ * then renders the entire page DOM including all UI controls, overlays,
+ * and the video frame.
  *
  * Returns a Promise<string|null>.
  */
 async function captureScreenshot() {
-  // Try video frame first (instant, lightweight)
-  try {
-    const video = document.querySelector('video');
-    if (video && video.readyState >= 2) {
-      const canvas = document.createElement('canvas');
-      const scale = Math.min(1, 1280 / video.videoWidth);
-      canvas.width = Math.round(video.videoWidth * scale);
-      canvas.height = Math.round(video.videoHeight * scale);
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', 0.6);
-    }
-  } catch { /* fall through to full-page */ }
-
-  // Full-page screenshot via html2canvas (lazy-loaded -- only fetched on first report)
   try {
     const mod = await import('html2canvas');
     const html2canvas = mod.default || mod;
