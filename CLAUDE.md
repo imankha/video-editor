@@ -198,8 +198,9 @@ Read: {path to EPIC.md}
 
 Epics appear inside milestone tables as:
 - **Epic header row**: Empty ID, bold name linking to EPIC.md, description in last column
-- **Child task rows**: Prefixed with `↳`, immediately follow the header row
+- **Child task rows**: Task column prefixed with `↳` (e.g., `| T1610 | ↳ [Profile Fields](...) | ...`), immediately follow the header row
 - Epic tasks are moved together as a unit when reordering in the task board
+- The task-board uses `↳` in the Task column to detect epic children and render them as a collapsible group
 
 ## Coding Principles
 

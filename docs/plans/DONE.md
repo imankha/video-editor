@@ -300,6 +300,12 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 
 ---
 
+## Superseded
+
+| ID | Task | Absorbed By |
+|----|------|-------------|
+| T1073 | [Team + Athlete Name on Profile](tasks/for-launch/T1073-team-athlete-name-profile.md) | T1610 (Profile Fields) in Athlete Profile epic |
+
 ## Won't Do
 
 | ID | Task | Reason |
