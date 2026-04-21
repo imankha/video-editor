@@ -81,9 +81,9 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | DONE | 2.0 | [ ] | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | [ ] | Clickable email in admin user list -> "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
-| T1610 | [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | [x] | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby |
-| T1620 | [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | 2.0 | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
-| T1630 | [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | 1.4 | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | [x] | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby. (Absorbs T1073) |
+| T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | 2.0 | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
+| T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | 1.4 | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
 | T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | TODO | 1.3 | [ ] | User clicks "approve" on completed project card in gallery -> card animates out -> project archived to R2 |
 | T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | [ ] | Clickable breadcrumbs (Games/Reels -> Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
@@ -148,10 +148,9 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | [ ] | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
-| T1073 | [Team + Athlete Name on Profile](tasks/for-launch/T1073-team-athlete-name-profile.md) | 7 | 2 | 3.5 | TODO | [x] | Let users set team name and athlete name per profile; feeds downstream branding/overlays and personalizes quest copy |
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | | | | | **No free tenants on R2 -- games metered, final/working prepaid at export** |
-| T1580 | [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 8 | 6 | 1.3 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
-| T1581 | [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 8 | 5 | 1.6 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
+| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 8 | 6 | 1.3 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
+| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 8 | 5 | 1.6 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
 | T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | 6 | 5 | 1.3 | TODO | [x] | "Upload Team" -- invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | [ ] | "Share to Social" from gallery -- one form posts to IG, TikTok, YouTube, FB via aggregator API |
 
