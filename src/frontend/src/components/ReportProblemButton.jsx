@@ -62,28 +62,43 @@ export function ReportProblemButton({ className = '' }) {
     setState('sending');
     try {
       const logs = getClientLogs();
-      const res = await fetch(`${API_BASE}/api/auth/report-problem`, {
+      const url = `${API_BASE}/api/auth/report-problem`;
+      const payload = {
+        logs,
+        user_agent: navigator.userAgent,
+        page_url: window.location.href,
+        email: email || null,
+        description: description.trim() || null,
+        screenshot: screenshotRef.current ? '(base64 image)' : null,
+        build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
+      };
+      console.warn(`[ReportProblem] POST ${url} logCount=${logs.length} hasScreenshot=${!!screenshotRef.current} email=${email || 'anon'}`);
+      const res = await fetch(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          logs,
-          user_agent: navigator.userAgent,
-          page_url: window.location.href,
-          email: email || null,
-          description: description.trim() || null,
+          ...payload,
           screenshot: screenshotRef.current,
-          build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        const hint = res.status === 404
+          ? ' (backend may not be running or endpoint not registered -- restart uvicorn)'
+          : res.status === 429
+          ? ' (rate limited -- wait and try again)'
+          : res.status >= 500
+          ? ' (backend error -- check server logs)'
+          : '';
+        console.error(`[ReportProblem] ${res.status} ${url}:`, data, hint);
         throw new Error(data.detail || `Failed (${res.status})`);
       }
       clearClientLogs();
       setState('sent');
     } catch (err) {
-      console.error('[ReportProblem] Failed to send report:', err.message);
+      const isNetwork = err.name === 'TypeError';
+      console.error(`[ReportProblem] Failed: ${err.message}${isNetwork ? ' (network error -- is the backend running on port 8000?)' : ''}`);
       setState('error');
     }
   };
