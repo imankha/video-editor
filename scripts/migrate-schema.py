@@ -1,15 +1,19 @@
 """
 Migrate existing profile databases to the current schema.
 
-Adds missing columns to tables that were created before those columns
-existed. Safe to run multiple times — uses ALTER TABLE which is a no-op
-if the column already exists (caught by try/except).
+PENDING migrations live in the MIGRATIONS and INDEXES lists below. When you
+add a new column to database.py CREATE TABLE, also add it here so existing
+accounts get the column on next deploy.
+
+deploy_production.sh runs this automatically before deploying, then calls
+--reset to clear the pending list. The merge reviewer checks that schema
+changes come with a corresponding entry here.
 
 Usage:
-    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --env dev
-    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --env staging
     cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --env prod
-    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --env prod --email sarkarati@gmail.com
+    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --env prod --email user@example.com
+    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --check   # exit 0 if pending, 1 if none
+    cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate-schema.py --reset   # clear lists after deploy
 """
 
 import argparse
@@ -27,96 +31,20 @@ PROJECT_ROOT = Path(__file__).parent.parent
 USER_DATA = PROJECT_ROOT / "user_data"
 AUTH_DB = USER_DATA / "auth.sqlite"
 
-# All columns that may be missing from older databases.
+# Pending migrations: columns to add before next deploy.
+# Cleared automatically by deploy_production.sh after running.
+# When adding schema changes, append entries here AND in database.py CREATE TABLE.
 # Format: (table_name, column_definition)
+# PENDING_MIGRATIONS_START
 MIGRATIONS = [
-    # raw_clips
-    ("raw_clips", "name TEXT"),
-    ("raw_clips", "notes TEXT"),
-    ("raw_clips", "start_time REAL"),
-    ("raw_clips", "end_time REAL"),
-    ("raw_clips", "game_id INTEGER"),
-    ("raw_clips", "auto_project_id INTEGER"),
-    ("raw_clips", "default_highlight_regions TEXT"),
-    ("raw_clips", "video_sequence INTEGER"),
-    ("raw_clips", "boundaries_version INTEGER DEFAULT 1"),
-    ("raw_clips", "boundaries_updated_at TIMESTAMP"),
-    # working_clips
-    ("working_clips", "crop_data TEXT"),
-    ("working_clips", "timing_data TEXT"),
-    ("working_clips", "segments_data TEXT"),
-    ("working_clips", "version INTEGER NOT NULL DEFAULT 1"),
-    ("working_clips", "exported_at TEXT DEFAULT NULL"),
-    ("working_clips", "raw_clip_version INTEGER"),
-    ("working_clips", "width INTEGER"),
-    ("working_clips", "height INTEGER"),
-    ("working_clips", "fps REAL"),
-    # working_videos
-    ("working_videos", "highlights_data TEXT"),
-    ("working_videos", "text_overlays TEXT"),
-    ("working_videos", "duration REAL"),
-    ("working_videos", "effect_type TEXT DEFAULT 'original'"),
-    ("working_videos", "version INTEGER NOT NULL DEFAULT 1"),
-    ("working_videos", "overlay_version INTEGER DEFAULT 0"),
-    ("working_videos", "highlight_color TEXT DEFAULT NULL"),
-    # final_videos
-    ("final_videos", "version INTEGER NOT NULL DEFAULT 1"),
-    ("final_videos", "duration REAL"),
-    ("final_videos", "source_type TEXT"),
-    ("final_videos", "game_id INTEGER"),
-    ("final_videos", "name TEXT"),
-    ("final_videos", "rating_counts TEXT"),
-    # games
-    ("games", "video_duration REAL"),
-    ("games", "video_width INTEGER"),
-    ("games", "video_height INTEGER"),
-    ("games", "video_size INTEGER"),
-    ("games", "clip_count INTEGER DEFAULT 0"),
-    ("games", "brilliant_count INTEGER DEFAULT 0"),
-    ("games", "good_count INTEGER DEFAULT 0"),
-    ("games", "interesting_count INTEGER DEFAULT 0"),
-    ("games", "mistake_count INTEGER DEFAULT 0"),
-    ("games", "blunder_count INTEGER DEFAULT 0"),
-    ("games", "aggregate_score INTEGER DEFAULT 0"),
-    ("games", "opponent_name TEXT"),
-    ("games", "game_date TEXT"),
-    ("games", "game_type TEXT"),
-    ("games", "tournament_name TEXT"),
-    ("games", "blake3_hash TEXT"),
-    ("games", "last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
-    ("games", "viewed_duration REAL DEFAULT 0"),
-    ("games", "video_fps REAL"),
-    ("games", "status TEXT DEFAULT 'ready'"),
-    # projects
-    ("projects", "is_auto_created INTEGER DEFAULT 0"),
-    ("projects", "last_opened_at TIMESTAMP"),
-    ("projects", "current_mode TEXT DEFAULT 'framing'"),
-    ("projects", "archived_at TIMESTAMP DEFAULT NULL"),
-    ("projects", "restored_at TIMESTAMP DEFAULT NULL"),
-    # export_jobs
-    ("export_jobs", "modal_call_id TEXT"),
-    ("export_jobs", "game_id INTEGER"),
-    ("export_jobs", "game_name TEXT"),
-    ("export_jobs", "acknowledged_at TIMESTAMP"),
-    ("export_jobs", "gpu_seconds REAL"),
-    ("export_jobs", "modal_function TEXT"),
-    # modal_tasks
-    ("modal_tasks", "retry_count INTEGER DEFAULT 0"),
-    # game_videos
-    ("game_videos", "fps REAL"),
 ]
+# PENDING_MIGRATIONS_END
 
-# Indexes to create (IF NOT EXISTS, safe to re-run)
+# Pending indexes: created IF NOT EXISTS, safe to re-run.
+# PENDING_INDEXES_START
 INDEXES = [
-    "CREATE INDEX IF NOT EXISTS idx_working_clips_project_version ON working_clips(project_id, version DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version ON working_clips(project_id, raw_clip_id, version DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version ON working_clips(project_id, uploaded_filename, version DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_working_videos_project_version ON working_videos(project_id, version DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_final_videos_project_version ON final_videos(project_id, version DESC)",
-    "CREATE INDEX IF NOT EXISTS idx_raw_clips_game_id ON raw_clips(game_id)",
-    "CREATE INDEX IF NOT EXISTS idx_raw_clips_rating ON raw_clips(rating)",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_raw_clips_game_end_time_seq ON raw_clips(game_id, end_time, video_sequence)",
 ]
+# PENDING_INDEXES_END
 
 
 def load_env(env_name):
@@ -187,11 +115,48 @@ def migrate_db(db_path, label=""):
     return added > 0
 
 
+def reset_pending():
+    """Clear MIGRATIONS and INDEXES lists in this file (called after successful deploy)."""
+    script_path = Path(__file__)
+    content = script_path.read_text()
+    import re
+    content = re.sub(
+        r"(# PENDING_MIGRATIONS_START\n)MIGRATIONS = \[.*?\]\n(# PENDING_MIGRATIONS_END)",
+        r"\1MIGRATIONS = [\n]\n\2",
+        content,
+        flags=re.DOTALL,
+    )
+    content = re.sub(
+        r"(# PENDING_INDEXES_START\n)INDEXES = \[.*?\]\n(# PENDING_INDEXES_END)",
+        r"\1INDEXES = [\n]\n\2",
+        content,
+        flags=re.DOTALL,
+    )
+    script_path.write_text(content)
+    print("Cleared pending migrations and indexes.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Migrate profile databases to current schema")
-    parser.add_argument("--env", required=True, choices=["dev", "staging", "prod"])
+    parser.add_argument("--env", choices=["dev", "staging", "prod"])
     parser.add_argument("--email", help="Migrate only this user (by email)")
+    parser.add_argument("--check", action="store_true", help="Exit 0 if pending migrations exist, 1 if none")
+    parser.add_argument("--reset", action="store_true", help="Clear pending migrations list (run after deploy)")
     args = parser.parse_args()
+
+    if args.check:
+        sys.exit(0 if MIGRATIONS or INDEXES else 1)
+
+    if args.reset:
+        reset_pending()
+        return
+
+    if not args.env:
+        parser.error("--env is required (unless using --check or --reset)")
+
+    if not MIGRATIONS and not INDEXES:
+        print("No pending migrations.")
+        return
 
     config = load_env(args.env)
     app_env = config["APP_ENV"]

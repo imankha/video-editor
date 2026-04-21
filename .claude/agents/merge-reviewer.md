@@ -78,7 +78,15 @@ The #1 priority. Every DB write MUST trace to a named user gesture. Scan ALL cha
 - [ ] No defensive fixes that mask bugs in code we control
 - [ ] No over-engineering (unnecessary abstractions, feature flags, backwards-compat shims)
 
-### 5. Keyframe Data Model (if keyframe code changed)
+### 5. Schema Migrations (if database.py changed)
+
+- [ ] Any new column in a CREATE TABLE statement has a matching entry in `scripts/migrate-schema.py` MIGRATIONS list
+- [ ] Any new index has a matching entry in the INDEXES list
+- [ ] Column definitions match exactly between database.py and migrate-schema.py (name, type, default)
+
+**Why this matters:** Existing user databases were created with older CREATE TABLE schemas. New columns only appear for new users unless we explicitly ALTER TABLE via the migration script. The deploy script runs pending migrations automatically -- but only if the entries are there.
+
+### 6. Keyframe Data Model (if keyframe code changed)
 
 - [ ] Frame-based (not time-based) keyframe values
 - [ ] Origin tracking preserved ('permanent' | 'user' | 'trim')
@@ -101,6 +109,7 @@ If no violations found:
 - [x] State Management: No duplicate state or stored flags
 - [x] Architecture: MVC + Data Always Ready maintained
 - [x] Code Quality: Clean code, no debug artifacts
+- [x] Schema Migrations: {N/A or checked}
 - [x] Keyframe Model: {N/A or checked}
 
 **Recommendation:** Safe to merge.

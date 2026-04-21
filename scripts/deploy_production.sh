@@ -57,6 +57,26 @@ fi
 short_sha=$(git rev-parse --short HEAD)
 echo "[pre-flight] On master ($short_sha), clean tree, up-to-date with origin ✓"
 
+# ── Run pending schema migrations ────────────────────────────────────
+
+PYTHON="$REPO_ROOT/src/backend/.venv/Scripts/python.exe"
+MIGRATE_SCRIPT="$REPO_ROOT/scripts/migrate-schema.py"
+
+if $deploy_backend; then
+  if "$PYTHON" "$MIGRATE_SCRIPT" --check 2>/dev/null; then
+    echo "[migrate]  Pending migrations found -- running against prod..."
+    "$PYTHON" "$MIGRATE_SCRIPT" --env prod
+    echo "[migrate]  Clearing pending migrations list..."
+    "$PYTHON" "$MIGRATE_SCRIPT" --reset
+    git add "$MIGRATE_SCRIPT"
+    git commit -m "Clear pending migrations after deploy"
+    git push origin master --quiet
+    echo "[migrate]  Migrations applied and cleared ✓"
+  else
+    echo "[migrate]  No pending migrations ✓"
+  fi
+fi
+
 # ── Helper: verify URL returns 200 ───────────────────────────────────
 
 verify_url() {
