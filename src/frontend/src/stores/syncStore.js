@@ -12,13 +12,16 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 
-export const useSyncStore = create((set) => ({
+export const useSyncStore = create((set, get) => ({
   syncFailed: false,
   isRetrying: false,
+  isOffline: !navigator.onLine,
 
   setSyncFailed: (failed) => set({ syncFailed: failed }),
+  setOffline: (offline) => set({ isOffline: offline }),
 
   retrySyncToR2: async () => {
+    if (get().isRetrying) return false;
     set({ isRetrying: true });
     try {
       const response = await _originalFetch(`${API_BASE}/api/retry-sync`, {
@@ -36,6 +39,20 @@ export const useSyncStore = create((set) => ({
     }
   },
 }));
+
+// Listen for browser online/offline events.
+// When coming back online with a pending sync failure, auto-retry.
+window.addEventListener('offline', () => {
+  useSyncStore.getState().setOffline(true);
+});
+
+window.addEventListener('online', () => {
+  const store = useSyncStore.getState();
+  store.setOffline(false);
+  if (store.syncFailed) {
+    store.retrySyncToR2();
+  }
+});
 
 /**
  * Check the X-Sync-Status header on a fetch Response and update the sync store.

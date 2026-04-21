@@ -1,53 +1,57 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { WifiOff, RefreshCw } from 'lucide-react';
 import { useSyncStore } from '../stores/syncStore';
 
-// Delay before surfacing the button so momentary sync-failed states
+// Delay before surfacing so momentary sync-failed states
 // (automatic retries, races between an in-flight write and a concurrent
 // read) don't flash the UI. If the flag clears within this window, the
-// button never appears.
+// indicator never appears.
 const SHOW_DELAY_MS = 3000;
 
 /**
- * SyncStatusIndicator - Shows a warning when database sync to R2 has failed.
+ * SyncStatusIndicator - Shows connection/sync status to the user.
  *
- * Fixed position bottom-right indicator. Visible but non-blocking.
- * Clicking triggers a manual retry via POST /api/retry-sync.
- *
- * Auto-hides when sync succeeds (either from auto-retry on next write
- * or manual retry via this button).
+ * Fixed position bottom-right indicator. Informational only — no button.
+ * Sync retries automatically when internet comes back online (see syncStore).
+ * Auto-hides when sync succeeds.
  */
 export function SyncStatusIndicator() {
   const syncFailed = useSyncStore(state => state.syncFailed);
   const isRetrying = useSyncStore(state => state.isRetrying);
-  const retrySyncToR2 = useSyncStore(state => state.retrySyncToR2);
+  const isOffline = useSyncStore(state => state.isOffline);
 
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!syncFailed) {
+    if (!syncFailed && !isOffline) {
       setVisible(false);
       return;
     }
     const timer = setTimeout(() => setVisible(true), SHOW_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [syncFailed]);
+  }, [syncFailed, isOffline]);
 
   if (!visible) return null;
 
   return (
-    <button
-      onClick={retrySyncToR2}
-      disabled={isRetrying}
-      className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium rounded-lg shadow-lg transition-colors disabled:opacity-60"
-    >
+    <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg shadow-lg">
       {isRetrying ? (
-        <RefreshCw className="w-4 h-4 animate-spin" />
+        <>
+          <RefreshCw className="w-4 h-4 animate-spin" />
+          <span>Syncing...</span>
+        </>
+      ) : isOffline ? (
+        <>
+          <WifiOff className="w-4 h-4" />
+          <span>No internet connection</span>
+        </>
       ) : (
-        <AlertTriangle className="w-4 h-4" />
+        <>
+          <RefreshCw className="w-4 h-4 animate-spin" />
+          <span>Reconnecting...</span>
+        </>
       )}
-      {isRetrying ? 'Syncing...' : 'Sync failed \u2014 click to retry'}
-    </button>
+    </div>
   );
 }
 
