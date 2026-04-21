@@ -17,6 +17,7 @@ import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
+import { useSyncStore } from '../stores/syncStore';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -634,7 +635,7 @@ export function ProjectManager({
             </div>
             <p className="text-gray-500 text-sm mb-4">
               {gamesError.includes('fetch') || gamesError.includes('network')
-                ? 'Cannot connect to server. Is the backend running?'
+                ? 'Cannot connect to server. Check your internet connection.'
                 : gamesError}
             </p>
             <Button
@@ -734,11 +735,8 @@ export function ProjectManager({
             </div>
             <p className="text-gray-500 text-sm mb-4">
               {error.includes('fetch') || error.includes('network')
-                ? 'Cannot connect to server. Is the backend running?'
+                ? 'Cannot connect to server. Check your internet connection.'
                 : error}
-            </p>
-            <p className="text-gray-600 text-xs">
-              Make sure the backend server is running on port 8000
             </p>
           </div>
         ) : projects.length === 0 ? (
@@ -1209,7 +1207,7 @@ function GameCard({ game, onLoad, onDelete }) {
  * @param {Object} project - Project data
  * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
  */
-function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null }) {
+function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false }) {
   const {
     clip_count,
     clips_exported,
@@ -1232,8 +1230,8 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     // Framing done - show single "Framing" segment as complete
     clipSegments.push({ status: 'done', label: 'Framing', tags: [] });
   } else if (isExporting === 'framing') {
-    // Currently exporting - show single "Framing" segment as exporting
-    clipSegments.push({ status: 'exporting', label: 'Framing', tags: [] });
+    // Currently exporting - show single "Framing" segment as exporting (or disconnected)
+    clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Framing', tags: [] });
   } else {
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
@@ -1259,7 +1257,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   if (has_final_video) {
     overlayStatus = 'done';
   } else if (isExporting === 'overlay') {
-    overlayStatus = 'exporting';
+    overlayStatus = isOffline ? 'disconnected' : 'exporting';
   } else if (has_overlay_edits) {
     overlayStatus = 'in_progress';
   } else if (has_working_video) {
@@ -1280,6 +1278,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   const statusColors = {
     done: 'bg-green-500',
     exporting: 'bg-amber-500',
+    disconnected: 'bg-red-500',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
     pending: 'bg-gray-600'
@@ -1297,7 +1296,9 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
         ) : (
           <>
             <span className="flex items-center gap-2">
-              {isExporting === 'framing' ? (
+              {isExporting === 'framing' && isOffline ? (
+                <span className="text-red-400">Not Connected</span>
+              ) : isExporting === 'framing' ? (
                 <span className="text-amber-400 flex items-center gap-1">
                   <RefreshCw size={10} className="animate-spin" />
                   Framing...
@@ -1308,7 +1309,16 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
                 <span>Framing</span>
               )}
             </span>
-            <span>Overlay</span>
+            {isExporting === 'overlay' && isOffline ? (
+              <span className="text-red-400">Not Connected</span>
+            ) : isExporting === 'overlay' ? (
+              <span className="text-amber-400 flex items-center gap-1">
+                <RefreshCw size={10} className="animate-spin" />
+                Exporting...
+              </span>
+            ) : (
+              <span>Overlay</span>
+            )}
           </>
         )}
       </div>
@@ -1345,6 +1355,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
               }}
               title={`${segment.label}${segment.tags?.length ? ` [${segment.tags.join(', ')}]` : ''}: ${
                 segment.status === 'done' ? 'Complete' :
+                segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
                 segment.status === 'in_progress' ? 'Editing' :
                 segment.status === 'ready' ? 'Ready' :
@@ -1370,6 +1381,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
 function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const isOffline = useSyncStore((state) => state.isOffline);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
@@ -1519,7 +1531,10 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               <>
                 <span>•</span>
                 <span>
-                  {isExporting === 'overlay' ? (
+                  {isExporting && isOffline ? (
+                    <span className="text-red-400">Not Connected</span>
+                  ) :
+                  isExporting === 'overlay' ? (
                     <span className="text-amber-400">Exporting...</span>
                   ) :
                   isExporting === 'framing' ? (
@@ -1554,6 +1569,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         onClipClick={handleClipClick}
         onOverlayClick={handleOverlayClick}
         isExporting={isExporting}
+        isOffline={isOffline}
       />
     </div>
   );
