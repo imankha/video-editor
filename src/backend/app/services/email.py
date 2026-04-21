@@ -68,6 +68,7 @@ async def send_problem_report_email(
     logs: list[dict],
     description: str | None = None,
     screenshot: str | None = None,
+    build: str | None = None,
 ) -> None:
     """Send a problem report (client console logs) to admin emails via Resend.
 
@@ -120,6 +121,7 @@ async def send_problem_report_email(
         <tr><td style="color:#9ca3af;padding-right:12px">Page:</td><td style="color:#e5e7eb">{_html_escape(page_url)}</td></tr>
         <tr><td style="color:#9ca3af;padding-right:12px">Browser:</td><td style="color:#e5e7eb;font-size:11px">{_html_escape(user_agent)}</td></tr>
         <tr><td style="color:#9ca3af;padding-right:12px">Time:</td><td style="color:#e5e7eb">{_html_escape(logs[-1]["ts"] if logs else "N/A")}</td></tr>
+        <tr><td style="color:#9ca3af;padding-right:12px">Build:</td><td style="color:#e5e7eb;font-family:monospace;font-size:12px">{_html_escape(build or 'unknown')}</td></tr>
       </table>
       {description_html}
       {screenshot_html}

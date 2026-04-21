@@ -96,6 +96,7 @@ export function ReportProblemButton({ className = '' }) {
           email: email || null,
           description: description.trim() || null,
           screenshot: screenshot || null,
+          build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
         }),
       });
       if (!res.ok) {

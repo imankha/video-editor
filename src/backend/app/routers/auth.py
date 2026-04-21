@@ -513,6 +513,7 @@ class ProblemReportRequest(BaseModel):
     email: str | None = None
     description: str | None = None
     screenshot: str | None = None  # base64 data URL (image/jpeg)
+    build: str | None = None       # frontend commit hash
 
 
 @router.post("/report-problem")
@@ -563,6 +564,7 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             logs=body.logs,
             description=body.description,
             screenshot=body.screenshot,
+            build=body.build,
         )
     except ValueError:
         raise HTTPException(status_code=500, detail="Email service not configured")
