@@ -415,6 +415,12 @@ HTML = r"""<!DOCTYPE html>
   .meta { font-size: 12px; color: var(--text-dim); font-family: monospace; white-space: nowrap; text-align: center; min-width: 28px; }
   .meta-label { font-size: 10px; color: var(--text-dim); display: block; }
 
+  .migr-badge {
+    font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+    white-space: nowrap; letter-spacing: 0.5px;
+    background: rgba(210,153,34,0.18); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3);
+  }
+
   .delete-btn {
     background: none; border: none; color: var(--text-dim); cursor: pointer;
     font-size: 18px; padding: 0 4px; border-radius: 4px; transition: all 0.15s;
@@ -510,11 +516,12 @@ function buildTaskCard(t, ms) {
   const impact = t.impact || '';
   const cmplx = t.complexity || '';
   const pri = t.pri || '';
+  const needsMigr = (t.migr || '').includes('x');
 
   card.innerHTML = `
     <span class="drag-handle">&#9776;</span>
     <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
-    <span class="task-name">${esc(t.name)}</span>
+    <span class="task-name">${esc(t.name)}${needsMigr ? ' <span class="migr-badge" title="Requires DB migration">DB</span>' : ''}</span>
     <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
     <span class="meta" title="Priority">${esc(pri)}</span>
     <span class="meta meta-extra" title="Impact">${impact ? 'I:' + esc(impact) : ''}</span>
@@ -1031,6 +1038,7 @@ class Handler(BaseHTTPRequestHandler):
                         'impact': t.get('impact', ''),
                         'complexity': t.get('complexity', ''),
                         'description': t.get('description', ''),
+                        'migr': t.get('migr', ''),
                         '_raw_task': t.get('_raw_task', ''),
                     }
                     if t.get('_is_epic_header'):
