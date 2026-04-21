@@ -31,19 +31,17 @@ async function captureScreenshot() {
 
   // Full-page screenshot via html2canvas (lazy-loaded -- only fetched on first report)
   try {
-    const { default: html2canvas } = await import('html2canvas');
+    const mod = await import('html2canvas');
+    const html2canvas = mod.default || mod;
     const canvas = await html2canvas(document.body, {
       scale: 0.75,           // 75% res keeps payload reasonable
       useCORS: true,
       logging: false,
       backgroundColor: '#111827', // match app bg
-      ignoreElements: (el) => {
-        // Skip the report modal itself so it doesn't appear in the screenshot
-        return el.closest?.('[data-report-modal]') != null;
-      },
     });
     return canvas.toDataURL('image/jpeg', 0.6);
-  } catch {
+  } catch (err) {
+    console.warn('[ReportProblem] Screenshot capture failed:', err?.message || err);
     return null;
   }
 }
@@ -66,13 +64,14 @@ export function ReportProblemButton({ className = '' }) {
   if (!ENABLE_PROBLEM_REPORT) return null;
 
   const handleOpen = async () => {
+    setDescription('');
+    setState('idle');
+    setScreenshot(null);
     // Capture screenshot BEFORE opening the modal so the modal overlay
-    // doesn't appear in the screenshot and the current UI state is preserved.
+    // doesn't appear in the full-page capture.
     const img = await captureScreenshot();
     setScreenshot(img);
     setOpen(true);
-    setDescription('');
-    setState('idle');
   };
 
   const handleClose = () => {
