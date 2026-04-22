@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
+import { useVideoStore } from '../stores/videoStore';
 
 /**
  * VideoPlayer component - Displays the video element with zoom and pan support
@@ -53,6 +54,7 @@ export function VideoPlayer({
   muted = false,
   loadingMessage = 'Loading video...'
 }) {
+  const isBuffering = useVideoStore((s) => s.isBuffering);
   const [isDragging, setIsDragging] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -234,6 +236,13 @@ export function VideoPlayer({
               progress={loadingProgress}
               elapsedSeconds={loadingElapsedSeconds}
             />
+          )}
+
+          {/* Mid-playback buffering spinner - shown when seeking to unbuffered position */}
+          {isBuffering && !isVideoElementLoading && !error && (
+            <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white/80" />
+            </div>
           )}
 
           {/* Render any overlays passed by the mode */}
