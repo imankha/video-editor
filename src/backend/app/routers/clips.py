@@ -1619,6 +1619,26 @@ async def stream_working_clip_bounded(
     if not presigned_url:
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
+    # Probe R2 with a 1-byte range to catch errors BEFORE committing to 206
+    # headers on StreamingResponse. Without this, R2 failures produce a broken
+    # 206 stream that browsers report as MEDIA_ERR_SRC_NOT_SUPPORTED (code=4).
+    # Same pattern as stream_working_video in projects.py.
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
+        probe_resp = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
+    if probe_resp.status_code not in (200, 206):
+        error_body = probe_resp.text[:500] if probe_resp.text else "(empty)"
+        logger.error(
+            f"[clip-stream] R2 probe error clip_id={clip_id} project_id={project_id} "
+            f"r2_status={probe_resp.status_code} "
+            f"r2_content_type={probe_resp.headers.get('content-type', 'unknown')} "
+            f"blake3={row['blake3_hash']} filename={row['video_filename']} "
+            f"body_snippet={error_body!r}"
+        )
+        raise HTTPException(
+            status_code=502 if probe_resp.status_code >= 500 else probe_resp.status_code,
+            detail=f"R2 returned {probe_resp.status_code} for game video",
+        )
+
     # Parse incoming Range header.
     range_hdr = request.headers.get("range") or request.headers.get("Range")
     req_start = 0
