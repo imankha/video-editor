@@ -370,15 +370,8 @@ export function keyframeReducer(state, action) {
       const keyframeToRemove = findKeyframeAtFrame(keyframes, frame);
       if (!keyframeToRemove) return state;
 
-      // Don't allow removing boundary keyframes (frame 0 or endFrame)
-      if (frame === 0 || (state.endFrame !== null && frame === state.endFrame)) {
-        if (keyframeToRemove.origin !== 'permanent') {
-          console.warn(`[keyframeController] Boundary keyframe at frame ${frame} has origin '${keyframeToRemove.origin}' instead of 'permanent' — blocked removal but origin should be fixed upstream`);
-        }
-        return state;
-      }
-
       // Don't allow removing if it would leave less than 2 keyframes
+      // (ensurePermanentKeyframes will reconstitute boundary permanents from remaining keyframes)
       if (keyframes.length <= 2) return state;
 
       const filtered = keyframes.filter(kf => kf.frame !== frame);
