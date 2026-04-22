@@ -445,7 +445,6 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   const finalizeData = await finalizeRes.json();
   notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
 
-  console.log(`[DIAG upload-freeze] ensureVideoInR2 END total=${((performance.now() - __diagT0) / 1000).toFixed(1)}s`);
   return {
     blake3_hash: finalizeData.blake3_hash,
     file_size: finalizeData.file_size,
