@@ -410,9 +410,11 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if idx == -1:
                     raise ValueError(f"Keyframe at frame {action.target.frame} not found")
 
-                # Don't allow deleting permanent keyframes
-                if crop_keyframes[idx].get('origin') == 'permanent':
-                    raise ValueError("Cannot delete permanent keyframe")
+                # Don't allow deleting boundary keyframes (first and last)
+                # Check by position, not origin field, since legacy data may have
+                # middle keyframes incorrectly saved as 'permanent'
+                if idx == 0 or idx == len(crop_keyframes) - 1:
+                    raise ValueError("Cannot delete boundary keyframe")
 
                 del crop_keyframes[idx]
                 logger.info(f"[Framing Action] Deleted keyframe at frame {action.target.frame}")
