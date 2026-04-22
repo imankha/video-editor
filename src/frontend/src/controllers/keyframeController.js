@@ -189,7 +189,17 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
     }
   }
 
-  return sortKeyframes(result);
+  // Demote middle keyframes with origin='permanent' to 'user'.
+  // After boundary changes (trim/detrim), old boundary keyframes may
+  // remain as permanent in the middle — only first and last should be permanent.
+  const sorted = sortKeyframes(result);
+  return sorted.map((kf, i) => {
+    const isBoundary = i === 0 || i === sorted.length - 1;
+    if (!isBoundary && kf.origin === 'permanent') {
+      return { ...kf, origin: 'user' };
+    }
+    return kf;
+  });
 }
 
 /**
