@@ -538,6 +538,10 @@ export function FramingContainer({
 
     const boundaryTime = trimRange.start;
     const boundaryFrame = Math.round(boundaryTime * framerate);
+
+    // Determine the NEW start after detrim: previous trim level, or 0
+    const lastStartOp = [...trimHistory].reverse().find(op => op.type === 'start');
+    const newStartTime = lastStartOp?.previousRange?.start ?? 0;
     const FRAME_TOLERANCE = 1;
 
     // Handle crop keyframes
@@ -554,19 +558,16 @@ export function FramingContainer({
       }
     }
 
-    // If removing start trim clears all trimming, update endFrame to full duration
-    const newTrimEnd = trimRange.end;
-    if (!newTrimEnd || newTrimEnd >= duration) {
-      const fullEndFrame = Math.round(duration * framerate);
-      setCropEndFrame(fullEndFrame);
-    }
+    // Re-enforce boundaries via setCropEndFrame (restores frame 0 via ensurePermanentKeyframes)
+    const currentEndTime = trimRange.end ?? duration;
+    setCropEndFrame(Math.round(currentEndTime * framerate));
 
-    // Always ensure permanent keyframe at start (frame 0)
-    const dataForStart = cropDataAtBoundary || getCropDataAtTime(0);
+    // Ensure permanent keyframe at new start position
+    const dataForStart = cropDataAtBoundary || getCropDataAtTime(newStartTime);
     if (dataForStart) {
-      addOrUpdateKeyframe(0, dataForStart, duration, 'permanent');
+      addOrUpdateKeyframe(newStartTime, dataForStart, duration, 'permanent');
       boundaryKfToAdd = {
-        frame: 0,
+        frame: Math.round(newStartTime * framerate),
         x: dataForStart.x,
         y: dataForStart.y,
         width: dataForStart.width,
@@ -608,10 +609,11 @@ export function FramingContainer({
         if (!result.success) hasError = true;
       }
 
-      // After detrimStart, trim start is cleared (0), trim end remains
-      const newTrimEnd = trimRange.end;
-      if (newTrimEnd && newTrimEnd < duration) {
-        const result = await framingActions.setTrimRange(selectedProjectId, clipId, 0, newTrimEnd);
+      // After detrimStart, start restores to previous level (or 0)
+      const hasStartTrim = newStartTime > 0.01;
+      const hasEndTrim = currentEndTime < duration - 0.01;
+      if (hasStartTrim || hasEndTrim) {
+        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
         if (!result.success) hasError = true;
       } else {
         // No more trim, clear it
@@ -629,14 +631,14 @@ export function FramingContainer({
           segments_data: JSON.stringify({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
-            trimRange: newTrimEnd && newTrimEnd < duration
-              ? { start: 0, end: newTrimEnd }
+            trimRange: (hasStartTrim || hasEndTrim)
+              ? { start: newStartTime, end: currentEndTime }
               : null,
           })
         });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for end
@@ -649,14 +651,18 @@ export function FramingContainer({
 
     const boundaryTime = trimRange.end;
     const boundaryFrame = Math.round(boundaryTime * framerate);
-    const endFrame = Math.round(duration * framerate);
+
+    // Determine the NEW end after detrim: previous trim level, or full duration
+    const lastEndOp = [...trimHistory].reverse().find(op => op.type === 'end');
+    const newEndTime = lastEndOp?.previousRange?.end ?? duration;
+    const newEndFrame = Math.round(newEndTime * framerate);
     const FRAME_TOLERANCE = 1;
 
     // Handle crop keyframes
     const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
     let boundaryKfToAdd = null;
 
-    if (boundaryFrame < endFrame) {
+    if (boundaryFrame < newEndFrame) {
       // Find keyframe at boundary using tolerance
       const cropKfAtBoundary = keyframes.find(kf =>
         Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
@@ -666,15 +672,15 @@ export function FramingContainer({
       }
     }
 
-    // Update controller's endFrame to full video duration (trim end is being removed)
-    setCropEndFrame(endFrame);
+    // Update controller's endFrame to the new trim level (not always full duration)
+    setCropEndFrame(newEndFrame);
 
-    // Always ensure permanent keyframe at end (duration)
-    const dataForEnd = cropDataAtBoundary || getCropDataAtTime(duration);
+    // Always ensure permanent keyframe at new end
+    const dataForEnd = cropDataAtBoundary || getCropDataAtTime(newEndTime);
     if (dataForEnd) {
-      addOrUpdateKeyframe(duration, dataForEnd, duration, 'permanent');
+      addOrUpdateKeyframe(newEndTime, dataForEnd, duration, 'permanent');
       boundaryKfToAdd = {
-        frame: endFrame,
+        frame: newEndFrame,
         x: dataForEnd.x,
         y: dataForEnd.y,
         width: dataForEnd.width,
@@ -719,10 +725,12 @@ export function FramingContainer({
         if (!result.success) hasError = true;
       }
 
-      // After detrimEnd, trim end is cleared (duration), trim start remains
+      // After detrimEnd, trim end restores to previous level (or full duration)
       const newTrimStart = trimRange.start;
-      if (newTrimStart && newTrimStart > 0) {
-        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart, duration);
+      const hasStartTrim = newTrimStart && newTrimStart > 0;
+      const hasEndTrim = newEndTime < duration - 0.01;
+      if (hasStartTrim || hasEndTrim) {
+        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
         if (!result.success) hasError = true;
       } else {
         // No more trim, clear it
@@ -740,14 +748,14 @@ export function FramingContainer({
           segments_data: JSON.stringify({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
-            trimRange: newTrimStart && newTrimStart > 0
-              ? { start: newTrimStart, end: duration }
+            trimRange: (hasStartTrim || hasEndTrim)
+              ? { start: newTrimStart ?? 0, end: newEndTime }
               : null,
           })
         });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
