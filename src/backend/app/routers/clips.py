@@ -410,9 +410,13 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if idx == -1:
                     raise ValueError(f"Keyframe at frame {action.target.frame} not found")
 
-                # Don't allow deleting permanent keyframes
-                if crop_keyframes[idx].get('origin') == 'permanent':
-                    raise ValueError("Cannot delete permanent keyframe")
+                # Don't allow deleting frame-0 boundary keyframe
+                if action.target.frame == 0:
+                    raise ValueError("Cannot delete boundary keyframe at frame 0")
+
+                # Ensure minimum keyframe count (boundary pair)
+                if len(crop_keyframes) <= 2:
+                    raise ValueError("Cannot delete: minimum 2 keyframes required")
 
                 del crop_keyframes[idx]
                 logger.info(f"[Framing Action] Deleted keyframe at frame {action.target.frame}")

@@ -3,6 +3,7 @@ import { FramingMode, CropOverlay } from '../modes/framing';
 import { API_BASE } from '../config';
 import * as framingActions from '../api/framingActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
+import { toast } from '../components/shared';
 
 /**
  * FramingContainer - Encapsulates Framing mode logic and computed state
@@ -49,6 +50,7 @@ export function FramingContainer({
   getKeyframesForExport,
   deleteKeyframesInRange,
   cleanupTrimKeyframes,
+  setCropEndFrame,
   restoreCropState,
   updateAspectRatio,
   resetCrop,
@@ -290,8 +292,14 @@ export function FramingContainer({
   /**
    * Handle crop complete (create keyframe)
    */
-  const handleCropComplete = useCallback((cropData) => {
+  const handleCropComplete = useCallback(async (cropData) => {
     const frame = Math.round(currentTime * framerate);
+    const callerClipId = selectedClipId;
+
+    // Capture pre-existing keyframe for rollback (may be null if no keyframe at this frame)
+    const previousKfData = getCropDataAtTime(currentTime);
+    const previousKf = keyframes.find(kf => kf.frame === frame);
+    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
 
     clipHasUserEditsRef.current = true;
     addOrUpdateKeyframe(currentTime, cropData, duration);
@@ -299,28 +307,41 @@ export function FramingContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch action to backend (fire-and-forget)
+    // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
+    // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
+    const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
+    if (callerClipId) {
+      const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
+      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+    }
+
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      framingActions.addCropKeyframe(selectedProjectId, clipId, {
+      const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
         frame,
         x: cropData.x,
         y: cropData.y,
         width: cropData.width,
         height: cropData.height,
         origin: 'user'
-      }).catch(err => console.error('[FramingContainer] Failed to sync addCropKeyframe:', err));
+      });
+      if (!result.success && selectedClipId === callerClipId) {
+        // Rollback: restore previous keyframe or remove the new one
+        if (previousKf && previousKfData) {
+          addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
+        } else {
+          removeKeyframe(currentTime, duration);
+        }
+        if (callerClipId) {
+          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+        toast.error('Failed to save crop keyframe', { message: result.error });
+      }
     }
-
-    // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
-    // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
-    if (selectedClipId) {
-      const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
-      const existingKfs = clipCropKeyframes(selectedClip) || [];
-      const updatedKfs = [...existingKfs.filter(kf => kf.frame !== frame), newKf];
-      updateClipData(selectedClipId, { crop_data: JSON.stringify(updatedKfs) });
-    }
-  }, [currentTime, framerate, duration, addOrUpdateKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Coordinated segment trim handler
@@ -331,7 +352,7 @@ export function FramingContainer({
    * 2. Delete all keyframes in the trimmed range
    * 3. Reconstitute a permanent keyframe at the new boundary
    */
-  const handleTrimSegment = useCallback((segmentIndex) => {
+  const handleTrimSegment = useCallback(async (segmentIndex) => {
     if (!duration || segmentIndex < 0 || segmentIndex >= segments.length) return;
 
     clipHasUserEditsRef.current = true;
@@ -339,6 +360,9 @@ export function FramingContainer({
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
+    // Identify user keyframes in trim range for Phase 3 persistence
+    let userKfsToDelete = [];
+    let boundaryKfToAdd = null;
 
     if (!isCurrentlyTrimmed) {
       // We're about to trim this segment
@@ -352,6 +376,12 @@ export function FramingContainer({
 
       // Tolerance for floating point comparisons (1 frame at 30fps = ~0.033s)
       const TOLERANCE = 1 / framerate + 0.001;
+
+      // Capture user keyframes in range before deleting (for backend persistence)
+      userKfsToDelete = keyframes.filter(kf => {
+        const kfTime = kf.frame / framerate;
+        return kfTime >= segment.start - TOLERANCE && kfTime <= segment.end + TOLERANCE && kf.origin === 'user';
+      });
 
       // Find crop data to preserve - use tolerance for boundary checks
       // Prioritize the edge that will become the new boundary
@@ -383,16 +413,43 @@ export function FramingContainer({
       // Delete crop keyframes in trimmed range
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
+      // Update controller's endFrame when trimming the end, or re-enforce
+      // boundaries when trimming the start (deleteKeyframesInRange removes
+      // frame 0, and ensurePermanentKeyframes in SET_END_FRAME restores it)
+      if (segment.isLast && boundaryTime !== undefined) {
+        setCropEndFrame(Math.round(boundaryTime * framerate));
+      } else if (segment.isFirst) {
+        // endFrame unchanged but need ensurePermanentKeyframes to restore frame 0
+        const currentEndFrame = Math.round((trimRange?.end ?? duration) * framerate);
+        setCropEndFrame(currentEndFrame);
+      }
+
       // Reconstitute permanent keyframe at boundary
       // This ensures there's always a keyframe at the new end/start of the visible timeline
       if (cropDataToPreserve && boundaryTime !== undefined) {
         addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
+        boundaryKfToAdd = {
+          frame: Math.round(boundaryTime * framerate),
+          x: cropDataToPreserve.x,
+          y: cropDataToPreserve.y,
+          width: cropDataToPreserve.width,
+          height: cropDataToPreserve.height,
+          origin: 'permanent'
+        };
       } else if (boundaryTime !== undefined) {
         // Emergency fallback: if we couldn't preserve any data, get current interpolated crop
         // This shouldn't happen in normal use, but ensures we always have boundary keyframes
         const fallbackData = getCropDataAtTime(boundaryTime);
         if (fallbackData) {
           addOrUpdateKeyframe(boundaryTime, fallbackData, duration, 'permanent');
+          boundaryKfToAdd = {
+            frame: Math.round(boundaryTime * framerate),
+            x: fallbackData.x,
+            y: fallbackData.y,
+            width: fallbackData.width,
+            height: fallbackData.height,
+            origin: 'permanent'
+          };
         }
       }
 
@@ -412,10 +469,25 @@ export function FramingContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch trim action to backend (fire-and-forget)
-    // Compute the new trim range after this toggle
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
+      let hasError = false;
+
+      // Phase 3: Persist keyframe changes from trim operation
+      if (!isCurrentlyTrimmed) {
+        // Delete user keyframes that were in the trimmed range
+        for (const kf of userKfsToDelete) {
+          const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, kf.frame);
+          if (!result.success) hasError = true;
+        }
+        // Add boundary permanent keyframe
+        if (boundaryKfToAdd) {
+          const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
+          if (!result.success) hasError = true;
+        }
+      }
+
       // Calculate new trim boundaries based on which segment was toggled
       let newTrimStart = trimRange?.start ?? null;
       let newTrimEnd = trimRange?.end ?? null;
@@ -432,11 +504,15 @@ export function FramingContainer({
       }
 
       if (newTrimStart !== null || newTrimEnd !== null) {
-        framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration)
-          .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange:', err));
+        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration);
+        if (!result.success) hasError = true;
       }
 
-      // Optimistically update store so sidebar framing indicator reflects trim
+      if (hasError) {
+        toast.error('Failed to save trim changes');
+      }
+
+      // Update store so sidebar framing indicator reflects trim
       if (selectedClipId) {
         updateClipData(selectedClipId, {
           segments_data: JSON.stringify({
@@ -449,23 +525,28 @@ export function FramingContainer({
         });
       }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for start
    * Restores the start of the timeline and ensures permanent keyframe at frame 0
    */
-  const handleDetrimStart = useCallback(() => {
+  const handleDetrimStart = useCallback(async () => {
     if (!trimRange || !duration) return;
 
     clipHasUserEditsRef.current = true;
 
     const boundaryTime = trimRange.start;
     const boundaryFrame = Math.round(boundaryTime * framerate);
+
+    // Determine the NEW start after detrim: previous trim level, or 0
+    const lastStartOp = [...trimHistory].reverse().find(op => op.type === 'start');
+    const newStartTime = lastStartOp?.previousRange?.start ?? 0;
     const FRAME_TOLERANCE = 1;
 
     // Handle crop keyframes
     const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
+    let boundaryKfToAdd = null;
 
     if (boundaryFrame > 0) {
       // Find keyframe at boundary using tolerance
@@ -477,15 +558,22 @@ export function FramingContainer({
       }
     }
 
-    // Always ensure permanent keyframe at start (frame 0)
-    if (cropDataAtBoundary) {
-      addOrUpdateKeyframe(0, cropDataAtBoundary, duration, 'permanent');
-    } else {
-      // Fallback: use interpolated data at frame 0
-      const fallbackData = getCropDataAtTime(0);
-      if (fallbackData) {
-        addOrUpdateKeyframe(0, fallbackData, duration, 'permanent');
-      }
+    // Re-enforce boundaries via setCropEndFrame (restores frame 0 via ensurePermanentKeyframes)
+    const currentEndTime = trimRange.end ?? duration;
+    setCropEndFrame(Math.round(currentEndTime * framerate));
+
+    // Ensure permanent keyframe at new start position
+    const dataForStart = cropDataAtBoundary || getCropDataAtTime(newStartTime);
+    if (dataForStart) {
+      addOrUpdateKeyframe(newStartTime, dataForStart, duration, 'permanent');
+      boundaryKfToAdd = {
+        frame: Math.round(newStartTime * framerate),
+        x: dataForStart.x,
+        y: dataForStart.y,
+        width: dataForStart.width,
+        height: dataForStart.height,
+        origin: 'permanent'
+      };
     }
 
     // Handle highlight keyframes if available
@@ -510,40 +598,71 @@ export function FramingContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch trim action to backend (fire-and-forget)
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      // After detrimStart, trim start is cleared (0), trim end remains
-      const newTrimEnd = trimRange.end;
-      if (newTrimEnd && newTrimEnd < duration) {
-        framingActions.setTrimRange(selectedProjectId, clipId, 0, newTrimEnd)
-          .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange (detrimStart):', err));
+      let hasError = false;
+
+      // Phase 3: Persist boundary keyframe change
+      if (boundaryKfToAdd) {
+        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
+        if (!result.success) hasError = true;
+      }
+
+      // After detrimStart, start restores to previous level (or 0)
+      const hasStartTrim = newStartTime > 0.01;
+      const hasEndTrim = currentEndTime < duration - 0.01;
+      if (hasStartTrim || hasEndTrim) {
+        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
+        if (!result.success) hasError = true;
       } else {
         // No more trim, clear it
-        framingActions.clearTrimRange(selectedProjectId, clipId)
-          .catch(err => console.error('[FramingContainer] Failed to sync clearTrimRange:', err));
+        const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
+        if (!result.success) hasError = true;
+      }
+
+      if (hasError) {
+        toast.error('Failed to save detrim changes');
+      }
+
+      // Sync segments to store so sidebar indicator updates
+      if (selectedClipId) {
+        updateClipData(selectedClipId, {
+          segments_data: JSON.stringify({
+            boundaries: segmentBoundaries,
+            segmentSpeeds: segmentSpeeds,
+            trimRange: (hasStartTrim || hasEndTrim)
+              ? { start: newStartTime, end: currentEndTime }
+              : null,
+          })
+        });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for end
    * Restores the end of the timeline and ensures permanent keyframe at duration
    */
-  const handleDetrimEnd = useCallback(() => {
+  const handleDetrimEnd = useCallback(async () => {
     if (!trimRange || !duration) return;
 
     clipHasUserEditsRef.current = true;
 
     const boundaryTime = trimRange.end;
     const boundaryFrame = Math.round(boundaryTime * framerate);
-    const endFrame = Math.round(duration * framerate);
+
+    // Determine the NEW end after detrim: previous trim level, or full duration
+    const lastEndOp = [...trimHistory].reverse().find(op => op.type === 'end');
+    const newEndTime = lastEndOp?.previousRange?.end ?? duration;
+    const newEndFrame = Math.round(newEndTime * framerate);
     const FRAME_TOLERANCE = 1;
 
     // Handle crop keyframes
     const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
+    let boundaryKfToAdd = null;
 
-    if (boundaryFrame < endFrame) {
+    if (boundaryFrame < newEndFrame) {
       // Find keyframe at boundary using tolerance
       const cropKfAtBoundary = keyframes.find(kf =>
         Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
@@ -553,15 +672,21 @@ export function FramingContainer({
       }
     }
 
-    // Always ensure permanent keyframe at end (duration)
-    if (cropDataAtBoundary) {
-      addOrUpdateKeyframe(duration, cropDataAtBoundary, duration, 'permanent');
-    } else {
-      // Fallback: use interpolated data at duration
-      const fallbackData = getCropDataAtTime(duration);
-      if (fallbackData) {
-        addOrUpdateKeyframe(duration, fallbackData, duration, 'permanent');
-      }
+    // Update controller's endFrame to the new trim level (not always full duration)
+    setCropEndFrame(newEndFrame);
+
+    // Always ensure permanent keyframe at new end
+    const dataForEnd = cropDataAtBoundary || getCropDataAtTime(newEndTime);
+    if (dataForEnd) {
+      addOrUpdateKeyframe(newEndTime, dataForEnd, duration, 'permanent');
+      boundaryKfToAdd = {
+        frame: newEndFrame,
+        x: dataForEnd.x,
+        y: dataForEnd.y,
+        width: dataForEnd.width,
+        height: dataForEnd.height,
+        origin: 'permanent'
+      };
     }
 
     // Handle highlight keyframes if available
@@ -589,21 +714,48 @@ export function FramingContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch trim action to backend (fire-and-forget)
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      // After detrimEnd, trim end is cleared (duration), trim start remains
+      let hasError = false;
+
+      // Phase 3: Persist boundary keyframe change
+      if (boundaryKfToAdd) {
+        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
+        if (!result.success) hasError = true;
+      }
+
+      // After detrimEnd, trim end restores to previous level (or full duration)
       const newTrimStart = trimRange.start;
-      if (newTrimStart && newTrimStart > 0) {
-        framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart, duration)
-          .catch(err => console.error('[FramingContainer] Failed to sync setTrimRange (detrimEnd):', err));
+      const hasStartTrim = newTrimStart && newTrimStart > 0;
+      const hasEndTrim = newEndTime < duration - 0.01;
+      if (hasStartTrim || hasEndTrim) {
+        const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
+        if (!result.success) hasError = true;
       } else {
         // No more trim, clear it
-        framingActions.clearTrimRange(selectedProjectId, clipId)
-          .catch(err => console.error('[FramingContainer] Failed to sync clearTrimRange:', err));
+        const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
+        if (!result.success) hasError = true;
+      }
+
+      if (hasError) {
+        toast.error('Failed to save detrim changes');
+      }
+
+      // Sync segments to store so sidebar indicator updates
+      if (selectedClipId) {
+        updateClipData(selectedClipId, {
+          segments_data: JSON.stringify({
+            boundaries: segmentBoundaries,
+            segmentSpeeds: segmentSpeeds,
+            trimRange: (hasStartTrim || hasEndTrim)
+              ? { start: newTrimStart ?? 0, end: newEndTime }
+              : null,
+          })
+        });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
@@ -615,20 +767,45 @@ export function FramingContainer({
   /**
    * Handle keyframe delete
    */
-  const handleKeyframeDelete = useCallback((time) => {
+  const handleKeyframeDelete = useCallback(async (time) => {
     const frame = Math.round(time * framerate);
+    const callerClipId = selectedClipId;
+
+    // Capture keyframe data for rollback
+    const deletedKf = keyframes.find(kf => kf.frame === frame);
+    const deletedCropData = getCropDataAtTime(time);
+    const deletedOrigin = deletedKf?.origin || 'user';
+    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+
     clipHasUserEditsRef.current = true;
     removeKeyframe(time, duration);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch action to backend (fire-and-forget)
+    // Sync to clip store so sidebar indicator updates
+    if (callerClipId) {
+      const updatedKfs = previousStoreKfs.filter(kf => kf.frame !== frame);
+      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+    }
+
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame)
-        .catch(err => console.error('[FramingContainer] Failed to sync deleteCropKeyframe:', err));
+      const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
+      if (!result.success && selectedClipId === callerClipId) {
+        // Rollback: re-add the keyframe
+        if (deletedCropData) {
+          addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
+        }
+        if (callerClipId) {
+          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+        toast.error('Failed to delete keyframe', { message: result.error });
+      }
     }
-  }, [duration, framerate, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [duration, framerate, keyframes, getCropDataAtTime, removeKeyframe, addOrUpdateKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Handler for copy crop at current time
@@ -642,61 +819,144 @@ export function FramingContainer({
   /**
    * Handler for paste crop at current time
    */
-  const handlePasteCrop = useCallback((time = currentTime) => {
+  const handlePasteCrop = useCallback(async (time = currentTime) => {
     if (videoUrl && copiedCrop) {
+      const frame = Math.round(time * framerate);
+      const callerClipId = selectedClipId;
+
+      // Capture pre-existing keyframe for rollback
+      const previousKfData = getCropDataAtTime(time);
+      const previousKf = keyframes.find(kf => kf.frame === frame);
+      const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+
       pasteCropKeyframe(time, duration);
       onUserEdit?.();
       setFramingChangedSinceExport?.(true);
 
-      // Dispatch action to backend (fire-and-forget)
+      // Sync to clip store so sidebar indicator updates
+      if (callerClipId) {
+        const newKf = { frame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin: 'user' };
+        const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
+        updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+      }
+
+      // Persist to backend with error recovery
       const clipId = selectedClip?.id;
       if (selectedProjectId && clipId) {
-        const frame = Math.round(time * framerate);
-        framingActions.addCropKeyframe(selectedProjectId, clipId, {
+        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
           frame,
           x: copiedCrop.x,
           y: copiedCrop.y,
           width: copiedCrop.width,
           height: copiedCrop.height,
           origin: 'user'
-        }).catch(err => console.error('[FramingContainer] Failed to sync addCropKeyframe (paste):', err));
+        });
+        if (!result.success && selectedClipId === callerClipId) {
+          // Rollback: restore previous keyframe or remove the pasted one
+          if (previousKf && previousKfData) {
+            addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
+          } else {
+            removeKeyframe(time, duration);
+          }
+          if (callerClipId) {
+            updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+          }
+          clipHasUserEditsRef.current = false;
+          setFramingChangedSinceExport?.(false);
+          toast.error('Failed to paste crop keyframe', { message: result.error });
+        }
       }
     }
-  }, [videoUrl, currentTime, copiedCrop, duration, framerate, pasteCropKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [videoUrl, currentTime, copiedCrop, duration, framerate, keyframes, getCropDataAtTime, pasteCropKeyframe, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Handle segment boundary add (split)
    */
-  const handleAddSplit = useCallback((time) => {
+  const handleAddSplit = useCallback(async (time) => {
+    const callerClipId = selectedClipId;
     clipHasUserEditsRef.current = true;
     addSegmentBoundary(time);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch action to backend (fire-and-forget)
+    // Sync to clip store so sidebar indicator updates
+    // Note: segmentBoundaries won't have the new value yet (React batching), so build manually
+    if (callerClipId) {
+      const updatedBoundaries = [...segmentBoundaries, time].sort((a, b) => a - b);
+      updateClipData(callerClipId, {
+        segments_data: JSON.stringify({
+          boundaries: updatedBoundaries,
+          segmentSpeeds: segmentSpeeds,
+          trimRange: trimRange,
+        })
+      });
+    }
+
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      framingActions.splitSegment(selectedProjectId, clipId, time)
-        .catch(err => console.error('[FramingContainer] Failed to sync splitSegment:', err));
+      const result = await framingActions.splitSegment(selectedProjectId, clipId, time);
+      if (!result.success && selectedClipId === callerClipId) {
+        removeSegmentBoundary(time);
+        if (callerClipId) {
+          updateClipData(callerClipId, {
+            segments_data: JSON.stringify({
+              boundaries: segmentBoundaries,
+              segmentSpeeds: segmentSpeeds,
+              trimRange: trimRange,
+            })
+          });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+        toast.error('Failed to split segment', { message: result.error });
+      }
     }
-  }, [addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [addSegmentBoundary, removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
    * Handle segment boundary remove
    */
-  const handleRemoveSplit = useCallback((time) => {
+  const handleRemoveSplit = useCallback(async (time) => {
+    const callerClipId = selectedClipId;
     clipHasUserEditsRef.current = true;
     removeSegmentBoundary(time);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch action to backend (fire-and-forget)
+    // Sync to clip store so sidebar indicator updates
+    if (callerClipId) {
+      const updatedBoundaries = segmentBoundaries.filter(b => b !== time);
+      updateClipData(callerClipId, {
+        segments_data: JSON.stringify({
+          boundaries: updatedBoundaries,
+          segmentSpeeds: segmentSpeeds,
+          trimRange: trimRange,
+        })
+      });
+    }
+
+    // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      framingActions.removeSegmentSplit(selectedProjectId, clipId, time)
-        .catch(err => console.error('[FramingContainer] Failed to sync removeSegmentSplit:', err));
+      const result = await framingActions.removeSegmentSplit(selectedProjectId, clipId, time);
+      if (!result.success && selectedClipId === callerClipId) {
+        addSegmentBoundary(time);
+        if (callerClipId) {
+          updateClipData(callerClipId, {
+            segments_data: JSON.stringify({
+              boundaries: segmentBoundaries,
+              segmentSpeeds: segmentSpeeds,
+              trimRange: trimRange,
+            })
+          });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+        toast.error('Failed to remove split', { message: result.error });
+      }
     }
-  }, [removeSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip]);
+  }, [removeSegmentBoundary, addSegmentBoundary, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   // Helper: sync current segment state to clip store so sidebar indicator updates
   const syncSegmentsToStore = useCallback(() => {
@@ -712,30 +972,47 @@ export function FramingContainer({
   /**
    * Handle segment speed change
    */
-  const handleSegmentSpeedChange = useCallback((segmentIndex, speed) => {
+  const handleSegmentSpeedChange = useCallback(async (segmentIndex, speed) => {
+    const previousSpeed = segmentSpeeds[segmentIndex] ?? 1;
+    const callerClipId = selectedClipId;
+
     clipHasUserEditsRef.current = true;
     setSegmentSpeed(segmentIndex, speed);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
-    // Dispatch action to backend (fire-and-forget)
-    const clipId = selectedClip?.id;
-    if (selectedProjectId && clipId) {
-      framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed)
-        .catch(err => console.error('[FramingContainer] Failed to sync setSegmentSpeed:', err));
-    }
-
     // Optimistically update store so sidebar framing indicator reflects the change
     // Note: segmentSpeeds won't have the new value yet (React batching), so build it manually
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedSpeeds = { ...segmentSpeeds, [segmentIndex]: speed };
-      updateClipData(selectedClipId, {
+      updateClipData(callerClipId, {
         segments_data: JSON.stringify({
           boundaries: segmentBoundaries,
           segmentSpeeds: updatedSpeeds,
           trimRange: trimRange,
         })
       });
+    }
+
+    // Persist to backend with error recovery
+    const clipId = selectedClip?.id;
+    if (selectedProjectId && clipId) {
+      const result = await framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
+      if (!result.success && selectedClipId === callerClipId) {
+        setSegmentSpeed(segmentIndex, previousSpeed);
+        if (callerClipId) {
+          updateClipData(callerClipId, {
+            segments_data: JSON.stringify({
+              boundaries: segmentBoundaries,
+              segmentSpeeds: segmentSpeeds,
+              trimRange: trimRange,
+            })
+          });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+        toast.error('Failed to set segment speed', { message: result.error });
+      }
     }
   }, [setSegmentSpeed, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 

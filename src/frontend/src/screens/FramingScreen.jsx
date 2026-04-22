@@ -226,6 +226,7 @@ export function FramingScreen({
     removeKeyframe,
     deleteKeyframesInRange,
     cleanupTrimKeyframes,
+    setEndFrame: setCropEndFrame,
     copyCropKeyframe,
     pasteCropKeyframe,
     interpolateCrop,
@@ -292,6 +293,7 @@ export function FramingScreen({
     getKeyframesForExport,
     deleteKeyframesInRange,
     cleanupTrimKeyframes,
+    setCropEndFrame,
     restoreCropState,
     updateAspectRatio,
     resetCrop,
@@ -474,17 +476,18 @@ export function FramingScreen({
     // prevent infinite loops (restore updates state → re-render → effect re-fires).
     // Guard on URL path (without query) because R2 signatures regenerate per render.
     const clipUrlKey = clipUrl.split('?')[0];
-    if (stateRestoredForUrlRef.current !== clipUrlKey) {
+    const clipDuration = firstClipWithMeta?.duration;
+    if (stateRestoredForUrlRef.current !== clipUrlKey && clipDuration) {
       stateRestoredForUrlRef.current = clipUrlKey;
-      const parsedSegments = clipSegments(firstClip, firstClipWithMeta?.duration || 0);
+      const parsedSegments = clipSegments(firstClip, clipDuration);
       const parsedCropKfs = clipCropKeyframes(firstClip);
 
       if (parsedSegments) {
-        restoreSegmentState(parsedSegments, firstClipWithMeta?.duration || 0);
+        restoreSegmentState(parsedSegments, clipDuration);
       }
 
       if (parsedCropKfs && parsedCropKfs.length > 0) {
-        const endFrame = Math.round((firstClipWithMeta?.duration || 0) * (firstClipWithMeta?.framerate || 30));
+        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
         if (endFrame > 0) {
           restoreCropState(parsedCropKfs, endFrame);
         }
@@ -553,24 +556,25 @@ export function FramingScreen({
     previousClipIdRef.current = selectedClipId;
 
     const newClipWithMeta = getClipWithMeta(newClip);
-    const newParsedSegments = clipSegments(newClip, newClipWithMeta?.duration || 0);
+    const newClipDuration = newClipWithMeta?.duration;
+    const newParsedSegments = newClipDuration ? clipSegments(newClip, newClipDuration) : null;
     const newParsedCropKfs = clipCropKeyframes(newClip);
 
     const switchClip = async () => {
       try {
         // 1. Restore new clip's segments state
-        if (newParsedSegments) {
-          restoreSegmentState(newParsedSegments, newClipWithMeta?.duration || 0);
+        if (newParsedSegments && newClipDuration) {
+          restoreSegmentState(newParsedSegments, newClipDuration);
         } else {
           resetSegments();
-          if (newClipWithMeta?.duration) {
-            initializeSegments(newClipWithMeta.duration);
+          if (newClipDuration) {
+            initializeSegments(newClipDuration);
           }
         }
 
         // 2. Restore new clip's crop keyframes BEFORE loading video
-        if (newParsedCropKfs && newParsedCropKfs.length > 0) {
-          const endFrame = Math.round((newClipWithMeta?.duration || 0) * (newClipWithMeta?.framerate || 30));
+        if (newParsedCropKfs && newParsedCropKfs.length > 0 && newClipDuration) {
+          const endFrame = Math.round(newClipDuration * (newClipWithMeta?.framerate || 30));
           if (endFrame > 0) {
             restoreCropState(newParsedCropKfs, endFrame);
           }

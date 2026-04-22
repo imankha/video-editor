@@ -60,6 +60,9 @@ export const ActionTypes = {
   PASTE_KEYFRAME: 'PASTE_KEYFRAME',
   CLEAR_COPIED: 'CLEAR_COPIED',
 
+  // End frame management
+  SET_END_FRAME: 'SET_END_FRAME',
+
   // End keyframe tracking
   SET_END_EXPLICIT: 'SET_END_EXPLICIT'
 };
@@ -186,7 +189,17 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
     }
   }
 
-  return sortKeyframes(result);
+  // Demote middle keyframes with origin='permanent' to 'user'.
+  // After boundary changes (trim/detrim), old boundary keyframes may
+  // remain as permanent in the middle — only first and last should be permanent.
+  const sorted = sortKeyframes(result);
+  return sorted.map((kf, i) => {
+    const isBoundary = i === 0 || i === sorted.length - 1;
+    if (!isBoundary && kf.origin === 'permanent') {
+      return { ...kf, origin: 'user' };
+    }
+    return kf;
+  });
 }
 
 /**
@@ -270,7 +283,13 @@ export function keyframeReducer(state, action) {
       // Enforce permanent keyframe invariant at boundaries
       // Use nullish coalescing — endFrame=0 is a valid value (|| treats 0 as falsy)
       const resolvedEndFrame = (endFrame != null && endFrame > 0) ? endFrame : sortedKeyframes[sortedKeyframes.length - 1].frame;
-      const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
+      // Filter out keyframes beyond endFrame (e.g., when trim shrinks the range
+      // but saved keyframes span the full video). They remain in the DB for de-trim.
+      const trimmedKeyframes = sortedKeyframes.filter(kf => kf.frame <= resolvedEndFrame);
+      const guardedKeyframes = ensurePermanentKeyframes(
+        trimmedKeyframes.length > 0 ? trimmedKeyframes : sortedKeyframes,
+        resolvedEndFrame
+      );
 
       // Determine if end keyframe was explicitly set (not same as start)
       const startKf = guardedKeyframes[0];
@@ -351,15 +370,8 @@ export function keyframeReducer(state, action) {
       const keyframeToRemove = findKeyframeAtFrame(keyframes, frame);
       if (!keyframeToRemove) return state;
 
-      // Don't allow removing boundary keyframes (frame 0 or endFrame)
-      if (frame === 0 || (state.endFrame !== null && frame === state.endFrame)) {
-        if (keyframeToRemove.origin !== 'permanent') {
-          console.warn(`[keyframeController] Boundary keyframe at frame ${frame} has origin '${keyframeToRemove.origin}' instead of 'permanent' — blocked removal but origin should be fixed upstream`);
-        }
-        return state;
-      }
-
       // Don't allow removing if it would leave less than 2 keyframes
+      // (ensurePermanentKeyframes will reconstitute boundary permanents from remaining keyframes)
       if (keyframes.length <= 2) return state;
 
       const filtered = keyframes.filter(kf => kf.frame !== frame);
@@ -453,6 +465,22 @@ export function keyframeReducer(state, action) {
       return {
         ...state,
         copiedData: null
+      };
+    }
+
+    case ActionTypes.SET_END_FRAME: {
+      const { endFrame } = action.payload;
+      // Filter out keyframes beyond the new endFrame (trim shrinking range)
+      // and ensure permanent boundary keyframes exist at 0 and endFrame
+      const trimmed = state.keyframes.filter(kf => kf.frame <= endFrame);
+      const guarded = ensurePermanentKeyframes(
+        trimmed.length > 0 ? trimmed : state.keyframes,
+        endFrame
+      );
+      return {
+        ...state,
+        endFrame,
+        keyframes: guarded
       };
     }
 
@@ -570,6 +598,14 @@ export const actions = {
    */
   clearCopied: () => ({
     type: ActionTypes.CLEAR_COPIED
+  }),
+
+  /**
+   * Update the endFrame (e.g., when detrim expands the range)
+   */
+  setEndFrame: (endFrame) => ({
+    type: ActionTypes.SET_END_FRAME,
+    payload: { endFrame }
   }),
 
   /**

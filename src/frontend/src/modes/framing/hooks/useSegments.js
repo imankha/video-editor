@@ -1,5 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from 'react';
-import { flushSync } from 'react-dom';
+import { useState, useCallback, useMemo } from 'react';
 import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 
 /**
@@ -38,10 +37,6 @@ export function useSegments() {
   // Framerate for frame calculations (matches useCrop)
   const [framerate] = useState(30);
 
-  // Lock to prevent re-entrant calls to detrim functions
-  // This is critical because React can invoke handlers multiple times
-  // MUST use useRef (not useState) so the same object persists across renders
-  const detrimLockRef = useRef({ isLocked: false });
 
   /**
    * DERIVED: Compute all boundaries from userSplits + duration
@@ -137,7 +132,7 @@ export function useSegments() {
 
       // User splits are boundaries excluding 0 and duration
       const userSplitsFromBoundaries = allBoundaries.filter(b =>
-        b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+        b > 0.01 && (videoDuration == null || Math.abs(b - videoDuration) > 0.01)
       );
       setUserSplits(userSplitsFromBoundaries);
 
@@ -159,7 +154,7 @@ export function useSegments() {
       // Restore user splits from boundaries (filter out 0 and duration)
       if (savedState.boundaries && Array.isArray(savedState.boundaries)) {
         const userSplitsFromBoundaries = savedState.boundaries.filter(b =>
-          b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+          b > 0.01 && (videoDuration == null || Math.abs(b - videoDuration) > 0.01)
         );
         setUserSplits(userSplitsFromBoundaries);
       }
@@ -184,8 +179,68 @@ export function useSegments() {
       }
     }
 
-    // Clear trim history when restoring (we don't persist history)
-    setTrimHistory([]);
+    // Reconstruct trim history from boundaries and trimRange so detrim buttons work after refresh.
+    // Each boundary between trimRange.end and duration represents an end-trim step (reverse order).
+    // Each boundary between 0 and trimRange.start represents a start-trim step.
+    const restoredTrimRange = savedState.trimRange || (
+      savedState.trim_start !== undefined ? { start: savedState.trim_start ?? 0, end: savedState.trim_end ?? videoDuration } : null
+    );
+    if (restoredTrimRange && videoDuration) {
+      const history = [];
+      const allBounds = savedState.boundaries
+        ? [...savedState.boundaries].sort((a, b) => a - b)
+        : (savedState.segments
+          ? [...new Set(savedState.segments.flatMap(s => [s.start, s.end]))].sort((a, b) => a - b)
+          : []);
+
+      // Reconstruct end-trim history: boundaries between trimRange.end and duration
+      if (restoredTrimRange.end < videoDuration - 0.01) {
+        const endTrimPoints = allBounds
+          .filter(b => b > restoredTrimRange.end + 0.01 && b < videoDuration - 0.01)
+          .sort((a, b) => a - b);
+        // Build history from outermost trim inward
+        // First trim: previousRange was null (no trim)
+        const trimSteps = [...endTrimPoints, restoredTrimRange.end].sort((a, b) => b - a);
+        // trimSteps is [largest..smallest] = chronological for end-trims
+        // (user trims inward: first to outermost point, then smaller)
+        let prevEnd = videoDuration;
+        for (let i = 0; i < trimSteps.length; i++) {
+          const trimTo = trimSteps[i]; // descending = chronological for end-trims
+          history.push({
+            type: 'end',
+            time: trimTo,
+            previousRange: prevEnd >= videoDuration - 0.01
+              ? null
+              : { start: restoredTrimRange.start, end: prevEnd }
+          });
+          prevEnd = trimTo;
+        }
+      }
+
+      // Reconstruct start-trim history: boundaries between 0 and trimRange.start
+      if (restoredTrimRange.start > 0.01) {
+        const startTrimPoints = allBounds
+          .filter(b => b > 0.01 && b < restoredTrimRange.start - 0.01)
+          .sort((a, b) => a - b);
+        const trimSteps = [...startTrimPoints, restoredTrimRange.start].sort((a, b) => a - b);
+        let prevStart = 0;
+        for (let i = 0; i < trimSteps.length; i++) {
+          const trimTo = trimSteps[i];
+          history.push({
+            type: 'start',
+            time: trimTo,
+            previousRange: prevStart < 0.01
+              ? null
+              : { start: prevStart, end: restoredTrimRange.end }
+          });
+          prevStart = trimTo;
+        }
+      }
+
+      setTrimHistory(history);
+    } else {
+      setTrimHistory([]);
+    }
   }, []);
 
   /**
@@ -334,71 +389,49 @@ export function useSegments() {
    * De-trim (undo last trim operation from start)
    * Pops from history and restores previous trim range
    *
-   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
-   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimStart = useCallback(() => {
-    // CRITICAL: Prevent re-entrant calls using a lock
-    if (detrimLockRef.current.isLocked) return;
-
-    // Pre-check: find the operation to undo BEFORE acquiring lock
+    // Pre-check: find the operation to undo
     const lastStartIndex = trimHistory.findLastIndex(op => op.type === 'start');
     if (lastStartIndex === -1) return;
 
     const lastStartOp = trimHistory[lastStartIndex];
 
-    detrimLockRef.current.isLocked = true;
-    try {
-      // FIX: Only restore the start value, preserve current end
-      // This prevents losing end trim when undoing a start trim
-      setTrimRange(current => {
-        const restoredStart = lastStartOp.previousRange?.start || 0;
-        const currentEnd = current?.end || duration;
+    // Compute new values from closure state (not nested updaters)
+    const restoredStart = lastStartOp.previousRange?.start || 0;
+    const newHistory = trimHistory.filter((_, i) => i !== lastStartIndex);
 
-        // Update history in the same state update
-        setTrimHistory(prev => prev.filter((_, i) => i !== lastStartIndex));
-
-        return { start: restoredStart, end: currentEnd };
-      });
-    } finally {
-      detrimLockRef.current.isLocked = false;
-    }
-  }, [trimHistory, duration]);
+    // Update both states together — React 18 auto-batches these
+    setTrimRange(current => ({
+      start: restoredStart,
+      end: current?.end || duration
+    }));
+    setTrimHistory(newHistory);
+  }, [trimHistory, duration, trimRange]);
 
   /**
    * De-trim (undo last trim operation from end)
    * Pops from history and restores previous trim range
    *
-   * BUG FIX: Uses flushSync to ensure both state updates complete in a single render,
-   * preventing double-click issues caused by stale state during re-renders.
    */
   const detrimEnd = useCallback(() => {
-    // CRITICAL: Prevent re-entrant calls using a lock
-    if (detrimLockRef.current.isLocked) return;
-
-    // Pre-check: find the operation to undo BEFORE acquiring lock
+    // Pre-check: find the operation to undo
     const lastEndIndex = trimHistory.findLastIndex(op => op.type === 'end');
     if (lastEndIndex === -1) return;
 
     const lastEndOp = trimHistory[lastEndIndex];
 
-    detrimLockRef.current.isLocked = true;
-    try {
-      // FIX: Only restore the end value, preserve current start
-      // This prevents losing start trim when undoing an end trim
-      setTrimRange(current => {
-        const restoredEnd = lastEndOp.previousRange?.end || duration;
-        const currentStart = current?.start || 0;
+    // Compute new values from closure state (not nested updaters)
+    const restoredEnd = lastEndOp.previousRange?.end || duration;
+    const newHistory = trimHistory.filter((_, i) => i !== lastEndIndex);
 
-        // Update history in the same state update
-        setTrimHistory(prev => prev.filter((_, i) => i !== lastEndIndex));
-
-        return { start: currentStart, end: restoredEnd };
-      });
-    } finally {
-      detrimLockRef.current.isLocked = false;
-    }
-  }, [trimHistory, duration]);
+    // Update both states together — React 18 auto-batches these
+    setTrimRange(current => ({
+      start: current?.start || 0,
+      end: restoredEnd
+    }));
+    setTrimHistory(newHistory);
+  }, [trimHistory, duration, trimRange]);
 
   /**
    * Toggle trim status for a segment (only works for first or last segment)
