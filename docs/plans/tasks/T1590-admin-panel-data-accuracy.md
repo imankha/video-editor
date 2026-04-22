@@ -1,6 +1,6 @@
 # T1590: Admin Panel Data Accuracy Audit
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 5
 **Created:** 2026-04-20
@@ -129,16 +129,16 @@ Existing `download_from_r2()` and `r2_key()` depend on a profile_id ContextVar n
 ### Steps
 1. [x] Fix frontend display bug (`||` -> `??`) — done 2026-04-20
 2. [x] Fix credit stats to read from per-user `user.sqlite` instead of stale `auth.sqlite` — done 2026-04-21 (commit c723af1)
-3. [ ] Create admin R2 download helper (bypasses ContextVar, downloads to standard paths)
-4. [ ] Create admin profile discovery helper (list R2 objects to find profile IDs per user)
-5. [ ] Refactor stat functions to single-profile (one db_path, no aggregation loop)
-6. [ ] Add pagination to GET /api/admin/users (capacity-driven page size)
-7. [ ] Build profile-centric response shape (profiles nested under users)
-8. [ ] Fix GPU drilldown endpoint to accept profile_id and pull from R2
-9. [ ] Fix `get_credit_stats_for_admin()` unnecessary filter (line 531)
-10. [ ] Update adminStore.js for paginated fetch and page state
-11. [ ] Update UserTable.jsx: grouped profile rows, expand toggle for multi-profile users
-12. [ ] Add pagination controls to UserTable.jsx
+3. [x] Create admin R2 download helper (bypasses ContextVar, downloads to standard paths)
+4. [x] Create admin profile discovery helper (list R2 objects to find profile IDs per user)
+5. [x] Refactor stat functions to single-profile (one db_path, no aggregation loop)
+6. [x] Add pagination to GET /api/admin/users (capacity-driven page size)
+7. [x] Build profile-centric response shape (profiles nested under users)
+8. [x] Fix GPU drilldown endpoint to accept profile_id and pull from R2
+9. [x] Fix `get_credit_stats_for_admin()` unnecessary filter (line 531)
+10. [x] Update adminStore.js for paginated fetch and page state
+11. [x] Update UserTable.jsx: grouped profile rows, expand toggle for multi-profile users
+12. [x] Add pagination controls to UserTable.jsx
 13. [ ] Test with real staging users who have known activity
 
 ### Code-Level Findings (2026-04-21)
