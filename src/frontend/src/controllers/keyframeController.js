@@ -270,7 +270,13 @@ export function keyframeReducer(state, action) {
       // Enforce permanent keyframe invariant at boundaries
       // Use nullish coalescing — endFrame=0 is a valid value (|| treats 0 as falsy)
       const resolvedEndFrame = (endFrame != null && endFrame > 0) ? endFrame : sortedKeyframes[sortedKeyframes.length - 1].frame;
-      const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
+      // Filter out keyframes beyond endFrame (e.g., when trim shrinks the range
+      // but saved keyframes span the full video). They remain in the DB for de-trim.
+      const trimmedKeyframes = sortedKeyframes.filter(kf => kf.frame <= resolvedEndFrame);
+      const guardedKeyframes = ensurePermanentKeyframes(
+        trimmedKeyframes.length > 0 ? trimmedKeyframes : sortedKeyframes,
+        resolvedEndFrame
+      );
 
       // Determine if end keyframe was explicitly set (not same as start)
       const startKf = guardedKeyframes[0];

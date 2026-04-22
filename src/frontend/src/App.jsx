@@ -10,7 +10,6 @@ import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/shared';
-import DebugInfo from './components/DebugInfo';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
@@ -574,8 +573,6 @@ function App() {
       </div>
       )}
 
-      {/* Debug Info */}
-      <DebugInfo />
 
       {/* Global Export Indicator - shows progress across all screens */}
       <GlobalExportIndicator />
