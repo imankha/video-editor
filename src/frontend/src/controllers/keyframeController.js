@@ -467,9 +467,17 @@ export function keyframeReducer(state, action) {
 
     case ActionTypes.SET_END_FRAME: {
       const { endFrame } = action.payload;
+      // Filter out keyframes beyond the new endFrame (trim shrinking range)
+      // and ensure permanent boundary keyframes exist at 0 and endFrame
+      const trimmed = state.keyframes.filter(kf => kf.frame <= endFrame);
+      const guarded = ensurePermanentKeyframes(
+        trimmed.length > 0 ? trimmed : state.keyframes,
+        endFrame
+      );
       return {
         ...state,
-        endFrame
+        endFrame,
+        keyframes: guarded
       };
     }
 
