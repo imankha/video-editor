@@ -1,6 +1,6 @@
 # T1670: Overlay Stuck "Loading working video..." After Framing Export
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-21

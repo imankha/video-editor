@@ -122,7 +122,7 @@ export function OverlayScreen({
   const exportButtonRef = externalExportButtonRef || internalExportButtonRef;
   const fullscreenContainerRef = useRef(null);
   const videoLoadedFromUrlRef = useRef(null); // Track which URL we've loaded to prevent infinite loops
-  const workingVideoFetchUrlRef = useRef(null); // Track which presigned URL we've started fetching
+  const workingVideoFetchIdRef = useRef(null); // Track which working_video_id we've started fetching
   const workingVideoRecoveryAttemptedRef = useRef(false); // Guard against infinite refresh loops
   const workingVideoAttemptsRef = useRef(0); // Count metadata-load attempts for the current URL
   const MAX_WORKING_VIDEO_ATTEMPTS = 2;
@@ -306,10 +306,12 @@ export function OverlayScreen({
   // =========================================
 
   useEffect(() => {
-    // If no working video in store but project has presigned URL, use it directly (streaming)
-    // Use ref to prevent duplicate fetches (allows loading even if isLoadingWorkingVideo was pre-set)
-    if (!workingVideo && project?.working_video_url && workingVideoFetchUrlRef.current !== project.working_video_url) {
-      workingVideoFetchUrlRef.current = project.working_video_url;
+    // If no working video in store but project has a working video, use the proxy URL (streaming).
+    // T1670: Guard on working_video_id (not URL) because the proxy URL is stable across exports
+    // (/api/projects/{id}/working_video/stream never changes). The ID changes per export,
+    // so a new export triggers a fresh load even though the URL is the same.
+    if (!workingVideo && project?.working_video_url && workingVideoFetchIdRef.current !== project.working_video_id) {
+      workingVideoFetchIdRef.current = project.working_video_id;
       workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
       workingVideoAttemptsRef.current = 0;
       setWorkingVideoLoadError(null);
@@ -335,8 +337,8 @@ export function OverlayScreen({
             attemptLoad();
           } else {
             // Exhausted attempts — surface failure to the user.
-            // Leave workingVideoFetchUrlRef set so this effect does not re-fire
-            // for the same URL; user must click retry to clear + re-attempt.
+            // Leave workingVideoFetchIdRef set so this effect does not re-fire
+            // for the same working_video_id; user must click retry to clear + re-attempt.
             setWorkingVideoLoadError(err.message || 'Failed to load working video');
             setIsLoadingWorkingVideo(false);
           }
@@ -871,7 +873,7 @@ export function OverlayScreen({
   const handleRetryWorkingVideo = useCallback(async () => {
     console.log('[OverlayScreen] Manual retry of working video load');
     setWorkingVideoLoadError(null);
-    workingVideoFetchUrlRef.current = null;
+    workingVideoFetchIdRef.current = null;
     workingVideoAttemptsRef.current = 0;
     await refreshProject();
   }, [refreshProject]);

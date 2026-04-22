@@ -1,6 +1,6 @@
 # T1690: Video Stream Proxy Returns Broken 206 on R2 Failure
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-04-21

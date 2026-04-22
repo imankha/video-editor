@@ -327,10 +327,10 @@ export function ExportButtonContainer({
         }
 
         if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
-          onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
+          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
         if (onExportComplete) {
-          onExportComplete();
+          await onExportComplete();
         }
       },
       onError: (serverError) => {
@@ -385,7 +385,11 @@ export function ExportButtonContainer({
           response.data.working_video_id || response.data.output_video_id,
           response.data.output_filename
         );
-        if (onExportComplete) onExportComplete();
+        // T1670: Transition to overlay on retry path (same as WS onComplete)
+        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
+          await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
+        }
+        if (onExportComplete) await onExportComplete();
       } else if (status === 'error' || modal_status === 'error') {
         disconnectedRef.current = false;
         setDisconnected(false);
@@ -404,7 +408,7 @@ export function ExportButtonContainer({
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
       setProgressMessage('Could not reach server — will keep trying...');
     }
-  }, [connectWebSocket, completeExportInStore, onExportComplete]);
+  }, [connectWebSocket, completeExportInStore, onExportComplete, onProceedToOverlay, editorMode, clips, projectId]);
 
   /**
    * Dismiss export UI when reconnection has failed and user gives up.
