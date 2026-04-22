@@ -413,9 +413,15 @@ export function FramingContainer({
       // Delete crop keyframes in trimmed range
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
-      // Update controller's endFrame when trimming the end
+      // Update controller's endFrame when trimming the end, or re-enforce
+      // boundaries when trimming the start (deleteKeyframesInRange removes
+      // frame 0, and ensurePermanentKeyframes in SET_END_FRAME restores it)
       if (segment.isLast && boundaryTime !== undefined) {
         setCropEndFrame(Math.round(boundaryTime * framerate));
+      } else if (segment.isFirst) {
+        // endFrame unchanged but need ensurePermanentKeyframes to restore frame 0
+        const currentEndFrame = Math.round((trimRange?.end ?? duration) * framerate);
+        setCropEndFrame(currentEndFrame);
       }
 
       // Reconstitute permanent keyframe at boundary
