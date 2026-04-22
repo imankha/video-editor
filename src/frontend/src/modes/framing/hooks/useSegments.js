@@ -184,8 +184,68 @@ export function useSegments() {
       }
     }
 
-    // Clear trim history when restoring (we don't persist history)
-    setTrimHistory([]);
+    // Reconstruct trim history from boundaries and trimRange so detrim buttons work after refresh.
+    // Each boundary between trimRange.end and duration represents an end-trim step (reverse order).
+    // Each boundary between 0 and trimRange.start represents a start-trim step.
+    const restoredTrimRange = savedState.trimRange || (
+      savedState.trim_start !== undefined ? { start: savedState.trim_start ?? 0, end: savedState.trim_end ?? videoDuration } : null
+    );
+    if (restoredTrimRange && videoDuration) {
+      const history = [];
+      const allBounds = savedState.boundaries
+        ? [...savedState.boundaries].sort((a, b) => a - b)
+        : (savedState.segments
+          ? [...new Set(savedState.segments.flatMap(s => [s.start, s.end]))].sort((a, b) => a - b)
+          : []);
+
+      // Reconstruct end-trim history: boundaries between trimRange.end and duration
+      if (restoredTrimRange.end < videoDuration - 0.01) {
+        const endTrimPoints = allBounds
+          .filter(b => b > restoredTrimRange.end + 0.01 && b < videoDuration - 0.01)
+          .sort((a, b) => a - b);
+        // Build history from outermost trim inward
+        // First trim: previousRange was null (no trim)
+        const trimSteps = [...endTrimPoints, restoredTrimRange.end].sort((a, b) => b - a);
+        // trimSteps is [largest..smallest], representing reverse-chronological order
+        // But history should be chronological: first = outermost, last = current
+        let prevEnd = videoDuration;
+        for (let i = 0; i < trimSteps.length; i++) {
+          const trimTo = trimSteps[trimSteps.length - 1 - i]; // chronological order
+          history.push({
+            type: 'end',
+            time: trimTo,
+            previousRange: prevEnd >= videoDuration - 0.01
+              ? null
+              : { start: restoredTrimRange.start, end: prevEnd }
+          });
+          prevEnd = trimTo;
+        }
+      }
+
+      // Reconstruct start-trim history: boundaries between 0 and trimRange.start
+      if (restoredTrimRange.start > 0.01) {
+        const startTrimPoints = allBounds
+          .filter(b => b > 0.01 && b < restoredTrimRange.start - 0.01)
+          .sort((a, b) => a - b);
+        const trimSteps = [...startTrimPoints, restoredTrimRange.start].sort((a, b) => a - b);
+        let prevStart = 0;
+        for (let i = 0; i < trimSteps.length; i++) {
+          const trimTo = trimSteps[i];
+          history.push({
+            type: 'start',
+            time: trimTo,
+            previousRange: prevStart < 0.01
+              ? null
+              : { start: prevStart, end: restoredTrimRange.end }
+          });
+          prevStart = trimTo;
+        }
+      }
+
+      setTrimHistory(history);
+    } else {
+      setTrimHistory([]);
+    }
   }, []);
 
   /**
