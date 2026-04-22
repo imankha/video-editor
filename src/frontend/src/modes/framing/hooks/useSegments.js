@@ -137,7 +137,7 @@ export function useSegments() {
 
       // User splits are boundaries excluding 0 and duration
       const userSplitsFromBoundaries = allBoundaries.filter(b =>
-        b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+        b > 0.01 && (videoDuration == null || Math.abs(b - videoDuration) > 0.01)
       );
       setUserSplits(userSplitsFromBoundaries);
 
@@ -159,7 +159,7 @@ export function useSegments() {
       // Restore user splits from boundaries (filter out 0 and duration)
       if (savedState.boundaries && Array.isArray(savedState.boundaries)) {
         const userSplitsFromBoundaries = savedState.boundaries.filter(b =>
-          b > 0.01 && (!videoDuration || Math.abs(b - videoDuration) > 0.01)
+          b > 0.01 && (videoDuration == null || Math.abs(b - videoDuration) > 0.01)
         );
         setUserSplits(userSplitsFromBoundaries);
       }
