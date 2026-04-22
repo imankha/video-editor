@@ -3,15 +3,21 @@ import { API_BASE } from '../config';
 import { useCreditStore } from './creditStore';
 
 /**
- * Admin Store — manages admin panel data (T550).
+ * Admin Store — manages admin panel data (T550, T1590).
  *
- * Fetches users (with quest progress + GPU totals in parallel on backend),
- * GPU drilldown per user, and credit grants.
+ * T1590: Paginated fetch with profile-centric response.
+ * Stats are per-profile, credits are per-user.
  */
 export const useAdminStore = create((set, get) => ({
   users: [],
   usersLoading: false,
   usersError: null,
+
+  // Pagination state
+  currentPage: 1,
+  totalPages: 1,
+  totalProfiles: 0,
+  pageSize: 10,
 
   // GPU drilldown: { [userId]: { data, loading, error } }
   gpuUsage: {},
@@ -19,24 +25,49 @@ export const useAdminStore = create((set, get) => ({
   // Credit grant state: { [userId]: { loading, error } }
   grantState: {},
 
-  fetchUsers: async () => {
+  fetchUsers: async (page, pageSize) => {
+    const state = get();
+    const p = page ?? state.currentPage;
+    const ps = pageSize ?? state.pageSize;
+
     set({ usersLoading: true, usersError: null });
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users`, { credentials: 'include' });
+      const res = await fetch(
+        `${API_BASE}/api/admin/users?page=${p}&page_size=${ps}`,
+        { credentials: 'include' },
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const users = await res.json();
-      set({ users, usersLoading: false });
+      const data = await res.json();
+      set({
+        users: data.users,
+        currentPage: data.page,
+        totalPages: data.total_pages,
+        totalProfiles: data.total_profiles,
+        pageSize: data.page_size,
+        usersLoading: false,
+      });
     } catch (err) {
       set({ usersLoading: false, usersError: err.message });
     }
   },
 
-  fetchGpuUsage: async (userId) => {
+  nextPage: () => {
+    const { currentPage, totalPages, fetchUsers } = get();
+    if (currentPage < totalPages) fetchUsers(currentPage + 1);
+  },
+
+  prevPage: () => {
+    const { currentPage, fetchUsers } = get();
+    if (currentPage > 1) fetchUsers(currentPage - 1);
+  },
+
+  fetchGpuUsage: async (userId, profileId) => {
     set(state => ({
       gpuUsage: { ...state.gpuUsage, [userId]: { data: null, loading: true, error: null } },
     }));
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/gpu-usage`, { credentials: 'include' });
+      const params = profileId ? `?profile_id=${profileId}` : '';
+      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/gpu-usage${params}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set(state => ({

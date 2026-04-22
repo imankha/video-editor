@@ -45,7 +45,7 @@ export function AdminScreen({ onBack }) {
           <h2 className="text-gray-300 font-medium mb-4">Users</h2>
 
           {loading && (
-            <p className="text-gray-500 text-sm">Loading users…</p>
+            <p className="text-gray-500 text-sm">Loading users{'\u2026'}</p>
           )}
 
           {error && (
@@ -57,7 +57,7 @@ export function AdminScreen({ onBack }) {
           )}
 
           {!loading && !error && knownUsers.length > 0 && (
-            <UserTable users={knownUsers} allUsers={users} />
+            <UserTable users={knownUsers} allUsers={knownUsers} />
           )}
         </div>
       </div>

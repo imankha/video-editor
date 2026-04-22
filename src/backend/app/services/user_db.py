@@ -528,8 +528,7 @@ def get_credit_stats_for_admin() -> dict:
                 "credits_balance": balance_row["balance"] if balance_row else 0,
                 "purchase_credit_amounts": [r["amount"] for r in purchase_detail_rows],
             }
-            if any(v for k, v in user_stats.items() if k != "purchase_credit_amounts") or user_stats["purchase_credit_amounts"]:
-                stats[user_id] = user_stats
+            stats[user_id] = user_stats
 
         except Exception as e:
             logger.warning(f"[UserDB] Could not read credit stats from {user_db_path}: {e}")

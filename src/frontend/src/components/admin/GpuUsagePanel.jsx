@@ -21,9 +21,9 @@ export function GpuUsagePanel({ user, onClose }) {
 
   useEffect(() => {
     if (!gpuState) {
-      fetchGpuUsage(user.user_id);
+      fetchGpuUsage(user.user_id, user._profileId);
     }
-  }, [user.user_id, gpuState, fetchGpuUsage]);
+  }, [user.user_id, user._profileId, gpuState, fetchGpuUsage]);
 
   const handleBackdrop = (e) => {
     if (e.target === e.currentTarget) onClose();
