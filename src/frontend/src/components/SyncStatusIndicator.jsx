@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { WifiOff, RefreshCw } from 'lucide-react';
+import { WifiOff, CloudOff } from 'lucide-react';
 import { useSyncStore } from '../stores/syncStore';
 
 // Delay before surfacing so momentary sync-failed states
@@ -34,21 +34,16 @@ export function SyncStatusIndicator() {
   if (!visible) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white text-sm font-medium rounded-lg shadow-lg">
-      {isRetrying ? (
+    <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 text-sm rounded-lg shadow-lg border border-gray-700">
+      {isOffline ? (
         <>
-          <RefreshCw className="w-4 h-4 animate-spin" />
-          <span>Syncing...</span>
-        </>
-      ) : isOffline ? (
-        <>
-          <WifiOff className="w-4 h-4" />
-          <span>No internet connection</span>
+          <WifiOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span>Offline -- your work is saved locally</span>
         </>
       ) : (
         <>
-          <RefreshCw className="w-4 h-4 animate-spin" />
-          <span>Reconnecting...</span>
+          <CloudOff className="w-4 h-4 text-amber-400 flex-shrink-0" />
+          <span>Cloud backup pending -- your work is saved locally</span>
         </>
       )}
     </div>
