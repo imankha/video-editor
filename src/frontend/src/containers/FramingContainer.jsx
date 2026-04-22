@@ -293,8 +293,11 @@ export function FramingContainer({
    */
   const handleCropComplete = useCallback(async (cropData) => {
     const frame = Math.round(currentTime * framerate);
+    const callerClipId = selectedClipId;
 
-    // Capture store state for rollback
+    // Capture pre-existing keyframe for rollback (may be null if no keyframe at this frame)
+    const previousKfData = getCropDataAtTime(currentTime);
+    const previousKf = keyframes.find(kf => kf.frame === frame);
     const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
 
     clipHasUserEditsRef.current = true;
@@ -306,9 +309,9 @@ export function FramingContainer({
     // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
     // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
     const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
-      updateClipData(selectedClipId, { crop_data: JSON.stringify(updatedKfs) });
+      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
     }
 
     // Persist to backend with error recovery
@@ -322,15 +325,22 @@ export function FramingContainer({
         height: cropData.height,
         origin: 'user'
       });
-      if (!result.success) {
-        removeKeyframe(currentTime, duration);
-        if (selectedClipId) {
-          updateClipData(selectedClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+      if (!result.success && selectedClipId === callerClipId) {
+        // Rollback: restore previous keyframe or remove the new one
+        if (previousKf && previousKfData) {
+          addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
+        } else {
+          removeKeyframe(currentTime, duration);
         }
+        if (callerClipId) {
+          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+        }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
         toast.error('Failed to save crop keyframe', { message: result.error });
       }
     }
-  }, [currentTime, framerate, duration, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Coordinated segment trim handler
@@ -729,6 +739,7 @@ export function FramingContainer({
    */
   const handleKeyframeDelete = useCallback(async (time) => {
     const frame = Math.round(time * framerate);
+    const callerClipId = selectedClipId;
 
     // Capture keyframe data for rollback
     const deletedKf = keyframes.find(kf => kf.frame === frame);
@@ -742,23 +753,25 @@ export function FramingContainer({
     setFramingChangedSinceExport?.(true);
 
     // Sync to clip store so sidebar indicator updates
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedKfs = previousStoreKfs.filter(kf => kf.frame !== frame);
-      updateClipData(selectedClipId, { crop_data: JSON.stringify(updatedKfs) });
+      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
     }
 
     // Persist to backend with error recovery
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
-      if (!result.success) {
+      if (!result.success && selectedClipId === callerClipId) {
         // Rollback: re-add the keyframe
         if (deletedCropData) {
           addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
         }
-        if (selectedClipId) {
-          updateClipData(selectedClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+        if (callerClipId) {
+          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
         }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
         toast.error('Failed to delete keyframe', { message: result.error });
       }
     }
@@ -779,6 +792,11 @@ export function FramingContainer({
   const handlePasteCrop = useCallback(async (time = currentTime) => {
     if (videoUrl && copiedCrop) {
       const frame = Math.round(time * framerate);
+      const callerClipId = selectedClipId;
+
+      // Capture pre-existing keyframe for rollback
+      const previousKfData = getCropDataAtTime(time);
+      const previousKf = keyframes.find(kf => kf.frame === frame);
       const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
 
       pasteCropKeyframe(time, duration);
@@ -786,10 +804,10 @@ export function FramingContainer({
       setFramingChangedSinceExport?.(true);
 
       // Sync to clip store so sidebar indicator updates
-      if (selectedClipId) {
+      if (callerClipId) {
         const newKf = { frame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin: 'user' };
         const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
-        updateClipData(selectedClipId, { crop_data: JSON.stringify(updatedKfs) });
+        updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
       }
 
       // Persist to backend with error recovery
@@ -803,21 +821,29 @@ export function FramingContainer({
           height: copiedCrop.height,
           origin: 'user'
         });
-        if (!result.success) {
-          removeKeyframe(time, duration);
-          if (selectedClipId) {
-            updateClipData(selectedClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+        if (!result.success && selectedClipId === callerClipId) {
+          // Rollback: restore previous keyframe or remove the pasted one
+          if (previousKf && previousKfData) {
+            addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
+          } else {
+            removeKeyframe(time, duration);
           }
+          if (callerClipId) {
+            updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+          }
+          clipHasUserEditsRef.current = false;
+          setFramingChangedSinceExport?.(false);
           toast.error('Failed to paste crop keyframe', { message: result.error });
         }
       }
     }
-  }, [videoUrl, currentTime, copiedCrop, duration, framerate, pasteCropKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [videoUrl, currentTime, copiedCrop, duration, framerate, keyframes, getCropDataAtTime, pasteCropKeyframe, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
   /**
    * Handle segment boundary add (split)
    */
   const handleAddSplit = useCallback(async (time) => {
+    const callerClipId = selectedClipId;
     clipHasUserEditsRef.current = true;
     addSegmentBoundary(time);
     onUserEdit?.();
@@ -825,9 +851,9 @@ export function FramingContainer({
 
     // Sync to clip store so sidebar indicator updates
     // Note: segmentBoundaries won't have the new value yet (React batching), so build manually
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedBoundaries = [...segmentBoundaries, time].sort((a, b) => a - b);
-      updateClipData(selectedClipId, {
+      updateClipData(callerClipId, {
         segments_data: JSON.stringify({
           boundaries: updatedBoundaries,
           segmentSpeeds: segmentSpeeds,
@@ -840,10 +866,10 @@ export function FramingContainer({
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.splitSegment(selectedProjectId, clipId, time);
-      if (!result.success) {
+      if (!result.success && selectedClipId === callerClipId) {
         removeSegmentBoundary(time);
-        if (selectedClipId) {
-          updateClipData(selectedClipId, {
+        if (callerClipId) {
+          updateClipData(callerClipId, {
             segments_data: JSON.stringify({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
@@ -851,6 +877,8 @@ export function FramingContainer({
             })
           });
         }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
         toast.error('Failed to split segment', { message: result.error });
       }
     }
@@ -860,15 +888,16 @@ export function FramingContainer({
    * Handle segment boundary remove
    */
   const handleRemoveSplit = useCallback(async (time) => {
+    const callerClipId = selectedClipId;
     clipHasUserEditsRef.current = true;
     removeSegmentBoundary(time);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
 
     // Sync to clip store so sidebar indicator updates
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedBoundaries = segmentBoundaries.filter(b => b !== time);
-      updateClipData(selectedClipId, {
+      updateClipData(callerClipId, {
         segments_data: JSON.stringify({
           boundaries: updatedBoundaries,
           segmentSpeeds: segmentSpeeds,
@@ -881,10 +910,10 @@ export function FramingContainer({
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.removeSegmentSplit(selectedProjectId, clipId, time);
-      if (!result.success) {
+      if (!result.success && selectedClipId === callerClipId) {
         addSegmentBoundary(time);
-        if (selectedClipId) {
-          updateClipData(selectedClipId, {
+        if (callerClipId) {
+          updateClipData(callerClipId, {
             segments_data: JSON.stringify({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
@@ -892,6 +921,8 @@ export function FramingContainer({
             })
           });
         }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
         toast.error('Failed to remove split', { message: result.error });
       }
     }
@@ -913,6 +944,7 @@ export function FramingContainer({
    */
   const handleSegmentSpeedChange = useCallback(async (segmentIndex, speed) => {
     const previousSpeed = segmentSpeeds[segmentIndex] ?? 1;
+    const callerClipId = selectedClipId;
 
     clipHasUserEditsRef.current = true;
     setSegmentSpeed(segmentIndex, speed);
@@ -921,9 +953,9 @@ export function FramingContainer({
 
     // Optimistically update store so sidebar framing indicator reflects the change
     // Note: segmentSpeeds won't have the new value yet (React batching), so build it manually
-    if (selectedClipId) {
+    if (callerClipId) {
       const updatedSpeeds = { ...segmentSpeeds, [segmentIndex]: speed };
-      updateClipData(selectedClipId, {
+      updateClipData(callerClipId, {
         segments_data: JSON.stringify({
           boundaries: segmentBoundaries,
           segmentSpeeds: updatedSpeeds,
@@ -936,10 +968,10 @@ export function FramingContainer({
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.setSegmentSpeed(selectedProjectId, clipId, segmentIndex, speed);
-      if (!result.success) {
+      if (!result.success && selectedClipId === callerClipId) {
         setSegmentSpeed(segmentIndex, previousSpeed);
-        if (selectedClipId) {
-          updateClipData(selectedClipId, {
+        if (callerClipId) {
+          updateClipData(callerClipId, {
             segments_data: JSON.stringify({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
@@ -947,6 +979,8 @@ export function FramingContainer({
             })
           });
         }
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
         toast.error('Failed to set segment speed', { message: result.error });
       }
     }
