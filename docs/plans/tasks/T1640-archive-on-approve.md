@@ -46,6 +46,16 @@ The archive logic already exists in `project_archive.py:archive_project()` -- ju
 3. [ ] Frontend: Wire button to call archive endpoint
 4. [ ] Frontend: Animate card out on successful archive (CSS transition)
 5. [ ] Frontend: Remove archived project from downloads list state
+6. [ ] Frontend: Change default mode when opening a completed reel from Overlay to Framing (see below)
+
+### Bundled: Default to Framing when opening completed reels
+
+When clicking into a completed reel from the gallery, the app should open in Framing mode (not Overlay). Two locations hardcode overlay:
+
+- `App.jsx:597` -- `setEditorMode(EDITOR_MODES.OVERLAY)` in the `onOpenProject` callback
+- `ProjectsScreen.jsx:344` -- `handleSelectProjectWithMode(projectId, { mode: 'overlay' })`
+
+Change both to use `EDITOR_MODES.FRAMING` / `{ mode: 'framing' }`.
 
 ## Acceptance Criteria
 
@@ -54,3 +64,4 @@ The archive logic already exists in `project_archive.py:archive_project()` -- ju
 - [ ] Card animates out smoothly after successful archive
 - [ ] Archived project can still be restored if user opens it from gallery later
 - [ ] Error state shown if archive fails (e.g., R2 unavailable)
+- [ ] Opening a completed reel from the gallery defaults to Framing mode (not Overlay)

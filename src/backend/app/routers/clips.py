@@ -1691,6 +1691,21 @@ async def stream_working_clip_bounded(
                 headers={"Range": f"bytes={req_start}-{req_end}"},
             ) as response:
                 if response.status_code not in (200, 206):
+                    # Read a snippet of R2's error body for diagnostics
+                    error_body = ""
+                    try:
+                        raw = await response.aread()
+                        error_body = raw[:500].decode("utf-8", errors="replace")
+                    except Exception:
+                        error_body = "(unreadable)"
+                    logger.error(
+                        f"[clip-stream] R2 error clip_id={clip_id} project_id={project_id} "
+                        f"r2_status={response.status_code} "
+                        f"r2_content_type={response.headers.get('content-type', 'unknown')} "
+                        f"blake3={row['blake3_hash']} filename={row['video_filename']} "
+                        f"range={req_start}-{req_end} window={window_kind} "
+                        f"body_snippet={error_body!r}"
+                    )
                     raise HTTPException(
                         status_code=response.status_code,
                         detail=f"R2 returned {response.status_code}",

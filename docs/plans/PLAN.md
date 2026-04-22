@@ -10,9 +10,14 @@
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | TESTING | [ ] | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
+| T1100 | [Remove Dead Overlay Debounce](tasks/T1100-remove-dead-overlay-debounce.md) | 5 | 2 | P0 | TODO | [ ] | Dead `saveOverlayData` with 2s debounce in OverlayContainer; remove + audit overlay persistence |
+| T1540 | [Gesture Persistence During Upload](tasks/T1540-gesture-persistence-during-upload.md) | 9 | 5 | P0 | DONE | [ ] | Clips added during game upload are silently not saved — `annotateGameId` gate prevents all persistence until upload completes + game is created. User loses clips on navigation. |
 | T1570 | [Admin Panel Missing Users](tasks/T1570-admin-panel-missing-users.md) | 5 | 3 | P1 | DONE | [ ] | Some users (e.g., sarkarati@gmail.com) don't appear in admin panel even though they exist in auth.sqlite |
 | T1590 | [Admin Panel Data Accuracy](tasks/T1590-admin-panel-data-accuracy.md) | 5 | 4 | P2 | TODO | [ ] | Activity/quest/GPU stats wrong on staging/prod: admin endpoint reads local filesystem but user DBs only sync from R2 on user request. Display bug (0 shown as dash) fixed. |
+| T1660 | [Framing Gesture Persistence](tasks/T1660-framing-gesture-persistence-audit.md) | 8 | 4 | P1 | TODO | [ ] | All framing gesture API calls are fire-and-forget with no error recovery. Deleted keyframes reappear on reload if backend rejects the delete. Also: delete/paste/split/detrim don't sync clip store. |
+| | **[Post-Export Video Loading](tasks/post-export-video-loading/EPIC.md)** | | | | | | **Fix "video not loading" after framing export: broken proxy 206 + frontend race condition** |
+| T1690 | ↳ [Video Stream Proxy Error Masking](tasks/post-export-video-loading/T1690-video-stream-proxy-error-masking.md) | 7 | 4 | P1 | TODO | [ ] | Stream proxies commit to 206+video/mp4 headers before R2 responds. R2 failures produce broken streams browser reports as "format not supported". Diagnostic logging added, needs deploy. |
+| T1670 | ↳ [Overlay Stuck Loading After Export](tasks/post-export-video-loading/T1670-overlay-stuck-loading-after-framing-export.md) | 8 | 5 | P1 | TODO | [ ] | After framing export, overlay shows "Loading working video..." forever. Race between onProceedToOverlay and onExportComplete; retry path skips overlay transition; effect has dead zone with stable proxy URL. |
 
 ### Milestone: Performance (NEXT UP)
 
@@ -20,11 +25,11 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | 8 | 5 | 1.6 | TESTING | [ ] | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests. Backend landed T1531, frontend landed T1570. |
-| T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | 9 | 3 | 3.0 | TESTING | [ ] | Achievement routes skip R2 sync entirely (SKIP_SYNC_PATHS). Frontend fire-and-forget already landed. |
-| T1533 | [Overlay Working Video Slow First-Load](tasks/T1533-overlay-working-video-slow-load.md) | 7 | 3 | 2.0 | TESTING | [ ] | Root cause was Chrome's Low-priority `<video>` defer (~15s `_blocked_queueing`), NOT moov placement. Fixed by `fetchpriority="high"` on VideoPlayer + fetch-based metadata extractor (bypasses video-element defer entirely). Desktop verified via HAR. |
-| T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | TESTING | [ ] | Verified on Chrome Android (1.7Mbps 4G): time-to-first-frame 2.0s, metadata fetch 716ms (moov at head), no 15s stall. Metadata extractor + video element run concurrently. No iOS Safari device available. |
-| T1539 | [R2 Concurrent-Write Rate Limit](tasks/T1539-r2-concurrent-write-rate-limit.md) | 7 | 2 | 3.5 | TESTING | [ ] | Per-user per-key upload lock (`threading.Lock`) inside `sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` serializes PutObject calls. Prevents export worker vs middleware sync race (the actual 429 source -- not request-to-request races, which the asyncio write lock already prevents). tryLock optimization skips redundant retry_pending_sync when upload already in progress. |
+| T1530 | [Comprehensive Profiling Strategy](tasks/T1530-comprehensive-profiling-strategy.md) | 8 | 5 | 1.6 | DONE | [ ] | Backend cProfile-on-breach + R2 call timing + frontend User Timing API for function-level attribution of slow requests. Backend landed T1531, frontend landed T1570. |
+| T1531 | [Quests Achievement 60s Stall](tasks/T1531-quests-achievement-60s-stall.md) | 9 | 3 | 3.0 | DONE | [ ] | Achievement routes skip R2 sync entirely (SKIP_SYNC_PATHS). Frontend fire-and-forget already landed. |
+| T1533 | [Overlay Working Video Slow First-Load](tasks/T1533-overlay-working-video-slow-load.md) | 7 | 3 | 2.0 | DONE | [ ] | Root cause was Chrome's Low-priority `<video>` defer (~15s `_blocked_queueing`), NOT moov placement. Fixed by `fetchpriority="high"` on VideoPlayer + fetch-based metadata extractor (bypasses video-element defer entirely). Desktop verified via HAR. |
+| T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | DONE | [ ] | Verified on Chrome Android (1.7Mbps 4G): time-to-first-frame 2.0s, metadata fetch 716ms (moov at head), no 15s stall. Metadata extractor + video element run concurrently. No iOS Safari device available. |
+| T1539 | [R2 Concurrent-Write Rate Limit](tasks/T1539-r2-concurrent-write-rate-limit.md) | 7 | 2 | 3.5 | DONE | [ ] | Per-user per-key upload lock (`threading.Lock`) inside `sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` serializes PutObject calls. Prevents export worker vs middleware sync race (the actual 429 source -- not request-to-request races, which the asyncio write lock already prevents). tryLock optimization skips redundant retry_pending_sync when upload already in progress. |
 | T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 4 | 1.0 | DONE | [ ] | T1539 shipped the R2 push lock; remaining handler-level parallelism gated on `[WRITE_LOCK_WAIT]` evidence that hasn't materialized. |
 
 ---
@@ -62,6 +67,15 @@ Goal: Eliminate orphaned accounts by removing guest accounts entirely. Users mus
 | T1290 | [Auth DB Restore Must Succeed](tasks/auth-integrity/T1290-auth-db-restore-must-succeed.md) | 9 | 4 | 2.3 | DONE | [ ] | Fail startup if auth.sqlite can't restore from R2 |
 | T1330 | [Remove Guest Accounts](tasks/auth-integrity/T1330-remove-guest-accounts.md) | 10 | 6 | 1.7 | DONE | [x] | Shipped earlier — init-guest + migration helpers removed; tests/test_auth_no_guest.py guards the removal |
 
+### For Alpha - Infrastructure
+
+Scale, reliability, and data format changes that must land before alpha users arrive.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|----|------|--------|-------|-----|--------|------|-------------|
+| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
+| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
+
 ### Epic: For Alpha (IN_PROGRESS)
 [tasks/for-alpha/EPIC.md](tasks/for-alpha/EPIC.md)
 
@@ -69,21 +83,25 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 
 | ID | Task | Status | Pri | Migr | Description |
 |----|------|--------|-----|------|-------------|
+| | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | P0 | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
+| T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | P0 | [x] | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby. (Absorbs T1073) |
+| T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | P0 | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
+| T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | P0 | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | P1 | | **No free tenants on R2 -- games metered, final/working prepaid at export** |
+| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | TODO | P1 | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
+| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | TODO | P1 | [x] | ExpirationBadge on game cards + date-slider extension modal |
+| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | P2 | [x] | "Upload Team" -- invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | [ ] | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
 | T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | DONE | 3.0 | [ ] | Users understood "Games" but not "Projects" -- rename to "Reels" (UI labels only) |
 | T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | TODO | 3.0 | [ ] | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
-| T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | TESTING | 2.3 | [ ] | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
-| T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | TESTING | 1.8 | [ ] | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
+| T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | DONE | 2.3 | [ ] | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
+| T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | DONE | 1.8 | [ ] | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
 | T1660 | [Export Failure Card State](tasks/for-alpha/T1660-export-failure-card-state.md) | TODO | 1.0 | [ ] | After export fails, project card reverts to blue "Editing" with no failure indication; add distinct failed state to progress strip |
 | T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | TODO | 1.3 | [ ] | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | DONE | 2.0 | [ ] | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | [ ] | Clickable email in admin user list -> "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
-| | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
-| T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | 2.3 | [x] | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby. (Absorbs T1073) |
-| T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | 2.0 | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
-| T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | 1.4 | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
 | T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | TODO | 1.3 | [ ] | User clicks "approve" on completed project card in gallery -> card animates out -> project archived to R2 |
 | T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | [ ] | Clickable breadcrumbs (Games/Reels -> Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
@@ -122,7 +140,6 @@ Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | DONE | [ ] | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
 | T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | ICE | [ ] | Epic on ice 2026-04-12 -- T1380 shipped the big win (TTFP seconds->359ms). Revisit only if users report seek problems. |
 | T1261 | [Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | ICE | [ ] | Parent epic on ice. |
@@ -139,7 +156,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | [ ] | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | [ ] | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | 5 | 2 | 2.3 | TODO | [ ] | Test coverage for R2 restore retry/cooldown -- NOT_FOUND vs ERROR handling, cooldown expiry |
-| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
+| T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
 
 #### Features
 
@@ -148,10 +165,6 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | [ ] | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
-| | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | | | | | **No free tenants on R2 -- games metered, final/working prepaid at export** |
-| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 8 | 6 | 1.3 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
-| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 8 | 5 | 1.6 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
-| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | 6 | 5 | 1.3 | TODO | [x] | "Upload Team" -- invite teammates by email; inviter earns credits per signup (viral loop) |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | [ ] | "Share to Social" from gallery -- one form posts to IG, TikTok, YouTube, FB via aggregator API |
 
 #### Completed
@@ -179,7 +192,6 @@ Improvements after real user traffic.
 | T40 | [1 User 2 Tabs](tasks/T40-stale-session-detection.md) | TODO | 1.3 | [ ] | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
-| T1100 | [Remove Dead Overlay Debounce](tasks/T1100-remove-dead-overlay-debounce.md) | TODO | 1.5 | [ ] | Dead `saveOverlayData` with 2s debounce in OverlayContainer; remove + audit overlay persistence |
 
 ---
 

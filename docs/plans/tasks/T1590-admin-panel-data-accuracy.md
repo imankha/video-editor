@@ -4,7 +4,7 @@
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-04-20
-**Updated:** 2026-04-20
+**Updated:** 2026-04-21
 
 ## Problem
 
@@ -65,11 +65,26 @@ Move activity counts into auth.sqlite (the one DB the admin always has). Update 
 
 ### Steps
 1. [x] Fix frontend display bug (`||` → `??`) — done 2026-04-20
-2. [ ] Add R2 DB pull to admin stats computation for profile DBs
-3. [ ] Fix `get_credit_stats_for_admin()` unnecessary filtering
-4. [ ] Verify quest progress matches user-facing quest panel
-5. [ ] Verify GPU totals match per-user drilldown
-6. [ ] Test with real staging users who have known activity
+2. [x] Fix credit stats to read from per-user `user.sqlite` instead of stale `auth.sqlite` — done 2026-04-21 (commit c723af1)
+3. [ ] Add R2 DB pull to admin stats computation for profile DBs
+4. [ ] Fix `get_credit_stats_for_admin()` unnecessary filtering
+5. [ ] Verify quest progress matches user-facing quest panel
+6. [ ] Verify GPU totals match per-user drilldown
+7. [ ] Test with real staging users who have known activity
+
+### Code-Level Findings (2026-04-21)
+
+**Affected functions in `src/backend/app/routers/admin.py`:**
+- `_compute_activity_counts()` (lines 234-281) — scans `USER_DATA_BASE / user_id / profiles / * / profile.sqlite` locally
+- `_compute_quest_progress()` (lines 181-231) — same local-only scan
+- `_compute_gpu_total()` (lines 300-321) — same local-only scan
+- None of these call any R2 sync — they rely entirely on locally cached files
+
+**Why this fails on Fly.io:** The DB sync middleware (`db_sync.py`) only pulls a user's profile DB from R2 when that user makes an authenticated request. Admin endpoints bypass this entirely, so profile DBs for most users simply don't exist on the local machine.
+
+**Credit stats partial fix:** `get_credit_stats_for_admin()` in `user_db.py` (lines 472-538) now reads from per-user `user.sqlite`, but still scans local filesystem only (no R2 pull). Works if files happen to be cached, misses users whose DBs haven't been synced recently.
+
+**Remaining work is the core of the task:** Implement Option A (pull profile DBs from R2 on demand) or Option C (aggregate stats into auth.sqlite) for the activity/quest/GPU columns.
 
 ## Acceptance Criteria
 

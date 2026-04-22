@@ -1067,6 +1067,20 @@ async def stream_working_video(project_id: int, request: Request):
             stream_headers = {"Range": upstream_range} if upstream_range else {}
             async with client.stream("GET", presigned_url, headers=stream_headers) as response:
                 if response.status_code not in (200, 206):
+                    error_body = ""
+                    try:
+                        raw = await response.aread()
+                        error_body = raw[:500].decode("utf-8", errors="replace")
+                    except Exception:
+                        error_body = "(unreadable)"
+                    logger.error(
+                        f"[working-video-stream] R2 error project_id={project_id} "
+                        f"r2_status={response.status_code} "
+                        f"r2_content_type={response.headers.get('content-type', 'unknown')} "
+                        f"filename={row['filename']} "
+                        f"range={upstream_range or 'full'} "
+                        f"body_snippet={error_body!r}"
+                    )
                     raise HTTPException(
                         status_code=response.status_code,
                         detail=f"R2 returned {response.status_code}",
