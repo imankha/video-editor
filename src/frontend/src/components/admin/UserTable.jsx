@@ -191,11 +191,9 @@ function ProfileRow({ profile, user, definitions, colCount, isOnly, onGpuClick }
  */
 export function UserTable({ users, allUsers }) {
   const definitions = useQuestStore((s) => s.definitions);
-  const { currentPage, totalPages, totalProfiles } = useAdminStore(s => ({
-    currentPage: s.currentPage,
-    totalPages: s.totalPages,
-    totalProfiles: s.totalProfiles,
-  }));
+  const currentPage = useAdminStore(s => s.currentPage);
+  const totalPages = useAdminStore(s => s.totalPages);
+  const totalProfiles = useAdminStore(s => s.totalProfiles);
   const nextPage = useAdminStore(s => s.nextPage);
   const prevPage = useAdminStore(s => s.prevPage);
 
