@@ -50,6 +50,7 @@ export function FramingContainer({
   getKeyframesForExport,
   deleteKeyframesInRange,
   cleanupTrimKeyframes,
+  setCropEndFrame,
   restoreCropState,
   updateAspectRatio,
   resetCrop,
@@ -412,6 +413,11 @@ export function FramingContainer({
       // Delete crop keyframes in trimmed range
       deleteKeyframesInRange(segment.start, segment.end, duration);
 
+      // Update controller's endFrame when trimming the end
+      if (segment.isLast && boundaryTime !== undefined) {
+        setCropEndFrame(Math.round(boundaryTime * framerate));
+      }
+
       // Reconstitute permanent keyframe at boundary
       // This ensures there's always a keyframe at the new end/start of the visible timeline
       if (cropDataToPreserve && boundaryTime !== undefined) {
@@ -513,7 +519,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for start
@@ -540,6 +546,13 @@ export function FramingContainer({
       if (cropKfAtBoundary) {
         deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
       }
+    }
+
+    // If removing start trim clears all trimming, update endFrame to full duration
+    const newTrimEnd = trimRange.end;
+    if (!newTrimEnd || newTrimEnd >= duration) {
+      const fullEndFrame = Math.round(duration * framerate);
+      setCropEndFrame(fullEndFrame);
     }
 
     // Always ensure permanent keyframe at start (frame 0)
@@ -617,7 +630,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for end
@@ -646,6 +659,9 @@ export function FramingContainer({
         deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
       }
     }
+
+    // Update controller's endFrame to full video duration (trim end is being removed)
+    setCropEndFrame(endFrame);
 
     // Always ensure permanent keyframe at end (duration)
     const dataForEnd = cropDataAtBoundary || getCropDataAtTime(duration);
@@ -725,7 +741,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Handle keyframe click (seek to keyframe time)

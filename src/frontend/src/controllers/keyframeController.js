@@ -60,6 +60,9 @@ export const ActionTypes = {
   PASTE_KEYFRAME: 'PASTE_KEYFRAME',
   CLEAR_COPIED: 'CLEAR_COPIED',
 
+  // End frame management
+  SET_END_FRAME: 'SET_END_FRAME',
+
   // End keyframe tracking
   SET_END_EXPLICIT: 'SET_END_EXPLICIT'
 };
@@ -462,6 +465,14 @@ export function keyframeReducer(state, action) {
       };
     }
 
+    case ActionTypes.SET_END_FRAME: {
+      const { endFrame } = action.payload;
+      return {
+        ...state,
+        endFrame
+      };
+    }
+
     case ActionTypes.SET_END_EXPLICIT: {
       return {
         ...state,
@@ -576,6 +587,14 @@ export const actions = {
    */
   clearCopied: () => ({
     type: ActionTypes.CLEAR_COPIED
+  }),
+
+  /**
+   * Update the endFrame (e.g., when detrim expands the range)
+   */
+  setEndFrame: (endFrame) => ({
+    type: ActionTypes.SET_END_FRAME,
+    payload: { endFrame }
   }),
 
   /**

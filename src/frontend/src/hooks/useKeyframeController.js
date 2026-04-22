@@ -136,6 +136,13 @@ export default function useKeyframeController({
     dispatch(actions.cleanupTrimKeyframes());
   }, []);
 
+  /**
+   * Update the endFrame (e.g., when detrim expands the range back to full duration)
+   */
+  const setEndFrame = useCallback((endFrame) => {
+    dispatch(actions.setEndFrame(endFrame));
+  }, []);
+
   // ============================================================================
   // COPY/PASTE OPERATIONS
   // ============================================================================
@@ -293,6 +300,7 @@ export default function useKeyframeController({
     removeKeyframe,
     deleteKeyframesInRange,
     cleanupTrimKeyframes,
+    setEndFrame,
     updateAllKeyframes,
 
     // Copy/paste
