@@ -320,17 +320,10 @@ describe('useOverlayState', () => {
   });
 
   // ============================================================================
-  // PERSISTENCE REFS
+  // SYNC STATE MACHINE
   // ============================================================================
 
-  describe('persistence refs', () => {
-    it('provides pendingOverlaySaveRef', () => {
-      const { result } = renderHook(() => useOverlayState());
-
-      expect(result.current.pendingOverlaySaveRef).toBeDefined();
-      expect(result.current.pendingOverlaySaveRef.current).toBeNull();
-    });
-
+  describe('sync state machine', () => {
     it('provides sync state machine', () => {
       const { result } = renderHook(() => useOverlayState());
 
@@ -359,11 +352,5 @@ describe('useOverlayState', () => {
       expect(result.current.overlayLoadedProjectId).toBe(123);
     });
 
-    it('pendingOverlaySaveRef is mutable', () => {
-      const { result } = renderHook(() => useOverlayState());
-
-      result.current.pendingOverlaySaveRef.current = { test: 'data' };
-      expect(result.current.pendingOverlaySaveRef.current).toEqual({ test: 'data' });
-    });
   });
 });

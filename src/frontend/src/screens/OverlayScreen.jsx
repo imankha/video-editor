@@ -91,7 +91,6 @@ export function OverlayScreen({
     setDragHighlight,
     selectedHighlightKeyframeTime,
     setSelectedHighlightKeyframeTime,
-    pendingOverlaySaveRef,
     // Sync state machine (replaces refs for reactive behavior)
     overlaySyncState,
     setOverlaySyncState,
@@ -715,7 +714,6 @@ export function OverlayScreen({
     highlightEffectType,
     setHighlightEffectType: wrappedSetHighlightEffectType,  // Use wrapped version
     highlightColor,  // Global color from store (used in preview)
-    pendingOverlaySaveRef,
     // Sync state machine (replaces overlayDataLoadedForProjectRef)
     overlaySyncState,
     overlayLoadedProjectId,
@@ -738,7 +736,6 @@ export function OverlayScreen({
     getRegionsForExport,
     restoreHighlightRegions,
     initializeHighlightRegionsFromClips,
-    onOverlayDataSaved: () => {},
   });
 
   const {

@@ -1,9 +1,7 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
-import { API_BASE } from '../config';
 import { EDITOR_MODES } from '../stores';
-import { HighlightEffect } from '../constants/highlightEffects';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -74,7 +72,6 @@ export function OverlayContainer({
   highlightEffectType,
   setHighlightEffectType,
   highlightColor,  // Global color from store (used in preview)
-  pendingOverlaySaveRef,
   // Sync state machine (replaces overlayDataLoadedForProjectRef)
   overlaySyncState,
   overlayLoadedProjectId,
@@ -100,8 +97,6 @@ export function OverlayContainer({
   restoreHighlightRegions,
   initializeHighlightRegionsFromClips,
 
-  // Callbacks
-  onOverlayDataSaved,
 }) {
 
   // DERIVED STATE: Check for framing edits
@@ -431,38 +426,6 @@ export function OverlayContainer({
     }
   }, [overlayVideoUrl, videoRef, resetHighlightRegions, setEditorMode]);
 
-  /**
-   * Save overlay data to backend (debounced)
-   */
-  const saveOverlayData = useCallback(async (data) => {
-    if (!selectedProjectId || editorMode !== 'overlay') return;
-
-    if (pendingOverlaySaveRef.current) {
-      clearTimeout(pendingOverlaySaveRef.current);
-    }
-
-    pendingOverlaySaveRef.current = setTimeout(async () => {
-      const saveProjectId = selectedProjectId;
-
-      try {
-        const formData = new FormData();
-        formData.append('highlights_data', JSON.stringify(data.highlightRegions || []));
-        formData.append('text_overlays', JSON.stringify(data.textOverlays || []));
-        formData.append('effect_type', data.effectType || HighlightEffect.DARK_OVERLAY);
-
-        await fetch(`${API_BASE}/api/export/projects/${saveProjectId}/overlay-data`, {
-          method: 'PUT',
-          body: formData
-        });
-
-        console.log('[OverlayContainer] Overlay data saved for project:', saveProjectId);
-        onOverlayDataSaved?.();
-      } catch (e) {
-        console.error('[OverlayContainer] Failed to save overlay data:', e);
-      }
-    }, 2000);
-  }, [selectedProjectId, editorMode, onOverlayDataSaved]);
-
   // NOTE: Effects for highlight region initialization and persistence are in OverlayScreen.jsx
   // OverlayContainer only provides derived state and handlers to avoid duplicate effects
 
@@ -526,10 +489,8 @@ export function OverlayContainer({
     handleProceedToOverlay,
 
     // Persistence
-    saveOverlayData,
     overlaySyncState,
     overlayLoadedProjectId,
-    pendingOverlaySaveRef,
 
     // State setters (for external use)
     setOverlayVideoFile,

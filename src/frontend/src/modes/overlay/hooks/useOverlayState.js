@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { extractVideoMetadataFromUrl } from '../../../utils/videoMetadata';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 
@@ -56,9 +56,6 @@ export default function useOverlayState() {
 
   // Track which projectId we've loaded data for (null = not loaded)
   const [overlayLoadedProjectId, setOverlayLoadedProjectId] = useState(null);
-
-  // Overlay persistence refs (only for values that don't affect rendering)
-  const pendingOverlaySaveRef = useRef(null);
 
   /**
    * Load overlay video from a URL (e.g., from framing export or working video)
@@ -125,8 +122,7 @@ export default function useOverlayState() {
     setIsLoadingWorkingVideo(false);
     setHighlightEffectType(HighlightEffect.DARK_OVERLAY);
 
-    // Reset refs and sync state
-    pendingOverlaySaveRef.current = null;
+    // Reset sync state
     setOverlaySyncState('idle');
     setOverlayLoadedProjectId(null);
   }, [overlayVideoUrl, overlayVideoFile]);
@@ -173,9 +169,6 @@ export default function useOverlayState() {
     setOverlaySyncState,
     overlayLoadedProjectId,
     setOverlayLoadedProjectId,
-
-    // Persistence refs (only for values that don't affect rendering)
-    pendingOverlaySaveRef,
 
     // Actions
     loadOverlayVideoFromUrl,
