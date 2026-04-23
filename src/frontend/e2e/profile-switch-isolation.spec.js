@@ -41,7 +41,10 @@ test.describe('Profile Switch — Game Isolation', () => {
     defaultProfileId = initData.profile_id;
     console.log(`[E2E] User: ${TEST_USER_ID}, default profile: ${defaultProfileId}`);
 
-    // 2. Add a game to the default profile
+    // 2. Add a game to the default profile.
+    // Use status='pending' with a fake blake3_hash so the endpoint accepts it
+    // without requiring a real R2 upload (this test only checks profile isolation).
+    const fakeHash = `e2e${'0'.repeat(59)}`; // 63-char fake hash
     const gameRes = await request.post(`${API_BASE}/games`, {
       headers: {
         'X-User-ID': TEST_USER_ID,
@@ -52,7 +55,8 @@ test.describe('Profile Switch — Game Isolation', () => {
         opponent_name: 'IsolationTest',
         game_date: '2026-01-15',
         game_type: 'home',
-        videos: [],
+        status: 'pending',
+        videos: [{ blake3_hash: fakeHash, sequence: 1 }],
       },
     });
     expect(gameRes.ok()).toBeTruthy();

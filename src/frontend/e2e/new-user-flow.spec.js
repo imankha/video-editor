@@ -400,8 +400,8 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await firstClip.click({ force: true });
     await page.waitForTimeout(800);
 
-    // Rate it 5 stars — find star rating UI and click the 5th star
-    const stars = page.locator('[data-testid="rating-star"], svg.lucide-star').filter({ has: page.locator('..') });
+    // Rate it 5 stars — star buttons have title="N star(s)" from StarRating component
+    const stars = page.locator('button[title*="star"]');
     const starCount = await stars.count();
     expect(starCount).toBeGreaterThanOrEqual(5);
     await stars.nth(4).click({ force: true });

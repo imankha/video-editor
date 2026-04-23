@@ -95,6 +95,11 @@ async function enterAnnotateMode(page) {
     const { useAuthStore } = await import('/src/stores/authStore.js');
     useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
   });
+
+  // Dismiss the quest panel overlay so it doesn't intercept pointer events on clip rows
+  await page.evaluate(() => {
+    document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
+  });
 }
 
 async function ensurePaused(page) {
