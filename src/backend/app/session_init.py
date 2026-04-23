@@ -119,6 +119,14 @@ def user_session_init(user_id: str) -> dict:
 
     # 8. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
+        from .services.project_archive import archive_completed_projects
+        archived_count = archive_completed_projects(user_id)
+        if archived_count > 0:
+            logger.info(f"T1640: Archived {archived_count} completed projects for user {user_id}")
+    except Exception as e:
+        logger.error(f"T1640: Failed to archive completed projects: {e}")
+
+    try:
         from .services.project_archive import cleanup_stale_restored_projects
         archived_count = cleanup_stale_restored_projects(user_id)
         if archived_count > 0:

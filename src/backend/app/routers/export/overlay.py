@@ -2123,9 +2123,6 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
         logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
 
-        # T66: Don't archive immediately — user may want to re-edit the overlay
-        # and re-export. Stale-project cleanup will archive later when appropriate.
-
         return JSONResponse({
             'success': True,
             'final_video_id': final_video_id,

@@ -590,8 +590,8 @@ function App() {
           if (projectId !== selectedProjectId) {
             selectProject(projectId);
           }
-          // Always switch to overlay mode (handles case where user is in annotate)
-          setEditorMode(EDITOR_MODES.OVERLAY);
+          // Default to framing mode when opening a completed reel
+          setEditorMode(EDITOR_MODES.FRAMING);
         }}
       />
 

@@ -341,7 +341,7 @@ export function ProjectsScreen({
         {/* Downloads Panel */}
         <DownloadsPanel
           onOpenProject={(projectId) => {
-            handleSelectProjectWithMode(projectId, { mode: 'overlay' });
+            handleSelectProjectWithMode(projectId, { mode: 'framing' });
           }}
         />
       </div>

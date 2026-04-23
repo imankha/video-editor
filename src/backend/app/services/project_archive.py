@@ -292,6 +292,59 @@ def clear_restored_flag(project_id: int) -> None:
         logger.error(f"Failed to clear restored_at flag for project {project_id}: {e}")
 
 
+def archive_completed_projects(user_id: Optional[str] = None) -> int:
+    """
+    Archive all completed projects that haven't been archived yet.
+
+    A project is "complete" when it has a final_video_id. This runs on
+    session init so that previous sessions' completed work is archived,
+    keeping the DB small for R2 sync.
+
+    Args:
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        Number of projects archived
+    """
+    if not R2_ENABLED:
+        return 0
+
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    archived_count = 0
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT id FROM projects
+                WHERE final_video_id IS NOT NULL
+                AND archived_at IS NULL
+            """)
+            completed_projects = cursor.fetchall()
+
+            if not completed_projects:
+                return 0
+
+            logger.info(f"Found {len(completed_projects)} completed projects to archive")
+
+        for row in completed_projects:
+            project_id = row['id']
+            if archive_project(project_id, user_id):
+                archived_count += 1
+                logger.info(f"Archived completed project {project_id}")
+            else:
+                logger.warning(f"Failed to archive completed project {project_id}")
+
+        return archived_count
+
+    except Exception as e:
+        logger.error(f"Failed to archive completed projects: {e}", exc_info=True)
+        return archived_count
+
+
 def cleanup_stale_restored_projects(user_id: Optional[str] = None) -> int:
     """
     Re-archive any projects that were restored but not edited within 48 hours.
