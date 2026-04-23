@@ -395,15 +395,27 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q1 Step 2: Annotate a 5 Star Play ---
     console.log('[Q1.2] Annotate a 5 Star Play');
 
-    // Click on the first clip to select it
-    const firstClip = page.locator('[title*="Great Control Pass"]').first();
-    await firstClip.click({ force: true });
+    // Dismiss the quest overlay so it doesn't intercept pointer events on clip rows.
+    // The quest panel is a fixed z-50 element that floats above the sidebar.
+    await page.evaluate(() => {
+      document.querySelectorAll('.quest-overlay').forEach(el => el.remove());
+    });
+    await page.waitForTimeout(200);
+
+    // Click the first clip row in the sidebar to select it.
+    // ClipListItem renders each clip as a <div> with cursor-pointer; the title attribute
+    // is on an inner text node, not the outer clickable div.  Use the clip list row
+    // selector that matches how clip-selection-state-machine.spec.js clicks clips.
+    const firstClipRow = page.locator('[data-sidebar="clips"] .border-b.border-gray-800').first();
+    await firstClipRow.click({ force: true });
     await page.waitForTimeout(800);
 
-    // Rate it 5 stars — wait for the ClipDetailsEditor to appear, then click the 5-star button.
-    // Each star button has an exact title like "1 star", "2 stars", ..., "5 stars".
+    // Wait for the ClipDetailsEditor to appear (it has data-clip-details on the root div).
+    await expect(page.locator('[data-clip-details]')).toBeVisible({ timeout: 10000 });
+
+    // Rate it 5 stars — each star button has an exact title like "1 star", "2 stars", ..., "5 stars".
     // Use exact match to avoid matching "Auto-created from 5-star clips" in ProjectManager.
-    const fiveStarBtn = page.locator('button[title="5 stars"]').first();
+    const fiveStarBtn = page.locator('[data-clip-details] button[title="5 stars"]').first();
     await expect(fiveStarBtn).toBeVisible({ timeout: 5000 });
     await fiveStarBtn.click({ force: true });
     await page.waitForTimeout(1000);
