@@ -151,17 +151,21 @@ async def create_payment_intent(request: CreateIntentRequest):
         customer_id = customer.id
         set_stripe_customer_id(user_id, customer_id)
 
-    intent = stripe.PaymentIntent.create(
-        amount=pack["price_cents"],
-        currency="usd",
-        customer=customer_id,
-        metadata={
-            "user_id": user_id,
-            "pack": request.pack,
-            "credits": str(pack["credits"]),
-        },
-        automatic_payment_methods={"enabled": True},
-    )
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=pack["price_cents"],
+            currency="usd",
+            customer=customer_id,
+            metadata={
+                "user_id": user_id,
+                "pack": request.pack,
+                "credits": str(pack["credits"]),
+            },
+            automatic_payment_methods={"enabled": True},
+        )
+    except stripe.StripeError as e:
+        logger.error(f"[Payments] Stripe error creating PaymentIntent for {user_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})")
 
     logger.info(f"[Payments] PaymentIntent created for {user_id}, pack={request.pack}, pi={intent.id}")
     return {"client_secret": intent.client_secret}
