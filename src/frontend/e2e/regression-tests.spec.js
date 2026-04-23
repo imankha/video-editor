@@ -1523,7 +1523,8 @@ test.describe('Full Coverage Tests @full', () => {
     ]).catch(() => false);
 
     if (framingVisible) {
-      await waitForVideoFirstFrame(page);
+      // navigateToFramingAndWaitForVideo already confirmed the video element is present
+      // (with CORS fallback if needed), so skip the redundant waitForVideoFirstFrame call
       console.log('[Full] Project created from library clips - now in Framing mode');
     } else {
       // Framing mode may not load if clips aren't extracted yet — verify project exists at minimum
