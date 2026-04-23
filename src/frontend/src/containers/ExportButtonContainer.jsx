@@ -182,6 +182,7 @@ export function ExportButtonContainer({
   const activeExports = useExportStore(state => state.activeExports);
   const completeExportInStore = useExportStore(state => state.completeExport);
   const failExportInStore = useExportStore(state => state.failExport);
+  const removeExportFromStore = useExportStore(state => state.removeExport);
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const creditBalance = useCreditStore((s) => s.balance);
 
@@ -337,6 +338,9 @@ export function ExportButtonContainer({
         // Server reported a real error — show it
         setDisconnected(false);
         setError(serverError || 'Export failed on server');
+        if (exportIdRef.current) {
+          failExportInStore(exportIdRef.current, serverError || 'Export failed on server');
+        }
         setIsExporting(false);
         handleExportEnd();
       },
@@ -394,7 +398,11 @@ export function ExportButtonContainer({
         disconnectedRef.current = false;
         setDisconnected(false);
         setReconnectionFailed(false);
-        setError(response.data.error || 'Export failed on server');
+        const errorMsg = response.data.error || 'Export failed on server';
+        setError(errorMsg);
+        if (exportId) {
+          failExportInStore(exportId, errorMsg);
+        }
         setIsExporting(false);
         handleExportEnd();
       } else {
@@ -886,7 +894,7 @@ export function ExportButtonContainer({
         // Full cleanup: disconnect WS, clear export ref, reset all state
         if (exportIdRef.current) {
           exportWebSocketManager.disconnect(exportIdRef.current);
-          failExportInStore(exportIdRef.current, 'Insufficient credits');
+          removeExportFromStore(exportIdRef.current);
           exportIdRef.current = null;
         }
         setIsExporting(false);
