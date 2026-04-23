@@ -32,7 +32,7 @@ import sqlite3
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
-from app.session_init import user_session_init
+from app.session_init import user_session_init, invalidate_user_cache
 from app.storage import (
     R2_ENABLED,
     get_r2_client,
@@ -502,6 +502,9 @@ async def logout(request: Request):
     """Invalidate current session and clear cookie."""
     session_id = request.cookies.get("rb_session")
     if session_id:
+        session = validate_session(session_id)
+        if session:
+            invalidate_user_cache(session["user_id"])
         invalidate_session(session_id)
 
     response = JSONResponse(content={"logged_out": True})

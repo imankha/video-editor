@@ -326,6 +326,7 @@ async def list_projects():
                 GROUP BY project_id
             ) clip_stats ON p.id = clip_stats.project_id
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.archived_at IS NULL
             ORDER BY p.created_at DESC
         """)
 
