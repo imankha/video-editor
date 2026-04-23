@@ -540,3 +540,40 @@ export async function warmVideoCache(url, { force = false } = {}) {
 // Kept for API compat — clearForegroundActive is a no-op since the warmer
 // is permanently disabled once FOREGROUND_ACTIVE fires.
 export function clearForegroundActive() {}
+
+/**
+ * Warm multiple video URLs with optional concurrency and force.
+ * Returns the count of successfully warmed URLs.
+ * Used by tests and callers that need to warm a batch of URLs directly.
+ *
+ * @param {string[]} urls - Array of URLs to warm
+ * @param {object} options
+ * @param {number} [options.concurrency=1] - Max concurrent warm fetches
+ * @param {boolean} [options.force=false] - Bypass the already-warmed cache check
+ * @returns {Promise<number>} Number of URLs successfully warmed
+ */
+export async function warmMultipleVideos(urls, { concurrency = 1, force = false } = {}) {
+  if (!urls || urls.length === 0) return 0;
+
+  let warmedCount = 0;
+  const queue = [...urls];
+
+  async function worker() {
+    while (queue.length > 0) {
+      const url = queue.shift();
+      if (!url) continue;
+      if (!force && warmedUrls.has(url)) {
+        warmedCount++;
+        continue;
+      }
+      // Temporarily clear warmed state if force so warmUrl doesn't skip it
+      if (force) warmedUrls.delete(url);
+      const ok = await warmUrl(url);
+      if (ok) warmedCount++;
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, urls.length) }, () => worker());
+  await Promise.all(workers);
+  return warmedCount;
+}

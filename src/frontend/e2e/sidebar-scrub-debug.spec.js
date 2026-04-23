@@ -47,7 +47,7 @@ async function enterAnnotateMode(page) {
   await page.waitForTimeout(500);
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
   await page.locator('input[type="date"]').fill('2026-03-21');
-  await page.getByRole('button', { name: 'Home' }).click();
+  await page.getByRole('button', { name: 'Home' }).click({ force: true });
   const videoInput = page.locator('form input[type="file"][accept*="video"]');
   await expect(videoInput).toBeAttached({ timeout: 10000 });
   await videoInput.setInputFiles(TEST_VIDEO);

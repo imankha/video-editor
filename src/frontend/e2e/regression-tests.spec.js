@@ -1546,24 +1546,26 @@ test.describe('Full Coverage Tests @full', () => {
     await waitForExportComplete(page); // Progress-based: fails only if no progress for 30s
 
     // Give time for database to be updated after export completes
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
 
     // Verify export succeeded - check database for has_working_video flag with retries
     // The backend sets working_video_id after saving the video file
     // Use cache: 'no-store' to bypass browser HTTP cache (FastAPI doesn't set Cache-Control)
+    // Increased retries (30 * 3s = 90s) to account for slow R2 writes in test env.
     let projectWithVideo = null;
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < 30; attempt++) {
       const projects = await page.evaluate(async () => {
-        const res = await fetch('/api/projects', { cache: 'no-store' });
+        const res = await fetch('/api/projects', { cache: 'no-store', credentials: 'include' });
+        if (!res.ok) return [];
         return res.json();
       });
-      projectWithVideo = projects.find(p => p.has_working_video);
+      projectWithVideo = Array.isArray(projects) ? projects.find(p => p.has_working_video) : null;
       if (projectWithVideo) {
         console.log(`[Full] Working video found for project ${projectWithVideo.id} (attempt ${attempt + 1})`);
         break;
       }
-      console.log(`[Full] No working video found yet (attempt ${attempt + 1}/10), waiting...`);
-      await page.waitForTimeout(2000);
+      console.log(`[Full] No working video found yet (attempt ${attempt + 1}/30), waiting...`);
+      await page.waitForTimeout(3000);
     }
 
     expect(projectWithVideo, 'Export must create a working video (has_working_video flag)').toBeTruthy();

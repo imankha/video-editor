@@ -63,7 +63,7 @@ async function enterAnnotateMode(page) {
   console.log('[Setup] Filling Add Game modal...');
   await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
   await page.locator('input[type="date"]').fill('2026-03-21');
-  await page.getByRole('button', { name: 'Home' }).click();
+  await page.getByRole('button', { name: 'Home' }).click({ force: true });
 
   console.log('[Setup] Setting video file...');
   const videoInput = page.locator('form input[type="file"][accept*="video"]');

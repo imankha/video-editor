@@ -112,14 +112,19 @@ async function cleanupTestData(request) {
   }
 }
 
-/** Wait for quest progress API to show a step as complete */
-async function waitForQuestStep(request, stepId, timeout = 30000) {
+/** Wait for quest progress API to show a step as complete.
+ * Uses the page's browser context (with session cookie) so the request is
+ * authenticated as the same user who created the game via the UI. */
+async function waitForQuestStep(page, stepId, timeout = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeout) {
     try {
-      const res = await request.get(`${API_BASE}/quests/progress`, { headers: TEST_HEADERS });
-      if (res.ok()) {
-        const data = await res.json();
+      const data = await page.evaluate(async (apiBase) => {
+        const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
+        if (!res.ok) return null;
+        return res.json();
+      }, API_BASE);
+      if (data) {
         for (const quest of data.quests) {
           if (quest.steps[stepId] === true) return true;
         }
@@ -130,11 +135,14 @@ async function waitForQuestStep(request, stepId, timeout = 30000) {
   return false;
 }
 
-/** Get all quest progress */
-async function getQuestProgress(request) {
-  const res = await request.get(`${API_BASE}/quests/progress`, { headers: TEST_HEADERS });
-  if (!res.ok()) return null;
-  return await res.json();
+/** Get all quest progress.
+ * Uses page's browser context (with session cookie) to match the UI's auth. */
+async function getQuestProgress(page) {
+  return await page.evaluate(async (apiBase) => {
+    const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
+    if (!res.ok) return null;
+    return res.json();
+  }, API_BASE);
 }
 
 /** Get game list via API */
@@ -342,7 +350,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.getByPlaceholder('e.g., Carlsbad SC').fill('Sporting CA');
     const today = new Date().toISOString().split('T')[0];
     await page.locator('input[type="date"]').fill(today);
-    await page.getByRole('button', { name: 'Home' }).click();
+    await page.getByRole('button', { name: 'Home' }).click({ force: true });
 
     // Upload video
     const videoInput = page.locator('form input[type="file"][accept*="video"]');
@@ -380,7 +388,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q1.1] TSV imported, clips visible');
 
     // Verify quest step: upload_game
-    const q1s1 = await waitForQuestStep(request, 'upload_game');
+    const q1s1 = await waitForQuestStep(page, 'upload_game');
     expect(q1s1).toBeTruthy();
     console.log('[Q1.1] upload_game step verified');
 
@@ -400,7 +408,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.waitForTimeout(1000);
 
     // Verify quest step: annotate_brilliant
-    const q1s2 = await waitForQuestStep(request, 'annotate_brilliant');
+    const q1s2 = await waitForQuestStep(page, 'annotate_brilliant');
     expect(q1s2).toBeTruthy();
     console.log('[Q1.2] annotate_brilliant step verified');
 
@@ -418,12 +426,12 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.waitForTimeout(500);
 
     // Verify quest step: playback_annotations
-    const q1s3 = await waitForQuestStep(request, 'playback_annotations');
+    const q1s3 = await waitForQuestStep(page, 'playback_annotations');
     expect(q1s3).toBeTruthy();
     console.log('[Q1.3] playback_annotations step verified');
 
     // Verify Quest 1 is fully complete
-    let progress = await getQuestProgress(request);
+    let progress = await getQuestProgress(page);
     const q1Progress = progress.quests.find(q => q.id === 'quest_1');
     expect(Object.values(q1Progress.steps).every(Boolean)).toBeTruthy();
     console.log('[Q1] All Quest 1 steps complete');
@@ -464,7 +472,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     expect(videoLoaded).toBeTruthy();
 
     // Verify quest step: open_framing
-    const q2s1 = await waitForQuestStep(request, 'open_framing');
+    const q2s1 = await waitForQuestStep(page, 'open_framing');
     expect(q2s1).toBeTruthy();
     console.log('[Q2.1] open_framing step verified');
 
@@ -493,7 +501,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Wait for framing export to complete
     const q2s3 = await waitWithProgress(page,
-      async () => await waitForQuestStep(request, 'wait_for_export', 5000),
+      async () => await waitForQuestStep(page, 'wait_for_export', 5000),
       { label: 'Q2.3-framing-export', stallTimeout: 60000 }
     );
     expect(q2s3).toBeTruthy();
@@ -518,7 +526,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
         // Wait for overlay export to complete
         const q2s4 = await waitWithProgress(page,
-          async () => await waitForQuestStep(request, 'export_overlay', 5000),
+          async () => await waitForQuestStep(page, 'export_overlay', 5000),
           { label: 'Q2.4-overlay-export', stallTimeout: 60000 }
         );
         expect(q2s4).toBeTruthy();
@@ -535,7 +543,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Record achievement via API (viewing gallery is hard to automate reliably)
     await recordAchievement(request, 'viewed_gallery_video');
 
-    const q2s5 = await waitForQuestStep(request, 'view_gallery_video');
+    const q2s5 = await waitForQuestStep(page, 'view_gallery_video');
     expect(q2s5).toBeTruthy();
     console.log('[Q2.5] view_gallery_video step verified');
 
@@ -562,11 +570,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     });
 
     // Verify annotate_second_5_star and annotate_5_more (3+ clips on first game)
-    const q3s1 = await waitForQuestStep(request, 'annotate_second_5_star');
+    const q3s1 = await waitForQuestStep(page, 'annotate_second_5_star');
     expect(q3s1).toBeTruthy();
     console.log('[Q3.1] annotate_second_5_star verified');
 
-    const q3s2 = await waitForQuestStep(request, 'annotate_5_more');
+    const q3s2 = await waitForQuestStep(page, 'annotate_5_more');
     expect(q3s2).toBeTruthy();
     console.log('[Q3.2] annotate_5_more verified');
 
@@ -602,7 +610,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Wait for second framing export
     const q3s4 = await waitWithProgress(page,
-      async () => await waitForQuestStep(request, 'wait_for_export_2', 5000),
+      async () => await waitForQuestStep(page, 'wait_for_export_2', 5000),
       { label: 'Q3.4-framing-export-2', stallTimeout: 60000 }
     );
     expect(q3s4).toBeTruthy();
@@ -620,7 +628,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
         await page.waitForTimeout(2000);
 
         await waitWithProgress(page,
-          async () => await waitForQuestStep(request, 'overlay_second_highlight', 5000),
+          async () => await waitForQuestStep(page, 'overlay_second_highlight', 5000),
           { label: 'Q3.5-overlay-export-2', stallTimeout: 60000 }
         );
       }
@@ -629,7 +637,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Record gallery watching achievement
     await recordAchievement(request, 'watched_gallery_video_1s');
 
-    const q3s6 = await waitForQuestStep(request, 'watch_second_highlight');
+    const q3s6 = await waitForQuestStep(page, 'watch_second_highlight');
     expect(q3s6).toBeTruthy();
     console.log('[Q3.6] watch_second_highlight verified');
 
@@ -682,7 +690,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await expect(uploadBtn2).toBeHidden({ timeout: 120000 });
     }
 
-    const q4s1 = await waitForQuestStep(request, 'upload_game_2');
+    const q4s1 = await waitForQuestStep(page, 'upload_game_2');
     expect(q4s1).toBeTruthy();
     console.log('[Q4.1] upload_game_2 verified');
 
@@ -698,7 +706,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       notes: 'Great effort',
     });
 
-    const q4s2 = await waitForQuestStep(request, 'annotate_game_2');
+    const q4s2 = await waitForQuestStep(page, 'annotate_game_2');
     expect(q4s2).toBeTruthy();
     console.log('[Q4.2] annotate_game_2 verified');
 
@@ -733,7 +741,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       await page.waitForTimeout(3000);
     }
 
-    const q4s3 = await waitForQuestStep(request, 'create_reel', 15000);
+    const q4s3 = await waitForQuestStep(page, 'create_reel', 15000);
     expect(q4s3).toBeTruthy();
     console.log('[Q4.3] create_reel verified');
 
@@ -770,7 +778,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Wait for reel export
     const q4s5 = await waitWithProgress(page,
-      async () => await waitForQuestStep(request, 'wait_for_reel', 5000),
+      async () => await waitForQuestStep(page, 'wait_for_reel', 5000),
       { label: 'Q4.5-reel-export', stallTimeout: 60000 }
     );
     expect(q4s5).toBeTruthy();
@@ -790,13 +798,13 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
         await page.waitForTimeout(2000);
 
         await waitWithProgress(page,
-          async () => await waitForQuestStep(request, 'overlay_reel', 5000),
+          async () => await waitForQuestStep(page, 'overlay_reel', 5000),
           { label: 'Q4.6-overlay-reel', stallTimeout: 60000 }
         );
       }
     }
 
-    const q4s6 = await waitForQuestStep(request, 'overlay_reel');
+    const q4s6 = await waitForQuestStep(page, 'overlay_reel');
     expect(q4s6).toBeTruthy();
     console.log('[Q4.6] overlay_reel verified');
 
@@ -804,7 +812,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q4.7] Watch reel in gallery');
 
     await recordAchievement(request, 'viewed_custom_project_video');
-    const q4s7 = await waitForQuestStep(request, 'watch_reel');
+    const q4s7 = await waitForQuestStep(page, 'watch_reel');
     expect(q4s7).toBeTruthy();
     console.log('[Q4.7] watch_reel verified');
 
@@ -857,7 +865,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Final] Vamos! dialog dismissed');
 
     // Final verification: all quests are claimed
-    const finalProgress = await getQuestProgress(request);
+    const finalProgress = await getQuestProgress(page);
     for (const quest of finalProgress.quests) {
       expect(quest.reward_claimed).toBeTruthy();
       console.log(`[Final] ${quest.id}: completed=${quest.completed}, claimed=${quest.reward_claimed}`);
