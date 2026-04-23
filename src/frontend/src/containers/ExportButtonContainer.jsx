@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { toast } from '../components/shared';
 import { useAppState } from '../contexts';
-import { useExportStore, useAuthStore, EDITOR_MODES } from '../stores';
+import { useExportStore, useAuthStore, useSyncStore, EDITOR_MODES } from '../stores';
 import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
@@ -184,6 +184,7 @@ export function ExportButtonContainer({
   const failExportInStore = useExportStore(state => state.failExport);
   const removeExportFromStore = useExportStore(state => state.removeExport);
   const requireAuth = useAuthStore((s) => s.requireAuth);
+  const isOffline = useSyncStore((s) => s.isOffline);
   const creditBalance = useCreditStore((s) => s.balance);
 
   // Use props if provided, otherwise fall back to context values
@@ -1059,7 +1060,7 @@ export function ExportButtonContainer({
     displayMessage,
     error,
     failedExport,
-    disconnected,
+    disconnected: disconnected || (isOffline && isExporting),
     reconnectionFailed,
     isFramingMode,
     isDarkOverlay,

@@ -1284,7 +1284,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     done: 'bg-green-500',
     exporting: 'bg-amber-500',
     export_failed: 'bg-orange-500',
-    disconnected: 'bg-red-500',
+    disconnected: 'bg-gray-400',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
     pending: 'bg-gray-600'
@@ -1546,7 +1546,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 <span>•</span>
                 <span>
                   {isExporting && isOffline ? (
-                    <span className="text-red-400">Not Connected</span>
+                    <span className="text-gray-400">Disconnected</span>
                   ) :
                   isExporting === 'overlay' ? (
                     <span className="text-amber-400">Exporting...</span>
