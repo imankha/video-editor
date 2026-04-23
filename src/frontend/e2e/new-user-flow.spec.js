@@ -400,11 +400,12 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await firstClip.click({ force: true });
     await page.waitForTimeout(800);
 
-    // Rate it 5 stars — star buttons have title="N star(s)" from StarRating component
-    const stars = page.locator('button[title*="star"]');
-    const starCount = await stars.count();
-    expect(starCount).toBeGreaterThanOrEqual(5);
-    await stars.nth(4).click({ force: true });
+    // Rate it 5 stars — wait for the ClipDetailsEditor to appear, then click the 5-star button.
+    // Each star button has an exact title like "1 star", "2 stars", ..., "5 stars".
+    // Use exact match to avoid matching "Auto-created from 5-star clips" in ProjectManager.
+    const fiveStarBtn = page.locator('button[title="5 stars"]').first();
+    await expect(fiveStarBtn).toBeVisible({ timeout: 5000 });
+    await fiveStarBtn.click({ force: true });
     await page.waitForTimeout(1000);
 
     // Verify quest step: annotate_brilliant

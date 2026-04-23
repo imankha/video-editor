@@ -117,7 +117,10 @@ test.describe('Profile Switch — Game Isolation', () => {
       }
     });
 
-    // Load app with default profile headers
+    // Verify profile isolation via API calls from the browser context.
+    // Game is created as 'pending' (no R2 upload) so it won't render in the UI,
+    // but the /api/games endpoint returns all games regardless of status.
+    // This tests that the browser correctly sends X-Profile-ID headers.
     await page.setExtraHTTPHeaders({
       'X-User-ID': TEST_USER_ID,
       'X-Profile-ID': defaultProfileId,
@@ -125,13 +128,17 @@ test.describe('Profile Switch — Game Isolation', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Should see the game from default profile
-    const gameCard = page.locator('.text-white').filter({ hasText: 'IsolationTest' }).first();
-    await expect(gameCard).toBeVisible({ timeout: 15000 });
-    console.log('[E2E] Default profile: game visible (correct)');
+    // Default profile should have the game
+    const defaultGames = await page.evaluate(async () => {
+      const res = await fetch('/api/games');
+      const data = await res.json();
+      return data.games;
+    });
+    expect(defaultGames.length).toBe(1);
+    expect(defaultGames[0].name).toContain('IsolationTest');
+    console.log('[E2E] Default profile: game found via API (correct)');
 
-    // Now switch to P2 by changing headers and reloading
-    // (simulates what happens after profile switch — frontend sends new X-Profile-ID)
+    // Switch to P2 and reload
     await page.setExtraHTTPHeaders({
       'X-User-ID': TEST_USER_ID,
       'X-Profile-ID': secondProfileId,
@@ -139,13 +146,14 @@ test.describe('Profile Switch — Game Isolation', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Should NOT see the game — it belongs to default profile
-    // Wait for the page to fully load then check
-    await page.waitForTimeout(2000);
-    const gameVisible = await page.locator('.text-white').filter({ hasText: 'IsolationTest' }).count();
-    console.log(`[E2E] P2 profile: game visible count = ${gameVisible}`);
-    expect(gameVisible).toBe(0);
-    console.log('[E2E] P2 profile: game not visible (correct)');
+    // P2 should have 0 games
+    const p2Games = await page.evaluate(async () => {
+      const res = await fetch('/api/games');
+      const data = await res.json();
+      return data.games;
+    });
+    expect(p2Games.length).toBe(0);
+    console.log('[E2E] P2 profile: 0 games via API (correct)');
 
     // Switch back to default
     await page.setExtraHTTPHeaders({
@@ -155,10 +163,14 @@ test.describe('Profile Switch — Game Isolation', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Game should be visible again
-    await expect(
-      page.locator('.text-white').filter({ hasText: 'IsolationTest' }).first()
-    ).toBeVisible({ timeout: 15000 });
-    console.log('[E2E] Default profile restored: game visible again (correct)');
+    // Game should be back
+    const restoredGames = await page.evaluate(async () => {
+      const res = await fetch('/api/games');
+      const data = await res.json();
+      return data.games;
+    });
+    expect(restoredGames.length).toBe(1);
+    expect(restoredGames[0].name).toContain('IsolationTest');
+    console.log('[E2E] Default profile restored: game found via API (correct)');
   });
 });
