@@ -59,7 +59,7 @@ from ..database import (
 from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
-from ..storage import R2_ENABLED
+from ..storage import R2_ENABLED, APP_ENV
 from ..user_context import set_current_user_id, get_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
@@ -373,7 +373,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 auth_source = "session"
 
         # 2. Fallback: X-User-ID header (backward compat for dev/tests)
-        if not user_id:
+        # SECURITY: Only enabled in dev/staging -- never in production.
+        if not user_id and APP_ENV != "production":
             raw_user_id = request.headers.get('X-User-ID')
             if raw_user_id:
                 sanitized = ''.join(c for c in raw_user_id if c.isalnum() or c in '_-')

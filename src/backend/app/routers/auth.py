@@ -301,18 +301,20 @@ async def auth_me(request: Request):
     In dev/test: also accepts X-User-ID header (same as middleware fallback).
     """
     # E2E test bypass: X-User-ID header acts as valid auth (mirrors middleware behavior)
-    x_user_id = request.headers.get("X-User-ID")
-    if x_user_id:
-        sanitized = ''.join(c for c in x_user_id if c.isalnum() or c in '_-')
-        if sanitized:
-            logger.info(f"[Auth] /me: X-User-ID header bypass user={sanitized}")
-            return {
-                "email": f"{sanitized}@test.local",
-                "user_id": sanitized,
-                "is_authenticated": True,
-                "picture_url": None,
-                "impersonator": None,
-            }
+    # SECURITY: Only enabled in dev/staging -- never in production.
+    if APP_ENV != "production":
+        x_user_id = request.headers.get("X-User-ID")
+        if x_user_id:
+            sanitized = ''.join(c for c in x_user_id if c.isalnum() or c in '_-')
+            if sanitized:
+                logger.info(f"[Auth] /me: X-User-ID header bypass user={sanitized} (env={APP_ENV})")
+                return {
+                    "email": f"{sanitized}@test.local",
+                    "user_id": sanitized,
+                    "is_authenticated": True,
+                    "picture_url": None,
+                    "impersonator": None,
+                }
 
     session_id = request.cookies.get("rb_session")
     if not session_id:
