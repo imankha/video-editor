@@ -46,6 +46,7 @@ FRONTEND_URL = _cors.split(",")[0].strip() if _cors else "http://localhost:5173"
 
 if STRIPE_SECRET_KEY:
     stripe.api_key = STRIPE_SECRET_KEY
+    logger.info(f"[Payments] Stripe configured: SK={STRIPE_SECRET_KEY[:20]}... PK={STRIPE_PUBLISHABLE_KEY[:20]}...")
 
 # ---------------------------------------------------------------------------
 # Public config endpoint (no auth required — publishable key is public)
