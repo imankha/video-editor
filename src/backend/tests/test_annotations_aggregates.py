@@ -15,6 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Generate a unique test user ID for isolation
 TEST_USER_ID = f"test_aggregates_{uuid.uuid4().hex[:8]}"
+TEST_PROFILE_ID = "testdefault"
+
+# Pre-populate _init_cache so the middleware uses "testdefault" as the profile
+# instead of running user_session_init() which would create a new profile UUID.
+from app.session_init import _init_cache
+_init_cache[TEST_USER_ID] = {"profile_id": TEST_PROFILE_ID, "is_new_user": False}
 
 
 def setup_module():
@@ -22,7 +28,7 @@ def setup_module():
     from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
     set_current_user_id(TEST_USER_ID)
-    set_current_profile_id("testdefault")
+    set_current_profile_id(TEST_PROFILE_ID)
 
 
 def teardown_module():

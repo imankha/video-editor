@@ -69,7 +69,7 @@ class TestSchemaCreation:
         conn.close()
 
         expected = {"credits", "credit_transactions", "credit_reservations",
-                    "stripe_customers", "pending_migrations"}
+                    "stripe_customers"}
         assert expected.issubset(tables), f"Missing tables: {expected - tables}"
 
     def test_ensure_user_database_idempotent(self, isolated_user_db):

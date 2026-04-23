@@ -62,7 +62,7 @@ const originalURL = global.URL;
 
 describe('uploadManager', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     global.Worker = MockWorker;
     global.URL = class extends originalURL {
       static createObjectURL = vi.fn(() => 'blob:mock-url');
@@ -235,7 +235,9 @@ describe('uploadManager', () => {
     });
 
     it('should handle dedup (video exists in R2, new game created)', async () => {
-      // T1180: create-game-with-video then prepare-upload. No separate attach.
+      // Flow: hash → createGame (status:'created') → ensureVideoInR2 → prepare-upload
+      // (status:'exists', skip upload) → activateGame → complete.
+      // Mock 1: POST /api/games → game created as pending
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -245,6 +247,7 @@ describe('uploadManager', () => {
           video_url: 'https://example.com/video.mp4',
         }),
       });
+      // Mock 2: POST /api/games/prepare-upload → video already in R2, skip upload
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -252,6 +255,11 @@ describe('uploadManager', () => {
           blake3_hash: 'a'.repeat(64),
           file_size: 1024,
         }),
+      });
+      // Mock 3: POST /api/games/456/activate → game activated
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ game_id: 456, status: 'ready' }),
       });
 
       const mockFile = new File(['test'], 'test.mp4', { type: 'video/mp4' });

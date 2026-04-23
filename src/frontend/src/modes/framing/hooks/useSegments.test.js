@@ -264,7 +264,7 @@ describe('useSegments', () => {
         expect(result.current.trimRange).toBeNull();
       });
 
-      it('clears trim history on restore', () => {
+      it('rebuilds trim history on restore from saved trimRange', () => {
         const result = setupHook();
 
         // Create some trim history
@@ -274,14 +274,19 @@ describe('useSegments', () => {
 
         expect(result.current.trimHistory.length).toBeGreaterThan(0);
 
-        // Restore should clear history
+        // Restore rebuilds history from the saved trimRange boundaries
         act(() => {
           result.current.restoreState({
             trimRange: { start: 1.0, end: 9.0 }
           }, VIDEO_DURATION);
         });
 
-        expect(result.current.trimHistory).toEqual([]);
+        // restoreState reconstructs trim history so detrim buttons work after refresh.
+        // For trimRange {start:1, end:9} with duration 10: one end-trim entry (9 < 10-0.01)
+        // and one start-trim entry (1 > 0.01).
+        expect(result.current.trimHistory).toHaveLength(2);
+        expect(result.current.trimHistory.some(h => h.type === 'end' && h.time === 9.0)).toBe(true);
+        expect(result.current.trimHistory.some(h => h.type === 'start' && h.time === 1.0)).toBe(true);
       });
     });
 

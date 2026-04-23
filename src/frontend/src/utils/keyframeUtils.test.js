@@ -126,8 +126,8 @@ describe('keyframeUtils', () => {
   });
 
   describe('FRAME_TOLERANCE', () => {
-    it('should be 5 (for ~167ms tolerance at 30fps)', () => {
-      expect(FRAME_TOLERANCE).toBe(5);
+    it('should be 10 (unified with MIN_KEYFRAME_SPACING)', () => {
+      expect(FRAME_TOLERANCE).toBe(10);
     });
   });
 

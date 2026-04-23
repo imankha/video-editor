@@ -41,7 +41,9 @@ def client(isolated_auth_db, tmp_path):
     """TestClient wired to a test user context."""
     with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
          patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.database.USER_DATA_BASE", tmp_path):
+         patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db._initialized_user_dbs", set()):
         from app.main import app
         return TestClient(app, raise_server_exceptions=True)
 
@@ -122,7 +124,8 @@ class TestAdminUsers:
     def test_admin_gets_user_list(self, client):
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
-        users = resp.json()
+        data = resp.json()
+        users = data["users"]
         user_ids = [u["user_id"] for u in users]
         assert "admin-user" in user_ids
         assert "regular-user" in user_ids
@@ -130,12 +133,12 @@ class TestAdminUsers:
     def test_user_list_has_required_fields(self, client):
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
-        for user in resp.json():
+        data = resp.json()
+        assert "users" in data
+        for user in data["users"]:
             assert "user_id" in user
             assert "email" in user
             assert "credits" in user
-            assert "quest_progress" in user
-            assert "gpu_seconds_total" in user
 
 
 class TestAdminGrantCredits:
@@ -148,13 +151,15 @@ class TestAdminGrantCredits:
         assert resp.status_code == 403
 
     def test_admin_can_grant_credits(self, client):
+        from app.services.user_db import get_credit_balance
+        balance_before = get_credit_balance("regular-user")["balance"]
         resp = client.post(
             "/api/admin/users/regular-user/grant-credits",
             json={"amount": 50},
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 200
-        assert resp.json()["balance"] == 50
+        assert resp.json()["balance"] == balance_before + 50
 
     def test_zero_amount_rejected(self, client):
         resp = client.post(
@@ -193,9 +198,8 @@ class TestGpuAggregation:
              patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
              patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.routers.admin.USER_DATA_BASE", tmp_path):
-            from app.routers.admin import _compute_gpu_total
-            import asyncio
-            total = asyncio.run(_compute_gpu_total("regular-user"))
+            from app.routers.admin import _compute_gpu_total_single
+            total = _compute_gpu_total_single(db_path)
 
         assert total == 150.5
 

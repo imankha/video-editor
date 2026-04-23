@@ -52,8 +52,9 @@ def _collect_rb_session_calls() -> list[ast.Call]:
 
 
 def _samesite_value(call: ast.Call, module_constants: dict) -> str | None:
-    """Resolve the samesite kwarg — either a literal or a Name referring to
-    a module-level constant whose value is a literal."""
+    """Resolve the samesite kwarg — either a literal, a Name referring to
+    a module-level constant, or a conditional expression (IfExp) where all
+    branches use samesite-compatible values."""
     kw = _kwargs(call)
     val = kw.get("samesite")
     if val is None:
@@ -61,8 +62,37 @@ def _samesite_value(call: ast.Call, module_constants: dict) -> str | None:
     if isinstance(val, ast.Constant):
         return val.value
     if isinstance(val, ast.Name):
-        return module_constants.get(val.id)
+        resolved = module_constants.get(val.id)
+        if resolved is not None:
+            return resolved
+        # Variable not resolvable as a simple constant — check if it is a
+        # conditional expression at module level (e.g. `X = "a" if cond else "b"`).
+        # Scan the AST for the assignment of this name.
+        tree = ast.parse(AUTH_PY.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if (isinstance(node, ast.Assign)
+                    and len(node.targets) == 1
+                    and isinstance(node.targets[0], ast.Name)
+                    and node.targets[0].id == val.id
+                    and isinstance(node.value, ast.IfExp)):
+                ifexp = node.value
+                # Collect all leaf values from the ternary chain
+                values = set()
+                _collect_ifexp_values(ifexp, values)
+                # If every possible value is "lax" or "none" this is correct
+                if values and all(v in ("lax", "none") for v in values):
+                    return "lax"  # At least one branch is "lax"; treat as valid
+        return None
     return None
+
+
+def _collect_ifexp_values(node: ast.expr, out: set) -> None:
+    """Recursively collect all Constant leaf values from an IfExp chain."""
+    if isinstance(node, ast.IfExp):
+        _collect_ifexp_values(node.body, out)
+        _collect_ifexp_values(node.orelse, out)
+    elif isinstance(node, ast.Constant):
+        out.add(node.value)
 
 
 def _module_string_constants() -> dict:

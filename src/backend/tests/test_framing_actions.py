@@ -132,38 +132,45 @@ class TestFramingActions:
             assert keyframes[0]["y"] == 100
 
     def test_delete_crop_keyframe(self, test_project_with_clip):
-        """Test deleting a crop keyframe."""
+        """Test deleting a non-boundary crop keyframe."""
         project_id, clip_id = test_project_with_clip
 
-        # Add two keyframes
+        # Add three keyframes so we can delete the middle one (frame 0 is a boundary)
         client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "add_crop_keyframe", "data": {"frame": 0, "x": 100, "y": 50, "width": 1080, "height": 1920, "origin": "user"}}
         )
         client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
+            json={"action": "add_crop_keyframe", "data": {"frame": 30, "x": 150, "y": 75, "width": 1080, "height": 1920, "origin": "user"}}
+        )
+        client.post(
+            f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "add_crop_keyframe", "data": {"frame": 60, "x": 200, "y": 100, "width": 1080, "height": 1920, "origin": "user"}}
         )
 
-        # Delete the first
+        # Delete the middle keyframe (frame 30 is not a boundary)
         response = client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={
                 "action": "delete_crop_keyframe",
-                "target": {"frame": 0}
+                "target": {"frame": 30}
             }
         )
 
         assert response.status_code == 200
         assert response.json()["success"] is True
 
-        # Verify deletion
+        # Verify deletion — frame 30 is gone, frame 0 and 60 remain
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
             keyframes = json.loads(cursor.fetchone()[0])
-            assert len(keyframes) == 1
-            assert keyframes[0]["frame"] == 60
+            assert len(keyframes) == 2
+            frames = [kf["frame"] for kf in keyframes]
+            assert 30 not in frames
+            assert 0 in frames
+            assert 60 in frames
 
     def test_move_crop_keyframe(self, test_project_with_clip):
         """Test moving a crop keyframe to a new frame."""
