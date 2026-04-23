@@ -364,10 +364,16 @@ async def claim_reward(quest_id: str):
         new_balance = grant_credits(user_id, qdef["reward"], "quest_reward", quest_id)
     except sqlite3.IntegrityError:
         # UNIQUE constraint violation — already claimed (race condition or retry)
-        # Still mark completed in user.sqlite in case backfill missed it
-        mark_quest_completed(user_id, quest_id)
-        balance = get_credit_balance(user_id)
-        return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
+        # Still mark completed in user.sqlite in case backfill missed it.
+        # Wrap in try/except: if a concurrent request holds the DB lock (race),
+        # the quest is already fully claimed — return success regardless.
+        try:
+            mark_quest_completed(user_id, quest_id)
+            balance = get_credit_balance(user_id)
+            return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
+        except sqlite3.OperationalError:
+            logger.warning(f"[Quests] DB locked during already-claimed handling for {quest_id}, returning success")
+            return {"credits_granted": 0, "new_balance": 0, "already_claimed": True}
 
     # T970: Mark quest as completed in user.sqlite (user-scoped, survives profile switch)
     mark_quest_completed(user_id, quest_id)
