@@ -190,14 +190,29 @@ async function frameAllClipsInProject(request, projectId) {
   return framed;
 }
 
-/** Record an achievement via API */
-async function recordAchievement(request, key) {
-  return await request.post(`${API_BASE}/quests/achievements/${key}`, { headers: TEST_HEADERS });
+/** Record an achievement via the page's browser context (session cookie auth). */
+async function recordAchievement(page, key) {
+  return await page.evaluate(async ({ apiBase, key }) => {
+    const res = await fetch(`${apiBase}/quests/achievements/${key}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return { ok: res.ok, status: res.status };
+  }, { apiBase: API_BASE, key });
 }
 
-/** Claim a quest reward via API */
-async function claimQuestReward(request, questId) {
-  return await request.post(`${API_BASE}/quests/${questId}/claim-reward`, { headers: TEST_HEADERS });
+/** Claim a quest reward via the page's browser context (session cookie auth). */
+async function claimQuestReward(page, questId) {
+  return await page.evaluate(async ({ apiBase, questId }) => {
+    const res = await fetch(`${apiBase}/quests/${questId}/claim-reward`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const data = res.ok ? await res.json() : null;
+    return { ok: res.ok, status: res.status, data };
+  }, { apiBase: API_BASE, questId });
 }
 
 /**
@@ -450,10 +465,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q1] All Quest 1 steps complete');
 
     // Claim Quest 1 reward via API
-    const q1claim = await claimQuestReward(request, 'quest_1');
-    expect(q1claim.ok()).toBeTruthy();
-    const q1data = await q1claim.json();
-    console.log(`[Q1] Reward claimed: ${q1data.credits_granted} credits`);
+    const q1claim = await claimQuestReward(page, 'quest_1');
+    expect(q1claim.ok).toBeTruthy();
+    console.log(`[Q1] Reward claimed: ${q1claim.data?.credits_granted} credits`);
 
     // =========================================================================
     // QUEST 2: EXPORT HIGHLIGHTS (25 credits)
@@ -553,16 +567,16 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
-    // Record achievement via API (viewing gallery is hard to automate reliably)
-    await recordAchievement(request, 'viewed_gallery_video');
+    // Record achievement via page session (viewing gallery is hard to automate reliably)
+    await recordAchievement(page, 'viewed_gallery_video');
 
     const q2s5 = await waitForQuestStep(page, 'view_gallery_video');
     expect(q2s5).toBeTruthy();
     console.log('[Q2.5] view_gallery_video step verified');
 
     // Claim Quest 2 reward via API
-    const q2claim = await claimQuestReward(request, 'quest_2');
-    expect(q2claim.ok()).toBeTruthy();
+    const q2claim = await claimQuestReward(page, 'quest_2');
+    expect(q2claim.ok).toBeTruthy();
     console.log('[Q2] Quest 2 reward claimed');
 
     // =========================================================================
@@ -648,15 +662,15 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     }
 
     // Record gallery watching achievement
-    await recordAchievement(request, 'watched_gallery_video_1s');
+    await recordAchievement(page, 'watched_gallery_video_1s');
 
     const q3s6 = await waitForQuestStep(page, 'watch_second_highlight');
     expect(q3s6).toBeTruthy();
     console.log('[Q3.6] watch_second_highlight verified');
 
     // Claim Quest 3 reward via API
-    const q3claim = await claimQuestReward(request, 'quest_3');
-    expect(q3claim.ok()).toBeTruthy();
+    const q3claim = await claimQuestReward(page, 'quest_3');
+    expect(q3claim.ok).toBeTruthy();
     console.log('[Q3] Quest 3 reward claimed');
 
     // =========================================================================
@@ -824,7 +838,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q4 Step 7: Watch Your Reel ---
     console.log('[Q4.7] Watch reel in gallery');
 
-    await recordAchievement(request, 'viewed_custom_project_video');
+    await recordAchievement(page, 'viewed_custom_project_video');
     const q4s7 = await waitForQuestStep(page, 'watch_reel');
     expect(q4s7).toBeTruthy();
     console.log('[Q4.7] watch_reel verified');
