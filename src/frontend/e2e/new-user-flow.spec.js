@@ -123,7 +123,7 @@ async function waitForQuestStep(page, stepId, timeout = 30000) {
         const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
         if (!res.ok) return null;
         return res.json();
-      }, API_BASE);
+      }, '/api');
       if (data) {
         for (const quest of data.quests) {
           if (quest.steps[stepId] === true) return true;
@@ -142,7 +142,7 @@ async function getQuestProgress(page) {
     const res = await fetch(`${apiBase}/quests/progress`, { credentials: 'include' });
     if (!res.ok) return null;
     return res.json();
-  }, API_BASE);
+  }, '/api');
 }
 
 /** Get game list via API (uses page session cookie for auth) */
@@ -152,7 +152,7 @@ async function getGames(page) {
     if (!res.ok) return [];
     const data = await res.json();
     return data.games || [];
-  }, API_BASE);
+  }, '/api');
 }
 
 /** Get projects via API (uses page session cookie for auth) */
@@ -161,7 +161,7 @@ async function getProjects(page) {
     const res = await fetch(`${apiBase}/projects`, { credentials: 'include' });
     if (!res.ok) return [];
     return res.json();
-  }, API_BASE);
+  }, '/api');
 }
 
 /** Create a raw clip via API (uses page session cookie for auth) */
@@ -174,7 +174,7 @@ async function createClipViaAPI(page, gameId, { start_time, end_time, name, rati
       body: JSON.stringify({ game_id: gameId, start_time, end_time, name, rating, tags, notes }),
     });
     return { ok: res.ok, status: res.status };
-  }, { apiBase: API_BASE, gameId, start_time, end_time, name, rating, tags, notes });
+  }, { apiBase: '/api', gameId, start_time, end_time, name, rating, tags, notes });
 }
 
 /** Frame all clips in a project via API (uses page session cookie for auth).
@@ -198,7 +198,7 @@ async function frameAllClipsInProject(page, projectId) {
       if (res.ok) framed++;
     }
     return framed;
-  }, { apiBase: API_BASE, projectId });
+  }, { apiBase: '/api', projectId });
 }
 
 /** Record an achievement via the page's browser context (session cookie auth). */
@@ -210,7 +210,7 @@ async function recordAchievement(page, key) {
       headers: { 'Content-Type': 'application/json' },
     });
     return { ok: res.ok, status: res.status };
-  }, { apiBase: API_BASE, key });
+  }, { apiBase: '/api', key });
 }
 
 /** Claim a quest reward via the page's browser context (session cookie auth). */
@@ -223,7 +223,7 @@ async function claimQuestReward(page, questId) {
     });
     const data = res.ok ? await res.json() : null;
     return { ok: res.ok, status: res.status, data };
-  }, { apiBase: API_BASE, questId });
+  }, { apiBase: '/api', questId });
 }
 
 /**

@@ -860,7 +860,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
 
       // Wait for Framing mode to load
       await expect(page.locator('button:has-text("Framing")')).toBeVisible({ timeout: 15000 });
-      await waitForVideoFirstFrame(page);
+      // Video check already handled by navigation — skip redundant waitForVideoFirstFrame
       console.log('[Test] Navigated to Framing mode for existing project');
     }
 
@@ -925,7 +925,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
 
   // Navigate to the project in Framing mode
   await navigateToFramingAndWaitForVideo(page);
-  await waitForVideoFirstFrame(page);
+  // Video check already handled by navigateToFramingAndWaitForVideo
   console.log('[Test] Project created from clips - now in Framing mode');
 
   // Return the created projects
@@ -2290,7 +2290,6 @@ test.describe('Full Coverage Tests @full', () => {
     // Navigate to the project in Framing mode
     console.log('[Full Pipeline] Navigating to framing mode...');
     await navigateToFramingAndWaitForVideo(page);
-    await waitForVideoFirstFrame(page);
 
     // Verify clips are loaded in sidebar
     const clipItems = page.locator('[data-testid="clip-item"]');
