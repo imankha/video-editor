@@ -123,9 +123,16 @@ export const useExportStore = create((set, get) => ({
         console.log(`[ExportStore] Adding new export: ${exportId} for project ${projectId}`);
       }
 
+      // Clear any failed exports for this project (user is retrying)
+      const cleaned = {};
+      for (const [id, exp] of Object.entries(state.activeExports)) {
+        if (exp.projectId === projectId && exp.status === 'error') continue;
+        cleaned[id] = exp;
+      }
+
       return {
         activeExports: {
-          ...state.activeExports,
+          ...cleaned,
           [exportId]: {
             exportId,
             projectId,

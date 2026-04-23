@@ -23,6 +23,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   displayProgress,
   displayMessage,
   error,
+  failedExport,
   disconnected,
   reconnectionFailed,
   isFramingMode,
@@ -266,6 +267,13 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {error && (
         <div className="text-red-400 text-sm bg-red-900/20 border border-red-800 rounded p-2">
           {error}
+        </div>
+      )}
+
+      {/* Persistent failed export from store (survives navigation) */}
+      {!error && failedExport && (
+        <div className="text-orange-400 text-sm bg-orange-900/20 border border-orange-800 rounded p-2">
+          Export failed: {failedExport.error || 'Unknown error'}
         </div>
       )}
 

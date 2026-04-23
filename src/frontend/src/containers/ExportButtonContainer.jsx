@@ -248,6 +248,13 @@ export function ExportButtonContainer({
     .filter(exp => exp.projectId === projectId && (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING))
     .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))[0];
 
+  // Check for a recent failed export (persistent across navigation)
+  const failedExport = !isExporting && !currentExportFromStore
+    ? Object.values(activeExports).find(
+        exp => exp.projectId === projectId && exp.status === ExportStatus.ERROR
+      ) || null
+    : null;
+
   // Combine internal, external, AND store-based exporting state
   const isCurrentlyExporting = isExporting || isExternallyExporting || !!currentExportFromStore;
 
@@ -1051,6 +1058,7 @@ export function ExportButtonContainer({
     displayProgress,
     displayMessage,
     error,
+    failedExport,
     disconnected,
     reconnectionFailed,
     isFramingMode,
