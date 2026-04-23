@@ -1207,7 +1207,7 @@ function GameCard({ game, onLoad, onDelete }) {
  * @param {Object} project - Project data
  * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
  */
-function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false }) {
+function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null }) {
   const {
     clip_count,
     clips_exported,
@@ -1232,6 +1232,9 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   } else if (isExporting === 'framing') {
     // Currently exporting - show single "Framing" segment as exporting (or disconnected)
     clipSegments.push({ status: isOffline ? 'disconnected' : 'exporting', label: 'Framing', tags: [] });
+  } else if (failedExportType === 'framing') {
+    // Framing export failed - show single "Framing" segment as failed
+    clipSegments.push({ status: 'export_failed', label: 'Framing', tags: [] });
   } else {
     // Framing not done - show per-clip editing status
     for (let i = 0; i < clip_count; i++) {
@@ -1258,6 +1261,8 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
     overlayStatus = 'done';
   } else if (isExporting === 'overlay') {
     overlayStatus = isOffline ? 'disconnected' : 'exporting';
+  } else if (failedExportType === 'overlay') {
+    overlayStatus = 'export_failed';
   } else if (has_overlay_edits) {
     overlayStatus = 'in_progress';
   } else if (has_working_video) {
@@ -1278,6 +1283,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   const statusColors = {
     done: 'bg-green-500',
     exporting: 'bg-amber-500',
+    export_failed: 'bg-orange-500',
     disconnected: 'bg-red-500',
     in_progress: 'bg-blue-500',
     ready: 'bg-blue-300',
@@ -1428,6 +1434,14 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     ? exportingProject.stage
     : storeExport?.type || null;
 
+  // Check for failed exports (only when not actively exporting)
+  const failedExport = !isExporting
+    ? Object.values(activeExports).find(
+        (exp) => exp.projectId === project.id && exp.status === 'error'
+      ) || null
+    : null;
+  const failedExportType = failedExport?.type || null;
+
   const canOpen = true;
 
   const handleDelete = (e) => {
@@ -1540,6 +1554,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                   isExporting === 'framing' ? (
                     <span className="text-amber-400">Exporting...</span>
                   ) :
+                  failedExportType ? (
+                    <span className="text-orange-400">Export Failed</span>
+                  ) :
                   project.has_working_video ? 'In Overlay' :
                   project.clips_in_progress > 0 ? (
                     <span className="text-blue-400">Editing</span>
@@ -1570,6 +1587,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         onOverlayClick={handleOverlayClick}
         isExporting={isExporting}
         isOffline={isOffline}
+        failedExportType={failedExportType}
       />
     </div>
   );

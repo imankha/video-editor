@@ -352,6 +352,18 @@ export const useExportStore = create((set, get) => ({
       .length;
   },
 
+  /**
+   * Get the most recent failed export for a project, or null.
+   * Used by ProjectCard to show "Export failed" state on cards.
+   */
+  getFailedExportForProject: (projectId) => {
+    const failed = Object.values(get().activeExports)
+      .filter((exp) => exp.projectId === projectId && exp.status === 'error');
+    if (failed.length === 0) return null;
+    // Return most recent (last added to activeExports)
+    return failed[failed.length - 1];
+  },
+
   // ===========================================
   // LEGACY ACTIONS (for backward compatibility)
   // ===========================================
