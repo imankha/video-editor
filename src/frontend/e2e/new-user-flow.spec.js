@@ -145,49 +145,60 @@ async function getQuestProgress(page) {
   }, API_BASE);
 }
 
-/** Get game list via API */
-async function getGames(request) {
-  const res = await request.get(`${API_BASE}/games`, { headers: TEST_HEADERS });
-  const data = await res.json();
-  return data.games || [];
+/** Get game list via API (uses page session cookie for auth) */
+async function getGames(page) {
+  return await page.evaluate(async (apiBase) => {
+    const res = await fetch(`${apiBase}/games`, { credentials: 'include' });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.games || [];
+  }, API_BASE);
 }
 
-/** Get projects via API */
-async function getProjects(request) {
-  const res = await request.get(`${API_BASE}/projects`, { headers: TEST_HEADERS });
-  return await res.json();
+/** Get projects via API (uses page session cookie for auth) */
+async function getProjects(page) {
+  return await page.evaluate(async (apiBase) => {
+    const res = await fetch(`${apiBase}/projects`, { credentials: 'include' });
+    if (!res.ok) return [];
+    return res.json();
+  }, API_BASE);
 }
 
-/** Create a raw clip via API */
-async function createClipViaAPI(request, gameId, { start_time, end_time, name, rating, tags = [], notes = '' }) {
-  return await request.post(`${API_BASE}/clips/raw/save`, {
-    headers: TEST_HEADERS,
-    data: { game_id: gameId, start_time, end_time, name, rating, tags, notes },
-  });
+/** Create a raw clip via API (uses page session cookie for auth) */
+async function createClipViaAPI(page, gameId, { start_time, end_time, name, rating, tags = [], notes = '' }) {
+  return await page.evaluate(async ({ apiBase, gameId, start_time, end_time, name, rating, tags, notes }) => {
+    const res = await fetch(`${apiBase}/clips/raw/save`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ game_id: gameId, start_time, end_time, name, rating, tags, notes }),
+    });
+    return { ok: res.ok, status: res.status };
+  }, { apiBase: API_BASE, gameId, start_time, end_time, name, rating, tags, notes });
 }
 
-/** Set crop data on a clip via API */
-async function frameClipViaAPI(request, projectId, clipId) {
-  return await request.post(`${API_BASE}/clips/projects/${projectId}/clips/${clipId}/actions`, {
-    headers: TEST_HEADERS,
-    data: {
-      action: 'add_crop_keyframe',
-      data: { frame: 0, x: 0.25, y: 0.1, width: 0.5, height: 0.8, origin: 'user' },
-    },
-  });
-}
-
-/** Frame all clips in a project via API */
-async function frameAllClipsInProject(request, projectId) {
-  const clipsRes = await request.get(`${API_BASE}/clips/projects/${projectId}/clips`, { headers: TEST_HEADERS });
-  if (!clipsRes.ok()) return 0;
-  const clips = await clipsRes.json();
-  let framed = 0;
-  for (const clip of clips) {
-    const res = await frameClipViaAPI(request, projectId, clip.id);
-    if (res.ok()) framed++;
-  }
-  return framed;
+/** Frame all clips in a project via API (uses page session cookie for auth).
+ * Runs entirely inside a single page.evaluate so all fetches share the session. */
+async function frameAllClipsInProject(page, projectId) {
+  return await page.evaluate(async ({ apiBase, projectId }) => {
+    const clipsRes = await fetch(`${apiBase}/clips/projects/${projectId}/clips`, { credentials: 'include' });
+    if (!clipsRes.ok) return 0;
+    const clips = await clipsRes.json();
+    let framed = 0;
+    for (const clip of clips) {
+      const res = await fetch(`${apiBase}/clips/projects/${projectId}/clips/${clip.id}/actions`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'add_crop_keyframe',
+          data: { frame: 0, x: 0.25, y: 0.1, width: 0.5, height: 0.8, origin: 'user' },
+        }),
+      });
+      if (res.ok) framed++;
+    }
+    return framed;
+  }, { apiBase: API_BASE, projectId });
 }
 
 /** Record an achievement via the page's browser context (session cookie auth). */
@@ -314,7 +325,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await cleanupTestData(request);
   });
 
-  test('Complete all 4 quests and see Vamos dialog', async ({ page, request }) => {
+  test('Complete all 4 quests and see Vamos dialog', async ({ page }) => {
     test.slow(); // This is a long workflow test
 
     await setupTestUser(page);
@@ -507,9 +518,9 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q2.2-3] Frame Video + Export');
 
     // Frame clips via API so the export button enables
-    const projects = await getProjects(request);
+    const projects = await getProjects(page);
     expect(projects.length).toBeGreaterThan(0);
-    const framed = await frameAllClipsInProject(request, projects[0].id);
+    const framed = await frameAllClipsInProject(page, projects[0].id);
     console.log(`[Q2.2] Framed ${framed} clip(s) via API`);
 
     // Reload to pick up framing data, re-enter project
@@ -586,12 +597,12 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     console.log('\n=== QUEST 3: ANNOTATE MORE CLIPS ===');
 
-    const games = await getGames(request);
+    const games = await getGames(page);
     const game1Id = games[0]?.id;
     expect(game1Id).toBeTruthy();
 
     // Create a second 5-star clip via API (need 2+ five-star clips on first game)
-    await createClipViaAPI(request, game1Id, {
+    await createClipViaAPI(page, game1Id, {
       start_time: 15, end_time: 21, name: 'Amazing Dribble', rating: 5, tags: ['Dribble'],
       notes: 'Incredible footwork',
     });
@@ -606,10 +617,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q3.2] annotate_5_more verified');
 
     // Second export: frame + export the second auto-project
-    const allProjects = await getProjects(request);
+    const allProjects = await getProjects(page);
     let secondProject = allProjects.length >= 2 ? allProjects[1] : allProjects[0];
     if (allProjects.length >= 2) {
-      const framedCount = await frameAllClipsInProject(request, secondProject.id);
+      const framedCount = await frameAllClipsInProject(page, secondProject.id);
       console.log(`[Q3.3] Framed ${framedCount} clip(s) in project ${secondProject.id}`);
     }
 
@@ -724,11 +735,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // --- Q4 Step 2: Annotate a 4+ Star Clip on Game 2 ---
     console.log('[Q4.2] Annotate 4+ star on game 2');
 
-    const gamesNow = await getGames(request);
+    const gamesNow = await getGames(page);
     const game2 = gamesNow.find(g => g.id !== game1Id);
     expect(game2).toBeTruthy();
 
-    await createClipViaAPI(request, game2.id, {
+    await createClipViaAPI(page, game2.id, {
       start_time: 1, end_time: 4, name: 'Strong Run', rating: 4, tags: ['Dribble'],
       notes: 'Great effort',
     });
@@ -776,11 +787,11 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q4.4-5] Frame and export reel');
 
     // Frame clips in the custom project via API
-    const latestProjects = await getProjects(request);
+    const latestProjects = await getProjects(page);
     const customProject = latestProjects.find(p => !p.is_auto_created);
     expect(customProject).toBeTruthy();
 
-    const reelFramed = await frameAllClipsInProject(request, customProject.id);
+    const reelFramed = await frameAllClipsInProject(page, customProject.id);
     console.log(`[Q4.4] Framed ${reelFramed} clip(s) in custom project`);
 
     // Navigate to the custom project and click Frame Video
