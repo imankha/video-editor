@@ -207,9 +207,8 @@ export function QuestPanel({ inline = false }) {
   const isSm = window.innerWidth >= 640;
   const positionStyle = getPositionForMode(editorMode, isSm, clipDetailsBottom);
 
-  // T1600: On mobile home screen, make quest panel static (below fold) instead of fixed overlay.
+  // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
   // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.
-  const isMobileHome = !isSm && inline;
 
   return (
     <>
@@ -239,7 +238,7 @@ export function QuestPanel({ inline = false }) {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay ${isMobileHome ? 'static mx-3 pt-6 pb-6 bg-gray-900' : 'fixed'} sm:fixed z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6 bg-gray-900' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
