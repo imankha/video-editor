@@ -525,6 +525,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
         togglePlay={togglePlay}
         stepForward={stepForward}
         stepBackward={stepBackward}
+        seekBackward={seekBackward}
         restart={restart}
         seek={seek}
         onTimelineSeek={handleTimelineSeek}

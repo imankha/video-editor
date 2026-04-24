@@ -37,6 +37,7 @@ export function AnnotateModeView({
   togglePlay,
   stepForward,
   stepBackward,
+  seekBackward,
   restart,
   seek,
   onTimelineSeek, // Seek + close overlay if target outside clips (timeline gesture)
@@ -399,6 +400,7 @@ export function AnnotateModeView({
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
+                onSeekBackward={seekBackward}
                 onRestart={restart}
                 playbackSpeed={annotatePlaybackSpeed}
                 onSpeedChange={onSpeedChange}
