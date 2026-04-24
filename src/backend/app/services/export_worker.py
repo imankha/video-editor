@@ -197,7 +197,7 @@ async def process_export_job(job_id: str):
         _sync_after_export(config)
 
     except Exception as e:
-        logger.error(f"[ExportWorker] Job {job_id} failed: {e}", exc_info=True)
+        logger.error(f"[ExportWorker] Job {job_id} failed ({type(e).__name__}): {e}", exc_info=True)
         update_job_error(job_id, str(e))
         await send_progress(job_id, 0, f"Export failed: {e}", "error")
 
