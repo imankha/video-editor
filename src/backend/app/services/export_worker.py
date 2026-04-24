@@ -118,24 +118,30 @@ def _sync_after_export(config: dict) -> None:
     export results (working_videos, project updates, job status) and
     credit refunds survive server restarts.
     """
-    try:
-        from ..user_context import get_current_user_id
-        from ..profile_context import get_current_profile_id
-        from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
+    from ..user_context import get_current_user_id
+    from ..profile_context import get_current_profile_id
+    from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
 
+    try:
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
+    except (RuntimeError, LookupError) as e:
+        logger.error(f"[ExportWorker] R2 sync skipped — ContextVar not set: {e}")
+        return
 
+    try:
         sync_db_to_r2_explicit(user_id, profile_id)
+    except OSError as e:
+        logger.error(f"[ExportWorker] Failed to sync profile DB to R2: {e}")
 
-        # Also sync user.sqlite if credits were involved (refund on failure)
-        credit_user_id = config.get("credit_user_id")
-        if credit_user_id:
+    credit_user_id = config.get("credit_user_id")
+    if credit_user_id:
+        try:
             sync_user_db_to_r2_explicit(credit_user_id)
+        except OSError as e:
+            logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
 
-        logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
-    except Exception as e:
-        logger.error(f"[ExportWorker] R2 sync after export failed: {e}")
+    logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
 
 
 async def process_export_job(job_id: str):
@@ -212,30 +218,6 @@ async def process_export_job(job_id: str):
 
         # T940: Sync to R2 after failure too (export_jobs status + refund)
         _sync_after_export(config)
-
-
-def _sync_after_export(user_id: str, profile_id: str, config: dict) -> None:
-    """
-    Sync databases to R2 after export job completes (T940).
-
-    Background workers run outside the request lifecycle, so the middleware
-    sync never fires. This function explicitly syncs:
-    - Profile database (always)
-    - User database (only if credit_user_id in config, meaning credits were involved)
-    """
-    from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
-
-    try:
-        sync_db_to_r2_explicit(user_id, profile_id)
-    except Exception as e:
-        logger.error(f"[ExportWorker] Failed to sync profile DB to R2: {e}")
-
-    credit_user_id = config.get("credit_user_id")
-    if credit_user_id:
-        try:
-            sync_user_db_to_r2_explicit(user_id)
-        except Exception as e:
-            logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
 
 
 async def process_framing_export(job_id: str, project_id: int, config: dict) -> tuple:
