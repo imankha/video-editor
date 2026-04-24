@@ -492,24 +492,25 @@ function App() {
     return (
       <>
         <ImpersonationBanner />
-        <ProjectsScreen
-            onStateReset={clearSelection}
-            onLoadGame={handleLoadGame}
-          />
+        {/* Shared bg-gray-900 wrapper: content + quest panel flow together, min-h-screen ensures background covers viewport */}
+        <div className="min-h-screen bg-gray-900">
+          <ProjectsScreen
+              onStateReset={clearSelection}
+              onLoadGame={handleLoadGame}
+            />
+          {/* Quest panel — static, flows after project content (T1600) */}
+          <QuestPanel inline />
+        </div>
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}
         <GlobalExportIndicator />
         {/* Upload Progress Indicator - shows upload progress on all screens */}
         <UploadProgressIndicator />
         {/* Sync Status Indicator - shows when R2 sync has failed */}
         <SyncStatusIndicator />
-        {/* GoogleOneTap + AuthGateModal are mounted once in main.jsx to avoid
-            the duplicate-mount race that caused FedCM AbortError / cancel_called. */}
         {/* T430: Account Settings panel */}
         <AccountSettings />
         {/* Toast Notifications */}
         <ToastContainer />
-        {/* Quest overlay — auto-shows for new users (T540). inline: static on mobile (below fold) */}
-        <QuestPanel inline />
         {/* Admin button — fixed top-right, visible only to admins */}
         {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
       </>

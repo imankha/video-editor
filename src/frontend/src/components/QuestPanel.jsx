@@ -238,7 +238,7 @@ export function QuestPanel({ inline = false }) {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6 bg-gray-900' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
