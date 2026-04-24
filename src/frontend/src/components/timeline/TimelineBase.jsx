@@ -277,7 +277,7 @@ export function TimelineBase({
   return (
     <div className="timeline-container py-4">
       {/* Time labels - shows visual duration (after speed/trim adjustments) */}
-      <div className="flex justify-between mb-2 text-xs text-gray-400 pl-32">
+      <div className="flex justify-between mb-2 text-xs text-gray-400 pl-20 sm:pl-32">
         <span>{formatTimeSimple(visualCurrentTime)}</span>
         <div className="flex items-center gap-2">
           {timelineZoom > 100 && (
@@ -292,14 +292,14 @@ export function TimelineBase({
       {/* Timeline with fixed labels and scrollable tracks */}
       <div className="relative">
         {/* Fixed layer labels on the left - provided by mode */}
-        <div className="absolute left-0 top-0 w-32 z-10">
+        <div className="absolute left-0 top-0 w-20 sm:w-32 z-10">
           {layerLabels}
         </div>
 
         {/* Scrollable timeline tracks container */}
         <div
           ref={scrollContainerRef}
-          className="ml-32 overflow-x-auto timeline-scroll-container"
+          className="ml-20 sm:ml-32 overflow-x-auto timeline-scroll-container"
           onScroll={handleScroll}
           style={{
             scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
@@ -454,7 +454,7 @@ function MobileScrollbar({ scrollContainerRef, timelineScale }) {
   return (
     <div
       ref={trackRef}
-      className="sm:hidden ml-32 mt-1 h-6 bg-gray-800 rounded-full relative touch-none"
+      className="sm:hidden ml-20 sm:ml-32 mt-1 h-6 bg-gray-800 rounded-full relative touch-none"
       onTouchStart={handleTouchStart}
       onClick={(e) => { handleDrag(e.clientX); }}
     >

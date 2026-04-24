@@ -271,7 +271,7 @@ export function OverlayModeView({
       <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen */}
         {effectiveOverlayVideoUrl && !isFullscreen && (
-          <div className="mb-6 flex gap-4 items-center">
+          <div className="mb-3 sm:mb-6 flex gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
               <ZoomControls
                 zoom={zoom}

@@ -508,8 +508,8 @@ function App() {
         <AccountSettings />
         {/* Toast Notifications */}
         <ToastContainer />
-        {/* Quest overlay — auto-shows for new users (T540) */}
-        <QuestPanel />
+        {/* Quest overlay — auto-shows for new users (T540). inline: static on mobile (below fold) */}
+        <QuestPanel inline />
         {/* Admin button — fixed top-right, visible only to admins */}
         {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
       </>
