@@ -37,9 +37,11 @@ Archive logic already exists in `project_archive.py:archive_project()`. Restore 
 ## Implementation
 
 ### Steps
-1. [ ] Backend: Add `archive_completed_projects()` function in `project_archive.py` that queries for projects with `final_video_id IS NOT NULL AND archived_at IS NULL`, then calls `archive_project()` on each
-2. [ ] Backend: Call `archive_completed_projects()` in `session_init.py` step 8 (cleanup tasks), after the existing stale restore cleanup
-3. [ ] Backend: Remove the comment in `overlay.py:2126-2127` about not archiving immediately -- the session-based approach replaces that design decision
+1. [x] Backend: Add `archive_completed_projects()` function in `project_archive.py` that queries for projects with `final_video_id IS NOT NULL AND archived_at IS NULL`, then calls `archive_project()` on each
+2. [x] Backend: Call `archive_completed_projects()` in `session_init.py` step 8 (cleanup tasks), after the existing stale restore cleanup
+3. [x] Backend: Remove the comment in `overlay.py:2126-2127` about not archiving immediately -- the session-based approach replaces that design decision
+4. [x] Backend: Clear `_init_cache` on logout so re-login runs full session_init (auth.py)
+5. [x] Backend: Filter `archived_at IS NOT NULL` from `GET /projects` list endpoint
 
 ### Bundled: Default to Framing when opening completed reels
 
@@ -52,8 +54,9 @@ Change both to use `EDITOR_MODES.FRAMING` / `{ mode: 'framing' }`.
 
 ## Acceptance Criteria
 
-- [ ] On login, all projects with a final export are archived to R2
-- [ ] Projects without a final export are never archived
-- [ ] During the current session, completed projects remain live (not archived)
-- [ ] Archived projects auto-restore transparently when opened from gallery
-- [ ] Opening a completed reel from the gallery defaults to Framing mode (not Overlay)
+- [x] On login, all projects with a final export are archived to R2
+- [x] Projects without a final export are never archived
+- [x] During the current session, completed projects remain live (not archived)
+- [x] Archived projects auto-restore transparently when opened from gallery
+- [x] Opening a completed reel from the gallery defaults to Framing mode (not Overlay)
+- [x] Archived projects hidden from reels list (still visible in downloads)

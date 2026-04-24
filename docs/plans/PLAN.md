@@ -18,6 +18,8 @@
 | | **[Post-Export Video Loading](tasks/post-export-video-loading/EPIC.md)** | | | | | | **Fix "video not loading" after framing export: broken proxy 206 + frontend race condition** |
 | T1690 | ↳ [Video Stream Proxy Error Masking](tasks/post-export-video-loading/T1690-video-stream-proxy-error-masking.md) | 7 | 4 | P1 | TESTING | [ ] | Stream proxies commit to 206+video/mp4 headers before R2 responds. R2 failures produce broken streams browser reports as "format not supported". Diagnostic logging added, needs deploy. |
 | T1670 | ↳ [Overlay Stuck Loading After Export](tasks/post-export-video-loading/T1670-overlay-stuck-loading-after-framing-export.md) | 8 | 5 | P1 | TESTING | [ ] | After framing export, overlay shows "Loading working video..." forever. Race between onProceedToOverlay and onExportComplete; retry path skips overlay transition; effect has dead zone with stable proxy URL. |
+| T1710 | [Export R2 Sync Never Fires](tasks/T1710-export-r2-sync-never-fires.md) | 10 | 2 | P0 | TODO | [ ] | Duplicate `_sync_after_export` definition shadows working version; every export silently fails R2 sync. Framing data lost on machine restart. |
+| T1720 | [Gallery Badge Count Clobbered](tasks/T1720-gallery-badge-count-clobbered.md) | 4 | 2 | P2 | TODO | [ ] | DownloadsPanel useEffect overwrites gallery store count with empty `downloads.length` on mount, clobbering fetchCount result. Badge shows 0 until panel opened. |
 
 ### Milestone: Performance (NEXT UP)
 
@@ -99,7 +101,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | DONE | 2.3 | [ ] | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
 | T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | DONE | 1.8 | [ ] | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
 | T1660 | [Export Failure Card State](tasks/for-alpha/T1660-export-failure-card-state.md) | TESTING | 1.0 | [ ] | After export fails, project card reverts to blue "Editing" with no failure indication; add distinct failed state to progress strip |
-| T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | TODO | 1.3 | [ ] | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
+| T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | TESTING | 1.3 | [ ] | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
 | T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | DONE | 2.0 | [ ] | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
 | T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | [ ] | Clickable email in admin user list -> "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
 | T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | TESTING | 1.3 | [ ] | Auto-archive completed projects on login; default to Framing when opening completed reels |
