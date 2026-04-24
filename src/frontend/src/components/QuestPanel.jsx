@@ -46,7 +46,7 @@ function getPositionForMode(editorMode, isSm, clipDetailsBottom) {
  * No header button needed — this component handles its own visibility,
  * fetching, and event subscriptions.
  */
-export function QuestPanel() {
+export function QuestPanel({ inline = false }) {
   const definitions = useQuestStore((s) => s.definitions);
   const quests = useQuestStore((s) => s.quests);
   const loaded = useQuestStore((s) => s.loaded);
@@ -207,25 +207,28 @@ export function QuestPanel() {
   const isSm = window.innerWidth >= 640;
   const positionStyle = getPositionForMode(editorMode, isSm, clipDetailsBottom);
 
+  // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
+  // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.
+
   return (
     <>
     {/* Quest 3 completion modal — rendered outside quest panel to ensure centering */}
     {showCompletionModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
-        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-12 max-w-2xl mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-          <div className="text-center mb-10">
-            <div className="text-6xl mb-5">🎉</div>
-            <h2 className="text-4xl font-bold text-white mb-3">Congratulations!</h2>
-            <p className="text-green-400 font-semibold text-2xl">+{questDef.reward} credits earned</p>
+        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-6 sm:p-12 max-w-2xl mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="text-center mb-6 sm:mb-10">
+            <div className="text-4xl sm:text-6xl mb-3 sm:mb-5">🎉</div>
+            <h2 className="text-2xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">Congratulations!</h2>
+            <p className="text-green-400 font-semibold text-xl sm:text-2xl">+{questDef.reward} credits earned</p>
           </div>
-          <div className="space-y-5 text-gray-300 text-xl leading-relaxed">
+          <div className="space-y-3 sm:space-y-5 text-gray-300 text-base sm:text-xl leading-relaxed">
             <p>Annotate every touch so your baller can take their game to the next level.</p>
             <p>Extract highlights anytime to post to Insta or send to college coaches.</p>
             <p className="text-white font-medium">Use your credits to create more AI-upscaled highlights!</p>
           </div>
           <button
             onClick={() => setShowCompletionModal(false)}
-            className="mt-10 w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-xl rounded-xl transition-colors"
+            className="mt-6 sm:mt-10 w-full py-3 sm:py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-lg sm:text-xl rounded-xl transition-colors"
           >
             Vamos!
           </button>
@@ -235,7 +238,7 @@ export function QuestPanel() {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay fixed z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>

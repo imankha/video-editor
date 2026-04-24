@@ -308,7 +308,7 @@ export function ProjectsScreen({
 
   return (
     <AppStateProvider value={appStateValue}>
-      <div className="min-h-screen bg-gray-900">
+      <div className="bg-gray-900">
         <ProjectManager
           projects={projects}
           loading={projectsLoading || loadingProjectId !== null}

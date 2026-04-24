@@ -819,7 +819,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
           />
 
           {/* Modal */}
-          <div className="fixed inset-8 md:inset-16 lg:inset-24 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700">
+          <div className="fixed inset-2 sm:inset-8 md:inset-16 lg:inset-24 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-gray-700">
             {/* Header */}
             <div className="flex items-center justify-between p-3 border-b border-gray-700 bg-gray-800">
               <div className="flex items-center gap-3">
