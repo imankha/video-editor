@@ -537,7 +537,7 @@ function App() {
       {/* Main Content - For framing/overlay modes */}
       {editorMode !== EDITOR_MODES.ANNOTATE && (
       <div className="flex-1 overflow-auto">
-        <div className="container mx-auto px-3 py-4 sm:px-4 sm:py-8">
+        <div className="container mx-auto px-3 pt-4 pb-48 sm:px-4 sm:pt-8 sm:pb-8">
           {/* T1550: Unified header */}
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
