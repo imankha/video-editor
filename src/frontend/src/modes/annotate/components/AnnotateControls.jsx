@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { formatTime } from '../../../utils/timeFormat';
 
@@ -75,6 +75,7 @@ export function AnnotateControls({
   onTogglePlay,
   onStepForward,
   onStepBackward,
+  onSeekBackward,
   onRestart,
   playbackSpeed = 1,
   onSpeedChange,
@@ -110,6 +111,16 @@ export function AnnotateControls({
     }`}>
       {/* Playback controls */}
       <div className="flex items-center gap-1">
+        {/* Back 5 seconds */}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={Rewind}
+          iconOnly
+          onClick={() => onSeekBackward?.(5)}
+          title="Back 5 seconds"
+        />
+
         {/* Step backward */}
         <Button
           variant="ghost"
