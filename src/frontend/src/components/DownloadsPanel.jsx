@@ -57,10 +57,10 @@ export function DownloadsPanel({
 
   // Sync download count to gallery store
   useEffect(() => {
-    if (downloads) {
+    if (loadState === 'ready') {
       setCount(downloads.length);
     }
-  }, [downloads, setCount]);
+  }, [downloads, loadState, setCount]);
 
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);

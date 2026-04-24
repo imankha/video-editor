@@ -48,6 +48,38 @@ keyframe = {
 - WebSocket connections are managed via service classes (e.g., `ExportWebSocketManager`)
 - Polling should only be used as a fallback when WebSockets aren't feasible
 
+## Testing Auth Bypass (Dev/Staging Only)
+
+When testing UI changes in the browser via Playwright MCP, bypass auth using the e2e test pattern:
+
+```javascript
+// 1. Set headers so backend accepts requests without a session cookie
+await page.setExtraHTTPHeaders({
+  'X-User-ID': 'manual-test-user',
+  'X-Test-Mode': 'true',
+});
+
+// 2. Hit the test-login endpoint to get a session cookie
+await page.evaluate(async () => {
+  await fetch('/api/auth/test-login', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-Test-Mode': 'true' },
+  });
+});
+
+// 3. Bypass the frontend auth gate
+await page.evaluate(async () => {
+  const { useAuthStore } = await import('/src/stores/authStore.js');
+  useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
+});
+
+// 4. Reload to pick up authenticated state
+await page.reload();
+```
+
+See `e2e/new-user-flow.spec.js` for the full pattern. The test-login endpoint creates an `e2e@test.local` user and is blocked in production.
+
 ## Don't
 - Don't add console.logs in committed code
 - Don't fetch data in View components
