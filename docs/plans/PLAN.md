@@ -20,6 +20,9 @@
 | T1670 | ↳ [Overlay Stuck Loading After Export](tasks/post-export-video-loading/T1670-overlay-stuck-loading-after-framing-export.md) | 8 | 5 | P1 | TESTING | [ ] | After framing export, overlay shows "Loading working video..." forever. Race between onProceedToOverlay and onExportComplete; retry path skips overlay transition; effect has dead zone with stable proxy URL. |
 | T1710 | [Export R2 Sync Never Fires](tasks/T1710-export-r2-sync-never-fires.md) | 10 | 2 | P0 | TESTING | [ ] | Duplicate `_sync_after_export` definition shadows working version; every export silently fails R2 sync. Framing data lost on machine restart. |
 | T1720 | [Gallery Badge Count Clobbered](tasks/T1720-gallery-badge-count-clobbered.md) | 4 | 2 | P2 | TESTING | [ ] | DownloadsPanel useEffect overwrites gallery store count with empty `downloads.length` on mount, clobbering fetchCount result. Badge shows 0 until panel opened. |
+| T1870 | [Video Stream Cache-Control](tasks/T1870-video-stream-cache-control.md) | 6 | 2 | P1 | TODO | [ ] | Stream proxy responses missing `Cache-Control: no-store` — browser caches error responses (502/timeout), "Retry" button fails, user must hard-refresh |
+| T1880 | [Video Load Error Diagnostics](tasks/T1880-video-load-error-diagnostics.md) | 5 | 3 | P2 | TODO | [ ] | "Video format not supported" error logs raw code but not HTTP status/content-type/body — can't distinguish server error page from actual codec issue |
+| T1890 | [Multi-Clip Cache Warming](tasks/T1890-multiclip-cache-warming.md) | 7 | 4 | P1 | TODO | [ ] | FOREGROUND_ACTIVE latch kills warming worker before clips 2-5 are warmed; switching clips in multi-clip project causes 10-48s cold loads |
 
 ### Milestone: Performance (NEXT UP)
 
@@ -94,7 +97,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | P1 | | **No free tenants on R2 -- games metered, final/working prepaid at export** |
 | T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | TODO | P1 | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | TODO | P1 | [x] | ExpirationBadge on game cards + date-slider extension modal |
-| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | TODO | P2 | [x] | "Upload Team" -- invite teammates by email; inviter earns credits per signup (viral loop) |
+| T1050 | [Team Invitations](tasks/for-launch/T1050-team-invitations.md) | ABSORBED | P2 | [x] | Absorbed by T1850 (Share Game with Team) in Player Tagging epic |
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | [ ] | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
@@ -157,7 +160,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1221 | [Dead Modal Code Removal](tasks/for-launch/T1221-dead-modal-code-removal.md) | 3 | 2 | 1.5 | DONE | [ ] | Delete extract_clip_modal, process_multi_clip_modal, create_annotated_compilation -- no callers (follow-up from T1220 audit) |
 | T1222 | [game_videos JOIN Audit](tasks/for-launch/T1222-game-videos-join-audit.md) | 5 | 3 | 1.7 | DONE | [ ] | Multi-video games have NULL games.blake3_hash; audit storage.py/games_upload.py/other exporters to JOIN game_videos instead |
 | | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | | | | | | **Non-blocking I/O + unify single/multi-clip export paths** |
-| T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | TESTING | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
+| T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | DONE | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
 | T1115 | ↳ [Unify Single/Multi-Clip Export](tasks/export-pipeline/T1115-unify-single-multi-clip.md) | 4 | 6 | 1.0 | TODO | [ ] | Single-clip framing = N=1 multi-clip; collapse render_project into thin adapter over shared pipeline |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | [ ] | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | [ ] | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |
@@ -173,6 +176,21 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | [ ] | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
+| | **[Sharing & Collaboration](tasks/sharing/EPIC.md)** | | | | | | **Gallery video sharing, player tagging, team game sharing, cross-user clip delivery** |
+| | ↳ *Phase 1: Gallery Video Sharing* | | | | | | |
+| T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 7 | 4 | 1.8 | TODO | [ ] | Shared UI: email input, autocomplete from prior shares, account lookup (green/yellow) |
+| T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 7 | 4 | 1.8 | TODO | [x] | shared_videos table, CRUD storage ops, share/revoke/list endpoints with access control |
+| T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 6 | 3 | 2.0 | TODO | [ ] | Resend integration for share emails (reused by Phase 2); fire-and-forget |
+| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 7 | 3 | 2.3 | TODO | [ ] | Share button on gallery cards, multi-email modal using UserPicker |
+| T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TODO | [ ] | /shared/:shareToken route, auth gate with email pre-fill, gated video player |
+| T1790 | ↳ [Watch Tracking & Share Status](tasks/sharing/T1790-watch-tracking-share-status.md) | 6 | 3 | 2.0 | TODO | [ ] | Watched event on play, share status panel on gallery cards per recipient |
+| | ↳ *Phase 2: Player Tagging & Team Sharing* | | | | | | |
+| T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | 7 | 3 | 2.3 | TODO | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
+| T1820 | ↳ [Annotation Player Tagging UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | "Players" section in add clip dialog; auto-tag for 4+ star; UserPicker for teammates |
+| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | 8 | 5 | 1.6 | TODO | [x] | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |
+| T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | 9 | 5 | 1.8 | TODO | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
+| T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | 8 | 4 | 2.0 | TODO | [ ] | "Share with Team" on game cards, game materialization on claim. Absorbs T1050. |
+| T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | 7 | 3 | 2.3 | TODO | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | [ ] | "Share to Social" from gallery -- one form posts to IG, TikTok, YouTube, FB via aggregator API |
 
 #### Completed
