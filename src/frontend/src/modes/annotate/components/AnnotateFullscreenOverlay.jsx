@@ -12,7 +12,8 @@ const RATING_NOTATION = {
   5: '!!'
 };
 
-const DEFAULT_CLIP_HALF_DURATION = 15; // seconds on each side of playhead
+const DEFAULT_CLIP_BEFORE = 15; // seconds before playhead
+const DEFAULT_CLIP_AFTER = 5;   // seconds after playhead
 const DEFAULT_RATING = 4; // "Good"
 
 /**
@@ -127,10 +128,10 @@ export function AnnotateFullscreenOverlay({
   }, [isVisible]); // only on visibility change, not on currentTime updates
 
   const [scrubStartTime, setScrubStartTime] = useState(
-    Math.max(0, currentTime - DEFAULT_CLIP_HALF_DURATION)
+    Math.max(0, currentTime - DEFAULT_CLIP_BEFORE)
   );
   const [scrubEndTime, setScrubEndTime] = useState(
-    Math.min(currentTime + DEFAULT_CLIP_HALF_DURATION, videoDuration || Infinity)
+    Math.min(currentTime + DEFAULT_CLIP_AFTER, videoDuration || Infinity)
   );
   const [notes, setNotes] = useState('');
   const notesRef = useRef(null);
@@ -151,8 +152,8 @@ export function AnnotateFullscreenOverlay({
       setSelectedTags([]);
       setClipName('');
       setIsNameManuallyEdited(false);
-      setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_HALF_DURATION));
-      setScrubEndTime(Math.min(t + DEFAULT_CLIP_HALF_DURATION, videoDuration || Infinity));
+      setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_BEFORE));
+      setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
       setNotes('');
     }
   }, [existingClip]);

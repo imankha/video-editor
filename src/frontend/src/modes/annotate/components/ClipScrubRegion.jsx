@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
 
-const WINDOW_BEFORE = 25; // seconds before anchor
-const WINDOW_AFTER = 25;  // seconds after anchor
+const WINDOW_BEFORE = 30; // seconds before anchor
+const WINDOW_AFTER = 30;  // seconds after anchor
 const MIN_REGION_DURATION = 0.5; // minimum clip duration in seconds
 
 /**
