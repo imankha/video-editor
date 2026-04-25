@@ -111,8 +111,9 @@ let currentPriority = WARMUP_PRIORITY.GAMES;
 let workersRunning = false;
 let warmupInProgress = false;
 
-// One-way latch: once any foreground <video> load fires we permanently stop
-// the warmer. The foreground player owns bandwidth from that point on.
+// Pauses lower-tier warming (games, gallery) while foreground video is loading.
+// Tier-1 clip ranges are exempt — they're small and needed for clip switching.
+// Cleared by clearForegroundActive() when the foreground video becomes playable.
 let warmerDisabled = false;
 
 // AbortControllers for in-flight warm fetches. FOREGROUND_ACTIVE and
@@ -141,7 +142,8 @@ export function getWarmingDiag() {
 
 /**
  * Set the warmup priority. Call this when user navigates.
- * FOREGROUND_ACTIVE permanently kills the warmer and aborts in-flight fetches.
+ * FOREGROUND_ACTIVE pauses lower-tier warming and aborts in-flight fetches.
+ * Tier-1 clip ranges continue processing. Cleared by clearForegroundActive().
  */
 export function setWarmupPriority(priority) {
   if (priority === currentPriority) return { abortedCount: 0 };
@@ -188,14 +190,14 @@ if (typeof document !== 'undefined') {
  * Returns null if queues are empty, warmer is disabled, or tab is hidden.
  */
 function getNextItem() {
-  if (warmerDisabled) return null;
-
   // Don't start new fetches while tab is hidden — they'll just stall.
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
     return null;
   }
 
-  // Tier 1: project clips (highest priority)
+  // Tier 1: project clips always process, even during FOREGROUND_ACTIVE.
+  // These are small byte-range requests for the current project's clips
+  // and don't meaningfully compete with foreground video playback.
   while (tier1Queue.length > 0) {
     const item = tier1Queue.shift();
     const cacheKey = item.type === 'clipRange'
@@ -205,6 +207,9 @@ function getNextItem() {
       return { ...item, _cacheKey: cacheKey };
     }
   }
+
+  // Lower tiers are paused when foreground video is loading
+  if (warmerDisabled) return null;
 
   // Tier 2/3: games and gallery by user navigation priority
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;
@@ -304,7 +309,7 @@ async function warmUrl(url, options = {}) {
  * Primes the Cloudflare edge cache for the clip's region of the game video.
  */
 async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, clipId = null) {
-  if (!url || !videoDuration || !videoSize || warmerDisabled) return false;
+  if (!url || !videoDuration || !videoSize) return false;
   const startMs = performance.now();
 
   const startByte = Math.floor((startTime / videoDuration) * videoSize);
@@ -527,9 +532,7 @@ export function pushClipRanges(clipRanges) {
   }
 }
 
-// Legacy export — used by FramingScreen. These calls are effectively no-ops
-// after FOREGROUND_ACTIVE fires (which happens before FramingScreen mounts),
-// but kept to avoid a multi-file change.
+// Legacy export — used by FramingScreen for direct warming outside the queue.
 export async function warmVideoCache(url, { force = false } = {}) {
   if (force || !warmedUrls.has(url)) {
     return warmUrl(url);
@@ -537,9 +540,16 @@ export async function warmVideoCache(url, { force = false } = {}) {
   return true;
 }
 
-// Kept for API compat — clearForegroundActive is a no-op since the warmer
-// is permanently disabled once FOREGROUND_ACTIVE fires.
-export function clearForegroundActive() {}
+export function clearForegroundActive() {
+  if (!warmerDisabled) return;
+  warmerDisabled = false;
+  currentPriority = WARMUP_PRIORITY.GAMES;
+  const remaining = tier1Queue.length + gamesQueue.length + galleryQueue.length + workingQueue.length;
+  if (remaining > 0) {
+    console.log(`[CacheWarming] Foreground clear — resuming worker for ${remaining} queued items`);
+    runWorkers();
+  }
+}
 
 /**
  * Warm multiple video URLs with optional concurrency and force.

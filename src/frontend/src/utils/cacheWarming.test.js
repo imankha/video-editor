@@ -78,9 +78,7 @@ describe('cacheWarming — T1410 foreground abort', () => {
     expect(result).toBe(false);
   });
 
-  it('FOREGROUND_ACTIVE permanently disables the warmer for the rest of the session', async () => {
-    // Prime queues via pushClipRanges (public API that touches tier1Queue).
-    // Enter FOREGROUND_ACTIVE first so the worker loop no-ops on getNextItem.
+  it('FOREGROUND_ACTIVE pauses lower tiers but tier-1 clip ranges still process', async () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
 
     cacheWarming.pushClipRanges([
@@ -91,38 +89,45 @@ describe('cacheWarming — T1410 foreground abort', () => {
       },
     ]);
 
-    // Let any scheduled microtasks run.
+    // Let microtasks run so the worker loop processes the tier-1 clip range.
     await Promise.resolve();
     await Promise.resolve();
 
-    // No fetch should have been issued — worker loop sees FOREGROUND_ACTIVE.
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    // Clearing is now a no-op — the warmer stays disabled.
-    cacheWarming.clearForegroundActive();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    // Still no fetches: the warmer does not resume after a foreground load.
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    // Even direct warm calls are gated.
-    const result = await cacheWarming.warmVideoCache('https://example.com/post-foreground.mp4');
-    expect(result).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Tier-1 clip ranges are exempt from FOREGROUND_ACTIVE — fetch should fire.
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
   });
 
-  it('StrictMode double-invoke: two FOREGROUND_ACTIVE entries leave the warmer disabled', async () => {
-    // Two overlapping foreground loads (React 18 StrictMode) both trip the
-    // permanent disable latch. clearForegroundActive is a no-op afterwards.
+  it('clearForegroundActive resumes the warmer', async () => {
+    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+
+    // Direct warm calls are gated during FOREGROUND_ACTIVE.
+    const result1 = await cacheWarming.warmVideoCache('https://example.com/gated.mp4');
+    expect(result1).toBe(false);
+
+    // Clear the latch — warmer should resume.
+    cacheWarming.clearForegroundActive();
+
+    // Now direct warm calls work again.
+    const warmPromise = cacheWarming.warmVideoCache('https://example.com/resumed.mp4');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetchMock.mock.calls.some(c => c[0] === 'https://example.com/resumed.mp4')).toBe(true);
+  });
+
+  it('StrictMode double-invoke: two FOREGROUND_ACTIVE entries, single clear resumes', async () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.GAMES);
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
-    cacheWarming.clearForegroundActive();
 
-    // Direct warm calls should also no-op now.
-    const result = await cacheWarming.warmVideoCache('https://example.com/survivor.mp4');
-    expect(result).toBe(false);
-    expect(fetchMock).not.toHaveBeenCalled();
+    // Still disabled before clear.
+    const result1 = await cacheWarming.warmVideoCache('https://example.com/before-clear.mp4');
+    expect(result1).toBe(false);
+
+    // Single clear is sufficient.
+    cacheWarming.clearForegroundActive();
+    const warmPromise = cacheWarming.warmVideoCache('https://example.com/after-clear.mp4');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetchMock.mock.calls.some(c => c[0] === 'https://example.com/after-clear.mp4')).toBe(true);
   });
 });

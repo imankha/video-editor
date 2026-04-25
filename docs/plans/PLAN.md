@@ -22,7 +22,7 @@
 | T1720 | [Gallery Badge Count Clobbered](tasks/T1720-gallery-badge-count-clobbered.md) | 4 | 2 | P2 | TESTING | [ ] | DownloadsPanel useEffect overwrites gallery store count with empty `downloads.length` on mount, clobbering fetchCount result. Badge shows 0 until panel opened. |
 | T1870 | [Video Stream Cache-Control](tasks/T1870-video-stream-cache-control.md) | 6 | 2 | P1 | TESTING | [ ] | Stream proxy responses missing `Cache-Control: no-store` — browser caches error responses (502/timeout), "Retry" button fails, user must hard-refresh |
 | T1880 | [Video Load Error Diagnostics](tasks/T1880-video-load-error-diagnostics.md) | 5 | 3 | P2 | TESTING | [ ] | "Video format not supported" error logs raw code but not HTTP status/content-type/body — can't distinguish server error page from actual codec issue |
-| T1890 | [Multi-Clip Cache Warming](tasks/T1890-multiclip-cache-warming.md) | 7 | 4 | P1 | TODO | [ ] | FOREGROUND_ACTIVE latch kills warming worker before clips 2-5 are warmed; switching clips in multi-clip project causes 10-48s cold loads |
+| T1890 | [Multi-Clip Cache Warming](tasks/T1890-multiclip-cache-warming.md) | 7 | 4 | P1 | TESTING | [ ] | FOREGROUND_ACTIVE latch kills warming worker before clips 2-5 are warmed; switching clips in multi-clip project causes 10-48s cold loads |
 
 ### Milestone: Performance (NEXT UP)
 
