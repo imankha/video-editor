@@ -22,6 +22,7 @@ import asyncio
 import logging
 import ffmpeg
 import shutil
+import time as time_module
 import hashlib
 import base64
 import math
@@ -1369,7 +1370,9 @@ async def export_multi_clip(
                                 .overwrite_output()
                                 .run(quiet=True)
                             )
+                        _t0 = time_module.monotonic()
                         await asyncio.to_thread(_extract_clip)
+                        logger.info(f"[T1110] ffmpeg extract clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                     except ffmpeg.Error as e:
                         raise HTTPException(status_code=500, detail=f"Failed to extract clip {i} range: {e}")
 
@@ -1393,8 +1396,10 @@ async def export_multi_clip(
                     r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
+                    _t0 = time_module.monotonic()
                     if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
                         raise HTTPException(status_code=500, detail=f"Failed to download uploaded clip {i}")
+                    logger.info(f"[T1110] download_from_r2 uploaded clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                     with open(clip_path, 'rb') as f:
                         video_files[i] = BytesFile(f.read())
 
@@ -1415,8 +1420,10 @@ async def export_multi_clip(
                     r2_key = f"raw_clips/{db_clip['raw_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
+                    _t0 = time_module.monotonic()
                     if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
                         raise HTTPException(status_code=500, detail=f"Failed to download raw clip {i}")
+                    logger.info(f"[T1110] download_from_r2 raw clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                     with open(clip_path, 'rb') as f:
                         video_files[i] = BytesFile(f.read())
 
@@ -1488,7 +1495,9 @@ async def export_multi_clip(
 
                 # Upload to R2 temp folder
                 source_key = f"temp/multi_clip_{export_id}/source_{clip_index}.mp4"
+                _t0 = time_module.monotonic()
                 await asyncio.to_thread(upload_bytes_to_r2, captured_user_id, source_key, content)
+                logger.info(f"[T1110] upload_bytes_to_r2 clip {clip_index} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                 source_keys.append(source_key)
                 logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
 
@@ -1711,12 +1720,14 @@ async def export_multi_clip(
                 logger.warning(f"[Multi-Clip Export] Failed to clear CUDA cache: {e}")
 
             try:
+                _t0 = time_module.monotonic()
                 shared_upscaler = await asyncio.to_thread(
                     AIVideoUpscaler,
                     device='cuda',
                     export_mode=export_mode,
                     sr_model_name='realesr_general_x4v3',
                 )
+                logger.info(f"[T1110] AIVideoUpscaler init took {time_module.monotonic() - _t0:.2f}s (threaded)")
             except (torch.cuda.OutOfMemoryError if torch else Exception) as e:
                 logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
                 torch.cuda.empty_cache()
@@ -1830,6 +1841,7 @@ async def export_multi_clip(
         await manager.send_progress(export_id, progress_data)
 
         final_output = os.path.join(temp_dir, f"final_{export_id}.mp4")
+        _t0 = time_module.monotonic()
         await asyncio.to_thread(
             concatenate_clips_with_transition,
             clip_paths=processed_paths,
@@ -1838,11 +1850,14 @@ async def export_multi_clip(
             include_audio=include_audio_bool,
             clip_info=sorted_clips,
         )
+        logger.info(f"[T1110] concatenate_clips_with_transition took {time_module.monotonic() - _t0:.2f}s (threaded)")
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
 
         # Get video duration for cost-optimized GPU selection in overlay mode
+        _t0 = time_module.monotonic()
         video_duration = await asyncio.to_thread(get_video_duration, final_output)
+        logger.info(f"[T1110] get_video_duration took {time_module.monotonic() - _t0:.2f}s (threaded)")
         logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
 
         # Restore user + profile context after async operations
@@ -1859,6 +1874,7 @@ async def export_multi_clip(
                 working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
 
                 # Upload to R2 with periodic progress updates (can take 60+ seconds for large files)
+                _t0 = time_module.monotonic()
                 def _do_upload():
                     set_current_profile_id(captured_profile_id)
                     return upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
@@ -1879,6 +1895,7 @@ async def export_multi_clip(
                         progress_value += 1
 
                 upload_result = await upload_task
+                logger.info(f"[T1110] upload_to_r2 took {time_module.monotonic() - _t0:.2f}s (threaded)")
                 if not upload_result:
                     raise Exception("Failed to upload working video to R2")
 
