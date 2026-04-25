@@ -1048,6 +1048,7 @@ def add_chapters_to_video(
         '-i', metadata_path,
         '-map_metadata', '1',
         '-codec', 'copy',
+        '-movflags', '+faststart',
         output_path
     ]
 
