@@ -7,7 +7,7 @@ import { useEditorStore } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
-import { useGamesDataStore, useReadyGames } from '../stores/gamesDataStore';
+import { useGamesDataStore, useReadyGames, usePendingGameIds } from '../stores/gamesDataStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -72,6 +72,7 @@ export function ProjectsScreen({
 
   // Games management — Zustand store (ready-only: pending uploads excluded)
   const games = useReadyGames();
+  const pendingGameIds = usePendingGameIds();
   const gamesLoading = useGamesDataStore(state => state.isLoading);
   const gamesError = useGamesDataStore(state => state.error);
   const fetchGames = useGamesDataStore(state => state.fetchGames);
@@ -336,6 +337,8 @@ export function ProjectsScreen({
           activeUpload={activeUpload}
           onClickActiveUpload={handleClickActiveUpload}
           onCancelActiveUpload={cancelUpload}
+          // Pending game IDs for blocking project cards
+          pendingGameIds={pendingGameIds}
         />
 
         {/* Downloads Panel */}

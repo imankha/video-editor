@@ -58,6 +58,8 @@ export function ProjectManager({
   activeUpload = null, // { fileName, progress, phase, message }
   onClickActiveUpload, // Navigate back to annotate mode
   onCancelActiveUpload, // Cancel active upload
+  // Pending game IDs - projects referencing these are blocked
+  pendingGameIds = new Set(),
 }) {
   // Get downloads and export state from context
   const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
@@ -884,6 +886,7 @@ export function ProjectManager({
                       onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
                       onDelete={() => onDeleteProject(project.id)}
                       exportingProject={exportingProject}
+                      pendingGameIds={pendingGameIds}
                     />
                   ))}
 
@@ -908,6 +911,7 @@ export function ProjectManager({
                             onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
                             onDelete={() => onDeleteProject(project.id)}
                             exportingProject={exportingProject}
+                            pendingGameIds={pendingGameIds}
                           />
                         ))}
                       </div>
@@ -1384,7 +1388,7 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
  * - Click on a clip segment: Open in framing mode with that clip selected
  * - Click on overlay segment: Open in overlay mode
  */
-function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null }) {
+function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const isOffline = useSyncStore((state) => state.isOffline);
@@ -1442,7 +1446,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     : null;
   const failedExportType = failedExport?.type || null;
 
-  const canOpen = true;
+  const isWaitingForUpload = project.game_ids?.some(id => pendingGameIds.has(id));
+  const canOpen = !isWaitingForUpload;
 
   const handleDelete = (e) => {
     e.stopPropagation();
@@ -1545,7 +1550,13 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               <>
                 <span>•</span>
                 <span>
-                  {isExporting && isOffline ? (
+                  {isWaitingForUpload ? (
+                    <span className="text-amber-400 inline-flex items-center gap-1">
+                      <Upload size={12} />
+                      Waiting for upload
+                    </span>
+                  ) :
+                  isExporting && isOffline ? (
                     <span className="text-gray-400">Disconnected</span>
                   ) :
                   isExporting === 'overlay' ? (

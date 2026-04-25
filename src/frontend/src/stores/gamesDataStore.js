@@ -26,6 +26,7 @@ let _fetchPromise = null;
 export const useGamesDataStore = create((set, get) => ({
   games: [],
   readyGames: [],  // Derived: games with status != 'pending' (cached to avoid infinite re-renders)
+  pendingGameIds: new Set(),
   selectedGame: null,
   isLoading: false,
   error: null,
@@ -73,7 +74,8 @@ export const useGamesDataStore = create((set, get) => ({
         const data = await response.json();
         const gamesList = data.games || [];
         const readyGames = gamesList.filter(g => g.status !== 'pending');
-        set({ games: gamesList, readyGames, isLoading: false });
+        const pendingGameIds = new Set(gamesList.filter(g => g.status === 'pending').map(g => g.id));
+        set({ games: gamesList, readyGames, pendingGameIds, isLoading: false });
         return gamesList;
       } catch (err) {
         if (err.name === 'AbortError') return get().games;
@@ -352,3 +354,4 @@ export const useGames = () => useGamesDataStore(state => state.games);
 export const useReadyGames = () => useGamesDataStore(state => state.readyGames);
 export const useSelectedGame = () => useGamesDataStore(state => state.selectedGame);
 export const useGamesLoading = () => useGamesDataStore(state => state.isLoading);
+export const usePendingGameIds = () => useGamesDataStore(state => state.pendingGameIds);
