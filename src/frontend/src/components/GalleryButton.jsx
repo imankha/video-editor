@@ -10,7 +10,7 @@ import { Button } from './shared/Button';
  */
 export function GalleryButton() {
   const open = useGalleryStore((state) => state.open);
-  const count = useGalleryStore((state) => state.count);
+  const unwatchedCount = useGalleryStore((state) => state.unwatchedCount);
 
   return (
     <Button
@@ -21,9 +21,9 @@ export function GalleryButton() {
       title="Gallery"
     >
       <span className="hidden sm:inline">Gallery</span>
-      {count > 0 && (
-        <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
-          {count}
+      {unwatchedCount > 0 && (
+        <span className="px-1.5 py-0.5 bg-cyan-500 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+          {unwatchedCount}
         </span>
       )}
     </Button>

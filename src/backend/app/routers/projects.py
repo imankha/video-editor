@@ -686,28 +686,6 @@ async def get_project(project_id: int):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
 
-        # Auto-restore archived projects: archived_at is set explicitly when
-        # working data is stripped, so this never fires for brand-new projects.
-        if project['archived_at']:
-            from app.services.project_archive import is_project_archived, restore_project
-            try:
-                if is_project_archived(project_id):
-                    logger.info(f"Auto-restoring archived project {project_id}")
-                    if restore_project(project_id):
-                        # Re-fetch project with restored data
-                        cursor.execute("""
-                            SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
-                                   p.is_auto_created, p.archived_at,
-                                   wv.filename as working_video_filename
-                            FROM projects p
-                            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
-                            WHERE p.id = ?
-                        """, (project_id,))
-                        project = cursor.fetchone()
-                        logger.info(f"Auto-restored project {project_id}, working_video_id={project['working_video_id']}")
-            except Exception as e:
-                logger.warning(f"Auto-restore failed for project {project_id}: {e}")
-
         # Get working clips with resolved filenames
         # (latest version of each clip only, grouped by end_time)
         cursor.execute(f"""

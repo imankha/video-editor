@@ -45,12 +45,58 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
-from ...services.project_archive import clear_restored_flag
+from ...services.project_archive import archive_project
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _finalize_overlay_export(
+    project_id: int,
+    output_filename: str,
+    export_id: str,
+    user_id: str,
+    gpu_seconds: float = None,
+    modal_function: str = None,
+) -> int:
+    """Save final_videos record, update project, update export_jobs, archive.
+
+    Shared by all overlay export completion paths (no-keyframes copy, local,
+    Modal GPU, test mode). Returns the final_video_id.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT COALESCE(MAX(version), 0) + 1 as next_version
+            FROM final_videos WHERE project_id = ?
+        """, (project_id,))
+        next_version = cursor.fetchone()['next_version']
+
+        cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
+        is_auto_project = cursor.fetchone() is not None
+        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
+
+        cursor.execute("""
+            INSERT INTO final_videos (project_id, filename, version, source_type)
+            VALUES (?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, source_type))
+        final_video_id = cursor.lastrowid
+
+        cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
+
+        cursor.execute("""
+            UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
+                completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
+            WHERE id = ?
+        """, (final_video_id, output_filename, gpu_seconds, modal_function, export_id))
+
+        conn.commit()
+
+    archive_project(project_id, user_id)
+    return final_video_id
 
 
 # =============================================================================
@@ -1089,12 +1135,14 @@ async def export_final(
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
 
-        return JSONResponse({
-            'success': True,
-            'final_video_id': final_video_id,
-            'filename': filename,
-            'project_id': project_id
-        })
+    archive_project(project_id, user_id)
+
+    return JSONResponse({
+        'success': True,
+        'final_video_id': final_video_id,
+        'filename': filename,
+        'project_id': project_id
+    })
 
 
 @router.get("/projects/{project_id}/final-video")
@@ -1206,9 +1254,6 @@ async def save_overlay_data(
                 logger.warning(f"[Overlay Data] Failed to parse highlights: {e}")
 
         conn.commit()
-
-        # T66: Clear restored_at flag since project was edited
-        clear_restored_flag(project_id)
 
         logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}, "
                    f"updated {raw_clips_updated} raw_clips")
@@ -1632,35 +1677,10 @@ async def _run_local_overlay_export(
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
 
-        # Save to database
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            cursor.execute("""
-                SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                FROM final_videos WHERE project_id = ?
-            """, (project_id,))
-            next_version = cursor.fetchone()['next_version']
-
-            cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
-            is_auto_project = cursor.fetchone() is not None
-            source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-            cursor.execute("""
-                INSERT INTO final_videos (project_id, filename, version, source_type)
-                VALUES (?, ?, ?, ?)
-            """, (project_id, output_filename, next_version, source_type))
-            final_video_id = cursor.lastrowid
-
-            cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
-
-            cursor.execute("""
-                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
-                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
-                WHERE id = ?
-            """, (final_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
-
-            conn.commit()
+        final_video_id = _finalize_overlay_export(
+            project_id, output_filename, export_id, user_id,
+            gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
+        )
 
         # Send complete progress via WebSocket
         complete_data = {
@@ -1853,38 +1873,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
-            # Save to database (same logic as Modal path)
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-
-                # Get next version number
-                cursor.execute("""
-                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                    FROM final_videos WHERE project_id = ?
-                """, (project_id,))
-                next_version = cursor.fetchone()['next_version']
-
-                # Determine source_type
-                cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
-                is_auto_project = cursor.fetchone() is not None
-                source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-                # Create final_videos record
-                cursor.execute("""
-                    INSERT INTO final_videos (project_id, filename, version, source_type)
-                    VALUES (?, ?, ?, ?)
-                """, (project_id, output_filename, next_version, source_type))
-                final_video_id = cursor.lastrowid
-
-                # Update export_jobs record
-                cursor.execute("""
-                    UPDATE export_jobs
-                    SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (final_video_id, output_filename, export_id))
-
-                conn.commit()
-
+            final_video_id = _finalize_overlay_export(project_id, output_filename, export_id, user_id)
             logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
 
             # Send final completion
@@ -1940,34 +1929,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
-            # Save to database
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-
-                cursor.execute("""
-                    SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                    FROM final_videos WHERE project_id = ?
-                """, (project_id,))
-                next_version = cursor.fetchone()['next_version']
-
-                cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
-                is_auto_project = cursor.fetchone() is not None
-                source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-                cursor.execute("""
-                    INSERT INTO final_videos (project_id, filename, version, source_type)
-                    VALUES (?, ?, ?, ?)
-                """, (project_id, output_filename, next_version, source_type))
-                final_video_id = cursor.lastrowid
-
-                cursor.execute("""
-                    UPDATE export_jobs
-                    SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (final_video_id, output_filename, export_id))
-
-                conn.commit()
-
+            final_video_id = _finalize_overlay_export(project_id, output_filename, export_id, user_id)
             logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")
 
             # Send final completion via WebSocket
@@ -2072,40 +2034,10 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Render] Processing complete (parallel={parallel_used})")
 
-        # Save to database
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Get next version number
-            cursor.execute("""
-                SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                FROM final_videos WHERE project_id = ?
-            """, (project_id,))
-            next_version = cursor.fetchone()['next_version']
-
-            # Determine source_type
-            cursor.execute("SELECT id FROM raw_clips WHERE auto_project_id = ?", (project_id,))
-            is_auto_project = cursor.fetchone() is not None
-            source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-            # Create final_videos record
-            cursor.execute("""
-                INSERT INTO final_videos (project_id, filename, version, source_type)
-                VALUES (?, ?, ?, ?)
-            """, (project_id, output_filename, next_version, source_type))
-            final_video_id = cursor.lastrowid
-
-            # Update project
-            cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
-
-            # Update export_jobs (T550: store GPU cost)
-            cursor.execute("""
-                UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
-                    completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
-                WHERE id = ?
-            """, (final_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
-
-            conn.commit()
+        final_video_id = _finalize_overlay_export(
+            project_id, output_filename, export_id, user_id,
+            gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
+        )
 
         # Send complete progress
         complete_data = {

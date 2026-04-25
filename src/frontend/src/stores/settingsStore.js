@@ -21,7 +21,7 @@ let _loadPromise = null;
 // Default settings (must match backend defaults)
 const DEFAULT_SETTINGS = {
   projectFilters: {
-    statusFilter: 'uncompleted',
+    statusFilter: 'all',
     aspectFilter: 'all',
     creationFilter: 'all',
   },

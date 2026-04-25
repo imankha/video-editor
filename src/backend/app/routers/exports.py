@@ -28,7 +28,7 @@ from datetime import datetime, timedelta
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
-from ..constants import ExportStatus, DEFAULT_HIGHLIGHT_EFFECT
+from ..constants import ExportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -599,86 +599,6 @@ async def start_framing_export(
         "message": "Framing export started"
     }
 
-
-@router.post("/overlay", response_model=dict)
-async def start_overlay_export(
-    background_tasks: BackgroundTasks,
-    video: UploadFile = File(...),
-    project_id: int = Form(...),
-    highlight_regions_json: str = Form(None),
-    highlight_keyframes_json: str = Form(None),
-    highlight_effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value),
-):
-    """
-    Start an overlay export job with video file upload.
-
-    This is the async version of /api/export/overlay.
-    """
-    from ..services.export_worker import process_export_job
-
-    # Validate project exists
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Project not found")
-
-    # Parse highlight data (support both formats)
-    highlight_regions = None
-    if highlight_regions_json:
-        try:
-            highlight_regions = json.loads(highlight_regions_json)
-        except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {e}")
-    elif highlight_keyframes_json:
-        try:
-            highlight_regions = json.loads(highlight_keyframes_json)
-        except json.JSONDecodeError as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {e}")
-
-    # Generate job ID
-    job_id = f"export_{uuid.uuid4().hex[:12]}"
-
-    # Stage the video file
-    staging_dir = get_export_staging_path()
-    video_ext = Path(video.filename).suffix or '.mp4'
-    staged_video_path = staging_dir / f"{job_id}{video_ext}"
-
-    try:
-        with open(staged_video_path, 'wb') as f:
-            content = await video.read()
-            f.write(content)
-        logger.info(f"[Exports] Staged video for job {job_id}: {staged_video_path}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
-
-    # Build config
-    config = {
-        "video_path": str(staged_video_path),
-        "highlight_regions": highlight_regions,
-        "highlight_effect_type": highlight_effect_type,
-    }
-
-    # Create job in database
-    input_data = json.dumps(config)
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            INSERT INTO export_jobs (id, project_id, type, status, input_data)
-            VALUES (?, ?, 'overlay', 'pending', ?)
-        """, (job_id, project_id, input_data))
-        conn.commit()
-
-    logger.info(f"[Exports] Created overlay job {job_id} for project {project_id}")
-
-    # Start background processing
-    background_tasks.add_task(process_export_job, job_id)
-
-    return {
-        "job_id": job_id,
-        "status": "pending",
-        "message": "Overlay export started"
-    }
 
 
 # ============================================================================

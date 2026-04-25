@@ -127,14 +127,6 @@ def user_session_init(user_id: str) -> dict:
         logger.error(f"T1640: Failed to archive completed projects: {e}")
 
     try:
-        from .services.project_archive import cleanup_stale_restored_projects
-        archived_count = cleanup_stale_restored_projects(user_id)
-        if archived_count > 0:
-            logger.info(f"T66: Re-archived {archived_count} stale restored projects for user {user_id}")
-    except Exception as e:
-        logger.error(f"T66: Failed to cleanup stale restored projects: {e}")
-
-    try:
         from .services.project_archive import cleanup_database_bloat
         cleanup_database_bloat()
     except Exception as e:

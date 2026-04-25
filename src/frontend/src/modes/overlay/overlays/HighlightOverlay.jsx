@@ -38,8 +38,9 @@ export default function HighlightOverlay({
   useEffect(() => {
     if (!videoRef?.current) return;
 
+    const video = videoRef.current;
+
     const updateVideoRect = () => {
-      const video = videoRef.current;
       const videoAspect = videoMetadata.width / videoMetadata.height;
 
       const container = video.closest('.video-container');
@@ -81,14 +82,17 @@ export default function HighlightOverlay({
     updateVideoRect();
     window.addEventListener('resize', updateVideoRect);
 
-    // Double RAF ensures layout settles after fullscreen toggle
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(updateVideoRect);
+    // Double RAF ensures layout settles after fullscreen toggle.
+    // Track both frame IDs so cleanup cancels the inner one too.
+    let innerRafId;
+    const outerRafId = requestAnimationFrame(() => {
+      innerRafId = requestAnimationFrame(updateVideoRect);
     });
 
     return () => {
       window.removeEventListener('resize', updateVideoRect);
-      cancelAnimationFrame(rafId);
+      cancelAnimationFrame(outerRafId);
+      cancelAnimationFrame(innerRafId);
     };
   }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
 

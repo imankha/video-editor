@@ -328,6 +328,21 @@ export function useDownloads(isOpen = false) {
     };
   }, []);
 
+  const markWatched = useCallback(async (downloadId) => {
+    setDownloads(prev => prev.map(d =>
+      d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
+    ));
+    try {
+      await fetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
+      const { useGalleryStore } = await import('../stores/galleryStore');
+      useGalleryStore.getState().setUnwatchedCount(
+        Math.max(0, useGalleryStore.getState().unwatchedCount - 1)
+      );
+    } catch (err) {
+      console.error('[useDownloads] markWatched error:', err);
+    }
+  }, []);
+
   return {
     // State
     downloads,
@@ -348,6 +363,7 @@ export function useDownloads(isOpen = false) {
     downloadFile,
     getDownloadUrl,
     getStreamingUrl,
+    markWatched,
     setFilter,
 
     // Utilities
