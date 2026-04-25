@@ -15,12 +15,15 @@ Separately, `framing.py` `render_project` and `multi_clip.py` `export_multi_clip
 
 ## Sequencing
 
-Fix blocking first (small, surgical), then unify (larger refactor on a stable async foundation).
+Fix blocking first (small, surgical), then extract the shared pipeline, then route single-clip through it.
 
 | # | ID | Task | Why This Order |
 |---|----|------|----------------|
 | 1 | T1110 | [Non-Blocking Export I/O](T1110-never-block-server.md) | Wrap sync calls in `asyncio.to_thread()`. Small diff, immediate server-responsiveness win. |
-| 2 | T1115 | [Unify Single/Multi-Clip Export](T1115-unify-single-multi-clip.md) | Collapse framing.py render into multi_clip pipeline. Depends on T1110 (both paths must be async before merging). |
+| 2a | T1116 | [Extract Shared Pipeline](T1116-extract-shared-pipeline.md) | Extract `_export_clips()` + `ClipExportData` from multi_clip.py. Internal refactor, no behavior change. Test: multi-clip export identical. |
+| 2b | T1117 | [Route Single-Clip Through Pipeline](T1117-route-single-clip.md) | Make render_project a thin adapter over `_export_clips()`. Delete 800 lines of duplicated logic. Test: single-clip export identical. |
+
+T1115 (original design doc) is preserved as reference: [T1115-unify-single-multi-clip.md](T1115-unify-single-multi-clip.md)
 
 ## Shared Context
 
@@ -58,5 +61,7 @@ All are `subprocess.run()` or synchronous network I/O inside `async def` handler
 
 - [ ] Zero `subprocess.run()` calls execute on the event loop thread in any export endpoint
 - [ ] Server responds to health checks during a multi-clip Modal export
-- [ ] Single-clip framing export uses the multi-clip code path
-- [ ] `framing.py` render_project is a thin adapter, not a parallel implementation
+- [ ] `_export_clips()` extracted with `ClipExportData` dataclass (T1116)
+- [ ] `export_multi_clip()` is a thin adapter over `_export_clips()` (T1116)
+- [ ] Single-clip framing export uses the multi-clip code path (T1117)
+- [ ] `framing.py` render_project is a thin adapter, not a parallel implementation (T1117)

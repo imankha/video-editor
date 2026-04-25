@@ -1,12 +1,15 @@
 # T1115: Unify Single-Clip into Multi-Clip Export
 
-**Status:** TODO
+**Status:** SPLIT → T1116 + T1117
 **Impact:** 4
 **Complexity:** 6
 **Created:** 2026-04-24
 **Updated:** 2026-04-24
-**Epic:** [Export Pipeline](EPIC.md) (task 2 of 2)
+**Epic:** [Export Pipeline](EPIC.md)
 **Depends on:** T1110 (both paths must be non-blocking before merging)
+**Split into:** [T1116 (Extract Shared Pipeline)](T1116-extract-shared-pipeline.md) + [T1117 (Route Single-Clip)](T1117-route-single-clip.md)
+
+> **This file is preserved as the design reference.** Implementation is tracked in T1116 and T1117.
 
 ## Problem
 
