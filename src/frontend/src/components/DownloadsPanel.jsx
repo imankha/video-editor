@@ -8,6 +8,7 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { API_BASE } from '../config';
 
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
@@ -130,7 +131,7 @@ export function DownloadsPanel({
       // T66: Restore project from archive if needed
       setRestoringProjectId(download.id);
       try {
-        const response = await fetch(`/api/downloads/${download.id}/restore-project`, {
+        const response = await fetch(`${API_BASE}/api/downloads/${download.id}/restore-project`, {
           method: 'POST',
         });
         if (!response.ok) {
@@ -167,7 +168,7 @@ export function DownloadsPanel({
 
     try {
       // First check if before/after is available
-      const statusRes = await fetch(`/api/export/before-after/${download.id}/status`);
+      const statusRes = await fetch(`${API_BASE}/api/export/before-after/${download.id}/status`);
       const status = await statusRes.json();
 
       if (!status.available) {
@@ -176,7 +177,7 @@ export function DownloadsPanel({
       }
 
       // Generate the comparison video
-      const response = await fetch(`/api/export/before-after/${download.id}`, {
+      const response = await fetch(`${API_BASE}/api/export/before-after/${download.id}`, {
         method: 'POST'
       });
 
