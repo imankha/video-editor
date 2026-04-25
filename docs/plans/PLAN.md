@@ -75,7 +75,9 @@ Scale, reliability, and data format changes that must land before alpha users ar
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
+| | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | | | | | | **Sessions survive deploys and route to correct machine** |
+| T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TODO | [ ] | Sync auth.sqlite to R2 after login so sessions survive machine restarts |
+| T1190 | ↳ [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 ### Epic: For Alpha (IN_PROGRESS)
@@ -155,7 +157,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1221 | [Dead Modal Code Removal](tasks/for-launch/T1221-dead-modal-code-removal.md) | 3 | 2 | 1.5 | DONE | [ ] | Delete extract_clip_modal, process_multi_clip_modal, create_annotated_compilation -- no callers (follow-up from T1220 audit) |
 | T1222 | [game_videos JOIN Audit](tasks/for-launch/T1222-game-videos-join-audit.md) | 5 | 3 | 1.7 | DONE | [ ] | Multi-video games have NULL games.blake3_hash; audit storage.py/games_upload.py/other exporters to JOIN game_videos instead |
 | | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | | | | | | **Non-blocking I/O + unify single/multi-clip export paths** |
-| T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | TODO | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
+| T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | TESTING | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
 | T1115 | ↳ [Unify Single/Multi-Clip Export](tasks/export-pipeline/T1115-unify-single-multi-clip.md) | 4 | 6 | 1.0 | TODO | [ ] | Single-clip framing = N=1 multi-clip; collapse render_project into thin adapter over shared pipeline |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | [ ] | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | [ ] | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |

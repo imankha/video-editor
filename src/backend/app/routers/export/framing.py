@@ -471,7 +471,7 @@ async def _run_local_framing_export(
             else:
                 source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
             if source_url:
-                source_info = get_video_info(source_url)
+                source_info = await asyncio.to_thread(get_video_info, source_url)
                 framerate = source_info.get('fps', 30.0)
         except Exception as e:
             logger.warning(f"[Render Background] Failed to probe framerate, using 30: {e}")
@@ -548,11 +548,11 @@ async def _run_local_framing_export(
             'framing', project_id=project_id, project_name=project_name
         )
 
-        if not download_from_r2(user_id, output_key, Path(output_path)):
+        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
             logger.warning("[Render Background] Could not download output to measure duration")
             video_duration = 0.0
         else:
-            video_duration = get_video_duration(output_path)
+            video_duration = await asyncio.to_thread(get_video_duration, output_path)
             logger.info(f"[Render Background] Video duration: {video_duration:.2f}s")
 
         # Restore user context again after long-running processing
@@ -929,7 +929,7 @@ async def render_project(request: RenderRequest, http_request: Request):
         else:
             source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
         if source_url:
-            source_info = get_video_info(source_url)
+            source_info = await asyncio.to_thread(get_video_info, source_url)
             framerate = source_info.get('fps', 30.0)
     except Exception as e:
         logger.warning(f"[Render] Failed to probe source video framerate, using default 30: {e}")
@@ -1032,11 +1032,11 @@ async def render_project(request: RenderRequest, http_request: Request):
             'framing', project_id=project_id, project_name=project_name
         )
 
-        if not download_from_r2(user_id, output_key, Path(output_path)):
+        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
             logger.warning("[Render] Could not download output to measure duration")
             video_duration = 0.0
         else:
-            video_duration = get_video_duration(output_path)
+            video_duration = await asyncio.to_thread(get_video_duration, output_path)
             logger.info(f"[Render] Video duration: {video_duration:.2f}s")
 
         # CRITICAL: Restore user + profile context after long-running task

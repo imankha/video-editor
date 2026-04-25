@@ -1361,13 +1361,15 @@ async def export_multi_clip(
                     logger.info(f"[Multi-Clip Export] Streaming clip {i} range: {start_time}s - {end_time}s")
 
                     try:
-                        (
-                            ffmpeg
-                            .input(source_url, ss=start_time, to=end_time)
-                            .output(str(clip_path), c='copy')
-                            .overwrite_output()
-                            .run(quiet=True)
-                        )
+                        def _extract_clip():
+                            (
+                                ffmpeg
+                                .input(source_url, ss=start_time, to=end_time)
+                                .output(str(clip_path), c='copy')
+                                .overwrite_output()
+                                .run(quiet=True)
+                            )
+                        await asyncio.to_thread(_extract_clip)
                     except ffmpeg.Error as e:
                         raise HTTPException(status_code=500, detail=f"Failed to extract clip {i} range: {e}")
 
@@ -1391,7 +1393,7 @@ async def export_multi_clip(
                     r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
-                    if not download_from_r2(captured_user_id, r2_key, clip_path):
+                    if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
                         raise HTTPException(status_code=500, detail=f"Failed to download uploaded clip {i}")
                     with open(clip_path, 'rb') as f:
                         video_files[i] = BytesFile(f.read())
@@ -1413,7 +1415,7 @@ async def export_multi_clip(
                     r2_key = f"raw_clips/{db_clip['raw_filename']}"
                     clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
                     logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
-                    if not download_from_r2(captured_user_id, r2_key, clip_path):
+                    if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
                         raise HTTPException(status_code=500, detail=f"Failed to download raw clip {i}")
                     with open(clip_path, 'rb') as f:
                         video_files[i] = BytesFile(f.read())
@@ -1486,7 +1488,7 @@ async def export_multi_clip(
 
                 # Upload to R2 temp folder
                 source_key = f"temp/multi_clip_{export_id}/source_{clip_index}.mp4"
-                upload_bytes_to_r2(captured_user_id, source_key, content)
+                await asyncio.to_thread(upload_bytes_to_r2, captured_user_id, source_key, content)
                 source_keys.append(source_key)
                 logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
 
@@ -1709,10 +1711,11 @@ async def export_multi_clip(
                 logger.warning(f"[Multi-Clip Export] Failed to clear CUDA cache: {e}")
 
             try:
-                shared_upscaler = AIVideoUpscaler(
+                shared_upscaler = await asyncio.to_thread(
+                    AIVideoUpscaler,
                     device='cuda',
                     export_mode=export_mode,
-                    sr_model_name='realesr_general_x4v3'
+                    sr_model_name='realesr_general_x4v3',
                 )
             except (torch.cuda.OutOfMemoryError if torch else Exception) as e:
                 logger.error(f"[Multi-Clip Export] CUDA out of memory during model init: {e}")
@@ -1827,18 +1830,19 @@ async def export_multi_clip(
         await manager.send_progress(export_id, progress_data)
 
         final_output = os.path.join(temp_dir, f"final_{export_id}.mp4")
-        concatenate_clips_with_transition(
+        await asyncio.to_thread(
+            concatenate_clips_with_transition,
             clip_paths=processed_paths,
             output_path=final_output,
             transition=transition,
             include_audio=include_audio_bool,
-            clip_info=sorted_clips
+            clip_info=sorted_clips,
         )
 
         logger.info(f"[Multi-Clip Export] Final output: {final_output}")
 
         # Get video duration for cost-optimized GPU selection in overlay mode
-        video_duration = get_video_duration(final_output)
+        video_duration = await asyncio.to_thread(get_video_duration, final_output)
         logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
 
         # Restore user + profile context after async operations
@@ -1855,26 +1859,14 @@ async def export_multi_clip(
                 working_filename = f"working_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
 
                 # Upload to R2 with periodic progress updates (can take 60+ seconds for large files)
-                # Run upload in thread while sending heartbeat progress every 10 seconds
-                upload_result = [None]  # Use list to store result from thread
-                upload_error = [None]
+                def _do_upload():
+                    set_current_profile_id(captured_profile_id)
+                    return upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
 
-                def do_upload():
-                    try:
-                        # Restore profile context in upload thread (ContextVars don't propagate)
-                        set_current_profile_id(captured_profile_id)
-                        result = upload_to_r2(captured_user_id, f"working_videos/{working_filename}", Path(final_output))
-                        upload_result[0] = result
-                    except Exception as e:
-                        upload_error[0] = e
+                upload_task = asyncio.create_task(asyncio.to_thread(_do_upload))
 
-                import threading
-                upload_thread = threading.Thread(target=do_upload)
-                upload_thread.start()
-
-                # Send periodic progress while upload is running
                 progress_value = 90
-                while upload_thread.is_alive():
+                while not upload_task.done():
                     upload_progress = {
                         "progress": progress_value,
                         "message": "Uploading to cloud storage...",
@@ -1882,16 +1874,12 @@ async def export_multi_clip(
                     }
                     export_progress[export_id] = upload_progress
                     await manager.send_progress(export_id, upload_progress)
-                    # Wait up to 10 seconds, checking if thread is done
-                    upload_thread.join(timeout=10)
-                    # Slowly increment progress (90 -> 95 during upload)
+                    await asyncio.sleep(5)
                     if progress_value < 95:
                         progress_value += 1
 
-                # Check for errors
-                if upload_error[0]:
-                    raise upload_error[0]
-                if not upload_result[0]:
+                upload_result = await upload_task
+                if not upload_result:
                     raise Exception("Failed to upload working video to R2")
 
                 with get_db_connection() as conn:

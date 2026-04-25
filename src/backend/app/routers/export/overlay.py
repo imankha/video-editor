@@ -1135,7 +1135,7 @@ async def export_final(
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
 
-    archive_project(project_id, user_id)
+    await asyncio.to_thread(archive_project, project_id, user_id)
 
     return JSONResponse({
         'success': True,
@@ -1677,7 +1677,8 @@ async def _run_local_overlay_export(
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
 
-        final_video_id = _finalize_overlay_export(
+        final_video_id = await asyncio.to_thread(
+            _finalize_overlay_export,
             project_id, output_filename, export_id, user_id,
             gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
         )
@@ -1873,7 +1874,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
-            final_video_id = _finalize_overlay_export(project_id, output_filename, export_id, user_id)
+            final_video_id = await asyncio.to_thread(_finalize_overlay_export, project_id, output_filename, export_id, user_id)
             logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
 
             # Send final completion
@@ -1929,7 +1930,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 'overlay', project_id=project_id, project_name=project_name
             )
 
-            final_video_id = _finalize_overlay_export(project_id, output_filename, export_id, user_id)
+            final_video_id = await asyncio.to_thread(_finalize_overlay_export, project_id, output_filename, export_id, user_id)
             logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")
 
             # Send final completion via WebSocket
@@ -2034,7 +2035,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Render] Processing complete (parallel={parallel_used})")
 
-        final_video_id = _finalize_overlay_export(
+        final_video_id = await asyncio.to_thread(
+            _finalize_overlay_export,
             project_id, output_filename, export_id, user_id,
             gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
         )
