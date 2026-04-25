@@ -165,10 +165,34 @@ If `isLoadingWorkingVideo` remains true for more than 30 seconds, auto-clear it 
 | `src/frontend/src/screens/OverlayScreen.jsx` | Fix effect dead zone; add timeout safety net |
 | `src/frontend/src/screens/FramingScreen.jsx` | No changes (handleProceedToOverlayInternal is fine) |
 
+## Additional Evidence: Multi-Clip Export (2026-04-25)
+
+Reproduced during T1110 testing with a 3-clip multi-clip export:
+
+### Timeline
+- Export started, took 726s (~12 min) total
+- WebSocket disconnected mid-export: `[WS] Failed to send pong` → `0 clients remaining`
+- Export completed successfully on backend (200, working video uploaded to R2 with faststart)
+- Frontend never received WS "complete" message → stayed on framing screen
+- `POST /api/exports/acknowledge` waited **626 seconds** for write lock (held by export handler for full duration), then succeeded
+- User manually clicked "Overlay" nav → overlay loaded correctly (persisted state was fine)
+- User navigated away and back → project correctly opened in overlay mode
+
+### What this confirms
+1. **Bug 2 is the primary cause for long exports** — WS drops naturally during 10+ min exports, not just on network issues. The retry/disconnect path never calls `onProceedToOverlay`, so users stay stuck on framing.
+2. **Backend state is correct** — the working video, project state, and export acknowledgment all persist correctly. The problem is purely frontend: the WS-driven transition never fires.
+3. **Write lock contention amplifies the problem** — `exports/acknowledge` blocked for 626s behind the export's write lock, delaying the frontend's ability to poll for completion status as a fallback.
+
+### Implications for fix
+- Phase 2 (retry/disconnect path) is the most critical fix — this is the path that fires for all long exports
+- Consider adding a **polling fallback**: if WS disconnects, poll `GET /api/exports/{id}` every 10s until status=complete, then trigger the overlay transition
+- The 626s write lock wait on `acknowledge` suggests the export handler should release the write lock earlier (after DB writes, before player detection/upload), but that's a separate concern
+
 ## Related
 
 - T1660 (Framing Gesture Persistence) — confirmed by `Keyframe at frame 170 not found` in these logs
 - T1520 (Export Disconnect/Retry UX) — retry path missing overlay transition
+- T1110 (Non-Blocking Export I/O) — the session where this was reproduced; event loop was free but WS still dropped
 
 ## Classification
 

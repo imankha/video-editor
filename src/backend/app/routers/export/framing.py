@@ -471,7 +471,9 @@ async def _run_local_framing_export(
             else:
                 source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
             if source_url:
-                source_info = get_video_info(source_url)
+                _t0 = time_module.monotonic()
+                source_info = await asyncio.to_thread(get_video_info, source_url)
+                logger.info(f"[T1110] get_video_info (local) took {time_module.monotonic() - _t0:.2f}s (threaded)")
                 framerate = source_info.get('fps', 30.0)
         except Exception as e:
             logger.warning(f"[Render Background] Failed to probe framerate, using 30: {e}")
@@ -548,11 +550,15 @@ async def _run_local_framing_export(
             'framing', project_id=project_id, project_name=project_name
         )
 
-        if not download_from_r2(user_id, output_key, Path(output_path)):
+        _t0 = time_module.monotonic()
+        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
             logger.warning("[Render Background] Could not download output to measure duration")
             video_duration = 0.0
         else:
-            video_duration = get_video_duration(output_path)
+            logger.info(f"[T1110] download_from_r2 (local) took {time_module.monotonic() - _t0:.2f}s (threaded)")
+            _t0 = time_module.monotonic()
+            video_duration = await asyncio.to_thread(get_video_duration, output_path)
+            logger.info(f"[T1110] get_video_duration (local) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Render Background] Video duration: {video_duration:.2f}s")
 
         # Restore user context again after long-running processing
@@ -929,7 +935,9 @@ async def render_project(request: RenderRequest, http_request: Request):
         else:
             source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
         if source_url:
-            source_info = get_video_info(source_url)
+            _t0 = time_module.monotonic()
+            source_info = await asyncio.to_thread(get_video_info, source_url)
+            logger.info(f"[T1110] get_video_info (Modal) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             framerate = source_info.get('fps', 30.0)
     except Exception as e:
         logger.warning(f"[Render] Failed to probe source video framerate, using default 30: {e}")
@@ -1032,11 +1040,15 @@ async def render_project(request: RenderRequest, http_request: Request):
             'framing', project_id=project_id, project_name=project_name
         )
 
-        if not download_from_r2(user_id, output_key, Path(output_path)):
+        _t0 = time_module.monotonic()
+        if not await asyncio.to_thread(download_from_r2, user_id, output_key, Path(output_path)):
             logger.warning("[Render] Could not download output to measure duration")
             video_duration = 0.0
         else:
-            video_duration = get_video_duration(output_path)
+            logger.info(f"[T1110] download_from_r2 (Modal) took {time_module.monotonic() - _t0:.2f}s (threaded)")
+            _t0 = time_module.monotonic()
+            video_duration = await asyncio.to_thread(get_video_duration, output_path)
+            logger.info(f"[T1110] get_video_duration (Modal) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Render] Video duration: {video_duration:.2f}s")
 
         # CRITICAL: Restore user + profile context after long-running task
