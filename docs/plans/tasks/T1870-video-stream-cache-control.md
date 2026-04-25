@@ -1,6 +1,6 @@
 # T1870: Video Stream Cache-Control Headers
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-04-25

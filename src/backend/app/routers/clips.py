@@ -1744,7 +1744,7 @@ async def stream_working_clip_bounded(
             "Content-Range": f"bytes {req_start}-{req_end}/{size}",
             "Content-Length": str(segment_len),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         },
     )
 

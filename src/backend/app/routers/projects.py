@@ -1017,7 +1017,7 @@ async def stream_working_video(project_id: int, request: Request):
             "Content-Range": f"bytes {req_start}-{req_end}/{total_size}",
             "Content-Length": str(content_length),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         }
         upstream_range = f"bytes={req_start}-{req_end}"
     else:
@@ -1025,7 +1025,7 @@ async def stream_working_video(project_id: int, request: Request):
         response_headers = {
             "Content-Length": str(total_size),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-store",
         }
         upstream_range = None
 
