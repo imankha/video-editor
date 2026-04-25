@@ -154,11 +154,15 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | DONE | [ ] | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1221 | [Dead Modal Code Removal](tasks/for-launch/T1221-dead-modal-code-removal.md) | 3 | 2 | 1.5 | DONE | [ ] | Delete extract_clip_modal, process_multi_clip_modal, create_annotated_compilation -- no callers (follow-up from T1220 audit) |
 | T1222 | [game_videos JOIN Audit](tasks/for-launch/T1222-game-videos-join-audit.md) | 5 | 3 | 1.7 | DONE | [ ] | Multi-video games have NULL games.blake3_hash; audit storage.py/games_upload.py/other exporters to JOIN game_videos instead |
-| T1110 | [Never Block Server on Export](tasks/for-launch/T1110-never-block-server.md) | 5 | 5 | 1.0 | TODO | [ ] | Modal path is synchronous (async but holds connection); return 202 + background task |
+| | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | | | | | | **Non-blocking I/O + unify single/multi-clip export paths** |
+| T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | TODO | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
+| T1115 | ↳ [Unify Single/Multi-Clip Export](tasks/export-pipeline/T1115-unify-single-multi-clip.md) | 4 | 6 | 1.0 | TODO | [ ] | Single-clip framing = N=1 multi-clip; collapse render_project into thin adapter over shared pipeline |
 | T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | [ ] | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
 | T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | [ ] | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | 5 | 2 | 2.3 | TODO | [ ] | Test coverage for R2 restore retry/cooldown -- NOT_FOUND vs ERROR handling, cooldown expiry |
 | T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
+| T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
+| T1740 | [Privacy & Regulatory Compliance](tasks/for-launch/T1740-privacy-regulatory-compliance.md) | 10 | 6 | 1.7 | TODO | [ ] | Privacy policy, ToS, COPPA/CCPA/CalOPPA compliance, age verification, consumer rights (data export/deletion), vendor DPAs, incident response plan. No biometric processing — BIPA/CUBI not applicable. Must ship before launch. |
 
 #### Features
 
