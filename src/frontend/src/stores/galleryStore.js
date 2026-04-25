@@ -17,6 +17,7 @@ export const useGalleryStore = create((set) => ({
 
   // Downloads count (for badge display)
   count: 0,
+  unwatchedCount: 0,
   countLoaded: false,
 
   // Actions
@@ -27,6 +28,7 @@ export const useGalleryStore = create((set) => ({
   close: () => set({ isOpen: false }),
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   setCount: (count) => set({ count, countLoaded: true }),
+  setUnwatchedCount: (unwatchedCount) => set({ unwatchedCount }),
 
   /**
    * Fetch downloads count from backend (for badge).
@@ -41,7 +43,8 @@ export const useGalleryStore = create((set) => ({
         if (!response.ok) return 0;
         const data = await response.json();
         const count = data.count || 0;
-        set({ count, countLoaded: true });
+        const unwatchedCount = data.unwatched_count || 0;
+        set({ count, unwatchedCount, countLoaded: true });
         return count;
       } catch {
         return 0;
@@ -55,7 +58,7 @@ export const useGalleryStore = create((set) => ({
   // Reset on profile switch — clears badge count and closes panel
   reset: () => {
     _fetchCountPromise = null;
-    set({ isOpen: false, count: 0, countLoaded: false });
+    set({ isOpen: false, count: 0, unwatchedCount: 0, countLoaded: false });
   },
 }));
 

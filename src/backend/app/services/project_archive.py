@@ -10,9 +10,8 @@ Archive location: {user_id}/archive/{project_id}.json
 
 import json
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
-from io import BytesIO
+from datetime import datetime
+from typing import Optional, Dict, Any
 
 from app.database import (
     get_db_connection,
@@ -23,7 +22,6 @@ from app.queries import latest_working_clips_subquery
 from app.storage import (
     R2_ENABLED,
     upload_bytes_to_r2,
-    download_from_r2,
     delete_from_r2,
     get_r2_client,
     R2_BUCKET,
@@ -35,9 +33,6 @@ logger = logging.getLogger(__name__)
 
 # Archive schema version for future migrations
 ARCHIVE_VERSION = 1
-
-# Stale threshold for restored projects (48 hours)
-STALE_RESTORE_HOURS = 48
 
 
 def _get_archive_r2_key(project_id: int) -> str:
@@ -65,10 +60,6 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
     Returns:
         True if archive succeeded, False otherwise
     """
-    if not R2_ENABLED:
-        logger.debug(f"R2 disabled, skipping archive for project {project_id}")
-        return False
-
     if user_id is None:
         user_id = get_current_user_id()
 
@@ -83,64 +74,68 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 logger.warning(f"Project {project_id} not found for archiving")
                 return False
 
-            project_data = _row_to_dict(project_row)
+            if R2_ENABLED:
+                project_data = _row_to_dict(project_row)
 
-            # 2. Get all working_clips for this project (all versions)
-            cursor.execute("""
-                SELECT * FROM working_clips WHERE project_id = ?
-                ORDER BY version, sort_order
-            """, (project_id,))
-            working_clips_data = [_row_to_dict(row) for row in cursor.fetchall()]
+                # 2. Get all working_clips for this project (all versions)
+                cursor.execute("""
+                    SELECT * FROM working_clips WHERE project_id = ?
+                    ORDER BY version, sort_order
+                """, (project_id,))
+                working_clips_data = [_row_to_dict(row) for row in cursor.fetchall()]
 
-            # 3. Get all working_videos for this project (all versions)
-            cursor.execute("""
-                SELECT * FROM working_videos WHERE project_id = ?
-                ORDER BY version
-            """, (project_id,))
-            working_videos_data = [_row_to_dict(row) for row in cursor.fetchall()]
+                # 3. Get all working_videos for this project (all versions)
+                cursor.execute("""
+                    SELECT * FROM working_videos WHERE project_id = ?
+                    ORDER BY version
+                """, (project_id,))
+                working_videos_data = [_row_to_dict(row) for row in cursor.fetchall()]
 
-            # 4. Build archive JSON
-            archive = {
-                "version": ARCHIVE_VERSION,
-                "archived_at": datetime.utcnow().isoformat() + "Z",
-                "project": project_data,
-                "working_clips": working_clips_data,
-                "working_videos": working_videos_data,
-            }
+                # 4. Build archive JSON
+                archive = {
+                    "version": ARCHIVE_VERSION,
+                    "archived_at": datetime.utcnow().isoformat() + "Z",
+                    "project": project_data,
+                    "working_clips": working_clips_data,
+                    "working_videos": working_videos_data,
+                }
 
-            # 5. Serialize to JSON
-            archive_json = json.dumps(archive, indent=2, default=str)
-            archive_bytes = archive_json.encode('utf-8')
+                # 5. Serialize to JSON
+                archive_json = json.dumps(archive, indent=2, default=str)
+                archive_bytes = archive_json.encode('utf-8')
 
-            # 6. Upload to R2
-            r2_path = _get_archive_r2_key(project_id)
-            if not upload_bytes_to_r2(user_id, r2_path, archive_bytes):
-                logger.error(f"Failed to upload archive to R2 for project {project_id}")
-                return False
+                # 6. Upload to R2
+                r2_path = _get_archive_r2_key(project_id)
+                if not upload_bytes_to_r2(user_id, r2_path, archive_bytes):
+                    logger.error(f"Failed to upload archive to R2 for project {project_id}")
+                    return False
 
-            logger.info(f"Uploaded archive to R2: {user_id}/{r2_path} ({len(archive_bytes)} bytes)")
+                logger.info(f"Uploaded archive to R2: {user_id}/{r2_path} ({len(archive_bytes)} bytes)")
 
-            # 7. Delete working data from DB, but KEEP projects and final_videos
-            # rows so the gallery can still list and download completed exports.
-            cursor.execute(
-                "UPDATE projects SET working_video_id = NULL, archived_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (project_id,),
-            )
+                # 7. Clear FK, delete working data, mark archived
+                cursor.execute(
+                    "UPDATE projects SET working_video_id = NULL, archived_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (project_id,),
+                )
+                cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+                clips_deleted = cursor.rowcount
+                cursor.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
+                videos_deleted = cursor.rowcount
 
-            cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
-            clips_deleted = cursor.rowcount
+                conn.commit()
+                conn.execute("VACUUM")
 
-            cursor.execute("DELETE FROM working_videos WHERE project_id = ?", (project_id,))
-            videos_deleted = cursor.rowcount
-
-            conn.commit()
-
-            logger.info(
-                f"Archived project {project_id}: deleted {clips_deleted} working_clips, "
-                f"{videos_deleted} working_videos from DB"
-            )
-            # VACUUM to reclaim disk space - keeps DB small for R2 sync
-            conn.execute("VACUUM")
+                logger.info(
+                    f"Archived project {project_id}: deleted {clips_deleted} working_clips, "
+                    f"{videos_deleted} working_videos from DB"
+                )
+            else:
+                cursor.execute(
+                    "UPDATE projects SET archived_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (project_id,),
+                )
+                conn.commit()
+                logger.info(f"Marked project {project_id} as archived (R2 disabled, working data kept)")
             return True
 
     except Exception as e:
@@ -268,29 +263,6 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
         return False
 
 
-def clear_restored_flag(project_id: int) -> None:
-    """
-    Clear the restored_at flag for a project.
-
-    Call this when a project is edited, making it a "real" active project
-    that shouldn't be auto-archived on startup.
-
-    Args:
-        project_id: ID of the project
-    """
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE projects SET restored_at = NULL WHERE id = ?",
-                (project_id,)
-            )
-            if cursor.rowcount > 0:
-                logger.debug(f"Cleared restored_at flag for project {project_id}")
-            conn.commit()
-    except Exception as e:
-        logger.error(f"Failed to clear restored_at flag for project {project_id}: {e}")
-
 
 def archive_completed_projects(user_id: Optional[str] = None) -> int:
     """
@@ -306,9 +278,6 @@ def archive_completed_projects(user_id: Optional[str] = None) -> int:
     Returns:
         Number of projects archived
     """
-    if not R2_ENABLED:
-        return 0
-
     if user_id is None:
         user_id = get_current_user_id()
 
@@ -342,60 +311,6 @@ def archive_completed_projects(user_id: Optional[str] = None) -> int:
 
     except Exception as e:
         logger.error(f"Failed to archive completed projects: {e}", exc_info=True)
-        return archived_count
-
-
-def cleanup_stale_restored_projects(user_id: Optional[str] = None) -> int:
-    """
-    Re-archive any projects that were restored but not edited within 48 hours.
-
-    Call this on app startup to clean up projects that users opened
-    from gallery but didn't actually edit.
-
-    Args:
-        user_id: User ID (defaults to current user from context)
-
-    Returns:
-        Number of projects re-archived
-    """
-    if not R2_ENABLED:
-        return 0
-
-    if user_id is None:
-        user_id = get_current_user_id()
-
-    archived_count = 0
-
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Find projects with restored_at older than 48 hours
-            cursor.execute("""
-                SELECT id FROM projects
-                WHERE restored_at IS NOT NULL
-                AND restored_at < datetime('now', '-48 hours')
-            """)
-            stale_projects = cursor.fetchall()
-
-            if not stale_projects:
-                return 0
-
-            logger.info(f"Found {len(stale_projects)} stale restored projects to re-archive")
-
-        # Archive each stale project (outside the connection context)
-        for row in stale_projects:
-            project_id = row['id']
-            if archive_project(project_id, user_id):
-                archived_count += 1
-                logger.info(f"Re-archived stale project {project_id}")
-            else:
-                logger.warning(f"Failed to re-archive stale project {project_id}")
-
-        return archived_count
-
-    except Exception as e:
-        logger.error(f"Failed to cleanup stale restored projects: {e}", exc_info=True)
         return archived_count
 
 

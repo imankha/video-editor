@@ -29,7 +29,6 @@ from ..routers.exports import (
     update_job_complete,
     update_job_error
 )
-from .ffmpeg_service import get_encoding_command_parts
 from .modal_client import modal_enabled, call_modal_overlay
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 
@@ -180,10 +179,6 @@ async def process_export_job(job_id: str):
         # Route to appropriate handler
         if job_type == 'framing':
             output_video_id, output_filename = await process_framing_export(job_id, project_id, config)
-        elif job_type == 'overlay':
-            output_video_id, output_filename = await process_overlay_export(job_id, project_id, config)
-        elif job_type == 'multi_clip':
-            output_video_id, output_filename = await process_multi_clip_export(job_id, project_id, config)
         else:
             raise ValueError(f"Unknown export type: {job_type}")
 
@@ -339,171 +334,6 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
     logger.info(f"[ExportWorker] Framing export complete: {output_filename} (id: {working_video_id})")
 
     return working_video_id, output_filename
-
-
-async def process_overlay_export(job_id: str, project_id: int, config: dict) -> tuple:
-    """
-    Process an overlay mode export.
-
-    Returns (output_video_id, output_filename)
-    """
-    import cv2
-    from ..database import get_final_videos_path
-
-    loop = asyncio.get_running_loop()
-
-    # Extract config
-    video_path = config.get('video_path')
-    highlight_regions = config.get('highlight_regions', [])
-    highlight_effect_type = normalize_effect_type(config.get('highlight_effect_type'))
-
-    if not video_path or not os.path.exists(video_path):
-        raise ValueError(f"Video file not found: {video_path}")
-
-    # Get output directory
-    final_videos_dir = get_final_videos_path()
-    final_videos_dir.mkdir(parents=True, exist_ok=True)
-
-    # Get next version number
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-            FROM final_videos WHERE project_id = ?
-        """, (project_id,))
-        next_version = cursor.fetchone()['next_version']
-
-    output_filename = f"final_{project_id}_v{next_version}.mp4"
-    output_path = str(final_videos_dir / output_filename)
-
-    await send_progress(job_id, 10, "Starting overlay rendering...")
-
-    # Import overlay processing code
-    try:
-        from ..ai_upscaler.keyframe_interpolator import KeyframeInterpolator
-    except ImportError as e:
-        raise RuntimeError(f"Failed to import overlay dependencies: {e}")
-
-    # Open video
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise ValueError(f"Failed to open video: {video_path}")
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-    # Create output video writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path + '.temp.mp4', fourcc, fps, (width, height))
-
-    try:
-        frame_idx = 0
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            time = frame_idx / fps
-
-            # Apply highlight overlay if regions exist
-            if highlight_regions:
-                # Convert regions to keyframes format for interpolation
-                highlight = KeyframeInterpolator.interpolate_highlight_from_regions(
-                    highlight_regions, time
-                ) if hasattr(KeyframeInterpolator, 'interpolate_highlight_from_regions') else None
-
-                if highlight:
-                    frame = KeyframeInterpolator.render_highlight_on_frame(
-                        frame, highlight, (width, height), None, highlight_effect_type
-                    )
-
-            out.write(frame)
-            frame_idx += 1
-
-            # Progress update (every 30 frames)
-            if frame_idx % 30 == 0:
-                progress = 10 + int((frame_idx / frame_count) * 60)
-                await send_progress(job_id, progress, f"Rendering frame {frame_idx}/{frame_count}")
-
-    finally:
-        cap.release()
-        out.release()
-
-    await send_progress(job_id, 75, "Encoding with audio...")
-
-    # Re-encode with ffmpeg to add audio and proper encoding (GPU accelerated if available)
-    import subprocess
-
-    # Get GPU-accelerated encoding parameters
-    encoding_params = get_encoding_command_parts(prefer_quality=True)
-
-    ffmpeg_cmd = [
-        'ffmpeg', '-y',
-        '-i', output_path + '.temp.mp4',
-        '-i', video_path,
-        '-map', '0:v',
-        '-map', '1:a?',
-    ]
-    ffmpeg_cmd.extend(encoding_params)
-    ffmpeg_cmd.extend([
-        '-c:a', 'aac',
-        '-b:a', '256k',
-        '-movflags', '+faststart',
-        output_path
-    ])
-
-    logger.info(f"[ExportWorker] FFmpeg overlay encode: {' '.join(ffmpeg_cmd[:12])}...")
-    result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(f"FFmpeg encoding failed: {result.stderr}")
-
-    # Clean up temp file
-    try:
-        os.remove(output_path + '.temp.mp4')
-    except:
-        pass
-
-    await send_progress(job_id, 95, "Saving to database...")
-
-    # Save to database
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Determine source_type: check if this is an auto-created project for a 5-star clip
-        cursor.execute("""
-            SELECT id FROM raw_clips WHERE auto_project_id = ?
-        """, (project_id,))
-        is_auto_project = cursor.fetchone() is not None
-        source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
-
-        cursor.execute("""
-            INSERT INTO final_videos (project_id, filename, version, source_type)
-            VALUES (?, ?, ?, ?)
-        """, (project_id, output_filename, next_version, source_type))
-        final_video_id = cursor.lastrowid
-
-        # Update project to point to new final video
-        cursor.execute("""
-            UPDATE projects SET final_video_id = ? WHERE id = ?
-        """, (final_video_id, project_id))
-
-        conn.commit()
-
-    logger.info(f"[ExportWorker] Overlay export complete: {output_filename} (id: {final_video_id}, source_type: {source_type})")
-
-    return final_video_id, output_filename
-
-
-async def process_multi_clip_export(job_id: str, project_id: int, config: dict) -> tuple:
-    """
-    Process a multi-clip export.
-
-    Returns (output_video_id, output_filename)
-    """
-    # TODO: Implement multi-clip export
-    raise NotImplementedError("Multi-clip export not yet implemented in worker")
 
 
 # =============================================================================

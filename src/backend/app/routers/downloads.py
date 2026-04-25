@@ -190,6 +190,7 @@ class DownloadItem(BaseModel):
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
     # Game grouping info
+    watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
     game_ids: List[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
     game_names: List[str] = []  # Display names for those games
     game_dates: List[str] = []  # Game dates (for season/year grouping)
@@ -228,6 +229,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.source_type,
                 fv.game_id,
                 fv.rating_counts,
+                fv.watched_at,
                 COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
             LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
@@ -511,6 +513,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 source_type=row['source_type'],
                 game_id=row['game_id'],
                 rating_counts=rating_counts,
+                watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,
                 game_dates=game_dates,
@@ -787,6 +790,19 @@ async def delete_download(download_id: int, remove_file: bool = False):
         return {"success": True, "deleted_id": download_id}
 
 
+@router.patch("/{download_id}/watched")
+async def mark_watched(download_id: int):
+    """Mark a download as watched (first play in gallery)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE final_videos SET watched_at = CURRENT_TIMESTAMP WHERE id = ? AND watched_at IS NULL",
+            (download_id,),
+        )
+        conn.commit()
+        return {"success": True}
+
+
 @router.get("/count")
 async def get_download_count():
     """
@@ -797,14 +813,19 @@ async def get_download_count():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Count only latest version per project (same logic as list endpoint)
         cursor.execute(f"""
-            SELECT COUNT(*) as count FROM final_videos
+            SELECT
+                COUNT(*) as count,
+                SUM(CASE WHEN watched_at IS NULL THEN 1 ELSE 0 END) as unwatched_count
+            FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
         """)
         row = cursor.fetchone()
 
-        return {"count": row['count'] if row else 0}
+        return {
+            "count": row['count'] if row else 0,
+            "unwatched_count": row['unwatched_count'] if row else 0,
+        }
 
 
 @router.post("/{download_id}/restore-project")
@@ -836,11 +857,11 @@ async def restore_project_from_archive(download_id: int):
 
         project_id = row['project_id']
 
-        # Check if project already exists in DB (not archived)
-        cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-        if cursor.fetchone():
-            # Project is already in DB, just return its ID
-            logger.info(f"Project {project_id} already in DB, no restore needed")
+        # Check if project is in DB and not archived (has working data)
+        cursor.execute("SELECT id, archived_at FROM projects WHERE id = ?", (project_id,))
+        project_row = cursor.fetchone()
+        if project_row and not project_row['archived_at']:
+            logger.info(f"Project {project_id} already in DB and not archived, no restore needed")
             return {"project_id": project_id, "restored": False}
 
     # Check if archive exists

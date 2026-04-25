@@ -49,18 +49,22 @@ export function DownloadsPanel({
     downloadingId,
     getDownloadUrl,
     getStreamingUrl,
+    markWatched,
     formatFileSize,
     formatDuration,
     formatDate,
     setFilter
   } = useDownloads(isOpen);
 
+  const setUnwatchedCount = useGalleryStore((state) => state.setUnwatchedCount);
+
   // Sync download count to gallery store
   useEffect(() => {
     if (loadState === 'ready') {
       setCount(downloads.length);
+      setUnwatchedCount(downloads.filter(d => !d.watched_at).length);
     }
-  }, [downloads, loadState, setCount]);
+  }, [downloads, loadState, setCount, setUnwatchedCount]);
 
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
@@ -96,6 +100,7 @@ export function DownloadsPanel({
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
     setPlayingVideo(download);
     close();
+    if (!download.watched_at) markWatched(download.id);
     // T540: Record achievements for viewing gallery video
     useQuestStore.getState().recordAchievement('viewed_gallery_video');
     // Custom project video gets a separate achievement for Quest 3
@@ -210,6 +215,19 @@ export function DownloadsPanel({
 
   // getSourceTypeLabel imported from constants/sourceTypes.js
 
+  // Find the latest unwatched download ID (first unwatched in created_at DESC order)
+  const latestUnwatchedId = downloads.find(d => !d.watched_at)?.id ?? null;
+
+  // ID of the latest export (for auto-expanding its parent group)
+  const latestDownloadId = downloads[0]?.id ?? null;
+
+  const getUnwatchedStyle = (downloadId) => {
+    if (downloadId === latestUnwatchedId) {
+      return { border: 'border-cyan-400', dot: 'unwatched-dot unwatched-dot-cyan' };
+    }
+    return { border: 'border-blue-500', dot: 'bg-blue-500' };
+  };
+
   // Render a single download item card
   const renderDownloadCard = (download) => {
     // Determine what to show as subtitle (avoid redundant or meaningless info)
@@ -221,15 +239,25 @@ export function DownloadsPanel({
       !projectNameLower.includes('annotated') &&
       !projectNameLower.includes('brilliant');
 
+    const isUnwatched = !download.watched_at;
+    const style = isUnwatched ? getUnwatchedStyle(download.id) : null;
+
     return (
       <div
         key={download.id}
-        className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
+        className={`p-3 bg-gray-700 rounded-lg border transition-colors ${
+          isUnwatched
+            ? `${style.border} border-l-4`
+            : 'border-gray-600 hover:border-gray-500'
+        }`}
       >
         <div className="flex items-start gap-3">
-          {/* Video icon */}
-          <div className="w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
+          {/* Video icon with unwatched dot */}
+          <div className="relative w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
             <Video size={20} className="text-purple-400" />
+            {isUnwatched && (
+              <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${style.dot} ring-2 ring-gray-700`} />
+            )}
           </div>
 
           {/* Info */}
@@ -342,13 +370,13 @@ export function DownloadsPanel({
           {/* Ungrouped items first */}
           {ungrouped.map(download => renderDownloadCard(download))}
 
-          {/* Grouped items by game - collapsed by default */}
+          {/* Grouped items by game - latest export's group expanded by default */}
           {sortedKeys.map(groupKey => (
             <CollapsibleGroup
               key={groupKey}
               title={groupKey}
               count={gameGroups[groupKey].length}
-              defaultExpanded={false}
+              defaultExpanded={gameGroups[groupKey].some(d => d.id === latestDownloadId)}
             >
               <div className="space-y-2">
                 {gameGroups[groupKey].map(download => renderDownloadCard(download))}

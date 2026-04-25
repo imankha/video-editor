@@ -643,6 +643,7 @@ def ensure_database():
                 name TEXT,
                 rating_counts TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                watched_at TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
