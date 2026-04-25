@@ -806,8 +806,64 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       }
     } else if (kind === VideoErrorKind.DECODE_ERROR) {
       userMessage = 'Video could not be decoded. The file may be corrupted.';
+      const diagUrl = video.src;
+      if (diagUrl && !diagUrl.startsWith('blob:')) {
+        fetch(diagUrl, {
+          method: 'GET',
+          headers: { Range: 'bytes=0-0' },
+          credentials: 'include',
+        })
+          .then(async (resp) => {
+            const ct = resp.headers.get('content-type') || 'unknown';
+            let bodySnippet = '';
+            try {
+              const reader = resp.body?.getReader();
+              if (reader) {
+                const { value } = await reader.read();
+                if (value) bodySnippet = new TextDecoder().decode(value.slice(0, 100));
+                reader.cancel();
+              }
+            } catch (_) { /* body read failed */ }
+            const isHtml = ct.includes('text/html') || bodySnippet.startsWith('<');
+            console.warn(
+              `[VIDEO_DIAG] decode_error id=${loadIdRef.current} ` +
+              `status=${resp.status} content_type=${ct} ` +
+              `is_html=${isHtml} url=${diagUrl.substring(0, 120)} ` +
+              `body=${bodySnippet.substring(0, 80).replace(/\n/g, ' ')}`
+            );
+          })
+          .catch(() => { /* diag probe failed */ });
+      }
     } else if (kind === VideoErrorKind.FORMAT_ERROR) {
       userMessage = 'Video format not supported.';
+      const diagUrl = video.src;
+      if (diagUrl && !diagUrl.startsWith('blob:')) {
+        fetch(diagUrl, {
+          method: 'GET',
+          headers: { Range: 'bytes=0-0' },
+          credentials: 'include',
+        })
+          .then(async (resp) => {
+            const ct = resp.headers.get('content-type') || 'unknown';
+            let bodySnippet = '';
+            try {
+              const reader = resp.body?.getReader();
+              if (reader) {
+                const { value } = await reader.read();
+                if (value) bodySnippet = new TextDecoder().decode(value.slice(0, 100));
+                reader.cancel();
+              }
+            } catch (_) { /* body read failed */ }
+            const isHtml = ct.includes('text/html') || bodySnippet.startsWith('<');
+            console.warn(
+              `[VIDEO_DIAG] format_error id=${loadIdRef.current} ` +
+              `status=${resp.status} content_type=${ct} ` +
+              `is_html=${isHtml} url=${diagUrl.substring(0, 120)} ` +
+              `body=${bodySnippet.substring(0, 80).replace(/\n/g, ' ')}`
+            );
+          })
+          .catch(() => { /* diag probe failed */ });
+      }
     } else if (kind === VideoErrorKind.STALE_BLOB) {
       // Stale blob but no stashed streaming URL — nothing we can do.
       userMessage = 'Video source expired. Please reload the page.';

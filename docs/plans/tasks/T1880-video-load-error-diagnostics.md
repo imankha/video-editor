@@ -1,6 +1,6 @@
 # T1880: Video Load Error Diagnostics
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-04-25
