@@ -1,6 +1,6 @@
 # T1116: Extract Shared Export Pipeline from multi_clip.py
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 4
 **Complexity:** 4
 **Created:** 2026-04-24
