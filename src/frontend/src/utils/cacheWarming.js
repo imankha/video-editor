@@ -118,7 +118,9 @@ let warmerDisabled = false;
 
 // AbortControllers for in-flight warm fetches. FOREGROUND_ACTIVE and
 // visibility-change abort these so the browser can reclaim connections.
+// Clip range controllers are separate — FOREGROUND_ACTIVE doesn't touch them.
 const inFlightControllers = new Set();
+const inFlightClipRangeControllers = new Set();
 
 // ── Diagnostics ─────────────────────────────────────────────────────────────
 
@@ -129,7 +131,7 @@ const inFlightControllers = new Set();
 export function getWarmingDiag() {
   return {
     priority: currentPriority,
-    inFlight: inFlightControllers.size,
+    inFlight: inFlightControllers.size + inFlightClipRangeControllers.size,
     tier1: tier1Queue.length,
     games: gamesQueue.length,
     gallery: galleryQueue.length,
@@ -176,9 +178,16 @@ function abortInFlightWarms() {
 // connection slot.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && inFlightControllers.size > 0) {
-      console.log(`[CacheWarming] Tab hidden — aborting ${inFlightControllers.size} in-flight warm fetches`);
-      abortInFlightWarms();
+    if (document.visibilityState === 'hidden') {
+      const total = inFlightControllers.size + inFlightClipRangeControllers.size;
+      if (total > 0) {
+        console.log(`[CacheWarming] Tab hidden — aborting ${total} in-flight warm fetches`);
+        abortInFlightWarms();
+        for (const ctrl of inFlightClipRangeControllers) {
+          try { ctrl.abort(); } catch { /* ignore */ }
+        }
+        inFlightClipRangeControllers.clear();
+      }
     }
   });
 }
@@ -322,7 +331,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), WARM_FETCH_TIMEOUT_MS);
-  inFlightControllers.add(controller);
+  inFlightClipRangeControllers.add(controller);
   try {
     // Warm the moov/ftyp header region (1MB). <video> always fetches a head
     // range first to parse the moov atom before it can seek to clipOffset.
@@ -351,7 +360,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
     return false;
   } finally {
     clearTimeout(timeout);
-    inFlightControllers.delete(controller);
+    inFlightClipRangeControllers.delete(controller);
   }
 }
 
