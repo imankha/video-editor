@@ -18,6 +18,7 @@ import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
 import { useSyncStore } from '../stores/syncStore';
+import { SECTION_NAMES } from '../config/displayNames';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -458,9 +459,9 @@ export function ProjectManager({
             variant="outline"
             icon={Image}
             onClick={onOpenDownloads}
-            title="Gallery"
+            title={SECTION_NAMES.LIBRARY}
           >
-            <span className="hidden sm:inline">Gallery</span>
+            <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
             {downloadsCount > 0 && (
               <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
                 {downloadsCount > 9 ? '9+' : downloadsCount}
@@ -476,7 +477,7 @@ export function ProjectManager({
       <div className="text-center pt-10 sm:pt-0 mb-6">
         <Logo size={48} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
-        <p className="text-gray-400">Manage your games and reels</p>
+        <p className="text-gray-400">{`Manage your games and ${SECTION_NAMES.DRAFTS_LOWER}`}</p>
       </div>
 
       {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
@@ -588,7 +589,7 @@ export function ProjectManager({
           }`}
         >
           <FolderOpen size={16} />
-          Reels
+          {SECTION_NAMES.DRAFTS}
           {projects.length > 0 && (
             <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
               activeTab === 'projects' ? 'bg-purple-700' : 'bg-gray-700'
@@ -728,12 +729,12 @@ export function ProjectManager({
       ) : (
         /* Projects List */
         loading ? (
-          <div className="text-gray-400">Loading reels...</div>
+          <div className="text-gray-400">{`Loading ${SECTION_NAMES.DRAFTS_LOWER}...`}</div>
         ) : error ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
               <AlertTriangle size={20} />
-              <span className="font-medium">Failed to load reels</span>
+              <span className="font-medium">{`Failed to load ${SECTION_NAMES.DRAFTS_LOWER}`}</span>
             </div>
             <p className="text-gray-500 text-sm mb-4">
               {error.includes('fetch') || error.includes('network')
@@ -743,7 +744,7 @@ export function ProjectManager({
           </div>
         ) : projects.length === 0 ? (
           <div className="text-gray-500 text-center">
-            <p className="mb-2">No reels yet</p>
+            <p className="mb-2">{`No ${SECTION_NAMES.DRAFTS_LOWER} yet`}</p>
             <p className="text-sm">Create a new reel or add a game to get started</p>
           </div>
         ) : (
@@ -852,7 +853,7 @@ export function ProjectManager({
                             ? 'bg-purple-600 text-white'
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
-                        title="Manually created reels"
+                        title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
                       >
                         <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : 'text-purple-400'} />
                         Custom ({filterCounts.custom})
@@ -866,14 +867,14 @@ export function ProjectManager({
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">
                 {filteredProjects.length === projects.length
-                  ? `Your Reels`
-                  : `Showing ${filteredProjects.length} of ${projects.length} Reels`}
+                  ? `Your ${SECTION_NAMES.DRAFTS}`
+                  : `Showing ${filteredProjects.length} of ${projects.length} ${SECTION_NAMES.DRAFTS}`}
               </h2>
             </div>
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
-                  No reels match the current filters
+                  {`No ${SECTION_NAMES.DRAFTS_LOWER} match the current filters`}
                 </div>
               ) : (
                 <>

@@ -11,6 +11,7 @@ import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
+import { SECTION_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
@@ -541,7 +542,7 @@ function App() {
           {/* T1550: Unified header */}
           <UnifiedHeader
             onHomeClick={() => handleModeChange(EDITOR_MODES.PROJECT_MANAGER)}
-            breadcrumbType="Reels"
+            breadcrumbType={SECTION_NAMES.DRAFTS}
             breadcrumbItemName={getProjectDisplayName(selectedProject)}
             editorMode={editorMode}
             onModeChange={handleModeChange}

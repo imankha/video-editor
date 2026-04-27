@@ -6,6 +6,7 @@ import { useExportStore, useAuthStore, useSyncStore, EDITOR_MODES } from '../sto
 import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
+import { SECTION_NAMES } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipCropKeyframes } from '../utils/clipSelectors';
@@ -829,7 +830,7 @@ export function ExportButtonContainer({
         const blob = new Blob([response.data], { type: 'video/mp4' });
 
         setLocalProgress(95);
-        setProgressMessage('Saving to gallery...');
+        setProgressMessage(`Saving to ${SECTION_NAMES.LIBRARY}...`);
 
         if (projectId) {
           try {

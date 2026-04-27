@@ -9,6 +9,7 @@ import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { API_BASE } from '../config';
+import { SECTION_NAMES } from '../config/displayNames';
 
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
@@ -450,7 +451,7 @@ export function DownloadsPanel({
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
             <Image size={20} className="text-purple-400" />
-            <h2 className="text-lg font-bold text-white">Gallery</h2>
+            <h2 className="text-lg font-bold text-white">{SECTION_NAMES.LIBRARY}</h2>
             {hasDownloads && (
               <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
                 {downloads.length}

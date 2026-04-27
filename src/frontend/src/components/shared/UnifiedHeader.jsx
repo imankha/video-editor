@@ -14,7 +14,7 @@ import { SignInButton } from '../SignInButton';
  * - CreditBalance, Gallery, SignIn, Admin, ModeSwitcher (right)
  *
  * @param {function} onHomeClick - Navigate back to home/projects
- * @param {string} breadcrumbType - "Games" or "Reels"
+ * @param {string} breadcrumbType - "Games" or "Reel Drafts"
  * @param {string} breadcrumbItemName - Current game or project name
  * @param {string} editorMode - Current mode ('annotate' | 'framing' | 'overlay')
  * @param {function} onModeChange - Mode switch handler

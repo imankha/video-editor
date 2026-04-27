@@ -4,6 +4,7 @@ import { Button, Toggle, ExportProgress } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { BuyCreditsModal } from './BuyCreditsModal';
+import { SECTION_NAMES } from '../config/displayNames';
 
 /**
  * ExportButtonView - Pure presentational component for export UI
@@ -280,7 +281,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
       {/* Success message */}
       {displayProgress === 100 && !isCurrentlyExporting && (
         <div className="text-green-400 text-sm bg-green-900/20 border border-green-800 rounded p-2">
-          Export complete! View in Gallery.
+          {`Export complete! View in ${SECTION_NAMES.LIBRARY}.`}
         </div>
       )}
 

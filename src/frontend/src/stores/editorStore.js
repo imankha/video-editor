@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { SECTION_NAMES } from '../config/displayNames';
 
 /**
  * Editor Modes - String constants for mode comparisons
@@ -27,7 +28,7 @@ export const EDITOR_MODES = {
  * - Single source of truth for screen metadata
  */
 export const SCREENS = {
-  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: 'Reels' },
+  PROJECT_MANAGER: { type: EDITOR_MODES.PROJECT_MANAGER, label: SECTION_NAMES.DRAFTS },
   FRAMING: { type: EDITOR_MODES.FRAMING, label: 'Framing' },
   OVERLAY: { type: EDITOR_MODES.OVERLAY, label: 'Overlay' },
   ANNOTATE: { type: EDITOR_MODES.ANNOTATE, label: 'Annotate' },

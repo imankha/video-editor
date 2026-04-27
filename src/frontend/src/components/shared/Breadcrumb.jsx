@@ -6,7 +6,7 @@ import { ChevronRight } from 'lucide-react';
  * Displays the current location in the app hierarchy.
  * Format: Type › Item Name
  *
- * @param {string} type - Category type ('Games' or 'Reels')
+ * @param {string} type - Category type ('Games' or 'Reel Drafts')
  * @param {string} itemName - Name of the selected item (optional)
  * @param {function} onTypeClick - Callback when type label is clicked (navigates home)
  */
