@@ -1183,6 +1183,7 @@ async def _export_clips(
     is_test_mode: bool = False,
 ) -> JSONResponse:
     """Core export pipeline. Handles 1-N clips via Modal or local GPU."""
+    logger.info(f"[T1116] _export_clips entered: export_id={export_id}, clips={len(clips)}, modal={modal_enabled()}")
     # Reconstruct legacy formats for internal functions
     clips_data = []
     video_files: Dict[int, Any] = {}
@@ -2077,6 +2078,8 @@ async def export_multi_clip(
         ))
 
     is_test_mode = request.headers.get('X-Test-Mode', '').lower() == 'true'
+
+    logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
 
     return await _export_clips(
         export_id=export_id,

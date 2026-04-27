@@ -426,7 +426,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         elif not skip_session_init:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
-            user_session_init(user_id)
+            init_result = user_session_init(user_id)
+            profile_id = init_result.get("profile_id")
 
         # --- Skip sync for certain paths ---
         should_sync = R2_ENABLED and not any(
@@ -441,7 +442,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # next request after a write will see locally-committed state since we
         # commit BEFORE releasing the lock.
         async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
-            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id)
+            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
 
     async def _sync_aware_flow(
         self,
@@ -450,6 +451,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         meta: dict,
         user_id: str,
         req_id: str,
+        profile_id: str | None = None,
     ) -> Response:
         """Original write-tracking + R2 sync flow. Held inside the per-user
         write lock when the request is a writer; runs lock-free for readers."""
@@ -521,8 +523,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     if had_writes and had_user_db_writes:
                         # Both need syncing — run in parallel using explicit
                         # functions that take args instead of relying on ContextVars
-                        _user_id = get_current_user_id()
-                        _profile_id = get_current_profile_id()
+                        _user_id = user_id
+                        _profile_id = profile_id
                         timing = {}
 
                         # T1530/T1531: these run on worker threads, so the
