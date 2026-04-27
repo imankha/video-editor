@@ -169,6 +169,7 @@ class WorkingClipResponse(BaseModel):
     game_id: Optional[int] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    duration: Optional[float] = None
     game_video_url: Optional[str] = None  # Presigned URL for source game video (for framing preview)
     # T1460: needed client-side for pushClipRanges proportional byte estimation
     video_duration: Optional[float] = None
@@ -1139,6 +1140,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 game_id=clip['raw_game_id'],
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
+                duration=(clip['raw_end_time'] - clip['raw_start_time']) if clip['raw_start_time'] is not None and clip['raw_end_time'] is not None else None,
                 game_video_url=game_video_url,
                 video_duration=clip['video_duration'],
                 video_size=clip['video_size'],

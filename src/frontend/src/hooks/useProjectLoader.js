@@ -159,9 +159,9 @@ export function useProjectLoader() {
           }
         }
 
-        const duration = (clip.start_time != null && clip.end_time != null)
-          ? clip.end_time - clip.start_time
-          : (clip.video_duration ?? 0);
+        const duration = clip.duration
+          ?? (clip.start_time != null && clip.end_time != null ? clip.end_time - clip.start_time : null)
+          ?? (clip.video_duration ?? 0);
 
         metadataCache[clip.id] = {
           duration,
