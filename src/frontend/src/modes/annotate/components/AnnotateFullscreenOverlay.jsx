@@ -249,8 +249,8 @@ export function AnnotateFullscreenOverlay({
     setSelectedTags([]);
     setClipName('');
     setIsNameManuallyEdited(false);
-    setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_HALF_DURATION));
-    setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_HALF_DURATION, videoDuration || Infinity));
+    setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE));
+    setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
     // Resume playback
     onResume();

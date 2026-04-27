@@ -805,25 +805,32 @@ async def delete_game(game_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Find all projects that were auto-created from this game's clips
-        # These must be deleted explicitly — they're not FK-linked to games
-        cursor.execute(
-            "SELECT DISTINCT auto_project_id FROM raw_clips WHERE game_id = ? AND auto_project_id IS NOT NULL",
-            (game_id,)
-        )
-        project_ids = [row['auto_project_id'] for row in cursor.fetchall()]
+        # Find all projects linked to this game's clips (auto-created or manual)
+        cursor.execute("""
+            SELECT DISTINCT p.id FROM projects p
+            JOIN working_clips wc ON wc.project_id = p.id
+            JOIN raw_clips rc ON rc.id = wc.raw_clip_id
+            WHERE rc.game_id = ?
+        """, (game_id,))
+        project_ids_before = {row['id'] for row in cursor.fetchall()}
 
-        if project_ids:
-            placeholders = ','.join('?' * len(project_ids))
-            # Delete auto-projects — cascades to working_clips, working_videos, export_jobs
-            cursor.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", project_ids)
-
-        # Delete the game — cascades to raw_clips (CASCADE), which cascades to
-        # working_clips (via raw_clip_id CASCADE). modal_tasks, game_videos also cascade.
+        # Delete the game — cascades to raw_clips, which cascades to working_clips
         cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+
+        # Delete any projects that are now empty (all their clips came from this game)
+        if project_ids_before:
+            placeholders = ','.join('?' * len(project_ids_before))
+            cursor.execute(f"""
+                DELETE FROM projects WHERE id IN ({placeholders})
+                AND id NOT IN (SELECT DISTINCT project_id FROM working_clips)
+            """, list(project_ids_before))
+            orphaned = cursor.rowcount
+        else:
+            orphaned = 0
+
         conn.commit()
 
-        logger.info(f"Deleted game {game_id} ({len(project_ids)} auto-projects cascaded)")
+        logger.info(f"Deleted game {game_id} ({orphaned} orphaned projects cleaned up)")
         return {'success': True}
 
 
