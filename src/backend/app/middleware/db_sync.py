@@ -46,8 +46,6 @@ from ..profiling import (
 from ..database import (
     init_request_context,
     clear_request_context,
-    sync_db_to_cloud_if_writes,
-    sync_user_db_to_cloud_if_writes,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
     get_request_has_writes,
@@ -60,7 +58,7 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED, APP_ENV
-from ..user_context import set_current_user_id, get_current_user_id, set_current_req_id
+from ..user_context import set_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
 
@@ -610,13 +608,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
                             )
                     elif had_writes:
-                        # T1536: same blocking concern — wrap in to_thread.
-                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
+                        _user_id = user_id
+                        _profile_id = profile_id
+                        result = await asyncio.to_thread(sync_db_to_r2_explicit, _user_id, _profile_id)
+                        db_status = "ok" if result else "failed"
                         user_sync_success = True
                     else:
                         # had_user_db_writes only
                         db_status = "ok"
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_r2_explicit, user_id)
 
                     if db_status == "conflict":
                         sync_status = "conflict"
@@ -660,10 +660,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     sync_start = time.perf_counter()
                     _begin_sync_attempt(user_id)
                     try:
-                        # T1536: don't block the event loop on the recovery sync.
-                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
-                        overall_ok = (db_status == "ok") and user_sync_success
+                        _err_user_id = user_id
+                        _err_profile_id = profile_id
+                        profile_ok = await asyncio.to_thread(
+                            sync_db_to_r2_explicit, _err_user_id, _err_profile_id
+                        ) if had_writes and _err_profile_id else True
+                        user_ok = await asyncio.to_thread(
+                            sync_user_db_to_r2_explicit, _err_user_id
+                        ) if had_user_db_writes else True
+                        overall_ok = profile_ok and user_ok
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
                         overall_ok = False
