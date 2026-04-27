@@ -93,6 +93,13 @@ verify_url() {
   fi
 }
 
+# ── Sync secrets from .env.prod ──────────────────────────────────────
+
+if $deploy_backend; then
+  echo "[secrets]  Syncing secrets from .env.prod to Fly.io..."
+  bash "$REPO_ROOT/scripts/push-secrets.sh" production
+fi
+
 # ── Backend deploy ───────────────────────────────────────────────────
 
 if $deploy_backend; then
@@ -142,6 +149,23 @@ if $deploy_frontend; then
   git tag "$tag"
   git push origin "$tag" --quiet
   echo "[tag]      Created $tag"
+fi
+
+# ── Promote TESTING → DONE in PLAN.md ────────────────────────────────
+
+PLAN_FILE="$REPO_ROOT/docs/plans/PLAN.md"
+if [[ -f "$PLAN_FILE" ]]; then
+  testing_count=$(grep -c '| TESTING |' "$PLAN_FILE" || true)
+  if [[ "$testing_count" -gt 0 ]]; then
+    echo "[plan]     Promoting $testing_count TESTING tasks to DONE..."
+    sed -i 's/| TESTING |/| DONE |/g' "$PLAN_FILE"
+    git add "$PLAN_FILE"
+    git commit -m "Promote $testing_count TESTING tasks to DONE after deploy"
+    git push origin master --quiet
+    echo "[plan]     $testing_count tasks promoted ✓"
+  else
+    echo "[plan]     No TESTING tasks to promote ✓"
+  fi
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────

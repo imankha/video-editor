@@ -1,3 +1,8 @@
+---
+name: deploy
+description: "Deploy to Production"
+---
+
 # Deploy to Production
 
 Deploy the app to production using `scripts/deploy_production.sh`.
@@ -21,17 +26,36 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    ```
    Use a 5-minute timeout (300000ms). The script handles:
    - Pre-flight checks (branch, clean tree, origin sync)
+   - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (single source of truth)
    - Backend: `fly deploy` + health check
    - Frontend: `npm run build:production` + `wrangler pages deploy` + site verify
+   - **TESTING → DONE**: promotes all TESTING tasks in PLAN.md to DONE
    - Git tagging of successful deploys
 
-4. **Promote TESTING → DONE**: After a successful deploy, scan `docs/plans/PLAN.md` for any tasks with status `TESTING` and change them to `DONE`. These tasks are now live in production. Use sed or Edit to replace all `| TESTING |` with `| DONE |` in the plan file.
+4. **Report result**: Summarize what deployed, confirm the health/verify checks passed, and list which tasks were promoted from TESTING to DONE.
 
-5. **Report result**: Summarize what deployed, confirm the health/verify checks passed, and list which tasks were promoted from TESTING to DONE.
+## Secrets Management
+
+**Single source of truth:** Root `.env` files contain all backend env vars per environment.
+
+| File | Environment | Fly.io App |
+|------|-------------|------------|
+| `.env` | Local dev | (none) |
+| `.env.staging` | Staging | reel-ballers-api-staging |
+| `.env.prod` | Production | reel-ballers-api |
+
+To update secrets:
+1. Edit the `.env.*` file
+2. Run `bash scripts/push-secrets.sh <staging|production>` to push to Fly.io
+3. The production deploy script runs this automatically
+
+Frontend public keys live in `src/frontend/.env.*` files (Vite build-time requirement).
+Non-secret config (APP_ENV, CORS_ORIGINS, etc.) lives in `fly.*.toml` `[env]` sections.
 
 ## If the script fails
 
 - **Pre-flight failure**: Tell the user what to fix (wrong branch, dirty tree, not pushed).
+- **Secrets sync failure**: Check `flyctl` auth (`flyctl auth login`).
 - **Backend deploy failure**: Check `fly logs` or the Fly.io dashboard.
 - **Frontend build failure**: Check the vite build output for errors.
 - **Frontend deploy failure**: Check wrangler output. May need `npx wrangler pages deploy dist --project-name reel-ballers-prod --branch main` manually.
