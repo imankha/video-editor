@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Star, Check } from 'lucide-react';
 import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
 import ClipScrubRegion from './ClipScrubRegion';
+import { Toggle } from '../../../components/shared/Button';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -275,6 +276,22 @@ export function ClipDetailsEditor({
             className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
             placeholder="Add notes (shown as overlay during playback)"
             rows={3}
+          />
+        </div>
+
+        {/* Create Reel Toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-gray-400 text-xs">Create Reel</label>
+            {!!region.autoProjectId && (
+              <span className="text-gray-500 text-xs ml-1.5">Reel already created</span>
+            )}
+          </div>
+          <Toggle
+            checked={!!region.autoProjectId}
+            onChange={(val) => val && onUpdate({ createProject: true })}
+            disabled={!!region.autoProjectId}
+            size="sm"
           />
         </div>
 
