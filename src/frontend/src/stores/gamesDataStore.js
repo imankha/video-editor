@@ -18,6 +18,7 @@ import { API_BASE } from '../config';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 import { useAuthStore } from './authStore';
 import { PROFILING_ENABLED } from '../utils/profiling';
+import { useProjectsStore } from './projectsStore';
 
 // Module-level refs for fetch cancellation
 let _fetchController = null;
@@ -282,6 +283,7 @@ export const useGamesDataStore = create((set, get) => ({
       }
 
       get().invalidateGames();
+      useProjectsStore.getState().fetchProjects({ force: true });
       set({ isLoading: false });
       return true;
     } catch (err) {
