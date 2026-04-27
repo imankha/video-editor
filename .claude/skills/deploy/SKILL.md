@@ -25,7 +25,9 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - Frontend: `npm run build:production` + `wrangler pages deploy` + site verify
    - Git tagging of successful deploys
 
-4. **Report result**: Summarize what deployed and confirm the health/verify checks passed.
+4. **Promote TESTING → DONE**: After a successful deploy, scan `docs/plans/PLAN.md` for any tasks with status `TESTING` and change them to `DONE`. These tasks are now live in production. Use sed or Edit to replace all `| TESTING |` with `| DONE |` in the plan file.
+
+5. **Report result**: Summarize what deployed, confirm the health/verify checks passed, and list which tasks were promoted from TESTING to DONE.
 
 ## If the script fails
 

@@ -10,7 +10,11 @@ Let users share content with others — from finished highlight reels (view-only
 ## Two Sharing Models
 
 ### 1. Gallery Video Sharing (view-only)
-Share a finished exported video with anyone. Recipient signs in, watches it in a gated player. Sharer sees who watched. Simple, lower complexity.
+Share a finished exported video with anyone. UX modeled on Google Docs sharing:
+- Sharer enters recipient email(s) and chooses **visibility**: public or private
+- **Private** (default): recipient must log in with the matching email to view the video
+- **Public**: anyone with the link can view without logging in — but named recipients still get email notifications and are tracked for watch status
+- Sharer sees who watched. Simple, lower complexity.
 
 ### 2. Player Tagging & Team Sharing (edit access)
 Tag clips with athletes by email during annotation. Share full games with the team. Recipients claim shared content to a profile of their choice and get full pipeline access (annotate, frame, overlay, export). Higher complexity — requires cross-user data materialization.
@@ -44,20 +48,20 @@ The User Picker suggests emails the user has previously shared with from the cur
 
 ## Tasks
 
-Ordered by dependency. Phase 1 ships first, Phase 2 builds on its infrastructure.
+Ordered by dependency. Gallery sharing ships first (For Alpha), player tagging builds on its infrastructure (For Launch).
 
-### Phase 1: Shared Infrastructure + Gallery Video Sharing
+### Gallery Sharing (For Alpha)
 
 | ID | Task | Status | Description |
 |----|------|--------|-------------|
 | T1800 | [User Picker Component](T1800-user-picker-component.md) | TODO | Shared UI: email input, autocomplete, account lookup (green/yellow) |
-| T1750 | [Share Backend Model & API](T1750-share-backend-model.md) | TODO | shared_videos table, share/revoke/list endpoints |
-| T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TODO | Resend integration for share notifications (reused by Phase 2) |
-| T1770 | [Gallery Share UI](T1770-gallery-share-ui.md) | TODO | Share button on gallery cards, multi-email modal using UserPicker |
-| T1780 | [Shared Video Player Page](T1780-shared-video-page.md) | TODO | /shared/:shareToken route, auth gate, gated video player |
+| T1750 | [Share Backend Model & API](T1750-share-backend-model.md) | TODO | shared_videos table, share/revoke/list endpoints, public/private access control |
+| T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TODO | Resend integration for share notifications (reused by player tagging) |
+| T1770 | [Gallery Share UI](T1770-gallery-share-ui.md) | TODO | Google Docs-style share modal: emails, visibility toggle, copy link |
+| T1780 | [Shared Video Player Page](T1780-shared-video-page.md) | TODO | /shared/:shareToken route — public plays immediately, private requires auth |
 | T1790 | [Watch Tracking & Share Status](T1790-watch-tracking-share-status.md) | TODO | Watched event on play, share status panel on gallery cards |
 
-### Phase 2: Player Tagging & Team Sharing
+### Player Tagging & Team Sharing (For Launch)
 
 | ID | Task | Status | Description |
 |----|------|--------|-------------|
@@ -65,13 +69,15 @@ Ordered by dependency. Phase 1 ships first, Phase 2 builds on its infrastructure
 | T1820 | [Annotation Player Tagging UI](T1820-annotation-player-tagging-ui.md) | TODO | "Players" section in add clip dialog, auto-tag for 4+ star |
 | T1830 | [Shared Content Inbox & Claim](T1830-shared-content-inbox.md) | TODO | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |
 | T1840 | [Cross-User Clip Delivery](T1840-cross-user-clip-delivery.md) | TODO | Player tag → pending share → email → claim → materialize game+clip |
-| T1850 | [Share Game with Team](T1850-share-game-with-team.md) | TODO | "Share with Team" on game cards, game materialization. Absorbs T1050. |
+| T1850 | [Share Game with Team](T1850-share-game-with-team.md) | TODO | "Share with Team" on game cards, game materialization on claim |
 | T1860 | [Reel Creation Player Filter](T1860-reel-creation-player-filter.md) | TODO | Player filter in GameClipSelectorModal, user's athlete default |
 
 ## Completion Criteria
 
 - [ ] All tasks complete
-- [ ] Gallery videos shareable via email with gated player + watch tracking
+- [ ] Gallery videos shareable via email with public/private visibility toggle
+- [ ] Public links viewable without login; private links require recipient email auth
+- [ ] Watch tracking works for both public and private shares
 - [ ] Clips taggable with athlete emails during annotation
 - [ ] Full games shareable with team
 - [ ] Recipients claim shared content to a profile of their choice

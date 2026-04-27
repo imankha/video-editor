@@ -10,8 +10,6 @@
 
 Users upload game footage that their teammates could also use. Currently there's no way to share a full game with others. A user who uploads a game should be able to share it with their team so teammates can annotate their own clips from the same footage.
 
-**Absorbs T1050 (Team Invitations)** — this is the concrete implementation of that concept.
-
 ## Solution
 
 Add a "Share with Team" button on game cards. Uses the UserPicker component (T1800) for entering teammate emails. Creates pending shares for each recipient. On claim, the recipient gets the full game in their profile database (same R2 video, no duplication). Sends email notifications with a link.
@@ -33,7 +31,6 @@ Add a "Share with Team" button on game cards. Uses the UserPicker component (T18
 
 ### Related Tasks
 - Depends on: T1800 (UserPicker), T1830 (inbox/claim flow)
-- Absorbs: T1050 (Team Invitations)
 - Related: T1840 (clip delivery uses same materialization pattern for games)
 
 ### Technical Notes
@@ -67,8 +64,7 @@ CTA: link to inbox or directly to game
 4. [ ] Backend: Create pending_shares for each recipient email
 5. [ ] Backend: Claim handler for game shares — materialize game + game_videos in recipient's DB
 6. [ ] Backend: Email notification via Resend
-7. [ ] Mark T1050 as absorbed by this task
-8. [ ] Tests: Share creation, claim materialization, game dedup
+7. [ ] Tests: Share creation, claim materialization, game dedup
 
 ### Progress Log
 
@@ -83,4 +79,3 @@ CTA: link to inbox or directly to game
 - [ ] Game appears in recipient's games list with full video access
 - [ ] Game deduplication: no duplicate if recipient already has the game
 - [ ] Non-users: pending share resolves on signup
-- [ ] T1050 marked as absorbed
