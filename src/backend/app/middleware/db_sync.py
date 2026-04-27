@@ -46,8 +46,6 @@ from ..profiling import (
 from ..database import (
     init_request_context,
     clear_request_context,
-    sync_db_to_cloud_if_writes,
-    sync_user_db_to_cloud_if_writes,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
     get_request_has_writes,
@@ -60,7 +58,7 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED, APP_ENV
-from ..user_context import set_current_user_id, get_current_user_id, set_current_req_id
+from ..user_context import set_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
 
@@ -179,22 +177,17 @@ def set_sync_failed(user_id: str, failed: bool) -> None:
             logger.info(f"[SYNC] User {user_id} recovered - R2 sync succeeded")
 
 
-def retry_pending_sync(user_id: str) -> bool:
+def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     """
     Retry a previously-failed R2 sync using explicit sync functions.
 
     Runs before init_request_context(), so it must NOT rely on request-scoped
-    ContextVars (which is why sync_db_to_cloud_if_writes — the original T930
-    implementation — was a no-op: has_writes was always False here). Uses the
-    explicit helpers that take user_id/profile_id directly.
+    ContextVars. Uses the explicit helpers that take user_id/profile_id directly.
 
     Returns True iff both profile.sqlite and user.sqlite synced successfully.
     """
     from app import database as db_module
     from app import storage as storage_module
-    from app.profile_context import get_current_profile_id
-
-    profile_id = get_current_profile_id()
 
     profile_ok = True
     db_path = db_module.get_database_path()
@@ -426,7 +419,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         elif not skip_session_init:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
-            user_session_init(user_id)
+            init_result = user_session_init(user_id)
+            profile_id = init_result.get("profile_id")
+            if profile_id:
+                set_current_profile_id(profile_id)
 
         # --- Skip sync for certain paths ---
         should_sync = R2_ENABLED and not any(
@@ -441,7 +437,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # next request after a write will see locally-committed state since we
         # commit BEFORE releasing the lock.
         async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
-            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id)
+            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
 
     async def _sync_aware_flow(
         self,
@@ -450,6 +446,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         meta: dict,
         user_id: str,
         req_id: str,
+        profile_id: str | None = None,
     ) -> Response:
         """Original write-tracking + R2 sync flow. Held inside the per-user
         write lock when the request is a writer; runs lock-free for readers."""
@@ -477,7 +474,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
                 _begin_sync_attempt(user_id)
                 try:
-                    ok = await asyncio.to_thread(retry_pending_sync, user_id)
+                    ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
                     if ok:
                         clear_sync_pending(user_id)
                         logger.info(f"[SYNC] Retry succeeded for user {user_id}")
@@ -521,8 +518,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     if had_writes and had_user_db_writes:
                         # Both need syncing — run in parallel using explicit
                         # functions that take args instead of relying on ContextVars
-                        _user_id = get_current_user_id()
-                        _profile_id = get_current_profile_id()
+                        _user_id = user_id
+                        _profile_id = profile_id
                         timing = {}
 
                         # T1530/T1531: these run on worker threads, so the
@@ -571,18 +568,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                             req_id=req_id,
                                         )
 
-                        # T1536: run both syncs on worker threads via the
-                        # asyncio default executor and AWAIT them. The previous
-                        # implementation used `executor.submit().result()`
-                        # which is a synchronous blocking call inside an async
-                        # def — it froze the event loop for the duration of
-                        # the sync (~900ms in the worst case), so every other
-                        # in-flight request (including readers that took no
-                        # lock) waited the same amount.
-                        loop = asyncio.get_running_loop()
+                        # T1536: run both syncs on worker threads and AWAIT them.
+                        # Uses asyncio.to_thread (not run_in_executor) so that
+                        # ContextVars (profile_id, user_id) propagate to the
+                        # worker threads — r2_key() reads them to build R2 paths.
                         profile_ok, user_ok = await asyncio.gather(
-                            loop.run_in_executor(None, _sync_profile),
-                            loop.run_in_executor(None, _sync_user),
+                            asyncio.to_thread(_sync_profile),
+                            asyncio.to_thread(_sync_user),
                         )
 
                         # T1154: distinguishing log for partial-success events so we can
@@ -608,13 +600,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
                             )
                     elif had_writes:
-                        # T1536: same blocking concern — wrap in to_thread.
-                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
+                        _user_id = user_id
+                        _profile_id = profile_id
+                        result = await asyncio.to_thread(sync_db_to_r2_explicit, _user_id, _profile_id)
+                        db_status = "ok" if result else "failed"
                         user_sync_success = True
                     else:
                         # had_user_db_writes only
                         db_status = "ok"
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_r2_explicit, user_id)
 
                     if db_status == "conflict":
                         sync_status = "conflict"
@@ -658,10 +652,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     sync_start = time.perf_counter()
                     _begin_sync_attempt(user_id)
                     try:
-                        # T1536: don't block the event loop on the recovery sync.
-                        db_status = await asyncio.to_thread(sync_db_to_cloud_if_writes)
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_cloud_if_writes)
-                        overall_ok = (db_status == "ok") and user_sync_success
+                        _err_user_id = user_id
+                        _err_profile_id = profile_id
+                        profile_ok = await asyncio.to_thread(
+                            sync_db_to_r2_explicit, _err_user_id, _err_profile_id
+                        ) if had_writes and _err_profile_id else True
+                        user_ok = await asyncio.to_thread(
+                            sync_user_db_to_r2_explicit, _err_user_id
+                        ) if had_user_db_writes else True
+                        overall_ok = profile_ok and user_ok
                     except Exception as sync_error:
                         logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
                         overall_ok = False

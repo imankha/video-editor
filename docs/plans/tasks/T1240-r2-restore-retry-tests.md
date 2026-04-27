@@ -1,6 +1,6 @@
 # T1240: R2 Restore Retry & Cooldown Tests
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-04-08

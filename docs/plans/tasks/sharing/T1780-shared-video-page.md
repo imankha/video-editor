@@ -12,7 +12,12 @@ When a recipient clicks the share link from their email, there's no page to land
 
 ## Solution
 
-Create a `/shared/:shareToken` route. If not signed in, show auth gate with recipient email pre-filled. After auth, verify email matches the share record. If authorized, render the video player (reused from gallery). If not, show 403.
+Create a `/shared/:shareToken` route that handles two access modes:
+
+- **Public links** (`is_public=1`): Render the video player immediately — no login required. Show sharer attribution (e.g., "Shared by {name}").
+- **Private links** (`is_public=0`): If not signed in, show auth gate with recipient email pre-filled. After auth, verify email matches the share record. If authorized, render the video player. If not, show 403.
+
+Both modes reuse the gallery VideoPlayer component.
 
 ## Context
 
@@ -29,20 +34,22 @@ Create a `/shared/:shareToken` route. If not signed in, show auth gate with reci
 
 ### Technical Notes
 
-- **Auth flow with share token:** When unauthenticated user hits `/shared/:shareToken`, show auth modal. After login, redirect back to the same `/shared/:shareToken` URL. The share token should be preserved across the auth redirect.
-- **Email pre-fill:** Backend GET `/shared/{shareToken}` can return recipient_email even for unauthenticated requests (just the email, not the video). Frontend uses this to pre-fill the auth form.
-- **Access check:** After auth, frontend calls GET `/shared/{shareToken}` with credentials. Backend returns 403 if email mismatch, 410 if revoked, 200 with video metadata if authorized.
-- **Video player:** Reuse the gallery VideoPlayer component. The backend response includes the stream URL for the shared video.
+- **Public vs private flow:** On page load, fetch `GET /shared/{shareToken}` (no auth). Backend returns `{is_public, recipient_email}` as metadata. If `is_public=1`, response includes full video metadata + stream URL — render player immediately. If `is_public=0`, proceed to auth flow.
+- **Auth flow (private only):** When unauthenticated user hits a private link, show auth modal with recipient email pre-filled. After login, redirect back to the same `/shared/:shareToken` URL. The share token should be preserved across the auth redirect.
+- **Access check (private only):** After auth, frontend calls GET `/shared/{shareToken}` with credentials. Backend returns 403 if email mismatch, 410 if revoked, 200 with video metadata if authorized.
+- **Video player:** Reuse the gallery VideoPlayer component. The backend response includes the stream URL for the shared video. Show sharer name/attribution on public links.
 
 ## Implementation
 
 ### Steps
 1. [ ] Add `/shared/:shareToken` route to App.jsx
-2. [ ] Create SharedVideoPage component (loading → auth gate → player or error)
-3. [ ] Handle unauthenticated state: fetch recipient email from share token, show auth with pre-fill
-4. [ ] Handle authenticated state: fetch share details, verify access, render player
-5. [ ] Error states: 403 (wrong email), 410 (revoked), 404 (invalid token)
-6. [ ] Auth redirect: preserve `/shared/:shareToken` URL across sign-in flow
+2. [ ] Create SharedVideoPage component (loading → public player / auth gate → player or error)
+3. [ ] Fetch share metadata on mount — branch on `is_public`
+4. [ ] Public path: render video player immediately with sharer attribution, no auth needed
+5. [ ] Private path: fetch recipient email, show auth gate with pre-fill
+6. [ ] Handle authenticated state (private): fetch share details, verify access, render player
+7. [ ] Error states: 403 (wrong email, private only), 410 (revoked), 404 (invalid token)
+8. [ ] Auth redirect: preserve `/shared/:shareToken` URL across sign-in flow
 
 ### Progress Log
 
@@ -51,9 +58,11 @@ Create a `/shared/:shareToken` route. If not signed in, show auth gate with reci
 ## Acceptance Criteria
 
 - [ ] `/shared/:shareToken` route exists and renders SharedVideoPage
-- [ ] Unauthenticated users see auth gate with recipient email pre-filled
+- [ ] Public links render video player immediately without login
+- [ ] Public links show sharer attribution
+- [ ] Private links: unauthenticated users see auth gate with recipient email pre-filled
 - [ ] After sign-in, user is redirected back to the shared video page
 - [ ] Authorized recipient sees video player and can play the video
-- [ ] Wrong email shows clear "not authorized" message (403)
+- [ ] Wrong email on private link shows clear "not authorized" message (403)
 - [ ] Revoked share shows "link no longer active" message (410)
 - [ ] Invalid token shows "not found" message (404)

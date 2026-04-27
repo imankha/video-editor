@@ -107,9 +107,8 @@ class TestRetryPendingSync:
 
     @patch("app.storage.sync_user_db_to_r2_with_version", return_value=(True, 2))
     @patch("app.storage.sync_database_to_r2_with_version", return_value=(True, 2))
-    @patch("app.profile_context.get_current_profile_id", return_value="abcd1234")
     @patch("app.storage.R2_ENABLED", True)
-    def test_retry_success(self, mock_profile, mock_db_sync, mock_user_sync, tmp_user):
+    def test_retry_success(self, mock_db_sync, mock_user_sync, tmp_user):
         from app.middleware.db_sync import retry_pending_sync
         user_id, base = tmp_user
 
@@ -126,16 +125,15 @@ class TestRetryPendingSync:
              patch("app.database.get_local_user_db_version", return_value=1), \
              patch("app.database.set_local_user_db_version") as mock_set_user_ver, \
              patch("app.database.USER_DATA_BASE", base):
-            result = retry_pending_sync(user_id)
+            result = retry_pending_sync(user_id, profile_id="abcd1234")
 
         assert result is True
         mock_set_ver.assert_called_once_with(user_id, "abcd1234", 2)
         mock_set_user_ver.assert_called_once_with(user_id, 2)
 
     @patch("app.storage.sync_database_to_r2_with_version", return_value=(False, None))
-    @patch("app.profile_context.get_current_profile_id", return_value="abcd1234")
     @patch("app.storage.R2_ENABLED", True)
-    def test_retry_failure(self, mock_profile, mock_db_sync, tmp_user):
+    def test_retry_failure(self, mock_db_sync, tmp_user):
         from app.middleware.db_sync import retry_pending_sync
         user_id, base = tmp_user
 
@@ -149,6 +147,6 @@ class TestRetryPendingSync:
              patch("app.database.get_local_user_db_version", return_value=None), \
              patch("app.database.set_local_user_db_version"), \
              patch("app.database.USER_DATA_BASE", base):
-            result = retry_pending_sync(user_id)
+            result = retry_pending_sync(user_id, profile_id="abcd1234")
 
         assert result is False
