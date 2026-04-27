@@ -28,6 +28,7 @@ from datetime import datetime, timedelta
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
+from ..profile_context import get_current_profile_id
 from ..constants import ExportStatus
 
 logger = logging.getLogger(__name__)
@@ -566,6 +567,7 @@ async def start_framing_export(
         "credits_deducted": credits_deducted,
         "video_seconds": video_seconds,
         "credit_user_id": user_id,
+        "profile_id": get_current_profile_id(),
     }
 
     # Step 2: Create job in database (atomic in profile.sqlite)

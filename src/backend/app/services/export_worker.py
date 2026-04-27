@@ -116,16 +116,16 @@ def _sync_after_export(config: dict) -> None:
     writes are never synced automatically. This explicit sync ensures
     export results (working_videos, project updates, job status) and
     credit refunds survive server restarts.
+
+    Reads user_id and profile_id from config dict — NOT from ContextVars,
+    which are unavailable in background tasks.
     """
-    from ..user_context import get_current_user_id
-    from ..profile_context import get_current_profile_id
     from ..database import sync_db_to_r2_explicit, sync_user_db_to_r2_explicit
 
-    try:
-        user_id = get_current_user_id()
-        profile_id = get_current_profile_id()
-    except (RuntimeError, LookupError) as e:
-        logger.error(f"[ExportWorker] R2 sync skipped — ContextVar not set: {e}")
+    user_id = config.get("credit_user_id")
+    profile_id = config.get("profile_id")
+    if not user_id or not profile_id:
+        logger.error(f"[ExportWorker] R2 sync skipped — missing user_id={user_id} or profile_id={profile_id} in config")
         return
 
     try:
@@ -133,12 +133,10 @@ def _sync_after_export(config: dict) -> None:
     except OSError as e:
         logger.error(f"[ExportWorker] Failed to sync profile DB to R2: {e}")
 
-    credit_user_id = config.get("credit_user_id")
-    if credit_user_id:
-        try:
-            sync_user_db_to_r2_explicit(credit_user_id)
-        except OSError as e:
-            logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
+    try:
+        sync_user_db_to_r2_explicit(user_id)
+    except OSError as e:
+        logger.error(f"[ExportWorker] Failed to sync user DB to R2: {e}")
 
     logger.info(f"[ExportWorker] R2 sync complete for user={user_id} profile={profile_id}")
 

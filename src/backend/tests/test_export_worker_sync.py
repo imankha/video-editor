@@ -175,61 +175,36 @@ class TestSyncUserDbToR2Explicit:
 # ---------------------------------------------------------------------------
 
 class TestSyncAfterExport:
-    """Tests for the export worker's post-export sync orchestrator (1-arg ContextVar version)."""
+    """Tests for the export worker's post-export sync orchestrator (reads from config dict)."""
 
     @patch("app.database.sync_user_db_to_r2_explicit")
     @patch("app.database.sync_db_to_r2_explicit")
-    @patch("app.profile_context.get_current_profile_id", return_value="p1")
-    @patch("app.user_context.get_current_user_id", return_value="u1")
-    def test_calls_both_syncs_when_credit_user_id_present(
-        self, mock_get_user, mock_get_profile, mock_db_sync, mock_user_sync
-    ):
-        """When config has credit_user_id, syncs both profile DB and user DB."""
+    def test_calls_both_syncs_when_config_complete(self, mock_db_sync, mock_user_sync):
+        """When config has credit_user_id and profile_id, syncs both DBs."""
         from app.services.export_worker import _sync_after_export
 
-        config = {"credit_user_id": "credit_u1"}
+        config = {"credit_user_id": "credit_u1", "profile_id": "p1"}
         _sync_after_export(config)
 
-        mock_db_sync.assert_called_once_with("u1", "p1")
+        mock_db_sync.assert_called_once_with("credit_u1", "p1")
         mock_user_sync.assert_called_once_with("credit_u1")
 
     @patch("app.database.sync_user_db_to_r2_explicit")
     @patch("app.database.sync_db_to_r2_explicit")
-    @patch("app.profile_context.get_current_profile_id", return_value="p1")
-    @patch("app.user_context.get_current_user_id", return_value="u1")
-    def test_only_profile_sync_when_no_credit_user_id(
-        self, mock_get_user, mock_get_profile, mock_db_sync, mock_user_sync
-    ):
-        """When config has no credit_user_id, only syncs profile DB."""
+    def test_skips_sync_when_missing_user_id(self, mock_db_sync, mock_user_sync):
+        """When config is missing credit_user_id, skips sync entirely."""
         from app.services.export_worker import _sync_after_export
 
-        config = {}
+        config = {"profile_id": "p1"}
         _sync_after_export(config)
 
-        mock_db_sync.assert_called_once_with("u1", "p1")
+        mock_db_sync.assert_not_called()
         mock_user_sync.assert_not_called()
 
     @patch("app.database.sync_user_db_to_r2_explicit")
     @patch("app.database.sync_db_to_r2_explicit")
-    @patch("app.profile_context.get_current_profile_id", return_value="p1")
-    @patch("app.user_context.get_current_user_id", return_value="u1")
-    def test_no_typeerror_with_dict_config(
-        self, mock_get_user, mock_get_profile, mock_db_sync, mock_user_sync
-    ):
-        """Regression: calling with a dict config must not raise TypeError."""
-        from app.services.export_worker import _sync_after_export
-
-        config = {"credit_user_id": "u1", "video_path": "/tmp/test.mp4"}
-        _sync_after_export(config)
-
-    @patch("app.database.sync_user_db_to_r2_explicit")
-    @patch("app.database.sync_db_to_r2_explicit")
-    @patch("app.profile_context.get_current_profile_id", side_effect=RuntimeError("no profile context"))
-    @patch("app.user_context.get_current_user_id", return_value="u1")
-    def test_skips_sync_when_context_var_not_set(
-        self, mock_get_user, mock_get_profile, mock_db_sync, mock_user_sync
-    ):
-        """When ContextVar is not set, logs error and skips sync without crashing."""
+    def test_skips_sync_when_missing_profile_id(self, mock_db_sync, mock_user_sync):
+        """When config is missing profile_id, skips sync entirely."""
         from app.services.export_worker import _sync_after_export
 
         config = {"credit_user_id": "u1"}
@@ -239,16 +214,21 @@ class TestSyncAfterExport:
         mock_user_sync.assert_not_called()
 
     @patch("app.database.sync_user_db_to_r2_explicit")
+    @patch("app.database.sync_db_to_r2_explicit")
+    def test_no_typeerror_with_dict_config(self, mock_db_sync, mock_user_sync):
+        """Regression: calling with a dict config must not raise TypeError."""
+        from app.services.export_worker import _sync_after_export
+
+        config = {"credit_user_id": "u1", "profile_id": "p1", "video_path": "/tmp/test.mp4"}
+        _sync_after_export(config)
+
+    @patch("app.database.sync_user_db_to_r2_explicit")
     @patch("app.database.sync_db_to_r2_explicit", side_effect=OSError("R2 upload failed"))
-    @patch("app.profile_context.get_current_profile_id", return_value="p1")
-    @patch("app.user_context.get_current_user_id", return_value="u1")
-    def test_profile_sync_oserror_does_not_crash(
-        self, mock_get_user, mock_get_profile, mock_db_sync, mock_user_sync
-    ):
+    def test_profile_sync_oserror_does_not_crash(self, mock_db_sync, mock_user_sync):
         """OSError from profile sync is caught; user sync still attempted."""
         from app.services.export_worker import _sync_after_export
 
-        config = {"credit_user_id": "credit_u1"}
+        config = {"credit_user_id": "credit_u1", "profile_id": "p1"}
         _sync_after_export(config)
 
         mock_user_sync.assert_called_once_with("credit_u1")
