@@ -51,6 +51,7 @@ Replace the implicit 5-star → auto-project logic with an explicit **"Create Re
 
 ### Related Tasks
 - None blocking. This replaces existing auto-project behavior.
+- **Game deletion already handles project cleanup:** `delete_game` in `games.py` now deletes any project whose working_clips all came from the deleted game (not just auto-created ones). This works correctly with both the old auto-project behavior and the new explicit toggle — no changes needed there.
 
 ### Technical Notes
 
@@ -60,6 +61,7 @@ Replace the implicit 5-star → auto-project logic with an explicit **"Create Re
 - Remove the auto-delete logic for rating changes (reel persists once created)
 - Keep `_create_auto_project_for_clip()` — just change what triggers it
 - Keep `is_auto_created` flag on projects for analytics
+- `delete_game` already cleans up orphaned projects (auto or manual) — no changes needed there
 
 **Frontend changes:**
 - Add "Create Reel" toggle (switch component) to the add/edit clip dialog

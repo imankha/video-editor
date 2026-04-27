@@ -53,6 +53,14 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 
 When suggesting the next task, always check the Bug Fix Sprint section first. Do not recommend feature work while bugs remain open.
 
+### Epic Prioritization
+
+**Epics compete with other epics and standalone tasks at the milestone level.** Each epic gets aggregate Impact/Complexity/Priority scores based on the collective value and effort of its tasks.
+
+- **Milestone level:** Epics and standalone tasks are ordered by Priority (Impact / Complexity). Higher priority = do first.
+- **Within-epic level:** Tasks are ordered by **dependency** — foundational layers first, since all tasks in an epic touch similar code. DB/model changes before API, API before UI.
+- **Impact over complexity:** When prioritizing within a milestone, favor high-impact work even if it's harder. The priority formula (Impact / Complexity) naturally rewards this.
+
 ---
 
 ## Completed Tasks
@@ -78,7 +86,7 @@ Scale, reliability, and data format changes that must land before alpha users ar
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | | | | | | **Sessions survive deploys and route to correct machine** |
+| | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | 9 | 5 | 1.8 | | | **Sessions survive deploys and route to correct machine** |
 | T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TODO | [ ] | Sync auth.sqlite to R2 after login so sessions survive machine restarts |
 | T1190 | ↳ [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
@@ -88,38 +96,39 @@ Scale, reliability, and data format changes that must land before alpha users ar
 
 Goal: Get user feedback. Core functionality works, performance is acceptable, onboarding doesn't block users.
 
-| ID | Task | Status | Pri | Migr | Description |
-|----|------|--------|-----|------|-------------|
-| | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | | P0 | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
-| T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | TODO | P0 | [x] | Add athlete_name, team_name, sport to profiles table + UI. Sport dropdown: Soccer, Football, Basketball, Lacrosse, Rugby. (Absorbs T1073) |
-| T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | TODO | P0 | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
-| T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | TODO | P0 | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
-| | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | | P1 | | **No free tenants on R2 -- games metered, final/working prepaid at export** |
-| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | TODO | P1 | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
-| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | TODO | P1 | [x] | ExpirationBadge on game cards + date-slider extension modal |
-| | **[Gallery Sharing](tasks/sharing/EPIC.md)** | | P1 | | **Google Docs-style share from gallery: email recipients, public/private visibility, watch tracking** |
-| T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | TODO | P1 | [ ] | Shared UI: email input, autocomplete from prior shares, account lookup (green/yellow) |
-| T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | TODO | P1 | [x] | shared_videos table (with is_public flag), CRUD storage ops, share/revoke/list/toggle-visibility endpoints with public/private access control |
-| T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | TODO | P1 | [ ] | Resend integration for share emails (reused by player tagging); fire-and-forget |
-| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | TODO | P1 | [ ] | Google Docs-style share modal: multi-email input, public/private visibility toggle, copy link, "People with access" list |
-| T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | TODO | P1 | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
-| T1790 | ↳ [Watch Tracking & Share Status](tasks/sharing/T1790-watch-tracking-share-status.md) | TODO | P1 | [ ] | Watched event on play, share status panel on gallery cards per recipient |
-| T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | TODO | P1 | [ ] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
-| T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | DONE | 3.5 | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
-| T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | DONE | 2.0 | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
-| T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | DONE | 1.3 | [ ] | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
-| T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | DONE | 3.0 | [ ] | Users understood "Games" but not "Projects" -- rename to "Reels" (UI labels only) |
-| T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | DONE | 3.0 | [x] | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
-| T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | DONE | 2.3 | [ ] | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
-| T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | DONE | 1.8 | [ ] | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
-| T1660 | [Export Failure Card State](tasks/for-alpha/T1660-export-failure-card-state.md) | DONE | 1.0 | [ ] | After export fails, project card reverts to blue "Editing" with no failure indication; add distinct failed state to progress strip |
-| T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | DONE | 1.3 | [ ] | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
-| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | DONE | 2.0 | [ ] | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
-| T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | DONE | 2.5 | [ ] | Clickable email in admin user list -> "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
-| T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | DONE | 1.3 | [ ] | Auto-archive completed projects on login; default to Framing when opening completed reels |
-| T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | DONE | 2.0 | [ ] | Clickable breadcrumbs (Games/Reels -> Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
-| T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | DONE | 1.3 | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
-| T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | DONE | 3.0 | [ ] | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin -> BrokenPipe. |
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|----|------|--------|-------|-----|--------|------|-------------|
+| T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | 7 | 3 | 2.3 | TODO | [ ] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
+| | **[Core Sharing Epic](tasks/sharing/EPIC.md)** | 8 | 4 | 1.9 | | | **End-to-end share loop: create share, send link, recipient watches** |
+| T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TODO | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
+| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
+| T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TODO | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
+| | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications, watch tracking — polish on core sharing** |
+| T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TODO | [ ] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
+| T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | TODO | [ ] | Resend integration for share emails (reused by player tagging); fire-and-forget |
+| T1790 | ↳ [Watch Tracking & Share Status](tasks/sharing/T1790-watch-tracking-share-status.md) | 6 | 4 | 1.5 | TODO | [ ] | Watched event on play, share status panel on gallery cards per recipient |
+| | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | 10 | 5 | 2.0 | | | **Gates virality -- every shared/invited user adds unmetered R2 cost without this. Must ship before sharing goes live.** |
+| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
+| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
+| | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
+| T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
+| T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
+| T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | 6 | 4 | 1.5 | TODO | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | 7 | 2 | 3.5 | DONE | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
+| T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | 6 | 3 | 2.0 | DONE | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
+| T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | 4 | 3 | 1.3 | DONE | [ ] | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
+| T1390 | [Rename Projects to Reels](tasks/for-alpha/T1390-rename-projects-to-reels.md) | 6 | 2 | 3.0 | DONE | [ ] | Users understood "Games" but not "Projects" -- rename to "Reels" (UI labels only) |
+| T1400 | [Framing Keyframe Dedup](tasks/for-alpha/T1400-framing-keyframe-dedup.md) | 6 | 2 | 3.0 | DONE | [x] | Snap to nearby keyframe within MIN_KEYFRAME_SPACING instead of creating duplicates |
+| T1520 | [Export Disconnect/Retry UX](tasks/for-alpha/T1520-export-disconnect-retry-ux.md) | 7 | 3 | 2.3 | DONE | [ ] | Misclassifies WS disconnect as "Export failed"; add retry button and reconcile with Modal job state on reconnect |
+| T1650 | [Report a Problem Button](tasks/T1650-report-problem-button.md) | 5 | 3 | 1.8 | DONE | [ ] | "Report a problem" button on auth modal sends browser console errors/warnings + user agent to all admins via Resend |
+| T1660 | [Export Failure Card State](tasks/for-alpha/T1660-export-failure-card-state.md) | 3 | 3 | 1.0 | DONE | [ ] | After export fails, project card reverts to blue "Editing" with no failure indication; add distinct failed state to progress strip |
+| T1600 | [Mobile Responsive](tasks/for-alpha/T1600-mobile-responsive.md) | 4 | 3 | 1.3 | DONE | [ ] | Make all screens work on mobile (360-428px); move new user flow below the fold on mobile so users scroll to it |
+| T1140 | [Production Deploy Script](tasks/T1140-production-deploy-script.md) | 6 | 3 | 2.0 | DONE | [ ] | Single command to deploy frontend/backend to production with pre-flight checks and health verification |
+| T1510 | [Admin Impersonate User](tasks/T1510-admin-impersonate-user.md) | 5 | 2 | 2.5 | DONE | [ ] | Clickable email in admin user list -> "login as user" session with banner, audit log, reversible stop. Unblocks support debugging |
+| T1640 | [Archive on Approve](tasks/T1640-archive-on-approve.md) | 4 | 3 | 1.3 | DONE | [ ] | Auto-archive completed projects on login; default to Framing when opening completed reels |
+| T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | 6 | 3 | 2.0 | DONE | [ ] | Clickable breadcrumbs (Games/Reels -> Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
+| T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | 4 | 3 | 1.3 | DONE | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
+| T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | 6 | 2 | 3.0 | DONE | [ ] | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin -> BrokenPipe. |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
@@ -166,7 +175,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1220 | [Modal Range Requests](tasks/for-launch/T1220-modal-range-requests.md) | 7 | 5 | 1.4 | DONE | [ ] | Modal downloads full 3GB video for 10s clip; use presigned URLs + FFmpeg pre-input seek |
 | T1221 | [Dead Modal Code Removal](tasks/for-launch/T1221-dead-modal-code-removal.md) | 3 | 2 | 1.5 | DONE | [ ] | Delete extract_clip_modal, process_multi_clip_modal, create_annotated_compilation -- no callers (follow-up from T1220 audit) |
 | T1222 | [game_videos JOIN Audit](tasks/for-launch/T1222-game-videos-join-audit.md) | 5 | 3 | 1.7 | DONE | [ ] | Multi-video games have NULL games.blake3_hash; audit storage.py/games_upload.py/other exporters to JOIN game_videos instead |
-| | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | | | | | | **Non-blocking I/O + unify single/multi-clip export paths** |
+| | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | 5 | 4 | 1.3 | | | **Non-blocking I/O + unify single/multi-clip export paths** |
 | T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | DONE | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
 | T1116 | ↳ [Extract Shared Pipeline](tasks/export-pipeline/T1116-extract-shared-pipeline.md) | 4 | 4 | 1.0 | TESTING | [ ] | Extract `_export_clips()` + `ClipExportData` from multi_clip.py; `export_multi_clip` becomes thin adapter. No behavior change. |
 | T1117 | ↳ [Route Single-Clip Through Pipeline](tasks/export-pipeline/T1117-route-single-clip.md) | 4 | 5 | 0.8 | TESTING | [ ] | `render_project` delegates to `_export_clips([clip])`. Delete 800 lines of duplicated logic. Unify response shapes. |
@@ -184,7 +193,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | [ ] | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
-| | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | | | | | | **Player tagging, team game sharing, cross-user clip delivery** |
+| | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | 8 | 6 | 1.3 | | | **Player tagging, team game sharing, cross-user clip delivery** |
 | T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | 7 | 3 | 2.3 | TODO | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
 | T1820 | ↳ [Annotation Player Tagging UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | "Players" section in add clip dialog; auto-tag for 4+ star; UserPicker for teammates |
 | T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | 8 | 5 | 1.6 | TODO | [x] | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |

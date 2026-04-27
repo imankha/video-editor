@@ -50,15 +50,24 @@ The User Picker suggests emails the user has previously shared with from the cur
 
 Ordered by dependency. Gallery sharing ships first (For Alpha), player tagging builds on its infrastructure (For Launch).
 
-### Gallery Sharing (For Alpha)
+### Phase 1: Core Sharing (For Alpha)
+
+End-to-end share loop: create share, send link, recipient watches. Share modal starts with basic email input; User Picker upgrades it in Phase 2.
 
 | ID | Task | Status | Description |
 |----|------|--------|-------------|
-| T1800 | [User Picker Component](T1800-user-picker-component.md) | TODO | Shared UI: email input, autocomplete, account lookup (green/yellow) |
 | T1750 | [Share Backend Model & API](T1750-share-backend-model.md) | TODO | shared_videos table, share/revoke/list endpoints, public/private access control |
-| T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TODO | Resend integration for share notifications (reused by player tagging) |
-| T1770 | [Gallery Share UI](T1770-gallery-share-ui.md) | TODO | Google Docs-style share modal: emails, visibility toggle, copy link |
+| T1770 | [Gallery Share UI](T1770-gallery-share-ui.md) | TODO | Share modal: email input, visibility toggle, copy link |
 | T1780 | [Shared Video Player Page](T1780-shared-video-page.md) | TODO | /shared/:shareToken route — public plays immediately, private requires auth |
+
+### Phase 2: Share Engagement (For Alpha)
+
+Recipient discovery, email notifications, watch tracking — polish on core sharing.
+
+| ID | Task | Status | Description |
+|----|------|--------|-------------|
+| T1800 | [User Picker Component](T1800-user-picker-component.md) | TODO | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal. |
+| T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TODO | Resend integration for share notifications (reused by player tagging) |
 | T1790 | [Watch Tracking & Share Status](T1790-watch-tracking-share-status.md) | TODO | Watched event on play, share status panel on gallery cards |
 
 ### Player Tagging & Team Sharing (For Launch)

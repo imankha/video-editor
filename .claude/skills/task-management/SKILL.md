@@ -111,6 +111,9 @@ What does completing this epic achieve?
 1. **Bundle tasks** - Don't context-switch out of an epic mid-way
 2. **Epic in PLAN.md** - Reference the epic folder, not individual tasks
 3. **Complete together** - Mark epic complete only when ALL tasks done
+4. **Epics get aggregate scores** - Each epic has Impact/Complexity/Priority so it competes with other epics and standalone tasks at the milestone level
+5. **Within-epic order = dependency** - Tasks inside an epic are ordered by dependency (foundational layers first: DB → API → UI), not by individual priority score
+6. **Impact over complexity** - Within a milestone, favor high-impact work; the Priority formula (Impact / Complexity) naturally rewards this
 
 ---
 
