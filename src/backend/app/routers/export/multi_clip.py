@@ -1331,7 +1331,25 @@ async def _export_clips(
                 except Exception as e:
                     logger.warning(f"[Multi-Clip Export] Failed to delete temp file {source_key}: {e}")
 
+            # Restore user context after long-running Modal task
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+
+            # Measure video duration (download output + ffprobe)
             video_duration = None
+            try:
+                _dur_dir = tempfile.mkdtemp()
+                _dur_path = os.path.join(_dur_dir, output_filename)
+                _t0 = time_module.monotonic()
+                if await asyncio.to_thread(download_from_r2, user_id, output_key, Path(_dur_path)):
+                    logger.info(f"[T1110] download_from_r2 (Modal duration) took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                    _t0 = time_module.monotonic()
+                    video_duration = await asyncio.to_thread(get_video_duration, _dur_path)
+                    logger.info(f"[T1110] get_video_duration (Modal) took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                    logger.info(f"[Multi-Clip Export] Video duration: {video_duration:.2f}s")
+                shutil.rmtree(_dur_dir, ignore_errors=True)
+            except Exception as dur_err:
+                logger.warning(f"[Multi-Clip Export] Failed to measure duration: {dur_err}")
 
             # Save to database if project_id provided
             working_video_id = None
@@ -1365,18 +1383,26 @@ async def _export_clips(
                         logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
 
                         cursor.execute("""
-                            INSERT INTO working_videos (project_id, filename, version, highlights_data)
-                            VALUES (?, ?, ?, ?)
-                        """, (project_id, output_filename, next_version, highlights_json))
+                            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (project_id, output_filename, next_version, video_duration, highlights_json))
                         working_video_id = cursor.lastrowid
 
                         cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
 
                         cursor.execute("""
                             UPDATE export_jobs
-                            SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                            SET status = 'complete', output_video_id = ?, output_filename = ?,
+                                completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
                             WHERE id = ?
-                        """, (working_video_id, output_filename, export_id))
+                        """, (working_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
+
+                        cursor.execute(f"""
+                            UPDATE working_clips
+                            SET exported_at = datetime('now'),
+                                raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
+                            WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
+                        """, (project_id, project_id))
 
                         conn.commit()
                         logger.info(f"[Multi-Clip Export] Saved to DB: working_video_id={working_video_id}, project updated, export_jobs completed")
@@ -1645,9 +1671,17 @@ async def _export_clips(
 
                     cursor.execute("""
                         UPDATE export_jobs
-                        SET status = 'complete', output_video_id = ?, output_filename = ?, completed_at = CURRENT_TIMESTAMP
+                        SET status = 'complete', output_video_id = ?, output_filename = ?,
+                            completed_at = CURRENT_TIMESTAMP
                         WHERE id = ?
                     """, (working_video_id, working_filename, export_id))
+
+                    cursor.execute(f"""
+                        UPDATE working_clips
+                        SET exported_at = datetime('now'),
+                            raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
+                        WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
+                    """, (project_id, project_id))
 
                     conn.commit()
                     logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
