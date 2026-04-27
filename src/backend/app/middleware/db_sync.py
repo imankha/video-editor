@@ -177,22 +177,17 @@ def set_sync_failed(user_id: str, failed: bool) -> None:
             logger.info(f"[SYNC] User {user_id} recovered - R2 sync succeeded")
 
 
-def retry_pending_sync(user_id: str) -> bool:
+def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     """
     Retry a previously-failed R2 sync using explicit sync functions.
 
     Runs before init_request_context(), so it must NOT rely on request-scoped
-    ContextVars (which is why sync_db_to_cloud_if_writes — the original T930
-    implementation — was a no-op: has_writes was always False here). Uses the
-    explicit helpers that take user_id/profile_id directly.
+    ContextVars. Uses the explicit helpers that take user_id/profile_id directly.
 
     Returns True iff both profile.sqlite and user.sqlite synced successfully.
     """
     from app import database as db_module
     from app import storage as storage_module
-    from app.profile_context import get_current_profile_id
-
-    profile_id = get_current_profile_id()
 
     profile_ok = True
     db_path = db_module.get_database_path()
@@ -426,6 +421,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
             init_result = user_session_init(user_id)
             profile_id = init_result.get("profile_id")
+            if profile_id:
+                set_current_profile_id(profile_id)
 
         # --- Skip sync for certain paths ---
         should_sync = R2_ENABLED and not any(
@@ -477,7 +474,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 logger.info(f"[SYNC] Retrying pending sync for user {user_id}")
                 _begin_sync_attempt(user_id)
                 try:
-                    ok = await asyncio.to_thread(retry_pending_sync, user_id)
+                    ok = await asyncio.to_thread(retry_pending_sync, user_id, profile_id)
                     if ok:
                         clear_sync_pending(user_id)
                         logger.info(f"[SYNC] Retry succeeded for user {user_id}")
