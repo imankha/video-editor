@@ -117,6 +117,7 @@ export function AnnotateContainer({
     getExportData: getAnnotateExportData,
     importAnnotations,
     setRawClipId,
+    setAutoProjectId,
     MAX_NOTES_LENGTH: ANNOTATE_MAX_NOTES_LENGTH,
   } = useAnnotate(annotateVideoMetadata, {
     selectedRegionId: annotateSelectedRegionId,
@@ -565,22 +566,21 @@ export function AnnotateContainer({
           tags: newRegion.tags,
           notes: newRegion.notes,
           video_sequence: currentVideoSequence,
+          ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
 
         if (result?.raw_clip_id) {
           setRawClipId(newRegion.id, result.raw_clip_id);
 
           if (result.project_created) {
-            toast.success('Reel created for your 5-star clip!', {
-              message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
-              duration: 8000,
-            });
+            setAutoProjectId(newRegion.id, result.project_id);
+            toast.success('Reel created!', { duration: 5000 });
           }
         }
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, seek, annotateGameId, saveClip, setRawClipId, currentVideoSequence]);
+  }, [addClipRegion, seek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence]);
 
   /**
    * Update a clip region - syncs to backend
@@ -616,15 +616,17 @@ export function AnnotateContainer({
         video_sequence: region.videoSequence ?? currentVideoSequence,
       };
 
+      if (updates.createProject != null) {
+        clipData.create_project = updates.createProject;
+      }
+
       const result = await saveClip(annotateGameId, clipData);
       if (result?.raw_clip_id) {
         setRawClipId(region.id, result.raw_clip_id);
 
         if (result.project_created) {
-          toast.success('Reel created for your 5-star clip!', {
-            message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
-            duration: 8000,
-          });
+          setAutoProjectId(region.id, result.project_id);
+          toast.success('Reel created!', { duration: 5000 });
         }
       }
     } else {
@@ -636,6 +638,7 @@ export function AnnotateContainer({
       if (updates.notes !== undefined) backendUpdates.notes = updates.notes;
       if (updates.startTime !== undefined) backendUpdates.start_time = updates.startTime;
       if (updates.endTime !== undefined) backendUpdates.end_time = updates.endTime;
+      if (updates.createProject != null) backendUpdates.create_project = updates.createProject;
 
       // Handle duration changes - need to send computed start_time
       // Since duration changes keep endTime fixed and adjust startTime
@@ -644,18 +647,15 @@ export function AnnotateContainer({
         backendUpdates.start_time = newStartTime;
       }
 
-
       if (Object.keys(backendUpdates).length > 0) {
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {
-          toast.success('Reel created for your 5-star clip!', {
-            message: 'We automatically create a highlight reel for every brilliant play so you can export it anytime.',
-            duration: 8000,
-          });
+          setAutoProjectId(region.id, result.project_id);
+          toast.success('Reel created!', { duration: 5000 });
         }
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, currentVideoSequence]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay

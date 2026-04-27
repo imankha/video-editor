@@ -72,6 +72,7 @@ export function useRawClipSave() {
           tags: clipData.tags || [],
           notes: clipData.notes || '',
           ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
+          ...(clipData.create_project != null && { create_project: clipData.create_project }),
         })
       });
 

@@ -126,6 +126,7 @@ class RawClipCreate(BaseModel):
     tags: List[str] = []
     notes: str = ""
     video_sequence: Optional[int] = None  # T82: which video in multi-video game (1-based)
+    create_project: Optional[bool] = None
 
 
 class RawClipUpdate(BaseModel):
@@ -137,6 +138,7 @@ class RawClipUpdate(BaseModel):
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     video_sequence: Optional[int] = None
+    create_project: Optional[bool] = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -819,18 +821,13 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     clip_id
                 ))
 
-            # Handle 5-star project sync
-            old_rating = existing['rating']
-            new_rating = clip_data.rating
+            # Handle explicit project creation toggle
             project_created = False
             project_id = existing['auto_project_id']
 
-            if new_rating == 5 and old_rating != 5 and not project_id:
+            if clip_data.create_project and not project_id:
                 project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
                 project_created = True
-            elif new_rating != 5 and old_rating == 5 and project_id:
-                _delete_auto_project(cursor, project_id, clip_id)
-                project_id = None
 
             _refresh_game_aggregates(cursor, clip_data.game_id)
             conn.commit()
@@ -852,10 +849,10 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
               clip_data.video_sequence))
         raw_clip_id = cursor.lastrowid
 
-        # Handle 5-star project creation
+        # Handle explicit project creation toggle
         project_created = False
         project_id = None
-        if clip_data.rating == 5:
+        if clip_data.create_project:
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
 
@@ -910,14 +907,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         # Check if duration changed
         duration_changed = (new_start != old_start or new_end != old_end)
 
-        # Handle rating change: 5 -> non-5
-        if old_rating == 5 and new_rating != 5 and auto_project_id:
-            _delete_auto_project(cursor, auto_project_id, clip_id)
-            auto_project_id = None
-
-        # Handle rating change: non-5 -> 5
+        # Handle explicit project creation toggle
         project_created = False
-        if old_rating != 5 and new_rating == 5 and not auto_project_id:
+        if update.create_project and not auto_project_id:
             clip_name = update.name if update.name is not None else clip['name']
             auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
             project_created = True

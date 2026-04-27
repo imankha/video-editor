@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Star, X, Check } from 'lucide-react';
 import { positions, soccerTags, generateClipName } from '../constants/soccerTags';
 import { ClipScrubRegion } from './ClipScrubRegion';
+import { Toggle } from '../../../components/shared/Button';
 
 // Rating notation map
 const RATING_NOTATION = {
@@ -134,6 +135,8 @@ export function AnnotateFullscreenOverlay({
     Math.min(currentTime + DEFAULT_CLIP_AFTER, videoDuration || Infinity)
   );
   const [notes, setNotes] = useState('');
+  const [createProject, setCreateProject] = useState(false);
+  const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
   const notesRef = useRef(null);
 
   // Reset form when existingClip changes (switching between create/edit mode)
@@ -147,6 +150,8 @@ export function AnnotateFullscreenOverlay({
       setScrubStartTime(existingClip.startTime);
       setScrubEndTime(existingClip.endTime);
       setNotes(existingClip.notes || '');
+      setCreateProject(!!existingClip.autoProjectId);
+      setCreateProjectManuallySet(!!existingClip.autoProjectId);
     } else {
       setRating(DEFAULT_RATING);
       setSelectedTags([]);
@@ -155,6 +160,8 @@ export function AnnotateFullscreenOverlay({
       setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_BEFORE));
       setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
       setNotes('');
+      setCreateProject(DEFAULT_RATING === 5);
+      setCreateProjectManuallySet(false);
     }
   }, [existingClip]);
 
@@ -197,13 +204,20 @@ export function AnnotateFullscreenOverlay({
         onClose();
       } else if (e.key >= '1' && e.key <= '5') {
         // Number keys to set rating
-        setRating(parseInt(e.key, 10));
+        handleRatingChange(parseInt(e.key, 10));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isVisible, rating, scrubStartTime, scrubEndTime, notes, existingClip, selectedTags, clipName]);
+
+  const handleRatingChange = (newRating) => {
+    setRating(newRating);
+    if (!createProjectManuallySet) {
+      setCreateProject(newRating === 5);
+    }
+  };
 
   const handleTagToggle = (tagName) => {
     setSelectedTags((prev) =>
@@ -230,6 +244,7 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
+        createProject,
       });
     } else {
       // Create new clip using scrub region start/end
@@ -241,17 +256,20 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
+        createProject,
       };
       onCreateClip(clipData);
     }
     // Reset form
-    setRating(3);
+    setRating(DEFAULT_RATING);
     setSelectedTags([]);
     setClipName('');
     setIsNameManuallyEdited(false);
     setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE));
     setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
+    setCreateProject(DEFAULT_RATING === 5);
+    setCreateProjectManuallySet(false);
     // Resume playback
     onResume();
   };
@@ -295,7 +313,7 @@ export function AnnotateFullscreenOverlay({
         {/* Star Rating */}
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">Rating (press 1-5)</label>
-          <StarRating rating={rating} onRatingChange={setRating} size={28} />
+          <StarRating rating={rating} onRatingChange={handleRatingChange} size={28} />
         </div>
 
         {/* Tag Selection */}
@@ -334,6 +352,22 @@ export function AnnotateFullscreenOverlay({
             placeholder="Add a note about this clip..."
             className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
             rows={2}
+          />
+        </div>
+
+        {/* Create Reel Toggle */}
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <label className="text-gray-400 text-sm">Create Reel</label>
+            {isEditMode && !!existingClip?.autoProjectId && (
+              <span className="text-gray-500 text-xs ml-2">Reel already created</span>
+            )}
+          </div>
+          <Toggle
+            checked={createProject}
+            onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
+            disabled={isEditMode && !!existingClip?.autoProjectId}
+            size="sm"
           />
         </div>
 

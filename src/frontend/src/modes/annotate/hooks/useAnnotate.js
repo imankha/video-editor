@@ -394,6 +394,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     const newRegion = {
       id: generateClipId(),
       rawClipId: null,
+      autoProjectId: null,
       startTime: clampedStart,
       endTime: Math.min(actualEndTime, duration),
       name: name || '',
@@ -489,6 +490,10 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         updated.rawClipId = updates.rawClipId;
       }
 
+      if (updates.autoProjectId !== undefined) {
+        updated.autoProjectId = updates.autoProjectId;
+      }
+
       return updated;
     }));
   }, [duration]);
@@ -502,6 +507,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     setClipRegions(prev => prev.map(region => {
       if (region.id !== regionId) return region;
       return { ...region, rawClipId };
+    }));
+  }, []);
+
+  const setAutoProjectId = useCallback((regionId, autoProjectId) => {
+    setClipRegions(prev => prev.map(region => {
+      if (region.id !== regionId) return region;
+      return { ...region, autoProjectId };
     }));
   }, []);
 
@@ -653,6 +665,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
         rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
         videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
+        autoProjectId: annotation.autoProjectId ?? annotation.auto_project_id ?? null,
         color,
         createdAt: new Date()
       };
@@ -701,6 +714,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     moveRegionEnd,
     importAnnotations,
     setRawClipId,
+    setAutoProjectId,
 
     // Queries
     getRegionAtTime,
