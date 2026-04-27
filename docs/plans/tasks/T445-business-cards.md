@@ -1,18 +1,18 @@
-# T445: Business Cards — Design & Print
+# T445: Vehicle Window Cards — Design & Print
 
 **Status:** TODO
-**Impact:** 5
+**Impact:** 6
 **Complexity:** 2
 **Created:** 2026-04-06
 **Updated:** 2026-04-06
 
 ## Problem
 
-Handing out cards at games is the primary offline-to-online funnel for the target audience (sports parents, ages 40s-50s). They need a physical card they can scan at the field that takes them straight to the app. No card = no way to bridge the gap between "I saw this at my kid's game" and "I'm using it on my phone."
+Cards placed on vehicle windows at games are the primary offline-to-online funnel for the target audience (soccer parents). Every car in the lot belongs to a parent who is exactly the target demographic — highly engaged in their child's sports development. They need a card they can scan that takes them straight to the app.
 
 ## Solution
 
-Design a business card with QR code linking to reelballers.com. Print via an online service. The card should communicate what the product does in 2 seconds (parents are distracted at games) and have a scannable QR code that works on any phone camera.
+Design a card for placing on vehicle windows at youth soccer games. QR code linking to reelballers.com. Print via an online service. The card should communicate what the product does in 2 seconds and have a scannable QR code that works on any phone camera. Size/format may need adjustment for windshield visibility vs. standard business card.
 
 ## Design
 

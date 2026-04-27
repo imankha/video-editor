@@ -1,6 +1,6 @@
 # T1153: Investigate Write-Ahead Sync Ordering
 
-**Status:** TODO
+**Status:** WONT_DO
 **Impact:** 6
 **Complexity:** 7
 **Created:** 2026-04-13

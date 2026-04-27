@@ -98,6 +98,8 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
+| T1950 | [Rename Reels/Gallery Terminology](tasks/for-alpha/T1950-rename-reels-gallery-terminology.md) | 6 | 2 | 3.0 | TODO | [ ] | Rename "Reels" → "Reel Drafts" and "Gallery" → "My Reels" across all UI to clarify that finished reels move to a final collection |
+| T1940 | [Remove Redundant Progress Bars](tasks/for-alpha/T1940-remove-redundant-progress-bars.md) | 6 | 2 | 3.0 | TODO | [ ] | Upload progress shown in 3 places. Remove from annotate, framing, overlay main UIs. Keep in toasts and on project cards only. |
 | T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | 7 | 3 | 2.3 | TODO | [ ] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
 | | **[Core Sharing Epic](tasks/sharing/EPIC.md)** | 8 | 4 | 1.9 | | | **End-to-end share loop: create share, send link, recipient watches** |
 | T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TODO | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
@@ -179,8 +181,6 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | DONE | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
 | T1116 | ↳ [Extract Shared Pipeline](tasks/export-pipeline/T1116-extract-shared-pipeline.md) | 4 | 4 | 1.0 | TESTING | [ ] | Extract `_export_clips()` + `ClipExportData` from multi_clip.py; `export_multi_clip` becomes thin adapter. No behavior change. |
 | T1117 | ↳ [Route Single-Clip Through Pipeline](tasks/export-pipeline/T1117-route-single-clip.md) | 4 | 5 | 0.8 | TESTING | [ ] | `render_project` delegates to `_export_clips([clip])`. Delete 800 lines of duplicated logic. Unify response shapes. |
-| T1153 | [Write-Ahead Sync Ordering (research)](tasks/T1153-write-ahead-sync-ordering.md) | 5 | 6 | 0.9 | TODO | [ ] | Evaluate: should critical writes (exports/credits) block on R2 before returning 200? Research task |
-| T1154 | [Atomic Dual-DB Sync](tasks/T1154-atomic-dual-db-sync.md) | 5 | 6 | 0.8 | MEASURING | [ ] | Precursor log line landed; wait 30d for partial-sync frequency data before recommending |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | 5 | 2 | 2.3 | DONE | [x] | Test coverage for R2 restore retry/cooldown -- NOT_FOUND vs ERROR handling, cooldown expiry |
 | T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
@@ -191,7 +191,6 @@ Scale, performance, and reliability — must be solid before feature work.
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
-| T445 | [Business Cards](tasks/T445-business-cards.md) | 5 | 2 | 2.5 | TODO | [ ] | Design + print physical cards with QR code for handing out at games |
 | T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
 | | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | 8 | 6 | 1.3 | | | **Player tagging, team game sharing, cross-user clip delivery** |
 | T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | 7 | 3 | 2.3 | TODO | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
@@ -200,6 +199,8 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | 9 | 5 | 1.8 | TODO | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
 | T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | 8 | 4 | 2.0 | TODO | [ ] | "Share with Team" on game cards, game materialization on claim |
 | T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | 7 | 3 | 2.3 | TODO | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
+| T1910 | [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
+| T1920 | [Landing Page Update](tasks/for-launch/T1920-landing-page-update.md) | 7 | 3 | 2.3 | TODO | [ ] | Add tutorial video embed and PWA install link to reelballers.com landing page. Depends on T1910 (tutorial) and T440 (PWA). |
 | T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | [ ] | "Share to Social" from gallery -- one form posts to IG, TikTok, YouTube, FB via aggregator API |
 
 #### Completed
@@ -216,6 +217,15 @@ Scale, performance, and reliability — must be solid before feature work.
 - T1120 Framing Video Cold Cache — DONE
 - T1020 Fast R2 Sync — DONE
 - T1010 Slow fetchProgress Response -- DONE
+
+### Milestone: Marketing
+
+Target audience: highly engaged soccer parents with enough technical ability to use the app. Reach them where they already spend attention.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|----|------|--------|-------|-----|--------|------|-------------|
+| T445 | [Vehicle Window Cards](tasks/T445-business-cards.md) | 6 | 2 | 3.0 | TODO | [ ] | Design + print cards to place on vehicle windows at games promoting reelballers.com with QR code. Targets parents already at the field. |
+| T1930 | [Influencer Marketing](tasks/marketing/T1930-influencer-marketing.md) | 8 | 4 | 2.0 | TODO | [ ] | Identify top influencers that youth soccer parents follow who align with video technology use. Outreach strategy + partnership plan. |
 
 ### Epic: Post Launch (TODO)
 [tasks/post-launch/EPIC.md](tasks/post-launch/EPIC.md)

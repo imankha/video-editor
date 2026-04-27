@@ -1,6 +1,6 @@
 # T1154: Atomic Dual-DB Sync (profile + user)
 
-**Status:** MEASURING (precursor log landed 2026-04-13; revisit after 30d of data)
+**Status:** WONT_DO
 **Impact:** 5
 **Complexity:** 6
 **Created:** 2026-04-13
