@@ -573,6 +573,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsSeeking(false);
     if (videoRef.current) {
       setCurrentTime(videoToClip(videoRef.current.currentTime));
+      if (isBuffering && videoRef.current.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        setIsBuffering(false);
+      }
     }
   };
 
