@@ -568,18 +568,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                             req_id=req_id,
                                         )
 
-                        # T1536: run both syncs on worker threads via the
-                        # asyncio default executor and AWAIT them. The previous
-                        # implementation used `executor.submit().result()`
-                        # which is a synchronous blocking call inside an async
-                        # def — it froze the event loop for the duration of
-                        # the sync (~900ms in the worst case), so every other
-                        # in-flight request (including readers that took no
-                        # lock) waited the same amount.
-                        loop = asyncio.get_running_loop()
+                        # T1536: run both syncs on worker threads and AWAIT them.
+                        # Uses asyncio.to_thread (not run_in_executor) so that
+                        # ContextVars (profile_id, user_id) propagate to the
+                        # worker threads — r2_key() reads them to build R2 paths.
                         profile_ok, user_ok = await asyncio.gather(
-                            loop.run_in_executor(None, _sync_profile),
-                            loop.run_in_executor(None, _sync_user),
+                            asyncio.to_thread(_sync_profile),
+                            asyncio.to_thread(_sync_user),
                         )
 
                         # T1154: distinguishing log for partial-success events so we can
