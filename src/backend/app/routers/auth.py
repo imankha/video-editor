@@ -52,6 +52,7 @@ from app.services.auth_db import (
     update_picture_url,
     sync_auth_db_to_r2,
     get_auth_db,
+    delete_session_from_r2,
 )
 
 # Test accounts that auto-reset on every login (fresh new-user experience).
@@ -506,6 +507,7 @@ async def logout(request: Request):
         if session:
             invalidate_user_cache(session["user_id"])
         invalidate_session(session_id)
+        delete_session_from_r2(session_id)
 
     response = JSONResponse(content={"logged_out": True})
     response.delete_cookie(

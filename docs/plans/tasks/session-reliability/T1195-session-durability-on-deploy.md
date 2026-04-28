@@ -1,6 +1,6 @@
 # T1195: Session Durability on Deploy
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 3
 **Created:** 2026-04-24

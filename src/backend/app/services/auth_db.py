@@ -10,12 +10,11 @@ database shared by all users. It stores:
 Sync strategy:
   - Read from R2 on server startup (restore users table for cross-device recovery)
   - Write to R2 immediately on create_user / link_google_to_user only
-  - Sessions are ephemeral — local SQLite only, loss on restart is acceptable
-
-The local SQLite file is the source of truth while the server is running.
-R2 is a backup for the users table only.
+  - Sessions persisted as individual R2 objects (T1195) — lazy-restored on
+    cache+DB miss after machine restart. O(1) per operation, no ListObjects.
 """
 
+import json
 import logging
 import secrets
 import sqlite3
@@ -398,6 +397,113 @@ def sync_auth_db_to_r2() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Per-session R2 persistence (T1195)
+# ---------------------------------------------------------------------------
+
+def _get_session_r2_key(session_id: str) -> str:
+    from ..storage import APP_ENV
+    return f"{APP_ENV}/sessions/{session_id}.json"
+
+
+def persist_session_to_r2(session_id: str, user_id: str, email: Optional[str], expires_at: str) -> None:
+    """Write a session object to R2 for cross-restart durability. O(1) PutObject."""
+    if not _r2_enabled():
+        return
+
+    from ..storage import get_r2_client, R2_BUCKET
+    client = get_r2_client()
+    if not client:
+        return
+
+    key = _get_session_r2_key(session_id)
+    body = json.dumps({
+        "user_id": user_id,
+        "email": email,
+        "expires_at": expires_at,
+        "created_at": datetime.utcnow().isoformat(),
+    }).encode()
+
+    try:
+        from ..utils.retry import retry_r2_call, TIER_1
+        retry_r2_call(
+            client.put_object,
+            Bucket=R2_BUCKET, Key=key, Body=body, ContentType="application/json",
+            operation="session_persist", **TIER_1,
+        )
+        logger.info(f"[AuthDB] Persisted session to R2: {session_id[:8]}...")
+    except Exception as e:
+        logger.error(f"[AuthDB] Failed to persist session to R2: {e}")
+
+
+def restore_session_from_r2(session_id: str) -> Optional[dict]:
+    """Lazy-restore a single session from R2 on cache+DB miss. O(1) GetObject."""
+    if not _r2_enabled():
+        return None
+
+    from ..storage import get_r2_client, R2_BUCKET
+    client = get_r2_client()
+    if not client:
+        return None
+
+    key = _get_session_r2_key(session_id)
+    try:
+        from ..utils.retry import retry_r2_call, TIER_1
+        response = retry_r2_call(
+            client.get_object,
+            Bucket=R2_BUCKET, Key=key,
+            operation="session_restore", **TIER_1,
+        )
+        data = json.loads(response["Body"].read())
+    except Exception as e:
+        if hasattr(e, "response") and e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return None
+        logger.error(f"[AuthDB] R2 error restoring session {session_id[:8]}...: {e}")
+        return None
+
+    expires_at = data.get("expires_at")
+    if not expires_at or datetime.fromisoformat(expires_at) < datetime.utcnow():
+        return None
+
+    user_id = data["user_id"]
+    email = data.get("email")
+
+    with get_auth_db() as db:
+        db.execute(
+            "INSERT OR REPLACE INTO sessions (session_id, user_id, expires_at) VALUES (?, ?, ?)",
+            (session_id, user_id, expires_at),
+        )
+        db.commit()
+
+    with _session_cache_lock:
+        _session_cache[session_id] = (user_id, email, expires_at)
+
+    logger.info(f"[AuthDB] Restored session from R2: {session_id[:8]}... user={user_id}")
+    return {"user_id": user_id, "email": email}
+
+
+def delete_session_from_r2(session_id: str) -> None:
+    """Delete a session object from R2 on logout. O(1) DeleteObject."""
+    if not _r2_enabled():
+        return
+
+    from ..storage import get_r2_client, R2_BUCKET
+    client = get_r2_client()
+    if not client:
+        return
+
+    key = _get_session_r2_key(session_id)
+    try:
+        from ..utils.retry import retry_r2_call, TIER_3
+        retry_r2_call(
+            client.delete_object,
+            Bucket=R2_BUCKET, Key=key,
+            operation="session_delete", **TIER_3,
+        )
+    except Exception as e:
+        logger.error(f"[AuthDB] Failed to delete session from R2: {e}")
+
+
+# ---------------------------------------------------------------------------
 # User operations
 # ---------------------------------------------------------------------------
 
@@ -540,6 +646,8 @@ def create_session(user_id: str, ttl_days: int = 30) -> str:
             email = user.get("email")
         _session_cache[session_id] = (user_id, email, expires_at)
 
+    persist_session_to_r2(session_id, user_id, email, expires_at)
+
     logger.info(f"[AuthDB] Created session for user {user_id}, expires {expires_at}")
     return session_id
 
@@ -579,7 +687,7 @@ def validate_session(session_id: str) -> Optional[dict]:
         ).fetchone()
 
     if not row:
-        return None
+        return restore_session_from_r2(session_id)
 
     expires_at = row['expires_at']
     if datetime.fromisoformat(expires_at) < datetime.utcnow():
