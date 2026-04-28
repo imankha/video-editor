@@ -205,6 +205,27 @@ def test_invalidate_user_sessions_deletes_all_from_r2(temp_auth_db, r2_mock):
     assert f"test/sessions/{sid2}.json" in deleted_keys
 
 
+def test_cleanup_expired_deletes_from_r2(temp_auth_db, r2_mock):
+    """cleanup_expired_sessions should delete each expired session from R2."""
+    auth_db.create_user("u1", email="a@b.com")
+
+    # Create a session then manually backdate it so it's expired
+    sid = auth_db.create_session("u1")
+    expired = (datetime.utcnow() - timedelta(days=1)).isoformat()
+    with auth_db.get_auth_db() as db:
+        db.execute("UPDATE sessions SET expires_at = ? WHERE session_id = ?", (expired, sid))
+        db.commit()
+    with auth_db._session_cache_lock:
+        auth_db._session_cache.clear()
+    r2_mock.delete_object.reset_mock()
+
+    count = auth_db.cleanup_expired_sessions()
+
+    assert count == 1
+    r2_mock.delete_object.assert_called_once()
+    assert r2_mock.delete_object.call_args.kwargs["Key"] == f"test/sessions/{sid}.json"
+
+
 def test_delete_failure_does_not_break_invalidation(temp_auth_db, r2_mock):
     """If R2 DeleteObject fails, local invalidation still succeeds."""
     auth_db.create_user("u1", email="a@b.com")

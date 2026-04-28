@@ -771,11 +771,18 @@ def cleanup_expired_sessions() -> int:
     """Remove expired sessions. Returns count deleted."""
     now = datetime.utcnow().isoformat()
     with get_auth_db() as db:
+        expired_ids = [
+            row[0] for row in
+            db.execute("SELECT session_id FROM sessions WHERE expires_at < ?", (now,)).fetchall()
+        ]
         cursor = db.execute(
             "DELETE FROM sessions WHERE expires_at < ?", (now,)
         )
         db.commit()
         count = cursor.rowcount
+
+    for sid in expired_ids:
+        delete_session_from_r2(sid)
 
     if count > 0:
         logger.info(f"[AuthDB] Cleaned up {count} expired sessions")
