@@ -87,7 +87,7 @@ Scale, reliability, and data format changes that must land before alpha users ar
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
 | | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | 9 | 5 | 1.8 | | | **Sessions survive deploys and route to correct machine** |
-| T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TESTING | [ ] | Persist sessions as individual R2 objects on login so sessions survive machine restarts (scales independently of auth.sqlite size) |
+| T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | DONE | [ ] | Persist sessions as individual R2 objects on login so sessions survive machine restarts (scales independently of auth.sqlite size) |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 ### Epic: For Alpha (IN_PROGRESS)
@@ -97,8 +97,8 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1950 | [Rename Reels/Gallery Terminology](tasks/for-alpha/T1950-rename-reels-gallery-terminology.md) | 6 | 2 | 3.0 | TESTING | [ ] | Rename "Reels" → "Reel Drafts" and "Gallery" → "My Reels" across all UI to clarify that finished reels move to a final collection |
-| T1940 | [Remove Redundant Progress Bars](tasks/for-alpha/T1940-remove-redundant-progress-bars.md) | 6 | 2 | 3.0 | TESTING | [ ] | Upload progress shown in 3 places. Remove from annotate, framing, overlay main UIs. Keep in toasts and on project cards only. |
+| T1950 | [Rename Reels/Gallery Terminology](tasks/for-alpha/T1950-rename-reels-gallery-terminology.md) | 6 | 2 | 3.0 | DONE | [ ] | Rename "Reels" → "Reel Drafts" and "Gallery" → "My Reels" across all UI to clarify that finished reels move to a final collection |
+| T1940 | [Remove Redundant Progress Bars](tasks/for-alpha/T1940-remove-redundant-progress-bars.md) | 6 | 2 | 3.0 | DONE | [ ] | Upload progress shown in 3 places. Remove from annotate, framing, overlay main UIs. Keep in toasts and on project cards only. |
 | T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | 7 | 3 | 2.3 | DONE | [x] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
 | | **[Core Sharing Epic](tasks/sharing/EPIC.md)** | 8 | 4 | 1.9 | | | **End-to-end share loop: create share, send link, recipient watches** |
 | T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TODO | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
