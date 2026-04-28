@@ -88,7 +88,6 @@ Scale, reliability, and data format changes that must land before alpha users ar
 |----|------|--------|-------|-----|--------|------|-------------|
 | | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | 9 | 5 | 1.8 | | | **Sessions survive deploys and route to correct machine** |
 | T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TESTING | [ ] | Persist sessions as individual R2 objects on login so sessions survive machine restarts (scales independently of auth.sqlite size) |
-| T1190 | ↳ [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 ### Epic: For Alpha (IN_PROGRESS)
@@ -116,6 +115,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
 | T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
 | T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | 6 | 4 | 1.5 | TODO | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| T1740 | [Privacy & Regulatory Compliance](tasks/for-launch/T1740-privacy-regulatory-compliance.md) | 10 | 6 | 1.7 | TODO | [ ] | Privacy policy, ToS, COPPA/CCPA/CalOPPA compliance, age verification, consumer rights (data export/deletion), vendor DPAs, incident response plan. No biometric processing — BIPA/CUBI not applicable. Must ship before launch. |
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | 7 | 2 | 3.5 | DONE | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | 6 | 3 | 2.0 | DONE | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
 | T980 | [Clip-Scoped Scrub Bar](tasks/T980-clip-scoped-scrub-playback.md) | 4 | 3 | 1.3 | DONE | [ ] | In Play Annotations mode, add a per-clip scrub bar so users can seek within each clip |
@@ -131,6 +131,16 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1550 | [Unified Navigation](tasks/T1550-unified-mode-navigation.md) | 6 | 3 | 2.0 | DONE | [ ] | Clickable breadcrumbs (Games/Reels -> Home), unified 3-mode tab bar (Annotate/Framing/Overlay), single shared header component |
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | 4 | 3 | 1.3 | DONE | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | 6 | 2 | 3.0 | DONE | [ ] | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin -> BrokenPipe. |
+
+### Milestone: Alpha Marketing
+
+Outreach to our network once alpha milestone is complete. Ordered: create source material first, then compose email, then send.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|----|------|--------|-------|-----|--------|------|-------------|
+| T1970 | [Annotate Mehdi Source Files](tasks/alpha-marketing/T1970-annotate-mehdi-source-files.md) | 8 | 2 | 4.0 | TODO | [ ] | Annotate, frame, and export Mehdi's game footage end-to-end to produce demo clips for outreach email |
+| T1980 | [Alpha Outreach Email](tasks/alpha-marketing/T1980-alpha-outreach-email.md) | 9 | 3 | 3.0 | TODO | [ ] | "Save your best moments before you lose the videos" — email with demo clip link, feature screenshots, CTA to app |
+| T1990 | [Alpha List](tasks/alpha-marketing/T1990-alpha-list.md) | 9 | 1 | 9.0 | TODO | [ ] | Contact list for alpha outreach: Zack, Arshia, Chris Choie, WhatsApp group, John Gleaves, Jack's dad, Jett's dad, current team, Shannon |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
@@ -159,12 +169,29 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 
 Goal: Make money, virality, super polished. Most tasks here are yet to be generated based on alpha feedback.
 
-#### Infrastructure (prioritized first)
+#### Features
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|----|------|--------|-------|-----|--------|------|-------------|
+| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
+| | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 | | | **Installable app + native share sheet + background export + push notifications** |
+| T441 | ↳ [PWA Install & Landing Page](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt, landing page email capture. Foundation for all PWA features. |
+| T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels — one tap to Instagram/WhatsApp/iMessage/any app. Replaces T1090. |
+| T443 | ↳ [Background Sync](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close — service worker tracks Modal job, notifies on completion. |
+| T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
+| T445 | ↳ [Landing Page Before/After Clips](tasks/pwa/T445-landing-page-before-after-clips.md) | 7 | 2 | 3.5 | TODO | [ ] | Update landing page with latest before/after clip comparisons — autoplay side-by-side raw footage vs finished reel. |
+| T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
+
+#### Infrastructure
 
 Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
+| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
+| T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
+| T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
+| T1960 | [Migrate Auth to Fly Postgres](tasks/for-launch/T1960-migrate-auth-to-fly-postgres.md) | 8 | 6 | 1.3 | TODO | [ ] | Move auth.sqlite (users, sessions, otp_codes, admin) to Fly Postgres. Eliminates restart fragility, concurrent write contention, and O(users) R2 syncs. Makes T1195 unnecessary. |
 | T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | DONE | [ ] | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
 | T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | ICE | [ ] | Epic on ice 2026-04-12 -- T1380 shipped the big win (TTFP seconds->359ms). Revisit only if users report seek problems. |
 | T1261 | [Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | ICE | [ ] | Parent epic on ice. |
@@ -182,27 +209,6 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1116 | ↳ [Extract Shared Pipeline](tasks/export-pipeline/T1116-extract-shared-pipeline.md) | 4 | 4 | 1.0 | DONE | [ ] | Extract `_export_clips()` + `ClipExportData` from multi_clip.py; `export_multi_clip` becomes thin adapter. No behavior change. |
 | T1117 | ↳ [Route Single-Clip Through Pipeline](tasks/export-pipeline/T1117-route-single-clip.md) | 4 | 5 | 0.8 | DONE | [ ] | `render_project` delegates to `_export_clips([clip])`. Delete 800 lines of duplicated logic. Unify response shapes. |
 | T1240 | [R2 Restore Retry Tests](tasks/T1240-r2-restore-retry-tests.md) | 5 | 2 | 2.3 | DONE | [x] | Test coverage for R2 restore retry/cooldown -- NOT_FOUND vs ERROR handling, cooldown expiry |
-| T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
-| T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
-| T1740 | [Privacy & Regulatory Compliance](tasks/for-launch/T1740-privacy-regulatory-compliance.md) | 10 | 6 | 1.7 | TODO | [ ] | Privacy policy, ToS, COPPA/CCPA/CalOPPA compliance, age verification, consumer rights (data export/deletion), vendor DPAs, incident response plan. No biometric processing — BIPA/CUBI not applicable. Must ship before launch. |
-| T1960 | [Migrate Auth to Fly Postgres](tasks/for-launch/T1960-migrate-auth-to-fly-postgres.md) | 8 | 6 | 1.3 | TODO | [ ] | Move auth.sqlite (users, sessions, otp_codes, admin) to Fly Postgres. Eliminates restart fragility, concurrent write contention, and O(users) R2 syncs. Makes T1195 unnecessary. |
-
-#### Features
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|----|------|--------|-------|-----|--------|------|-------------|
-| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
-| T440 | [Progressive Web App](tasks/T440-progressive-web-app.md) | 6 | 3 | 2.0 | TODO | [ ] | "Install app" prompt, offline shell, home screen icon -- feels native on phones |
-| | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | 8 | 6 | 1.3 | | | **Player tagging, team game sharing, cross-user clip delivery** |
-| T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | 7 | 3 | 2.3 | TODO | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
-| T1820 | ↳ [Annotation Player Tagging UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | "Players" section in add clip dialog; auto-tag for 4+ star; UserPicker for teammates |
-| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | 8 | 5 | 1.6 | TODO | [x] | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |
-| T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | 9 | 5 | 1.8 | TODO | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
-| T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | 8 | 4 | 2.0 | TODO | [ ] | "Share with Team" on game cards, game materialization on claim |
-| T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | 7 | 3 | 2.3 | TODO | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
-| T1910 | [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
-| T1920 | [Landing Page Update](tasks/for-launch/T1920-landing-page-update.md) | 7 | 3 | 2.3 | TODO | [ ] | Add tutorial video embed and PWA install link to reelballers.com landing page. Depends on T1910 (tutorial) and T440 (PWA). |
-| T1090 | [Social Media Auto-Posting](tasks/for-launch/T1090-social-media-auto-posting.md) | 4 | 4 | 1.1 | TODO | [ ] | "Share to Social" from gallery -- one form posts to IG, TikTok, YouTube, FB via aggregator API |
 
 #### Completed
 
@@ -226,6 +232,7 @@ Target audience: highly engaged soccer parents with enough technical ability to 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
 | T445 | [Vehicle Window Cards](tasks/T445-business-cards.md) | 6 | 2 | 3.0 | TODO | [ ] | Design + print cards to place on vehicle windows at games promoting reelballers.com with QR code. Targets parents already at the field. |
+| T1920 | [Landing Page Update](tasks/for-launch/T1920-landing-page-update.md) | 7 | 3 | 2.3 | TODO | [ ] | Add tutorial video embed and PWA install link to reelballers.com landing page. Depends on T1910 (tutorial) and T440 (PWA). |
 | T1930 | [Influencer Marketing](tasks/marketing/T1930-influencer-marketing.md) | 8 | 4 | 2.0 | TODO | [ ] | Identify top influencers that youth soccer parents follow who align with video technology use. Outreach strategy + partnership plan. |
 
 ### Epic: Post Launch (TODO)
@@ -235,6 +242,13 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Pri | Migr | Description |
 |----|------|--------|-----|------|-------------|
+| | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | | 1.3 | | **Player tagging, team game sharing, cross-user clip delivery** |
+| T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | TODO | 2.3 | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
+| T1820 | ↳ [Annotation Player Tagging UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | TODO | 2.0 | [ ] | "Players" section in add clip dialog; auto-tag for 4+ star; UserPicker for teammates |
+| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | TODO | 1.6 | [x] | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |
+| T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | TODO | 1.8 | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
+| T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | TODO | 2.0 | [ ] | "Share with Team" on game cards, game materialization on claim |
+| T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | TODO | 2.3 | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
 | T40 | [1 User 2 Tabs](tasks/T40-stale-session-detection.md) | TODO | 1.3 | [ ] | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |

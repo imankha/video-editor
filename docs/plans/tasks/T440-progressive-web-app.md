@@ -1,10 +1,11 @@
 # T440: Progressive Web App (PWA)
 
-**Status:** TODO
+**Status:** PROMOTED TO EPIC
+**Epic:** [tasks/pwa/EPIC.md](pwa/EPIC.md) — split into T441 (install), T442 (Web Share), T443 (Background Sync), T444 (Push/Badges)
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-04-06
-**Updated:** 2026-04-06
+**Updated:** 2026-04-28
 
 ## Problem
 

@@ -1,6 +1,7 @@
 # T1090: Social Media Auto-Posting
 
-**Status:** TODO
+**Status:** SUPERSEDED
+**Superseded By:** T442 (Web Share API) — native OS share sheet covers all platforms with zero integration maintenance
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-04-07
