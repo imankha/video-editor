@@ -744,10 +744,16 @@ def invalidate_session(session_id: str) -> None:
     with _session_cache_lock:
         _session_cache.pop(session_id, None)
 
+    delete_session_from_r2(session_id)
+
 
 def invalidate_user_sessions(user_id: str) -> None:
     """Delete all sessions for a user (e.g., password change)."""
     with get_auth_db() as db:
+        session_ids = [
+            row[0] for row in
+            db.execute("SELECT session_id FROM sessions WHERE user_id = ?", (user_id,)).fetchall()
+        ]
         db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
         db.commit()
 
@@ -756,6 +762,9 @@ def invalidate_user_sessions(user_id: str) -> None:
         to_remove = [sid for sid, (uid, _, _) in _session_cache.items() if uid == user_id]
         for sid in to_remove:
             del _session_cache[sid]
+
+    for sid in session_ids:
+        delete_session_from_r2(sid)
 
 
 def cleanup_expired_sessions() -> int:
