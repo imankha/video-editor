@@ -17,7 +17,7 @@ const API_BASE_URL = `${API_BASE}/api`;
  * - filename: standalone clip filename (null if clip uses game video range queries)
  * - file_url: presigned R2 URL (null in local dev)
  * - name, notes, exported_at, sort_order
- * - crop_data, timing_data, segments_data: JSON strings
+ * - crop_data, timing_data, segments_data: parsed objects (decoded from msgpack by API)
  * - game_id, start_time, end_time, tags, rating
  *
  * Video metadata is cached separately in clipMetadataCache keyed by clip ID.
@@ -147,10 +147,10 @@ export const useProjectDataStore = create((set, get) => ({
       const updatePayload = {};
 
       if (framingData.cropKeyframes !== undefined) {
-        updatePayload.crop_data = JSON.stringify(framingData.cropKeyframes);
+        updatePayload.crop_data = framingData.cropKeyframes;
       }
       if (framingData.segments !== undefined) {
-        updatePayload.segments_data = JSON.stringify(framingData.segments);
+        updatePayload.segments_data = framingData.segments;
       }
       // T280: timing_data is redundant with segments_data.trimRange — stop writing it
 
@@ -178,10 +178,17 @@ export const useProjectDataStore = create((set, get) => ({
           newVersion: result.new_version
         };
       } else {
-        // Update local raw clip with the data we just sent
+        // Update local clip with parsed objects (not JSON strings)
+        const localUpdate = {};
+        if (framingData.cropKeyframes !== undefined) {
+          localUpdate.crop_data = framingData.cropKeyframes;
+        }
+        if (framingData.segments !== undefined) {
+          localUpdate.segments_data = framingData.segments;
+        }
         set((state) => ({
           clips: state.clips.map(c =>
-            c.id === clipId ? { ...c, ...updatePayload } : c
+            c.id === clipId ? { ...c, ...localUpdate } : c
           ),
         }));
       }

@@ -196,9 +196,9 @@ class WorkingClipResponse(BaseModel):
 
 class WorkingClipUpdate(BaseModel):
     sort_order: Optional[int] = None
-    crop_data: Optional[str] = None
-    timing_data: Optional[str] = None
-    segments_data: Optional[str] = None
+    crop_data: Optional[Any] = None
+    timing_data: Optional[Any] = None
+    segments_data: Optional[Any] = None
 
 
 # =============================================================================
@@ -1792,14 +1792,24 @@ async def update_working_clip(
         was_exported = current_clip['exported_at'] is not None
 
         # Check if data actually changed (avoid creating new versions for no-op saves)
+        # Compare by decoding DB bytes and normalizing incoming data to match
         data_actually_changed = False
         if is_framing_change:
-            if update.crop_data is not None and update.crop_data != current_clip['crop_data']:
-                data_actually_changed = True
-            if update.timing_data is not None and update.timing_data != current_clip['timing_data']:
-                data_actually_changed = True
-            if update.segments_data is not None and update.segments_data != current_clip['segments_data']:
-                data_actually_changed = True
+            if update.crop_data is not None:
+                current_decoded = decode_data(current_clip['crop_data']) if current_clip['crop_data'] else None
+                incoming = json.loads(update.crop_data) if isinstance(update.crop_data, str) else update.crop_data
+                if incoming != current_decoded:
+                    data_actually_changed = True
+            if update.timing_data is not None:
+                current_decoded = decode_data(current_clip['timing_data']) if current_clip['timing_data'] else None
+                incoming = json.loads(update.timing_data) if isinstance(update.timing_data, str) else update.timing_data
+                if incoming != current_decoded:
+                    data_actually_changed = True
+            if update.segments_data is not None:
+                current_decoded = decode_data(current_clip['segments_data']) if current_clip['segments_data'] else None
+                incoming = json.loads(update.segments_data) if isinstance(update.segments_data, str) else update.segments_data
+                if incoming != current_decoded:
+                    data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:
             # Create a NEW version of this clip instead of updating

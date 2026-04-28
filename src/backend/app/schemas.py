@@ -319,7 +319,7 @@ EffectType = Literal['original', 'brightness_boost', 'dark_overlay']
 # =============================================================================
 
 def parse_crop_data(raw) -> Optional[CropData]:
-    """Safely parse crop_data from DB (msgpack bytes, JSON string, or None)."""
+    """Safely parse crop_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
     try:
@@ -333,7 +333,7 @@ def parse_crop_data(raw) -> Optional[CropData]:
 
 
 def parse_timing_data(raw) -> Optional[TimingData]:
-    """Safely parse timing_data from DB (msgpack bytes, JSON string, or None)."""
+    """Safely parse timing_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
     try:
@@ -347,7 +347,7 @@ def parse_timing_data(raw) -> Optional[TimingData]:
 
 
 def parse_segments_data(raw) -> Optional[SegmentsData]:
-    """Safely parse segments_data from DB (msgpack bytes, JSON string, or None)."""
+    """Safely parse segments_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
     try:
@@ -361,7 +361,7 @@ def parse_segments_data(raw) -> Optional[SegmentsData]:
 
 
 def parse_highlights_data(raw) -> Optional[HighlightsData]:
-    """Safely parse highlights_data from DB (msgpack bytes, JSON string, or None)."""
+    """Safely parse highlights_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
     try:

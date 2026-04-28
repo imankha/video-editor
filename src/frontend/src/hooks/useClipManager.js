@@ -166,8 +166,7 @@ export function useClipManager() {
         };
       });
 
-      // Store updated keyframes back as JSON in crop_data
-      return { ...clip, crop_data: JSON.stringify(newKeyframes) };
+      return { ...clip, crop_data: newKeyframes };
     }));
   }, [globalAspectRatio, calculateCenteredCrop, setGlobalAspectRatioState, setClips, clipMetadataCache]);
 

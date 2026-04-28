@@ -3,9 +3,8 @@ Tests for MessagePack encode/decode helpers (T1180).
 
 Tests verify:
 - encode_data produces msgpack bytes
-- decode_data auto-detects JSON vs msgpack by first byte
+- decode_data handles msgpack bytes only (no JSON backward compat)
 - Round-trip: encode then decode preserves data exactly
-- Backward compatibility: old JSON strings decode correctly
 - Edge cases: None, empty structures, nested data
 """
 
@@ -61,26 +60,6 @@ class TestDecodeData:
         from app.utils.encoding import decode_data
         assert decode_data(None) is None
 
-    def test_decode_json_string_dict(self):
-        from app.utils.encoding import decode_data
-        result = decode_data('{"key": "value"}')
-        assert result == {"key": "value"}
-
-    def test_decode_json_string_list(self):
-        from app.utils.encoding import decode_data
-        result = decode_data('[1, 2, 3]')
-        assert result == [1, 2, 3]
-
-    def test_decode_json_bytes_dict(self):
-        from app.utils.encoding import decode_data
-        result = decode_data(b'{"key": "value"}')
-        assert result == {"key": "value"}
-
-    def test_decode_json_bytes_list(self):
-        from app.utils.encoding import decode_data
-        result = decode_data(b'[1, 2, 3]')
-        assert result == [1, 2, 3]
-
     def test_decode_msgpack_bytes(self):
         from app.utils.encoding import encode_data, decode_data
         original = {"key": "value", "num": 42}
@@ -92,6 +71,13 @@ class TestDecodeData:
         from app.utils.encoding import decode_data
         result = decode_data(b'')
         assert result is None
+
+    def test_decode_msgpack_list(self):
+        from app.utils.encoding import encode_data, decode_data
+        original = [1, 2, 3]
+        encoded = encode_data(original)
+        result = decode_data(encoded)
+        assert result == original
 
 
 class TestRoundTrip:
@@ -166,39 +152,17 @@ class TestRoundTrip:
         assert decoded["trimRange"][1] == pytest.approx(99.987654321)
 
 
-class TestBackwardCompatibility:
-    """Test that old JSON data from DB is read correctly."""
-
-    def test_old_json_string_from_db(self):
-        """Simulate reading a TEXT column that contains a JSON string."""
-        from app.utils.encoding import decode_data
-        old_data = '[{"frame": 0, "x": 100}]'
-        result = decode_data(old_data)
-        assert result == [{"frame": 0, "x": 100}]
-
-    def test_old_json_bytes_from_db(self):
-        """Simulate reading bytes that are actually JSON (edge case)."""
-        from app.utils.encoding import decode_data
-        old_data = b'{"trimRange": [0, 10]}'
-        result = decode_data(old_data)
-        assert result == {"trimRange": [0, 10]}
-
-    def test_new_msgpack_bytes_from_db(self):
-        """Simulate reading msgpack bytes from BLOB column."""
-        from app.utils.encoding import encode_data, decode_data
-        original = [{"frame": 0, "x": 100}]
-        msgpack_bytes = encode_data(original)
-        result = decode_data(msgpack_bytes)
-        assert result == original
+class TestMsgpackFormat:
+    """Verify msgpack bytes don't collide with JSON markers."""
 
     def test_first_byte_detection_dict(self):
-        """Msgpack dict does NOT start with 0x7B."""
+        """Msgpack dict does NOT start with 0x7B (JSON '{')."""
         from app.utils.encoding import encode_data
         encoded = encode_data({"a": 1})
         assert encoded[0:1] != b'{'
 
     def test_first_byte_detection_list(self):
-        """Msgpack list does NOT start with 0x5B."""
+        """Msgpack list does NOT start with 0x5B (JSON '[')."""
         from app.utils.encoding import encode_data
         encoded = encode_data([1, 2])
         assert encoded[0:1] != b'['

@@ -221,9 +221,9 @@ describe('T70: Multi-clip Overlay After Framing Edit', () => {
       // 3. Export should include all 3 clips in metadata
 
       const clips = [
-        { id: 1, filename: 'clip1.mp4', duration: 10, crop_data: JSON.stringify([{ time: 0, x: 0, y: 0 }]) },
-        { id: 2, filename: 'clip2.mp4', duration: 15, crop_data: JSON.stringify([{ time: 0, x: 100, y: 100 }]) }, // Edited clip
-        { id: 3, filename: 'clip3.mp4', duration: 20, crop_data: JSON.stringify([{ time: 0, x: 0, y: 0 }]) }
+        { id: 1, filename: 'clip1.mp4', duration: 10, crop_data: [{ time: 0, x: 0, y: 0 }] },
+        { id: 2, filename: 'clip2.mp4', duration: 15, crop_data: [{ time: 0, x: 100, y: 100 }] }, // Edited clip
+        { id: 3, filename: 'clip3.mp4', duration: 20, crop_data: [{ time: 0, x: 0, y: 0 }] }
       ];
 
       useProjectDataStore.getState().setProjectClips({ clips, aspectRatio: '9:16' });

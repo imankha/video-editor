@@ -256,11 +256,11 @@ export function FramingContainer({
     };
 
     try {
-      // Save to local clip manager state (raw backend JSON format)
+      // Save to local clip manager state
       // T280: No timing_data — trimRange lives in segments_data only
       updateClipData(selectedClipId, {
-        segments_data: JSON.stringify(segmentState),
-        crop_data: JSON.stringify(keyframes),
+        segments_data: segmentState,
+        crop_data: keyframes,
       });
 
       // Save to backend (use frame-based keyframes for storage - FFmpeg conversion happens at export)
@@ -312,7 +312,7 @@ export function FramingContainer({
     const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
     if (callerClipId) {
       const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
-      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+      updateClipData(callerClipId, { crop_data: updatedKfs });
     }
 
     // Persist to backend with error recovery
@@ -334,7 +334,7 @@ export function FramingContainer({
           removeKeyframe(currentTime, duration);
         }
         if (callerClipId) {
-          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+          updateClipData(callerClipId, { crop_data: previousStoreKfs });
         }
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
@@ -515,7 +515,7 @@ export function FramingContainer({
       // Update store so sidebar framing indicator reflects trim
       if (selectedClipId) {
         updateClipData(selectedClipId, {
-          segments_data: JSON.stringify({
+          segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
             trimRange: !isCurrentlyTrimmed
@@ -628,7 +628,7 @@ export function FramingContainer({
       // Sync segments to store so sidebar indicator updates
       if (selectedClipId) {
         updateClipData(selectedClipId, {
-          segments_data: JSON.stringify({
+          segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
             trimRange: (hasStartTrim || hasEndTrim)
@@ -745,7 +745,7 @@ export function FramingContainer({
       // Sync segments to store so sidebar indicator updates
       if (selectedClipId) {
         updateClipData(selectedClipId, {
-          segments_data: JSON.stringify({
+          segments_data: ({
             boundaries: segmentBoundaries,
             segmentSpeeds: segmentSpeeds,
             trimRange: (hasStartTrim || hasEndTrim)
@@ -785,7 +785,7 @@ export function FramingContainer({
     // Sync to clip store so sidebar indicator updates
     if (callerClipId) {
       const updatedKfs = previousStoreKfs.filter(kf => kf.frame !== frame);
-      updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+      updateClipData(callerClipId, { crop_data: updatedKfs });
     }
 
     // Persist to backend with error recovery
@@ -798,7 +798,7 @@ export function FramingContainer({
           addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
         }
         if (callerClipId) {
-          updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+          updateClipData(callerClipId, { crop_data: previousStoreKfs });
         }
         clipHasUserEditsRef.current = false;
         setFramingChangedSinceExport?.(false);
@@ -837,7 +837,7 @@ export function FramingContainer({
       if (callerClipId) {
         const newKf = { frame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin: 'user' };
         const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
-        updateClipData(callerClipId, { crop_data: JSON.stringify(updatedKfs) });
+        updateClipData(callerClipId, { crop_data: updatedKfs });
       }
 
       // Persist to backend with error recovery
@@ -859,7 +859,7 @@ export function FramingContainer({
             removeKeyframe(time, duration);
           }
           if (callerClipId) {
-            updateClipData(callerClipId, { crop_data: JSON.stringify(previousStoreKfs) });
+            updateClipData(callerClipId, { crop_data: previousStoreKfs });
           }
           clipHasUserEditsRef.current = false;
           setFramingChangedSinceExport?.(false);
@@ -884,7 +884,7 @@ export function FramingContainer({
     if (callerClipId) {
       const updatedBoundaries = [...segmentBoundaries, time].sort((a, b) => a - b);
       updateClipData(callerClipId, {
-        segments_data: JSON.stringify({
+        segments_data: ({
           boundaries: updatedBoundaries,
           segmentSpeeds: segmentSpeeds,
           trimRange: trimRange,
@@ -900,7 +900,7 @@ export function FramingContainer({
         removeSegmentBoundary(time);
         if (callerClipId) {
           updateClipData(callerClipId, {
-            segments_data: JSON.stringify({
+            segments_data: ({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
               trimRange: trimRange,
@@ -928,7 +928,7 @@ export function FramingContainer({
     if (callerClipId) {
       const updatedBoundaries = segmentBoundaries.filter(b => b !== time);
       updateClipData(callerClipId, {
-        segments_data: JSON.stringify({
+        segments_data: ({
           boundaries: updatedBoundaries,
           segmentSpeeds: segmentSpeeds,
           trimRange: trimRange,
@@ -944,7 +944,7 @@ export function FramingContainer({
         addSegmentBoundary(time);
         if (callerClipId) {
           updateClipData(callerClipId, {
-            segments_data: JSON.stringify({
+            segments_data: ({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
               trimRange: trimRange,
@@ -966,7 +966,7 @@ export function FramingContainer({
       segmentSpeeds: segmentSpeeds,
       trimRange: trimRange,
     };
-    updateClipData(selectedClipId, { segments_data: JSON.stringify(segmentState) });
+    updateClipData(selectedClipId, { segments_data: segmentState });
   }, [selectedClipId, segmentBoundaries, segmentSpeeds, trimRange, updateClipData]);
 
   /**
@@ -986,7 +986,7 @@ export function FramingContainer({
     if (callerClipId) {
       const updatedSpeeds = { ...segmentSpeeds, [segmentIndex]: speed };
       updateClipData(callerClipId, {
-        segments_data: JSON.stringify({
+        segments_data: ({
           boundaries: segmentBoundaries,
           segmentSpeeds: updatedSpeeds,
           trimRange: trimRange,
@@ -1002,7 +1002,7 @@ export function FramingContainer({
         setSegmentSpeed(segmentIndex, previousSpeed);
         if (callerClipId) {
           updateClipData(callerClipId, {
-            segments_data: JSON.stringify({
+            segments_data: ({
               boundaries: segmentBoundaries,
               segmentSpeeds: segmentSpeeds,
               trimRange: trimRange,

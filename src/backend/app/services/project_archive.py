@@ -28,6 +28,7 @@ from app.storage import (
     r2_key,
 )
 from app.user_context import get_current_user_id
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,18 @@ def _get_archive_r2_key(project_id: int) -> str:
     return f"archive/{project_id}.json"
 
 
+_BINARY_COLUMNS = {'crop_data', 'timing_data', 'segments_data', 'highlights_data', 'input_data'}
+
+
 def _row_to_dict(row) -> Dict[str, Any]:
-    """Convert a sqlite3.Row to a dictionary."""
-    return {key: row[key] for key in row.keys()}
+    """Convert a sqlite3.Row to a dictionary, decoding binary columns to JSON-safe objects."""
+    result = {}
+    for key in row.keys():
+        value = row[key]
+        if key in _BINARY_COLUMNS and isinstance(value, bytes):
+            value = decode_data(value)
+        result[key] = value
+    return result
 
 
 def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
@@ -211,12 +221,12 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     values
                 )
 
-            # Insert working_clips
+            # Insert working_clips (re-encode binary columns to msgpack)
             for clip in archive.get("working_clips", []):
                 columns = list(clip.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                values = [clip[col] for col in columns]
+                values = [encode_data(clip[col]) if col in _BINARY_COLUMNS and clip[col] is not None else clip[col] for col in columns]
 
                 cursor.execute(
                     f"INSERT INTO working_clips ({column_names}) VALUES ({placeholders})",
@@ -228,7 +238,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 columns = list(video.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                values = [video[col] for col in columns]
+                values = [encode_data(video[col]) if col in _BINARY_COLUMNS and video[col] is not None else video[col] for col in columns]
 
                 cursor.execute(
                     f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",

@@ -1022,11 +1022,11 @@ export function ExportButtonContainer({
   // Check if any clips haven't been worked on (no crop or meaningful segment edits)
   const isMultiClipMode = clips && clips.length > 0;
   const clipsNotFramed = (clips || []).filter(c => {
-    const hasCrop = clipCropKeyframes(c)?.length > 0;
+    const hasCrop = (c.cropKeyframes?.length > 0) || (clipCropKeyframes(c)?.length > 0);
     if (hasCrop) return false;
     // Check for real segment edits (speed, trim, splits) — not just default state
-    if (!c.segments_data) return true;
-    const s = c.segments_data;
+    const s = c.segments || c.segments_data;
+    if (!s) return true;
     const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
     const hasTrim = !!s.trimRange;
     const hasSplits = (s.userSplits?.length || 0) > 0;
