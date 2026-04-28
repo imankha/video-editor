@@ -44,6 +44,7 @@ from ...queries import latest_working_clips_subquery
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
+from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -1378,14 +1379,14 @@ async def _export_clips(
                         """, (project_id,))
                         next_version = cursor.fetchone()['next_version']
 
-                        highlights_json = json.dumps(highlight_regions)
+                        highlights_encoded = encode_data(highlight_regions)
 
                         logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
 
                         cursor.execute("""
                             INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
                             VALUES (?, ?, ?, ?, ?)
-                        """, (project_id, output_filename, next_version, video_duration, highlights_json))
+                        """, (project_id, output_filename, next_version, video_duration, highlights_encoded))
                         working_video_id = cursor.lastrowid
 
                         cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
@@ -1659,12 +1660,12 @@ async def _export_clips(
                         logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
                         highlight_regions = generate_default_highlight_regions(source_clips)
 
-                    highlights_json = json.dumps(highlight_regions)
+                    highlights_encoded = encode_data(highlight_regions)
 
                     cursor.execute("""
                         INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
                         VALUES (?, ?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_json))
+                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_encoded))
                     working_video_id = cursor.lastrowid
 
                     cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
@@ -1960,7 +1961,7 @@ async def export_multi_clip(
                 # Use DB-authoritative crop/segments data
                 # DB stores frame-based keyframes; pipeline expects time-based
                 if db_clip['crop_data']:
-                    raw_kfs = json.loads(db_clip['crop_data'])
+                    raw_kfs = decode_data(db_clip['crop_data'])
                     framerate = 30  # Default; matches single-clip export fallback
                     if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
                         clip_data['cropKeyframes'] = [
@@ -1970,7 +1971,7 @@ async def export_multi_clip(
                     else:
                         clip_data['cropKeyframes'] = raw_kfs
                 if db_clip['segments_data']:
-                    clip_data['segments'] = json.loads(db_clip['segments_data'])
+                    clip_data['segments'] = decode_data(db_clip['segments_data'])
                 if db_clip['raw_duration']:
                     clip_data['duration'] = db_clip['raw_duration']
 

@@ -11,6 +11,7 @@ overlay mode, the highlights don't appear.
 
 import pytest
 import json
+from app.utils.encoding import decode_data
 from app.highlight_transform import (
     transform_all_regions_to_working,
     transform_highlight_region_to_working,
@@ -294,7 +295,7 @@ class TestAPICodePath:
 
             if highlights_data:
                 try:
-                    highlights = json.loads(highlights_data)
+                    highlights = decode_data(highlights_data)
                     print(f"  Parsed highlights: {len(highlights)} regions")
                 except json.JSONDecodeError:
                     print(f"  Failed to parse highlights_data")

@@ -38,6 +38,7 @@ from pydantic import BaseModel
 import time as time_module
 from ...user_context import get_current_user_id
 from ...profile_context import get_current_profile_id
+from ...utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -436,8 +437,8 @@ async def render_project(request: RenderRequest, http_request: Request):
             detail={"error": "no_source_video", "message": "Clip has no source video (no game_id and no raw_filename)"}
         )
     try:
-        json.loads(clip['crop_data'])
-    except (json.JSONDecodeError, TypeError) as e:
+        decode_data(clip['crop_data'])
+    except Exception as e:
         raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
     # Credit reservation
@@ -447,8 +448,8 @@ async def render_project(request: RenderRequest, http_request: Request):
     segments_raw = None
     if clip['segments_data']:
         try:
-            segments_raw = json.loads(clip['segments_data'])
-        except (json.JSONDecodeError, TypeError):
+            segments_raw = decode_data(clip['segments_data'])
+        except Exception:
             pass
     video_seconds = get_output_duration(segments_raw, source_duration) if source_duration else source_duration
     credits_required = math.ceil(video_seconds) if video_seconds > 0 else 0
@@ -475,7 +476,7 @@ async def render_project(request: RenderRequest, http_request: Request):
     temp_dir = tempfile.mkdtemp()
     pipeline_entered = False
     try:
-        crop_keyframes = json.loads(clip['crop_data'])
+        crop_keyframes = decode_data(clip['crop_data'])
 
         # ffprobe for actual fps (framing uses real fps, not default 30)
         framerate = 30.0

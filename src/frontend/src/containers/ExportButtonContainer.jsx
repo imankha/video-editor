@@ -1026,13 +1026,11 @@ export function ExportButtonContainer({
     if (hasCrop) return false;
     // Check for real segment edits (speed, trim, splits) — not just default state
     if (!c.segments_data) return true;
-    try {
-      const s = JSON.parse(c.segments_data);
-      const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
-      const hasTrim = !!s.trimRange;
-      const hasSplits = (s.userSplits?.length || 0) > 0;
-      return !hasSpeed && !hasTrim && !hasSplits;
-    } catch { return true; }
+    const s = c.segments_data;
+    const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
+    const hasTrim = !!s.trimRange;
+    const hasSplits = (s.userSplits?.length || 0) > 0;
+    return !hasSpeed && !hasTrim && !hasSplits;
   });
 
   const hasUnframedClips = isMultiClipMode

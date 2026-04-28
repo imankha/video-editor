@@ -12,7 +12,7 @@ import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
  * Helper to calculate effective duration for a clip (accounting for speed changes)
  */
 function calculateEffectiveDuration(clip) {
-  const segments = clip.segments_data ? JSON.parse(clip.segments_data) : {};
+  const segments = clip.segments_data || {};
   const boundaries = segments.boundaries || [0, clip.duration || 0];
   const segmentSpeeds = segments.segmentSpeeds || {};
   const trimRange = segments.trimRange;

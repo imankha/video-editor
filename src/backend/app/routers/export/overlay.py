@@ -48,6 +48,7 @@ from ...services.image_extractor import (
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
 from ...services.project_archive import archive_project
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
+from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -188,8 +189,8 @@ def _get_overlay_data(cursor, project_id: int) -> tuple:
     highlights = []
     if row['highlights_data']:
         try:
-            highlights = json.loads(row['highlights_data'])
-        except json.JSONDecodeError:
+            highlights = decode_data(row['highlights_data'])
+        except Exception:
             highlights = []
 
     effect_type = normalize_effect_type(row['effect_type'])
@@ -205,7 +206,7 @@ def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_t
         UPDATE working_videos
         SET highlights_data = ?, effect_type = ?, highlight_color = ?, overlay_version = ?
         WHERE id = ?
-    """, (json.dumps(highlights), effect_type, highlight_color, new_version, working_video_id))
+    """, (encode_data(highlights), effect_type, highlight_color, new_version, working_video_id))
 
 
 def _find_region_index(highlights: list, region_id: str) -> int:
@@ -1110,7 +1111,7 @@ async def export_final(
 
             if wc['segments_data']:
                 try:
-                    segments = json.loads(wc['segments_data'])
+                    segments = decode_data(wc['segments_data'])
                     trim_range = segments.get('trimRange')
                     if trim_range:
                         start_frame = int(trim_range.get('start', 0) * framerate)
@@ -1120,7 +1121,7 @@ async def export_final(
                         boundaries = segments['boundaries']
                         if len(boundaries) >= 2:
                             end_frame = int(boundaries[-1] * framerate)
-                except json.JSONDecodeError:
+                except Exception:
                     pass
 
             # Insert tracking record
@@ -1231,6 +1232,9 @@ async def save_overlay_data(
                 detail="Project has no working video - complete framing first"
             )
 
+        # Parse highlights from form data for DB write and later use
+        parsed_highlights = json.loads(highlights_data) if highlights_data and highlights_data != '[]' else []
+
         # Update working video with overlay data
         cursor.execute("""
             UPDATE working_videos
@@ -1238,22 +1242,19 @@ async def save_overlay_data(
                 text_overlays = ?,
                 effect_type = ?
             WHERE id = ?
-        """, (highlights_data, text_overlays, effect_type, project['working_video_id']))
+        """, (encode_data(parsed_highlights) if parsed_highlights else None, text_overlays, effect_type, project['working_video_id']))
 
         # Transform and save highlight data to source raw_clips
         raw_clips_updated = 0
 
-        if highlights_data and highlights_data != "[]":
+        if parsed_highlights:
             try:
-                regions = json.loads(highlights_data)
-
-                if regions:
-                    raw_clips_updated = await _save_highlights_to_raw_clips(
-                        project_id=project_id,
-                        regions=regions,
-                        cursor=cursor
-                    )
-            except json.JSONDecodeError as e:
+                raw_clips_updated = await _save_highlights_to_raw_clips(
+                    project_id=project_id,
+                    regions=parsed_highlights,
+                    cursor=cursor
+                )
+            except Exception as e:
                 logger.warning(f"[Overlay Data] Failed to parse highlights: {e}")
 
         conn.commit()
@@ -1334,14 +1335,14 @@ async def _save_highlights_to_raw_clips(
 
         if clip['crop_data']:
             try:
-                crop_keyframes = json.loads(clip['crop_data'])
-            except json.JSONDecodeError:
+                crop_keyframes = decode_data(clip['crop_data'])
+            except Exception:
                 pass
 
         if clip['segments_data']:
             try:
-                segments_data = json.loads(clip['segments_data'])
-            except json.JSONDecodeError:
+                segments_data = decode_data(clip['segments_data'])
+            except Exception:
                 pass
 
         # Transform regions to raw clip space
@@ -1464,14 +1465,14 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
 
         if clip['crop_data']:
             try:
-                crop_keyframes = json.loads(clip['crop_data'])
-            except json.JSONDecodeError:
+                crop_keyframes = decode_data(clip['crop_data'])
+            except Exception:
                 pass
 
         if clip['segments_data']:
             try:
-                segments_data = json.loads(clip['segments_data'])
-            except json.JSONDecodeError:
+                segments_data = decode_data(clip['segments_data'])
+            except Exception:
                 pass
 
         # Transform regions from raw clip space to working video space
@@ -1530,8 +1531,8 @@ async def get_overlay_data(project_id: int):
         if result:
             if result['highlights_data']:
                 try:
-                    highlights = json.loads(result['highlights_data'])
-                except json.JSONDecodeError:
+                    highlights = decode_data(result['highlights_data'])
+                except Exception:
                     pass
 
             if result['text_overlays']:
@@ -1808,14 +1809,14 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     highlight_regions = []
     if project['highlights_data']:
         try:
-            highlight_regions = json.loads(project['highlights_data'])
+            highlight_regions = decode_data(project['highlights_data'])
             # DEBUG: Log what we loaded from database
             logger.info(f"[Overlay Render] DEBUG - Loaded highlights_data from DB: {len(project['highlights_data'])} chars")
             if highlight_regions and highlight_regions[0].get('keyframes'):
                 first_kf = highlight_regions[0]['keyframes'][:3]
                 logger.info(f"[Overlay Render] DEBUG - First region keyframes sample: {first_kf}")
-        except json.JSONDecodeError as e:
-            logger.error(f"[Overlay Render] DEBUG - JSON decode error: {e}")
+        except Exception as e:
+            logger.error(f"[Overlay Render] DEBUG - decode error: {e}")
     else:
         logger.warning(f"[Overlay Render] DEBUG - highlights_data is empty/None!")
 

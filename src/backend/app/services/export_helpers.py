@@ -24,6 +24,7 @@ from typing import Optional
 
 from app.database import get_db_connection
 from app.constants import ExportStatus, ExportPhase
+from app.utils.encoding import encode_data
 from app.websocket import manager, export_progress, make_progress_data
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ def create_export_job(
                 export_id,
                 project_id,
                 export_type,
-                json.dumps(input_data) if input_data else '{}',
+                encode_data(input_data) if input_data else encode_data({}),
                 game_id,
                 game_name,
             ))

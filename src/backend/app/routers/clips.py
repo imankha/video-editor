@@ -13,7 +13,7 @@ Files are stored in:
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Request
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Optional, List
 import os
 import uuid
 import json
@@ -28,6 +28,7 @@ from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -88,17 +89,26 @@ def get_working_clip_url(filename: str, source_type: str) -> Optional[str]:
 router = APIRouter(prefix="/api/clips", tags=["clips"])
 
 
-def normalize_json_data(value: Optional[str]) -> Optional[str]:
-    """Convert empty JSON to NULL for consistent storage.
+def normalize_and_encode(value) -> bytes | None:
+    """Normalize empty data to NULL and encode as msgpack for DB storage.
 
-    This ensures we don't have multiple representations of 'no data'
-    (NULL, '', '[]', '{}') which complicates queries.
+    Accepts: None, str (JSON from form data), bytes (already msgpack), dict/list (parsed).
+    Returns: msgpack bytes or None.
     """
     if value is None:
         return None
-    if value in ('', '[]', '{}', 'null'):
+    if isinstance(value, str):
+        if value in ('', '[]', '{}', 'null'):
+            return None
+        value = json.loads(value)
+    if isinstance(value, bytes):
+        decoded = decode_data(value)
+        if decoded in ([], {}, None):
+            return None
+        return value
+    if value in ([], {}):
         return None
-    return value
+    return encode_data(value)
 
 
 class RawClipResponse(BaseModel):
@@ -164,9 +174,9 @@ class WorkingClipResponse(BaseModel):
     notes: Optional[str] = None
     exported_at: Optional[str] = None  # ISO timestamp when clip was exported (NULL = not exported)
     sort_order: int
-    crop_data: Optional[str] = None
-    timing_data: Optional[str] = None
-    segments_data: Optional[str] = None
+    crop_data: Optional[Any] = None
+    timing_data: Optional[Any] = None
+    segments_data: Optional[Any] = None
     # Fields from raw_clips for Annotate navigation and framing
     game_id: Optional[int] = None
     start_time: Optional[float] = None
@@ -262,15 +272,15 @@ def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
     crop_keyframes = []
     if clip['crop_data']:
         try:
-            crop_keyframes = json.loads(clip['crop_data'])
-        except json.JSONDecodeError:
+            crop_keyframes = decode_data(clip['crop_data'])
+        except Exception:
             crop_keyframes = []
 
     segments_data = {}
     if clip['segments_data']:
         try:
-            segments_data = json.loads(clip['segments_data'])
-        except json.JSONDecodeError:
+            segments_data = decode_data(clip['segments_data'])
+        except Exception:
             segments_data = {}
 
     return crop_keyframes, segments_data, clip
@@ -286,14 +296,14 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     handled exclusively by the PUT endpoint which receives full state from the
     frontend's saveCurrentClipState.
     """
-    crop_data_str = json.dumps(crop_keyframes) if crop_keyframes else None
-    segments_data_str = json.dumps(segments_data) if segments_data else None
+    crop_data_encoded = encode_data(crop_keyframes) if crop_keyframes else None
+    segments_data_encoded = encode_data(segments_data) if segments_data else None
 
     cursor.execute("""
         UPDATE working_clips
         SET crop_data = ?, segments_data = ?
         WHERE id = ?
-    """, (normalize_json_data(crop_data_str), normalize_json_data(segments_data_str), clip['id']))
+    """, (crop_data_encoded, segments_data_encoded, clip['id']))
     conn.commit()
 
     return {"success": True, "refresh_required": False}
@@ -1126,9 +1136,9 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 notes=clip['raw_notes'],
                 exported_at=clip['exported_at'],
                 sort_order=clip['sort_order'],
-                crop_data=clip['crop_data'],
-                timing_data=clip['timing_data'],
-                segments_data=clip['segments_data'],
+                crop_data=decode_data(clip['crop_data']),
+                timing_data=decode_data(clip['timing_data']),
+                segments_data=decode_data(clip['segments_data']),
                 game_id=clip['raw_game_id'],
                 start_time=clip['raw_start_time'],
                 end_time=clip['raw_end_time'],
@@ -1814,9 +1824,9 @@ async def update_working_clip(
                 current_clip['uploaded_filename'],
                 current_clip['sort_order'],
                 new_version,
-                normalize_json_data(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
-                normalize_json_data(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
-                normalize_json_data(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
+                normalize_and_encode(update.crop_data if update.crop_data is not None else current_clip['crop_data']),
+                normalize_and_encode(update.timing_data if update.timing_data is not None else current_clip['timing_data']),
+                normalize_and_encode(update.segments_data if update.segments_data is not None else current_clip['segments_data']),
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
@@ -1846,13 +1856,13 @@ async def update_working_clip(
             params.append(update.sort_order)
         if update.crop_data is not None:
             updates.append("crop_data = ?")
-            params.append(normalize_json_data(update.crop_data))
+            params.append(normalize_and_encode(update.crop_data))
         if update.timing_data is not None:
             updates.append("timing_data = ?")
-            params.append(normalize_json_data(update.timing_data))
+            params.append(normalize_and_encode(update.timing_data))
         if update.segments_data is not None:
             updates.append("segments_data = ?")
-            params.append(normalize_json_data(update.segments_data))
+            params.append(normalize_and_encode(update.segments_data))
 
         if updates:
             params.append(clip_id)

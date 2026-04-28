@@ -88,7 +88,7 @@ Scale, reliability, and data format changes that must land before alpha users ar
 |----|------|--------|-------|-----|--------|------|-------------|
 | | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | 9 | 5 | 1.8 | | | **Sessions survive deploys and route to correct machine** |
 | T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | DONE | [ ] | Persist sessions as individual R2 objects on login so sessions survive machine restarts (scales independently of auth.sqlite size) |
-| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
+| T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TESTING | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
 ### Epic: For Alpha (IN_PROGRESS)
 [tasks/for-alpha/EPIC.md](tasks/for-alpha/EPIC.md)

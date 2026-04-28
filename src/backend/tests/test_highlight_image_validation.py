@@ -13,6 +13,7 @@ Uses structural similarity (SSIM) to compare images.
 """
 
 import pytest
+from app.utils.encoding import decode_data
 import json
 import cv2
 import numpy as np
@@ -100,8 +101,8 @@ def find_available_test_data() -> Optional[Dict]:
 
                 # Parse the data
                 highlights = json.loads(row['default_highlight_regions'])
-                crop_data = json.loads(row['crop_data']) if row['crop_data'] else []
-                segments_data = json.loads(row['segments_data']) if row['segments_data'] else {}
+                crop_data = decode_data(row['crop_data']) if row['crop_data'] else []
+                segments_data = decode_data(row['segments_data']) if row['segments_data'] else {}
 
                 return {
                     'user_dir': user_dir,

@@ -22,24 +22,20 @@ export const clipDisplayName = (clip) =>
 export const clipFileUrl = (clip, projectId) =>
   clip.file_url || `/api/clips/projects/${projectId}/clips/${clip.id}/file`;
 
-// ========== Lazy JSON Parsers ==========
+// ========== Data Accessors ==========
 
 export const clipCropKeyframes = (clip) => {
   if (!clip.crop_data) return [];
-  try { return JSON.parse(clip.crop_data); }
-  catch { return []; }
+  return Array.isArray(clip.crop_data) ? clip.crop_data : [];
 };
 
 export const clipSegments = (clip, duration) => {
-  if (!clip.segments_data) {
-    return { boundaries: [0, duration || 0], userSplits: [], trimRange: null, segmentSpeeds: {} };
-  }
-  try { return JSON.parse(clip.segments_data); }
-  catch { return { boundaries: [0, duration || 0], userSplits: [], trimRange: null, segmentSpeeds: {} }; }
+  const defaults = { boundaries: [0, duration || 0], userSplits: [], trimRange: null, segmentSpeeds: {} };
+  if (!clip.segments_data) return defaults;
+  return typeof clip.segments_data === 'object' ? clip.segments_data : defaults;
 };
 
 export const clipTrimRange = (clip) => {
   if (!clip.timing_data) return null;
-  try { return JSON.parse(clip.timing_data).trimRange || null; }
-  catch { return null; }
+  return clip.timing_data.trimRange || null;
 };

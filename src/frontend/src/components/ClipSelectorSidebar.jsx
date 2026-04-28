@@ -11,13 +11,11 @@ import { getClipDisplayName } from '../utils/clipDisplayName';
 /** Check if clip has real user segment edits (speed changes, trims, or splits) */
 function hasUserSegmentEdits(clip) {
   if (!clip.segments_data) return false;
-  try {
-    const s = JSON.parse(clip.segments_data);
-    const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
-    const hasTrim = !!s.trimRange;
-    const hasSplits = (s.userSplits?.length || 0) > 0;
-    return hasSpeed || hasTrim || hasSplits;
-  } catch { return false; }
+  const s = clip.segments_data;
+  const hasSpeed = Object.keys(s.segmentSpeeds || {}).length > 0;
+  const hasTrim = !!s.trimRange;
+  const hasSplits = (s.userSplits?.length || 0) > 0;
+  return hasSpeed || hasTrim || hasSplits;
 }
 
 /**

@@ -13,6 +13,7 @@ from app.main import app
 from app.database import get_db_connection
 from app.user_context import set_current_user_id
 from app.profile_context import set_current_profile_id
+from app.utils.encoding import decode_data
 from app.session_init import _init_cache
 
 TEST_USER_ID = f"test_framing_{uuid.uuid4().hex[:8]}"
@@ -92,7 +93,7 @@ class TestFramingActions:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
             row = cursor.fetchone()
-            keyframes = json.loads(row[0])
+            keyframes = decode_data(row[0])
             assert len(keyframes) == 1
             assert keyframes[0]["frame"] == 0
             assert keyframes[0]["x"] == 100
@@ -127,7 +128,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
-            keyframes = json.loads(cursor.fetchone()[0])
+            keyframes = decode_data(cursor.fetchone()[0])
             assert keyframes[0]["x"] == 200
             assert keyframes[0]["y"] == 100
 
@@ -165,7 +166,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
-            keyframes = json.loads(cursor.fetchone()[0])
+            keyframes = decode_data(cursor.fetchone()[0])
             assert len(keyframes) == 2
             frames = [kf["frame"] for kf in keyframes]
             assert 30 not in frames
@@ -199,7 +200,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
-            keyframes = json.loads(cursor.fetchone()[0])
+            keyframes = decode_data(cursor.fetchone()[0])
             assert keyframes[0]["frame"] == 45
 
     def test_split_segment(self, test_project_with_clip):
@@ -221,7 +222,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT segments_data FROM working_clips WHERE id = ?", (clip_id,))
-            segments = json.loads(cursor.fetchone()[0])
+            segments = decode_data(cursor.fetchone()[0])
             assert "boundaries" in segments
             assert 2.5 in segments["boundaries"]
 
@@ -251,7 +252,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT segments_data FROM working_clips WHERE id = ?", (clip_id,))
-            segments = json.loads(cursor.fetchone()[0])
+            segments = decode_data(cursor.fetchone()[0])
             assert 2.5 not in segments.get("boundaries", [])
 
     def test_set_segment_speed(self, test_project_with_clip):
@@ -274,7 +275,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT segments_data FROM working_clips WHERE id = ?", (clip_id,))
-            segments = json.loads(cursor.fetchone()[0])
+            segments = decode_data(cursor.fetchone()[0])
             assert segments["segmentSpeeds"]["0"] == 0.5
 
     def test_set_trim_range(self, test_project_with_clip):
@@ -296,7 +297,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT segments_data FROM working_clips WHERE id = ?", (clip_id,))
-            segments = json.loads(cursor.fetchone()[0])
+            segments = decode_data(cursor.fetchone()[0])
             assert segments["trimRange"]["start"] == 1.0
             assert segments["trimRange"]["end"] == 5.0
 
@@ -323,7 +324,7 @@ class TestFramingActions:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT segments_data FROM working_clips WHERE id = ?", (clip_id,))
-            segments = json.loads(cursor.fetchone()[0])
+            segments = decode_data(cursor.fetchone()[0])
             assert segments.get("trimRange") is None
 
     def test_invalid_action_fails(self, test_project_with_clip):

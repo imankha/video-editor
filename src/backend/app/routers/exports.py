@@ -30,6 +30,7 @@ from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
 from ..profile_context import get_current_profile_id
 from ..constants import ExportStatus
+from ..utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class ExportJobListResponse(BaseModel):
 def create_export_job(project_id: int, job_type: str, config: dict) -> str:
     """Create a new export job in the database. Returns job_id."""
     job_id = f"export_{uuid.uuid4().hex[:12]}"
-    input_data = json.dumps(config)
+    input_data = encode_data(config)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -571,7 +572,7 @@ async def start_framing_export(
     }
 
     # Step 2: Create job in database (atomic in profile.sqlite)
-    input_data = json.dumps(config)
+    input_data = encode_data(config)
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()

@@ -16,6 +16,7 @@ from app.database import get_db_connection
 from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url
+from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -1213,7 +1214,7 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
             new_crop_data = None
             if row['crop_data']:
                 try:
-                    crop_keyframes = json.loads(row['crop_data'])
+                    crop_keyframes = decode_data(row['crop_data'])
                     if crop_keyframes and len(crop_keyframes) >= 2:
                         # Old duration derived from last permanent keyframe's frame number
                         # Keyframes are frame-based; last keyframe is at the old end frame
@@ -1230,21 +1231,21 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
                             # Ensure first frame is 0 and last frame is new_end_frame
                             rescaled[0]['frame'] = 0
                             rescaled[-1]['frame'] = new_end_frame
-                            new_crop_data = json.dumps(rescaled)
+                            new_crop_data = encode_data(rescaled)
                             logger.info(f"Rescaled {len(rescaled)} keyframes for clip {working_clip_id}: "
                                        f"old_end={old_end_frame} new_end={new_end_frame} scale={scale:.3f}")
                         else:
                             new_crop_data = row['crop_data']  # Keep as-is if can't determine scale
                     else:
                         new_crop_data = row['crop_data']
-                except (json.JSONDecodeError, TypeError):
+                except (json.JSONDecodeError, TypeError, Exception):
                     new_crop_data = None  # Corrupt data, reset
 
             # Rescale segment boundaries if they exist
             new_segments_data = None
             if row['segments_data']:
                 try:
-                    seg_data = json.loads(row['segments_data'])
+                    seg_data = decode_data(row['segments_data'])
                     # Get old duration from segment boundaries (last boundary = old duration)
                     boundaries = seg_data.get('boundaries', [])
                     old_duration = boundaries[-1] if boundaries else 0
@@ -1269,10 +1270,10 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
                         if seg_data.get('userSplits'):
                             seg_data['userSplits'] = [round(s * scale, 3) for s in seg_data['userSplits']]
 
-                        new_segments_data = json.dumps(seg_data)
+                        new_segments_data = encode_data(seg_data)
                     else:
                         new_segments_data = row['segments_data']
-                except (json.JSONDecodeError, TypeError):
+                except (json.JSONDecodeError, TypeError, Exception):
                     new_segments_data = None
 
             # Update working clip with rescaled data and new version

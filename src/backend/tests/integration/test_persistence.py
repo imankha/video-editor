@@ -13,6 +13,7 @@ Tests the full persistence strategy including:
 import requests
 import json
 import time
+from app.utils.encoding import decode_data
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -225,8 +226,8 @@ class PersistenceTest:
 
         if updated_clip:
             if updated_clip.get('crop_data') and updated_clip.get('timing_data'):
-                crop_data = json.loads(updated_clip['crop_data'])
-                timing_data = json.loads(updated_clip['timing_data'])
+                crop_data = decode_data(updated_clip['crop_data'])
+                timing_data = decode_data(updated_clip['timing_data'])
 
                 if crop_data.get('x') == 100 and timing_data.get('speed') == 1.5:
                     log_success("Framing data persisted correctly")

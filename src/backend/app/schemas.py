@@ -318,65 +318,57 @@ EffectType = Literal['original', 'brightness_boost', 'dark_overlay']
 # HELPER FUNCTIONS
 # =============================================================================
 
-def parse_crop_data(json_str: Optional[str]) -> Optional[CropData]:
-    """
-    Safely parse crop_data JSON string.
-
-    Args:
-        json_str: JSON string from database, or None
-
-    Returns:
-        CropData object, or None if input is None/empty/invalid
-    """
-    if not json_str:
+def parse_crop_data(raw) -> Optional[CropData]:
+    """Safely parse crop_data from DB (msgpack bytes, JSON string, or None)."""
+    if not raw:
         return None
     try:
-        import json
-        data = json.loads(json_str)
+        from app.utils.encoding import decode_data
+        data = decode_data(raw)
         if isinstance(data, list):
             return CropData.from_json_list(data)
         return None
-    except (json.JSONDecodeError, ValueError):
+    except Exception:
         return None
 
 
-def parse_timing_data(json_str: Optional[str]) -> Optional[TimingData]:
-    """Safely parse timing_data JSON string."""
-    if not json_str:
+def parse_timing_data(raw) -> Optional[TimingData]:
+    """Safely parse timing_data from DB (msgpack bytes, JSON string, or None)."""
+    if not raw:
         return None
     try:
-        import json
-        data = json.loads(json_str)
+        from app.utils.encoding import decode_data
+        data = decode_data(raw)
         if isinstance(data, dict):
             return TimingData(**data)
         return None
-    except (json.JSONDecodeError, ValueError):
+    except Exception:
         return None
 
 
-def parse_segments_data(json_str: Optional[str]) -> Optional[SegmentsData]:
-    """Safely parse segments_data JSON string."""
-    if not json_str:
+def parse_segments_data(raw) -> Optional[SegmentsData]:
+    """Safely parse segments_data from DB (msgpack bytes, JSON string, or None)."""
+    if not raw:
         return None
     try:
-        import json
-        data = json.loads(json_str)
+        from app.utils.encoding import decode_data
+        data = decode_data(raw)
         if isinstance(data, dict):
             return SegmentsData(**data)
         return None
-    except (json.JSONDecodeError, ValueError):
+    except Exception:
         return None
 
 
-def parse_highlights_data(json_str: Optional[str]) -> Optional[HighlightsData]:
-    """Safely parse highlights_data JSON string."""
-    if not json_str:
+def parse_highlights_data(raw) -> Optional[HighlightsData]:
+    """Safely parse highlights_data from DB (msgpack bytes, JSON string, or None)."""
+    if not raw:
         return None
     try:
-        import json
-        data = json.loads(json_str)
+        from app.utils.encoding import decode_data
+        data = decode_data(raw)
         if isinstance(data, list):
             return HighlightsData.from_json_list(data)
         return None
-    except (json.JSONDecodeError, ValueError):
+    except Exception:
         return None

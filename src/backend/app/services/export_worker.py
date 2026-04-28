@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from ..database import get_db_connection, get_working_videos_path
+from ..utils.encoding import decode_data
 from ..websocket import manager, export_progress
 from .ffmpeg_service import get_video_duration
 from ..routers.exports import (
@@ -170,7 +171,7 @@ async def process_export_job(job_id: str):
 
     try:
         # Parse config
-        config = json.loads(job['input_data'])
+        config = decode_data(job['input_data'])
         job_type = job['type']
         project_id = job['project_id']
 
