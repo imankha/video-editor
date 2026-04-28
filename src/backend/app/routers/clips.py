@@ -269,19 +269,8 @@ def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
     if not clip:
         return None, None, None
 
-    crop_keyframes = []
-    if clip['crop_data']:
-        try:
-            crop_keyframes = decode_data(clip['crop_data'])
-        except Exception:
-            crop_keyframes = []
-
-    segments_data = {}
-    if clip['segments_data']:
-        try:
-            segments_data = decode_data(clip['segments_data'])
-        except Exception:
-            segments_data = {}
+    crop_keyframes = decode_data(clip['crop_data']) or []
+    segments_data = decode_data(clip['segments_data']) or {}
 
     return crop_keyframes, segments_data, clip
 
@@ -1796,19 +1785,13 @@ async def update_working_clip(
         data_actually_changed = False
         if is_framing_change:
             if update.crop_data is not None:
-                current_decoded = decode_data(current_clip['crop_data']) if current_clip['crop_data'] else None
-                incoming = json.loads(update.crop_data) if isinstance(update.crop_data, str) else update.crop_data
-                if incoming != current_decoded:
+                if decode_data(update.crop_data) != decode_data(current_clip['crop_data']):
                     data_actually_changed = True
             if update.timing_data is not None:
-                current_decoded = decode_data(current_clip['timing_data']) if current_clip['timing_data'] else None
-                incoming = json.loads(update.timing_data) if isinstance(update.timing_data, str) else update.timing_data
-                if incoming != current_decoded:
+                if decode_data(update.timing_data) != decode_data(current_clip['timing_data']):
                     data_actually_changed = True
             if update.segments_data is not None:
-                current_decoded = decode_data(current_clip['segments_data']) if current_clip['segments_data'] else None
-                incoming = json.loads(update.segments_data) if isinstance(update.segments_data, str) else update.segments_data
-                if incoming != current_decoded:
+                if decode_data(update.segments_data) != decode_data(current_clip['segments_data']):
                     data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:
