@@ -87,7 +87,7 @@ Scale, reliability, and data format changes that must land before alpha users ar
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
 | | **[Session Reliability Epic](tasks/session-reliability/EPIC.md)** | 9 | 5 | 1.8 | | | **Sessions survive deploys and route to correct machine** |
-| T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TODO | [ ] | Sync auth.sqlite to R2 after login so sessions survive machine restarts |
+| T1195 | ↳ [Session Durability on Deploy](tasks/session-reliability/T1195-session-durability-on-deploy.md) | 8 | 3 | 2.7 | TODO | [ ] | Persist sessions as individual R2 objects on login so sessions survive machine restarts (scales independently of auth.sqlite size) |
 | T1190 | ↳ [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
 | T1180 | [Binary Data Format](tasks/for-launch/T1180-binary-data-format.md) | 3 | 4 | 0.8 | TODO | [x] | Replace JSON columns with MessagePack for ~30-50% size reduction |
 
@@ -185,6 +185,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T1740 | [Privacy & Regulatory Compliance](tasks/for-launch/T1740-privacy-regulatory-compliance.md) | 10 | 6 | 1.7 | TODO | [ ] | Privacy policy, ToS, COPPA/CCPA/CalOPPA compliance, age verification, consumer rights (data export/deletion), vendor DPAs, incident response plan. No biometric processing — BIPA/CUBI not applicable. Must ship before launch. |
+| T1960 | [Migrate Auth to Fly Postgres](tasks/for-launch/T1960-migrate-auth-to-fly-postgres.md) | 8 | 6 | 1.3 | TODO | [ ] | Move auth.sqlite (users, sessions, otp_codes, admin) to Fly Postgres. Eliminates restart fragility, concurrent write contention, and O(users) R2 syncs. Makes T1195 unnecessary. |
 
 #### Features
 
