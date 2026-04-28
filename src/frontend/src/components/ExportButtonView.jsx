@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle } from 'react';
 import { Download, Loader, AlertCircle, Check } from 'lucide-react';
-import { Button, Toggle, ExportProgress } from './shared';
+import { Button, Toggle } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { BuyCreditsModal } from './BuyCreditsModal';
@@ -217,14 +217,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             : 'Add Overlay'
         }
       </Button>
-
-      {/* Progress display when exporting */}
-      <ExportProgress
-        isExporting={isCurrentlyExporting}
-        progress={displayProgress}
-        progressMessage={displayMessage}
-        label={isFramingMode ? "AI Upscaling" : "Overlay Export"}
-      />
 
       {/* Disconnected state - recoverable, not an error */}
       {disconnected && !error && (

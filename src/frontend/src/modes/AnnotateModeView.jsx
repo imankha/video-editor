@@ -70,7 +70,6 @@ export function AnnotateModeView({
 
   // Upload state
   isUploadingGameVideo,
-  uploadProgress,
 
   // T710: Annotation playback
   playback,
@@ -268,32 +267,6 @@ export function AnnotateModeView({
               <span className="text-gray-400">Size:</span>{' '}
               {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
             </span>
-            {uploadProgress && (
-              <span className="flex items-center gap-2 ml-auto">
-                <span className="text-blue-400">Uploading… {uploadProgress.percent}%</span>
-                <span className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                  <span
-                    className="block h-full bg-blue-500 transition-all duration-300 rounded-full"
-                    style={{ width: `${uploadProgress.percent}%` }}
-                  />
-                </span>
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Compact upload indicator when no metadata bar is visible */}
-      {uploadProgress && (!annotateVideoMetadata || annotateFullscreen) && (
-        <div className="hidden sm:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-blue-400">Uploading… {uploadProgress.percent}%</span>
-            <span className="w-24 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-              <span
-                className="block h-full bg-blue-500 transition-all duration-300 rounded-full"
-                style={{ width: `${uploadProgress.percent}%` }}
-              />
-            </span>
           </div>
         </div>
       )}
@@ -454,26 +427,6 @@ export function AnnotateModeView({
         {!annotateFullscreen && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-2">
-              {/* Upload progress bar (shown during video upload) */}
-              {uploadProgress && (
-                <div className="bg-gray-800 rounded-lg p-3 mb-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-300">
-                      {uploadProgress.message || 'Uploading video...'}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {uploadProgress.percent}%
-                    </span>
-                  </div>
-                  <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 transition-all duration-300"
-                      style={{ width: `${uploadProgress.percent}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
               <button
                 onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
                 disabled={!hasAnnotateClips || isUploadingGameVideo}

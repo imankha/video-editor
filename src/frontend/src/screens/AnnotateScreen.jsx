@@ -166,7 +166,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
     annotatePlaybackSpeed,
     annotateContainerRef,
     isUploadingGameVideo,
-    uploadProgress,
     hasAnnotateClips,
     clipRegions,
     annotateRegionsWithLayout,
@@ -553,7 +552,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
         onLayerSelect={setAnnotateSelectedLayer}
         // Upload state
         isUploadingGameVideo={isUploadingGameVideo}
-        uploadProgress={uploadProgress}
         // T710: Annotation playback
         playback={playback}
         lockScrub={lockScrub}

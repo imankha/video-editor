@@ -148,12 +148,6 @@ export function AnnotateContainer({
   const uploadStore = useUploadStore();
   const activeUpload = uploadStore.activeUpload;
 
-  // Derive upload progress from store for UI display
-  const storeUploadProgress = activeUpload ? {
-    percent: activeUpload.progress,
-    message: activeUpload.message,
-  } : null;
-
   // Derive isUploading from store
   const isUploadingFromStore = uploadStore.isUploading();
 
@@ -960,7 +954,6 @@ export function AnnotateContainer({
     annotateContainerRef,
     annotateFileInputRef,
     isUploadingGameVideo: isUploadingFromStore, // From global store (persists across navigation)
-    uploadProgress: storeUploadProgress, // From global store
     isClipSaving, // Real-time clip save in progress
     hasAnnotateClips,
 
