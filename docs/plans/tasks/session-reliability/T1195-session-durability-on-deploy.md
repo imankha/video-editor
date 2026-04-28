@@ -33,42 +33,44 @@ The previous approach (`sync_auth_db_to_r2()`) uploads the entire auth.sqlite fi
 
 ### Design
 
+All operations are O(1). No ListObjects, no startup bulk restore, no iteration over sessions.
+
 **Write path (login):**
 1. After `_issue_session_cookie()`, write a session object to R2: `{env}/sessions/{session_id}.json`
 2. Object contains: `{ user_id, email, expires_at, created_at }`
-3. This is a single small PutObject — fast, no contention with other logins
+3. Single PutObject (~200 bytes) — fast, no contention with other logins
 
-**Read path (restore after restart):**
-1. On startup, after `restore_auth_db_or_fail()`, list `{env}/sessions/` prefix in R2
-2. For each session object not already in local auth.sqlite `sessions` table, insert it
-3. Delete any R2 session objects that are expired
+**Read path (lazy restore on cache miss):**
+1. `validate_session()` checks in-memory cache → local auth.sqlite (existing behavior)
+2. On **both miss**, do a single GetObject for `{env}/sessions/{session_id}.json`
+3. If found and not expired: insert into local auth.sqlite, populate cache, return valid
+4. If not found or expired: return invalid (existing behavior)
 
-**Delete path (logout / expiry):**
+This means after a restart, the first request from each user pays one R2 GetObject (~50ms). Subsequent requests hit cache/local DB as before. No startup restore step needed.
+
+**Delete path (logout):**
 1. On logout, delete `{env}/sessions/{session_id}.json` from R2
-2. `cleanup_expired_sessions()` also deletes expired R2 session objects
 
-**Session validation (no change):**
-- `validate_session()` continues to read from local auth.sqlite + in-memory cache
-- R2 is only involved at login (write) and startup (restore)
+**Expiry cleanup (zero code):**
+- Configure an R2 object lifecycle rule on the `{env}/sessions/` prefix to auto-delete objects after the session TTL (e.g., 30 days). No cleanup code needed.
 
 ### Changes
 
 1. **New function** `persist_session_to_r2(session_id, user_id, email, expires_at)` in `auth_db.py`
-2. **New function** `restore_sessions_from_r2()` in `auth_db.py` — called after `restore_auth_db_or_fail()`
+2. **New function** `restore_session_from_r2(session_id)` in `auth_db.py` — O(1) GetObject by exact key
 3. **New function** `delete_session_from_r2(session_id)` in `auth_db.py`
-4. **OAuth callback** (`auth.py`): Call `persist_session_to_r2()` after `_issue_session_cookie()`
-5. **OTP verify** (`auth.py`): Same — persist after session creation
-6. **Logout handler**: Call `delete_session_from_r2()` alongside local session deletion
-7. **`cleanup_expired_sessions()`**: Also clean up expired R2 session objects
-8. **Startup** (`main.py` or `lifespan`): Call `restore_sessions_from_r2()` after auth DB restore
+4. **`validate_session()`**: On cache + DB miss, call `restore_session_from_r2()` before returning invalid
+5. **OAuth callback** (`auth.py`): Call `persist_session_to_r2()` after `_issue_session_cookie()`
+6. **OTP verify** (`auth.py`): Same — persist after session creation
+7. **Logout handler**: Call `delete_session_from_r2()` alongside local session deletion
+8. **R2 lifecycle rule**: Auto-delete `{env}/sessions/*` objects after session TTL
 
 ## Context
 
 ### Relevant Files
 - `src/backend/app/routers/auth.py` — OAuth and OTP handlers, `_issue_session_cookie()`
-- `src/backend/app/services/auth_db.py` — `sync_auth_db_to_r2()`, `create_session()`
+- `src/backend/app/services/auth_db.py` — `sync_auth_db_to_r2()`, `create_session()`, `validate_session()`
 - `src/backend/app/middleware/db_sync.py` — `SKIP_SYNC_PATHS` definition
-- `src/backend/app/main.py` — startup/lifespan for restore call
 
 ### Related Tasks
 - Part of: Session Reliability epic
@@ -78,32 +80,33 @@ The previous approach (`sync_auth_db_to_r2()`) uploads the entire auth.sqlite fi
 - Related: T1290 (Auth DB Restore Must Succeed) — ensures restore works on startup
 
 ### Technical Notes
-- R2 ListObjects with prefix is paginated (1000 per page). For sessions, this is fine — active sessions should be well under 1000.
-- Session objects are tiny (~200 bytes JSON). PutObject latency is <100ms.
+- All R2 operations are O(1): PutObject on login, GetObject on cache miss, DeleteObject on logout. No ListObjects anywhere in the hot path.
+- Session objects are tiny (~200 bytes JSON). PutObject adds <100ms to login. GetObject adds ~50ms on first request after restart (once per session, then cached).
 - No change to `SKIP_SYNC_PATHS` — auth.sqlite full-file sync remains unchanged.
+- R2 lifecycle rules handle expiry cleanup automatically — no application code needed.
 - This is intentionally a narrow fix. The broader solution is T1960 (Fly Postgres for auth).
 
 ## Implementation
 
 ### Steps
-1. [ ] Add `persist_session_to_r2()` — writes `{env}/sessions/{session_id}.json` to R2
-2. [ ] Add `delete_session_from_r2()` — deletes session object from R2
-3. [ ] Add `restore_sessions_from_r2()` — lists prefix, imports missing sessions, deletes expired
-4. [ ] In OAuth callback, call `persist_session_to_r2()` after `_issue_session_cookie()`
-5. [ ] In OTP verify handler, call `persist_session_to_r2()` after session creation
-6. [ ] In logout handler, call `delete_session_from_r2()`
-7. [ ] In `cleanup_expired_sessions()`, also delete expired R2 session objects
-8. [ ] Call `restore_sessions_from_r2()` during startup after auth DB restore
+1. [ ] Add `persist_session_to_r2()` — PutObject `{env}/sessions/{session_id}.json`
+2. [ ] Add `restore_session_from_r2(session_id)` — GetObject by exact key, returns session data or None
+3. [ ] Add `delete_session_from_r2()` — DeleteObject
+4. [ ] Update `validate_session()` — on cache + DB miss, call `restore_session_from_r2()` before returning invalid
+5. [ ] In OAuth callback, call `persist_session_to_r2()` after `_issue_session_cookie()`
+6. [ ] In OTP verify handler, call `persist_session_to_r2()` after session creation
+7. [ ] In logout handler, call `delete_session_from_r2()`
+8. [ ] Configure R2 lifecycle rule to auto-delete `sessions/` objects after session TTL
 9. [ ] Add backend test: login → verify session object exists in R2
-10. [ ] Add backend test: simulate restart (restore from R2) → verify session survives
+10. [ ] Add backend test: simulate restart (clear local DB/cache) → first request restores from R2
 11. [ ] Manual test: sign in on production, restart Fly machine, verify session survives
 
 ## Acceptance Criteria
 
 - [ ] OAuth login persists session to R2 as individual object
 - [ ] OTP login persists session to R2 as individual object
-- [ ] Session survives Fly machine restart (restored from R2 objects)
+- [ ] Session survives Fly machine restart (lazy-restored on first request via O(1) GetObject)
 - [ ] Logout deletes session from R2
-- [ ] Expired session cleanup includes R2 objects
-- [ ] No regression: auth endpoints remain fast (R2 PutObject adds <100ms)
-- [ ] Works independently of auth.sqlite size
+- [ ] R2 lifecycle rule handles expired session cleanup (no application code)
+- [ ] No regression: auth endpoints remain fast (PutObject <100ms on login, GetObject <50ms on first post-restart request)
+- [ ] All operations are O(1) — no ListObjects, no iteration, no startup bulk restore
