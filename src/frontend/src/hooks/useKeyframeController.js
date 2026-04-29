@@ -44,7 +44,6 @@ export default function useKeyframeController({
           console.error('Keyframe invariant violations:', violations);
           console.warn('[Keyframe] State dump:', {
             machineState: state.machineState,
-            endFrame: state.endFrame,
             keyframeCount: state.keyframes?.length,
             firstFrame: state.keyframes?.[0]?.frame,
             lastFrame: state.keyframes?.[state.keyframes.length - 1]?.frame,
@@ -65,8 +64,8 @@ export default function useKeyframeController({
    * Initialize keyframes with start and end
    */
   const initializeKeyframes = useCallback((defaultData, endFrame) => {
-    dispatch(actions.initialize(defaultData, endFrame, framerate));
-  }, [framerate]);
+    dispatch(actions.initialize(defaultData, endFrame));
+  }, []);
 
   /**
    * Check if keyframes need initialization or are stale
@@ -90,8 +89,8 @@ export default function useKeyframeController({
       console.warn('[useKeyframeController] No keyframes to restore');
       return;
     }
-    dispatch(actions.restoreKeyframes(savedKeyframes, framerate));
-  }, [framerate]);
+    dispatch(actions.restoreKeyframes(savedKeyframes));
+  }, []);
 
   // ============================================================================
   // KEYFRAME OPERATIONS

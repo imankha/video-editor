@@ -1628,7 +1628,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           <div className="mt-3 flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-400">
               <CheckCircle size={14} />
-              Export Complete
+              Done
             </span>
             {project.final_video_id && (
               <button

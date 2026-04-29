@@ -21,8 +21,6 @@ describe('keyframeController', () => {
       expect(state.keyframes).toEqual([]);
       expect(state.isEndKeyframeExplicit).toBe(false);
       expect(state.copiedData).toBeNull();
-      expect(state.endFrame).toBeNull();
-      expect(state.framerate).toBe(30);
     });
   });
 
@@ -39,9 +37,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       expect(validateInvariants(state)).toEqual([]);
     });
@@ -54,9 +50,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
       expect(violations.length).toBeGreaterThanOrEqual(1);
@@ -71,9 +65,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
       expect(violations.length).toBeGreaterThan(0);
@@ -88,9 +80,7 @@ describe('keyframeController', () => {
           { frame: 0, origin: 'permanent', x: 100 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
       expect(violations.some(v => v.includes('not sorted'))).toBe(true);
@@ -103,9 +93,7 @@ describe('keyframeController', () => {
           { frame: 0, origin: 'permanent', x: 100 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
       expect(violations.some(v => v.includes('at least 2 keyframes'))).toBe(true);
@@ -140,14 +128,7 @@ describe('keyframeController', () => {
         origin: 'permanent',
         ...defaultData
       });
-      expect(newState.endFrame).toBe(90);
       expect(newState.isEndKeyframeExplicit).toBe(false);
-    });
-
-    it('sets framerate from payload', () => {
-      const state = createInitialState();
-      const newState = keyframeReducer(state, actions.initialize({}, 90, 60));
-      expect(newState.framerate).toBe(60);
     });
   });
 
@@ -162,8 +143,6 @@ describe('keyframeController', () => {
         ],
         isEndKeyframeExplicit: true,
         copiedData: { x: 100 },
-        endFrame: 90,
-        framerate: 30
       };
 
       const newState = keyframeReducer(state, actions.reset());
@@ -184,9 +163,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(30, { x: 150 }, 'user'));
@@ -205,9 +182,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(30, { x: 175 }, 'user'));
@@ -224,9 +199,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 125 }, 'user'));
@@ -243,9 +216,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 100 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 150 }, 'user'));
@@ -263,9 +234,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: true,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 150 }, 'user'));
@@ -282,9 +251,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 100 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(90, { x: 200 }, 'user'));
@@ -301,9 +268,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.addKeyframe(30, { x: 140 }, 'user'));
@@ -322,9 +287,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.removeKeyframe(30));
@@ -342,9 +305,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.removeKeyframe(0));
@@ -361,9 +322,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.removeKeyframe(0));
@@ -379,9 +338,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.removeKeyframe(45));
@@ -405,9 +362,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.deleteKeyframesInRange(25, 65));
@@ -427,9 +382,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Delete range includes both boundaries (caller reconstitutes as needed)
@@ -453,9 +406,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Delete range 25-60, both 30 and 60 should be deleted
@@ -481,9 +432,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.cleanupTrimKeyframes());
@@ -500,9 +449,7 @@ describe('keyframeController', () => {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: null,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.startTrim());
@@ -514,9 +461,7 @@ describe('keyframeController', () => {
         machineState: KeyframeStates.TRIMMING,
         keyframes: [],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: null,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.endTrim());
@@ -537,9 +482,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200, y: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const updateFn = (kf) => ({ ...kf, x: kf.x + 50 });
@@ -559,9 +502,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Remove keyframes with origin='user' by returning null
@@ -598,8 +539,6 @@ describe('keyframeController', () => {
         ],
         isEndKeyframeExplicit: false,
         copiedData: { x: 150, y: 175 },
-        endFrame: 90,
-        framerate: 30
       };
 
       const newState = keyframeReducer(state, actions.pasteKeyframe(45));
@@ -616,9 +555,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.pasteKeyframe(45));
@@ -681,9 +618,7 @@ describe('keyframeController', () => {
         { frame: 90, origin: 'permanent', x: 200 }
       ],
       isEndKeyframeExplicit: true,
-      copiedData: { x: 175 },
-      endFrame: 90,
-      framerate: 30
+      copiedData: { x: 175 }
     };
 
     describe('needsInitialization', () => {
@@ -776,7 +711,7 @@ describe('keyframeController', () => {
         { frame: 90, origin: 'permanent', x: 200 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
       expect(newState.keyframes[0].frame).toBe(0);
       expect(newState.keyframes[0].origin).toBe('permanent');
@@ -792,11 +727,10 @@ describe('keyframeController', () => {
         { frame: 60, origin: 'user', x: 180 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
       expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(60);
       expect(newState.keyframes[newState.keyframes.length - 1].origin).toBe('permanent');
-      expect(newState.endFrame).toBe(60);
       expect(newState.keyframes.length).toBe(2);
     });
 
@@ -808,7 +742,7 @@ describe('keyframeController', () => {
         { frame: 90, origin: 'user', x: 200 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
       expect(newState.keyframes[0].origin).toBe('permanent');
       expect(newState.keyframes[1].origin).toBe('permanent');
@@ -823,9 +757,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       const newState = keyframeReducer(state, actions.cleanupTrimKeyframes());
@@ -845,15 +777,13 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
       expect(violations.some(v => v.includes('permanent at frame 0'))).toBe(true);
     });
 
-    it('validateInvariants detects missing permanent end keyframe', () => {
+    it('validateInvariants detects non-permanent last keyframe', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
@@ -861,12 +791,10 @@ describe('keyframeController', () => {
           { frame: 60, origin: 'user', x: 180 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
       const violations = validateInvariants(state);
-      expect(violations.some(v => v.includes('permanent at endFrame=90'))).toBe(true);
+      expect(violations.some(v => v.includes('Last keyframe must be permanent'))).toBe(true);
     });
   });
 
@@ -880,9 +808,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Try to add at frame 33 (3 frames from 30, less than MIN_KEYFRAME_SPACING=5)
@@ -902,9 +828,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Frame 50 is well away from 30 and 90
@@ -922,9 +846,7 @@ describe('keyframeController', () => {
           { frame: 90, origin: 'permanent', x: 200 }
         ],
         isEndKeyframeExplicit: false,
-        copiedData: null,
-        endFrame: 90,
-        framerate: 30
+        copiedData: null
       };
 
       // Frame 86 is 4 frames from 90 — within MIN_KEYFRAME_SPACING but also within FRAME_TOLERANCE

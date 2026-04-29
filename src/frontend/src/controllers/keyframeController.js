@@ -76,9 +76,7 @@ export function createInitialState() {
     machineState: KeyframeStates.UNINITIALIZED,
     keyframes: [],
     isEndKeyframeExplicit: false,
-    copiedData: null,
-    endFrame: null,
-    framerate: 30
+    copiedData: null
   };
 }
 
@@ -121,11 +119,9 @@ export function validateInvariants(state) {
     if (first.frame !== 0 || first.origin !== 'permanent') {
       violations.push(`First keyframe must be permanent at frame 0, got frame=${first.frame} origin=${first.origin}`);
     }
-    if (state.endFrame !== null) {
-      const last = state.keyframes[state.keyframes.length - 1];
-      if (last.frame !== state.endFrame || last.origin !== 'permanent') {
-        violations.push(`Last keyframe must be permanent at endFrame=${state.endFrame}, got frame=${last.frame} origin=${last.origin}`);
-      }
+    const last = state.keyframes[state.keyframes.length - 1];
+    if (last.origin !== 'permanent') {
+      violations.push(`Last keyframe must be permanent, got frame=${last.frame} origin=${last.origin}`);
     }
   }
 
@@ -139,6 +135,10 @@ export function validateInvariants(state) {
  */
 function sortKeyframes(keyframes) {
   return [...keyframes].sort((a, b) => a.frame - b.frame);
+}
+
+function getEndFrame(keyframes) {
+  return keyframes.length > 0 ? keyframes[keyframes.length - 1].frame : null;
 }
 
 /**
@@ -238,7 +238,7 @@ function determineOrigin(frame, endFrame, requestedOrigin) {
 export function keyframeReducer(state, action) {
   switch (action.type) {
     case ActionTypes.INITIALIZE: {
-      const { defaultData, endFrame, framerate, startFrame = 0 } = action.payload;
+      const { defaultData, endFrame, startFrame = 0 } = action.payload;
 
       return {
         ...state,
@@ -247,9 +247,7 @@ export function keyframeReducer(state, action) {
           { frame: startFrame, origin: 'permanent', ...defaultData },
           { frame: endFrame, origin: 'permanent', ...defaultData }
         ],
-        isEndKeyframeExplicit: false,
-        endFrame,
-        framerate: framerate || state.framerate
+        isEndKeyframeExplicit: false
       };
     }
 
@@ -258,7 +256,7 @@ export function keyframeReducer(state, action) {
     }
 
     case ActionTypes.RESTORE_KEYFRAMES: {
-      const { keyframes, framerate } = action.payload;
+      const { keyframes } = action.payload;
 
       if (!keyframes || !Array.isArray(keyframes) || keyframes.length === 0) {
         console.warn('[keyframeController] Cannot restore - empty or invalid keyframes array');
@@ -294,16 +292,15 @@ export function keyframeReducer(state, action) {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
         keyframes: guardedKeyframes,
-        isEndKeyframeExplicit: isEndExplicit,
-        endFrame: resolvedEndFrame,
-        framerate: framerate || state.framerate
+        isEndKeyframeExplicit: isEndExplicit
       };
     }
 
     case ActionTypes.ADD_KEYFRAME:
     case ActionTypes.UPDATE_KEYFRAME: {
       const { frame, data, origin: requestedOrigin = 'user' } = action.payload;
-      const { keyframes, endFrame, isEndKeyframeExplicit } = state;
+      const { keyframes, isEndKeyframeExplicit } = state;
+      const endFrame = getEndFrame(keyframes);
 
       // Check if a keyframe exists within tolerance range (snap to existing)
       // This prevents accidentally creating new keyframes when user intends to edit existing ones
@@ -370,7 +367,7 @@ export function keyframeReducer(state, action) {
       const filtered = keyframes.filter(kf => kf.frame !== frame);
       return {
         ...state,
-        keyframes: ensurePermanentKeyframes(filtered, state.endFrame)
+        keyframes: ensurePermanentKeyframes(filtered, getEndFrame(keyframes))
       };
     }
 
@@ -399,11 +396,12 @@ export function keyframeReducer(state, action) {
 
       const updated = keyframes.map(updateFn).filter(kf => kf !== null);
       const sorted = sortKeyframes(updated);
+      const endFrame = getEndFrame(sorted);
 
       return {
         ...state,
-        keyframes: state.endFrame !== null
-          ? ensurePermanentKeyframes(sorted, state.endFrame)
+        keyframes: endFrame !== null
+          ? ensurePermanentKeyframes(sorted, endFrame)
           : sorted
       };
     }
@@ -428,7 +426,7 @@ export function keyframeReducer(state, action) {
 
       return {
         ...state,
-        keyframes: ensurePermanentKeyframes(filtered, state.endFrame),
+        keyframes: ensurePermanentKeyframes(filtered, getEndFrame(keyframes)),
         machineState: KeyframeStates.INITIALIZED
       };
     }
@@ -472,7 +470,6 @@ export function keyframeReducer(state, action) {
       );
       return {
         ...state,
-        endFrame,
         keyframes: guarded
       };
     }
@@ -497,9 +494,9 @@ export const actions = {
   /**
    * Initialize keyframes with default data at start and end
    */
-  initialize: (defaultData, endFrame, framerate) => ({
+  initialize: (defaultData, endFrame) => ({
     type: ActionTypes.INITIALIZE,
-    payload: { defaultData, endFrame, framerate }
+    payload: { defaultData, endFrame }
   }),
 
   /**
@@ -512,9 +509,9 @@ export const actions = {
   /**
    * Restore keyframes from saved state (for clip switching)
    */
-  restoreKeyframes: (keyframes, framerate) => ({
+  restoreKeyframes: (keyframes) => ({
     type: ActionTypes.RESTORE_KEYFRAMES,
-    payload: { keyframes, framerate }
+    payload: { keyframes }
   }),
 
   /**
@@ -668,6 +665,11 @@ export const selectors = {
    * Get copied data
    */
   getCopiedData: (state) => state.copiedData,
+
+  /**
+   * Get the end frame (derived from last keyframe)
+   */
+  getEndFrame: (state) => getEndFrame(state.keyframes),
 
   /**
    * Check if end keyframe was explicitly set
