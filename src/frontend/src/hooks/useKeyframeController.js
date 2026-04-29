@@ -85,12 +85,12 @@ export default function useKeyframeController({
   /**
    * Restore keyframes from saved state (for clip switching)
    */
-  const restoreKeyframes = useCallback((savedKeyframes, endFrame) => {
+  const restoreKeyframes = useCallback((savedKeyframes) => {
     if (!savedKeyframes || savedKeyframes.length === 0) {
       console.warn('[useKeyframeController] No keyframes to restore');
       return;
     }
-    dispatch(actions.restoreKeyframes(savedKeyframes, endFrame, framerate));
+    dispatch(actions.restoreKeyframes(savedKeyframes, framerate));
   }, [framerate]);
 
   // ============================================================================

@@ -167,40 +167,18 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    */
   useLayoutEffect(() => {
     if (savedKeyframes && savedKeyframes.length > 0) {
-      // Only restore if these are different keyframes than we already processed
       const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
 
       if (keyframesKey !== lastSavedKeyframesRef.current) {
-        // Normalize and restore
         const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
         if (validateFrameKeyframes(frameKeyframes)) {
-          // Require video duration for endFrame — using max keyframe frame
-          // produces wrong results (e.g., endFrame=1 for a 5s clip with a
-          // single keyframe at frame 1). Defer until metadata arrives.
-          const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
-          if (!effectiveDuration) return;
-          const endFrame = timeToFrame(effectiveDuration, framerate);
-
-          const lastSavedFrame = frameKeyframes[frameKeyframes.length - 1]?.frame;
-          if (lastSavedFrame !== endFrame) {
-            console.warn(`[useCrop] Restore: saved keyframes end at frame ${lastSavedFrame} but clip endFrame=${endFrame} (trimEnd=${trimRange?.end} duration=${videoMetadata?.duration} fps=${framerate})`);
-          }
-          console.log('[T2000] useCrop restore', JSON.stringify({
-            savedKeyframesCount: savedKeyframes.length,
-            savedKeyframes: savedKeyframes.map(kf => ({ frame: kf.frame, time: kf.time, origin: kf.origin })),
-            frameKeyframes: frameKeyframes.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y })),
-            endFrame,
-            trimEnd: trimRange?.end,
-            duration: videoMetadata?.duration,
-            framerate,
-          }));
           lastSavedKeyframesRef.current = keyframesKey;
-          restoreKeyframes(frameKeyframes, endFrame);
+          restoreKeyframes(frameKeyframes);
         }
       }
     }
-  }, [savedKeyframes, framerate, restoreKeyframes, videoMetadata, trimRange]);
+  }, [savedKeyframes, framerate, restoreKeyframes]);
 
   /**
    * Auto-initialize keyframes when metadata loads
@@ -358,13 +336,11 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * @param {import('../../../types/keyframes').FrameKeyframe[]|import('../../../types/keyframes').TimeKeyframe[]} savedKeyframes
    * @param {number} endFrame
    */
-  const restoreState = useCallback((savedKeyframes, endFrame) => {
+  const restoreState = useCallback((savedKeyframes) => {
     if (!savedKeyframes || savedKeyframes.length === 0) {
-      console.log('[useCrop] No keyframes to restore');
       return;
     }
 
-    // Normalize to frame-based format (handles backwards compatibility with time-based data)
     const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
     if (!validateFrameKeyframes(frameKeyframes)) {
@@ -372,7 +348,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
       return;
     }
 
-    restoreKeyframes(frameKeyframes, endFrame);
+    restoreKeyframes(frameKeyframes);
   }, [restoreKeyframes, framerate]);
 
   return {

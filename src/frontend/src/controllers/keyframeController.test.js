@@ -776,7 +776,7 @@ describe('keyframeController', () => {
         { frame: 90, origin: 'permanent', x: 200 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
 
       expect(newState.keyframes[0].frame).toBe(0);
       expect(newState.keyframes[0].origin).toBe('permanent');
@@ -784,19 +784,20 @@ describe('keyframeController', () => {
       expect(newState.keyframes.length).toBe(4);
     });
 
-    it('RESTORE_KEYFRAMES reconstitutes missing endFrame', () => {
+    it('RESTORE_KEYFRAMES derives endFrame from last keyframe', () => {
       const state = createInitialState();
-      // Saved keyframes missing endFrame (last is at frame 60)
+      // Saved keyframes — endFrame derived from last keyframe (frame 60)
       const saved = [
         { frame: 0, origin: 'permanent', x: 100 },
         { frame: 60, origin: 'user', x: 180 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
 
-      expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(90);
+      expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(60);
       expect(newState.keyframes[newState.keyframes.length - 1].origin).toBe('permanent');
-      expect(newState.keyframes.length).toBe(3);
+      expect(newState.endFrame).toBe(60);
+      expect(newState.keyframes.length).toBe(2);
     });
 
     it('RESTORE_KEYFRAMES fixes origin on boundary keyframes', () => {
@@ -807,7 +808,7 @@ describe('keyframeController', () => {
         { frame: 90, origin: 'user', x: 200 }
       ];
 
-      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 90, 30));
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved, 30));
 
       expect(newState.keyframes[0].origin).toBe('permanent');
       expect(newState.keyframes[1].origin).toBe('permanent');
