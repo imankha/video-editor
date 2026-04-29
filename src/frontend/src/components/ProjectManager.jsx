@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play } from 'lucide-react';
 import { Logo } from './Logo';
+import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -21,6 +22,7 @@ import { useSyncStore } from '../stores/syncStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
+import { GAME, REEL } from '../config/themeColors';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -465,7 +467,7 @@ export function ProjectManager({
           >
             <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
             {downloadsCount > 0 && (
-              <span className="px-1.5 py-0.5 bg-purple-600 text-white text-xs font-bold rounded-full min-w-[20px] text-center">
+              <span className={`px-1.5 py-0.5 ${REEL.bg} text-white text-xs font-bold rounded-full min-w-[20px] text-center`}>
                 {downloadsCount > 9 ? '9+' : downloadsCount}
               </span>
             )}
@@ -492,22 +494,42 @@ export function ProjectManager({
             </h2>
           </div>
           <div className="flex gap-3">
-            {/* Recent Project */}
+            {/* Recent Game (left) */}
+            {recentItems.recentGame && (
+              <button
+                onClick={() => onLoadGame(recentItems.recentGame.id)}
+                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${GAME.bgSubtle} ${GAME.borderSubtle} ${GAME.bgSubtleHover}`}
+              >
+                <div className={`p-2 rounded-lg ${GAME.bgIcon}`}>
+                  <Gamepad2 size={18} className={GAME.accent} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-white font-medium truncate block">
+                    {recentItems.recentGame.name}
+                  </span>
+                  <div className="text-xs text-gray-500">
+                    {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
+                  </div>
+                </div>
+                <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
+              </button>
+            )}
+
+            {/* Recent Reel (right) */}
             {recentItems.recentProject && (
               <button
-                onClick={() => onSelectProject(recentItems.recentProject.id)}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
-                  recentItems.mostRecentType === 'project'
-                    ? 'bg-purple-900/30 border-purple-500/50 hover:bg-purple-900/50'
-                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
-                }`}
+                onClick={() => {
+                  const p = recentItems.recentProject;
+                  if (p.has_working_video || p.has_final_video) {
+                    onSelectProjectWithMode?.(p.id, { mode: 'overlay' });
+                  } else {
+                    onSelectProject(p.id);
+                  }
+                }}
+                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${REEL.bgSubtle} ${REEL.borderSubtle} ${REEL.bgSubtleHover}`}
               >
-                <div className={`p-2 rounded-lg ${
-                  recentItems.mostRecentType === 'project' ? 'bg-purple-600/30' : 'bg-gray-700'
-                }`}>
-                  <FolderOpen size={18} className={
-                    recentItems.mostRecentType === 'project' ? 'text-purple-400' : 'text-gray-400'
-                  } />
+                <div className={`p-2 rounded-lg ${REEL.bgIcon}`}>
+                  <FolderOpen size={18} className={REEL.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -529,35 +551,6 @@ export function ProjectManager({
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
               </button>
             )}
-
-            {/* Recent Game */}
-            {recentItems.recentGame && (
-              <button
-                onClick={() => onLoadGame(recentItems.recentGame.id)}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${
-                  recentItems.mostRecentType === 'game'
-                    ? 'bg-green-900/30 border-green-500/50 hover:bg-green-900/50'
-                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-800'
-                }`}
-              >
-                <div className={`p-2 rounded-lg ${
-                  recentItems.mostRecentType === 'game' ? 'bg-green-600/30' : 'bg-gray-700'
-                }`}>
-                  <Gamepad2 size={18} className={
-                    recentItems.mostRecentType === 'game' ? 'text-green-400' : 'text-gray-400'
-                  } />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-white font-medium truncate block">
-                    {recentItems.recentGame.name}
-                  </span>
-                  <div className="text-xs text-gray-500">
-                    {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
-                  </div>
-                </div>
-                <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
-              </button>
-            )}
           </div>
         </div>
       )}
@@ -568,7 +561,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('games')}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'games'
-              ? 'bg-green-600 text-white shadow-lg'
+              ? `${GAME.bg} text-white shadow-lg`
               : 'text-gray-400 hover:text-white hover:bg-white/10'
           }`}
         >
@@ -576,7 +569,7 @@ export function ProjectManager({
           Games
           {games.length > 0 && (
             <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'games' ? 'bg-green-700' : 'bg-gray-700'
+              activeTab === 'games' ? GAME.bgDark : 'bg-gray-700'
             }`}>
               {games.length}
             </span>
@@ -586,7 +579,7 @@ export function ProjectManager({
           onClick={() => setActiveTab('projects')}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
             activeTab === 'projects'
-              ? 'bg-purple-600 text-white shadow-lg'
+              ? `${REEL.bg} text-white shadow-lg`
               : 'text-gray-400 hover:text-white hover:bg-white/10'
           }`}
         >
@@ -594,7 +587,7 @@ export function ProjectManager({
           {SECTION_NAMES.DRAFTS}
           {projects.length > 0 && (
             <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
-              activeTab === 'projects' ? 'bg-purple-700' : 'bg-gray-700'
+              activeTab === 'projects' ? REEL.bgDark : 'bg-gray-700'
             }`}>
               {projects.length}
             </span>
@@ -615,7 +608,7 @@ export function ProjectManager({
           </Button>
         ) : (
           <Button
-            variant="primary"
+            variant="cyan"
             size="lg"
             icon={Plus}
             disabled={!hasClips}
@@ -662,7 +655,7 @@ export function ProjectManager({
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
-                <h2 className="text-sm font-semibold text-green-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <h2 className={`text-sm font-semibold ${GAME.accent} uppercase tracking-wide mb-3 flex items-center gap-2`}>
                   <Loader2 size={14} className="animate-spin" />
                   Uploading
                 </h2>
@@ -777,7 +770,7 @@ export function ProjectManager({
                               statusFilter === opt.value
                                 ? opt.color === 'blue' ? 'bg-blue-600 text-white'
                                   : opt.color === 'gray' ? 'bg-gray-600 text-white'
-                                  : 'bg-purple-600 text-white'
+                                  : `${REEL.bg} text-white`
                                 : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                             }`}
                           >
@@ -798,7 +791,7 @@ export function ProjectManager({
                         onClick={() => setAspectFilter('all')}
                         className={`px-2.5 py-1 text-xs rounded transition-colors ${
                           aspectFilter === 'all'
-                            ? 'bg-purple-600 text-white'
+                            ? `${REEL.bg} text-white`
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                       >
@@ -810,7 +803,7 @@ export function ProjectManager({
                           onClick={() => setAspectFilter(ratio)}
                           className={`px-2.5 py-1 text-xs rounded transition-colors ${
                             aspectFilter === ratio
-                              ? 'bg-purple-600 text-white'
+                              ? `${REEL.bg} text-white`
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -830,7 +823,7 @@ export function ProjectManager({
                         onClick={() => setCreationFilter('all')}
                         className={`px-2.5 py-1 text-xs rounded transition-colors ${
                           creationFilter === 'all'
-                            ? 'bg-purple-600 text-white'
+                            ? `${REEL.bg} text-white`
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                       >
@@ -852,12 +845,12 @@ export function ProjectManager({
                         onClick={() => setCreationFilter('custom')}
                         className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
                           creationFilter === 'custom'
-                            ? 'bg-purple-600 text-white'
+                            ? `${REEL.bg} text-white`
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                         title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
                       >
-                        <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : 'text-purple-400'} />
+                        <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
                         Custom ({filterCounts.custom})
                       </button>
                     </div>
@@ -893,17 +886,18 @@ export function ProjectManager({
                     />
                   ))}
 
-                  {/* Grouped projects by game - expand if has incomplete projects */}
+                  {/* Grouped projects by game - expand if has incomplete or unpublished projects */}
                   {groupedProjects.sortedKeys.map(groupKey => {
                     const group = groupedProjects.groups[groupKey];
                     const hasIncomplete = group.statusCounts.done < group.statusCounts.total;
+                    const hasUnpublished = group.projects.some(p => p.has_final_video && !p.is_published);
                     return (
                     <CollapsibleGroup
                       key={groupKey}
                       title={groupKey}
                       count={group.projects.length}
                       statusCounts={group.statusCounts}
-                      defaultExpanded={hasIncomplete}
+                      defaultExpanded={hasIncomplete || hasUnpublished}
                     >
                       <div className="space-y-2">
                         {group.projects.map(project => (
@@ -1060,12 +1054,12 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
   return (
     <div
       onClick={onClick}
-      className="group relative p-3 sm:p-4 bg-green-900/20 hover:bg-green-900/30 rounded-lg border border-green-600/50 hover:border-green-500 cursor-pointer transition-all"
+      className={`group relative p-3 sm:p-4 ${GAME.bgCard} ${GAME.bgCardHover} rounded-lg border ${GAME.borderCard} ${GAME.borderHover} cursor-pointer transition-all`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <FileVideo size={18} className="text-green-400" />
+            <FileVideo size={18} className={GAME.accent} />
             <h3 className="text-white font-medium truncate">{upload.fileName}</h3>
             {onCancel && (
               <button
@@ -1086,7 +1080,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
           {/* Progress bar */}
           <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-600 transition-all duration-300"
+              className={`h-full ${GAME.progressBar} transition-all duration-300`}
               style={{ width: `${upload.progress || 0}%` }}
             />
           </div>
@@ -1131,15 +1125,15 @@ function GameCard({ game, onLoad, onDelete }) {
   return (
     <div
       onClick={onLoad}
-      className="group relative p-3 sm:p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 hover:border-green-500 transition-all"
+      className={`group relative p-3 sm:p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 ${GAME.borderHover} transition-all`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Gamepad2 size={18} className="text-green-400 flex-shrink-0" />
+            <Gamepad2 size={18} className={`${GAME.accent} flex-shrink-0`} />
             <h3 className="text-white font-medium truncate">{game.name}</h3>
             {isFullyReviewed && (
-              <CheckCircle size={14} className="text-green-400" title="Fully reviewed" />
+              <CheckCircle size={14} className={GAME.accent} title="Fully reviewed" />
             )}
             {isPartiallyReviewed && (
               <span className="text-xs text-gray-400 flex items-center gap-1" title={`${viewedPercent}% reviewed`}>
@@ -1395,6 +1389,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const isOffline = useSyncStore((state) => state.isOffline);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
@@ -1414,6 +1409,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       }
       useGalleryStore.getState().fetchCount({ force: true });
       fetchProjects({ force: true });
+      // Close first so open() triggers a fresh download fetch (isOpen: false→true)
+      useGalleryStore.getState().close();
+      setTimeout(() => useGalleryStore.getState().open(), 300);
     } catch (error) {
       console.error('[ProjectCard] Publish error:', error);
       alert(`Failed to move to ${SECTION_NAMES.LIBRARY}: ${error.message}`);
@@ -1503,7 +1501,11 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const handleCardClick = () => {
     if (isRenaming) return; // Don't open while renaming
     if (!canOpen) return;
-    onSelect();
+    if (project.has_working_video || project.has_final_video) {
+      onSelectWithMode({ mode: 'overlay' });
+    } else {
+      onSelect();
+    }
   };
 
   const isComplete = project.has_final_video;
@@ -1513,7 +1515,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       onClick={handleCardClick}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
         canOpen
-          ? 'hover:bg-gray-750 cursor-pointer border-gray-700 hover:border-purple-500'
+          ? `hover:bg-gray-750 cursor-pointer border-gray-700 ${REEL.borderHover}`
           : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
       title={undefined}
@@ -1532,7 +1534,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 onKeyDown={handleRenameKeyDown}
                 onBlur={handleSaveRename}
                 onClick={(e) => e.stopPropagation()}
-                className="text-white font-medium bg-transparent border-b border-purple-500 outline-none w-full"
+                className={`text-white font-medium bg-transparent border-b ${REEL.border} outline-none w-full`}
                 autoFocus
               />
             ) : (
@@ -1550,24 +1552,10 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               </>
             )}
             {isComplete && project.is_published && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-green-900/50 text-green-400 flex-shrink-0">
+              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${REEL.bgMuted} ${REEL.accent} flex-shrink-0`}>
                 <CheckCircle size={12} />
                 In {SECTION_NAMES.LIBRARY}
               </span>
-            )}
-            {isComplete && !project.is_published && (
-              <button
-                onClick={handlePublishToMyReels}
-                disabled={isPublishing}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white transition-colors flex-shrink-0 disabled:opacity-50"
-              >
-                {isPublishing ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <Image size={12} />
-                )}
-                Move to {SECTION_NAMES.LIBRARY}
-              </button>
             )}
           </div>
           {/* Tags row - show first clip's tags for auto-created projects */}
@@ -1576,7 +1564,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               {project.clips[0].tags.map((tag, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs bg-purple-900/50 text-purple-300 rounded"
+                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs ${REEL.bgMuted} ${REEL.accentMuted} rounded`}
                 >
                   <Tag size={10} />
                   {tag}
@@ -1634,15 +1622,82 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         />
       </div>
 
-      {/* Segmented progress strip - clickable segments for direct navigation */}
-      <SegmentedProgressStrip
-        project={project}
-        onClipClick={handleClipClick}
-        onOverlayClick={handleOverlayClick}
-        isExporting={isExporting}
-        isOffline={isOffline}
-        failedExportType={failedExportType}
-      />
+      {isComplete ? (
+        <>
+          {/* Completed: checkmark badge + preview + Move to My Reels */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-400">
+              <CheckCircle size={14} />
+              Export Complete
+            </span>
+            {project.final_video_id && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
+                className={`p-1.5 rounded-full ${REEL.bgMuted} hover:bg-cyan-800/60 transition-colors`}
+                title="Preview video"
+              >
+                <Play size={16} className={REEL.accent} />
+              </button>
+            )}
+          </div>
+          {!project.is_published && (
+            <button
+              onClick={handlePublishToMyReels}
+              disabled={isPublishing}
+              className={`mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${REEL.bgCta} ${REEL.bgCtaHover} text-white transition-all disabled:opacity-50 animate-pulse hover:animate-none shadow-lg ${REEL.shadow}`}
+            >
+              {isPublishing ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Image size={16} />
+              )}
+              Move to {SECTION_NAMES.LIBRARY}
+            </button>
+          )}
+        </>
+      ) : (
+        /* Segmented progress strip - clickable segments for direct navigation */
+        <SegmentedProgressStrip
+          project={project}
+          onClipClick={handleClipClick}
+          onOverlayClick={handleOverlayClick}
+          isExporting={isExporting}
+          isOffline={isOffline}
+          failedExportType={failedExportType}
+        />
+      )}
+
+      {/* Video preview modal */}
+      {isPreviewing && project.final_video_id && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/80 z-[60]"
+            onClick={(e) => { e.stopPropagation(); setIsPreviewing(false); }}
+          />
+          <div className="fixed inset-4 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
+              <div className="flex items-center gap-3">
+                <Film size={20} className={REEL.accent} />
+                <h3 className="text-white font-medium">{getProjectDisplayName(project)}</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={X}
+                iconOnly
+                onClick={(e) => { e.stopPropagation(); setIsPreviewing(false); }}
+              />
+            </div>
+            <div className="flex-1 min-h-0">
+              <MediaPlayer
+                src={`${API_BASE}/api/downloads/${project.final_video_id}/stream`}
+                autoPlay
+                onClose={() => setIsPreviewing(false)}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

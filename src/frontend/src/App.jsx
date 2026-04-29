@@ -309,8 +309,6 @@ function App() {
       clearSelection();
       useVideoStore.getState().reset();
       setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
-      // T780: Auto-open Gallery so user sees their finished video immediately
-      setTimeout(() => useGalleryStore.getState().open(), 500);
     }
   }, [fetchProjects, editorMode, clearSelection, setEditorMode]);
 

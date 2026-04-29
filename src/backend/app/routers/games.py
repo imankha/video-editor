@@ -945,7 +945,7 @@ def load_annotations_from_db(game_id: int) -> list:
         cursor = conn.cursor()
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
-            SELECT id, start_time, end_time, name, rating, tags, notes, video_sequence
+            SELECT id, start_time, end_time, name, rating, tags, notes, video_sequence, auto_project_id
             FROM raw_clips
             WHERE game_id = ?
             ORDER BY video_sequence, end_time
@@ -972,6 +972,7 @@ def load_annotations_from_db(game_id: int) -> list:
                 'tags': tags,
                 'notes': row['notes'] or '',
                 'video_sequence': row['video_sequence'],  # T82: which video (null = single-video)
+                'auto_project_id': row['auto_project_id'],
             })
 
         return annotations

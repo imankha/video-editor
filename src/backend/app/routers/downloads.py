@@ -829,7 +829,7 @@ async def publish_to_my_reels(project_id: int):
             raise HTTPException(status_code=404, detail="No final video found for this project")
 
         cursor.execute(
-            "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP WHERE id = ?",
+            "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL WHERE id = ?",
             (row['id'],),
         )
         conn.commit()

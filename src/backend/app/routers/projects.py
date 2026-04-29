@@ -218,6 +218,7 @@ class ProjectListItem(BaseModel):
     has_working_video: bool
     has_overlay_edits: bool
     has_final_video: bool
+    final_video_id: Optional[int] = None
     is_published: bool  # True if latest final video has been published to My Reels
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
@@ -450,6 +451,7 @@ async def list_projects():
                 has_working_video=bool(row['has_working_video']),
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
+                final_video_id=row['final_video_id'],
                 is_published=bool(row['is_published']),
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],

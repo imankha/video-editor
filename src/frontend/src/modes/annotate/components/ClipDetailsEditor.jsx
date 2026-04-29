@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trash2, Star, Check } from 'lucide-react';
+import { Trash2, Star, Check, Plus } from 'lucide-react';
 import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
 import ClipScrubRegion from './ClipScrubRegion';
-import { Toggle } from '../../../components/shared/Button';
+import { Button } from '../../../components/shared/Button';
 
 // Rating-based background colors (used for tinting the details panel)
 const RATING_COLORS = {
@@ -113,6 +113,7 @@ export function ClipDetailsEditor({
   onScrubUnlock,
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reelRequested, setReelRequested] = useState(false);
 
   // Local scrub state — same pattern as AnnotateFullscreenOverlay.
   // Dragging updates local state instantly; persisted to parent on change.
@@ -125,8 +126,10 @@ export function ClipDetailsEditor({
   useEffect(() => {
     setScrubStartTime(region.startTime);
     setScrubEndTime(region.endTime);
+    setReelRequested(false);
   }, [region.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const reelCreated = !!region.autoProjectId || reelRequested;
   const notesLength = region.notes?.length || 0;
 
   // Derive display name from region.name or auto-generate from rating+tags
@@ -279,20 +282,18 @@ export function ClipDetailsEditor({
           />
         </div>
 
-        {/* Create Reel Toggle */}
+        {/* Create Reel Button */}
         <div className="flex items-center justify-between">
-          <div>
-            <label className="text-gray-400 text-xs">Create Reel</label>
-            {!!region.autoProjectId && (
-              <span className="text-gray-500 text-xs ml-1.5">Reel already created</span>
-            )}
-          </div>
-          <Toggle
-            checked={!!region.autoProjectId}
-            onChange={(val) => val && onUpdate({ createProject: true })}
-            disabled={!!region.autoProjectId}
+          <label className="text-gray-400 text-xs">Reel</label>
+          <Button
+            variant={reelCreated ? 'success' : 'cyan'}
             size="sm"
-          />
+            icon={reelCreated ? Check : Plus}
+            disabled={reelCreated}
+            onClick={() => { setReelRequested(true); onUpdate({ createProject: true }); }}
+          >
+            {reelCreated ? 'Reel Created' : 'Create Reel'}
+          </Button>
         </div>
 
         {/* Delete Button */}

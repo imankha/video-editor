@@ -186,6 +186,15 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
           if (lastSavedFrame !== endFrame) {
             console.warn(`[useCrop] Restore: saved keyframes end at frame ${lastSavedFrame} but clip endFrame=${endFrame} (trimEnd=${trimRange?.end} duration=${videoMetadata?.duration} fps=${framerate})`);
           }
+          console.log('[T2000] useCrop restore', JSON.stringify({
+            savedKeyframesCount: savedKeyframes.length,
+            savedKeyframes: savedKeyframes.map(kf => ({ frame: kf.frame, time: kf.time, origin: kf.origin })),
+            frameKeyframes: frameKeyframes.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y })),
+            endFrame,
+            trimEnd: trimRange?.end,
+            duration: videoMetadata?.duration,
+            framerate,
+          }));
           lastSavedKeyframesRef.current = keyframesKey;
           restoreKeyframes(frameKeyframes, endFrame);
         }

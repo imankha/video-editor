@@ -482,6 +482,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if not action.data:
                     raise ValueError("set_trim_range requires data.start and data.end")
 
+                logger.info(f"[Framing Action] set_trim_range: clip={clip_id}, data.start={action.data.start}, data.end={action.data.end}, current segments_data={segments_data}")
                 trim_range = segments_data.get('trimRange') or {}
                 if action.data.start is not None:
                     trim_range['start'] = action.data.start
@@ -663,11 +664,17 @@ def _insert_working_clip_with_dims(
 
 def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> int:
     """Create a 9:16 project for a 5-star clip and return the project ID."""
+    logger.info(f"[CreateReel] Creating auto-project for clip {raw_clip_id}, clip_name={clip_name!r}")
+
     # Fetch tags and rating from the raw clip to generate a name if needed
     cursor.execute("""
         SELECT rating, tags, notes FROM raw_clips WHERE id = ?
     """, (raw_clip_id,))
     clip_data = cursor.fetchone()
+
+    if not clip_data:
+        logger.error(f"[CreateReel] raw_clip {raw_clip_id} not found in DB")
+        raise ValueError(f"Raw clip {raw_clip_id} not found")
 
     # Generate project name using the same logic as frontend
     if clip_name:
@@ -683,6 +690,8 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
         project_name = derive_clip_name(None, rating, tags, notes, generated_title) or f"Clip {raw_clip_id}"
     else:
         project_name = f"Clip {raw_clip_id}"
+
+    logger.info(f"[CreateReel] Using project name: {project_name!r} for clip {raw_clip_id}")
 
     cursor.execute("""
         INSERT INTO projects (name, aspect_ratio, is_auto_created)
@@ -824,9 +833,13 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             project_created = False
             project_id = existing['auto_project_id']
 
-            if clip_data.create_project and not project_id:
-                project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
-                project_created = True
+            if clip_data.create_project:
+                if project_id:
+                    logger.info(f"[CreateReel] Clip {clip_id} already has project {project_id}, skipping")
+                else:
+                    logger.info(f"[CreateReel] Creating reel for existing clip {clip_id} via save path")
+                    project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
+                    project_created = True
 
             _refresh_game_aggregates(cursor, clip_data.game_id)
             conn.commit()
@@ -852,6 +865,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
         project_created = False
         project_id = None
         if clip_data.create_project:
+            logger.info(f"[CreateReel] Creating reel for new clip {raw_clip_id} via save path")
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
 
@@ -908,10 +922,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
 
         # Handle explicit project creation toggle
         project_created = False
-        if update.create_project and not auto_project_id:
-            clip_name = update.name if update.name is not None else clip['name']
-            auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
-            project_created = True
+        if update.create_project:
+            if auto_project_id:
+                logger.info(f"[CreateReel] Clip {clip_id} already has auto_project_id={auto_project_id}, skipping")
+            else:
+                clip_name = update.name if update.name is not None else clip['name']
+                logger.info(f"[CreateReel] Creating reel for clip {clip_id}, name={clip_name!r}")
+                auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
+                project_created = True
 
         # Build update query
         updates = []

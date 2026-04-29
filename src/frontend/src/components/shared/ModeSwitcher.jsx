@@ -1,6 +1,7 @@
 import React from 'react';
 import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 import { useAppState } from '../../contexts';
+import { GAME, REEL } from '../../config/themeColors';
 
 /**
  * ModeSwitcher - Tab toggle for switching between editor modes.
@@ -48,7 +49,7 @@ export function ModeSwitcher({
       icon: Scissors,
       description: 'Clip extraction',
       available: hasAnnotateVideo || mode === 'annotate',
-      color: 'green',
+      color: 'game',
     },
     {
       id: 'framing',
@@ -56,7 +57,7 @@ export function ModeSwitcher({
       icon: Crop,
       description: 'Crop, trim & speed',
       available: hasProject,
-      color: 'blue',
+      color: 'reel',
     },
     {
       id: 'overlay',
@@ -64,7 +65,7 @@ export function ModeSwitcher({
       icon: Sparkles,
       description: 'Highlights & effects',
       available: hasProject && (hasWorkingVideo || hasOverlayVideo),
-      color: 'purple',
+      color: 'reel',
       showWarning: framingOutOfSync,
     },
   ];
@@ -80,10 +81,9 @@ export function ModeSwitcher({
     const isAvailable = modeOption.available;
 
     const activeColor = {
-      green: 'bg-green-600',
-      blue: 'bg-blue-600',
-      purple: 'bg-purple-600',
-    }[modeOption.color] || 'bg-purple-600';
+      game: GAME.bg,
+      reel: REEL.bg,
+    }[modeOption.color] || REEL.bg;
 
     return (
       <button

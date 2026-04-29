@@ -76,6 +76,12 @@ export function Button({
       'focus:ring-red-500',
     ].filter(Boolean).join(' '),
 
+    cyan: [
+      'bg-cyan-600 text-white',
+      !disabled && !loading && 'hover:bg-cyan-500',
+      'focus:ring-cyan-400',
+    ].filter(Boolean).join(' '),
+
     warning: [
       'bg-yellow-600 text-white',
       !disabled && !loading && 'hover:bg-yellow-700',
@@ -234,6 +240,7 @@ export function Toggle({
   onChange,
   disabled = false,
   size = 'md',
+  accent = 'purple',
   className = '',
 }) {
   const sizeStyles = {
@@ -253,9 +260,9 @@ export function Toggle({
       disabled={disabled}
       className={[
         'relative inline-flex items-center rounded-full transition-colors',
-        'focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900',
+        `focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 ${accent === 'cyan' ? 'focus:ring-cyan-400' : 'focus:ring-purple-500'}`,
         styles.track,
-        checked ? 'bg-purple-600' : 'bg-gray-600',
+        checked ? (accent === 'cyan' ? 'bg-cyan-500' : 'bg-purple-600') : 'bg-gray-600',
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
         className,
       ].filter(Boolean).join(' ')}

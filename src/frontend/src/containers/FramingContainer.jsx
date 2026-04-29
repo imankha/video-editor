@@ -505,7 +505,10 @@ export function FramingContainer({
 
       if (newTrimStart !== null || newTrimEnd !== null) {
         const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newTrimEnd ?? duration);
-        if (!result.success) hasError = true;
+        if (!result.success) {
+          hasError = true;
+          console.error('[FramingContainer] setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newTrimEnd, duration });
+        }
       }
 
       if (hasError) {
@@ -614,11 +617,17 @@ export function FramingContainer({
       const hasEndTrim = currentEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
         const result = await framingActions.setTrimRange(selectedProjectId, clipId, newStartTime, currentEndTime);
-        if (!result.success) hasError = true;
+        if (!result.success) {
+          hasError = true;
+          console.error('[FramingContainer] detrimStart setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newStartTime, currentEndTime });
+        }
       } else {
         // No more trim, clear it
         const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
-        if (!result.success) hasError = true;
+        if (!result.success) {
+          hasError = true;
+          console.error('[FramingContainer] detrimStart clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
+        }
       }
 
       if (hasError) {
@@ -731,11 +740,17 @@ export function FramingContainer({
       const hasEndTrim = newEndTime < duration - 0.01;
       if (hasStartTrim || hasEndTrim) {
         const result = await framingActions.setTrimRange(selectedProjectId, clipId, newTrimStart ?? 0, newEndTime);
-        if (!result.success) hasError = true;
+        if (!result.success) {
+          hasError = true;
+          console.error('[FramingContainer] detrimEnd setTrimRange failed:', result.error, { projectId: selectedProjectId, clipId, newTrimStart, newEndTime });
+        }
       } else {
         // No more trim, clear it
         const result = await framingActions.clearTrimRange(selectedProjectId, clipId);
-        if (!result.success) hasError = true;
+        if (!result.success) {
+          hasError = true;
+          console.error('[FramingContainer] detrimEnd clearTrimRange failed:', result.error, { projectId: selectedProjectId, clipId });
+        }
       }
 
       if (hasError) {

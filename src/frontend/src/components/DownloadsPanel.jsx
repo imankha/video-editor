@@ -10,12 +10,13 @@ import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
+import { REEL } from '../config/themeColors';
 
 // Filter options for gallery source types (icon-only with tooltips)
 const FILTER_OPTIONS = [
   { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
   { value: SourceType.BRILLIANT_CLIP, label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
-  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Reels', icon: Folder, color: 'text-purple-400' },
+  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Reels', icon: Folder, color: REEL.accent },
 ];
 
 /**
@@ -255,10 +256,12 @@ export function DownloadsPanel({
       >
         <div className="flex items-start gap-3">
           {/* Video icon with unwatched dot */}
-          <div className="relative w-10 h-10 rounded bg-purple-900/40 flex items-center justify-center flex-shrink-0">
-            <Video size={20} className="text-purple-400" />
+          <div className={`relative w-10 h-10 rounded flex items-center justify-center flex-shrink-0 ${
+            isUnwatched ? 'bg-cyan-900/40' : REEL.bgMuted
+          }`}>
+            <Video size={20} className={isUnwatched ? 'text-cyan-400' : REEL.accent} />
             {isUnwatched && (
-              <span className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${style.dot} ring-2 ring-gray-700`} />
+              <span className={`absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full ${style.dot} ring-2 ring-gray-700`} />
             )}
           </div>
 
@@ -282,10 +285,10 @@ export function DownloadsPanel({
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={(e) => handlePlay(e, download)}
-            className="p-2 hover:bg-purple-900/40 rounded transition-colors"
+            className={`p-2 hover:${REEL.bgMuted} rounded transition-colors`}
             title="Play video"
           >
-            <Play size={16} className="text-purple-400 hover:text-purple-300" />
+            <Play size={16} className={`${REEL.accent} hover:text-cyan-300`} />
           </button>
           <button
             onClick={(e) => handleDownload(e, download)}
@@ -394,7 +397,7 @@ export function DownloadsPanel({
     if (loadState === 'loading') {
       return (
         <div className="flex items-center justify-center py-12">
-          <Loader size={24} className="text-purple-500 animate-spin" />
+          <Loader size={24} className={`${REEL.accent} animate-spin`} />
         </div>
       );
     }
@@ -450,10 +453,10 @@ export function DownloadsPanel({
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            <Image size={20} className="text-purple-400" />
+            <Image size={20} className={REEL.accent} />
             <h2 className="text-lg font-bold text-white">{SECTION_NAMES.LIBRARY}</h2>
             {hasDownloads && (
-              <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
+              <span className={`px-2 py-0.5 ${REEL.bg} text-white text-xs font-medium rounded-full`}>
                 {downloads.length}
               </span>
             )}
@@ -479,7 +482,7 @@ export function DownloadsPanel({
                 title={option.label}
                 className={`p-2 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-purple-600 text-white'
+                    ? `${REEL.bg} text-white`
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
                 }`}
               >
@@ -525,7 +528,7 @@ export function DownloadsPanel({
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
               <div className="flex items-center gap-3">
-                <Video size={20} className="text-purple-400" />
+                <Video size={20} className={REEL.accent} />
                 <div>
                   <h3 className="text-white font-medium">{playingVideo.project_name}</h3>
                   {(() => {

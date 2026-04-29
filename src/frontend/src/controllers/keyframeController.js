@@ -151,6 +151,7 @@ function sortKeyframes(keyframes) {
 function ensurePermanentKeyframes(keyframes, endFrame) {
   if (keyframes.length === 0) return keyframes;
 
+  const inputSnapshot = keyframes.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y, width: kf.width, height: kf.height }));
   let result = [...keyframes];
 
   // Ensure frame 0 exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
@@ -193,13 +194,35 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
   // After boundary changes (trim/detrim), old boundary keyframes may
   // remain as permanent in the middle — only first and last should be permanent.
   const sorted = sortKeyframes(result);
-  return sorted.map((kf, i) => {
+  const final = sorted.map((kf, i) => {
     const isBoundary = i === 0 || i === sorted.length - 1;
     if (!isBoundary && kf.origin === 'permanent') {
       return { ...kf, origin: 'user' };
     }
     return kf;
   });
+
+  // T2000 diagnostic: detect duplicate frames
+  const frameCounts = {};
+  final.forEach(kf => { frameCounts[kf.frame] = (frameCounts[kf.frame] || 0) + 1; });
+  const duplicates = Object.entries(frameCounts).filter(([, c]) => c > 1);
+  if (duplicates.length > 0) {
+    console.error('[T2000] ensurePermanentKeyframes produced DUPLICATE frames!', JSON.stringify({
+      duplicateFrames: duplicates.map(([f, c]) => `frame ${f} x${c}`),
+      endFrame,
+      input: inputSnapshot,
+      output: final.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y, width: kf.width, height: kf.height })),
+    }));
+  } else {
+    console.log('[T2000] ensurePermanentKeyframes OK', JSON.stringify({
+      endFrame,
+      inputCount: inputSnapshot.length,
+      outputCount: final.length,
+      frames: final.map(kf => `${kf.frame}(${kf.origin})`).join(', '),
+    }));
+  }
+
+  return final;
 }
 
 /**
@@ -258,6 +281,13 @@ export function keyframeReducer(state, action) {
     case ActionTypes.RESTORE_KEYFRAMES: {
       const { keyframes, endFrame, framerate } = action.payload;
 
+      console.log('[T2000] RESTORE_KEYFRAMES input', JSON.stringify({
+        keyframeCount: keyframes?.length,
+        endFrame,
+        framerate,
+        keyframes: keyframes?.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y, w: kf.width, h: kf.height })),
+      }));
+
       // Validate keyframes array (allow 1+ keyframes; ensurePermanentKeyframes adds boundaries)
       if (!keyframes || !Array.isArray(keyframes) || keyframes.length === 0) {
         console.warn('[keyframeController] Cannot restore - empty or invalid keyframes array');
@@ -286,10 +316,24 @@ export function keyframeReducer(state, action) {
       // Filter out keyframes beyond endFrame (e.g., when trim shrinks the range
       // but saved keyframes span the full video). They remain in the DB for de-trim.
       const trimmedKeyframes = sortedKeyframes.filter(kf => kf.frame <= resolvedEndFrame);
+
+      console.log('[T2000] RESTORE pre-ensurePermanent', JSON.stringify({
+        resolvedEndFrame,
+        trimmedCount: trimmedKeyframes.length,
+        sortedCount: sortedKeyframes.length,
+        trimmedFrames: trimmedKeyframes.map(kf => `${kf.frame}(${kf.origin})`).join(', '),
+      }));
+
       const guardedKeyframes = ensurePermanentKeyframes(
         trimmedKeyframes.length > 0 ? trimmedKeyframes : sortedKeyframes,
         resolvedEndFrame
       );
+
+      console.log('[T2000] RESTORE final result', JSON.stringify({
+        guardedCount: guardedKeyframes.length,
+        frames: guardedKeyframes.map(kf => `${kf.frame}(${kf.origin})`).join(', '),
+        data: guardedKeyframes.map(kf => ({ frame: kf.frame, origin: kf.origin, x: kf.x, y: kf.y, w: kf.width, h: kf.height })),
+      }));
 
       // Determine if end keyframe was explicitly set (not same as start)
       const startKf = guardedKeyframes[0];

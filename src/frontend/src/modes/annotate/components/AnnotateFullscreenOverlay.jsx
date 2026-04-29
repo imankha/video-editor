@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, X, Check } from 'lucide-react';
+import { Star, X, Check, Plus } from 'lucide-react';
 import { positions, soccerTags, generateClipName } from '../constants/soccerTags';
 import { ClipScrubRegion } from './ClipScrubRegion';
-import { Toggle } from '../../../components/shared/Button';
+import { Toggle, Button } from '../../../components/shared/Button';
 
 // Rating notation map
 const RATING_NOTATION = {
@@ -355,20 +355,35 @@ export function AnnotateFullscreenOverlay({
           />
         </div>
 
-        {/* Create Reel Toggle */}
+        {/* Create Reel — toggle in create mode, button in edit mode */}
         <div className="mb-4 flex items-center justify-between">
-          <div>
-            <label className="text-gray-400 text-sm">Create Reel</label>
-            {isEditMode && !!existingClip?.autoProjectId && (
-              <span className="text-gray-500 text-xs ml-2">Reel already created</span>
-            )}
-          </div>
-          <Toggle
-            checked={createProject}
-            onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
-            disabled={isEditMode && !!existingClip?.autoProjectId}
-            size="sm"
-          />
+          <label className="text-gray-400 text-sm">Reel</label>
+          {isEditMode ? (
+            existingClip?.autoProjectId ? (
+              <span className="text-green-400 text-sm">Reel already created</span>
+            ) : (
+              <Button
+                variant="cyan"
+                size="sm"
+                icon={Plus}
+                onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+              >
+                Create Reel
+              </Button>
+            )
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
+                {createProject ? 'Create Reel' : "Don't Create Reel"}
+              </span>
+              <Toggle
+                checked={createProject}
+                onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
+                size="sm"
+                accent="cyan"
+              />
+            </div>
+          )}
         </div>
 
         {/* Actions */}

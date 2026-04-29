@@ -620,7 +620,8 @@ export function AnnotateContainer({
 
         if (result.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          toast.success('Reel created!', { duration: 5000 });
+          const clipName = updates.name || region.name || 'Untitled';
+          toast.success(`Reel created: ${clipName}`, { duration: 5000 });
         }
       }
     } else {
@@ -645,7 +646,8 @@ export function AnnotateContainer({
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
         if (result?.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          toast.success('Reel created!', { duration: 5000 });
+          const clipName = region.name || 'Untitled';
+          toast.success(`Reel created: ${clipName}`, { duration: 5000 });
         }
       }
     }
