@@ -23,6 +23,7 @@
 | T1870 | [Video Stream Cache-Control](tasks/T1870-video-stream-cache-control.md) | 6 | 2 | P1 | DONE | [ ] | Stream proxy responses missing `Cache-Control: no-store` — browser caches error responses (502/timeout), "Retry" button fails, user must hard-refresh |
 | T1880 | [Video Load Error Diagnostics](tasks/T1880-video-load-error-diagnostics.md) | 5 | 3 | P2 | DONE | [ ] | "Video format not supported" error logs raw code but not HTTP status/content-type/body — can't distinguish server error page from actual codec issue |
 | T1890 | [Multi-Clip Cache Warming](tasks/T1890-multiclip-cache-warming.md) | 7 | 4 | P1 | DONE | [ ] | FOREGROUND_ACTIVE latch kills warming worker before clips 2-5 are warmed; switching clips in multi-clip project causes 10-48s cold loads |
+| T2000 | [Overlapping Crop Keyframes](tasks/T2000-overlapping-crop-keyframes.md) | 6 | 4 | P1 | TODO | [ ] | Two crop keyframe diamonds overlap at clip start on framing timeline. `ensurePermanentKeyframes` duplicates frame-0 keyframe on restore when saved keyframes already include one; dedup logic from T1400 doesn't cover restore path. |
 
 ### Milestone: Performance (NEXT UP)
 
