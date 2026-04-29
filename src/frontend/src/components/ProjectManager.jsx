@@ -18,6 +18,8 @@ import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useQuestStore } from '../stores/questStore';
 import { useSyncStore } from '../stores/syncStore';
+import { useGalleryStore } from '../stores/galleryStore';
+import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
 
 /**
@@ -1392,10 +1394,33 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
 function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const isOffline = useSyncStore((state) => state.isOffline);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
   const renameProject = useProjectsStore(state => state.renameProject);
+  const fetchProjects = useProjectsStore(state => state.fetchProjects);
+
+  const handlePublishToMyReels = async (e) => {
+    e.stopPropagation();
+    setIsPublishing(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
+        method: 'POST',
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to publish');
+      }
+      useGalleryStore.getState().fetchCount({ force: true });
+      fetchProjects({ force: true });
+    } catch (error) {
+      console.error('[ProjectCard] Publish error:', error);
+      alert(`Failed to move to ${SECTION_NAMES.LIBRARY}: ${error.message}`);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   const handleStartRename = (e) => {
     e.stopPropagation();
@@ -1524,8 +1549,25 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 </button>
               </>
             )}
-            {isComplete && (
-              <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+            {isComplete && project.is_published && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-green-900/50 text-green-400 flex-shrink-0">
+                <CheckCircle size={12} />
+                In {SECTION_NAMES.LIBRARY}
+              </span>
+            )}
+            {isComplete && !project.is_published && (
+              <button
+                onClick={handlePublishToMyReels}
+                disabled={isPublishing}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-600 hover:bg-purple-500 text-white transition-colors flex-shrink-0 disabled:opacity-50"
+              >
+                {isPublishing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <Image size={12} />
+                )}
+                Move to {SECTION_NAMES.LIBRARY}
+              </button>
             )}
           </div>
           {/* Tags row - show first clip's tags for auto-created projects */}

@@ -644,6 +644,7 @@ def ensure_database():
                 rating_counts TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 watched_at TIMESTAMP,
+                published_at TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
@@ -1024,6 +1025,14 @@ def ensure_database():
             logger.info("[Migration T900] projects FK SET NULL added")
 
         conn.execute("PRAGMA foreign_keys=ON")
+
+        # Add published_at column to final_videos (for "Move To My Reels" feature)
+        existing_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(final_videos)").fetchall()}
+        if 'published_at' not in existing_cols:
+            cursor.execute("ALTER TABLE final_videos ADD COLUMN published_at TIMESTAMP")
+            # Back-fill: existing final_videos were auto-published, so mark them as published
+            cursor.execute("UPDATE final_videos SET published_at = created_at WHERE published_at IS NULL")
+            logger.info("[Migration] Added published_at to final_videos, back-filled existing rows")
 
         conn.commit()
         _initialized_users.add(user_id)

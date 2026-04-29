@@ -145,7 +145,7 @@ export function DownloadsPanel({
         close();
       } catch (error) {
         console.error('[DownloadsPanel] Restore project error:', error);
-        alert(`Failed to open reel: ${error.message}`);
+        alert(`Failed to open reel as draft: ${error.message}`);
       } finally {
         setRestoringProjectId(null);
       }
@@ -161,7 +161,7 @@ export function DownloadsPanel({
   };
 
   // Get appropriate title for the folder button
-  const getOpenSourceTitle = () => 'Open reel';
+  const getOpenSourceTitle = () => 'Open Reel as Draft';
 
   const handleBeforeAfter = async (e, download) => {
     e.stopPropagation();

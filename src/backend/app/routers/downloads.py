@@ -234,6 +234,7 @@ async def list_downloads(source_type: Optional[str] = None):
             FROM final_videos fv
             LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
             WHERE fv.id IN ({latest_final_videos_subquery()})
+            AND fv.published_at IS NOT NULL
         """
 
         if source_type:
@@ -803,6 +804,35 @@ async def mark_watched(download_id: int):
         return {"success": True}
 
 
+@router.post("/publish/{project_id}")
+async def publish_to_my_reels(project_id: int):
+    """Publish a project's latest final video to My Reels.
+
+    Sets published_at on the latest final_video for the given project,
+    making it visible in the downloads/gallery list.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id FROM final_videos
+            WHERE project_id = ?
+            ORDER BY version DESC
+            LIMIT 1
+        """, (project_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="No final video found for this project")
+
+        cursor.execute(
+            "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (row['id'],),
+        )
+        conn.commit()
+        return {"success": True, "final_video_id": row['id']}
+
+
 @router.get("/count")
 async def get_download_count():
     """
@@ -819,6 +849,7 @@ async def get_download_count():
                 SUM(CASE WHEN watched_at IS NULL THEN 1 ELSE 0 END) as unwatched_count
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
+            AND published_at IS NOT NULL
         """)
         row = cursor.fetchone()
 
@@ -877,6 +908,15 @@ async def restore_project_from_archive(download_id: int):
             status_code=500,
             detail="Failed to restore project from archive"
         )
+
+    # Unpublish: moving back to draft removes from My Reels
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE final_videos SET published_at = NULL WHERE project_id = ?",
+            (project_id,),
+        )
+        conn.commit()
 
     logger.info(f"Restored project {project_id} from archive for user {user_id}")
     return {"project_id": project_id, "restored": True}

@@ -218,6 +218,7 @@ class ProjectListItem(BaseModel):
     has_working_video: bool
     has_overlay_edits: bool
     has_final_video: bool
+    is_published: bool  # True if latest final video has been published to My Reels
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
     current_mode: Optional[str] = 'framing'
@@ -297,6 +298,11 @@ async def list_projects():
                 CASE WHEN EXISTS (
                     SELECT 1 FROM final_videos WHERE project_id = p.id
                 ) THEN 1 ELSE 0 END as has_final_video,
+                -- Published status (latest final video has published_at set)
+                CASE WHEN EXISTS (
+                    SELECT 1 FROM final_videos
+                    WHERE project_id = p.id AND published_at IS NOT NULL
+                ) THEN 1 ELSE 0 END as is_published,
                 -- Check if project was auto-created for a 5-star clip
                 CASE WHEN EXISTS (
                     SELECT 1 FROM raw_clips rc WHERE rc.auto_project_id = p.id
@@ -444,6 +450,7 @@ async def list_projects():
                 has_working_video=bool(row['has_working_video']),
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
+                is_published=bool(row['is_published']),
                 is_auto_created=bool(row['is_auto_created']),
                 created_at=row['created_at'],
                 current_mode=row['current_mode'] or 'framing',
