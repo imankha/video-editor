@@ -19,7 +19,7 @@ from app.database import get_db_connection, get_final_videos_path
 from app.queries import latest_final_videos_subquery
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
-from app.services.project_archive import restore_project, is_project_archived
+from app.services.project_archive import archive_project, restore_project, is_project_archived
 from app.constants import SourceType
 
 logger = logging.getLogger(__name__)
@@ -809,8 +809,11 @@ async def publish_to_my_reels(project_id: int):
     """Publish a project's latest final video to My Reels.
 
     Sets published_at on the latest final_video for the given project,
-    making it visible in the downloads/gallery list.
+    making it visible in the downloads/gallery list. Also archives the
+    project's working data to R2 to keep the database small.
     """
+    user_id = get_current_user_id()
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -830,7 +833,10 @@ async def publish_to_my_reels(project_id: int):
             (row['id'],),
         )
         conn.commit()
-        return {"success": True, "final_video_id": row['id']}
+
+    archive_project(project_id, user_id)
+
+    return {"success": True, "final_video_id": row['id']}
 
 
 @router.get("/count")

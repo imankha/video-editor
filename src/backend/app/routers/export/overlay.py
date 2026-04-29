@@ -46,7 +46,6 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
-from ...services.project_archive import archive_project
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from ...utils.encoding import encode_data, decode_data
 
@@ -97,7 +96,6 @@ def _finalize_overlay_export(
 
         conn.commit()
 
-    archive_project(project_id, user_id)
     return final_video_id
 
 
@@ -1136,10 +1134,6 @@ async def export_final(
         conn.commit()
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
-
-    _t0 = time_module.monotonic()
-    await asyncio.to_thread(archive_project, project_id, user_id)
-    logger.info(f"[T1110] archive_project (export_final) took {time_module.monotonic() - _t0:.2f}s (threaded)")
 
     return JSONResponse({
         'success': True,

@@ -2,8 +2,8 @@
 Project Archive Service for Video Editor.
 
 Archives completed projects to R2 as JSON files to reduce active database size.
-Projects are archived when exported (final_video created) and can be restored
-when user opens them from the gallery.
+Projects are archived when the user clicks "Move to My Reels" (publish) and
+can be restored when the user clicks "Open Reel as Draft" from the gallery.
 
 Archive location: {user_id}/archive/{project_id}.json
 """
@@ -276,11 +276,11 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
 def archive_completed_projects(user_id: Optional[str] = None) -> int:
     """
-    Archive all completed projects that haven't been archived yet.
+    Archive all published projects that haven't been archived yet.
 
-    A project is "complete" when it has a final_video_id. This runs on
-    session init so that previous sessions' completed work is archived,
-    keeping the DB small for R2 sync.
+    Only archives projects whose final video has been published to My Reels
+    (published_at IS NOT NULL). Unpublished drafts stay in the database
+    so the user can see them in the project list and click "Move to My Reels".
 
     Args:
         user_id: User ID (defaults to current user from context)
@@ -298,9 +298,11 @@ def archive_completed_projects(user_id: Optional[str] = None) -> int:
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT id FROM projects
-                WHERE final_video_id IS NOT NULL
-                AND archived_at IS NULL
+                SELECT p.id FROM projects p
+                JOIN final_videos fv ON fv.id = p.final_video_id
+                WHERE p.final_video_id IS NOT NULL
+                AND p.archived_at IS NULL
+                AND fv.published_at IS NOT NULL
             """)
             completed_projects = cursor.fetchall()
 
