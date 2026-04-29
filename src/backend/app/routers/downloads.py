@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+import asyncio
 import os
 import re
 import json
@@ -834,7 +835,9 @@ async def publish_to_my_reels(project_id: int):
         )
         conn.commit()
 
-    archive_project(project_id, user_id)
+    archived = await asyncio.to_thread(archive_project, project_id, user_id)
+    if not archived:
+        logger.warning(f"Failed to archive project {project_id} after publish — working data retained")
 
     return {"success": True, "final_video_id": row['id']}
 
