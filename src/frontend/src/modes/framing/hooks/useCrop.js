@@ -180,6 +180,25 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     }
   }, [savedKeyframes, framerate, restoreKeyframes]);
 
+  // Phase 2: Adjust keyframe boundaries when trimRange/duration loads after restore.
+  // Saved keyframes may span the full video (e.g., endFrame=599) while the clip is
+  // trimmed to a shorter range (e.g., frame 229). SET_END_FRAME filters out keyframes
+  // beyond the boundary and ensures a permanent at the correct endFrame.
+  useEffect(() => {
+    if (machineState === 'uninitialized') return;
+    const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
+    if (!effectiveDuration) return;
+
+    const correctEndFrame = timeToFrame(effectiveDuration, framerate);
+    const currentEndFrame = keyframesRef.current.length > 0
+      ? keyframesRef.current[keyframesRef.current.length - 1].frame
+      : null;
+
+    if (currentEndFrame !== null && currentEndFrame !== correctEndFrame) {
+      setEndFrame(correctEndFrame);
+    }
+  }, [trimRange, videoMetadata?.duration, machineState, framerate, setEndFrame]);
+
   /**
    * Auto-initialize keyframes when metadata loads
    * Creates permanent keyframes at start (frame=0) and end (frame=totalFrames)
