@@ -497,15 +497,45 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
     )
 
 
+def _vacuum_user_dbs(user_id: str) -> None:
+    """VACUUM all profile DBs for a user. Runs in a background thread."""
+    profiles_dir = USER_DATA_BASE / user_id / "profiles"
+    if not profiles_dir.exists():
+        return
+    for profile_dir in profiles_dir.iterdir():
+        db_path = profile_dir / "profile.sqlite"
+        if not db_path.is_file():
+            continue
+        try:
+            size_before = db_path.stat().st_size
+            conn = sqlite3.connect(str(db_path))
+            conn.execute("VACUUM")
+            conn.close()
+            size_after = db_path.stat().st_size
+            logger.info(
+                f"[Logout VACUUM] {user_id}/{profile_dir.name}: "
+                f"{size_before // 1024}KB -> {size_after // 1024}KB "
+                f"({(size_before - size_after) // 1024}KB freed)"
+            )
+        except Exception as e:
+            logger.warning(f"[Logout VACUUM] Failed for {user_id}/{profile_dir.name}: {e}")
+
+
 @router.post("/logout")
 async def logout(request: Request):
     """Invalidate current session and clear cookie."""
     session_id = request.cookies.get("rb_session")
+    user_id = None
     if session_id:
         session = validate_session(session_id)
         if session:
-            invalidate_user_cache(session["user_id"])
+            user_id = session["user_id"]
+            invalidate_user_cache(user_id)
         invalidate_session(session_id)
+
+    if user_id:
+        import asyncio
+        asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
 
     response = JSONResponse(content={"logged_out": True})
     response.delete_cookie(

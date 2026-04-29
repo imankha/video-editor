@@ -133,7 +133,6 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 videos_deleted = cursor.rowcount
 
                 conn.commit()
-                conn.execute("VACUUM")
 
                 logger.info(
                     f"Archived project {project_id}: deleted {clips_deleted} working_clips, "
