@@ -71,6 +71,29 @@ function signature.
 See [perf-instrument-req-id.md](rules/perf-instrument-req-id.md) for the
 ContextVar + per-log-site pattern.
 
+## Accessing Prod Logs (T2020)
+
+Fly.io's built-in log buffer only retains ~47 lines. Logs are also written to
+`/tmp/logs/app.log` with daily rotation (1 backup). Access them remotely via
+debug endpoints (gated by `DEBUG_ENDPOINTS_ENABLED=true`, already on in prod):
+
+```bash
+# List available log files with sizes
+curl https://<host>/api/_debug/logs
+
+# Read last 200 lines (default)
+curl https://<host>/api/_debug/logs/app.log
+
+# Tail + grep for a specific req_id
+curl "https://<host>/api/_debug/logs/app.log?tail=2000&grep=req_id%3Dabc123"
+
+# Grep for slow requests
+curl "https://<host>/api/_debug/logs/app.log?tail=2000&grep=SLOW%20REQUEST"
+```
+
+Rotated files are named `app.log.YYYY-MM-DD`. Logs are lost on machine restart
+(ephemeral `/tmp`), but survive between checks on a running machine.
+
 ## Anti-Patterns
 
 - **Speculating without the chain.** "It's probably the R2 call" — maybe, but
