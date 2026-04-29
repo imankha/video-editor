@@ -26,6 +26,7 @@ import re
 import signal
 import subprocess
 import logging
+import logging.handlers
 import time
 from dotenv import load_dotenv
 
@@ -48,6 +49,18 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# T2020: File-based log retention — survives Fly.io's ~47-line buffer limit
+LOG_DIR = Path("/tmp/logs")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+_file_handler = logging.handlers.TimedRotatingFileHandler(
+    LOG_DIR / "app.log", when="midnight", backupCount=1, encoding="utf-8"
+)
+_file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+))
+logging.getLogger().addHandler(_file_handler)
 
 # Quiet noisy third-party libraries (only show warnings and above)
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -259,9 +272,8 @@ async def startup_event():
     logger.info(f"Python version: {sys.version.split()[0]}")
     logger.info("=" * 80)
 
-    # T1570: Clear stale profiles on startup, auto-enable profiling in dev/staging
-    from app.profiling import clear_profile_dir, profile_on_breach_enabled
-    clear_profile_dir()
+    # T1570: Auto-enable profiling in dev/staging
+    from app.profiling import profile_on_breach_enabled
     if ENV in ("development", "staging") and not os.getenv("PROFILE_ON_BREACH_ENABLED"):
         os.environ["PROFILE_ON_BREACH_ENABLED"] = "true"
         os.environ.setdefault("PROFILE_ON_BREACH_MS", "500")
