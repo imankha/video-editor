@@ -134,6 +134,7 @@ async def init_session():
     subsequent requests.
     """
     user_id = get_current_user_id()
+    cancel_active_vacuum(user_id)
     result = user_session_init(user_id)
 
     return InitResponse(
@@ -497,6 +498,17 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
     )
 
 
+_active_vacuum_conns: dict[str, sqlite3.Connection] = {}
+
+
+def cancel_active_vacuum(user_id: str) -> None:
+    """Interrupt any in-progress VACUUM for this user. Safe to call from any thread."""
+    conn = _active_vacuum_conns.pop(user_id, None)
+    if conn:
+        logger.info(f"[Logout VACUUM] Interrupting active VACUUM for {user_id} (user logged back in)")
+        conn.interrupt()
+
+
 def _vacuum_user_dbs(user_id: str) -> None:
     """VACUUM all profile DBs for a user. Runs in a background thread."""
     profiles_dir = USER_DATA_BASE / user_id / "profiles"
@@ -509,7 +521,9 @@ def _vacuum_user_dbs(user_id: str) -> None:
         try:
             size_before = db_path.stat().st_size
             conn = sqlite3.connect(str(db_path))
+            _active_vacuum_conns[user_id] = conn
             conn.execute("VACUUM")
+            _active_vacuum_conns.pop(user_id, None)
             conn.close()
             size_after = db_path.stat().st_size
             logger.info(
@@ -518,6 +532,11 @@ def _vacuum_user_dbs(user_id: str) -> None:
                 f"({(size_before - size_after) // 1024}KB freed)"
             )
         except Exception as e:
+            _active_vacuum_conns.pop(user_id, None)
+            try:
+                conn.close()
+            except Exception:
+                pass
             logger.warning(f"[Logout VACUUM] Failed for {user_id}/{profile_dir.name}: {e}")
 
 
