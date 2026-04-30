@@ -99,6 +99,12 @@ export function Button({
       !disabled && !loading && 'hover:bg-gray-700 hover:text-white hover:border-gray-500',
       'focus:ring-gray-500',
     ].filter(Boolean).join(' '),
+
+    reelOutline: [
+      'bg-transparent text-cyan-400 border border-cyan-500/50',
+      !disabled && !loading && 'hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500',
+      'focus:ring-cyan-400',
+    ].filter(Boolean).join(' '),
   };
 
   // Size styles

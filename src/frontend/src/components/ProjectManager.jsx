@@ -460,11 +460,10 @@ export function ProjectManager({
         {isAuthenticated && <CreditBalance />}
         {isAuthenticated && onOpenDownloads && (
           <Button
-            variant="outline"
+            variant="reelOutline"
             icon={Image}
             onClick={onOpenDownloads}
             title={SECTION_NAMES.LIBRARY}
-            className={`${REEL.accent} ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500`}
           >
             <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
             {downloadsCount > 0 && (
