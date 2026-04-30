@@ -346,6 +346,11 @@ async function warmUrl(url, options = {}) {
     return false;
   } finally {
     clearTimeout(timeout);
+    // Close the underlying connection. no-cors opaque responses resolve the
+    // fetch promise on headers, but the browser continues downloading the body
+    // for caching — holding the HTTP/1.1 connection slot. Aborting here frees
+    // the slot so foreground video loads aren't blocked.
+    try { controller.abort(); } catch { /* ignore */ }
     inFlightControllers.delete(controller);
   }
 }
@@ -397,6 +402,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
     return false;
   } finally {
     clearTimeout(timeout);
+    try { controller.abort(); } catch { /* ignore */ }
     inFlightClipRangeControllers.delete(controller);
   }
 }
