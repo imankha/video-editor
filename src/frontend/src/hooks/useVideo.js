@@ -7,7 +7,7 @@ import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback } from '../utils/videoLoadWatchdog';
-import { chooseLoadRoute, isDirectForced } from '../utils/videoLoadRoute';
+import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
@@ -261,11 +261,14 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       console.log(`[VIDEO_LOAD] warm_status id=${loadId} clipWarmed=${clipWarmed} rangeCovered=${route.rangeCovered} urlWarmed=${ws?.urlWarmed ?? false} clipRanges=${ws?.clipRanges.length ?? 0} route=${route.route}`);
     }
 
-    // T1410: pause warmup & abort in-flight warm fetches so foreground video
-    // wins the race for R2 connections. Cleared on loadeddata/error below.
-    const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    // T2040: route-aware foreground mode. Proxy loads don't compete for R2
+    // sockets, so tier-1 clip warming can continue during the load.
+    const foregroundMode = route.route === ROUTE.PROXY
+      ? WARMUP_PRIORITY.FOREGROUND_PROXY
+      : WARMUP_PRIORITY.FOREGROUND_DIRECT;
+    const { abortedCount } = setWarmupPriority(foregroundMode);
     if (abortedCount > 0) {
-      console.log(`[VIDEO_LOAD] warmer_abort id=${loadId} count=${abortedCount}`);
+      console.log(`[VIDEO_LOAD] warmer_abort id=${loadId} count=${abortedCount} mode=${foregroundMode}`);
     }
 
     // T1400: range-fallback watchdog — if we're still not playable after
@@ -628,12 +631,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       useVideoStore.getState().setLoadingProgress(0);
       useVideoStore.getState().setLoadStartTime(performance.now());
 
-      // T1410: if a non-blob streaming src was set outside loadVideoFromStreamingUrl
-      // (e.g., Annotate mode sets store.videoUrl directly), still throttle the
-      // warmer so it doesn't race the foreground <video>. Blob srcs are already
-      // fully downloaded — no network race to worry about.
+      // T1410: non-blob src set outside loadVideoFromStreamingUrl (e.g. Annotate
+      // mode sets store.videoUrl directly) → always direct R2 load, stop warming.
       if (!isBlob && video.src) {
-        const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+        const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
         if (abortedCount > 0) {
           console.log(`[VIDEO_LOAD] warmer_abort id=${loadIdRef.current} count=${abortedCount} trigger=loadstart`);
         }

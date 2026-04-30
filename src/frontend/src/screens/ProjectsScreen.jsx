@@ -12,6 +12,7 @@ import { useUploadStore } from '../stores/uploadStore';
 import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
+import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -109,6 +110,7 @@ export function ProjectsScreen({
   useEffect(() => {
     fetchProjects();
     fetchGames();
+    setWarmupPriority(WARMUP_PRIORITY.DRAFT_REELS);
   }, [fetchProjects, fetchGames]);
 
   // Listen for export completion events and refresh project list
