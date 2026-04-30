@@ -191,6 +191,20 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
 | T445 | ↳ [Landing Page Before/After Clips](tasks/pwa/T445-landing-page-before-after-clips.md) | 7 | 2 | 3.5 | TODO | [ ] | Update landing page with latest before/after clip comparisons — autoplay side-by-side raw footage vs finished reel. |
 | T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
+| | **[Overlay System v2](tasks/overlay-v2/EPIC.md)** | 9 | 7 | 1.3 | | | **Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits.** |
+| T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
+| T2110 | ↳ [Player Profile Data Model](tasks/overlay-v2/T2110-player-profile-data-model.md) | 8 | 3 | 2.7 | TODO | [x] | Account-level player profiles (name, number, team color, position). Set once, reuse across all reels. |
+| T2120 | ↳ [Pulse Ring Primitive](tasks/overlay-v2/T2120-pulse-ring-primitive.md) | 7 | 3 | 2.3 | TODO | [ ] | Animated scale + opacity loop for dramatic moments (goals, big saves). 1-2s duration. |
+| T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
+| T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
+| T2150 | ↳ [Overlay Presets System](tasks/overlay-v2/T2150-overlay-presets-system.md) | 8 | 4 | 2.0 | TODO | [ ] | One-click templates: "Spotlight", "Goal", "Custom". Wire up multiple primitives at once. |
+| T2160 | ↳ [Tracker Re-acquisition & Gap Bridging](tasks/overlay-v2/T2160-tracker-reacquisition.md) | 9 | 6 | 1.5 | TODO | [ ] | Appearance embedding for auto-suggest on re-entry. Spline interpolation through <0.5s tracking drops. |
+| T2170 | ↳ [Glow & Arrow Primitives](tasks/overlay-v2/T2170-glow-arrow-primitives.md) | 6 | 4 | 1.5 | TODO | [ ] | Phase 2: soft radial glow aura + floating arrow pointer for wide shots. |
+| T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
+| T2190 | ↳ [Extended Presets](tasks/overlay-v2/T2190-extended-presets.md) | 5 | 2 | 2.5 | TODO | [ ] | Phase 2: "Recruiting" (minimal + persistent label) and "Social" (pulse + glow + broadcast name) presets. |
+| T2200 | ↳ [Outline Trace Primitive](tasks/overlay-v2/T2200-outline-trace-primitive.md) | 5 | 7 | 0.7 | TODO | [ ] | Phase 3: edge-detect player silhouette outline. Expensive to compute, premium-feel. |
+| T2210 | ↳ [Spotlight Cone Primitive](tasks/overlay-v2/T2210-spotlight-cone-primitive.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 3: darken/desaturate everything outside player region. High-drama cinematic effect. |
+| T2220 | ↳ [Multi-Player Tracking](tasks/overlay-v2/T2220-multi-player-tracking.md) | 6 | 7 | 0.9 | TODO | [ ] | Phase 3: highlight 2+ players simultaneously (e.g., assist + goal scorer) with independent overlays. |
 
 #### Infrastructure
 
@@ -310,5 +324,6 @@ IDs use gaps of 10 to allow insertions:
 - `T200-T299` - Post-launch features + polish
 - `T400-T430` - User Auth epic (T400=Google, T401=OTP, T405=D1, T420=sessions, T430=settings)
 - `T500-T525` - Monetization epic
+- `T2100-T2220` - Overlay System v2 epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
