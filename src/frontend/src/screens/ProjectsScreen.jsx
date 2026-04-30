@@ -186,6 +186,11 @@ export function ProjectsScreen({
       // Fetch project details
       const project = await selectProject(projectId);
 
+      // Set mode immediately to prevent flash (e.g. framing flash before overlay)
+      if (options.mode) {
+        setEditorMode(options.mode);
+      }
+
       // Load project with all associated data
       const result = await loadProject(project, {
         mode: options.mode,

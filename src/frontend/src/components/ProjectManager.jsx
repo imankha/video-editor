@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers } from 'lucide-react';
 import { Logo } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
@@ -1520,18 +1520,23 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
 
   const isComplete = project.has_final_video;
 
+  const isReadyToPublish = isComplete && !project.is_published;
+
   return (
     <div
-      onClick={handleCardClick}
+      onClick={isReadyToPublish ? undefined : handleCardClick}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
-        canOpen
-          ? `hover:bg-gray-750 cursor-pointer border-gray-700 ${REEL.borderHover}`
-          : 'cursor-not-allowed border-gray-700 opacity-75'
+        isReadyToPublish
+          ? 'border-gray-700'
+          : canOpen
+            ? `hover:bg-gray-750 cursor-pointer border-gray-700 ${REEL.borderHover}`
+            : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
       title={undefined}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
+          {/* Name row */}
           <div className="flex items-center gap-2">
             {project.is_auto_created && (
               <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created reel" />
@@ -1568,7 +1573,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               </span>
             )}
           </div>
-          {/* Tags row - show first clip's tags for auto-created projects */}
+
+          {/* Tags row */}
           {project.is_auto_created && project.clips?.[0]?.tags?.length > 0 && (
             <div className="flex items-center gap-1 mt-1 flex-wrap">
               {project.clips[0].tags.map((tag, idx) => (
@@ -1582,11 +1588,21 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               ))}
             </div>
           )}
+
+          {/* Metadata row */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{project.aspect_ratio}</span>
             <span>•</span>
             <span>{project.clip_count} clip{project.clip_count !== 1 ? 's' : ''}</span>
-            {/* Only show status text for non-complete projects - complete is obvious from green bar */}
+            {isComplete && (
+              <>
+                <span>•</span>
+                <span className="inline-flex items-center gap-1 text-green-400">
+                  <CheckCircle size={12} />
+                  Done
+                </span>
+              </>
+            )}
             {!project.has_final_video && (
               <>
                 <span>•</span>
@@ -1620,51 +1636,89 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           </div>
         </div>
 
-        {/* Delete button */}
-        <Button
-          variant={showDeleteConfirm ? 'danger' : 'ghost'}
-          size="sm"
-          icon={Trash2}
-          iconOnly
-          onClick={handleDelete}
-          className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
-          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-        />
+        {/* Top-right: Move CTA for ready-to-publish, delete icon for other states */}
+        {isReadyToPublish ? (
+          <button
+            onClick={handlePublishToMyReels}
+            disabled={isPublishing}
+            className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium ${REEL.bgCta} ${REEL.bgCtaHover} text-white transition-all disabled:opacity-50 shadow-lg ${REEL.shadow}`}
+          >
+            {isPublishing ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Image size={18} />
+            )}
+            Move to {SECTION_NAMES.LIBRARY}
+          </button>
+        ) : (
+          <Button
+            variant={showDeleteConfirm ? 'danger' : 'ghost'}
+            size="sm"
+            icon={Trash2}
+            iconOnly
+            onClick={handleDelete}
+            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
+            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
+          />
+        )}
       </div>
 
-      {isComplete ? (
+      {isReadyToPublish ? (
         <>
-          {/* Completed: checkmark badge + preview + Move to My Reels */}
-          <div className="mt-3 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-400">
-              <CheckCircle size={14} />
-              Done
-            </span>
+          {/* Secondary actions row */}
+          <div className="mt-2 flex items-center justify-center gap-2">
             {project.final_video_id && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Play}
                 onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-                className={`p-1.5 rounded-full ${REEL.bgMuted} hover:bg-cyan-800/60 transition-colors`}
                 title="Preview video"
               >
-                <Play size={16} className={REEL.accent} />
-              </button>
+                Preview
+              </Button>
             )}
-          </div>
-          {!project.is_published && (
-            <button
-              onClick={handlePublishToMyReels}
-              disabled={isPublishing}
-              className={`mt-2 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold ${REEL.bgCta} ${REEL.bgCtaHover} text-white transition-all disabled:opacity-50 animate-pulse hover:animate-none shadow-lg ${REEL.shadow}`}
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Crop}
+              onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
+              title="Open in Framing"
             >
-              {isPublishing ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Image size={16} />
-              )}
-              Move to {SECTION_NAMES.LIBRARY}
+              Framing
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Layers}
+              onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
+              title="Open in Overlay"
+            >
+              Overlay
+            </Button>
+            <Button
+              variant={showDeleteConfirm ? 'danger' : 'ghost'}
+              size="sm"
+              icon={Trash2}
+              onClick={handleDelete}
+              title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
+            >
+              Delete
+            </Button>
+          </div>
+        </>
+      ) : isComplete ? (
+        <div className="mt-3 flex items-center gap-2">
+          {project.final_video_id && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
+              className={`p-1.5 rounded-full ${REEL.bgMuted} hover:bg-cyan-800/60 transition-colors`}
+              title="Preview video"
+            >
+              <Play size={16} className={REEL.accent} />
             </button>
           )}
-        </>
+        </div>
       ) : (
         /* Segmented progress strip - clickable segments for direct navigation */
         <SegmentedProgressStrip

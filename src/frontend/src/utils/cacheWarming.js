@@ -111,14 +111,12 @@ let currentPriority = WARMUP_PRIORITY.GAMES;
 let workersRunning = false;
 let warmupInProgress = false;
 
-// Pauses lower-tier warming (games, gallery) while foreground video is loading.
-// Tier-1 clip ranges are exempt — they're small and needed for clip switching.
+// Pauses ALL warming while foreground video is loading.
 // Cleared by clearForegroundActive() when the foreground video becomes playable.
 let warmerDisabled = false;
 
 // AbortControllers for in-flight warm fetches. FOREGROUND_ACTIVE and
-// visibility-change abort these so the browser can reclaim connections.
-// Clip range controllers are separate — FOREGROUND_ACTIVE doesn't touch them.
+// visibility-change abort ALL of these so the browser can reclaim connections.
 const inFlightControllers = new Set();
 const inFlightClipRangeControllers = new Set();
 
@@ -144,8 +142,9 @@ export function getWarmingDiag() {
 
 /**
  * Set the warmup priority. Call this when user navigates.
- * FOREGROUND_ACTIVE pauses lower-tier warming and aborts in-flight fetches.
- * Tier-1 clip ranges continue processing. Cleared by clearForegroundActive().
+ * FOREGROUND_ACTIVE stops ALL warming and aborts ALL in-flight fetches
+ * (including tier-1 clip ranges) to free connections for the foreground video.
+ * Cleared by clearForegroundActive().
  */
 export function setWarmupPriority(priority) {
   if (priority === currentPriority) return { abortedCount: 0 };
@@ -163,13 +162,17 @@ export function setWarmupPriority(priority) {
 }
 
 function abortInFlightWarms() {
-  const count = inFlightControllers.size;
+  const count = inFlightControllers.size + inFlightClipRangeControllers.size;
   if (count === 0) return 0;
   console.log(`[CacheWarming] Aborting ${count} in-flight warm fetches`);
   for (const ctrl of inFlightControllers) {
     try { ctrl.abort(); } catch { /* ignore */ }
   }
   inFlightControllers.clear();
+  for (const ctrl of inFlightClipRangeControllers) {
+    try { ctrl.abort(); } catch { /* ignore */ }
+  }
+  inFlightClipRangeControllers.clear();
   return count;
 }
 
@@ -183,10 +186,6 @@ if (typeof document !== 'undefined') {
       if (total > 0) {
         console.log(`[CacheWarming] Tab hidden — aborting ${total} in-flight warm fetches`);
         abortInFlightWarms();
-        for (const ctrl of inFlightClipRangeControllers) {
-          try { ctrl.abort(); } catch { /* ignore */ }
-        }
-        inFlightClipRangeControllers.clear();
       }
     }
   });
@@ -204,9 +203,11 @@ function getNextItem() {
     return null;
   }
 
-  // Tier 1: project clips always process, even during FOREGROUND_ACTIVE.
-  // These are small byte-range requests for the current project's clips
-  // and don't meaningfully compete with foreground video playback.
+  // All tiers are paused when foreground video is loading — free all
+  // connections for the user's video (R2 is HTTP/1.1, 6-socket limit).
+  if (warmerDisabled) return null;
+
+  // Tier 1: project clips (highest priority)
   while (tier1Queue.length > 0) {
     const item = tier1Queue.shift();
     const cacheKey = item.type === 'clipRange'
@@ -216,9 +217,6 @@ function getNextItem() {
       return { ...item, _cacheKey: cacheKey };
     }
   }
-
-  // Lower tiers are paused when foreground video is loading
-  if (warmerDisabled) return null;
 
   // Tier 2/3: games and gallery by user navigation priority
   const priorityQueue = currentPriority === WARMUP_PRIORITY.GAMES ? gamesQueue : galleryQueue;

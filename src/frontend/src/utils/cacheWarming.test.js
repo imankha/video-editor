@@ -2,9 +2,9 @@
  * T1410: verify warmup abort wiring.
  *
  * Behavior under test:
- *  1. Setting priority to FOREGROUND_ACTIVE aborts every in-flight warm fetch.
- *  2. Worker loop does not pull new items while in FOREGROUND_ACTIVE.
- *  3. When a StrictMode-style double invocation races two foreground loads,
+ *  1. Setting priority to FOREGROUND_ACTIVE aborts ALL in-flight warm fetches
+ *     (including tier-1 clip ranges) and stops the worker from pulling new items.
+ *  2. When a StrictMode-style double invocation races two foreground loads,
  *     only one wins — the first is aborted cleanly (AbortError) and the
  *     second survives. We simulate this at the fetch layer.
  */
@@ -78,7 +78,7 @@ describe('cacheWarming — T1410 foreground abort', () => {
     expect(result).toBe(false);
   });
 
-  it('FOREGROUND_ACTIVE pauses lower tiers but tier-1 clip ranges still process', async () => {
+  it('FOREGROUND_ACTIVE stops ALL warming including tier-1 clip ranges', async () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
 
     cacheWarming.pushClipRanges([
@@ -89,12 +89,13 @@ describe('cacheWarming — T1410 foreground abort', () => {
       },
     ]);
 
-    // Let microtasks run so the worker loop processes the tier-1 clip range.
+    // Let microtasks run.
     await Promise.resolve();
     await Promise.resolve();
 
-    // Tier-1 clip ranges are exempt from FOREGROUND_ACTIVE — fetch should fire.
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+    // Tier-1 clip ranges are also paused during FOREGROUND_ACTIVE to free
+    // all connections for the foreground video (R2 HTTP/1.1 6-socket limit).
+    expect(fetchMock.mock.calls.length).toBe(0);
   });
 
   it('clearForegroundActive resumes the warmer', async () => {
