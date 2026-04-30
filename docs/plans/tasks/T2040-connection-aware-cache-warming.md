@@ -1,6 +1,6 @@
 # T2040: Connection-Aware Cache Warming
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-30
