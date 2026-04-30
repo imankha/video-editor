@@ -705,6 +705,8 @@ describe('keyframeController', () => {
     it('RESTORE_KEYFRAMES reconstitutes missing frame 0', () => {
       const state = createInitialState();
       // Saved keyframes missing frame 0 (starts at frame 10)
+      // Frame 10 is within boundary-duplicate threshold and has identical data
+      // to the reconstituted frame 0, so it gets deduplicated
       const saved = [
         { frame: 10, origin: 'user', x: 120 },
         { frame: 50, origin: 'user', x: 160 },
@@ -716,7 +718,7 @@ describe('keyframeController', () => {
       expect(newState.keyframes[0].frame).toBe(0);
       expect(newState.keyframes[0].origin).toBe('permanent');
       expect(newState.keyframes[0].x).toBe(120); // Reconstituted from nearest
-      expect(newState.keyframes.length).toBe(4);
+      expect(newState.keyframes.length).toBe(3); // frame 10 deduplicated (identical to reconstituted frame 0)
     });
 
     it('RESTORE_KEYFRAMES derives endFrame from last keyframe', () => {

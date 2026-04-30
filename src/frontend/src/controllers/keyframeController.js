@@ -204,6 +204,25 @@ function ensurePermanentKeyframes(keyframes, endFrame) {
   return final;
 }
 
+function hasSameSpatialData(a, b) {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function removeBoundaryDuplicates(keyframes) {
+  if (keyframes.length <= 2) return keyframes;
+
+  const startKf = keyframes[0];
+  const endKf = keyframes[keyframes.length - 1];
+  const threshold = MIN_KEYFRAME_SPACING * 3;
+
+  return keyframes.filter(kf => {
+    if (kf.origin === 'permanent') return true;
+    if (kf.frame > 0 && kf.frame < threshold && hasSameSpatialData(kf, startKf)) return false;
+    if (kf.frame < endKf.frame && endKf.frame - kf.frame < threshold && hasSameSpatialData(kf, endKf)) return false;
+    return true;
+  });
+}
+
 /**
  * Determine the origin for a keyframe based on its position
  * @param {number} frame - Frame number
@@ -281,7 +300,8 @@ export function keyframeReducer(state, action) {
       // mark it permanent. No dependency on external trimRange/duration.
       const resolvedEndFrame = sortedKeyframes[sortedKeyframes.length - 1].frame;
 
-      const guardedKeyframes = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
+      const guarded = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
+      const guardedKeyframes = removeBoundaryDuplicates(guarded);
 
       const startKf = guardedKeyframes[0];
       const endKf = guardedKeyframes[guardedKeyframes.length - 1];
@@ -464,10 +484,10 @@ export function keyframeReducer(state, action) {
       // Filter out keyframes beyond the new endFrame (trim shrinking range)
       // and ensure permanent boundary keyframes exist at 0 and endFrame
       const trimmed = state.keyframes.filter(kf => kf.frame <= endFrame);
-      const guarded = ensurePermanentKeyframes(
+      const guarded = removeBoundaryDuplicates(ensurePermanentKeyframes(
         trimmed.length > 0 ? trimmed : state.keyframes,
         endFrame
-      );
+      ));
       return {
         ...state,
         keyframes: guarded
