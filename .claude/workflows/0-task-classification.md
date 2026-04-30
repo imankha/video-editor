@@ -101,10 +101,15 @@ Before starting any task, produce this classification:
 - Architect was included (verify design adherence)
 - 5+ files changed
 - Complex logic introduced
+- State management or persistence changes (high corruption risk)
+- Cross-layer changes (frontend + backend)
 
 **Skip when:**
-- Trivial changes
+- Trivial changes (< 3 files, < 20 LOC, single layer)
 - No architectural decisions made
+- Pure styling/copy changes
+
+**Note:** When included, the reviewer runs a two-phase process: solo review, then conversation with implementor if MAJOR issues found. See [reviewer.md](../.claude/agents/reviewer.md) for the full protocol.
 
 ---
 

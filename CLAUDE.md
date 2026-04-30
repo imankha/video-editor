@@ -93,6 +93,8 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 
 **Note**: Classification determines which agents to include based on scope (stack layers, files, LOC). Default to full workflow; skip stages only with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
 
+*\*Conversation: Reviewer conducts solo review, then engages in structured conversation with implementor on MAJOR findings. Implementor can push back; reviewer evaluates on merit. Unresolved disagreements escalate to user. Max 2 rounds. See [ORCHESTRATION.md](.claude/ORCHESTRATION.md).*
+
 ## Stage Detection Rules
 
 | User Says | Action |
