@@ -216,8 +216,10 @@ class ProjectListItem(BaseModel):
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
     has_working_video: bool
+    working_video_created_at: Optional[str] = None
     has_overlay_edits: bool
     has_final_video: bool
+    final_video_created_at: Optional[str] = None
     final_video_id: Optional[int] = None
     is_published: bool  # True if latest final video has been published to My Reels
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
@@ -252,7 +254,10 @@ class ProjectDetailResponse(BaseModel):
     aspect_ratio: str
     working_video_id: Optional[int]
     working_video_url: Optional[str] = None  # Presigned R2 URL for streaming
+    working_video_created_at: Optional[str] = None
     final_video_id: Optional[int]
+    has_final_video: bool = False
+    final_video_created_at: Optional[str] = None
     clips: List[WorkingClipResponse]
     created_at: str
     is_auto_created: bool = False  # True if auto-created from 5-star clips
@@ -290,6 +295,7 @@ async def list_projects():
                 COALESCE(clip_stats.in_progress, 0) as clips_in_progress,
                 -- Working video info (check if referenced working video exists)
                 CASE WHEN wv.id IS NOT NULL THEN 1 ELSE 0 END as has_working_video,
+                wv.created_at as working_video_created_at,
                 -- Check for overlay edits (highlights or text overlays with actual content)
                 CASE WHEN (
                     (wv.highlights_data IS NOT NULL AND wv.highlights_data != '[]' AND wv.highlights_data != '') OR
@@ -299,6 +305,7 @@ async def list_projects():
                 CASE WHEN EXISTS (
                     SELECT 1 FROM final_videos WHERE project_id = p.id
                 ) THEN 1 ELSE 0 END as has_final_video,
+                (SELECT MAX(fv2.created_at) FROM final_videos fv2 WHERE fv2.project_id = p.id) as final_video_created_at,
                 -- Published status (latest final video has published_at set)
                 CASE WHEN EXISTS (
                     SELECT 1 FROM final_videos
@@ -449,8 +456,10 @@ async def list_projects():
                 clips_exported=row['clips_exported'],
                 clips_in_progress=row['clips_in_progress'],
                 has_working_video=bool(row['has_working_video']),
+                working_video_created_at=row['working_video_created_at'],
                 has_overlay_edits=bool(row['has_overlay_edits']),
                 has_final_video=bool(row['has_final_video']),
+                final_video_created_at=row['final_video_created_at'],
                 final_video_id=row['final_video_id'],
                 is_published=bool(row['is_published']),
                 is_auto_created=bool(row['is_auto_created']),
@@ -686,7 +695,9 @@ async def get_project(project_id: int):
         cursor.execute("""
             SELECT p.id, p.name, p.aspect_ratio, p.working_video_id, p.final_video_id, p.created_at,
                    p.is_auto_created, p.archived_at,
-                   wv.filename as working_video_filename
+                   wv.filename as working_video_filename,
+                   wv.created_at as working_video_created_at,
+                   (SELECT MAX(fv.created_at) FROM final_videos fv WHERE fv.project_id = p.id) as final_video_created_at
             FROM projects p
             LEFT JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -756,7 +767,10 @@ async def get_project(project_id: int):
             aspect_ratio=project['aspect_ratio'],
             working_video_id=project['working_video_id'],
             working_video_url=working_video_url,
+            working_video_created_at=project['working_video_created_at'],
             final_video_id=project['final_video_id'],
+            has_final_video=project['final_video_created_at'] is not None,
+            final_video_created_at=project['final_video_created_at'],
             clips=clips,
             created_at=project['created_at'],
             is_auto_created=bool(project['is_auto_created'])

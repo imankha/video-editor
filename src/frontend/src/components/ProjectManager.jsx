@@ -520,7 +520,12 @@ export function ProjectManager({
               <button
                 onClick={() => {
                   const p = recentItems.recentProject;
-                  if (p.has_working_video || p.has_final_video) {
+                  const needsOverlay = p.has_working_video && (
+                    !p.has_final_video ||
+                    (p.working_video_created_at && p.final_video_created_at &&
+                     p.working_video_created_at > p.final_video_created_at)
+                  );
+                  if (needsOverlay) {
                     onSelectProjectWithMode?.(p.id, { mode: 'overlay' });
                   } else {
                     onSelectProject(p.id);
@@ -1501,7 +1506,12 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const handleCardClick = () => {
     if (isRenaming) return; // Don't open while renaming
     if (!canOpen) return;
-    if (project.has_working_video || project.has_final_video) {
+    const needsOverlay = project.has_working_video && (
+      !project.has_final_video ||
+      (project.working_video_created_at && project.final_video_created_at &&
+       project.working_video_created_at > project.final_video_created_at)
+    );
+    if (needsOverlay) {
       onSelectWithMode({ mode: 'overlay' });
     } else {
       onSelect();

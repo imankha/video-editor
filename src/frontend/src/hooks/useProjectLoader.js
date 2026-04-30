@@ -111,7 +111,10 @@ export function useProjectLoader() {
       onProgress({ stage: 'loading', message: 'Loading project...' });
 
       // Determine target mode
-      const targetMode = mode || (project.working_video_id ? 'overlay' : 'framing');
+      const framingNewerThanFinal = project.working_video_created_at && project.final_video_created_at &&
+        project.working_video_created_at > project.final_video_created_at;
+      const needsOverlay = project.working_video_id && (!project.has_final_video || framingNewerThanFinal);
+      const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
 
       // Update last_opened_at (non-blocking)
       fetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {
