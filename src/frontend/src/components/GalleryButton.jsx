@@ -2,6 +2,7 @@ import { Image } from 'lucide-react';
 import { useGalleryStore } from '../stores/galleryStore';
 import { Button } from './shared/Button';
 import { SECTION_NAMES } from '../config/displayNames';
+import { REEL } from '../config/themeColors';
 
 /**
  * GalleryButton - Self-contained button that opens the Downloads/Gallery panel
@@ -15,11 +16,12 @@ export function GalleryButton() {
 
   return (
     <Button
-      variant="ghost"
+      variant="outline"
       size="md"
       icon={Image}
       onClick={open}
       title={SECTION_NAMES.LIBRARY}
+      className={`${REEL.accent} ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500`}
     >
       <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
       {unwatchedCount > 0 && (

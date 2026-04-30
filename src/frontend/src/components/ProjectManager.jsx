@@ -464,6 +464,7 @@ export function ProjectManager({
             icon={Image}
             onClick={onOpenDownloads}
             title={SECTION_NAMES.LIBRARY}
+            className={`${REEL.accent} ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500`}
           >
             <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
             {downloadsCount > 0 && (
@@ -1641,7 +1642,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           <button
             onClick={handlePublishToMyReels}
             disabled={isPublishing}
-            className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium ${REEL.bgCta} ${REEL.bgCtaHover} text-white transition-all disabled:opacity-50 shadow-lg ${REEL.shadow}`}
+            className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${REEL.accent} border-2 ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500 transition-all disabled:opacity-50`}
           >
             {isPublishing ? (
               <Loader2 size={18} className="animate-spin" />

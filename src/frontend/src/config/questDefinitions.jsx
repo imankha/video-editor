@@ -35,6 +35,7 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
   const colors = {
     purple: 'bg-purple-600 text-white',
     green: 'bg-green-600 text-white',
+    cyan: 'bg-transparent text-cyan-400 border border-cyan-500/50',
   };
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 ${colors[variant]}`}>
@@ -78,18 +79,18 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Drag and resize the <QIcon icon={Crop} className="text-yellow-300" /> crop box around your player at different keyframes so your player stays in view. When ready, click <MiniButton icon={Film} variant="purple">Frame Video</MiniButton>.</>,
   wait_for_export: 'Wait for the framing export to finish. We AI upscale your video to crisp 1080p.',
   export_overlay: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
-  view_gallery_video: <>Click <MiniButton variant="purple"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <QIcon icon={Image} className="text-white" /> {SECTION_NAMES.LIBRARY} in the top bar to watch it.</>,
+  view_gallery_video: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> in the top bar to watch it.</>,
   annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and find and annotate another 5 star moment.</>,
   annotate_5_more: 'Annotate more clips, try to get every touch that could be a learning or celebration.',
   export_second_highlight: <>Pick a reel, crop it along the timeline and then click <MiniButton icon={Film}>Frame Video</MiniButton> to frame it.</>,
   wait_for_export_2: 'Wait for the framing export to finish.',
   overlay_second_highlight: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
-  watch_second_highlight: <>Click <MiniButton variant="purple"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <QIcon icon={Image} className="text-white" /> {SECTION_NAMES.LIBRARY} in the top bar to watch it.</>,
+  watch_second_highlight: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> in the top bar to watch it.</>,
   upload_game_2: 'Add another game — more highlights, better reel!',
   annotate_game_2: <>Find a <FilledStar /><FilledStar /><FilledStar /><FilledStar /> or <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> moment in your new game.</>,
   create_reel: <>Click <QIcon icon={Home} className="text-white" /> Home → {SECTION_NAMES.DRAFTS} → <MiniButton icon={Plus}>New Reel</MiniButton>. Pick your best clips from both games.</>,
   export_reel: <>Frame your multi-clip highlight reel and click <MiniButton icon={Film}>Frame Video</MiniButton>.</>,
   wait_for_reel: 'Wait for the export to finish.',
   overlay_reel: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
-  watch_reel: <>Your highlight reel is ready! Click <MiniButton variant="purple"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <QIcon icon={Image} className="text-white" /> {SECTION_NAMES.LIBRARY} to watch and download it.</>,
+  watch_reel: <>Your highlight reel is ready! Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> to watch and download it.</>,
 };
