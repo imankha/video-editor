@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { Minimize } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
@@ -212,6 +212,13 @@ export function FramingModeView({
   // Context
   cropContextValue,
 }) {
+  const DIM_PRESETS = [
+    { label: 'Dim', value: 0.2 },
+    { label: 'Dark', value: 0.7 },
+    { label: 'Preview', value: 1.0 },
+  ];
+  const [dimOpacity, setDimOpacity] = useState(0.2);
+
   return (
     <>
       {/* Error Message */}
@@ -279,7 +286,25 @@ export function FramingModeView({
         {/* Controls Bar - hidden in fullscreen */}
         {videoUrl && !isFullscreen && (
           <div className="mb-3 sm:mb-6 flex gap-4 items-center">
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-400 mr-2">Background:</span>
+                <div className="flex gap-1">
+                  {DIM_PRESETS.map(preset => (
+                    <button
+                      key={preset.label}
+                      onClick={() => setDimOpacity(preset.value)}
+                      className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                        dimOpacity === preset.value
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-300 hover:bg-gray-700'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
@@ -320,6 +345,7 @@ export function FramingModeView({
                     panOffset={panOffset}
                     selectedKeyframeIndex={selectedCropKeyframeIndex}
                     isFullscreen={isFullscreen}
+                    dimOpacity={dimOpacity}
                   />
                 ),
               ].filter(Boolean)}

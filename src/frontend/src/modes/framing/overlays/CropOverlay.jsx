@@ -15,7 +15,8 @@ export default function CropOverlay({
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   selectedKeyframeIndex = null,
-  isFullscreen = false
+  isFullscreen = false,
+  dimOpacity = 0.2
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -456,7 +457,7 @@ export default function CropOverlay({
         <rect
           width="100%"
           height="100%"
-          fill="rgba(0, 0, 0, 0.2)"
+          fill={`rgba(0, 0, 0, ${dimOpacity})`}
           mask="url(#cropMask)"
         />
       </svg>
@@ -469,7 +470,7 @@ export default function CropOverlay({
           top: `${screenCrop.y}px`,
           width: `${screenCrop.width}px`,
           height: `${screenCrop.height}px`,
-          boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.2)',
+          boxShadow: `0 0 0 9999px rgba(0, 0, 0, ${dimOpacity})`,
           touchAction: 'none'
         }}
         onMouseDown={handleCropPointerDown}
