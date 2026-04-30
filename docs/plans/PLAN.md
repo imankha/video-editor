@@ -183,13 +183,14 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
+| T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | TODO | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 | | | **Installable app + native share sheet + background export + push notifications** |
 | T441 | ↳ [PWA Install & Landing Page](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt, landing page email capture. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels — one tap to Instagram/WhatsApp/iMessage/any app. Replaces T1090. |
 | T443 | ↳ [Background Sync](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close — service worker tracks Modal job, notifies on completion. |
 | T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
-| T445 | ↳ [Landing Page Before/After Clips](tasks/pwa/T445-landing-page-before-after-clips.md) | 7 | 2 | 3.5 | TODO | [ ] | Update landing page with latest before/after clip comparisons — autoplay side-by-side raw footage vs finished reel. |
+| T445 | ↳ [Landing Page Before/After Clips](tasks/pwa/T445-landing-page-before-after-clips.md) | 7 | 2 | 3.5 | SUPERSEDED | [ ] | Absorbed into Landing Page Redesign epic (T2330) |
 | T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
 | | **[Overlay System v2](tasks/overlay-v2/EPIC.md)** | 9 | 7 | 1.3 | | | **Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits.** |
 | T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
@@ -255,8 +256,17 @@ Target audience: highly engaged soccer parents with enough technical ability to 
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
+| | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 9 | 7 | 1.3 | | | **Full rebuild: CTA above fold, before/after proof, pricing, 4 features, sample reels, mobile sticky bar** |
+| T2300 | ↳ [Visual Foundation & Design System](tasks/landing-page-redesign/T2300-visual-foundation.md) | 7 | 3 | 2.3 | TODO | [ ] | Color palette shift (navy, not purple), accent color, typography (General Sans/Sohne), background treatment |
+| T2310 | ↳ [Sticky Nav & CTA System](tasks/landing-page-redesign/T2310-sticky-nav-cta.md) | 9 | 4 | 2.3 | TODO | [ ] | Sticky nav with condensing, CTA button, mobile hamburger, mobile sticky bottom bar (5-10% conversion lift) |
+| T2320 | ↳ [Hero Section](tasks/landing-page-redesign/T2320-hero-section.md) | 10 | 4 | 2.5 | TODO | [ ] | "From Upload to IG in 5 minutes." + CTA above fold + phone mockup with real looping reel |
+| T2330 | ↳ [Before/After Section](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Side-by-side synced video loops: "Same moment. Different reel." The most important section on the page. |
+| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
+| T2350 | ↳ [Features Redesign](tasks/landing-page-redesign/T2350-features-redesign.md) | 7 | 3 | 2.3 | TODO | [ ] | Cut from 6 to 4 tiles. Each maps to a competitive gap vs Veo/Trace. Custom icons, no "AI" in headings. |
+| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
+| T2370 | ↳ [Positioning & Pricing](tasks/landing-page-redesign/T2370-positioning-pricing.md) | 8 | 4 | 2.0 | TODO | [ ] | "You already have Veo or Trace" positioning + 3-tier credit pricing table |
+| T2380 | ↳ [FAQ, Final CTA & Footer](tasks/landing-page-redesign/T2380-faq-cta-footer.md) | 5 | 2 | 2.5 | TODO | [ ] | 6-question FAQ accordion, "Make the reel" final CTA, footer with voice-as-marketing tagline |
 | T445 | [Vehicle Window Cards](tasks/T445-business-cards.md) | 6 | 2 | 3.0 | TODO | [ ] | Design + print cards to place on vehicle windows at games promoting reelballers.com with QR code. Targets parents already at the field. |
-| T1920 | [Landing Page Update](tasks/for-launch/T1920-landing-page-update.md) | 7 | 3 | 2.3 | TODO | [ ] | Add tutorial video embed and PWA install link to reelballers.com landing page. Depends on T1910 (tutorial) and T440 (PWA). |
 | T1930 | [Influencer Marketing](tasks/marketing/T1930-influencer-marketing.md) | 8 | 4 | 2.0 | TODO | [ ] | Identify top influencers that youth soccer parents follow who align with video technology use. Outreach strategy + partnership plan. |
 
 ### Epic: Post Launch (TODO)
@@ -325,5 +335,6 @@ IDs use gaps of 10 to allow insertions:
 - `T400-T430` - User Auth epic (T400=Google, T401=OTP, T405=D1, T420=sessions, T430=settings)
 - `T500-T525` - Monetization epic
 - `T2100-T2220` - Overlay System v2 epic
+- `T2300-T2380` - Landing Page Redesign epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
