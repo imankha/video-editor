@@ -100,7 +100,7 @@ export function DownloadsPanel({
 
   const handlePlay = (e, download) => {
     e.stopPropagation();
-    setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_ACTIVE);
+    setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     setPlayingVideo(download);
     close();
     if (!download.watched_at) markWatched(download.id);
