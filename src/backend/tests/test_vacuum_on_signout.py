@@ -7,11 +7,14 @@ Tests verify:
 3. _vacuum_user_dbs skips missing profiles dir gracefully
 4. _vacuum_user_dbs skips profiles without profile.sqlite
 5. _vacuum_user_dbs registers/clears _active_vacuum_conns
-6. cancel_active_vacuum interrupts an in-progress VACUUM
+6. cancel_active_vacuum interrupts an in-progress VACUUM, preserves archive flag
 7. cancel_active_vacuum is a no-op when no VACUUM is active
-8. logout endpoint fires _vacuum_user_dbs in background
+8a. logout fires VACUUM only when user archived a project during session
+8b. logout skips VACUUM when user didn't archive anything
 9. init endpoint calls cancel_active_vacuum before session init
 10. cleanup_database_bloat still has its size-gated VACUUM (unchanged)
+11. mark_user_archived tracks archive events
+12. publish_to_my_reels calls mark_user_archived after successful archive
 """
 import ast
 import sqlite3
@@ -24,6 +27,7 @@ import pytest
 
 ARCHIVE_PY = Path(__file__).resolve().parents[1] / "app" / "services" / "project_archive.py"
 AUTH_PY = Path(__file__).resolve().parents[1] / "app" / "routers" / "auth.py"
+DOWNLOADS_PY = Path(__file__).resolve().parents[1] / "app" / "routers" / "downloads.py"
 
 
 # ---------------------------------------------------------------------------
@@ -196,15 +200,21 @@ def test_vacuum_user_dbs_clears_active_conn_after_failure(tmp_path):
 
 def test_cancel_active_vacuum_interrupts(tmp_path):
     """cancel_active_vacuum should call interrupt() on the tracked connection."""
-    from app.routers.auth import cancel_active_vacuum, _active_vacuum_conns
+    from app.routers.auth import cancel_active_vacuum, _active_vacuum_conns, _users_who_archived
 
     mock_conn = MagicMock(spec=sqlite3.Connection)
     _active_vacuum_conns["user-123"] = mock_conn
+    _users_who_archived.add("user-123")
 
     cancel_active_vacuum("user-123")
 
     mock_conn.interrupt.assert_called_once()
     assert "user-123" not in _active_vacuum_conns
+    assert "user-123" in _users_who_archived, (
+        "cancel_active_vacuum must NOT clear the archive flag — "
+        "it tracks session-level archive events, not vacuum state"
+    )
+    _users_who_archived.discard("user-123")
 
 
 # ---------------------------------------------------------------------------
@@ -220,15 +230,32 @@ def test_cancel_active_vacuum_noop_when_no_vacuum():
 
 
 # ---------------------------------------------------------------------------
+# mark_user_archived tracks archive events
+# ---------------------------------------------------------------------------
+
+def test_mark_user_archived():
+    """mark_user_archived should add user to _users_who_archived set."""
+    from app.routers.auth import mark_user_archived, _users_who_archived
+
+    _users_who_archived.discard("user-mark-test")
+    mark_user_archived("user-mark-test")
+    assert "user-mark-test" in _users_who_archived
+    _users_who_archived.discard("user-mark-test")
+
+
+# ---------------------------------------------------------------------------
 # 8. logout endpoint fires _vacuum_user_dbs in background
 # ---------------------------------------------------------------------------
 
-def test_logout_fires_vacuum_in_background():
-    """POST /logout should schedule _vacuum_user_dbs via asyncio.to_thread."""
+def test_logout_fires_vacuum_when_user_archived():
+    """POST /logout should schedule VACUUM only if user archived a project during session."""
     from fastapi.testclient import TestClient
     from app.main import app
+    from app.routers.auth import _users_who_archived
 
     client = TestClient(app)
+
+    _users_who_archived.add("user-abc")
 
     with patch("app.routers.auth.validate_session") as mock_validate, \
          patch("app.routers.auth.invalidate_session"), \
@@ -242,6 +269,31 @@ def test_logout_fires_vacuum_in_background():
     assert r.status_code == 200
     assert r.json()["logged_out"] is True
     mock_vacuum.assert_called_once_with("user-abc")
+    assert "user-abc" not in _users_who_archived
+
+
+def test_logout_skips_vacuum_when_no_archive():
+    """POST /logout should NOT schedule VACUUM if user didn't archive anything."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.routers.auth import _users_who_archived
+
+    client = TestClient(app)
+
+    _users_who_archived.discard("user-abc")
+
+    with patch("app.routers.auth.validate_session") as mock_validate, \
+         patch("app.routers.auth.invalidate_session"), \
+         patch("app.routers.auth.invalidate_user_cache"), \
+         patch("app.routers.auth._vacuum_user_dbs") as mock_vacuum:
+
+        mock_validate.return_value = {"user_id": "user-abc", "email": "test@test.com"}
+
+        r = client.post("/api/auth/logout", cookies={"rb_session": "fake-session"})
+
+    assert r.status_code == 200
+    assert r.json()["logged_out"] is True
+    mock_vacuum.assert_not_called()
 
 
 def test_logout_without_session_skips_vacuum():
@@ -349,3 +401,33 @@ def test_cancel_interrupts_real_vacuum(tmp_path):
     verify_conn = sqlite3.connect(str(db_path))
     verify_conn.execute("SELECT 1")
     verify_conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 12. publish_to_my_reels calls mark_user_archived after successful archive
+# ---------------------------------------------------------------------------
+
+def test_publish_calls_mark_user_archived():
+    """publish_to_my_reels must call mark_user_archived when archive succeeds."""
+    src = DOWNLOADS_PY.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if node.name != "publish_to_my_reels":
+            continue
+
+        found = False
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name):
+                if child.func.id == "mark_user_archived":
+                    found = True
+                    break
+        assert found, (
+            "publish_to_my_reels must call mark_user_archived after a successful archive — "
+            "without this, logout VACUUM will never fire"
+        )
+        return
+
+    pytest.fail("publish_to_my_reels function not found in downloads.py")

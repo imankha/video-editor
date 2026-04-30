@@ -86,7 +86,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
-| 4.5 | Review | - | Reviewer | - |
+| 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation* |
 | 5 | Automated Testing | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
 | 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
@@ -114,7 +114,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | **Architect** | Design with DRY, patterns, code smells; requires approval | [architect.md](.claude/agents/architect.md) |
 | **Tester** | Phase 1: create failing tests. Phase 2: run tests until pass | [tester.md](.claude/agents/tester.md) |
 | **Implementor** | Execute approved design with MVC, no state duplication | [implementor.md](.claude/agents/implementor.md) |
-| **Reviewer** | Verify implementation matches approved design | [reviewer.md](.claude/agents/reviewer.md) |
+| **Reviewer** | High-scrutiny review: rules-educated, conversation with implementor | [reviewer.md](.claude/agents/reviewer.md) |
 | **Project Manager** | Roadmap, prioritization, development cycles | [project-manager.md](.claude/agents/project-manager.md) |
 | **UI Designer** | Define UI details, maintain style guide; requires approval | [ui-designer.md](.claude/agents/ui-designer.md) |
 | **Merge Reviewer** | Pre-merge audit: sync strategy, state, architecture | [merge-reviewer.md](.claude/agents/merge-reviewer.md) |

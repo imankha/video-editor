@@ -47,7 +47,11 @@ User: "Implement T{id}"
 │     5c. Cleanup + test updates                              │
 │         │                                                   │
 │         ▼                                                   │
-│  6. Spawn Reviewer ─────────────► Returns: approval/issues  │
+│  6. Spawn Reviewer (Phase 1) ───► Returns: approval/issues  │
+│     6a. If NEEDS CONVERSATION:                              │
+│         Implementor responds to MAJOR findings              │
+│         Spawn Reviewer (Phase 2) to evaluate pushback       │
+│         Resolve or escalate to user                         │
 │         │                                                   │
 │         ▼                                                   │
 │  7. Spawn Tester (Phase 2) ─────► Returns: test results     │
@@ -115,7 +119,14 @@ Which skills are relevant to each agent:
 |-------|-----------|-----------|
 | mvc-pattern | CRITICAL | Verifying structure |
 | data-always-ready | CRITICAL | Checking data guards |
-| state-management | HIGH | Verifying state approach |
+| state-management | CRITICAL | Verifying state approach |
+| gesture-based-sync | CRITICAL | Checking persistence rules |
+| type-safety | HIGH | Verifying type safety |
+
+**References** (reviewer MUST read before reviewing):
+- coding-standards.md - All implementation rules (CRITICAL)
+- code-smells.md - Fowler's refactoring catalog (CRITICAL)
+- design-patterns.md - Expected patterns (HIGH)
 
 ### Merge Reviewer
 | Skill | Relevance | Load When |
@@ -205,24 +216,95 @@ Task tool:
     Use skills: data-always-ready, mvc-pattern, state-management, type-safety
 ```
 
-### Reviewer
+### Reviewer (Phase 1: Solo Review)
 ```
-Task tool:
+Agent tool:
   subagent_type: general-purpose
   prompt: |
     You are the Reviewer agent for task T{id}: {title}.
 
-    Design doc: {content}
-    Changes made: {git diff or file list}
+    ## Your Education -- Read These Files First
+    Before reviewing ANY code, read and internalize:
+    1. .claude/references/coding-standards.md (ALL rules)
+    2. .claude/references/code-smells.md (smell catalog)
+    3. .claude/references/design-patterns.md (expected patterns)
+    4. .claude/agents/reviewer.md (your full instructions + severity levels)
 
-    Verify:
-    1. Implementation matches design
-    2. MVC pattern followed
-    3. No state duplication
-    4. No new code smells
+    ## Approved Design
+    {design doc path or content}
 
-    Return: APPROVED or NEEDS REVISION with specific issues.
+    ## Implementation Changes
+    {git diff or changed file list with paths}
+
+    ## Instructions
+    1. Read all reference files listed above
+    2. Read the approved design document
+    3. Read every changed file IN FULL (not just the diff)
+    4. Produce findings using the format in reviewer.md
+    5. Categorize each finding as BLOCKING, MAJOR, or MINOR
+    6. Return verdict: APPROVED, NEEDS REVISION, or NEEDS CONVERSATION
 ```
+
+### Reviewer (Phase 2: Evaluate Pushback)
+
+Only spawned when Phase 1 returned NEEDS CONVERSATION and the implementor
+has responded to each MAJOR finding. See `.claude/agents/reviewer.md` for
+the Conversation Round Template.
+
+```
+Agent tool:
+  subagent_type: general-purpose
+  prompt: |
+    You are the Reviewer agent, continuing your review of T{id}.
+
+    Read .claude/agents/reviewer.md for your full instructions,
+    especially the "Conversation Round Template" section.
+
+    ## Your Prior Findings (Phase 1)
+    {paste MAJOR findings from Phase 1}
+
+    ## Implementor's Responses
+    {for each MAJOR finding: ACCEPT / PUSHBACK (with justification) / PARTIAL}
+
+    ## Instructions
+    1. Re-read .claude/references/coding-standards.md
+    2. For each pushback, evaluate on technical merit
+    3. Decide: ACCEPTED, SUSTAINED, or COMPROMISE
+    4. Return final verdict: APPROVED, NEEDS REVISION, or ESCALATE TO USER
+```
+
+### Review Conversation Flow (Orchestrator Steps)
+
+```
+1. Spawn Reviewer Phase 1
+   |
+   +-- APPROVED --> proceed to Stage 5
+   |
+   +-- NEEDS REVISION (BLOCKING) --> send fixes back to implementor,
+   |                                  then re-run Phase 1
+   |
+   +-- NEEDS CONVERSATION (MAJOR, no BLOCKING) -->
+       |
+       2. Present MAJOR findings to implementor (or spawn implementor
+          subagent to respond to each finding)
+       |
+       3. Collect implementor responses (ACCEPT / PUSHBACK / PARTIAL)
+       |
+       4. Spawn Reviewer Phase 2 with findings + responses
+       |
+       +-- APPROVED --> proceed to Stage 5
+       |
+       +-- NEEDS REVISION --> implementor fixes sustained issues,
+       |                       then re-run Phase 1
+       |
+       +-- ESCALATE --> present disagreement to user for decision
+```
+
+**Key rules:**
+- Maximum 2 conversation rounds. If still unresolved after round 2, escalate.
+- BLOCKING issues skip conversation -- they go straight to NEEDS REVISION.
+- The orchestrator does NOT inject its own opinion during the conversation.
+  It relays findings and responses faithfully between reviewer and implementor.
 
 ### Tester (Phase 2)
 ```

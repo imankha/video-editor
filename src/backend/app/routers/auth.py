@@ -499,6 +499,12 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
 
 
 _active_vacuum_conns: dict[str, sqlite3.Connection] = {}
+_users_who_archived: set[str] = set()
+
+
+def mark_user_archived(user_id: str) -> None:
+    """Record that this user archived a project during their session."""
+    _users_who_archived.add(user_id)
 
 
 def cancel_active_vacuum(user_id: str) -> None:
@@ -552,7 +558,8 @@ async def logout(request: Request):
             invalidate_user_cache(user_id)
         invalidate_session(session_id)
 
-    if user_id:
+    if user_id and user_id in _users_who_archived:
+        _users_who_archived.discard(user_id)
         import asyncio
         asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
 

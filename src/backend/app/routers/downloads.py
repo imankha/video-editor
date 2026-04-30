@@ -836,7 +836,10 @@ async def publish_to_my_reels(project_id: int):
         conn.commit()
 
     archived = await asyncio.to_thread(archive_project, project_id, user_id)
-    if not archived:
+    if archived:
+        from app.routers.auth import mark_user_archived
+        mark_user_archived(user_id)
+    else:
         logger.warning(f"Failed to archive project {project_id} after publish — working data retained")
 
     return {"success": True, "final_video_id": row['id']}
