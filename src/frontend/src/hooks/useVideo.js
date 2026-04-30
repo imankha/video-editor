@@ -632,8 +632,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       useVideoStore.getState().setLoadStartTime(performance.now());
 
       // T1410: non-blob src set outside loadVideoFromStreamingUrl (e.g. Annotate
-      // mode sets store.videoUrl directly) → always direct R2 load, stop warming.
-      if (!isBlob && video.src) {
+      // mode sets store.videoUrl directly) → direct R2 load, stop warming.
+      // T2040: skip for proxy loads — loadVideoFromStreamingUrl already set
+      // FOREGROUND_PROXY, and overriding to DIRECT would kill tier-1 warming.
+      if (!isBlob && video.src && !isProxyLoadRef.current) {
         const { abortedCount } = setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
         if (abortedCount > 0) {
           console.log(`[VIDEO_LOAD] warmer_abort id=${loadIdRef.current} count=${abortedCount} trigger=loadstart`);
@@ -953,23 +955,28 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }
   }, [currentTime, getSegmentAtTime, isPlaying, clampToVisibleRange]);
 
-  // Cleanup on unmount
+  // Revoke blob URL when videoUrl changes
   useEffect(() => {
     return () => {
       if (videoUrl) {
         revokeVideoURL(videoUrl);
       }
-      // T1410: safety net — if we unmount while still in foreground-loading
-      // mode (StrictMode synthetic unmount, route change mid-load), release
-      // the warmer so it isn't stuck paused forever.
+    };
+  }, [videoUrl]);
+
+  // T1410: safety net — release warmer on true unmount (route change mid-load,
+  // StrictMode synthetic unmount). Runs once, not on videoUrl transitions — a
+  // new load immediately re-enters foreground mode so clearing here would create
+  // a gap where lower-tier warming races the new video's connection setup.
+  useEffect(() => {
+    return () => {
       clearForegroundActive();
-      // T1400: drop pending watchdog so it doesn't fire after unmount.
       if (watchdogTimerRef.current) {
         clearTimeout(watchdogTimerRef.current);
         watchdogTimerRef.current = null;
       }
     };
-  }, [videoUrl]);
+  }, []);
 
   return {
     // Refs
