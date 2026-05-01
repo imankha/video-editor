@@ -38,8 +38,6 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     isMuted,
     hasAudio,
     isLoading,
-    loadingProgress,
-    loadingElapsedSeconds,
     togglePlay,
     seek,
     seekForward,
@@ -154,6 +152,13 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     togglePlay();
   }, [togglePlay, showControls, scheduleHideControls]);
 
+  // Auto-hide controls when playing (handles mobile where no mouse move fires)
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setTimeout(() => setShowControls(false), 2000);
+    return () => clearTimeout(id);
+  }, [isPlaying]);
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -184,15 +189,8 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
         Your browser does not support the video tag.
       </video>
 
-      {/* Loading Indicator - detailed when we have progress, simple otherwise */}
-      {isLoading && (
-        <VideoLoadingOverlay
-          simple={loadingProgress === null}
-          progress={loadingProgress}
-          elapsedSeconds={loadingElapsedSeconds}
-          message="Loading video..."
-        />
-      )}
+      {/* Loading spinner — simple mode only (no grey backdrop) */}
+      {isLoading && <VideoLoadingOverlay simple />}
 
       {/* Shared Video Controls */}
       <VideoControls

@@ -539,18 +539,18 @@ export function DownloadsPanel({
         <>
           {/* Modal Backdrop */}
           <div
-            className="fixed inset-0 bg-black/80 z-[60]"
+            className="fixed inset-0 bg-black z-[60]"
             onClick={() => closeVideo()}
           />
 
           {/* Modal Content */}
-          <div className="fixed inset-4 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl">
+          <div className="fixed inset-0 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-black overflow-hidden md:rounded-xl md:bg-gray-900 md:shadow-2xl">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
-              <div className="flex items-center gap-3">
-                <Video size={20} className={REEL.accent} />
-                <div>
-                  <h3 className="text-white font-medium">{playingVideo.project_name}</h3>
+            <div className="flex items-center justify-between px-3 py-2 md:p-4 border-b border-gray-700 bg-gray-800">
+              <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                <Video size={18} className={`${REEL.accent} shrink-0`} />
+                <div className="min-w-0">
+                  <h3 className="text-white text-sm md:text-base font-medium truncate">{playingVideo.project_name}</h3>
                   {(() => {
                     const showFilename = !isUuidFilename(playingVideo.filename);
                     const projectNameLower = (playingVideo.project_name || '').toLowerCase();

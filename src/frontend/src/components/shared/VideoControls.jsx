@@ -121,14 +121,11 @@ export function VideoControls({
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
     >
-      {/* Gradient background */}
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-
       {/* Scrub bar */}
       <div
         ref={timelineRef}
         className="relative w-full cursor-pointer z-10"
-        style={{ paddingTop: IS_COARSE ? 16 : 8, paddingBottom: IS_COARSE ? 16 : 8 }}
+        style={{ paddingTop: IS_COARSE ? 20 : 8, paddingBottom: IS_COARSE ? 14 : 8 }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
         onMouseMove={handleTimelineMouseMove}
@@ -137,16 +134,13 @@ export function VideoControls({
       >
         {/* Track container */}
         <div
-          className="relative w-full transition-all duration-150"
+          className="relative w-full transition-all duration-150 bg-white/25 rounded-full"
           style={{ height: IS_COARSE ? 6 : (active ? 5 : 3) }}
         >
-          {/* Background */}
-          <div className="absolute inset-0 bg-white/25" />
-
           {/* Hover fill */}
           {active && !isDragging && (
             <div
-              className="absolute inset-y-0 left-0 bg-white/25"
+              className="absolute inset-y-0 left-0 bg-white/20 rounded-full"
               style={{ width: `${hoverPercent}%` }}
             />
           )}
@@ -183,28 +177,28 @@ export function VideoControls({
       </div>
 
       {/* Controls bar — YouTube layout: play | volume | time ... fullscreen */}
-      <div className="flex items-center justify-between px-3 pb-2.5 z-10">
+      <div className={`flex items-center justify-between px-3 z-10 ${IS_COARSE ? 'gap-2 pb-4 pt-1' : 'pb-2.5'}`} style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.9))' }}>
         {/* Left group */}
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center ${IS_COARSE ? 'gap-3' : 'gap-1'}`}>
           {/* Play / Pause */}
           <button
             onClick={onTogglePlay}
-            className="p-1.5 text-white hover:text-white/80 transition-colors"
+            className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5' : 'p-1.5'}`}
             title={isPlaying ? 'Pause (Space)' : 'Play (Space)'}
           >
             {isPlaying
-              ? <Pause size={22} fill="white" />
-              : <Play size={22} fill="white" />
+              ? <Pause size={IS_COARSE ? 26 : 22} fill="white" />
+              : <Play size={IS_COARSE ? 26 : 22} fill="white" />
             }
           </button>
 
           {/* Restart */}
           <button
             onClick={() => onSeek?.(0)}
-            className="p-1.5 text-white hover:text-white/80 transition-colors"
+            className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5' : 'p-1.5'}`}
             title="Restart (Home)"
           >
-            <RotateCcw size={20} />
+            <RotateCcw size={IS_COARSE ? 24 : 20} />
           </button>
 
           {/* Volume — icon + slider on hover, like YouTube */}
@@ -216,48 +210,50 @@ export function VideoControls({
             >
               <button
                 onClick={onToggleMute}
-                className="p-1.5 text-white hover:text-white/80 transition-colors"
+                className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5' : 'p-1.5'}`}
                 title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
               >
                 {isMuted || volume === 0
-                  ? <VolumeX size={22} />
-                  : <Volume2 size={22} />
+                  ? <VolumeX size={IS_COARSE ? 26 : 22} />
+                  : <Volume2 size={IS_COARSE ? 26 : 22} />
                 }
               </button>
-              <div
-                className="overflow-hidden transition-all duration-200"
-                style={{ width: showVolumeSlider ? 60 : 0, opacity: showVolumeSlider ? 1 : 0 }}
-              >
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeInput}
-                  className="w-[56px] h-1 bg-white/30 rounded-full appearance-none cursor-pointer
-                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
-                    [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
-                />
-              </div>
+              {!IS_COARSE && (
+                <div
+                  className="overflow-hidden transition-all duration-200"
+                  style={{ width: showVolumeSlider ? 60 : 0, opacity: showVolumeSlider ? 1 : 0 }}
+                >
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={isMuted ? 0 : volume}
+                    onChange={handleVolumeInput}
+                    className="w-[56px] h-1 bg-white/30 rounded-full appearance-none cursor-pointer
+                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3
+                      [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full"
+                  />
+                </div>
+              )}
             </div>
           )}
 
           {/* Time */}
-          <span className="text-white text-sm font-mono ml-2 select-none">
+          <span className={`text-white font-mono select-none ${IS_COARSE ? 'text-xs ml-1' : 'text-sm ml-2'}`}>
             {formatTimeCompact(currentTime)}<span className="text-white/60"> / {formatTimeCompact(duration)}</span>
           </span>
         </div>
 
         {/* Right group */}
-        <div className="flex items-center gap-1">
+        <div className={`flex items-center ${IS_COARSE ? 'gap-3' : 'gap-1'}`}>
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}
-              className="p-1.5 text-white hover:text-white/80 transition-colors"
+              className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5' : 'p-1.5'}`}
               title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
             >
-              {isFullscreen ? <Minimize size={22} /> : <Maximize size={22} />}
+              {isFullscreen ? <Minimize size={IS_COARSE ? 26 : 22} /> : <Maximize size={IS_COARSE ? 26 : 22} />}
             </button>
           )}
         </div>

@@ -111,12 +111,12 @@ function Overlay({ children, onClose, title }) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/80 z-[60]"
+        className="fixed inset-0 bg-black z-[60]"
         onClick={onClose}
       />
-      <div className="fixed inset-4 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-gray-900 rounded-xl overflow-hidden shadow-2xl">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
-          <h3 className="text-white font-medium truncate">
+      <div className="fixed inset-0 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-black overflow-hidden md:rounded-xl md:bg-gray-900 md:shadow-2xl">
+        <div className="flex items-center justify-between px-3 py-2 md:p-4 border-b border-gray-700 bg-gray-800">
+          <h3 className="text-white text-sm md:text-base font-medium truncate">
             {title || 'Shared Video'}
           </h3>
           <button
