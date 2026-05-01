@@ -1,82 +1,90 @@
 # T1800: User Picker Component
 
 **Status:** TODO
-**Impact:** 7
-**Complexity:** 4
+**Impact:** 6
+**Complexity:** 3
 **Created:** 2026-04-25
-**Updated:** 2026-04-25
+**Updated:** 2026-05-01
 
 ## Problem
 
-Multiple features need a shared UI for entering recipient emails: player tagging (T1820), game sharing (T1850), and video sharing (T1770). Each needs email input, autocomplete from prior shares, and account status feedback.
+The ShareModal currently uses a plain text input for emails. Users must type full email addresses with no autocomplete or discovery. For repeat sharing (teammates, parents on the same team), this is tedious.
 
 ## Solution
 
-Build a reusable `UserPicker` component and the backend infrastructure it needs: email account lookup and shared contacts autocomplete.
+Build a `UserPicker` component that upgrades the ShareModal's email input with chip-style tags and autocomplete from prior shares.
 
 ## Context
 
-### Relevant Files (REQUIRED)
+### What Already Exists (from T1750/T1770)
+
+- **ShareModal** lives at `src/frontend/src/components/ShareModal.jsx` (not in Gallery/)
+- ShareModal props: `{ videoId, videoName, onClose }`
+- ShareModal already parses comma/semicolon-separated emails, validates with regex, and shows yellow "(invite)" for non-existing users via `is_existing_user` from `ShareCreateResponse`
+- Backend `POST /api/gallery/{video_id}/share` already returns `is_existing_user: bool` per recipient (looked up from auth.sqlite at share time)
+- Backend `GET /api/gallery/{video_id}/shares` returns existing shares with `recipient_email`
+- Email lookup infrastructure: `get_user_by_email()` exists in `app/services/auth_db.py`
+- No `shared_contacts` table exists yet — autocomplete source needs to be created
+- Sharing DB is global (`sharing.sqlite`), not per-profile — can query all prior recipients for a user
+
+### Relevant Files
 
 **Frontend:**
-- New: `src/frontend/src/components/shared/UserPicker.jsx` — Reusable component
-- `src/frontend/src/components/Gallery/ShareModal.jsx` — Will consume UserPicker (T1770)
+- Modify: `src/frontend/src/components/ShareModal.jsx` — Replace plain text input with UserPicker
+- New: `src/frontend/src/components/shared/UserPicker.jsx` — Reusable chip input with autocomplete
 
 **Backend:**
-- `src/backend/app/routers/auth.py` — Add email lookup endpoint
-- `src/backend/app/database.py` — Add `shared_contacts` table to profile DB schema
-- `src/backend/app/storage.py` or new `src/backend/app/routers/sharing.py` — Contacts CRUD
+- New endpoint: `GET /api/gallery/contacts` — Returns prior share recipients for autocomplete (queries sharing.sqlite for distinct recipient_emails by sharer_user_id, ordered by frequency)
+- `src/backend/app/routers/shares.py` — Add contacts endpoint to `gallery_shares_router`
+- `src/backend/app/services/sharing_db.py` — Add `list_contacts_for_user(sharer_user_id)` query
 
 ### Related Tasks
-- Blocks: T1820, T1840, T1850 (all use UserPicker)
-- Reusable by: T1770 (Gallery Share UI in Shareable Video Links epic)
-- Depends on: T1610 (athlete profiles — for meaningful athlete identity display)
+- Enhances: T1770 (upgrades ShareModal input)
+- Depends on: T1750 (sharing.sqlite must exist)
 
 ### Technical Notes
 
-**UserPicker component props:**
+**Autocomplete source — query sharing.sqlite directly (no new table needed):**
+```sql
+SELECT recipient_email, COUNT(*) as times_shared, MAX(shared_at) as last_shared
+FROM shared_videos
+WHERE sharer_user_id = ? AND revoked_at IS NULL
+GROUP BY recipient_email
+ORDER BY times_shared DESC, last_shared DESC
+LIMIT 20
+```
+This avoids a `shared_contacts` table — the sharing.sqlite already has all the data. Keep it simple.
+
+**UserPicker component:**
 ```jsx
 <UserPicker
-  selectedEmails={[]}           // Controlled list of selected emails
-  onChange={(emails) => ...}    // Callback when list changes
-  autoTagSelf={true}            // Auto-include current user's athlete
-  multiple={true}               // Allow multiple emails
+  emails={['alice@example.com']}   // Controlled list
+  onChange={(emails) => ...}        // Callback
+  contacts={[]}                     // Autocomplete suggestions (from API)
+  placeholder="Enter emails..."
 />
 ```
 
-**Each email entry shows:**
-- Email address (as chip/tag)
-- Green checkmark if account found in system
-- Yellow warning icon + "No account" if not found
-- Athlete name (if account found, from their profile — but we only know email, so backend returns display name from auth)
+**Each chip shows:**
+- Email text with × remove button
+- Account status indicator is shown post-submit (already exists in ShareModal success state via `is_existing_user`)
 
-**Autocomplete source: `shared_contacts` table (per-profile DB):**
-```sql
-CREATE TABLE shared_contacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL UNIQUE,
-    display_name TEXT,              -- Cached from lookup at share time
-    last_used_at TEXT NOT NULL,
-    times_used INTEGER DEFAULT 1
-);
-```
-Sorted by `times_used DESC, last_used_at DESC` for relevance.
+**Autocomplete dropdown:**
+- Appears on focus if contacts exist, filtered by typed prefix
+- Shows email + share count ("shared 3 times")
+- Keyboard navigable (arrow keys + Enter to select)
 
-**Backend lookup endpoint:**
-- `GET /api/sharing/lookup?email=<email>` — Returns `{found: bool, display_name: str|null}`
-- Queries `auth.sqlite` for matching email, returns profile display name if found
-- Debounced from frontend (300ms) to avoid hammering on every keystroke
+**No `autoTagSelf` needed** — removed from scope, not relevant for video sharing
 
 ## Implementation
 
 ### Steps
-1. [ ] Backend: Add `shared_contacts` table to profile DB schema + migration
-2. [ ] Backend: CRUD for shared contacts (upsert on share, list for autocomplete)
-3. [ ] Backend: `GET /api/sharing/lookup?email=` endpoint (queries auth.sqlite)
-4. [ ] Frontend: UserPicker component — multi-email chip input with autocomplete dropdown
-5. [ ] Frontend: Account status indicators (green check / yellow warning) via lookup endpoint
-6. [ ] Frontend: Debounced lookup as user types
-7. [ ] Tests: Backend tests for lookup + contacts endpoints
+1. [ ] Backend: Add `list_contacts_for_user()` to sharing_db.py (query shown above)
+2. [ ] Backend: Add `GET /api/gallery/contacts` endpoint to shares.py
+3. [ ] Frontend: Build UserPicker component — chip input with autocomplete dropdown
+4. [ ] Frontend: Replace ShareModal's plain text input with UserPicker
+5. [ ] Frontend: Fetch contacts on ShareModal mount, pass to UserPicker
+6. [ ] Backend tests for contacts endpoint
 
 ### Progress Log
 
@@ -84,10 +92,9 @@ Sorted by `times_used DESC, last_used_at DESC` for relevance.
 
 ## Acceptance Criteria
 
-- [ ] UserPicker renders multi-email chip/tag input
-- [ ] Typing triggers autocomplete from shared_contacts (debounced)
-- [ ] Each email shows green check (found) or yellow warning (not found)
-- [ ] Can add/remove emails
-- [ ] `autoTagSelf` pre-populates current user's email
-- [ ] Reusable across multiple parent components
-- [ ] Backend lookup returns account status without exposing sensitive data
+- [ ] UserPicker renders email chips (add via Enter/comma, remove via × or Backspace)
+- [ ] Autocomplete dropdown shows prior share recipients on focus/type
+- [ ] Selecting from dropdown adds chip
+- [ ] Replaces existing plain text input in ShareModal
+- [ ] Backend contacts endpoint returns prior recipients sorted by frequency
+- [ ] Keyboard navigable (arrow keys, Enter, Escape)

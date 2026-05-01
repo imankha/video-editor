@@ -217,6 +217,7 @@ Scale, performance, and reliability — must be solid before feature work.
 | | **[Session Scaling Epic](tasks/session-scaling/EPIC.md)** | 8 | 5 | 1.6 | | | **Session pinning + write-back R2 sync + data loss recovery. Makes per-user SQLite correct and fast at multi-machine scale.** |
 | T1190 | ↳ [Session & Machine Pinning](tasks/session-scaling/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry, single active session enforcement (absorbs T420) |
 | T2250 | ↳ [Write-Back R2 Sync](tasks/session-scaling/T2250-write-back-r2-sync.md) | 8 | 5 | 1.6 | TODO | [ ] | Move R2 sync from blocking-per-gesture to periodic background (~3 min). Sync on sign-out, export, session invalidation. Writes respond in <5ms instead of ~200ms. |
+| T40 | ↳ [Single Active Session Handoff](tasks/session-scaling/T40-single-active-session-handoff.md) | 8 | 5 | 1.6 | TODO | [ ] | Auto-signout old device on new login, sync R2 before 401, retry on failure, "signed in elsewhere" UX. Orchestrates device handoff end-to-end. |
 | T2260 | ↳ [Data Loss Detection & Recovery](tasks/session-scaling/T2260-data-loss-detection-recovery.md) | 7 | 4 | 1.8 | TODO | [ ] | Detect version gaps on reconnect after crash. Auto-grant goodwill credits, notify user with clear explanation. |
 | T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
@@ -286,7 +287,6 @@ Improvements after real user traffic.
 | T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | TODO | 1.8 | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
 | T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | TODO | 2.0 | [ ] | "Share with Team" on game cards, game materialization on claim |
 | T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | TODO | 2.3 | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
-| T40 | [1 User 2 Tabs](tasks/T40-stale-session-detection.md) | TODO | 1.3 | [ ] | If two tabs edit the same data, second tab's save overwrites the first; detect and warn |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 

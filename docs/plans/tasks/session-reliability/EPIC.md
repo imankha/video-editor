@@ -12,7 +12,7 @@ Ensure user sessions survive machine restarts and deploys, and that requests con
 | # | ID | Task | Status |
 |---|-----|------|--------|
 | 1 | T1195 | [Session Durability on Deploy](T1195-session-durability-on-deploy.md) | TODO |
-| 2 | T1190 | [Session & Machine Pinning](../for-launch/T1190-session-machine-pinning.md) | TODO |
+| 2 | T1190 | [Session & Machine Pinning](../session-scaling/T1190-session-machine-pinning.md) | TODO |
 
 ## Sequencing
 
