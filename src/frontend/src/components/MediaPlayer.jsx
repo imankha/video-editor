@@ -171,7 +171,8 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full bg-black flex items-center justify-center"
+      className="relative w-full h-full bg-black flex items-center justify-center select-none"
+      style={{ WebkitTapHighlightColor: 'transparent' }}
       onClick={handleContainerClick}
       onTouchStart={() => { isTouchRef.current = true; }}
       onMouseMove={handleMouseMove}

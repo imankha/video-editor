@@ -31,6 +31,7 @@ export function VideoControls({
   const timelineRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragPercent, setDragPercent] = useState(0);
+  const dragPercentRef = useRef(0);
   const [isHovering, setIsHovering] = useState(false);
   const [hoverPercent, setHoverPercent] = useState(0);
   const [showVolumeSlider, setShowVolumeSlider] = useState(false);
@@ -69,30 +70,40 @@ export function VideoControls({
     const percent = getPercentFromEvent(e);
     setIsDragging(true);
     setDragPercent(percent);
+    dragPercentRef.current = percent;
     seekToPercent(percent);
   }, [getPercentFromEvent, seekToPercent]);
 
   useEffect(() => {
     if (!isDragging) return;
-    const handleGlobalMove = (e) => {
-      if (e.touches) e.preventDefault();
+    const handleMouseMove = (e) => {
       const percent = getPercentFromEvent(e);
       setDragPercent(percent);
       seekToPercent(percent);
       setHoverPercent(percent);
     };
-    const handleGlobalUp = () => setIsDragging(false);
-    window.addEventListener('mousemove', handleGlobalMove);
-    window.addEventListener('mouseup', handleGlobalUp);
-    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
-    window.addEventListener('touchend', handleGlobalUp);
-    window.addEventListener('touchcancel', handleGlobalUp);
+    const handleTouchMove = (e) => {
+      e.preventDefault();
+      const percent = getPercentFromEvent(e);
+      setDragPercent(percent);
+      dragPercentRef.current = percent;
+    };
+    const handleMouseUp = () => setIsDragging(false);
+    const handleTouchEnd = () => {
+      seekToPercent(dragPercentRef.current);
+      setIsDragging(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+    window.addEventListener('touchcancel', handleTouchEnd);
     return () => {
-      window.removeEventListener('mousemove', handleGlobalMove);
-      window.removeEventListener('mouseup', handleGlobalUp);
-      window.removeEventListener('touchmove', handleGlobalMove);
-      window.removeEventListener('touchend', handleGlobalUp);
-      window.removeEventListener('touchcancel', handleGlobalUp);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [isDragging, getPercentFromEvent, seekToPercent]);
 
@@ -118,6 +129,7 @@ export function VideoControls({
       className={`absolute inset-x-0 bottom-0 flex flex-col transition-opacity duration-300 ${
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
+      style={{ WebkitTapHighlightColor: 'transparent' }}
       onClick={(e) => e.stopPropagation()}
       onTouchStart={(e) => e.stopPropagation()}
     >
