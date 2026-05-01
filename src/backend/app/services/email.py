@@ -212,7 +212,7 @@ async def send_share_email(
     share_url = _get_share_url(share_token)
 
     html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
       <h2 style="color: #ffffff; margin-bottom: 8px;">You've been sent a video</h2>
       <p style="color: #d1d5db; font-size: 15px; margin-bottom: 4px;">
         <strong style="color: #ffffff;">{_html_escape(sharer_email)}</strong> shared a video with you:
@@ -225,7 +225,7 @@ async def send_share_email(
         Watch Video
       </a>
       <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="color: #6b7280; font-size: 12px;">
+      <p style="color: #9ca3af; font-size: 12px;">
         Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
       </p>
     </div>

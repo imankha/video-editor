@@ -144,7 +144,10 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT filename, name, duration FROM final_videos WHERE id = ?",
+            """SELECT fv.filename, COALESCE(fv.name, p.name) as name, fv.duration
+               FROM final_videos fv
+               LEFT JOIN projects p ON fv.project_id = p.id
+               WHERE fv.id = ?""",
             (video_id,),
         )
         video = cursor.fetchone()
@@ -178,10 +181,15 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
     is_self_share = not body.recipient_emails and body.is_public
-    if not is_self_share:
+    if is_self_share:
+        logger.info("[Share] Public self-share -- skipping email")
+    else:
         from ..services.email import send_share_email
         for s in shares:
-            if s["recipient_email"].lower() != sharer_email.lower():
+            if s["recipient_email"].lower() == sharer_email.lower():
+                logger.info(f"[Share] Skipping email to self ({sharer_email})")
+            else:
+                logger.info(f"[Share] Sending email to {s['recipient_email']}")
                 asyncio.create_task(send_share_email(
                     recipient_email=s["recipient_email"],
                     sharer_email=sharer_email,
