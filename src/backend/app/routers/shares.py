@@ -128,9 +128,6 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
-    if not body.recipient_emails:
-        raise HTTPException(400, "At least one recipient email is required")
-
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -141,8 +138,15 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         if not video:
             raise HTTPException(404, "Video not found")
 
+    recipient_emails = body.recipient_emails
+    if not recipient_emails:
+        if not body.is_public:
+            raise HTTPException(400, "At least one recipient email is required")
+        sharer = get_user_by_id(user_id)
+        recipient_emails = [sharer["email"] if sharer else user_id]
+
     existing_emails: set[str] = set()
-    for email in body.recipient_emails:
+    for email in recipient_emails:
         user = get_user_by_email(email.lower().strip())
         if user:
             existing_emails.add(email.lower().strip())
@@ -154,7 +158,7 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         video_filename=video["filename"],
         video_name=video["name"],
         video_duration=video["duration"],
-        recipient_emails=body.recipient_emails,
+        recipient_emails=recipient_emails,
         is_public=body.is_public,
     )
 

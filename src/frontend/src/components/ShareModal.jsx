@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2 } from 'lucide-react';
+import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 
@@ -21,6 +21,9 @@ export function ShareModal({ videoId, videoName, onClose }) {
   const [existingShares, setExistingShares] = useState(null);
   const [loadingShares, setLoadingShares] = useState(true);
   const [copiedToken, setCopiedToken] = useState(null);
+  const [showValidation, setShowValidation] = useState(false);
+  const [publicLink, setPublicLink] = useState(null);
+  const [creatingPublicLink, setCreatingPublicLink] = useState(false);
 
   const fetchExistingShares = useCallback(async () => {
     try {
@@ -42,6 +45,15 @@ export function ShareModal({ videoId, videoName, onClose }) {
   }, [fetchExistingShares]);
 
   useEffect(() => {
+    if (!existingShares) return;
+    const activePublic = existingShares.find(s => s.is_public && !s.revoked_at);
+    if (activePublic) {
+      setPublicLink(`${window.location.origin}/shared/${activePublic.share_token}`);
+      setIsPublic(true);
+    }
+  }, [existingShares]);
+
+  useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') onClose();
     };
@@ -53,11 +65,43 @@ export function ShareModal({ videoId, videoName, onClose }) {
     if (e.target === e.currentTarget) onClose();
   }, [onClose]);
 
+  const handleTogglePublic = async () => {
+    if (isPublic) {
+      setIsPublic(false);
+      return;
+    }
+    setIsPublic(true);
+    if (publicLink) return;
+    setCreatingPublicLink(true);
+    try {
+      const resp = await fetch(`${API_BASE}/api/gallery/${videoId}/share`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient_emails: [], is_public: true }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.shares.length > 0) {
+          setPublicLink(`${window.location.origin}/shared/${data.shares[0].share_token}`);
+        }
+        fetchExistingShares();
+      }
+    } catch {
+      // Non-critical
+    } finally {
+      setCreatingPublicLink(false);
+    }
+  };
+
   const emails = parseEmails(emailInput);
   const invalidEmails = emails.filter(e => !EMAIL_REGEX.test(e));
+  const hasInvalid = showValidation && invalidEmails.length > 0;
   const canSubmit = emails.length > 0 && invalidEmails.length === 0 && !isSubmitting;
 
   const handleSubmit = async () => {
+    setShowValidation(true);
+    if (invalidEmails.length > 0) return;
     setError(null);
     setIsSubmitting(true);
     try {
@@ -120,7 +164,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdropClick}
+      onMouseDown={handleBackdropClick}
     >
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
         {/* Header */}
@@ -146,40 +190,76 @@ export function ShareModal({ videoId, videoName, onClose }) {
             <label className="block text-sm text-gray-400 mb-1">
               Add people
             </label>
-            <input
-              type="text"
-              value={emailInput}
-              onChange={(e) => { setEmailInput(e.target.value); setError(null); setSuccessShares(null); }}
-              placeholder="Enter emails, separated by commas"
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 text-sm"
-              onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) handleSubmit(); }}
-              disabled={isSubmitting}
-            />
-            {invalidEmails.length > 0 && (
-              <p className="text-red-400 text-xs mt-1">
-                Invalid: {invalidEmails.join(', ')}
-              </p>
-            )}
+            <div className="relative">
+              <input
+                type="text"
+                value={emailInput}
+                onChange={(e) => { setEmailInput(e.target.value); setShowValidation(false); setError(null); setSuccessShares(null); }}
+                placeholder="Enter emails, separated by commas"
+                className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none text-sm ${
+                  hasInvalid ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-cyan-500'
+                }`}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+                disabled={isSubmitting}
+              />
+              {hasInvalid && (
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">
+                  Invalid email
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Visibility toggle */}
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setIsPublic(!isPublic)}
-              className="flex items-center gap-2 text-sm text-gray-300 hover:text-white transition-colors"
-            >
-              {isPublic ? (
-                <>
+          <div className="space-y-2">
+            <label className="flex items-center justify-between cursor-pointer group">
+              <div className="flex items-center gap-2 text-sm text-gray-300 group-hover:text-white transition-colors">
+                {isPublic ? (
                   <Globe size={16} className="text-green-400" />
-                  <span>Anyone with the link</span>
-                </>
-              ) : (
-                <>
+                ) : (
                   <Lock size={16} className="text-gray-400" />
-                  <span>Restricted to recipients</span>
-                </>
-              )}
-            </button>
+                )}
+                <span>{isPublic ? 'Anyone with the link' : 'Restricted to recipients'}</span>
+              </div>
+              <div
+                role="switch"
+                aria-checked={isPublic}
+                onClick={handleTogglePublic}
+                className={`relative w-9 h-5 rounded-full transition-colors ${isPublic ? 'bg-green-500' : 'bg-gray-600'}`}
+              >
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${isPublic ? 'translate-x-4' : ''}`} />
+              </div>
+            </label>
+            {isPublic && (
+              <div className="flex items-center gap-2 bg-gray-700/50 rounded-lg px-3 py-2">
+                {creatingPublicLink ? (
+                  <Loader size={14} className="text-gray-400 animate-spin" />
+                ) : publicLink ? (
+                  <>
+                    <input
+                      type="text"
+                      readOnly
+                      value={publicLink}
+                      className="flex-1 bg-transparent text-sm text-gray-300 outline-none truncate"
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <button
+                      onClick={() => handleCopyLink(publicLink.split('/shared/')[1])}
+                      className="text-gray-400 hover:text-white transition-colors p-1 flex-shrink-0"
+                      title="Copy link"
+                    >
+                      {copiedToken === publicLink.split('/shared/')[1] ? (
+                        <Check size={14} className="text-green-400" />
+                      ) : (
+                        <Copy size={14} />
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-sm text-gray-500">Creating link...</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Error */}
@@ -277,7 +357,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
             <Button
               variant="primary"
               onClick={handleSubmit}
-              disabled={!canSubmit}
+              disabled={emails.length === 0 || isSubmitting}
             >
               {isSubmitting ? (
                 <span className="flex items-center gap-2">
