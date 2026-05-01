@@ -183,7 +183,7 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | TESTING | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
+| T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | DONE | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
 | | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 | | | **Installable app + native share sheet + background export + push notifications** |
 | T441 | ↳ [PWA Install & Landing Page](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt, landing page email capture. Foundation for all PWA features. |

@@ -37,8 +37,6 @@ AUTH_DB = USER_DATA / "auth.sqlite"
 # Format: (table_name, column_definition)
 # PENDING_MIGRATIONS_START
 MIGRATIONS = [
-    ("final_videos", "watched_at TIMESTAMP"),
-    ("final_videos", "published_at TIMESTAMP"),
 ]
 # PENDING_MIGRATIONS_END
 
