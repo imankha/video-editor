@@ -55,6 +55,7 @@ class ShareCreateRecipient(BaseModel):
     share_token: str
     recipient_email: str
     is_existing_user: bool
+    email_sent: Optional[bool] = None
 
 
 class ShareCreateResponse(BaseModel):
@@ -181,21 +182,23 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
     is_self_share = not body.recipient_emails and body.is_public
-    if is_self_share:
-        logger.info("[Share] Public self-share -- skipping email")
-    else:
+
+    email_results = {}
+    if not is_self_share:
         from ..services.email import send_share_email
+        tasks = {}
         for s in shares:
             if s["recipient_email"].lower() == sharer_email.lower():
-                logger.info(f"[Share] Skipping email to self ({sharer_email})")
-            else:
-                logger.info(f"[Share] Sending email to {s['recipient_email']}")
-                asyncio.create_task(send_share_email(
-                    recipient_email=s["recipient_email"],
-                    sharer_email=sharer_email,
-                    share_token=s["share_token"],
-                    video_name=video["name"],
-                ))
+                continue
+            tasks[s["recipient_email"]] = send_share_email(
+                recipient_email=s["recipient_email"],
+                sharer_email=sharer_email,
+                share_token=s["share_token"],
+                video_name=video["name"],
+            )
+        if tasks:
+            results = await asyncio.gather(*tasks.values())
+            email_results = dict(zip(tasks.keys(), results))
 
     return ShareCreateResponse(
         shares=[
@@ -203,6 +206,7 @@ async def create_share(video_id: int, body: ShareCreateRequest):
                 share_token=s["share_token"],
                 recipient_email=s["recipient_email"],
                 is_existing_user=s["recipient_email"] in existing_emails,
+                email_sent=email_results.get(s["recipient_email"]),
             )
             for s in shares
         ]

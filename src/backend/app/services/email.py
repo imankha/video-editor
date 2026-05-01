@@ -207,7 +207,7 @@ async def send_share_email(
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
         logger.warning("[Email] RESEND_API_KEY not configured, skipping share email")
-        return
+        return False
 
     share_url = _get_share_url(share_token)
 
@@ -247,10 +247,12 @@ async def send_share_email(
         resp = await retry_async_call(_send, operation="resend_share", **TIER_1)
         if resp.status_code not in (200, 201):
             logger.error(f"[Email] Share email failed: {resp.status_code} {resp.text}")
-        else:
-            logger.info(f"[Email] Share email sent to {recipient_email}")
+            return False
+        logger.info(f"[Email] Share email sent to {recipient_email}")
+        return True
     except Exception as e:
         logger.error(f"[Email] Share email to {recipient_email} failed: {e}")
+        return False
 
 
 def _html_escape(s: str) -> str:
