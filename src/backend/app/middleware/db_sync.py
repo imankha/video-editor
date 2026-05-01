@@ -238,6 +238,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/health',
         '/api/auth',
         '/api/quests/achievements',
+        '/api/shared/',
         '/static',
     )
 
@@ -248,6 +249,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/health',              # Health check
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
         '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
+        '/api/shared/',             # T1750: public share links work without auth
         '/docs',                    # API docs
         '/redoc',                   # API docs
         '/openapi.json',            # OpenAPI spec
