@@ -184,6 +184,76 @@ async def send_problem_report_email(
     logger.info(f"[Email] Problem report sent to {to_emails} from {reporter_email or 'anonymous'}")
 
 
+DOMAIN_MAP = {
+    "production": "reelballers.com",
+    "staging": "staging.reelballers.com",
+    "dev": "localhost:5173",
+}
+
+
+def _get_share_url(share_token: str) -> str:
+    from app.storage import APP_ENV
+    domain = DOMAIN_MAP.get(APP_ENV, "localhost:5173")
+    scheme = "http" if "localhost" in domain else "https"
+    return f"{scheme}://{domain}/shared/{share_token}"
+
+
+async def send_share_email(
+    recipient_email: str,
+    sharer_email: str,
+    share_token: str,
+    video_name: str,
+) -> None:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning("[Email] RESEND_API_KEY not configured, skipping share email")
+        return
+
+    share_url = _get_share_url(share_token)
+
+    html_body = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px;">
+      <h2 style="color: #ffffff; margin-bottom: 8px;">You've been sent a video</h2>
+      <p style="color: #d1d5db; font-size: 15px; margin-bottom: 4px;">
+        <strong style="color: #ffffff;">{_html_escape(sharer_email)}</strong> shared a video with you:
+      </p>
+      <p style="color: #e5e7eb; font-size: 18px; font-weight: 600; margin: 16px 0;">
+        {_html_escape(video_name or "Untitled")}
+      </p>
+      <a href="{_html_escape(share_url)}"
+         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+        Watch Video
+      </a>
+      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
+      <p style="color: #6b7280; font-size: 12px;">
+        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
+      </p>
+    </div>
+    """
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": FROM_ADDRESS,
+                        "to": [recipient_email],
+                        "subject": f"{sharer_email} shared a video with you on Reel Ballers",
+                        "html": html_body,
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_share", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Share email failed: {resp.status_code} {resp.text}")
+        else:
+            logger.info(f"[Email] Share email sent to {recipient_email}")
+    except Exception as e:
+        logger.error(f"[Email] Share email to {recipient_email} failed: {e}")
+
+
 def _html_escape(s: str) -> str:
     """Minimal HTML escape for email content."""
     return (s

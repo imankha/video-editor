@@ -11,6 +11,7 @@ shared_router (/api/shared):
   - DELETE /{share_token}    -- revoke share (authenticated sharer)
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -173,6 +174,20 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         recipient_emails=recipient_emails,
         is_public=body.is_public,
     )
+
+    sharer = get_user_by_id(user_id)
+    sharer_email = sharer["email"] if sharer else user_id
+    is_self_share = not body.recipient_emails and body.is_public
+    if not is_self_share:
+        from ..services.email import send_share_email
+        for s in shares:
+            if s["recipient_email"].lower() != sharer_email.lower():
+                asyncio.create_task(send_share_email(
+                    recipient_email=s["recipient_email"],
+                    sharer_email=sharer_email,
+                    share_token=s["share_token"],
+                    video_name=video["name"],
+                ))
 
     return ShareCreateResponse(
         shares=[

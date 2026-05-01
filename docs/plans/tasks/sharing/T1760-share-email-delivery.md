@@ -1,6 +1,6 @@
 # T1760: Share Email Delivery
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-04-25
