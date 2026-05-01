@@ -1,6 +1,6 @@
 # T1770: Gallery Share UI
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-04-25

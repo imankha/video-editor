@@ -111,9 +111,9 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1940 | [Remove Redundant Progress Bars](tasks/for-alpha/T1940-remove-redundant-progress-bars.md) | 6 | 2 | 3.0 | DONE | [ ] | Upload progress shown in 3 places. Remove from annotate, framing, overlay main UIs. Keep in toasts and on project cards only. |
 | T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | 7 | 3 | 2.3 | DONE | [x] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
 | | **[Core Sharing Epic](tasks/sharing/EPIC.md)** | 8 | 4 | 1.9 | | | **End-to-end share loop: create share, send link, recipient watches** |
-| T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TODO | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
-| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
-| T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TODO | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
+| T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TESTING | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
+| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TESTING | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
+| T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TESTING | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
 | | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications, watch tracking — polish on core sharing** |
 | T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TODO | [ ] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
 | T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | TODO | [ ] | Resend integration for share emails (reused by player tagging); fire-and-forget |
@@ -125,6 +125,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
 | T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
 | T1630 | ↳ [Sport-Driven Tag Selection](tasks/athlete-profile/T1630-sport-driven-tag-selection.md) | 6 | 4 | 1.5 | TODO | [ ] | Annotation UI loads tags based on active profile's sport instead of hardcoded soccer tags |
+| T1960 | [Migrate Global SQLite to Fly Postgres](tasks/for-launch/T1960-migrate-auth-to-fly-postgres.md) | 8 | 6 | 1.3 | TODO | [ ] | Move auth.sqlite + sharing.sqlite to Fly Postgres (~$2-4/mo). Eliminates restart fragility, concurrent write contention, and O(users) R2 syncs. Per-user SQLite+R2 stays (correct with session pinning). Gates alpha exit. |
 | T1740 | [Privacy & Regulatory Compliance](tasks/for-launch/T1740-privacy-regulatory-compliance.md) | 10 | 6 | 1.7 | TODO | [ ] | Privacy policy, ToS, COPPA/CCPA/CalOPPA compliance, age verification, consumer rights (data export/deletion), vendor DPAs, incident response plan. No biometric processing — BIPA/CUBI not applicable. Must ship before launch. |
 | T1040 | [Force Login on Add Game](tasks/for-alpha/T1040-force-login-add-game.md) | 7 | 2 | 3.5 | DONE | [ ] | Guest clicks "Add Game" -> auth gate appears first; ensures persistent identity before investing effort |
 | T1030 | [Quest UI Relocation](tasks/for-alpha/T1030-quest-ui-relocation.md) | 6 | 3 | 2.0 | DONE | [ ] | Move quest panel out of floating overlay into dedicated area; currently covers controls user needs (e.g., playback button for Q1S3) |
@@ -213,10 +214,12 @@ Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| T1190 | [Session & Machine Pinning](tasks/for-launch/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry (absorbs T420) |
+| | **[Session Scaling Epic](tasks/session-scaling/EPIC.md)** | 8 | 5 | 1.6 | | | **Session pinning + write-back R2 sync + data loss recovery. Makes per-user SQLite correct and fast at multi-machine scale.** |
+| T1190 | ↳ [Session & Machine Pinning](tasks/session-scaling/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry, single active session enforcement (absorbs T420) |
+| T2250 | ↳ [Write-Back R2 Sync](tasks/session-scaling/T2250-write-back-r2-sync.md) | 8 | 5 | 1.6 | TODO | [ ] | Move R2 sync from blocking-per-gesture to periodic background (~3 min). Sync on sign-out, export, session invalidation. Writes respond in <5ms instead of ~200ms. |
+| T2260 | ↳ [Data Loss Detection & Recovery](tasks/session-scaling/T2260-data-loss-detection-recovery.md) | 7 | 4 | 1.8 | TODO | [ ] | Detect version gaps on reconnect after crash. Auto-grant goodwill credits, notify user with clear explanation. |
 | T1700 | [Harden Analytics](tasks/for-launch/T1700-harden-analytics.md) | 6 | 4 | 1.5 | TODO | [ ] | Audit and harden analytics pipeline: ensure events are reliably captured, stored, and queryable; add missing instrumentation for key user flows |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
-| T1960 | [Migrate Auth to Fly Postgres](tasks/for-launch/T1960-migrate-auth-to-fly-postgres.md) | 8 | 6 | 1.3 | TODO | [ ] | Move auth.sqlite (users, sessions, otp_codes, admin) to Fly Postgres. Eliminates restart fragility, concurrent write contention, and O(users) R2 syncs. Makes T1195 unnecessary. |
 | T1210 | [Clip-Scoped Video Loading](tasks/for-launch/T1210-clip-scoped-video-loading.md) | 7 | 4 | 1.8 | DONE | [ ] | Framing loads full 90-min video; preload on project creation, only buffer clip time ranges |
 | T1260 | [Video Seek Optimization](tasks/for-launch/T1260-video-seek-optimization.md) | 8 | 5 | 1.6 | ICE | [ ] | Epic on ice 2026-04-12 -- T1380 shipped the big win (TTFP seconds->359ms). Revisit only if users report seek problems. |
 | T1261 | [Seek Perf Instrumentation](tasks/for-launch/T1261-seek-perf-instrumentation.md) | 8 | 2 | 4.0 | ICE | [ ] | Parent epic on ice. |
@@ -335,6 +338,7 @@ IDs use gaps of 10 to allow insertions:
 - `T400-T430` - User Auth epic (T400=Google, T401=OTP, T405=D1, T420=sessions, T430=settings)
 - `T500-T525` - Monetization epic
 - `T2100-T2220` - Overlay System v2 epic
+- `T2250-T2260` - Session Scaling epic
 - `T2300-T2380` - Landing Page Redesign epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.

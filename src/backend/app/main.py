@@ -75,7 +75,7 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router
+from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router, gallery_shares_router, shared_router
 from app.routers.exports import router as exports_router
 from app.websocket import websocket_export_progress
 from app.user_context import set_current_user_id, get_current_user_id
@@ -135,6 +135,8 @@ app.include_router(quests_router, prefix="/api")
 app.include_router(exports_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
+app.include_router(gallery_shares_router)
+app.include_router(shared_router)
 
 # T1530/T1531: debug endpoints (profile listing/reading). Gated internally
 # by DEBUG_ENDPOINTS_ENABLED=true.
@@ -303,6 +305,10 @@ async def startup_event():
     from app.services.auth_db import restore_auth_db_or_fail
     restore_auth_db_or_fail()
     logger.info("[Startup] Central auth DB initialized")
+
+    from app.services.sharing_db import restore_sharing_db_or_fail
+    restore_sharing_db_or_fail()
+    logger.info("[Startup] Sharing DB initialized")
 
     # Default user 'a' init removed — all users now go through auth.
     # Profile context is set per-request by the middleware.

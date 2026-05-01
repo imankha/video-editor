@@ -1,9 +1,10 @@
-import { useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
+import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -265,6 +266,17 @@ function App() {
   const isAdmin = useAuthStore(state => state.isAdmin);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
 
+  // T1780: Detect /shared/:token URL and render overlay player
+  const [sharedToken, setSharedToken] = useState(() => {
+    const match = window.location.pathname.match(/^\/shared\/([a-f0-9-]+)$/i);
+    return match ? match[1] : null;
+  });
+
+  const handleCloseShared = useCallback(() => {
+    setSharedToken(null);
+    window.history.replaceState({}, '', '/');
+  }, []);
+
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
 
@@ -512,6 +524,8 @@ function App() {
         <ToastContainer />
         {/* Admin button — fixed top-right, visible only to admins */}
         {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
+        {/* T1780: Shared video overlay */}
+        {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
       </>
     );
   }
@@ -627,6 +641,9 @@ function App() {
       {/* GoogleOneTap + AuthGateModal are mounted once in main.jsx. */}
       {/* T430: Account Settings panel */}
       <AccountSettings />
+
+      {/* T1780: Shared video overlay */}
+      {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
 
     </div>
     </AppStateProvider>
