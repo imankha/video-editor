@@ -22,6 +22,9 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
         if (cancelled) return;
         if (resp.ok) {
           const data = await resp.json();
+          if (data.video_url) {
+            fetch(data.video_url, { headers: { Range: 'bytes=0-524287' } }).catch(() => {});
+          }
           setShare(data);
           setState('ready');
         } else if (resp.status === 403) {
