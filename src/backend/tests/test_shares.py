@@ -423,6 +423,73 @@ class TestCreateShareMultipleEmails:
         assert resp.status_code == 403
 
 
+class TestContacts:
+    def test_contacts_empty(self, client):
+        resp = client.get("/api/gallery/contacts", headers=_auth_headers(SHARER_ID))
+        assert resp.status_code == 200
+        assert resp.json()["contacts"] == []
+
+    def test_contacts_returns_prior_recipients(self, client):
+        video_id = _seed_final_video(client)
+        client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL, UNKNOWN_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        resp = client.get("/api/gallery/contacts", headers=_auth_headers(SHARER_ID))
+        assert resp.status_code == 200
+        contacts = resp.json()["contacts"]
+        assert RECIPIENT_EMAIL in contacts
+        assert UNKNOWN_EMAIL in contacts
+
+    def test_contacts_excludes_revoked(self, client):
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL, UNKNOWN_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        token_to_revoke = resp.json()["shares"][0]["share_token"]
+        client.delete(f"/api/shared/{token_to_revoke}", headers=_auth_headers(SHARER_ID))
+
+        resp = client.get("/api/gallery/contacts", headers=_auth_headers(SHARER_ID))
+        contacts = resp.json()["contacts"]
+        assert len(contacts) == 1
+        assert RECIPIENT_EMAIL not in contacts
+        assert UNKNOWN_EMAIL in contacts
+
+    def test_contacts_ordered_by_frequency(self, client):
+        video_id = _seed_final_video(client)
+        client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [UNKNOWN_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        resp = client.get("/api/gallery/contacts", headers=_auth_headers(SHARER_ID))
+        contacts = resp.json()["contacts"]
+        assert contacts[0] == RECIPIENT_EMAIL
+
+    def test_contacts_isolated_per_user(self, client):
+        video_id = _seed_final_video(client)
+        client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [UNKNOWN_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        resp = client.get("/api/gallery/contacts", headers=_auth_headers(RECIPIENT_ID))
+        assert resp.json()["contacts"] == []
+
+
 class TestListSharesIncludesRevoked:
     def test_revoked_shares_visible_in_list(self, client):
         video_id = _seed_final_video(client)

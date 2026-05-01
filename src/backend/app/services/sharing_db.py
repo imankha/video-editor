@@ -260,6 +260,21 @@ def update_share_visibility(token: str, is_public: bool, sharer_user_id: str) ->
     return False
 
 
+def list_contacts_for_user(sharer_user_id: str) -> list[str]:
+    with get_sharing_db() as db:
+        rows = db.execute(
+            """SELECT recipient_email, COUNT(*) as times_shared,
+                      MAX(shared_at) as last_shared
+               FROM shared_videos
+               WHERE sharer_user_id = ? AND revoked_at IS NULL
+               GROUP BY recipient_email
+               ORDER BY times_shared DESC, last_shared DESC
+               LIMIT 20""",
+            (sharer_user_id,),
+        ).fetchall()
+        return [row["recipient_email"] for row in rows]
+
+
 def revoke_share(token: str, sharer_user_id: str) -> bool:
     now = datetime.utcnow().isoformat()
     with get_sharing_db() as db:
