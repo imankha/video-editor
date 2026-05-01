@@ -77,11 +77,14 @@ export function UserPicker({ emails, onChange, contacts, placeholder }) {
     const val = e.target.value;
     if (val.includes(',') || val.includes(';')) {
       const parts = val.split(/[,;]/);
-      parts.forEach((part, i) => {
-        if (i < parts.length - 1 && part.trim()) {
-          addEmail(part);
-        }
-      });
+      const toAdd = parts
+        .slice(0, -1)
+        .map((p) => p.trim().toLowerCase())
+        .filter((p) => p && EMAIL_REGEX.test(p) && !emails.includes(p));
+      if (toAdd.length > 0) {
+        const deduped = [...new Set(toAdd)];
+        onChange([...emails, ...deduped]);
+      }
       setInputValue(parts[parts.length - 1] || '');
       return;
     }
