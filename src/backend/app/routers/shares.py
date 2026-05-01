@@ -11,6 +11,7 @@ shared_router (/api/shared):
   - DELETE /{share_token}    -- revoke share (authenticated sharer)
 """
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -54,6 +55,7 @@ class ShareCreateRecipient(BaseModel):
     share_token: str
     recipient_email: str
     is_existing_user: bool
+    email_sent: Optional[bool] = None
 
 
 class ShareCreateResponse(BaseModel):
@@ -143,7 +145,10 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT filename, name, duration FROM final_videos WHERE id = ?",
+            """SELECT fv.filename, COALESCE(fv.name, p.name) as name, fv.duration
+               FROM final_videos fv
+               LEFT JOIN projects p ON fv.project_id = p.id
+               WHERE fv.id = ?""",
             (video_id,),
         )
         video = cursor.fetchone()
@@ -174,12 +179,34 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         is_public=body.is_public,
     )
 
+    sharer = get_user_by_id(user_id)
+    sharer_email = sharer["email"] if sharer else user_id
+    is_self_share = not body.recipient_emails and body.is_public
+
+    email_results = {}
+    if not is_self_share:
+        from ..services.email import send_share_email
+        tasks = {}
+        for s in shares:
+            if s["recipient_email"].lower() == sharer_email.lower():
+                continue
+            tasks[s["recipient_email"]] = send_share_email(
+                recipient_email=s["recipient_email"],
+                sharer_email=sharer_email,
+                share_token=s["share_token"],
+                video_name=video["name"],
+            )
+        if tasks:
+            results = await asyncio.gather(*tasks.values())
+            email_results = dict(zip(tasks.keys(), results))
+
     return ShareCreateResponse(
         shares=[
             ShareCreateRecipient(
                 share_token=s["share_token"],
                 recipient_email=s["recipient_email"],
                 is_existing_user=s["recipient_email"] in existing_emails,
+                email_sent=email_results.get(s["recipient_email"]),
             )
             for s in shares
         ]

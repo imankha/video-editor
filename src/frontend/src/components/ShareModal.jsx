@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
+import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 
 export function ShareModal({ videoId, videoName, onClose }) {
@@ -116,6 +117,21 @@ export function ShareModal({ videoId, videoName, onClose }) {
       setSuccessShares(data.shares);
       setEmails([]);
       fetchExistingShares();
+
+      const emailed = data.shares.filter((s) => s.email_sent !== null);
+      if (emailed.length > 0) {
+        const failed = emailed.filter((s) => s.email_sent === false);
+        if (failed.length === 0) {
+          toast.success('Shares sent');
+        } else if (failed.length === emailed.length) {
+          toast.error('Failed to send share emails');
+        } else {
+          const failedNames = failed.map((s) => s.recipient_email).join(', ');
+          toast.error(`Failed to email ${failedNames}`, {
+            message: 'The rest were sent successfully',
+          });
+        }
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -157,6 +173,8 @@ export function ShareModal({ videoId, videoName, onClose }) {
   };
 
   const activeShares = existingShares?.filter(s => !s.revoked_at) || [];
+  const activeEmails = new Set(activeShares.map(s => s.recipient_email.toLowerCase()));
+  const filteredContacts = contacts.filter(c => !activeEmails.has(c.toLowerCase()));
 
   return (
     <div
@@ -190,7 +208,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
             <UserPicker
               emails={emails}
               onChange={(updated) => { setEmails(updated); setError(null); setSuccessShares(null); }}
-              contacts={contacts}
+              contacts={filteredContacts}
             />
           </div>
 

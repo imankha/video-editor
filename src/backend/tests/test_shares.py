@@ -12,9 +12,10 @@ Covers:
 - is_existing_user flag on create response
 """
 
+import asyncio
 import sqlite3
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -509,3 +510,62 @@ class TestListSharesIncludesRevoked:
         active = [s for s in shares if s["revoked_at"] is None]
         assert len(revoked) == 1
         assert len(active) == 1
+
+
+class TestShareEmailDelivery:
+    def test_share_sends_email_to_recipient(self, client):
+        video_id = _seed_final_video(client)
+        mock_send = AsyncMock(return_value=True)
+        with patch("app.services.email.send_share_email", mock_send):
+            resp = client.post(
+                f"/api/gallery/{video_id}/share",
+                json={"recipient_emails": [RECIPIENT_EMAIL]},
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        mock_send.assert_called_once()
+        call_kwargs = mock_send.call_args
+        assert call_kwargs.kwargs["recipient_email"] == RECIPIENT_EMAIL
+        assert call_kwargs.kwargs["sharer_email"] == SHARER_EMAIL
+        assert call_kwargs.kwargs["video_name"] == "Test Video"
+        assert resp.json()["shares"][0]["email_sent"] is True
+
+    def test_no_email_for_public_self_share(self, client):
+        video_id = _seed_final_video(client)
+        mock_send = AsyncMock(return_value=True)
+        with patch("app.services.email.send_share_email", mock_send):
+            resp = client.post(
+                f"/api/gallery/{video_id}/share",
+                json={"recipient_emails": [], "is_public": True},
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        mock_send.assert_not_called()
+
+    def test_multiple_recipients_each_get_email(self, client):
+        video_id = _seed_final_video(client)
+        mock_send = AsyncMock(return_value=True)
+        with patch("app.services.email.send_share_email", mock_send):
+            resp = client.post(
+                f"/api/gallery/{video_id}/share",
+                json={"recipient_emails": [RECIPIENT_EMAIL, UNKNOWN_EMAIL]},
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        assert mock_send.call_count == 2
+        emailed = {c.kwargs["recipient_email"] for c in mock_send.call_args_list}
+        assert emailed == {RECIPIENT_EMAIL, UNKNOWN_EMAIL}
+        for share in resp.json()["shares"]:
+            assert share["email_sent"] is True
+
+    def test_email_failure_reported_in_response(self, client):
+        video_id = _seed_final_video(client)
+        mock_send = AsyncMock(return_value=False)
+        with patch("app.services.email.send_share_email", mock_send):
+            resp = client.post(
+                f"/api/gallery/{video_id}/share",
+                json={"recipient_emails": [RECIPIENT_EMAIL]},
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        assert resp.json()["shares"][0]["email_sent"] is False
