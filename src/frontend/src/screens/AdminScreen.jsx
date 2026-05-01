@@ -1,7 +1,14 @@
 import React, { useEffect } from 'react';
 import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
+import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
+
+const ENV_STYLES = {
+  dev: 'bg-green-500/20 text-green-400 border-green-500/40',
+  staging: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+  production: 'bg-red-500/20 text-red-400 border-red-500/40',
+};
 
 /**
  * AdminScreen — Full-page admin panel.
@@ -14,6 +21,7 @@ export function AdminScreen({ onBack }) {
   const users = useAdminStore(state => state.users);
   const loading = useAdminStore(state => state.usersLoading);
   const error = useAdminStore(state => state.usersError);
+  const environment = useAuthStore(state => state.adminEnvironment);
 
   useEffect(() => {
     fetchUsers();
@@ -37,6 +45,11 @@ export function AdminScreen({ onBack }) {
           <div className="flex items-center gap-2">
             <ShieldCheck size={20} className="text-purple-400" />
             <h1 className="text-white text-xl font-semibold">Admin Panel</h1>
+            {environment && (
+              <span className={`px-2 py-0.5 text-xs font-mono font-semibold rounded border uppercase ${ENV_STYLES[environment] || ENV_STYLES.dev}`}>
+                {environment === 'production' ? 'PROD' : environment.toUpperCase()}
+              </span>
+            )}
           </div>
         </div>
 

@@ -365,7 +365,7 @@ def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
 async def admin_me():
     """Check if the current user is an admin. Safe for all users — never 403."""
     user_id = get_current_user_id()
-    return {"is_admin": is_admin(user_id)}
+    return {"is_admin": is_admin(user_id), "environment": APP_ENV}
 
 
 @router.get("/users")

@@ -11,6 +11,7 @@ export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
   isAdmin: false,
+  adminEnvironment: null,
   email: null,
   pictureUrl: null,  // T430: Google profile picture URL
   showAuthModal: false,
@@ -28,7 +29,7 @@ export const useAuthStore = create((set, get) => ({
       const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
       if (!res.ok) return;
       const data = await res.json();
-      set({ isAdmin: data.is_admin });
+      set({ isAdmin: data.is_admin, adminEnvironment: data.environment || null });
     } catch {
       // Best-effort — non-critical
     }
@@ -142,6 +143,7 @@ export const useAuthStore = create((set, get) => ({
     set({
       isAuthenticated: false,
       isAdmin: false,
+      adminEnvironment: null,
       email: null,
       pictureUrl: null,
       showAuthModal: false,
