@@ -50,7 +50,7 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 
 ### Task Completion Rule
 
-**AI cannot mark tasks as DONE.** AI can only set status to TESTING. User must say "complete" or "done" to mark a task as DONE in PLAN.md.
+**AI cannot mark tasks as DONE.** AI sets status to TESTING after implementation and tests pass. DONE is only set after the task is deployed to production — the user will say "complete" or "done" at that point. TESTING is the correct status to proceed to the next task in an epic.
 
 ### Classification Output (Required)
 

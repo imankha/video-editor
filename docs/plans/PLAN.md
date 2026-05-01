@@ -112,7 +112,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1900 | [Explicit Create Reel Toggle](tasks/for-alpha/T1900-explicit-create-project-toggle.md) | 7 | 3 | 2.3 | DONE | [x] | Replace auto-5-star reel creation with explicit "Create Reel" toggle in add clip dialog. Defaults ON for 5-star, OFF for others. Disabled once reel exists. |
 | | **[Core Sharing Epic](tasks/sharing/EPIC.md)** | 8 | 4 | 1.9 | | | **End-to-end share loop: create share, send link, recipient watches** |
 | T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TESTING | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
-| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TODO | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
+| T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TESTING | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
 | T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TODO | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
 | | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications, watch tracking — polish on core sharing** |
 | T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TODO | [ ] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |

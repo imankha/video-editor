@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2 } from 'lucide-react';
+import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { MediaPlayer } from './MediaPlayer';
@@ -78,6 +79,9 @@ export function DownloadsPanel({
 
   // State for project restore (T66)
   const [restoringProjectId, setRestoringProjectId] = useState(null);
+
+  // State for share modal
+  const [sharingDownload, setSharingDownload] = useState(null);
 
   if (!isOpen && !playingVideo) return null;
 
@@ -302,6 +306,13 @@ export function DownloadsPanel({
               <Download size={16} className="text-gray-400 hover:text-white" />
             )}
           </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setSharingDownload(download); }}
+            className="p-2 hover:bg-gray-600 rounded transition-colors"
+            title="Share video"
+          >
+            <Share2 size={16} className="text-gray-400 hover:text-cyan-400" />
+          </button>
           {!import.meta.env.PROD && (
             <button
               onClick={(e) => handleBeforeAfter(e, download)}
@@ -513,6 +524,15 @@ export function DownloadsPanel({
         }
       `}</style>
       </>}
+
+      {/* Share Modal */}
+      {sharingDownload && (
+        <ShareModal
+          videoId={sharingDownload.id}
+          videoName={sharingDownload.project_name}
+          onClose={() => setSharingDownload(null)}
+        />
+      )}
 
       {/* Video Preview Modal */}
       {playingVideo && (
