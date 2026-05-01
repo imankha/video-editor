@@ -157,6 +157,8 @@ export function ShareModal({ videoId, videoName, onClose }) {
   };
 
   const activeShares = existingShares?.filter(s => !s.revoked_at) || [];
+  const activeEmails = new Set(activeShares.map(s => s.recipient_email.toLowerCase()));
+  const filteredContacts = contacts.filter(c => !activeEmails.has(c.toLowerCase()));
 
   return (
     <div
@@ -190,7 +192,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
             <UserPicker
               emails={emails}
               onChange={(updated) => { setEmails(updated); setError(null); setSuccessShares(null); }}
-              contacts={contacts}
+              contacts={filteredContacts}
             />
           </div>
 
