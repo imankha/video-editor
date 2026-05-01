@@ -114,10 +114,9 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1750 | ↳ [Share Backend Model & API](tasks/sharing/T1750-share-backend-model.md) | 8 | 4 | 2.0 | TESTING | [x] | shared_videos table, CRUD storage ops, share/revoke/list/toggle-visibility endpoints. Foundation for all sharing tasks. |
 | T1770 | ↳ [Gallery Share UI](tasks/sharing/T1770-gallery-share-ui.md) | 8 | 4 | 2.0 | TESTING | [ ] | Share modal: email input, public/private visibility toggle, copy link, "People with access" list |
 | T1780 | ↳ [Shared Video Player Page](tasks/sharing/T1780-shared-video-page.md) | 8 | 5 | 1.6 | TESTING | [ ] | /shared/:shareToken route — public links play immediately; private links show auth gate with email pre-fill |
-| | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications, watch tracking — polish on core sharing** |
-| T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TODO | [ ] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
+| | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications — polish on core sharing** |
+| T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TESTING | [x] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
 | T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | TODO | [ ] | Resend integration for share emails (reused by player tagging); fire-and-forget |
-| T1790 | ↳ [Watch Tracking & Share Status](tasks/sharing/T1790-watch-tracking-share-status.md) | 6 | 4 | 1.5 | TODO | [ ] | Watched event on play, share status panel on gallery cards per recipient |
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | 10 | 5 | 2.0 | | | **Gates virality -- every shared/invited user adds unmetered R2 cost without this. Must ship before sharing goes live.** |
 | T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |

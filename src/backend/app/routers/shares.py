@@ -24,6 +24,7 @@ from ..storage import APP_ENV, generate_presigned_url_global
 from ..services.sharing_db import (
     create_shares,
     get_share_by_token,
+    list_contacts_for_user,
     list_shares_for_video,
     update_share_visibility,
     revoke_share,
@@ -77,6 +78,10 @@ class ShareListItem(BaseModel):
     revoked_at: Optional[str]
 
 
+class ContactsResponse(BaseModel):
+    contacts: list[str]
+
+
 class ShareVisibilityRequest(BaseModel):
     is_public: bool
 
@@ -122,6 +127,13 @@ def _build_video_r2_key(share: dict) -> str:
 # ---------------------------------------------------------------------------
 # Gallery shares router (always authenticated)
 # ---------------------------------------------------------------------------
+
+@gallery_shares_router.get("/contacts", response_model=ContactsResponse)
+async def get_contacts():
+    user_id = get_current_user_id()
+    contacts = list_contacts_for_user(user_id)
+    return ContactsResponse(contacts=contacts)
+
 
 @gallery_shares_router.post("/{video_id}/share", response_model=ShareCreateResponse)
 async def create_share(video_id: int, body: ShareCreateRequest):

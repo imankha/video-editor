@@ -62,13 +62,12 @@ End-to-end share loop: create share, send link, recipient watches. Share modal s
 
 ### Phase 2: Share Engagement (For Alpha)
 
-Recipient discovery, email notifications, watch tracking — polish on core sharing.
+Recipient discovery, email notifications — polish on core sharing.
 
 | ID | Task | Status | Description |
 |----|------|--------|-------------|
 | T1800 | [User Picker Component](T1800-user-picker-component.md) | TODO | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal. |
 | T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TODO | Resend integration for share notifications (reused by player tagging) |
-| T1790 | [Watch Tracking & Share Status](T1790-watch-tracking-share-status.md) | TODO | Watched event on play, share status panel on gallery cards |
 
 ### Player Tagging & Team Sharing (For Launch)
 

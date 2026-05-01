@@ -1,19 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Link, Check, Loader, Globe, Lock, Trash2, Copy } from 'lucide-react';
 import { Button } from './shared/Button';
+import { UserPicker } from './shared/UserPicker';
 import { API_BASE } from '../config';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function parseEmails(input) {
-  return input
-    .split(/[,;\s]+/)
-    .map(e => e.trim().toLowerCase())
-    .filter(e => e.length > 0);
-}
-
 export function ShareModal({ videoId, videoName, onClose }) {
-  const [emailInput, setEmailInput] = useState('');
+  const [emails, setEmails] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [isPublic, setIsPublic] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -21,7 +14,6 @@ export function ShareModal({ videoId, videoName, onClose }) {
   const [existingShares, setExistingShares] = useState(null);
   const [loadingShares, setLoadingShares] = useState(true);
   const [copiedToken, setCopiedToken] = useState(null);
-  const [showValidation, setShowValidation] = useState(false);
   const [publicLink, setPublicLink] = useState(null);
   const [creatingPublicLink, setCreatingPublicLink] = useState(false);
 
@@ -42,6 +34,10 @@ export function ShareModal({ videoId, videoName, onClose }) {
 
   useEffect(() => {
     fetchExistingShares();
+    fetch(`${API_BASE}/api/gallery/contacts`, { credentials: 'include' })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data) setContacts(data.contacts); })
+      .catch(() => {});
   }, [fetchExistingShares]);
 
   useEffect(() => {
@@ -99,14 +95,10 @@ export function ShareModal({ videoId, videoName, onClose }) {
     }
   };
 
-  const emails = parseEmails(emailInput);
-  const invalidEmails = emails.filter(e => !EMAIL_REGEX.test(e));
-  const hasInvalid = showValidation && invalidEmails.length > 0;
-  const canSubmit = emails.length > 0 && invalidEmails.length === 0 && !isSubmitting;
+  const canSubmit = emails.length > 0 && !isSubmitting;
 
   const handleSubmit = async () => {
-    setShowValidation(true);
-    if (invalidEmails.length > 0) return;
+    if (emails.length === 0) return;
     setError(null);
     setIsSubmitting(true);
     try {
@@ -122,7 +114,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
       }
       const data = await resp.json();
       setSuccessShares(data.shares);
-      setEmailInput('');
+      setEmails([]);
       fetchExistingShares();
     } catch (err) {
       setError(err.message);
@@ -195,24 +187,11 @@ export function ShareModal({ videoId, videoName, onClose }) {
             <label className="block text-sm text-gray-400 mb-1">
               Add people
             </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={emailInput}
-                onChange={(e) => { setEmailInput(e.target.value); setShowValidation(false); setError(null); setSuccessShares(null); }}
-                placeholder="Enter emails, separated by commas"
-                className={`w-full bg-gray-700 border rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none text-sm ${
-                  hasInvalid ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-cyan-500'
-                }`}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
-                disabled={isSubmitting}
-              />
-              {hasInvalid && (
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-red-400 text-xs">
-                  Invalid email
-                </span>
-              )}
-            </div>
+            <UserPicker
+              emails={emails}
+              onChange={(updated) => { setEmails(updated); setError(null); setSuccessShares(null); }}
+              contacts={contacts}
+            />
           </div>
 
           {/* Visibility toggle */}

@@ -1,6 +1,6 @@
 # T1800: User Picker Component
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-04-25
