@@ -26,6 +26,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const hideControlsTimeoutRef = useRef(null);
+  const isTouchRef = useRef(false);
 
   // Use shared video state hook
   const {
@@ -35,6 +36,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     duration,
     volume,
     isMuted,
+    hasAudio,
     isLoading,
     loadingProgress,
     loadingElapsedSeconds,
@@ -113,6 +115,11 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
           toggleFullscreen();
           scheduleHideControls();
           break;
+        case 'Home':
+          e.preventDefault();
+          seek(0);
+          scheduleHideControls();
+          break;
         case 'Escape':
           e.preventDefault();
           if (document.fullscreenElement) {
@@ -133,6 +140,20 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     scheduleHideControls();
   }, [scheduleHideControls]);
 
+  const handleContainerClick = useCallback(() => {
+    if (isTouchRef.current) {
+      isTouchRef.current = false;
+      if (showControls) {
+        setShowControls(false);
+        if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
+      } else {
+        scheduleHideControls();
+      }
+      return;
+    }
+    togglePlay();
+  }, [togglePlay, showControls, scheduleHideControls]);
+
   // Cleanup
   useEffect(() => {
     return () => {
@@ -146,7 +167,8 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
     <div
       ref={containerRef}
       className="relative w-full h-full bg-black flex items-center justify-center"
-      onClick={togglePlay}
+      onClick={handleContainerClick}
+      onTouchStart={() => { isTouchRef.current = true; }}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => isPlaying && setShowControls(false)}
     >
@@ -185,6 +207,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
         onSeek={seek}
         onVolumeChange={setVolume}
         onToggleMute={toggleMute}
+        showVolume={hasAudio}
         visible={showControls}
         isFullscreen={isFullscreen}
         onToggleFullscreen={toggleFullscreen}
@@ -194,6 +217,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
       {!isPlaying && !isLoading && showControls && (
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 cursor-pointer z-20"
+          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             togglePlay();

@@ -21,6 +21,8 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
   // Volume state
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [hasAudio, setHasAudio] = useState(true);
+  const audioCheckedRef = useRef(false);
 
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +107,14 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
     onLoadedMetadata: useCallback(() => {
       if (videoRef.current) {
         setDuration(videoRef.current.duration);
+        const v = videoRef.current;
+        if (v.audioTracks) {
+          setHasAudio(v.audioTracks.length > 0);
+          audioCheckedRef.current = true;
+        } else if (typeof v.mozHasAudio !== 'undefined') {
+          setHasAudio(v.mozHasAudio);
+          audioCheckedRef.current = true;
+        }
       }
     }, []),
 
@@ -123,6 +133,12 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
     onTimeUpdate: useCallback(() => {
       if (videoRef.current) {
         setCurrentTime(videoRef.current.currentTime);
+        if (!audioCheckedRef.current && videoRef.current.currentTime > 0.5) {
+          audioCheckedRef.current = true;
+          if (typeof videoRef.current.webkitAudioDecodedByteCount !== 'undefined') {
+            setHasAudio(videoRef.current.webkitAudioDecodedByteCount > 0);
+          }
+        }
       }
     }, []),
 
@@ -170,6 +186,7 @@ export function useStandaloneVideo({ autoPlay = true } = {}) {
     duration,
     volume,
     isMuted,
+    hasAudio,
     isLoading,
     loadingProgress,
     loadingElapsedSeconds,

@@ -44,6 +44,11 @@ export function formatTimeSimple(seconds) {
   return `${minutes}:${ss}.${mmm}`;
 }
 
+export function formatTimeCompact(seconds) {
+  if (isNaN(seconds) || seconds < 0) return '0.0';
+  return seconds.toFixed(1);
+}
+
 /**
  * Convert pixel position to time
  * @param {number} pixel - X coordinate relative to timeline

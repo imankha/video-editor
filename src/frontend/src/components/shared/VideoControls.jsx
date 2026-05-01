@@ -1,6 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
-import { formatTime } from '../../utils/timeFormat';
+import { Play, Pause, RotateCcw, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
+import { formatTimeCompact } from '../../utils/timeFormat';
+
+const IS_COARSE = window.matchMedia?.('(pointer: coarse)').matches;
 
 /**
  * VideoControls - YouTube-style playback controls
@@ -40,7 +42,8 @@ export function VideoControls({
   const getPercentFromEvent = useCallback((e) => {
     if (!timelineRef.current) return 0;
     const rect = timelineRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const clientX = e.touches?.[0]?.clientX ?? e.clientX;
+    const x = clientX - rect.left;
     return Math.max(0, Math.min(100, (x / rect.width) * 100));
   }, []);
 
@@ -61,9 +64,18 @@ export function VideoControls({
     setHoverPercent(getPercentFromEvent(e));
   }, [getPercentFromEvent]);
 
+  const handleTouchStart = useCallback((e) => {
+    e.stopPropagation();
+    const percent = getPercentFromEvent(e);
+    setIsDragging(true);
+    setDragPercent(percent);
+    seekToPercent(percent);
+  }, [getPercentFromEvent, seekToPercent]);
+
   useEffect(() => {
     if (!isDragging) return;
     const handleGlobalMove = (e) => {
+      if (e.touches) e.preventDefault();
       const percent = getPercentFromEvent(e);
       setDragPercent(percent);
       seekToPercent(percent);
@@ -72,9 +84,15 @@ export function VideoControls({
     const handleGlobalUp = () => setIsDragging(false);
     window.addEventListener('mousemove', handleGlobalMove);
     window.addEventListener('mouseup', handleGlobalUp);
+    window.addEventListener('touchmove', handleGlobalMove, { passive: false });
+    window.addEventListener('touchend', handleGlobalUp);
+    window.addEventListener('touchcancel', handleGlobalUp);
     return () => {
       window.removeEventListener('mousemove', handleGlobalMove);
       window.removeEventListener('mouseup', handleGlobalUp);
+      window.removeEventListener('touchmove', handleGlobalMove);
+      window.removeEventListener('touchend', handleGlobalUp);
+      window.removeEventListener('touchcancel', handleGlobalUp);
     };
   }, [isDragging, getPercentFromEvent, seekToPercent]);
 
@@ -92,7 +110,7 @@ export function VideoControls({
     volumeTimeoutRef.current = setTimeout(() => setShowVolumeSlider(false), 300);
   };
 
-  const hoverTime = duration > 0 ? formatTime((hoverPercent / 100) * duration) : '0:00';
+  const hoverTime = duration > 0 ? formatTimeCompact((hoverPercent / 100) * duration) : '0:00';
   const active = isHovering || isDragging;
 
   return (
@@ -101,6 +119,7 @@ export function VideoControls({
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
       }`}
       onClick={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
     >
       {/* Gradient background */}
       <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
@@ -109,8 +128,9 @@ export function VideoControls({
       <div
         ref={timelineRef}
         className="relative w-full cursor-pointer z-10"
-        style={{ paddingTop: 8, paddingBottom: 8 }}
+        style={{ paddingTop: IS_COARSE ? 16 : 8, paddingBottom: IS_COARSE ? 16 : 8 }}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
         onMouseMove={handleTimelineMouseMove}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
@@ -118,7 +138,7 @@ export function VideoControls({
         {/* Track container */}
         <div
           className="relative w-full transition-all duration-150"
-          style={{ height: active ? 5 : 3 }}
+          style={{ height: IS_COARSE ? 6 : (active ? 5 : 3) }}
         >
           {/* Background */}
           <div className="absolute inset-0 bg-white/25" />
@@ -141,9 +161,9 @@ export function VideoControls({
           <div
             className="absolute top-1/2 -translate-y-1/2 rounded-full bg-purple-500 transition-all duration-100"
             style={{
-              width: active ? 14 : 12,
-              height: active ? 14 : 12,
-              left: `calc(${progress}% - ${active ? 7 : 6}px)`,
+              width: IS_COARSE ? 20 : (active ? 14 : 12),
+              height: IS_COARSE ? 20 : (active ? 14 : 12),
+              left: `calc(${progress}% - ${IS_COARSE ? 10 : (active ? 7 : 6)}px)`,
             }}
           />
         </div>
@@ -176,6 +196,15 @@ export function VideoControls({
               ? <Pause size={22} fill="white" />
               : <Play size={22} fill="white" />
             }
+          </button>
+
+          {/* Restart */}
+          <button
+            onClick={() => onSeek?.(0)}
+            className="p-1.5 text-white hover:text-white/80 transition-colors"
+            title="Restart (Home)"
+          >
+            <RotateCcw size={20} />
           </button>
 
           {/* Volume — icon + slider on hover, like YouTube */}
@@ -216,7 +245,7 @@ export function VideoControls({
 
           {/* Time */}
           <span className="text-white text-sm font-mono ml-2 select-none">
-            {formatTime(currentTime)}<span className="text-white/60"> / {formatTime(duration)}</span>
+            {formatTimeCompact(currentTime)}<span className="text-white/60"> / {formatTimeCompact(duration)}</span>
           </span>
         </div>
 
