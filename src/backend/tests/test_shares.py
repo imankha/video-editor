@@ -342,6 +342,24 @@ class TestPatchShare:
         )
         assert resp.status_code == 401
 
+    def test_patch_nonexistent_token(self, client):
+        resp = client.patch(
+            "/api/shared/nonexistent-token",
+            json={"is_public": True},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert resp.status_code == 404
+
+    def test_patch_revoked_share(self, client):
+        token = self._create_share(client)
+        client.delete(f"/api/shared/{token}", headers=_auth_headers(SHARER_ID))
+        resp = client.patch(
+            f"/api/shared/{token}",
+            json={"is_public": True},
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert resp.status_code == 409
+
 
 class TestDeleteShare:
     def _create_share(self, client) -> str:
@@ -373,3 +391,54 @@ class TestDeleteShare:
         token = self._create_share(client)
         resp = client.delete(f"/api/shared/{token}")
         assert resp.status_code == 401
+
+    def test_revoke_nonexistent_token(self, client):
+        resp = client.delete("/api/shared/nonexistent-token", headers=_auth_headers(SHARER_ID))
+        assert resp.status_code == 404
+
+
+class TestCreateShareMultipleEmails:
+    def test_each_email_gets_unique_token(self, client):
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL, UNKNOWN_EMAIL, "third@example.com"]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        data = resp.json()
+        tokens = [s["share_token"] for s in data["shares"]]
+        assert len(tokens) == 3
+        assert len(set(tokens)) == 3  # all unique
+
+    def test_default_is_private(self, client):
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        token = resp.json()["shares"][0]["share_token"]
+        # Private share should reject unauthenticated access
+        resp = client.get(f"/api/shared/{token}")
+        assert resp.status_code == 403
+
+
+class TestListSharesIncludesRevoked:
+    def test_revoked_shares_visible_in_list(self, client):
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL, UNKNOWN_EMAIL]},
+            headers=_auth_headers(SHARER_ID),
+        )
+        tokens = [s["share_token"] for s in resp.json()["shares"]]
+        # Revoke one share
+        client.delete(f"/api/shared/{tokens[0]}", headers=_auth_headers(SHARER_ID))
+
+        resp = client.get(f"/api/gallery/{video_id}/shares", headers=_auth_headers(SHARER_ID))
+        shares = resp.json()
+        assert len(shares) == 2  # both still visible
+        revoked = [s for s in shares if s["revoked_at"] is not None]
+        active = [s for s in shares if s["revoked_at"] is None]
+        assert len(revoked) == 1
+        assert len(active) == 1
