@@ -68,6 +68,11 @@ export function ShareModal({ videoId, videoName, onClose }) {
   const handleTogglePublic = async () => {
     if (isPublic) {
       setIsPublic(false);
+      if (publicLink) {
+        const token = publicLink.split('/shared/')[1];
+        if (token) handleRevoke(token);
+        setPublicLink(null);
+      }
       return;
     }
     setIsPublic(true);

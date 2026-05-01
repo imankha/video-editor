@@ -1,6 +1,6 @@
 # T1780: Shared Video Player Page
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-25
