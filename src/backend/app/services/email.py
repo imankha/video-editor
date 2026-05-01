@@ -213,11 +213,10 @@ async def send_share_email(
 
     html_body = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
-      <h2 style="color: #ffffff; margin-bottom: 8px;">You've been sent a video</h2>
-      <p style="color: #d1d5db; font-size: 15px; margin-bottom: 4px;">
-        <strong style="color: #ffffff;">{_html_escape(sharer_email)}</strong> shared a video with you:
+      <p style="color: #d1d5db; font-size: 16px; margin: 0 0 8px 0;">
+        Check out this soccer highlight from {_html_escape(sharer_email)}
       </p>
-      <p style="color: #e5e7eb; font-size: 18px; font-weight: 600; margin: 16px 0;">
+      <p style="color: #e5e7eb; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
         {_html_escape(video_name or "Untitled")}
       </p>
       <a href="{_html_escape(share_url)}"
