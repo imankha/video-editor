@@ -23,6 +23,8 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
+import { ExpirationBadge } from './ExpirationBadge';
+import { StorageExtensionModal } from './StorageExtensionModal';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -76,6 +78,7 @@ export function ProjectManager({
   const [activeTab, setActiveTab] = useState(projects.length === 0 ? 'games' : 'projects');
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
+  const [extensionGame, setExtensionGame] = useState(null);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
@@ -719,6 +722,7 @@ export function ProjectManager({
                       game={game}
                       onLoad={() => onLoadGame(game.id)}
                       onDelete={() => onDeleteGame(game.id)}
+                      onExtend={() => setExtensionGame(game)}
                     />
                   ))}
                 </div>
@@ -943,6 +947,14 @@ export function ProjectManager({
         onCreateGame={handleCreateGame}
       />
 
+      {extensionGame && (
+        <StorageExtensionModal
+          game={extensionGame}
+          onClose={() => setExtensionGame(null)}
+          onExtensionSuccess={onFetchGames}
+        />
+      )}
+
     </div>
   );
 }
@@ -1103,16 +1115,14 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete }) {
+function GameCard({ game, onLoad, onDelete, onExtend }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isExpired = game.storage_status === 'expired';
 
-  // T251: Compute view progress
   const hasBeenViewed = game.viewed_duration > 0;
   const rawPercent = game.video_duration > 0
     ? (game.viewed_duration / game.video_duration) * 100
     : 0;
-  // Show at least 1% if any viewing has occurred (avoid rounding to 0 for long videos)
   const viewedPercent = hasBeenViewed ? Math.max(1, Math.min(100, Math.round(rawPercent))) : 0;
   const isFullyReviewed = viewedPercent >= 95;
   const isPartiallyReviewed = hasBeenViewed && !isFullyReviewed;
@@ -1128,10 +1138,18 @@ function GameCard({ game, onLoad, onDelete }) {
     }
   };
 
+  const handleClick = () => {
+    if (isExpired) {
+      onExtend?.();
+    } else {
+      onLoad();
+    }
+  };
+
   return (
     <div
-      onClick={() => !isExpired && onLoad()}
-      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all ${isExpired ? 'opacity-50 cursor-not-allowed' : `hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}`}
+      onClick={handleClick}
+      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all ${isExpired ? 'opacity-60 cursor-pointer hover:opacity-80' : `hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
@@ -1150,9 +1168,7 @@ function GameCard({ game, onLoad, onDelete }) {
             {isNew && !isExpired && game.video_duration > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
-            {isExpired && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">Expired</span>
-            )}
+            <ExpirationBadge expiresAt={game.storage_expires_at} onClick={onExtend} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{new Date(game.created_at).toLocaleDateString()}</span>
