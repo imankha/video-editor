@@ -1,7 +1,9 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
 import { GameType, VideoMode } from '../constants/gameConstants';
+import { useCreditStore } from '../stores/creditStore';
+import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
 
 /**
@@ -28,6 +30,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [isDragging, setIsDragging] = useState(false);
   const [draggingHalfIndex, setDraggingHalfIndex] = useState(null);
   const fileInputRef = useRef(null);
+  const creditBalance = useCreditStore(state => state.balance);
   const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -207,6 +210,18 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     ? selectedFile
     : (halfFiles[0] && halfFiles[1]);
   const isValid = opponentName.trim() && gameDate && hasVideo;
+
+  const uploadCost = useMemo(() => {
+    if (videoMode === VideoMode.PER_GAME && selectedFile) {
+      return calculateUploadCost(selectedFile.size);
+    }
+    if (videoMode === VideoMode.PER_HALF && halfFiles[0] && halfFiles[1]) {
+      return calculateUploadCost(halfFiles[0].size + halfFiles[1].size);
+    }
+    return null;
+  }, [videoMode, selectedFile, halfFiles]);
+
+  const canAfford = uploadCost !== null && creditBalance >= uploadCost;
 
   if (!isOpen) return null;
 
@@ -494,6 +509,19 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               </div>
             )}
           </div>
+
+          {/* Upload cost info */}
+          {uploadCost !== null && (
+            <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+              canAfford ? 'bg-gray-700/50 text-gray-300' : 'bg-red-900/30 text-red-300 border border-red-700/50'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Coins size={14} className={canAfford ? 'text-yellow-400' : 'text-red-400'} />
+                <span>{uploadCost} credit{uploadCost !== 1 ? 's' : ''} for 30 days of storage</span>
+              </div>
+              <span className="font-medium text-white">Balance: {creditBalance}</span>
+            </div>
+          )}
 
           {/* Submit Button */}
           <div className="pt-2">

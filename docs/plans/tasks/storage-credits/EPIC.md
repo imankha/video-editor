@@ -45,5 +45,6 @@ No change to existing Framing credit cost. The R2 storage for 5 years ($0.014) i
 |---|---|---|---|
 | 1 | **T1580** | P1 | Game Upload & Storage Credits — size-based upload cost, 30-day expiry, renewal |
 | 2 | **T1581** | P2 | Storage Extension UX — date-slider modal + ExpirationBadge for game cards |
+| 3 | **T1582** | P2 | Auto-Recap & Brilliant Clip Export — generate recap video + export 5-star clips before game video deletion |
 
-Two tasks instead of four. The extension UX (T1581) only needs to handle game videos.
+T1582 adds a 1-credit surcharge to uploads to cover GPU cost of auto-exporting brilliant clips. See [T1582 economic analysis](T1582-game-recap-on-expiry.md#economic-analysis) for break-even math.

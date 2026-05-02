@@ -1,72 +1,93 @@
-# T1840: Cross-User Clip Delivery
+# T1840: Tag Teammate at Framing
 
 **Status:** TODO
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-04-25
-**Updated:** 2026-04-25
+**Updated:** 2026-05-02
 
 ## Problem
 
-When a user tags a clip with a teammate's email, that teammate needs to receive the clip in their own database so they can frame and export it. No mechanism exists for cross-user clip transfer.
+When an advocate user frames and exports a teammate's clip, the polished result is trapped in their account. The teammate's parent — the person who'd most want to see it — has no way to receive it. An unfinished annotation isn't worth sharing; the real value comes after framing and overlay produce a polished output.
 
 ## Solution
 
-When a clip is saved with player tags pointing to other users' emails, create `pending_shares` records and send email notifications. When the recipient claims the share (via T1830 inbox), materialize the game record and raw clip in the recipient's chosen profile database, pointing to the same R2 video (no file duplication).
+During the framing export background task (while the user is waiting for GPU processing), detect that the clip is marked `is_teammate` and show a sharing prompt. The user enters email(s) via the UserPicker. After export completes, create pending_shares and send notification emails. On claim, the recipient gets the game, annotation, AND the finished My Reels entry — instant gratification without any effort.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
 
+**Frontend:**
+- `src/frontend/src/modes/framing/components/FramingExportProgress.jsx` (or equivalent export wait UI) — Show sharing prompt for teammate clips
+- `src/frontend/src/components/shared/UserPicker.jsx` — Reuse for email entry
+- `src/frontend/src/stores/exportStore.js` — Track sharing intent during export
+
 **Backend:**
-- `src/backend/app/routers/clips.py` — Hook into player tag save to create pending shares
-- `src/backend/app/database.py` — Materialization: create game + raw_clip in recipient's profile DB
-- `src/backend/app/routers/sharing.py` — Claim handler for clip-type shares
-- `src/backend/app/email_utils.py` — Send notification email to recipient
+- `src/backend/app/routers/sharing.py` — Endpoint: create tagged_clip share
+- `src/backend/app/database.py` — Materialization handled by T1830 claim flow
+- `src/backend/app/email_utils.py` — Share notification email
 
 ### Related Tasks
-- Depends on: T1810 (player tag model), T1820 (tagging UI), T1830 (inbox/claim infrastructure)
-- Related: T1760 (share email delivery — similar Resend integration)
+- Depends on: T1810 (is_teammate flag), T1820 (toggle UI sets the flag), T1830 (inbox/claim infrastructure + materialization), T1760 (Resend email delivery)
+- Related: T1850 (Share Game — similar game materialization pattern)
 
 ### Technical Notes
 
-**Trigger: Player tag save creates pending shares**
-When `PUT /api/clips/raw/{id}/player-tags` is called:
-1. Diff new tags vs existing tags
-2. For each newly added email (not the sharer's own email):
-   - Look up `recipient_user_id` in auth.sqlite (may be NULL if not registered)
-   - Create `pending_shares` record with `share_type='clip'`
-   - `source_data` JSON: `{game_id, game_blake3_hash, game_name, raw_clip: {start_time, end_time, rating, tags, name, notes, video_sequence}}`
-   - Send email notification via Resend
-3. For removed tags: optionally revoke unclaimed pending shares
+**Why during framing export:**
+- The user is already idle (GPU processing takes 10-30s)
+- The clip has just become "real work" — framed, polished, worth sharing
+- Zero additional friction — they're waiting anyway
+- This is the moment of maximum motivation: "Jake's dad needs to see this"
 
-**Materialization on claim (the core complexity):**
-When recipient claims a clip share to a profile:
-1. Open recipient's profile database
-2. Check if game already exists (by `blake3_hash`):
-   - Yes: reuse existing game record
-   - No: create `games` + `game_videos` records pointing to same R2 objects
-3. Create `raw_clips` record with the shared clip metadata
-4. The clip now appears in the recipient's clip library, linked to the game
-5. Recipient can create reels, frame, export — full pipeline access
+**Trigger UX:**
+1. User clicks "Frame Video" on a clip where `is_teammate = true`
+2. Framing export starts (background GPU task)
+3. While the progress indicator shows, a sharing section appears below it:
+   - "Share this clip with [teammate]'s parent?"
+   - UserPicker for entering email(s)
+   - "Share after export" / "Skip" buttons
+4. User enters emails and confirms → sharing intent stored locally
+5. When export completes → share created, emails sent
 
-**No video duplication:**
-Games are stored on R2 by `blake3_hash` (content-addressed). The recipient's game record points to the same R2 key. No copy needed.
+**Share creation (backend):**
+`POST /api/sharing/clip-share`
+```json
+{
+  "raw_clip_id": 123,
+  "published_video_id": 456,
+  "recipient_emails": ["jake.dad@example.com"]
+}
+```
+
+For each recipient:
+1. Look up recipient in auth.sqlite (may be NULL if not registered)
+2. Create `pending_shares` record with `share_type = 'tagged_clip'`
+3. `source_data` includes game metadata, clip metadata, and My Reels video reference (see T1830 for schema)
+4. Send email via Resend
+
+**What the recipient gets on claim (materialized by T1830):**
+1. **Game** — check by blake3_hash, skip if exists. Create `games` + `game_videos` pointing to same R2 objects.
+2. **Annotation** — create `raw_clips` record with shared clip metadata. Linked to game.
+3. **My Reels entry** — create `published_videos` record pointing to same R2 video. Immediately watchable.
+
+No R2 file duplication. No credit cost to recipient.
 
 **Email template:**
-"[Sharer name] shared a clip with you from [game name]. Sign in to view and edit it."
-CTA button: link to inbox or directly to `/shared/claim/{share_id}`
+"[Advocate name] made a highlight clip from [game name] — check it out!"
+CTA: link to inbox
+
+**Skip behavior:** No share created. The teammate flag stays on the clip. The advocate can always share the finished clip later through the My Reels share flow (existing gallery sharing).
 
 ## Implementation
 
 ### Steps
-1. [ ] Backend: Hook player tag save → create pending_shares for new recipient emails
-2. [ ] Backend: Diff logic — only create shares for newly added tags, not existing ones
-3. [ ] Backend: Claim handler for clip shares — materialize game + raw_clip in recipient's profile DB
-4. [ ] Backend: Game deduplication — check blake3_hash before creating game record
-5. [ ] Backend: Email notification on new clip share (via Resend)
-6. [ ] Backend: Handle tag removal — revoke unclaimed pending shares
-7. [ ] Tests: Claim materialization, game dedup, pending share lifecycle
+1. [ ] Frontend: Detect `is_teammate` on framing export start → show sharing section in export wait UI
+2. [ ] Frontend: UserPicker integration in export wait UI
+3. [ ] Frontend: Store sharing intent locally, fire `POST /api/sharing/clip-share` on export completion
+4. [ ] Backend: `POST /api/sharing/clip-share` endpoint — gathers game + clip + published_video data, creates pending_shares
+5. [ ] Backend: Email notification via Resend
+6. [ ] Tests: Share creation, source_data correctness, skip behavior
 
 ### Progress Log
 
@@ -74,11 +95,12 @@ CTA button: link to inbox or directly to `/shared/claim/{share_id}`
 
 ## Acceptance Criteria
 
-- [ ] Tagging a clip with a new email creates a pending_share record
+- [ ] Framing export of `is_teammate` clip shows sharing prompt during wait
+- [ ] UserPicker works in export wait context (autocomplete, green/yellow status)
+- [ ] Share created only after export completes (not before)
 - [ ] Recipient receives email notification
-- [ ] Claiming materializes game + raw_clip in recipient's profile DB
-- [ ] Game deduplication: same blake3_hash doesn't create duplicate games
-- [ ] Materialized clip has correct metadata (rating, tags, name, notes, boundaries)
-- [ ] Recipient can frame and export the claimed clip
-- [ ] Removing a player tag revokes unclaimed pending shares
-- [ ] Non-users: pending share waits and resolves on signup
+- [ ] Claiming materializes game + annotation + My Reels entry (via T1830 claim handler)
+- [ ] Recipient can immediately watch the clip in My Reels
+- [ ] Recipient can also re-frame/re-overlay the annotation independently
+- [ ] Skipping the prompt creates no share (no side effects)
+- [ ] Non-users: pending share resolves on signup
