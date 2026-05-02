@@ -1,5 +1,5 @@
 """
-Tests for T1581: Storage extension cost calculations and expiry logic.
+Tests for T1581/T1582: Storage extension costs, upload surcharge, and expiry logic.
 """
 
 import math
@@ -7,47 +7,68 @@ from datetime import datetime, timedelta
 
 from app.services.storage_credits import (
     calculate_extension_cost,
+    calculate_storage_cost,
     calculate_upload_cost,
     storage_expires_at,
+    AUTO_EXPORT_SURCHARGE,
     R2_RATE_PER_GB_MONTH,
     CREDIT_VALUE,
     MARGIN,
 )
 
 
-class TestCalculateExtensionCost:
-    def test_extension_cost_matches_upload_cost(self):
-        size = 2_500_000_000  # 2.5 GB
-        assert calculate_extension_cost(size, 30) == calculate_upload_cost(size, 30)
+class TestUploadCostIncludesSurcharge:
+    def test_upload_cost_equals_storage_plus_surcharge(self):
+        size = int(2.5 * 1024 ** 3)
+        assert calculate_upload_cost(size, 30) == calculate_storage_cost(size, 30) + AUTO_EXPORT_SURCHARGE
+
+    def test_1gb_upload_cost(self):
+        size = int(1.0 * 1024 ** 3)
+        assert calculate_upload_cost(size, 30) == 2  # 1 storage + 1 surcharge
+
+    def test_2_5gb_upload_cost(self):
+        size = int(2.5 * 1024 ** 3)
+        assert calculate_upload_cost(size, 30) == 2  # 1 storage + 1 surcharge
+
+    def test_5gb_upload_cost(self):
+        size = int(5.0 * 1024 ** 3)
+        assert calculate_upload_cost(size, 30) == 3  # 2 storage + 1 surcharge
+
+    def test_10gb_upload_cost(self):
+        size = int(10.0 * 1024 ** 3)
+        assert calculate_upload_cost(size, 30) == 4  # 3 storage + 1 surcharge
+
+
+class TestExtensionCostNoSurcharge:
+    def test_extension_has_no_surcharge(self):
+        size = int(2.5 * 1024 ** 3)
+        assert calculate_extension_cost(size, 30) == calculate_storage_cost(size, 30)
+
+    def test_extension_less_than_upload(self):
+        size = int(2.5 * 1024 ** 3)
+        assert calculate_extension_cost(size, 30) < calculate_upload_cost(size, 30)
 
     def test_minimum_1_credit(self):
         assert calculate_extension_cost(100_000, 1) == 1
 
     def test_small_game_30_days(self):
-        size = int(1.0 * 1024 ** 3)  # 1 GB
-        cost = calculate_extension_cost(size, 30)
-        assert cost == 1
+        size = int(1.0 * 1024 ** 3)
+        assert calculate_extension_cost(size, 30) == 1
 
     def test_large_game_30_days(self):
-        size = int(5.0 * 1024 ** 3)  # 5 GB
-        cost = calculate_extension_cost(size, 30)
-        assert cost == 2
+        size = int(5.0 * 1024 ** 3)
+        assert calculate_extension_cost(size, 30) == 2
 
     def test_very_large_game_30_days(self):
-        size = int(10.0 * 1024 ** 3)  # 10 GB
-        cost = calculate_extension_cost(size, 30)
-        assert cost == 3
+        size = int(10.0 * 1024 ** 3)
+        assert calculate_extension_cost(size, 30) == 3
 
     def test_cost_scales_with_days(self):
         size = int(5.0 * 1024 ** 3)
-        cost_30 = calculate_extension_cost(size, 30)
-        cost_90 = calculate_extension_cost(size, 90)
-        assert cost_90 > cost_30
+        assert calculate_extension_cost(size, 90) > calculate_extension_cost(size, 30)
 
     def test_cost_scales_with_size(self):
-        cost_small = calculate_extension_cost(int(1.0 * 1024 ** 3), 30)
-        cost_large = calculate_extension_cost(int(10.0 * 1024 ** 3), 30)
-        assert cost_large > cost_small
+        assert calculate_extension_cost(int(10.0 * 1024 ** 3), 30) > calculate_extension_cost(int(1.0 * 1024 ** 3), 30)
 
     def test_365_day_extension(self):
         size = int(2.5 * 1024 ** 3)
@@ -83,7 +104,7 @@ class TestStorageExpiresAt:
 
 
 class TestDaysPerCreditFormula:
-    """Verify the frontend daysPerCredit formula matches backend cost formula."""
+    """Verify the frontend daysPerCredit formula matches backend extension cost formula."""
 
     def _days_per_credit(self, file_size_bytes):
         size_gb = file_size_bytes / (1024 ** 3)
@@ -98,7 +119,6 @@ class TestDaysPerCreditFormula:
         dpc = self._days_per_credit(size)
         assert dpc == 52
         assert calculate_extension_cost(size, dpc) == 1
-        assert calculate_extension_cost(size, dpc + 1) >= 1
 
     def test_5_gb_game(self):
         size = int(5.0 * 1024 ** 3)

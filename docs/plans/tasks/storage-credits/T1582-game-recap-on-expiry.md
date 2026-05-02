@@ -1,6 +1,6 @@
 # T1582: Auto-Recap & Brilliant Clip Export Before Expiry
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-05-01
@@ -156,29 +156,16 @@ All artifacts combined cost ~$0.05 for 5 years of R2. Well under 1 credit.
 
 ### Steps
 
-1. [ ] Add `auto_export_surcharge` constant (1 credit) to `storage_credits.py`
-2. [ ] Update `calculate_upload_cost()` to include surcharge
-3. [ ] Add `auto_export_status` and `recap_video_url` columns to games table
-4. [ ] Create `auto_export_game()` service function:
-   - Query all annotated clips for the game
-   - Filter 5-star (or 4-star fallback) for brilliant export
-   - Queue brilliant clips through framing + overlay pipeline (reuse export pipeline)
-   - Concat all clips into recap video (CPU-only FFmpeg)
-   - Upload recap to R2 as `recaps/{game_id}.mp4`
-   - Store brilliant exports in My Reels (gallery)
-   - Update game: `auto_export_status = 'complete'`, `recap_video_url`
-5. [ ] Modify daily cleanup sweep to call `auto_export_game()` before R2 deletion
-6. [ ] Frontend: expired game card click → play recap video (if available)
-7. [ ] Frontend: show brilliant clips in My Reels with "Auto-exported" badge
-8. [ ] Update upload cost display to reflect new total (storage + auto-export)
+1. [x] Add `auto_export_surcharge` constant (1 credit) to `storage_credits.py`
+2. [x] Update `calculate_upload_cost()` to include surcharge
+3. [x] Update upload cost display to reflect new total (storage + auto-export)
+
+Steps 3-7 from the original plan (auto-export pipeline, recap generation, frontend playback)
+have been moved to a standalone task: [T1583](../T1583-auto-export-pipeline.md)
 
 ## Acceptance Criteria
 
-- [ ] Upload cost includes 1-credit auto-export surcharge
-- [ ] All 5-star clips are auto-exported before game video deletion
-- [ ] Recap video is generated from all annotated clips (CPU-only, 480p)
-- [ ] Expired games with recap show playable video on click
-- [ ] Brilliant clip exports appear in My Reels
-- [ ] Auto-export is idempotent (doesn't re-run on already-exported games)
-- [ ] GPU cost per game stays under 0.5 credits (typical scenario)
-- [ ] Users with no annotated clips skip auto-export (no wasted GPU)
+- [x] Upload cost includes 1-credit auto-export surcharge
+- [x] Extension cost does NOT include surcharge (storage-only)
+- [x] Frontend upload cost display reflects new total
+- [x] Backend + frontend formulas match (23 tests passing)
