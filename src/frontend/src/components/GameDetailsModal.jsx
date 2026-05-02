@@ -151,6 +151,21 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     }
   }, [isSubmitting, getVideoFile]);
 
+  const hasVideo = videoMode === VideoMode.PER_GAME
+    ? selectedFile
+    : (halfFiles[0] && halfFiles[1]);
+  const isValid = opponentName.trim() && gameDate && hasVideo;
+
+  const uploadCost = useMemo(() => {
+    if (videoMode === VideoMode.PER_GAME && selectedFile) {
+      return calculateUploadCost(selectedFile.size);
+    }
+    if (videoMode === VideoMode.PER_HALF && halfFiles[0] && halfFiles[1]) {
+      return calculateUploadCost(halfFiles[0].size + halfFiles[1].size);
+    }
+    return null;
+  }, [videoMode, selectedFile, halfFiles]);
+
   const submitGame = useCallback(async () => {
     setIsSubmitting(true);
     try {
@@ -186,14 +201,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-
-    const hasVideo = videoMode === VideoMode.PER_GAME
-      ? selectedFile
-      : (halfFiles[0] && halfFiles[1]);
-
-    if (!opponentName.trim() || !gameDate || !hasVideo) {
-      return;
-    }
+    if (!isValid) return;
 
     if (uploadCost !== null && creditBalance < uploadCost) {
       setShowBuyCredits(true);
@@ -201,7 +209,14 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     }
 
     await submitGame();
-  }, [opponentName, gameDate, videoMode, selectedFile, halfFiles, uploadCost, creditBalance, submitGame]);
+  }, [isValid, uploadCost, creditBalance, submitGame]);
+
+  const handlePaymentSuccess = useCallback(async () => {
+    setShowBuyCredits(false);
+    await fetchCredits();
+    toast.success('Credits purchased! Creating your game...');
+    await submitGame();
+  }, [fetchCredits, submitGame]);
 
   const handleClose = useCallback(() => {
     if (!isSubmitting) {
@@ -216,28 +231,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       onClose();
     }
   }, [isSubmitting, onClose]);
-
-  const hasVideo = videoMode === VideoMode.PER_GAME
-    ? selectedFile
-    : (halfFiles[0] && halfFiles[1]);
-  const isValid = opponentName.trim() && gameDate && hasVideo;
-
-  const uploadCost = useMemo(() => {
-    if (videoMode === VideoMode.PER_GAME && selectedFile) {
-      return calculateUploadCost(selectedFile.size);
-    }
-    if (videoMode === VideoMode.PER_HALF && halfFiles[0] && halfFiles[1]) {
-      return calculateUploadCost(halfFiles[0].size + halfFiles[1].size);
-    }
-    return null;
-  }, [videoMode, selectedFile, halfFiles]);
-
-  const handlePaymentSuccess = useCallback(async () => {
-    setShowBuyCredits(false);
-    await fetchCredits();
-    toast.success('Credits purchased! Creating your game...');
-    await submitGame();
-  }, [fetchCredits, submitGame]);
 
   if (!isOpen) return null;
 
