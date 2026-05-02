@@ -164,6 +164,25 @@ def init_auth_db():
         """)
         db.commit()
 
+        # T1580: cross-user game storage tracking for R2 cleanup.
+        # Each row = one user's reference to a deduped game video.
+        # Daily sweep deletes R2 objects when MAX(storage_expires_at) < now.
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS game_storage_refs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                profile_id TEXT NOT NULL,
+                blake3_hash TEXT NOT NULL,
+                game_size_bytes INTEGER NOT NULL,
+                storage_expires_at TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(user_id, profile_id, blake3_hash)
+            );
+            CREATE INDEX IF NOT EXISTS idx_game_refs_hash ON game_storage_refs(blake3_hash);
+            CREATE INDEX IF NOT EXISTS idx_game_refs_user ON game_storage_refs(user_id);
+        """)
+        db.commit()
+
         # T1330: drop any NULL-email (guest) rows + rebuild users with NOT NULL email.
         _migrate_users_email_not_null(db)
 
@@ -912,3 +931,78 @@ def get_all_users_for_admin() -> list:
                ORDER BY created_at DESC"""
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# T1580: Game storage references (cross-user R2 cleanup)
+# ---------------------------------------------------------------------------
+
+def insert_game_storage_ref(
+    user_id: str,
+    profile_id: str,
+    blake3_hash: str,
+    game_size_bytes: int,
+    storage_expires_at: str,
+) -> None:
+    """Record a user's reference to a game video for R2 lifecycle tracking."""
+    with get_auth_db() as db:
+        db.execute(
+            """INSERT OR REPLACE INTO game_storage_refs
+                  (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at),
+        )
+        db.commit()
+    sync_auth_db_to_r2()
+
+
+def get_game_storage_ref(
+    user_id: str, profile_id: str, blake3_hash: str
+) -> Optional[dict]:
+    """Get a user's storage ref for a game video, or None."""
+    with get_auth_db() as db:
+        row = db.execute(
+            """SELECT storage_expires_at, game_size_bytes, created_at
+               FROM game_storage_refs
+               WHERE user_id = ? AND profile_id = ? AND blake3_hash = ?""",
+            (user_id, profile_id, blake3_hash),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_storage_refs_for_user(user_id: str) -> list[dict]:
+    """Get all storage refs for a user (all profiles). Used for game list expiry display."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT blake3_hash, storage_expires_at, game_size_bytes
+               FROM game_storage_refs
+               WHERE user_id = ?""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_expired_hashes() -> list[str]:
+    """Find game hashes where ALL user references have expired."""
+    now = datetime.utcnow().isoformat()
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT blake3_hash FROM game_storage_refs
+               GROUP BY blake3_hash
+               HAVING MAX(storage_expires_at) < ?""",
+            (now,),
+        ).fetchall()
+    return [row["blake3_hash"] for row in rows]
+
+
+def delete_refs_for_hash(blake3_hash: str) -> int:
+    """Delete all storage refs for a game hash (after R2 object deleted)."""
+    with get_auth_db() as db:
+        cursor = db.execute(
+            "DELETE FROM game_storage_refs WHERE blake3_hash = ?",
+            (blake3_hash,),
+        )
+        db.commit()
+        count = cursor.rowcount
+    sync_auth_db_to_r2()
+    return count

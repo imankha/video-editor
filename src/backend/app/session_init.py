@@ -86,6 +86,12 @@ def user_session_init(user_id: str) -> dict:
         set_selected_profile_id(user_id, profile_id)
         logger.info(f"Created new profile {profile_id} for user {user_id}")
 
+        # T1580: seed starting credits for new accounts
+        from .services.storage_credits import NEW_ACCOUNT_CREDITS
+        from .services.user_db import grant_credits
+        grant_credits(user_id, NEW_ACCOUNT_CREDITS, source="new_account_bonus")
+        logger.info(f"Seeded {NEW_ACCOUNT_CREDITS} credits for new user {user_id}")
+
     # 2. Set profile context
     set_current_profile_id(profile_id)
 

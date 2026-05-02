@@ -1105,6 +1105,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
  */
 function GameCard({ game, onLoad, onDelete }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const isExpired = game.storage_status === 'expired';
 
   // T251: Compute view progress
   const hasBeenViewed = game.viewed_duration > 0;
@@ -1129,13 +1130,13 @@ function GameCard({ game, onLoad, onDelete }) {
 
   return (
     <div
-      onClick={onLoad}
-      className={`group relative p-3 sm:p-4 bg-gray-800 hover:bg-gray-750 rounded-lg cursor-pointer border border-gray-700 ${GAME.borderHover} transition-all`}
+      onClick={() => !isExpired && onLoad()}
+      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all ${isExpired ? 'opacity-50 cursor-not-allowed' : `hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Gamepad2 size={18} className={`${GAME.accent} flex-shrink-0`} />
+            <Gamepad2 size={18} className={`${isExpired ? 'text-gray-500' : GAME.accent} flex-shrink-0`} />
             <h3 className="text-white font-medium truncate">{game.name}</h3>
             {isFullyReviewed && (
               <CheckCircle size={14} className={GAME.accent} title="Fully reviewed" />
@@ -1146,8 +1147,11 @@ function GameCard({ game, onLoad, onDelete }) {
                 {viewedPercent}%
               </span>
             )}
-            {isNew && game.video_duration > 0 && (
+            {isNew && !isExpired && game.video_duration > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
+            )}
+            {isExpired && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400">Expired</span>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">

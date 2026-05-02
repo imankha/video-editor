@@ -21,6 +21,9 @@ from pydantic import BaseModel, Field
 
 from app.database import get_db_connection
 from app.constants import UploadStatus
+from app.services.storage_credits import calculate_upload_cost
+from app.services.user_db import get_credit_balance
+from app.user_context import get_current_user_id
 from app.storage import (
     R2_ENABLED,
     r2_head_object_global,
@@ -126,6 +129,11 @@ async def prepare_upload(request: PrepareUploadRequest):
     # Check if game already exists in R2
     head_result = r2_head_object_global(r2_key)
 
+    # T1580: compute upload cost for all response paths
+    upload_cost = calculate_upload_cost(request.file_size)
+    user_id = get_current_user_id()
+    balance = get_credit_balance(user_id)["balance"]
+
     if head_result:
         # Video already exists in R2 - no upload needed
         # Game creation is handled separately by POST /api/games
@@ -133,6 +141,9 @@ async def prepare_upload(request: PrepareUploadRequest):
             "status": UploadStatus.EXISTS,
             "blake3_hash": blake3_hash,
             "file_size": head_result.get('ContentLength', request.file_size),
+            "upload_cost": upload_cost,
+            "balance": balance,
+            "can_afford": balance >= upload_cost,
         }
 
     # Check for existing pending upload with same hash (resume support)
@@ -181,7 +192,10 @@ async def prepare_upload(request: PrepareUploadRequest):
                     "upload_session_id": session_id,
                     "parts": remaining_parts,
                     "completed_parts": completed_parts,
-                    "is_resume": True
+                    "is_resume": True,
+                    "upload_cost": upload_cost,
+                    "balance": balance,
+                    "can_afford": balance >= upload_cost,
                 }
             else:
                 # R2 session expired/invalid - delete stale pending upload
@@ -243,7 +257,10 @@ async def prepare_upload(request: PrepareUploadRequest):
         "status": UploadStatus.UPLOAD_REQUIRED,
         "upload_session_id": session_id,
         "parts": parts,
-        "is_resume": False
+        "is_resume": False,
+        "upload_cost": upload_cost,
+        "balance": balance,
+        "can_afford": balance >= upload_cost,
     }
 
 

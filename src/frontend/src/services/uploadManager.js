@@ -26,6 +26,7 @@ export const UPLOAD_PHASE = {
   FINALIZING: 'finalizing',
   COMPLETE: 'complete',
   ERROR: 'error',
+  INSUFFICIENT_CREDITS: 'insufficient_credits',
 };
 
 // R2 upload status returned from prepare-upload / finalize-upload
@@ -368,6 +369,15 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   const prepareData = await prepareRes.json();
 
+  // T1580: Check if user can afford the upload before transferring bytes
+  if (prepareData.can_afford === false) {
+    const err = new Error(`Insufficient credits: need ${prepareData.upload_cost}, have ${prepareData.balance}`);
+    err.insufficientCredits = true;
+    err.uploadCost = prepareData.upload_cost;
+    err.balance = prepareData.balance;
+    throw err;
+  }
+
   // Video already exists in R2 - skip upload.
   // Simulate upload progress so UX is identical to a real upload (dedup is invisible).
   if (prepareData.status === UPLOAD_STATUS.EXISTS) {
@@ -514,6 +524,14 @@ async function activateGame(gameId) {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
+    if (res.status === 402) {
+      const detail = typeof error.detail === 'object' ? error.detail : {};
+      const err = new Error(detail.message || 'Insufficient credits for game upload');
+      err.insufficientCredits = true;
+      err.uploadCost = detail.required;
+      err.balance = detail.balance;
+      throw err;
+    }
     throw new Error(error.detail || `Activate game failed: ${res.status}`);
   }
   return await res.json();

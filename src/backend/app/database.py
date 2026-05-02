@@ -1034,6 +1034,12 @@ def ensure_database():
             cursor.execute("UPDATE final_videos SET published_at = created_at WHERE published_at IS NULL")
             logger.info("[Migration] Added published_at to final_videos, back-filled existing rows")
 
+        # T1580: storage expiry for game videos
+        game_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(games)").fetchall()}
+        if 'storage_expires_at' not in game_cols:
+            cursor.execute("ALTER TABLE games ADD COLUMN storage_expires_at TEXT")
+            logger.info("[Migration T1580] Added storage_expires_at to games")
+
         conn.commit()
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")

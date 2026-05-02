@@ -11,7 +11,10 @@ import { Button } from './shared/Button';
  *   onClose: () => void - close handler
  *   onBuyCredits: () => void - open BuyCreditsModal (T525)
  */
-export function InsufficientCreditsModal({ required, available, videoSeconds, onClose, onBuyCredits }) {
+export function InsufficientCreditsModal({ required, available, videoSeconds, description, onClose, onBuyCredits }) {
+  const detail = description
+    || `This export requires ${required} credits (${Math.round(videoSeconds)}s of video).`;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
       <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-white/10">
@@ -29,11 +32,7 @@ export function InsufficientCreditsModal({ required, available, videoSeconds, on
         </div>
 
         <div className="space-y-3 text-gray-300 text-sm">
-          <p>
-            This export requires{' '}
-            <strong className="text-white">{required} credits</strong>{' '}
-            ({Math.round(videoSeconds)}s of video).
-          </p>
+          <p>{detail}</p>
           <p>
             Your balance:{' '}
             <strong className="text-white">{available} credits</strong>.

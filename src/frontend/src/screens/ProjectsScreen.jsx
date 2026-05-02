@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ProjectManager } from '../components/ProjectManager';
 import { DownloadsPanel } from '../components/DownloadsPanel';
+import { InsufficientCreditsModal } from '../components/InsufficientCreditsModal';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
 import { useEditorStore } from '../stores/editorStore';
@@ -88,6 +89,8 @@ export function ProjectsScreen({
   // Active upload from uploadStore (in-progress upload that persists across navigation)
   const activeUpload = useUploadStore(state => state.activeUpload);
   const cancelUpload = useUploadStore(state => state.cancelUpload);
+  const insufficientCredits = useUploadStore(state => state.insufficientCredits);
+  const clearInsufficientCredits = useUploadStore(state => state.clearInsufficientCredits);
 
   // Project loading
   const { loadProject } = useProjectLoader();
@@ -354,6 +357,17 @@ export function ProjectsScreen({
             handleSelectProjectWithMode(projectId, { mode: 'framing' });
           }}
         />
+
+        {/* T1580: Insufficient credits for game upload */}
+        {insufficientCredits && (
+          <InsufficientCreditsModal
+            required={insufficientCredits.required}
+            available={insufficientCredits.balance}
+            description={`This upload requires ${insufficientCredits.required} credit${insufficientCredits.required !== 1 ? 's' : ''} for 30 days of storage.`}
+            onClose={clearInsufficientCredits}
+            onBuyCredits={clearInsufficientCredits}
+          />
+        )}
       </div>
     </AppStateProvider>
   );
