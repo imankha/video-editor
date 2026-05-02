@@ -41,10 +41,10 @@ No change to existing Framing credit cost. The R2 storage for 5 years ($0.014) i
 
 ## Task Breakdown
 
-| # | Task | Priority | Description |
-|---|---|---|---|
-| 1 | **T1580** | P1 | Game Upload & Storage Credits — size-based upload cost, 30-day expiry, renewal |
-| 2 | **T1581** | P2 | Storage Extension UX — date-slider modal + ExpirationBadge for game cards |
-| 3 | **T1582** | P2 | Auto-Recap & Brilliant Clip Export — generate recap video + export 5-star clips before game video deletion |
+| # | Task | Priority | Status | Description |
+|---|---|---|---|---|
+| 1 | **T1580** | P1 | TESTING | Game Upload & Storage Credits — size-based upload cost, 30-day expiry, renewal |
+| 2 | **T1581** | P2 | TESTING | Storage Extension UX — credit-based extension modal + ExpirationBadge for game cards |
+| 3 | **T1582** | P2 | TESTING | Upload surcharge (+1 credit) to pre-fund auto-export GPU costs |
 
-T1582 adds a 1-credit surcharge to uploads to cover GPU cost of auto-exporting brilliant clips. See [T1582 economic analysis](T1582-game-recap-on-expiry.md#economic-analysis) for break-even math.
+The auto-export pipeline (recap generation + brilliant clip export) was split out to [T1583](../T1583-auto-export-pipeline.md) as a standalone task outside this epic, so the Storage Credits epic can be tested independently.

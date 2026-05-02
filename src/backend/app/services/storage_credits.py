@@ -23,17 +23,22 @@ MARGIN = 0.10
 STORAGE_DURATION_DAYS = 30
 EXPIRY_VISIBLE_DAYS = 28
 NEW_ACCOUNT_CREDITS = 8
+AUTO_EXPORT_SURCHARGE = 1
 
 
-def calculate_upload_cost(file_size_bytes: int, days: int = STORAGE_DURATION_DAYS) -> int:
+def calculate_storage_cost(file_size_bytes: int, days: int = STORAGE_DURATION_DAYS) -> int:
     size_gb = file_size_bytes / (1024 ** 3)
     return max(1, math.ceil(
         size_gb * R2_RATE_PER_GB_MONTH * (days / 30) * (1 + MARGIN) / CREDIT_VALUE
     ))
 
 
+def calculate_upload_cost(file_size_bytes: int, days: int = STORAGE_DURATION_DAYS) -> int:
+    return calculate_storage_cost(file_size_bytes, days) + AUTO_EXPORT_SURCHARGE
+
+
 def calculate_extension_cost(file_size_bytes: int, days: int) -> int:
-    return calculate_upload_cost(file_size_bytes, days)
+    return calculate_storage_cost(file_size_bytes, days)
 
 
 def storage_expires_at(from_dt: datetime = None, days: int = STORAGE_DURATION_DAYS) -> datetime:
