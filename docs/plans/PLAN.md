@@ -118,8 +118,9 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | TESTING | [x] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
 | T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | TESTING | [x] | Resend integration for share emails (reused by player tagging); fire-and-forget |
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | 10 | 5 | 2.0 | | | **Gates virality -- every shared/invited user adds unmetered R2 cost without this. Must ship before sharing goes live.** |
-| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TODO | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
+| T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TESTING | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
+| T1582 | ↳ [Auto-Recap & Brilliant Clips](tasks/storage-credits/T1582-game-recap-on-expiry.md) | 8 | 6 | 1.3 | TODO | [ ] | Auto-export 5-star clips + generate recap video before game video deletion. +1cr surcharge on uploads covers GPU. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
 | T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
@@ -279,13 +280,13 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Pri | Migr | Description |
 |----|------|--------|-----|------|-------------|
-| | **[Player Tagging & Team Sharing](tasks/sharing/EPIC.md)** | | 1.3 | | **Player tagging, team game sharing, cross-user clip delivery** |
-| T1810 | ↳ [Player Tag Data Model & API](tasks/sharing/T1810-player-tag-data-model.md) | TODO | 2.3 | [x] | clip_player_tags table, CRUD endpoints, player tags on clips by email |
-| T1820 | ↳ [Annotation Player Tagging UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | TODO | 2.0 | [ ] | "Players" section in add clip dialog; auto-tag for 4+ star; UserPicker for teammates |
-| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | TODO | 1.6 | [x] | pending_shares in auth.sqlite, inbox UI, profile picker with per-sharer default |
-| T1840 | ↳ [Cross-User Clip Delivery](tasks/sharing/T1840-cross-user-clip-delivery.md) | TODO | 1.8 | [ ] | Player tag → pending share → email → claim → materialize game+clip in recipient DB |
-| T1850 | ↳ [Share Game with Team](tasks/sharing/T1850-share-game-with-team.md) | TODO | 2.0 | [ ] | "Share with Team" on game cards, game materialization on claim |
-| T1860 | ↳ [Reel Creation Player Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | TODO | 2.3 | [ ] | Player filter in GameClipSelectorModal; user's athlete default; OR logic |
+| | **[Teammate Sharing](tasks/sharing/EPIC.md)** | | 1.5 | | **Teammate annotations, game sharing with friends, tag-at-framing clip delivery** |
+| T1810 | ↳ [Teammate Annotation Model](tasks/sharing/T1810-player-tag-data-model.md) | TODO | 3.5 | [x] | `is_teammate` boolean on raw_clips, API support for toggle + filter |
+| T1820 | ↳ [Teammate Toggle UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | TODO | 3.0 | [ ] | "My Athlete" / "Teammate" toggle in annotation dialog |
+| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | TODO | 1.6 | [x] | pending_shares in auth.sqlite, inbox UI, claim flow with content materialization |
+| T1850 | ↳ [Share Game](tasks/sharing/T1850-share-game-with-team.md) | TODO | 2.0 | [ ] | Share game with friends via UserPicker, no cost to recipient |
+| T1840 | ↳ [Tag Teammate at Framing](tasks/sharing/T1840-cross-user-clip-delivery.md) | TODO | 1.8 | [ ] | During framing export wait, prompt to tag + share; delivers game + clip + My Reels entry |
+| T1860 | ↳ [Reel Creation Teammate Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | TODO | 2.3 | [ ] | "My Athlete" / "Teammate" filter in GameClipSelectorModal |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 

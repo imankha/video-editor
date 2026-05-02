@@ -1,7 +1,11 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
+import { BuyCreditsModal } from './BuyCreditsModal';
+import { toast } from './shared';
 import { GameType, VideoMode } from '../constants/gameConstants';
+import { useCreditStore } from '../stores/creditStore';
+import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
 
 /**
@@ -27,7 +31,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggingHalfIndex, setDraggingHalfIndex] = useState(null);
+  const [showBuyCredits, setShowBuyCredits] = useState(false);
   const fileInputRef = useRef(null);
+  const creditBalance = useCreditStore(state => state.balance);
+  const fetchCredits = useCreditStore(state => state.fetchCredits);
   const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -144,19 +151,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     }
   }, [isSubmitting, getVideoFile]);
 
-  const handleSubmit = useCallback(async (e) => {
-    e.preventDefault();
-
-    const hasVideo = videoMode === VideoMode.PER_GAME
-      ? selectedFile
-      : (halfFiles[0] && halfFiles[1]);
-
-    if (!opponentName.trim() || !gameDate || !hasVideo) {
-      return;
-    }
-
+  const submitGame = useCallback(async () => {
     setIsSubmitting(true);
-
     try {
       const gameDetails = {
         opponentName: opponentName.trim(),
@@ -174,7 +170,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
 
       await onCreateGame(gameDetails);
 
-      // Reset form
       setOpponentName('');
       setGameDate('');
       setGameType(GameType.HOME);
@@ -188,6 +183,25 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       setIsSubmitting(false);
     }
   }, [opponentName, gameDate, gameType, tournamentName, selectedFile, videoMode, halfFiles, onCreateGame, onClose]);
+
+  const handleSubmit = useCallback(async (e) => {
+    e.preventDefault();
+
+    const hasVideo = videoMode === VideoMode.PER_GAME
+      ? selectedFile
+      : (halfFiles[0] && halfFiles[1]);
+
+    if (!opponentName.trim() || !gameDate || !hasVideo) {
+      return;
+    }
+
+    if (uploadCost !== null && creditBalance < uploadCost) {
+      setShowBuyCredits(true);
+      return;
+    }
+
+    await submitGame();
+  }, [opponentName, gameDate, videoMode, selectedFile, halfFiles, uploadCost, creditBalance, submitGame]);
 
   const handleClose = useCallback(() => {
     if (!isSubmitting) {
@@ -207,6 +221,23 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     ? selectedFile
     : (halfFiles[0] && halfFiles[1]);
   const isValid = opponentName.trim() && gameDate && hasVideo;
+
+  const uploadCost = useMemo(() => {
+    if (videoMode === VideoMode.PER_GAME && selectedFile) {
+      return calculateUploadCost(selectedFile.size);
+    }
+    if (videoMode === VideoMode.PER_HALF && halfFiles[0] && halfFiles[1]) {
+      return calculateUploadCost(halfFiles[0].size + halfFiles[1].size);
+    }
+    return null;
+  }, [videoMode, selectedFile, halfFiles]);
+
+  const handlePaymentSuccess = useCallback(async () => {
+    setShowBuyCredits(false);
+    await fetchCredits();
+    toast.success('Credits purchased! Creating your game...');
+    await submitGame();
+  }, [fetchCredits, submitGame]);
 
   if (!isOpen) return null;
 
@@ -495,6 +526,17 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
             )}
           </div>
 
+          {/* Upload cost info */}
+          {uploadCost !== null && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-lg text-sm bg-gray-700/50 text-gray-300">
+              <div className="flex items-center gap-2">
+                <Coins size={14} className="text-yellow-400" />
+                <span>{uploadCost} credit{uploadCost !== 1 ? 's' : ''} for 30 days of storage</span>
+              </div>
+              <span className="font-medium text-white">Balance: {creditBalance}</span>
+            </div>
+          )}
+
           {/* Submit Button */}
           <div className="pt-2">
             <Button
@@ -509,6 +551,13 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
           </div>
         </form>
       </div>
+
+      {showBuyCredits && (
+        <BuyCreditsModal
+          onClose={() => setShowBuyCredits(false)}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
     </div>
   );
 }

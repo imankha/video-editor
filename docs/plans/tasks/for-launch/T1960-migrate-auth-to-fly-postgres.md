@@ -62,6 +62,12 @@ Migrate global SQLite tables to **Fly Postgres (unmanaged)** — a self-hosted P
 |-------|---------|-------------------|
 | shared_videos | SQLite, R2 sync on every write | Postgres table, indexed by token/video/sharer/recipient |
 
+**New (from Storage Credits epic, T1580):**
+
+| Table | Current | After (Postgres) |
+|-------|---------|-------------------|
+| game_storage_refs | Auth SQLite (interim until T1960) | Postgres table, cross-user game expiry tracking for R2 cleanup |
+
 ### What stays as SQLite
 
 Per-user databases (`profile.sqlite`, `user.sqlite`) remain as local SQLite synced to R2. The per-user pattern is correct with session pinning — each DB is small, isolated, and only accessed by one user at a time.
@@ -142,6 +148,51 @@ CREATE TABLE impersonation_audit (
 );
 CREATE INDEX idx_impersonation_audit_admin ON impersonation_audit(admin_user_id);
 CREATE INDEX idx_impersonation_audit_target ON impersonation_audit(target_user_id);
+
+-- Game storage references (cross-user)
+--
+-- Tracks per-user storage expiry for deduped game videos.
+-- The daily cleanup sweep queries this to find R2 objects safe to delete:
+-- all user references expired → delete from R2.
+--
+-- ACCESS PATTERNS:
+--
+-- READ  Cleanup sweep (daily cron):
+--       SELECT blake3_hash FROM game_storage_refs
+--         GROUP BY blake3_hash HAVING MAX(storage_expires_at) < now()
+--       → idx_game_refs_hash covers GROUP BY; Postgres scans all rows but table is small
+--
+-- READ  Check if game expired for a user (on game list load):
+--       SELECT storage_expires_at WHERE user_id = $1 AND blake3_hash = $2
+--       → UNIQUE constraint covers this (single-row lookup)
+--
+-- READ  Extension modal (show current expiry + compute cost):
+--       SELECT storage_expires_at, game_size_bytes WHERE user_id = $1 AND blake3_hash = $2
+--       → Same UNIQUE index
+--
+-- WRITE Register game upload (1 row per upload):
+--       INSERT INTO game_storage_refs (...) VALUES (...)
+--
+-- WRITE Extend storage (user pays credits to push expiry forward):
+--       UPDATE game_storage_refs SET storage_expires_at = $1
+--         WHERE user_id = $2 AND blake3_hash = $3
+--
+CREATE TABLE game_storage_refs (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(user_id),
+    profile_id TEXT NOT NULL,               -- For R2 key construction (no FK — profiles in per-user SQLite)
+    blake3_hash TEXT NOT NULL,              -- Deduped game video hash (maps to R2 key: {env}/games/{hash}.mp4)
+    game_size_bytes BIGINT NOT NULL,        -- Original upload size, used for extension cost calculation
+    storage_expires_at TIMESTAMPTZ NOT NULL,-- Per-user expiry; R2 object deleted when MAX() across all users passes
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, profile_id, blake3_hash)
+);
+
+-- Cleanup sweep: find hashes where ALL references are expired
+CREATE INDEX idx_game_refs_hash ON game_storage_refs(blake3_hash);
+
+-- User's game list: check expiry for all games belonging to a user
+CREATE INDEX idx_game_refs_user ON game_storage_refs(user_id);
 
 -- Shared videos
 --
@@ -311,6 +362,7 @@ See original T1960 audit for the full list of files importing from auth_db.py. s
 - T1190 (Session & Machine Pinning) — machine pinning becomes simpler when auth doesn't need local disk
 - T1290 (Auth DB Restore Must Succeed) — entire restore mechanism becomes unnecessary
 - T1750 (Share Backend Model & API) — sharing.sqlite migrates to Postgres here
+- T1580 (Game Storage Credits) — game_storage_refs table added to auth.sqlite as interim; migrates to Postgres here
 
 ### Risks
 - **Migration downtime**: Need a brief maintenance window to migrate data and switch over

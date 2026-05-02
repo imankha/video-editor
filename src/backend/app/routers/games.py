@@ -29,6 +29,10 @@ from app.storage import (
     r2_head_object_global,
 )
 from app.user_context import get_current_user_id
+from app.profile_context import get_current_profile_id
+from app.services.storage_credits import calculate_upload_cost, storage_expires_at
+from app.services.user_db import deduct_credits
+from app.services.auth_db import insert_game_storage_ref
 
 logger = logging.getLogger(__name__)
 
@@ -560,15 +564,51 @@ async def activate_game(game_id: int):
                         (fps, game_id)
                     )
 
-        # Flip status to ready
+        # T1580: Compute total size and deduct storage credits
         cursor.execute(
-            "UPDATE games SET status = ? WHERE id = ?",
-            (GameStatus.READY, game_id)
+            "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
+            (game_id,),
+        )
+        game_video_rows = cursor.fetchall()
+        total_size = sum(r["video_size"] or 0 for r in game_video_rows)
+
+        user_id = get_current_user_id()
+        profile_id = get_current_profile_id()
+        upload_cost = calculate_upload_cost(total_size) if total_size > 0 else 1
+
+        result = deduct_credits(user_id, upload_cost, source="game_upload", reference_id=str(game_id))
+        if not result["success"]:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "message": "Insufficient credits for game upload",
+                    "required": upload_cost,
+                    "balance": result["balance"],
+                },
+            )
+
+        # Set storage expiry on the game and record cross-user refs
+        expires_at = storage_expires_at()
+        expires_str = expires_at.isoformat()
+        cursor.execute(
+            "UPDATE games SET status = ?, storage_expires_at = ? WHERE id = ?",
+            (GameStatus.READY, expires_str, game_id),
         )
         conn.commit()
 
-    logger.info(f"Activated game {game_id}: status=ready")
-    return {"game_id": game_id, "status": GameStatus.READY}
+        for vr in game_video_rows:
+            if vr["blake3_hash"]:
+                insert_game_storage_ref(
+                    user_id, profile_id, vr["blake3_hash"],
+                    vr["video_size"] or 0, expires_str,
+                )
+
+    logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
+    return {
+        "game_id": game_id,
+        "status": GameStatus.READY,
+        "upload_cost_charged": upload_cost,
+    }
 
 
 @router.get("")
@@ -592,6 +632,7 @@ async def list_games():
                    g.mistake_count, g.blunder_count, g.aggregate_score,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status,
+                   g.storage_expires_at,
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -623,6 +664,17 @@ async def list_games():
             # Support both new (blake3_hash) and old (video_filename) storage
             video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
 
+            # T1580: compute storage status from expiry
+            expires_at_str = row['storage_expires_at']
+            if expires_at_str:
+                try:
+                    is_expired = datetime.fromisoformat(expires_at_str) < datetime.utcnow()
+                except ValueError:
+                    is_expired = False
+                storage_status = 'expired' if is_expired else 'active'
+            else:
+                storage_status = 'active'
+
             games.append({
                 'id': row['id'],
                 'name': display_name,
@@ -640,6 +692,8 @@ async def list_games():
                 'video_duration': row['effective_duration'],
                 'viewed_duration': row['viewed_duration'] or 0,
                 'status': row['status'] or 'ready',
+                'storage_status': storage_status,
+                'storage_expires_at': expires_at_str,
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")

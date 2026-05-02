@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { uploadGame, uploadMultiVideoGame, UPLOAD_PHASE } from '../services/uploadManager';
 import { toast } from '../components/shared';
 import { useQuestStore } from './questStore';
+import { useCreditStore } from './creditStore';
 
 /**
  * Upload Store - Manages game video uploads that persist across page navigation
@@ -18,6 +19,9 @@ export const useUploadStore = create((set, get) => ({
   // T1540: Game ID created during upload (persists across component remounts)
   uploadGameId: null,
   uploadGameName: null,
+
+  // T1580: Insufficient credits info (shown when upload is blocked)
+  insufficientCredits: null, // { required, balance }
 
   // Callbacks to notify when upload completes
   onCompleteCallbacks: [],
@@ -129,10 +133,25 @@ export const useUploadStore = create((set, get) => ({
       });
       // T540: Refresh quest progress after game upload
       useQuestStore.getState().fetchProgress({ force: true });
+      // T1580: Refresh credit balance after upload (credits deducted at activation)
+      useCreditStore.getState().fetchCredits();
     };
 
     const onUploadError = (error) => {
       console.error('[UploadStore] Upload failed:', error);
+      if (error.insufficientCredits) {
+        set({
+          activeUpload: null,
+          onCompleteCallbacks: [],
+          uploadGameId: null,
+          uploadGameName: null,
+          insufficientCredits: {
+            required: error.uploadCost,
+            balance: error.balance,
+          },
+        });
+        return;
+      }
       set((state) => ({
         activeUpload: state.activeUpload ? {
           ...state.activeUpload,
@@ -192,6 +211,8 @@ export const useUploadStore = create((set, get) => ({
     }
   },
 
+  clearInsufficientCredits: () => set({ insufficientCredits: null }),
+
   /**
    * Get current upload progress (0-100)
    */
@@ -223,7 +244,7 @@ export const useUploadStore = create((set, get) => ({
    * In-flight XHR continues (aborting multipart R2 uploads is complex),
    * but the completion callback is discarded so it won't affect the new profile.
    */
-  reset: () => set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null }),
+  reset: () => set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, insufficientCredits: null }),
 }));
 
 export default useUploadStore;

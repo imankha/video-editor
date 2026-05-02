@@ -1,71 +1,57 @@
-# T1810: Player Tag Data Model & API
+# T1810: Teammate Annotation Model
 
 **Status:** TODO
 **Impact:** 7
-**Complexity:** 3
+**Complexity:** 2
 **Created:** 2026-04-25
-**Updated:** 2026-04-25
+**Updated:** 2026-05-02
 
 ## Problem
 
-No data model exists for associating clips with specific athletes. Currently every clip is implicitly "mine." We need a `clip_player_tags` table to track which athletes are featured in each clip.
+All clips are implicitly "my athlete." Users annotating game footage often clip great plays by teammates but have no way to distinguish these. This distinction is needed for reel creation filtering and as the foundation for the teammate sharing flow (tag-at-framing).
 
 ## Solution
 
-Add `clip_player_tags` table to the per-profile database and backend CRUD endpoints for managing player tags on clips.
+Add an `is_teammate` boolean column to `raw_clips` (default 0). Include in clip CRUD API responses and accept in save/update payloads. Support filtering by `is_teammate` in the clip list endpoint.
 
 ## Context
 
 ### Relevant Files (REQUIRED)
 
 **Backend:**
-- `src/backend/app/database.py` — Add table to schema + migration
-- `src/backend/app/routers/clips.py` — Add player tag endpoints, include tags in clip responses
-- `src/backend/app/storage.py` — Player tag storage operations
+- `src/backend/app/database.py` — Add column to schema + migration
+- `src/backend/app/routers/clips.py` — Include `is_teammate` in clip responses and save/update payloads
+- `src/backend/app/storage.py` — Update clip storage operations
 
 ### Related Tasks
-- Depends on: T1800 (shared_contacts for autocomplete)
-- Blocks: T1820 (UI), T1840 (delivery), T1860 (reel filter)
+- Blocks: T1820 (toggle UI), T1840 (tag at framing), T1860 (reel filter)
 
 ### Technical Notes
 
-**Table schema (per-profile DB):**
+**Schema change (per-profile DB):**
 ```sql
-CREATE TABLE clip_player_tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    raw_clip_id INTEGER NOT NULL,
-    recipient_email TEXT NOT NULL,
-    tagged_at TEXT NOT NULL,
-    FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE,
-    UNIQUE(raw_clip_id, recipient_email)
-);
-CREATE INDEX idx_clip_player_tags_clip ON clip_player_tags(raw_clip_id);
-CREATE INDEX idx_clip_player_tags_email ON clip_player_tags(recipient_email);
+ALTER TABLE raw_clips ADD COLUMN is_teammate BOOLEAN NOT NULL DEFAULT 0;
 ```
 
-**Key design points:**
-- Player tags are stored by email only — no profile_id for the recipient (they choose profile on claim)
-- The current user's own email is a player tag like any other (auto-added for 4+ star clips)
-- Deleting a raw_clip cascades to its player tags
-- Tags are per-clip, not per-game (a game may have clips tagged to different players)
+**API changes:**
+- `POST /api/clips/raw/save` — accept optional `is_teammate` field (default false)
+- `PUT /api/clips/raw/{id}` — accept `is_teammate` in update payload
+- `GET /api/clips/raw` — include `is_teammate` in response, support `?is_teammate=0|1` filter param
+- `RawClipResponse` model — add `is_teammate: bool` field
 
-**Endpoints:**
-- `PUT /api/clips/raw/{id}/player-tags` — body: `{emails: [str]}` — replaces all player tags for clip
-- `GET /api/clips/raw/{id}/player-tags` — list player tags for a clip
-- Include `player_tags` array in `RawClipResponse` model
-
-**Integration with existing clip save flow:**
-- `POST /api/clips/raw/save` could accept optional `player_tags` field
-- Or: player tags saved separately after clip creation (simpler, matches gesture-based persistence)
+**Design points:**
+- Boolean, not enum — "My Athlete" (0) and "Teammate" (1) are the only values
+- Default 0 — all existing clips are implicitly "my athlete," no data migration needed
+- Set during annotation via toggle (T1820), used for reel filtering (T1860) and as a prompt trigger during framing export (T1840)
 
 ## Implementation
 
 ### Steps
-1. [ ] Add `clip_player_tags` table to database schema + migration
-2. [ ] Storage functions: `set_clip_player_tags(clip_id, emails)`, `get_clip_player_tags(clip_id)`, `get_clips_by_player_tag(email)`
-3. [ ] Endpoints: PUT and GET for player tags on clips
-4. [ ] Include `player_tags` in RawClipResponse
-5. [ ] Backend tests for CRUD + cascade delete
+1. [ ] Add `is_teammate` column to raw_clips schema + migration script
+2. [ ] Update storage functions to include is_teammate in CRUD
+3. [ ] Update RawClipResponse model
+4. [ ] Add `is_teammate` filter param to clip list endpoint
+5. [ ] Backend tests for CRUD + filter
 
 ### Progress Log
 
@@ -73,10 +59,9 @@ CREATE INDEX idx_clip_player_tags_email ON clip_player_tags(recipient_email);
 
 ## Acceptance Criteria
 
-- [ ] `clip_player_tags` table created via migration
-- [ ] PUT replaces all player tags for a clip (idempotent)
-- [ ] GET returns list of emails tagged on a clip
-- [ ] Player tags included in clip list/detail API responses
-- [ ] Deleting a clip cascades to its player tags
-- [ ] Can query clips by player email (for reel creation filter)
+- [ ] `is_teammate` column exists on raw_clips (default 0)
+- [ ] Clip save/update accepts `is_teammate`
+- [ ] Clip list/detail responses include `is_teammate`
+- [ ] Clip list endpoint supports `?is_teammate=` filter
+- [ ] Existing clips default to `is_teammate = 0`
 - [ ] Backend tests pass
