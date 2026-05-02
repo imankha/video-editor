@@ -30,7 +30,7 @@ from app.storage import (
 )
 from app.user_context import get_current_user_id
 from app.profile_context import get_current_profile_id
-from app.services.storage_credits import calculate_upload_cost, storage_expires_at
+from app.services.storage_credits import calculate_upload_cost, calculate_extension_cost, storage_expires_at
 from app.services.user_db import deduct_credits
 from app.services.auth_db import insert_game_storage_ref
 
@@ -632,7 +632,7 @@ async def list_games():
                    g.mistake_count, g.blunder_count, g.aggregate_score,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status,
-                   g.storage_expires_at,
+                   g.storage_expires_at, g.video_size,
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -694,10 +694,82 @@ async def list_games():
                 'status': row['status'] or 'ready',
                 'storage_status': storage_status,
                 'storage_expires_at': expires_at_str,
+                'video_size': row['video_size'],
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
         return {'games': games}
+
+
+class ExtendStorageRequest(BaseModel):
+    days: int = Field(..., ge=1, le=365)
+
+
+@router.post("/{game_id:int}/extend-storage")
+async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
+    """Extend storage expiry for a game by N days. Deducts credits."""
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT id, storage_expires_at, video_size FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        game_size = game['video_size'] or 0
+        cost = calculate_extension_cost(game_size, request.days)
+
+        result = deduct_credits(user_id, cost, source="storage_extension", reference_id=str(game_id))
+        if not result["success"]:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "insufficient_credits",
+                    "required": cost,
+                    "balance": result["balance"],
+                },
+            )
+
+        current_expiry = game['storage_expires_at']
+        if current_expiry:
+            base = max(datetime.fromisoformat(current_expiry), datetime.utcnow())
+        else:
+            base = datetime.utcnow()
+        new_expiry = storage_expires_at(from_dt=base, days=request.days)
+        new_expiry_str = new_expiry.isoformat()
+
+        cursor.execute(
+            "UPDATE games SET storage_expires_at = ? WHERE id = ?",
+            (new_expiry_str, game_id),
+        )
+        conn.commit()
+
+        game_video_rows = cursor.execute(
+            "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
+            (game_id,),
+        ).fetchall()
+
+    for vr in game_video_rows:
+        insert_game_storage_ref(
+            user_id, profile_id, vr["blake3_hash"],
+            vr["video_size"] or 0, new_expiry_str,
+        )
+
+    logger.info(
+        f"[extend_storage] game={game_id} extended by {request.days}d, "
+        f"cost={cost}cr, new_expiry={new_expiry_str}"
+    )
+
+    return {
+        "success": True,
+        "new_expires_at": new_expiry_str,
+        "cost_credits": cost,
+        "new_balance": result["balance"],
+    }
 
 
 @router.get("/tournaments")

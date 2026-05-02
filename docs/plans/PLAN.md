@@ -119,7 +119,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | TESTING | [x] | Resend integration for share emails (reused by player tagging); fire-and-forget |
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | 10 | 5 | 2.0 | | | **Gates virality -- every shared/invited user adds unmetered R2 cost without this. Must ship before sharing goes live.** |
 | T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TESTING | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
-| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TODO | [x] | ExpirationBadge on game cards + date-slider extension modal |
+| T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TESTING | [x] | ExpirationBadge on game cards + credit-based extension modal |
 | T1582 | ↳ [Auto-Recap & Brilliant Clips](tasks/storage-credits/T1582-game-recap-on-expiry.md) | 8 | 6 | 1.3 | TODO | [ ] | Auto-export 5-star clips + generate recap video before game video deletion. +1cr surcharge on uploads covers GPU. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |

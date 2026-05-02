@@ -1,6 +1,6 @@
 # T1581: Storage Extension UX
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-04-19
