@@ -322,6 +322,15 @@ async def startup_event():
         "per-user first request (runs once per user via user_session_init)"
     )
 
+    # T1583: Start background sweep loop for auto-export + R2 cleanup
+    from app.services.sweep_scheduler import start_sweep_loop
+    await start_sweep_loop()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    from app.services.sweep_scheduler import stop_sweep_loop
+    await stop_sweep_loop()
 
 
 @app.exception_handler(Exception)

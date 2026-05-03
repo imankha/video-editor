@@ -1006,3 +1006,29 @@ def delete_refs_for_hash(blake3_hash: str) -> int:
         count = cursor.rowcount
     sync_auth_db_to_r2()
     return count
+
+
+def get_users_for_hash(blake3_hash: str) -> list[dict]:
+    """Get all (user_id, profile_id) pairs that reference this game hash."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT user_id, profile_id FROM game_storage_refs
+               WHERE blake3_hash = ?""",
+            (blake3_hash,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_next_expiry() -> Optional[datetime]:
+    """Return the earliest future expiry across all game storage refs."""
+    now = datetime.utcnow().isoformat()
+    with get_auth_db() as db:
+        row = db.execute(
+            """SELECT MIN(storage_expires_at) as next_expiry
+               FROM game_storage_refs
+               WHERE storage_expires_at > ?""",
+            (now,),
+        ).fetchone()
+    if row and row['next_expiry']:
+        return datetime.fromisoformat(row['next_expiry'])
+    return None

@@ -678,7 +678,9 @@ def ensure_database():
                 tournament_name TEXT,
                 viewed_duration REAL DEFAULT 0,
                 video_fps REAL,
-                status TEXT DEFAULT 'ready'
+                status TEXT DEFAULT 'ready',
+                auto_export_status TEXT,
+                recap_video_url TEXT
             )
         """)
 
@@ -1039,6 +1041,14 @@ def ensure_database():
         if 'storage_expires_at' not in game_cols:
             cursor.execute("ALTER TABLE games ADD COLUMN storage_expires_at TEXT")
             logger.info("[Migration T1580] Added storage_expires_at to games")
+
+        # T1583: auto-export pipeline columns
+        if 'auto_export_status' not in game_cols:
+            cursor.execute("ALTER TABLE games ADD COLUMN auto_export_status TEXT")
+            logger.info("[Migration T1583] Added auto_export_status to games")
+        if 'recap_video_url' not in game_cols:
+            cursor.execute("ALTER TABLE games ADD COLUMN recap_video_url TEXT")
+            logger.info("[Migration T1583] Added recap_video_url to games")
 
         conn.commit()
         _initialized_users.add(user_id)

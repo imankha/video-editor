@@ -121,7 +121,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | TESTING | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TESTING | [x] | ExpirationBadge on game cards + credit-based extension modal |
 | T1582 | ↳ [Upload Surcharge](tasks/storage-credits/T1582-game-recap-on-expiry.md) | 8 | 2 | 4.0 | TESTING | [ ] | +1cr surcharge on uploads to pre-fund auto-export GPU costs |
-| T1583 | [Auto-Export Pipeline](tasks/T1583-auto-export-pipeline.md) | 8 | 6 | 1.3 | TODO | [ ] | Auto-export 5-star clips + generate recap video before game video deletion. Split from T1582. |
+| T1583 | [Auto-Export Pipeline](tasks/T1583-auto-export-pipeline.md) | 8 | 6 | 1.3 | TESTING | [ ] | Auto-export 5-star clips + generate recap video before game video deletion. Split from T1582. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
 | T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |

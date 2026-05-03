@@ -1,6 +1,6 @@
 # T1583: Auto-Export Pipeline (Recap + Brilliant Clips)
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-05-02

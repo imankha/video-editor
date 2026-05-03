@@ -25,6 +25,7 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
 import { ExpirationBadge } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
+import { RecapPlayerModal } from './RecapPlayerModal';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -79,6 +80,7 @@ export function ProjectManager({
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
+  const [recapGame, setRecapGame] = useState(null);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
@@ -723,6 +725,7 @@ export function ProjectManager({
                       onLoad={() => onLoadGame(game.id)}
                       onDelete={() => onDeleteGame(game.id)}
                       onExtend={() => setExtensionGame(game)}
+                      onPlayRecap={() => setRecapGame(game)}
                     />
                   ))}
                 </div>
@@ -955,6 +958,17 @@ export function ProjectManager({
         />
       )}
 
+      {recapGame && (
+        <RecapPlayerModal
+          game={recapGame}
+          onClose={() => setRecapGame(null)}
+          onExtend={() => {
+            setRecapGame(null);
+            setExtensionGame(recapGame);
+          }}
+        />
+      )}
+
     </div>
   );
 }
@@ -1115,7 +1129,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete, onExtend }) {
+function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isExpired = game.storage_status === 'expired';
 
@@ -1138,9 +1152,15 @@ function GameCard({ game, onLoad, onDelete, onExtend }) {
     }
   };
 
+  const hasRecap = Boolean(game.recap_video_url);
+
   const handleClick = () => {
     if (isExpired) {
-      onExtend?.();
+      if (hasRecap) {
+        onPlayRecap?.();
+      } else {
+        onExtend?.();
+      }
     } else {
       onLoad();
     }
@@ -1167,6 +1187,9 @@ function GameCard({ game, onLoad, onDelete, onExtend }) {
             )}
             {isNew && !isExpired && game.video_duration > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
+            )}
+            {isExpired && hasRecap && (
+              <Play size={14} className="text-blue-400" title="Watch recap" />
             )}
             <ExpirationBadge expiresAt={game.storage_expires_at} onClick={onExtend} />
           </div>

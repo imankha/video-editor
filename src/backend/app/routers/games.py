@@ -633,6 +633,7 @@ async def list_games():
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status,
                    g.storage_expires_at, g.video_size,
+                   g.auto_export_status, g.recap_video_url,
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
             LEFT JOIN (
@@ -695,10 +696,30 @@ async def list_games():
                 'storage_status': storage_status,
                 'storage_expires_at': expires_at_str,
                 'video_size': row['video_size'],
+                'auto_export_status': row['auto_export_status'],
+                'recap_video_url': row['recap_video_url'],
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
         return {'games': games}
+
+
+@router.get("/{game_id:int}/recap-url")
+async def get_recap_url(game_id: int):
+    """Get presigned URL for a game's recap video."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT recap_video_url FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+
+    if not game or not game['recap_video_url']:
+        raise HTTPException(status_code=404, detail="No recap video")
+
+    user_id = get_current_user_id()
+    url = generate_presigned_url(user_id, game['recap_video_url'], expires_in=14400)
+    return {"url": url}
 
 
 class ExtendStorageRequest(BaseModel):
