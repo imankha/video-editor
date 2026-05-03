@@ -11,10 +11,13 @@ import logging
 from datetime import datetime
 
 from .auth_db import (
+    delete_grace_deletion,
     delete_ref,
+    get_expired_grace_deletions,
     get_expired_refs,
     get_next_expiry,
     has_remaining_refs,
+    insert_grace_deletion,
 )
 from .auto_export import auto_export_game
 from ..database import ensure_database, get_db_connection
@@ -29,6 +32,7 @@ _sweep_task: asyncio.Task | None = None
 MAX_DELAY = 86400  # 24 hours
 MIN_DELAY = 60  # 1 minute
 STARTUP_DELAY = 60  # Wait for app to stabilize
+GRACE_PERIOD_DAYS = 14
 
 
 async def start_sweep_loop():
@@ -79,13 +83,14 @@ async def _run_sweep_loop():
 
 
 def do_sweep():
-    """Process all individually-expired storage refs (per user-game)."""
+    """Phase 1: process expired refs. Phase 2: delete grace-expired R2 objects."""
+    # Phase 1: auto-export and delete expired storage refs
     expired_refs = get_expired_refs()
     if not expired_refs:
-        logger.info("[Sweep] No expired games")
-        return
+        logger.info("[Sweep] No expired refs")
+    else:
+        logger.info(f"[Sweep] Processing {len(expired_refs)} expired refs")
 
-    logger.info(f"[Sweep] Processing {len(expired_refs)} expired refs")
     expired_hashes = {r['blake3_hash'] for r in expired_refs}
 
     for ref in expired_refs:
@@ -117,8 +122,15 @@ def do_sweep():
         logger.info(f"[Sweep] Deleted ref user={user_id[:8]} hash={blake3_hash[:12]}")
 
         if not has_remaining_refs(blake3_hash):
-            r2_delete_object_global(f"games/{blake3_hash}.mp4")
-            logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (no refs remain)")
+            insert_grace_deletion(blake3_hash, GRACE_PERIOD_DAYS)
+            logger.info(f"[Sweep] Grace period started hash={blake3_hash[:12]} ({GRACE_PERIOD_DAYS}d)")
+
+    # Phase 2: delete R2 objects whose grace period has elapsed
+    grace_expired = get_expired_grace_deletions()
+    for blake3_hash in grace_expired:
+        r2_delete_object_global(f"games/{blake3_hash}.mp4")
+        delete_grace_deletion(blake3_hash)
+        logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
 
 
 def _find_games_for_hash(

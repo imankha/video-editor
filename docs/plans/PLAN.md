@@ -122,6 +122,11 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | TESTING | [x] | ExpirationBadge on game cards + credit-based extension modal |
 | T1582 | ↳ [Upload Surcharge](tasks/storage-credits/T1582-game-recap-on-expiry.md) | 8 | 2 | 4.0 | TESTING | [ ] | +1cr surcharge on uploads to pre-fund auto-export GPU costs |
 | T1583 | [Auto-Export Pipeline](tasks/T1583-auto-export-pipeline.md) | 8 | 6 | 1.3 | TESTING | [ ] | Auto-export 5-star clips + generate recap video before game video deletion. Split from T1582. |
+| T2400 | [Grace Period for Expired Games](tasks/T2400-grace-period-for-expired-games.md) | 7 | 3 | 2.3 | TESTING | [ ] | Keep game videos in R2 for 2 weeks after last ref expires. Extend option available during grace period. |
+| | **[Expired Game Experience](tasks/expired-game-experience/EPIC.md)** | 6 | 4 | 1.5 | | | **Rich playback-mode viewer for expired games: annotations, highlights tabs, brilliant clips in My Reels** |
+| T2410 | ↳ [Playback-Mode Recap Viewer](tasks/expired-game-experience/T2410-playback-mode-recap-viewer.md) | 7 | 5 | 1.4 | TODO | [ ] | Replace RecapPlayerModal with read-only playback mode showing annotations, clip navigation |
+| T2420 | ↳ [Annotations + Highlights Tabs](tasks/expired-game-experience/T2420-annotations-highlights-tabs.md) | 6 | 4 | 1.5 | TODO | [ ] | Two video modes: all annotated clips, or just 5-star highlights |
+| T2430 | ↳ [Brilliant Clips in My Reels](tasks/expired-game-experience/T2430-brilliant-clips-in-my-reels.md) | 6 | 2 | 3.0 | TODO | [ ] | Ensure auto-exported 5-star clips are filterable and always accessible in My Reels |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TODO | [x] | DB schema: athlete_name, team_name, sport + profile UI. Foundation for T1620/T1630. (Absorbs T1073) |
 | T1620 | ↳ [Sport-Specific Tag Definitions](tasks/athlete-profile/T1620-sport-specific-tag-definitions.md) | 5 | 3 | 1.7 | TODO | [ ] | Research and define position categories + tags for Football, Basketball, Lacrosse, Rugby |
@@ -341,5 +346,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2100-T2220` - Overlay System v2 epic
 - `T2250-T2260` - Session Scaling epic
 - `T2300-T2380` - Landing Page Redesign epic
+- `T2400` - Grace Period for Expired Games
+- `T2410-T2430` - Expired Game Experience epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.

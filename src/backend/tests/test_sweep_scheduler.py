@@ -167,15 +167,18 @@ class TestFindGamesForHash:
 # ---------------------------------------------------------------------------
 
 class TestDoSweep:
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
     @patch(f"{M}.get_expired_refs", return_value=[])
-    def test_no_expired_refs(self, mock_expired, isolated_profile_db):
+    def test_no_expired_refs(self, mock_expired, mock_grace_expired, isolated_profile_db):
         from app.services.sweep_scheduler import do_sweep
 
         do_sweep()
         mock_expired.assert_called_once()
+        mock_grace_expired.assert_called_once()
 
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
     @patch(f"{M}.has_remaining_refs", return_value=False)
-    @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
@@ -184,10 +187,10 @@ class TestDoSweep:
     ])
     def test_sweep_processes_ref(
         self, mock_expired, mock_ensure, mock_export,
-        mock_delete_ref, mock_r2_delete, mock_has_remaining,
-        isolated_profile_db
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
     ):
-        from app.services.sweep_scheduler import do_sweep
+        from app.services.sweep_scheduler import do_sweep, GRACE_PERIOD_DAYS
 
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc")
@@ -196,20 +199,21 @@ class TestDoSweep:
 
         mock_export.assert_called_once_with(USER_ID, PROFILE_ID, game_id)
         mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
-        mock_r2_delete.assert_called_once_with("games/hash_abc.mp4")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
 
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
     @patch(f"{M}.has_remaining_refs", return_value=True)
-    @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
     @patch(f"{M}.get_expired_refs", return_value=[
         {"user_id": USER_ID, "profile_id": PROFILE_ID, "blake3_hash": "hash_abc"}
     ])
-    def test_sweep_skips_r2_delete_when_refs_remain(
+    def test_sweep_skips_grace_when_refs_remain(
         self, mock_expired, mock_ensure, mock_export,
-        mock_delete_ref, mock_r2_delete, mock_has_remaining,
-        isolated_profile_db
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -219,10 +223,11 @@ class TestDoSweep:
         do_sweep()
 
         mock_delete_ref.assert_called_once()
-        mock_r2_delete.assert_not_called()
+        mock_insert_grace.assert_not_called()
 
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
     @patch(f"{M}.has_remaining_refs", return_value=False)
-    @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", side_effect=RuntimeError("boom"))
     @patch(f"{M}.ensure_database")
@@ -231,8 +236,8 @@ class TestDoSweep:
     ])
     def test_sweep_continues_on_export_failure(
         self, mock_expired, mock_ensure, mock_export,
-        mock_delete_ref, mock_r2_delete, mock_has_remaining,
-        isolated_profile_db
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -242,10 +247,11 @@ class TestDoSweep:
         do_sweep()
 
         mock_delete_ref.assert_called_once()
-        mock_r2_delete.assert_called_once()
+        mock_insert_grace.assert_called_once()
 
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
     @patch(f"{M}.has_remaining_refs", return_value=False)
-    @patch(f"{M}.r2_delete_object_global")
     @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="skipped")
     @patch(f"{M}.ensure_database")
@@ -255,8 +261,8 @@ class TestDoSweep:
     ])
     def test_sweep_processes_each_ref_independently(
         self, mock_expired, mock_ensure, mock_export,
-        mock_delete_ref, mock_r2_delete, mock_has_remaining,
-        isolated_profile_db
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -264,6 +270,40 @@ class TestDoSweep:
 
         assert mock_ensure.call_count == 2
         assert mock_delete_ref.call_count == 2
+
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old1", "hash_old2"])
+    @patch(f"{M}.get_expired_refs", return_value=[])
+    def test_sweep_grace_phase_deletes_expired(
+        self, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, isolated_profile_db
+    ):
+        from app.services.sweep_scheduler import do_sweep
+
+        do_sweep()
+
+        assert mock_r2_delete.call_count == 2
+        mock_r2_delete.assert_any_call("games/hash_old1.mp4")
+        mock_r2_delete.assert_any_call("games/hash_old2.mp4")
+        assert mock_del_grace.call_count == 2
+        mock_del_grace.assert_any_call("hash_old1")
+        mock_del_grace.assert_any_call("hash_old2")
+
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.get_expired_refs", return_value=[])
+    def test_sweep_grace_phase_empty(
+        self, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, isolated_profile_db
+    ):
+        from app.services.sweep_scheduler import do_sweep
+
+        do_sweep()
+
+        mock_r2_delete.assert_not_called()
+        mock_del_grace.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

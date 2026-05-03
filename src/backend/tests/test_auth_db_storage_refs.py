@@ -148,3 +148,131 @@ class TestGetNextExpiry:
         result = auth_db.get_next_expiry()
         assert result is not None
         assert abs((result - future).total_seconds()) < 2
+
+    def test_returns_grace_expiry_when_earlier(self, temp_auth_db):
+        ref_future = datetime.utcnow() + timedelta(days=30)
+        _insert_ref("hash_a", "user-1", "prof-1", ref_future.isoformat())
+        auth_db.insert_grace_deletion("hash_b", grace_days=3)
+
+        result = auth_db.get_next_expiry()
+        assert result is not None
+        grace_expected = datetime.utcnow() + timedelta(days=3)
+        assert abs((result - grace_expected).total_seconds()) < 2
+
+    def test_returns_ref_expiry_when_earlier_than_grace(self, temp_auth_db):
+        ref_soon = datetime.utcnow() + timedelta(hours=1)
+        _insert_ref("hash_a", "user-1", "prof-1", ref_soon.isoformat())
+        auth_db.insert_grace_deletion("hash_b", grace_days=14)
+
+        result = auth_db.get_next_expiry()
+        assert result is not None
+        assert abs((result - ref_soon).total_seconds()) < 2
+
+    def test_returns_grace_expiry_when_no_refs(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a", grace_days=7)
+
+        result = auth_db.get_next_expiry()
+        assert result is not None
+        expected = datetime.utcnow() + timedelta(days=7)
+        assert abs((result - expected).total_seconds()) < 2
+
+
+# ---------------------------------------------------------------------------
+# insert_grace_deletion
+# ---------------------------------------------------------------------------
+
+class TestInsertGraceDeletion:
+    def test_basic_insert(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a", grace_days=14)
+
+        with auth_db.get_auth_db() as db:
+            row = db.execute(
+                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = ?",
+                ("hash_a",),
+            ).fetchone()
+        assert row is not None
+        expires = datetime.fromisoformat(row['grace_expires_at'])
+        expected = datetime.utcnow() + timedelta(days=14)
+        assert abs((expires - expected).total_seconds()) < 2
+
+    def test_idempotent_insert_or_ignore(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a", grace_days=14)
+        auth_db.insert_grace_deletion("hash_a", grace_days=7)
+
+        with auth_db.get_auth_db() as db:
+            row = db.execute(
+                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = ?",
+                ("hash_a",),
+            ).fetchone()
+        expires = datetime.fromisoformat(row['grace_expires_at'])
+        expected = datetime.utcnow() + timedelta(days=14)
+        assert abs((expires - expected).total_seconds()) < 2
+
+
+# ---------------------------------------------------------------------------
+# get_expired_grace_deletions
+# ---------------------------------------------------------------------------
+
+class TestGetExpiredGraceDeletions:
+    def test_returns_only_past_grace_rows(self, temp_auth_db):
+        past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        future = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        with auth_db.get_auth_db() as db:
+            db.execute(
+                "INSERT INTO r2_grace_deletions (blake3_hash, grace_expires_at) VALUES (?, ?)",
+                ("hash_a", past),
+            )
+            db.execute(
+                "INSERT INTO r2_grace_deletions (blake3_hash, grace_expires_at) VALUES (?, ?)",
+                ("hash_b", future),
+            )
+            db.commit()
+
+        result = auth_db.get_expired_grace_deletions()
+        assert result == ["hash_a"]
+
+    def test_returns_empty_when_none_expired(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a", grace_days=14)
+
+        result = auth_db.get_expired_grace_deletions()
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# delete_grace_deletion
+# ---------------------------------------------------------------------------
+
+class TestDeleteGraceDeletion:
+    def test_removes_row(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a")
+
+        auth_db.delete_grace_deletion("hash_a")
+
+        with auth_db.get_auth_db() as db:
+            row = db.execute(
+                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = ?",
+                ("hash_a",),
+            ).fetchone()
+        assert row is None
+
+    def test_no_op_for_nonexistent(self, temp_auth_db):
+        auth_db.delete_grace_deletion("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# insert_game_storage_ref clears grace deletion
+# ---------------------------------------------------------------------------
+
+class TestInsertRefClearsGrace:
+    def test_clears_grace_on_extension(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a")
+
+        future = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+
+        with auth_db.get_auth_db() as db:
+            row = db.execute(
+                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = ?",
+                ("hash_a",),
+            ).fetchone()
+        assert row is None

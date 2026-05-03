@@ -183,6 +183,18 @@ def init_auth_db():
         """)
         db.commit()
 
+        # T2400: Grace period before permanent R2 deletion.
+        # When the last user ref for a hash expires, the hash enters a 14-day
+        # grace window before the R2 object is permanently deleted.
+        db.executescript("""
+            CREATE TABLE IF NOT EXISTS r2_grace_deletions (
+                blake3_hash TEXT PRIMARY KEY,
+                grace_expires_at TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+        """)
+        db.commit()
+
         # T1330: drop any NULL-email (guest) rows + rebuild users with NOT NULL email.
         _migrate_users_email_not_null(db)
 
@@ -952,6 +964,10 @@ def insert_game_storage_ref(
                VALUES (?, ?, ?, ?, ?)""",
             (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at),
         )
+        db.execute(
+            "DELETE FROM r2_grace_deletions WHERE blake3_hash = ?",
+            (blake3_hash,),
+        )
         db.commit()
     sync_auth_db_to_r2()
 
@@ -1018,15 +1034,64 @@ def has_remaining_refs(blake3_hash: str) -> bool:
 
 
 def get_next_expiry() -> Optional[datetime]:
-    """Return the earliest future expiry across all game storage refs."""
+    """Return the earliest future event: ref expiry or grace deletion deadline."""
     now = datetime.utcnow().isoformat()
     with get_auth_db() as db:
-        row = db.execute(
+        ref_row = db.execute(
             """SELECT MIN(storage_expires_at) as next_expiry
                FROM game_storage_refs
                WHERE storage_expires_at > ?""",
             (now,),
         ).fetchone()
-    if row and row['next_expiry']:
-        return datetime.fromisoformat(row['next_expiry'])
-    return None
+        grace_row = db.execute(
+            """SELECT MIN(grace_expires_at) as next_expiry
+               FROM r2_grace_deletions""",
+        ).fetchone()
+
+    candidates = []
+    if ref_row and ref_row['next_expiry']:
+        candidates.append(datetime.fromisoformat(ref_row['next_expiry']))
+    if grace_row and grace_row['next_expiry']:
+        candidates.append(datetime.fromisoformat(grace_row['next_expiry']))
+    return min(candidates) if candidates else None
+
+
+# ---------------------------------------------------------------------------
+# T2400: Grace period before permanent R2 deletion
+# ---------------------------------------------------------------------------
+
+def insert_grace_deletion(blake3_hash: str, grace_days: int = 14) -> None:
+    """Schedule an R2 object for deletion after a grace period."""
+    grace_expires_at = (datetime.utcnow() + timedelta(days=grace_days)).isoformat()
+    with get_auth_db() as db:
+        db.execute(
+            """INSERT OR IGNORE INTO r2_grace_deletions
+                  (blake3_hash, grace_expires_at)
+               VALUES (?, ?)""",
+            (blake3_hash, grace_expires_at),
+        )
+        db.commit()
+    sync_auth_db_to_r2()
+
+
+def get_expired_grace_deletions() -> list[str]:
+    """Return blake3_hashes whose grace period has elapsed."""
+    now = datetime.utcnow().isoformat()
+    with get_auth_db() as db:
+        rows = db.execute(
+            """SELECT blake3_hash FROM r2_grace_deletions
+               WHERE grace_expires_at < ?""",
+            (now,),
+        ).fetchall()
+    return [r['blake3_hash'] for r in rows]
+
+
+def delete_grace_deletion(blake3_hash: str) -> None:
+    """Remove a grace deletion row (after R2 deletion or storage extension)."""
+    with get_auth_db() as db:
+        db.execute(
+            "DELETE FROM r2_grace_deletions WHERE blake3_hash = ?",
+            (blake3_hash,),
+        )
+        db.commit()
+    sync_auth_db_to_r2()

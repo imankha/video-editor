@@ -677,6 +677,8 @@ async def list_games():
                 except ValueError:
                     is_expired = False
                 storage_status = 'expired' if is_expired else 'active'
+            elif row['auto_export_status']:
+                storage_status = 'expired'
             else:
                 storage_status = 'active'
 
