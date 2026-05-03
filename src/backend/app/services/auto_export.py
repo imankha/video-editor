@@ -17,7 +17,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from ..storage import download_from_r2_global, upload_to_r2
+from ..storage import download_from_r2_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,8 @@ def _generate_recap(
             clips_by_hash[clip['video_hash']].append(clip)
 
         extracted_paths = []
+        clip_mapping = []
+        recap_offset = 0.0
         for video_hash, hash_clips in clips_by_hash.items():
             source_path = Path(temp_dir) / f"source_{video_hash[:12]}.mp4"
             if not download_from_r2_global(
@@ -233,6 +235,19 @@ def _generate_recap(
                 )
                 extracted_paths.append(out_path)
 
+                probe = ffmpeg.probe(str(out_path))
+                duration = float(probe['format']['duration'])
+                clip_mapping.append({
+                    'id': clip['id'],
+                    'name': clip['name'],
+                    'rating': clip['rating'],
+                    'tags': json.loads(clip['tags']) if clip['tags'] else [],
+                    'notes': clip['notes'] or '',
+                    'recap_start': round(recap_offset, 3),
+                    'recap_end': round(recap_offset + duration, 3),
+                })
+                recap_offset += duration
+
         if not extracted_paths:
             raise RuntimeError("No clips extracted for recap")
 
@@ -250,5 +265,11 @@ def _generate_recap(
 
         recap_r2_key = f"recaps/{game_id}.mp4"
         upload_to_r2(user_id, recap_r2_key, recap_path)
+
+        upload_bytes_to_r2(
+            user_id,
+            f"recaps/{game_id}_clips.json",
+            json.dumps(clip_mapping).encode(),
+        )
 
     return recap_r2_key

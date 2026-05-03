@@ -27,6 +27,7 @@ from app.storage import (
     generate_presigned_url_global,
     generate_presigned_url,
     r2_head_object_global,
+    download_from_r2,
 )
 from app.user_context import get_current_user_id
 from app.profile_context import get_current_profile_id
@@ -734,6 +735,70 @@ async def get_recap_url(game_id: int):
     user_id = get_current_user_id()
     url = generate_presigned_url(user_id, game['recap_video_url'], expires_in=14400)
     return {"url": url}
+
+
+def _try_load_recap_mapping(user_id: str, game_id: int):
+    """Try loading stored clip mapping JSON from R2. Returns list or None."""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        local_path = Path(tmp) / "clips.json"
+        if not download_from_r2(user_id, f"recaps/{game_id}_clips.json", local_path):
+            return None
+        with open(local_path) as f:
+            return json.load(f)
+
+
+def _compute_recap_clips(game_id: int):
+    """Compute recap clip positions from DB by summing durations in concat order."""
+    from collections import defaultdict
+    from app.services.auto_export import _get_annotated_clips
+
+    clips = _get_annotated_clips(game_id)
+    clips_by_hash = defaultdict(list)
+    for clip in clips:
+        clips_by_hash[clip['video_hash']].append(clip)
+
+    result = []
+    offset = 0.0
+    for hash_clips in clips_by_hash.values():
+        for clip in hash_clips:
+            duration = clip['end_time'] - clip['start_time']
+            result.append({
+                'id': clip['id'],
+                'name': clip['name'],
+                'rating': clip['rating'],
+                'tags': json.loads(clip['tags']) if clip['tags'] else [],
+                'notes': clip['notes'] or '',
+                'recap_start': round(offset, 3),
+                'recap_end': round(offset + duration, 3),
+            })
+            offset += duration
+    return result
+
+
+@router.get("/{game_id:int}/recap-data")
+async def get_recap_data(game_id: int):
+    """Get recap video URL and clip timeline data for the recap viewer."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        game = cursor.execute(
+            "SELECT recap_video_url FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+
+    if not game or not game['recap_video_url']:
+        raise HTTPException(status_code=404, detail="No recap video")
+
+    user_id = get_current_user_id()
+    url = generate_presigned_url(user_id, game['recap_video_url'], expires_in=14400)
+
+    clips = _try_load_recap_mapping(user_id, game_id)
+    if clips is None:
+        clips = _compute_recap_clips(game_id)
+
+    return {"url": url, "clips": clips}
 
 
 class ExtendStorageRequest(BaseModel):
