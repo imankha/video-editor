@@ -1153,13 +1153,14 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
   };
 
   const hasRecap = Boolean(game.recap_video_url);
+  const canExtend = game.can_extend !== false;
 
   const handleClick = () => {
     if (isExpired) {
-      if (hasRecap) {
-        onPlayRecap?.();
-      } else {
+      if (canExtend) {
         onExtend?.();
+      } else if (hasRecap) {
+        onPlayRecap?.();
       }
     } else {
       onLoad();
@@ -1191,7 +1192,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
             {isExpired && hasRecap && (
               <Play size={14} className="text-blue-400" title="Watch recap" />
             )}
-            <ExpirationBadge expiresAt={game.storage_expires_at} onClick={onExtend} />
+            <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{new Date(game.created_at).toLocaleDateString()}</span>

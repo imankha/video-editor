@@ -1086,6 +1086,15 @@ def get_expired_grace_deletions() -> list[str]:
     return [r['blake3_hash'] for r in rows]
 
 
+def get_grace_deletion_hashes() -> set[str]:
+    """Return all blake3_hashes with a pending grace deletion (R2 object still exists)."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            "SELECT blake3_hash FROM r2_grace_deletions",
+        ).fetchall()
+    return {r['blake3_hash'] for r in rows}
+
+
 def delete_grace_deletion(blake3_hash: str) -> None:
     """Remove a grace deletion row (after R2 deletion or storage extension)."""
     with get_auth_db() as db:

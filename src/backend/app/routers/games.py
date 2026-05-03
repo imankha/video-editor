@@ -35,6 +35,7 @@ from app.services.user_db import deduct_credits
 from app.services.auth_db import (
     insert_game_storage_ref,
     get_game_storage_ref,
+    get_grace_deletion_hashes,
     get_storage_refs_for_user,
 )
 
@@ -651,6 +652,7 @@ async def list_games():
         user_id = get_current_user_id()
         storage_refs = get_storage_refs_for_user(user_id)
         expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_refs}
+        grace_hashes = get_grace_deletion_hashes()
 
         games = []
         for row in rows:
@@ -682,11 +684,14 @@ async def list_games():
             else:
                 storage_status = 'active'
 
+            blake3 = row['blake3_hash']
+            can_extend = blake3 in expiry_by_hash or blake3 in grace_hashes
+
             games.append({
                 'id': row['id'],
                 'name': display_name,
                 'raw_name': row['name'],
-                'blake3_hash': row['blake3_hash'],
+                'blake3_hash': blake3,
                 'video_url': video_url,
                 'clip_count': row['clip_count'] or 0,
                 'brilliant_count': row['brilliant_count'] or 0,
@@ -704,6 +709,7 @@ async def list_games():
                 'video_size': row['video_size'],
                 'auto_export_status': row['auto_export_status'],
                 'recap_video_url': row['recap_video_url'],
+                'can_extend': can_extend,
             })
 
         logger.info(f"[list_games] returning {len(games)} games for profile={_profile}")
