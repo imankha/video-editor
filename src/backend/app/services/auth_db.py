@@ -982,41 +982,39 @@ def get_storage_refs_for_user(user_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def get_expired_hashes() -> list[str]:
-    """Find game hashes where ALL user references have expired."""
+def get_expired_refs() -> list[dict]:
+    """Find individually expired storage refs (per user-game, not per hash)."""
     now = datetime.utcnow().isoformat()
     with get_auth_db() as db:
         rows = db.execute(
-            """SELECT blake3_hash FROM game_storage_refs
-               GROUP BY blake3_hash
-               HAVING MAX(storage_expires_at) < ?""",
+            """SELECT user_id, profile_id, blake3_hash
+               FROM game_storage_refs
+               WHERE storage_expires_at < ?""",
             (now,),
         ).fetchall()
-    return [row["blake3_hash"] for row in rows]
+    return [dict(r) for r in rows]
 
 
-def delete_refs_for_hash(blake3_hash: str) -> int:
-    """Delete all storage refs for a game hash (after R2 object deleted)."""
+def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
+    """Delete a single user's storage ref for a hash."""
     with get_auth_db() as db:
-        cursor = db.execute(
-            "DELETE FROM game_storage_refs WHERE blake3_hash = ?",
-            (blake3_hash,),
+        db.execute(
+            """DELETE FROM game_storage_refs
+               WHERE user_id = ? AND profile_id = ? AND blake3_hash = ?""",
+            (user_id, profile_id, blake3_hash),
         )
         db.commit()
-        count = cursor.rowcount
     sync_auth_db_to_r2()
-    return count
 
 
-def get_users_for_hash(blake3_hash: str) -> list[dict]:
-    """Get all (user_id, profile_id) pairs that reference this game hash."""
+def has_remaining_refs(blake3_hash: str) -> bool:
+    """Check if any storage refs remain for this hash (any user still active)."""
     with get_auth_db() as db:
-        rows = db.execute(
-            """SELECT user_id, profile_id FROM game_storage_refs
-               WHERE blake3_hash = ?""",
+        row = db.execute(
+            "SELECT COUNT(*) as cnt FROM game_storage_refs WHERE blake3_hash = ?",
             (blake3_hash,),
-        ).fetchall()
-    return [dict(r) for r in rows]
+        ).fetchone()
+    return row['cnt'] > 0
 
 
 def get_next_expiry() -> Optional[datetime]:

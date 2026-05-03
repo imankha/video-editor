@@ -168,24 +168,25 @@ class TestFindGamesForHash:
 # ---------------------------------------------------------------------------
 
 class TestDoSweep:
-    @patch(f"{M}.get_expired_hashes", return_value=[])
-    def test_no_expired_hashes(self, mock_expired, isolated_profile_db):
+    @patch(f"{M}.get_expired_refs", return_value=[])
+    def test_no_expired_refs(self, mock_expired, isolated_profile_db):
         from app.services.sweep_scheduler import do_sweep
 
         do_sweep()
         mock_expired.assert_called_once()
 
-    @patch(f"{M}.delete_refs_for_hash")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
     @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
-    @patch(f"{M}.get_users_for_hash", return_value=[
-        {"user_id": USER_ID, "profile_id": PROFILE_ID}
+    @patch(f"{M}.get_expired_refs", return_value=[
+        {"user_id": USER_ID, "profile_id": PROFILE_ID, "blake3_hash": "hash_abc"}
     ])
-    @patch(f"{M}.get_expired_hashes", return_value=["hash_abc"])
-    def test_sweep_processes_hash(
-        self, mock_expired, mock_users, mock_ensure, mock_export,
-        mock_r2_delete, mock_delete_refs, isolated_profile_db
+    def test_sweep_processes_ref(
+        self, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_r2_delete, mock_has_remaining,
+        isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -195,20 +196,21 @@ class TestDoSweep:
         do_sweep()
 
         mock_export.assert_called_once_with(USER_ID, PROFILE_ID, game_id)
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
         mock_r2_delete.assert_called_once_with("games/hash_abc.mp4")
-        mock_delete_refs.assert_called_once_with("hash_abc")
 
-    @patch(f"{M}.delete_refs_for_hash")
+    @patch(f"{M}.has_remaining_refs", return_value=True)
     @patch(f"{M}.r2_delete_object_global")
-    @patch(f"{M}.auto_export_game", side_effect=RuntimeError("boom"))
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", return_value="complete")
     @patch(f"{M}.ensure_database")
-    @patch(f"{M}.get_users_for_hash", return_value=[
-        {"user_id": USER_ID, "profile_id": PROFILE_ID}
+    @patch(f"{M}.get_expired_refs", return_value=[
+        {"user_id": USER_ID, "profile_id": PROFILE_ID, "blake3_hash": "hash_abc"}
     ])
-    @patch(f"{M}.get_expired_hashes", return_value=["hash_abc"])
-    def test_sweep_continues_on_export_failure(
-        self, mock_expired, mock_users, mock_ensure, mock_export,
-        mock_r2_delete, mock_delete_refs, isolated_profile_db
+    def test_sweep_skips_r2_delete_when_refs_remain(
+        self, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_r2_delete, mock_has_remaining,
+        isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
@@ -217,32 +219,52 @@ class TestDoSweep:
 
         do_sweep()
 
-        # R2 delete + ref cleanup should still happen
-        mock_r2_delete.assert_called_once()
-        mock_delete_refs.assert_called_once()
+        mock_delete_ref.assert_called_once()
+        mock_r2_delete.assert_not_called()
 
-    @patch(f"{M}.delete_refs_for_hash")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
     @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", side_effect=RuntimeError("boom"))
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs", return_value=[
+        {"user_id": USER_ID, "profile_id": PROFILE_ID, "blake3_hash": "hash_abc"}
+    ])
+    def test_sweep_continues_on_export_failure(
+        self, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_r2_delete, mock_has_remaining,
+        isolated_profile_db
+    ):
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_abc")
+
+        do_sweep()
+
+        mock_delete_ref.assert_called_once()
+        mock_r2_delete.assert_called_once()
+
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.delete_ref")
     @patch(f"{M}.auto_export_game", return_value="skipped")
     @patch(f"{M}.ensure_database")
-    @patch(f"{M}.get_users_for_hash", return_value=[
-        {"user_id": "user-a", "profile_id": "prof-a"},
-        {"user_id": "user-b", "profile_id": "prof-b"},
+    @patch(f"{M}.get_expired_refs", return_value=[
+        {"user_id": "user-a", "profile_id": "prof-a", "blake3_hash": "hash_xyz"},
+        {"user_id": "user-b", "profile_id": "prof-b", "blake3_hash": "hash_xyz"},
     ])
-    @patch(f"{M}.get_expired_hashes", return_value=["hash_xyz"])
-    def test_sweep_processes_all_users_for_hash(
-        self, mock_expired, mock_users, mock_ensure, mock_export,
-        mock_r2_delete, mock_delete_refs, isolated_profile_db
+    def test_sweep_processes_each_ref_independently(
+        self, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_r2_delete, mock_has_remaining,
+        isolated_profile_db
     ):
         from app.services.sweep_scheduler import do_sweep
 
         do_sweep()
 
-        # auto_export_game may be called for each user (or 0 times if no games found)
-        # but context should be set for both users
-        from app.services.sweep_scheduler import set_current_user_id
-        # The key assertion: ensure_database called for each user
         assert mock_ensure.call_count == 2
+        assert mock_delete_ref.call_count == 2
 
 
 # ---------------------------------------------------------------------------

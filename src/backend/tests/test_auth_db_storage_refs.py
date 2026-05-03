@@ -1,7 +1,6 @@
 """
-Tests for auth_db storage ref functions: get_users_for_hash, get_next_expiry.
-
-Also covers the games API recap-url endpoint.
+Tests for auth_db storage ref functions: get_expired_refs, delete_ref,
+has_remaining_refs, get_next_expiry.
 """
 
 import sys
@@ -41,32 +40,77 @@ def _insert_ref(blake3_hash, user_id, profile_id, expires_at_iso):
 
 
 # ---------------------------------------------------------------------------
-# get_users_for_hash
+# get_expired_refs
 # ---------------------------------------------------------------------------
 
-class TestGetUsersForHash:
-    def test_returns_all_refs(self, temp_auth_db):
+class TestGetExpiredRefs:
+    def test_returns_individually_expired_refs(self, temp_auth_db):
         past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        future = (datetime.utcnow() + timedelta(days=7)).isoformat()
         _insert_ref("hash_a", "user-1", "prof-1", past)
-        _insert_ref("hash_a", "user-2", "prof-2", past)
+        _insert_ref("hash_a", "user-2", "prof-2", future)
 
-        result = auth_db.get_users_for_hash("hash_a")
-        assert len(result) == 2
-        user_ids = {r["user_id"] for r in result}
-        assert user_ids == {"user-1", "user-2"}
+        result = auth_db.get_expired_refs()
+        assert len(result) == 1
+        assert result[0]["user_id"] == "user-1"
 
-    def test_returns_empty_for_unknown_hash(self, temp_auth_db):
-        result = auth_db.get_users_for_hash("nonexistent")
+    def test_returns_empty_when_none_expired(self, temp_auth_db):
+        future = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        _insert_ref("hash_a", "user-1", "prof-1", future)
+
+        result = auth_db.get_expired_refs()
         assert result == []
 
-    def test_does_not_cross_hash(self, temp_auth_db):
+    def test_returns_all_expired_across_hashes(self, temp_auth_db):
         past = (datetime.utcnow() - timedelta(days=1)).isoformat()
         _insert_ref("hash_a", "user-1", "prof-1", past)
         _insert_ref("hash_b", "user-2", "prof-2", past)
 
-        result = auth_db.get_users_for_hash("hash_a")
-        assert len(result) == 1
-        assert result[0]["user_id"] == "user-1"
+        result = auth_db.get_expired_refs()
+        assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
+# delete_ref
+# ---------------------------------------------------------------------------
+
+class TestDeleteRef:
+    def test_deletes_single_ref(self, temp_auth_db):
+        past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        _insert_ref("hash_a", "user-1", "prof-1", past)
+        _insert_ref("hash_a", "user-2", "prof-2", past)
+
+        auth_db.delete_ref("user-1", "prof-1", "hash_a")
+
+        with auth_db.get_auth_db() as db:
+            rows = db.execute("SELECT user_id FROM game_storage_refs").fetchall()
+        assert len(rows) == 1
+        assert rows[0]["user_id"] == "user-2"
+
+    def test_no_op_for_nonexistent_ref(self, temp_auth_db):
+        auth_db.delete_ref("nobody", "noprof", "nohash")
+
+
+# ---------------------------------------------------------------------------
+# has_remaining_refs
+# ---------------------------------------------------------------------------
+
+class TestHasRemainingRefs:
+    def test_true_when_refs_exist(self, temp_auth_db):
+        future = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        _insert_ref("hash_a", "user-1", "prof-1", future)
+
+        assert auth_db.has_remaining_refs("hash_a") is True
+
+    def test_false_when_no_refs(self, temp_auth_db):
+        assert auth_db.has_remaining_refs("hash_a") is False
+
+    def test_false_after_all_deleted(self, temp_auth_db):
+        past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        _insert_ref("hash_a", "user-1", "prof-1", past)
+
+        auth_db.delete_ref("user-1", "prof-1", "hash_a")
+        assert auth_db.has_remaining_refs("hash_a") is False
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +137,6 @@ class TestGetNextExpiry:
 
         result = auth_db.get_next_expiry()
         assert result is not None
-        # Should be within a few seconds of 'soon'
         assert abs((result - soon).total_seconds()) < 2
 
     def test_ignores_past_expiries(self, temp_auth_db):

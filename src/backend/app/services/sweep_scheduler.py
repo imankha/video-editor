@@ -11,10 +11,10 @@ import logging
 from datetime import datetime
 
 from .auth_db import (
-    delete_refs_for_hash,
-    get_expired_hashes,
+    delete_ref,
+    get_expired_refs,
     get_next_expiry,
-    get_users_for_hash,
+    has_remaining_refs,
 )
 from .auto_export import auto_export_game
 from ..database import ensure_database, get_db_connection
@@ -79,45 +79,46 @@ async def _run_sweep_loop():
 
 
 def do_sweep():
-    """Process all currently-expired game hashes."""
-    expired_hashes = get_expired_hashes()
-    if not expired_hashes:
+    """Process all individually-expired storage refs (per user-game)."""
+    expired_refs = get_expired_refs()
+    if not expired_refs:
         logger.info("[Sweep] No expired games")
         return
 
-    logger.info(f"[Sweep] Processing {len(expired_hashes)} expired hashes")
-    expired_set = set(expired_hashes)
+    logger.info(f"[Sweep] Processing {len(expired_refs)} expired refs")
+    expired_hashes = {r['blake3_hash'] for r in expired_refs}
 
-    for blake3_hash in expired_hashes:
-        refs = get_users_for_hash(blake3_hash)
+    for ref in expired_refs:
+        user_id = ref['user_id']
+        profile_id = ref['profile_id']
+        blake3_hash = ref['blake3_hash']
 
-        for ref in refs:
-            user_id = ref['user_id']
-            profile_id = ref['profile_id']
+        set_current_user_id(user_id)
+        set_current_profile_id(profile_id)
+        ensure_database()
 
-            set_current_user_id(user_id)
-            set_current_profile_id(profile_id)
-            ensure_database()
+        game_ids = _find_games_for_hash(
+            user_id, profile_id, blake3_hash, expired_hashes
+        )
 
-            game_ids = _find_games_for_hash(
-                user_id, profile_id, blake3_hash, expired_set
-            )
+        for game_id in game_ids:
+            try:
+                status = auto_export_game(user_id, profile_id, game_id)
+                logger.info(
+                    f"[Sweep] game={game_id} user={user_id[:8]} status={status}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[Sweep] Auto-export failed: user={user_id} "
+                    f"game={game_id}: {e}"
+                )
 
-            for game_id in game_ids:
-                try:
-                    status = auto_export_game(user_id, profile_id, game_id)
-                    logger.info(
-                        f"[Sweep] game={game_id} user={user_id[:8]} status={status}"
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"[Sweep] Auto-export failed: user={user_id} "
-                        f"game={game_id}: {e}"
-                    )
+        delete_ref(user_id, profile_id, blake3_hash)
+        logger.info(f"[Sweep] Deleted ref user={user_id[:8]} hash={blake3_hash[:12]}")
 
-        r2_delete_object_global(f"games/{blake3_hash}.mp4")
-        delete_refs_for_hash(blake3_hash)
-        logger.info(f"[Sweep] Deleted R2 object and refs for hash={blake3_hash[:12]}")
+        if not has_remaining_refs(blake3_hash):
+            r2_delete_object_global(f"games/{blake3_hash}.mp4")
+            logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (no refs remain)")
 
 
 def _find_games_for_hash(
