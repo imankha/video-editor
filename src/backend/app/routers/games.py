@@ -33,6 +33,7 @@ from app.profile_context import get_current_profile_id
 from app.services.storage_credits import calculate_upload_cost, calculate_extension_cost, storage_expires_at
 from app.services.user_db import deduct_credits
 from app.services.auth_db import (
+    get_all_ref_hashes,
     insert_game_storage_ref,
     get_game_storage_ref,
     get_grace_deletion_hashes,
@@ -653,6 +654,7 @@ async def list_games():
         storage_refs = get_storage_refs_for_user(user_id)
         expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_refs}
         grace_hashes = get_grace_deletion_hashes()
+        all_ref_hashes = get_all_ref_hashes()
 
         games = []
         for row in rows:
@@ -685,7 +687,7 @@ async def list_games():
                 storage_status = 'active'
 
             blake3 = row['blake3_hash']
-            can_extend = blake3 in expiry_by_hash or blake3 in grace_hashes
+            can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
             games.append({
                 'id': row['id'],

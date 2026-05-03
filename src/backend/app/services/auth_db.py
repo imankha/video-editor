@@ -1033,6 +1033,15 @@ def has_remaining_refs(blake3_hash: str) -> bool:
     return row['cnt'] > 0
 
 
+def get_all_ref_hashes() -> set[str]:
+    """Return all blake3_hashes that have at least one storage ref (any user)."""
+    with get_auth_db() as db:
+        rows = db.execute(
+            "SELECT DISTINCT blake3_hash FROM game_storage_refs",
+        ).fetchall()
+    return {r['blake3_hash'] for r in rows}
+
+
 def get_next_expiry() -> Optional[datetime]:
     """Return the earliest future event: ref expiry or grace deletion deadline."""
     now = datetime.utcnow().isoformat()
