@@ -46,7 +46,6 @@ def isolated_profile_db(tmp_path):
             recap_video_url TEXT,
             status TEXT DEFAULT 'ready',
             video_filename TEXT,
-            storage_expires_at TEXT,
             video_size INTEGER,
             video_duration REAL,
             video_width INTEGER,

@@ -47,7 +47,6 @@ def isolated_profile_db(tmp_path):
             video_filename TEXT,
             clip_count INTEGER DEFAULT 0,
             status TEXT DEFAULT 'ready',
-            storage_expires_at TEXT,
             auto_export_status TEXT,
             recap_video_url TEXT,
             video_size INTEGER,

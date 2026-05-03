@@ -32,7 +32,11 @@ from app.user_context import get_current_user_id
 from app.profile_context import get_current_profile_id
 from app.services.storage_credits import calculate_upload_cost, calculate_extension_cost, storage_expires_at
 from app.services.user_db import deduct_credits
-from app.services.auth_db import insert_game_storage_ref
+from app.services.auth_db import (
+    insert_game_storage_ref,
+    get_game_storage_ref,
+    get_storage_refs_for_user,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -587,12 +591,11 @@ async def activate_game(game_id: int):
                 },
             )
 
-        # Set storage expiry on the game and record cross-user refs
-        expires_at = storage_expires_at()
-        expires_str = expires_at.isoformat()
+        # Set game ready and record cross-user storage refs
+        expires_str = storage_expires_at().isoformat()
         cursor.execute(
-            "UPDATE games SET status = ?, storage_expires_at = ? WHERE id = ?",
-            (GameStatus.READY, expires_str, game_id),
+            "UPDATE games SET status = ? WHERE id = ?",
+            (GameStatus.READY, game_id),
         )
         conn.commit()
 
@@ -631,8 +634,7 @@ async def list_games():
                    g.clip_count, g.brilliant_count, g.good_count, g.interesting_count,
                    g.mistake_count, g.blunder_count, g.aggregate_score,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
-                   g.video_duration, g.viewed_duration, g.status,
-                   g.storage_expires_at, g.video_size,
+                   g.video_duration, g.viewed_duration, g.status, g.video_size,
                    g.auto_export_status, g.recap_video_url,
                    COALESCE(gv_sum.total_duration, g.video_duration) AS effective_duration
             FROM games g
@@ -645,9 +647,13 @@ async def list_games():
         """)
         rows = cursor.fetchall()
 
+        # Derive storage expiry from auth_db (single source of truth)
+        user_id = get_current_user_id()
+        storage_refs = get_storage_refs_for_user(user_id)
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_refs}
+
         games = []
         for row in rows:
-            # Warn about games missing expected details (helps identify data issues)
             if not row['opponent_name'] or not row['game_date'] or not row['game_type']:
                 logger.warning(
                     f"Game {row['id']} missing details: opponent={row['opponent_name']}, "
@@ -662,11 +668,9 @@ async def list_games():
                 row['name']
             )
 
-            # Support both new (blake3_hash) and old (video_filename) storage
             video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
 
-            # T1580: compute storage status from expiry
-            expires_at_str = row['storage_expires_at']
+            expires_at_str = expiry_by_hash.get(row['blake3_hash'])
             if expires_at_str:
                 try:
                     is_expired = datetime.fromisoformat(expires_at_str) < datetime.utcnow()
@@ -735,7 +739,7 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         game = cursor.execute(
-            "SELECT id, storage_expires_at, video_size FROM games WHERE id = ?",
+            "SELECT id, blake3_hash, video_size FROM games WHERE id = ?",
             (game_id,),
         ).fetchone()
         if not game:
@@ -755,19 +759,15 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
                 },
             )
 
-        current_expiry = game['storage_expires_at']
+        # Get current expiry from auth_db (single source of truth)
+        ref = get_game_storage_ref(user_id, profile_id, game['blake3_hash']) if game['blake3_hash'] else None
+        current_expiry = ref['storage_expires_at'] if ref else None
         if current_expiry:
             base = max(datetime.fromisoformat(current_expiry), datetime.utcnow())
         else:
             base = datetime.utcnow()
         new_expiry = storage_expires_at(from_dt=base, days=request.days)
         new_expiry_str = new_expiry.isoformat()
-
-        cursor.execute(
-            "UPDATE games SET storage_expires_at = ? WHERE id = ?",
-            (new_expiry_str, game_id),
-        )
-        conn.commit()
 
         game_video_rows = cursor.execute(
             "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
