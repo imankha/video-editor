@@ -1,6 +1,6 @@
 # T2430: Brilliant Clips in My Reels
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-05-03

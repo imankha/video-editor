@@ -231,6 +231,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.game_id,
                 fv.rating_counts,
                 fv.watched_at,
+                fv.duration as fv_duration,
                 COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
             LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
@@ -433,15 +434,13 @@ async def list_downloads(source_type: Optional[str] = None):
                     game_ids = [row['game_id']]
                     game_names = [game_info['name']]
                     game_dates = [game_info['date']]
-            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
-                # For brilliant_clips, get game info from raw_clip (no working_clips exist)
-                bc_data = brilliant_clip_data.get(row['project_id'])
-                if bc_data and bc_data['game_id']:
-                    game_info = games_info.get(bc_data['game_id'])
-                    if game_info:
-                        game_ids = [bc_data['game_id']]
-                        game_names = [game_info['name']]
-                        game_dates = [game_info['date']]
+            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value and row['game_id']:
+                # Brilliant clips store game_id directly on the final_videos row
+                game_info = games_info.get(row['game_id'])
+                if game_info:
+                    game_ids = [row['game_id']]
+                    game_names = [game_info['name']]
+                    game_dates = [game_info['date']]
             elif row['project_id']:
                 # Custom project export: games from project's working_clips
                 pg = project_games.get(row['project_id'], {})
@@ -492,6 +491,8 @@ async def list_downloads(source_type: Optional[str] = None):
             if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
                 # Annotated game: sum of rated clip durations
                 duration = game_durations.get(row['game_id'])
+            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+                duration = project_durations.get(row['project_id']) or row['fv_duration']
             else:
                 # Project: duration from working_video
                 duration = project_durations.get(row['project_id'])

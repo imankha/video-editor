@@ -123,7 +123,7 @@ def _set_game_status(game_id: int, status: str) -> None:
 def _export_brilliant_clip(
     user_id: str, profile_id: str, clip: dict, game_id: int
 ) -> None:
-    """Export a single brilliant clip via FFmpeg center-crop to 9:16 at 1080x1920."""
+    """Export a single brilliant clip via FFmpeg stream-copy extract (original resolution)."""
     video_hash = clip['video_hash']
     start_time = clip['start_time']
     end_time = clip['end_time']
