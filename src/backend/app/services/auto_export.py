@@ -17,7 +17,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from ..storage import delete_from_r2, download_from_r2_global, upload_to_r2, upload_bytes_to_r2
+from ..storage import delete_from_r2, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -44,8 +44,11 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
         ).fetchone()
         if not game:
             return 'skipped'
-        if game['auto_export_status'] in ('complete', 'pending'):
-            return game['auto_export_status']
+        if game['auto_export_status'] == 'complete':
+            return 'complete'
+
+        if game['auto_export_status'] == 'pending':
+            logger.info(f"[AutoExport] Retrying previously pending game {game_id}")
 
         cursor.execute(
             "UPDATE games SET auto_export_status = 'pending' WHERE id = ?",
@@ -136,14 +139,14 @@ def _export_brilliant_clip(
     end_time = clip['end_time']
     duration = end_time - start_time
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        source_path = Path(temp_dir) / "source.mp4"
-        if not download_from_r2_global(f"games/{video_hash}.mp4", source_path):
-            raise RuntimeError(f"Failed to download game video {video_hash}")
+    video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
+    if not video_url:
+        raise RuntimeError(f"Failed to generate presigned URL for {video_hash}")
 
+    with tempfile.TemporaryDirectory() as temp_dir:
         output_path = Path(temp_dir) / "extracted.mp4"
         (
-            ffmpeg.input(str(source_path), ss=start_time, to=end_time)
+            ffmpeg.input(video_url, ss=start_time, to=end_time)
             .output(str(output_path), c="copy", movflags="+faststart")
             .run(quiet=True, overwrite_output=True)
         )
@@ -196,12 +199,10 @@ def _generate_recap(
         clip_mapping = []
         recap_offset = 0.0
         for video_hash, hash_clips in clips_by_hash.items():
-            source_path = Path(temp_dir) / f"source_{video_hash[:12]}.mp4"
-            if not download_from_r2_global(
-                f"games/{video_hash}.mp4", source_path
-            ):
+            video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
+            if not video_url:
                 logger.error(
-                    f"[AutoExport] Failed to download {video_hash} for recap"
+                    f"[AutoExport] Failed to get URL for {video_hash}"
                 )
                 continue
 
@@ -209,7 +210,7 @@ def _generate_recap(
                 out_path = Path(temp_dir) / f"clip_{clip['id']}.mp4"
                 (
                     ffmpeg.input(
-                        str(source_path),
+                        video_url,
                         ss=clip['start_time'],
                         to=clip['end_time'],
                     )
