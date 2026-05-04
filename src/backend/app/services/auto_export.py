@@ -238,8 +238,8 @@ def _generate_recap(
                     .output(
                         str(out_path),
                         vcodec="libx264",
-                        preset="fast",
-                        crf=28,
+                        preset="ultrafast",
+                        crf=32,
                         acodec="aac",
                         movflags="+faststart",
                     )
