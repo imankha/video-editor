@@ -2,11 +2,12 @@
 Tests for app.services.sweep_scheduler — background cleanup sweep loop.
 
 Covers do_sweep, _find_games_for_hash, start/stop lifecycle,
-_run_sweep_loop delay calculation, and error handling.
+_run_sweep_loop delay calculation, keepalive, and error handling.
 """
 
 import asyncio
 import sqlite3
+import time
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock, AsyncMock
@@ -305,6 +306,44 @@ class TestDoSweep:
         mock_r2_delete.assert_not_called()
         mock_del_grace.assert_not_called()
 
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.get_expired_refs", return_value=[])
+    def test_sweep_timing_logged(self, mock_expired, mock_grace, isolated_profile_db, caplog):
+        import logging
+        from app.services.sweep_scheduler import do_sweep
+
+        with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        assert "Complete in" in caplog.text
+        assert "refs=0" in caplog.text
+        assert "grace_deleted=0" in caplog.text
+
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", return_value="complete")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs", return_value=[
+        {"user_id": USER_ID, "profile_id": PROFILE_ID, "blake3_hash": "hash_abc"}
+    ])
+    def test_sweep_logs_game_count(
+        self, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db, caplog
+    ):
+        import logging
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_abc")
+
+        with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
+            do_sweep()
+
+        assert "found" in caplog.text and "games to export" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # start/stop sweep loop tests
@@ -344,6 +383,57 @@ class TestSweepLoopLifecycle:
 
 
 # ---------------------------------------------------------------------------
+# _ping_health tests
+# ---------------------------------------------------------------------------
+
+class TestPingHealth:
+    @pytest.mark.asyncio
+    async def test_ping_health_calls_urlopen(self, isolated_profile_db):
+        """Verify _ping_health pings the health endpoint."""
+        import app.services.sweep_scheduler as sched
+
+        call_count = 0
+
+        async def _mock_sleep(delay):
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 2:
+                raise asyncio.CancelledError()
+
+        with patch("urllib.request.urlopen") as mock_urlopen, \
+             patch("asyncio.sleep", side_effect=_mock_sleep):
+            try:
+                await sched._ping_health()
+            except asyncio.CancelledError:
+                pass
+
+        mock_urlopen.assert_called_with("http://localhost:8000/api/health", timeout=5)
+
+    @pytest.mark.asyncio
+    async def test_ping_health_continues_on_exception(self, isolated_profile_db):
+        """Ping health continues even if urlopen raises."""
+        import app.services.sweep_scheduler as sched
+
+        call_count = 0
+
+        async def _mock_sleep(delay):
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 3:
+                raise asyncio.CancelledError()
+
+        with patch("urllib.request.urlopen", side_effect=ConnectionError("refused")), \
+             patch("asyncio.sleep", side_effect=_mock_sleep):
+            try:
+                await sched._ping_health()
+            except asyncio.CancelledError:
+                pass
+
+        # Should have looped multiple times despite errors
+        assert call_count >= 2
+
+
+# ---------------------------------------------------------------------------
 # _run_sweep_loop delay calculation tests
 # ---------------------------------------------------------------------------
 
@@ -367,7 +457,10 @@ class TestRunSweepLoop:
         with patch.object(sched, "do_sweep"), \
              patch.object(sched, "get_next_expiry", return_value=None), \
              patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", new_callable=AsyncMock):
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
         assert sleep_delays[0] == sched.STARTUP_DELAY
@@ -388,7 +481,10 @@ class TestRunSweepLoop:
         with patch.object(sched, "do_sweep"), \
              patch.object(sched, "get_next_expiry", return_value=past), \
              patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", new_callable=AsyncMock):
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
         assert sleep_delays[1] == sched.MIN_DELAY
@@ -408,7 +504,10 @@ class TestRunSweepLoop:
         with patch.object(sched, "do_sweep"), \
              patch.object(sched, "get_next_expiry", return_value=future), \
              patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", new_callable=AsyncMock):
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
         assert sleep_delays[1] == sched.MAX_DELAY
@@ -422,15 +521,16 @@ class TestRunSweepLoop:
         async def _mock_sleep(delay):
             sleep_delays.append(delay)
             if len(sleep_delays) >= 2:
-                # CancelledError from the retry sleep (in except block)
-                # propagates out of the function since it's not in the try
                 raise asyncio.CancelledError()
 
         async def _mock_to_thread(fn, *args):
             raise RuntimeError("sweep failed")
 
         with patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", side_effect=_mock_to_thread):
+             patch("asyncio.to_thread", side_effect=_mock_to_thread), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
             try:
                 await sched._run_sweep_loop()
             except asyncio.CancelledError:
@@ -454,8 +554,38 @@ class TestRunSweepLoop:
         with patch.object(sched, "do_sweep"), \
              patch.object(sched, "get_next_expiry", return_value=future), \
              patch("asyncio.sleep", side_effect=_mock_sleep), \
-             patch("asyncio.to_thread", new_callable=AsyncMock):
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
             await sched._run_sweep_loop()
 
         # ~2 hours = ~7200s
         assert sched.MIN_DELAY <= sleep_delays[1] <= sched.MAX_DELAY
+
+    @pytest.mark.asyncio
+    async def test_loop_creates_and_cancels_keepalive(self, isolated_profile_db):
+        """Verify the keepalive task is created before sweep and cancelled after."""
+        import app.services.sweep_scheduler as sched
+
+        sleep_delays = []
+        created_tasks = []
+
+        async def _mock_sleep(delay):
+            sleep_delays.append(delay)
+            if len(sleep_delays) >= 2:
+                raise asyncio.CancelledError()
+
+        original_create_task = asyncio.create_task
+
+        with patch.object(sched, "do_sweep"), \
+             patch.object(sched, "get_next_expiry", return_value=None), \
+             patch("asyncio.sleep", side_effect=_mock_sleep), \
+             patch("asyncio.to_thread", new_callable=AsyncMock), \
+             patch("asyncio.create_task") as mock_create_task:
+            mock_task = MagicMock()
+            mock_create_task.return_value = mock_task
+            await sched._run_sweep_loop()
+
+        mock_create_task.assert_called()
+        mock_task.cancel.assert_called()

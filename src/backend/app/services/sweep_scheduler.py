@@ -8,6 +8,7 @@ get_next_expiry() and sleeps until then (capped at 24h).
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 
 from .auth_db import (
@@ -61,8 +62,9 @@ async def _ping_health():
     while True:
         try:
             urllib.request.urlopen("http://localhost:8000/api/health", timeout=5)
-        except Exception:
-            pass
+            logger.debug("[Sweep] Keepalive ping OK")
+        except Exception as e:
+            logger.debug(f"[Sweep] Keepalive ping failed: {e}")
         await asyncio.sleep(30)
 
 
@@ -99,6 +101,8 @@ async def _run_sweep_loop():
 
 def do_sweep():
     """Phase 1: process expired refs. Phase 2: delete grace-expired R2 objects."""
+    t0 = time.perf_counter()
+
     # Phase 1: auto-export and delete expired storage refs
     expired_refs = get_expired_refs()
     if not expired_refs:
@@ -120,6 +124,7 @@ def do_sweep():
         game_ids = _find_games_for_hash(
             user_id, profile_id, blake3_hash, expired_hashes
         )
+        logger.info(f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} found {len(game_ids)} games to export")
 
         for game_id in game_ids:
             try:
@@ -142,10 +147,15 @@ def do_sweep():
 
     # Phase 2: delete R2 objects whose grace period has elapsed
     grace_expired = get_expired_grace_deletions()
+    if grace_expired:
+        logger.info(f"[Sweep] Phase 2: deleting {len(grace_expired)} grace-expired R2 objects")
     for blake3_hash in grace_expired:
         r2_delete_object_global(f"games/{blake3_hash}.mp4")
         delete_grace_deletion(blake3_hash)
         logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
+
+    elapsed = time.perf_counter() - t0
+    logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={len(expired_refs)}, grace_deleted={len(grace_expired)})")
 
 
 def _find_games_for_hash(

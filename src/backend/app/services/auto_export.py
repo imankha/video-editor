@@ -9,6 +9,7 @@ DB to R2 explicitly after every write.
 import json
 import logging
 import tempfile
+import time
 import uuid
 from collections import defaultdict
 from pathlib import Path
@@ -32,6 +33,9 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
     """
     from ..database import ensure_database
 
+    t0 = time.perf_counter()
+    logger.info(f"[AutoExport] Starting game={game_id} user={user_id[:8]}")
+
     set_current_user_id(user_id)
     set_current_profile_id(profile_id)
     ensure_database()
@@ -43,8 +47,10 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             (game_id,),
         ).fetchone()
         if not game:
+            logger.info(f"[AutoExport] game={game_id} not found, skipping")
             return 'skipped'
         if game['auto_export_status'] == 'complete':
+            logger.info(f"[AutoExport] game={game_id} already complete")
             return 'complete'
 
         if game['auto_export_status'] == 'pending':
@@ -58,15 +64,18 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
 
     try:
         annotated_clips = _get_annotated_clips(game_id)
+        logger.info(f"[AutoExport] game={game_id} found {len(annotated_clips)} annotated clips")
 
         if not annotated_clips:
             _set_game_status(game_id, 'skipped')
             sync_db_to_r2_explicit(user_id, profile_id)
+            logger.info(f"[AutoExport] game={game_id} no clips, skipped in {time.perf_counter() - t0:.2f}s")
             return 'skipped'
 
         brilliant_clips = [c for c in annotated_clips if c['rating'] == 5]
         if not brilliant_clips:
             brilliant_clips = [c for c in annotated_clips if c['rating'] == 4]
+        logger.info(f"[AutoExport] game={game_id} exporting {len(brilliant_clips)} brilliant clips")
 
         for clip in brilliant_clips:
             try:
@@ -85,10 +94,12 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
             conn.commit()
 
         sync_db_to_r2_explicit(user_id, profile_id)
+        elapsed = time.perf_counter() - t0
+        logger.info(f"[AutoExport] game={game_id} complete in {elapsed:.2f}s ({len(brilliant_clips)} brilliant, {len(annotated_clips)} total)")
         return 'complete'
 
     except Exception as e:
-        logger.error(f"[AutoExport] Failed for game {game_id}: {e}")
+        logger.error(f"[AutoExport] game={game_id} failed after {time.perf_counter() - t0:.2f}s: {e}")
         _set_game_status(game_id, 'failed')
         sync_db_to_r2_explicit(user_id, profile_id)
         return 'failed'
@@ -134,10 +145,12 @@ def _export_brilliant_clip(
         logger.warning(f"[AutoExport] Skipping clip {clip['id']} — no auto_project_id")
         return
 
+    t0 = time.perf_counter()
     video_hash = clip['video_hash']
     start_time = clip['start_time']
     end_time = clip['end_time']
     duration = end_time - start_time
+    logger.info(f"[AutoExport] Brilliant clip={clip['id']} hash={video_hash[:12]} range={start_time:.1f}-{end_time:.1f}s")
 
     video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
     if not video_url:
@@ -145,15 +158,18 @@ def _export_brilliant_clip(
 
     with tempfile.TemporaryDirectory() as temp_dir:
         output_path = Path(temp_dir) / "extracted.mp4"
+        t_ffmpeg = time.perf_counter()
         (
             ffmpeg.input(video_url, ss=start_time, to=end_time)
             .output(str(output_path), c="copy", movflags="+faststart")
             .run(quiet=True, overwrite_output=True)
         )
+        logger.info(f"[AutoExport] Brilliant clip={clip['id']} ffmpeg stream-copy in {time.perf_counter() - t_ffmpeg:.2f}s")
 
         filename = f"auto_{game_id}_{clip['id']}_{uuid.uuid4().hex[:8]}.mp4"
         r2_key = f"final_videos/{filename}"
         upload_to_r2(user_id, r2_key, output_path)
+        logger.info(f"[AutoExport] Brilliant clip={clip['id']} uploaded as {filename} in {time.perf_counter() - t0:.2f}s")
 
     clip_name = clip['name'] or f"Clip {clip['id']}"
     with get_db_connection() as conn:
@@ -190,10 +206,14 @@ def _generate_recap(
     user_id: str, profile_id: str, game_id: int, clips: list[dict]
 ) -> str:
     """Generate a 480p recap video by concatenating all annotated clips."""
+    t0 = time.perf_counter()
+    logger.info(f"[AutoExport] Recap game={game_id} starting with {len(clips)} clips")
+
     with tempfile.TemporaryDirectory() as temp_dir:
         clips_by_hash = defaultdict(list)
         for clip in clips:
             clips_by_hash[clip['video_hash']].append(clip)
+        logger.info(f"[AutoExport] Recap game={game_id} {len(clips_by_hash)} unique video sources")
 
         extracted_paths = []
         clip_mapping = []
@@ -202,7 +222,7 @@ def _generate_recap(
             video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
             if not video_url:
                 logger.error(
-                    f"[AutoExport] Failed to get URL for {video_hash}"
+                    f"[AutoExport] Recap game={game_id} failed to get URL for hash={video_hash[:12]}"
                 )
                 continue
 
@@ -241,8 +261,10 @@ def _generate_recap(
                 recap_offset += duration
 
         if not extracted_paths:
+            logger.error(f"[AutoExport] Recap game={game_id} no clips extracted after {time.perf_counter() - t0:.2f}s")
             raise RuntimeError("No clips extracted for recap")
 
+        logger.info(f"[AutoExport] Recap game={game_id} extracted {len(extracted_paths)} clips in {time.perf_counter() - t0:.2f}s, concatenating")
         concat_list = Path(temp_dir) / "concat.txt"
         with open(concat_list, "w") as f:
             for path in extracted_paths:
@@ -264,4 +286,6 @@ def _generate_recap(
             json.dumps(clip_mapping).encode(),
         )
 
+    elapsed = time.perf_counter() - t0
+    logger.info(f"[AutoExport] Recap game={game_id} complete in {elapsed:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s duration)")
     return recap_r2_key
