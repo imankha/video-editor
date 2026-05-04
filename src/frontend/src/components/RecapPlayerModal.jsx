@@ -12,9 +12,10 @@ const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/st
 export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [recapData, setRecapData] = useState(null);
   const [brilliantClips, setBrilliantClips] = useState(null);
-  const [error, setError] = useState(null);
+  const [recapError, setRecapError] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab || 'annotations');
+  const [isLoading, setIsLoading] = useState(true);
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
   const contentRef = useRef(null);
@@ -22,7 +23,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   useEffect(() => {
     let cancelled = false;
 
-    fetch(`${API_BASE}/api/games/${game.id}/recap-data`, { credentials: 'include' })
+    const recapPromise = fetch(`${API_BASE}/api/games/${game.id}/recap-data`, { credentials: 'include' })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load recap');
         return r.json();
@@ -31,10 +32,11 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         if (!cancelled) setRecapData(data);
       })
       .catch(err => {
-        if (!cancelled) setError(err.message);
+        console.error('[RecapPlayerModal] Recap fetch failed:', err.message);
+        if (!cancelled) setRecapError(err.message);
       });
 
-    fetch(`${API_BASE}/api/games/${game.id}/brilliant-clips`, { credentials: 'include' })
+    const clipsPromise = fetch(`${API_BASE}/api/games/${game.id}/brilliant-clips`, { credentials: 'include' })
       .then(r => {
         if (!r.ok) throw new Error('Failed to load highlights');
         return r.json();
@@ -42,9 +44,14 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
       .then(data => {
         if (!cancelled) setBrilliantClips(data.clips || []);
       })
-      .catch(() => {
+      .catch(err => {
+        console.error('[RecapPlayerModal] Highlights fetch failed:', err.message);
         if (!cancelled) setBrilliantClips([]);
       });
+
+    Promise.allSettled([recapPromise, clipsPromise]).then(() => {
+      if (!cancelled) setIsLoading(false);
+    });
 
     return () => { cancelled = true; };
   }, [game.id]);
@@ -88,19 +95,20 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     getStreamUrl,
   );
 
-  if (error) {
+  const bothFailed = recapError && (!brilliantClips || brilliantClips.length === 0);
+  if (bothFailed && !isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
         <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700 p-8">
-          <div className="text-center text-red-400">{error}</div>
+          <div className="text-center text-red-400">{recapError}</div>
           <Button onClick={onClose} variant="secondary" className="w-full mt-4">Close</Button>
         </div>
       </div>
     );
   }
 
-  if (!recapData) {
+  if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
         <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
@@ -113,9 +121,13 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     );
   }
 
-  const hasRecapClips = recapData.clips && recapData.clips.length > 0;
+  const hasRecapClips = recapData?.clips && recapData.clips.length > 0;
   const hasHighlights = brilliantClips && brilliantClips.length > 0;
-  const showTabs = hasHighlights;
+  const showTabs = hasRecapClips && hasHighlights;
+
+  const effectiveTab = (!hasRecapClips && hasHighlights) ? 'highlights'
+    : (!hasHighlights && hasRecapClips) ? 'annotations'
+    : activeTab;
 
   const highlightsSidebarClips = (brilliantClips || []).map(clip => ({
     id: clip.id,
@@ -165,7 +177,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             <button
               onClick={() => setActiveTab('annotations')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'annotations'
+                effectiveTab === 'annotations'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-gray-400 hover:text-gray-300'
               }`}
@@ -175,7 +187,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             <button
               onClick={() => setActiveTab('highlights')}
               className={`px-4 py-2 text-sm font-medium transition-colors ${
-                activeTab === 'highlights'
+                effectiveTab === 'highlights'
                   ? 'text-blue-400 border-b-2 border-blue-400'
                   : 'text-gray-400 hover:text-gray-300'
               }`}
@@ -186,7 +198,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         )}
 
         {/* Content: sidebar + video */}
-        {activeTab === 'annotations' ? (
+        {effectiveTab === 'annotations' ? (
           <div className="flex flex-1 min-h-0">
             {/* Clips sidebar — hidden in fullscreen */}
             {hasRecapClips && !isFullscreen && (() => {
@@ -235,15 +247,17 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   ? 'relative flex-1 min-h-0 bg-black'
                   : 'flex-1 flex items-center justify-center bg-black p-2 min-h-0'
               }>
-                <video
-                  ref={recapVideoRef}
-                  src={recapData.url}
-                  autoPlay
-                  className={isFullscreen
-                    ? 'absolute inset-0 w-full h-full object-contain'
-                    : 'max-w-full max-h-full rounded-lg'
-                  }
-                />
+                {recapData?.url && (
+                  <video
+                    ref={recapVideoRef}
+                    src={recapData.url}
+                    autoPlay
+                    className={isFullscreen
+                      ? 'absolute inset-0 w-full h-full object-contain'
+                      : 'max-w-full max-h-full rounded-lg'
+                    }
+                  />
+                )}
               </div>
 
               {hasRecapClips && (

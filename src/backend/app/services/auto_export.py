@@ -17,7 +17,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from ..storage import download_from_r2_global, upload_to_r2, upload_bytes_to_r2
+from ..storage import delete_from_r2, download_from_r2_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,14 @@ def _set_game_status(game_id: int, status: str) -> None:
 def _export_brilliant_clip(
     user_id: str, profile_id: str, clip: dict, game_id: int
 ) -> None:
-    """Export a single brilliant clip via FFmpeg stream-copy extract (original resolution)."""
+    """Export a single brilliant clip via FFmpeg stream-copy extract (original resolution).
+
+    If the clip was previously exported, replaces the old final_video and R2 file.
+    """
+    if not clip['auto_project_id']:
+        logger.warning(f"[AutoExport] Skipping clip {clip['id']} — no auto_project_id")
+        return
+
     video_hash = clip['video_hash']
     start_time = clip['start_time']
     end_time = clip['end_time']
@@ -148,6 +155,24 @@ def _export_brilliant_clip(
     clip_name = clip['name'] or f"Clip {clip['id']}"
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # Replace existing export for this clip (re-export scenario)
+        cursor.execute(
+            """SELECT filename FROM final_videos
+               WHERE source_type = 'brilliant_clip' AND project_id = ?""",
+            (clip['auto_project_id'],),
+        )
+        old_row = cursor.fetchone()
+        if old_row:
+            old_r2_key = f"final_videos/{old_row['filename']}"
+            try:
+                delete_from_r2(user_id, old_r2_key)
+            except Exception as e:
+                logger.warning(f"[AutoExport] Failed to delete old R2 file {old_r2_key}: {e}")
+            cursor.execute(
+                """DELETE FROM final_videos
+                   WHERE source_type = 'brilliant_clip' AND project_id = ?""",
+                (clip['auto_project_id'],),
+            )
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, version, source_type, game_id, name,
