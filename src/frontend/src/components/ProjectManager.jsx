@@ -725,7 +725,7 @@ export function ProjectManager({
                       onLoad={() => onLoadGame(game.id)}
                       onDelete={() => onDeleteGame(game.id)}
                       onExtend={() => setExtensionGame(game)}
-                      onPlayRecap={() => setRecapGame(game)}
+                      onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
                     />
                   ))}
                 </div>
@@ -960,7 +960,8 @@ export function ProjectManager({
 
       {recapGame && (
         <RecapPlayerModal
-          game={recapGame}
+          game={recapGame.game || recapGame}
+          initialTab={recapGame.initialTab}
           onClose={() => setRecapGame(null)}
         />
       )}
@@ -1163,15 +1164,104 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
     }
   };
 
+  if (isExpired) {
+    const hasBrilliant = game.brilliant_count > 0;
+
+    return (
+      <div
+        className="group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <Gamepad2 size={18} className="text-gray-500 flex-shrink-0" />
+              <h3 className="text-white font-medium truncate">{game.name}</h3>
+              <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
+              <span>{new Date(game.created_at).toLocaleDateString()}</span>
+              <span>•</span>
+              <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
+              {game.clip_count > 0 && (
+                <>
+                  {game.brilliant_count > 0 && (
+                    <>
+                      <span>•</span>
+                      <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
+                    </>
+                  )}
+                  {game.good_count > 0 && (
+                    <>
+                      <span>•</span>
+                      <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
+                    </>
+                  )}
+                  <span className="hidden sm:inline">•</span>
+                  <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
+                    Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {hasBrilliant && hasRecap && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('highlights'); }}
+              className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
+            >
+              <Star size={18} />
+              Highlights
+            </button>
+          )}
+        </div>
+
+        <div className="mt-2 flex items-center justify-center gap-2">
+          {hasRecap && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Play}
+              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
+              title="Watch all annotated clips"
+            >
+              Annotations
+            </Button>
+          )}
+          {canExtend && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={RefreshCw}
+              onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
+              title="Extend storage"
+            >
+              Extend Storage
+            </Button>
+          )}
+          <Button
+            variant={showDeleteConfirm ? 'danger' : 'ghost'}
+            size="sm"
+            icon={Trash2}
+            onClick={handleDelete}
+            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+          >
+            Delete
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={handleClick}
-      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all ${isExpired ? 'opacity-60 cursor-pointer hover:opacity-80' : `hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}`}
+      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}
     >
       <div className="flex items-center justify-between">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Gamepad2 size={18} className={`${isExpired ? 'text-gray-500' : GAME.accent} flex-shrink-0`} />
+            <Gamepad2 size={18} className={`${GAME.accent} flex-shrink-0`} />
             <h3 className="text-white font-medium truncate">{game.name}</h3>
             {isFullyReviewed && (
               <CheckCircle size={14} className={GAME.accent} title="Fully reviewed" />
@@ -1182,18 +1272,8 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
                 {viewedPercent}%
               </span>
             )}
-            {isNew && !isExpired && game.video_duration > 0 && (
+            {isNew && game.video_duration > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
-            )}
-            {isExpired && hasRecap && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onPlayRecap?.(); }}
-                className="p-1 rounded hover:bg-blue-900/50 transition-colors"
-                title="Watch recap"
-              >
-                <Play size={14} className="text-blue-400" />
-              </button>
             )}
             <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
           </div>

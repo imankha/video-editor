@@ -9,12 +9,12 @@ import { PlaybackControls } from '../modes/annotate/components/PlaybackControls'
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
-export function RecapPlayerModal({ game, onClose }) {
+export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [recapData, setRecapData] = useState(null);
   const [brilliantClips, setBrilliantClips] = useState(null);
   const [error, setError] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeTab, setActiveTab] = useState('annotations');
+  const [activeTab, setActiveTab] = useState(initialTab || 'annotations');
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
   const contentRef = useRef(null);
@@ -281,7 +281,7 @@ export function RecapPlayerModal({ game, onClose }) {
               <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
                 <div className="p-2 border-b border-gray-700">
                   <span className="text-xs text-gray-400 font-medium">
-                    {brilliantClips.length} highlights
+                    {(brilliantClips || []).length} highlights
                   </span>
                 </div>
                 <div className="flex-1 overflow-y-auto min-h-0">

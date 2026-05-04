@@ -134,44 +134,10 @@ def _export_brilliant_clip(
         if not download_from_r2_global(f"games/{video_hash}.mp4", source_path):
             raise RuntimeError(f"Failed to download game video {video_hash}")
 
-        extracted_path = Path(temp_dir) / "extracted.mp4"
+        output_path = Path(temp_dir) / "extracted.mp4"
         (
             ffmpeg.input(str(source_path), ss=start_time, to=end_time)
-            .output(str(extracted_path), c="copy")
-            .run(quiet=True, overwrite_output=True)
-        )
-
-        probe = ffmpeg.probe(str(extracted_path))
-        video_stream = next(
-            s for s in probe['streams'] if s['codec_type'] == 'video'
-        )
-        src_w = int(video_stream['width'])
-        src_h = int(video_stream['height'])
-
-        target_ratio = 9 / 16
-        src_ratio = src_w / src_h
-        if src_ratio > target_ratio:
-            crop_h = src_h
-            crop_w = int(crop_h * target_ratio)
-        else:
-            crop_w = src_w
-            crop_h = int(crop_w / target_ratio)
-        crop_x = (src_w - crop_w) // 2
-        crop_y = (src_h - crop_h) // 2
-
-        output_path = Path(temp_dir) / "output.mp4"
-        (
-            ffmpeg.input(str(extracted_path))
-            .filter("crop", crop_w, crop_h, crop_x, crop_y)
-            .filter("scale", 1080, 1920)
-            .output(
-                str(output_path),
-                vcodec="libx264",
-                preset="medium",
-                crf=23,
-                acodec="aac",
-                movflags="+faststart",
-            )
+            .output(str(output_path), c="copy", movflags="+faststart")
             .run(quiet=True, overwrite_output=True)
         )
 
