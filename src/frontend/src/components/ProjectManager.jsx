@@ -23,7 +23,7 @@ import { useGalleryStore } from '../stores/galleryStore';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
-import { ExpirationBadge } from './ExpirationBadge';
+import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 
@@ -1151,6 +1151,8 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
 
   const hasRecap = Boolean(game.recap_video_url);
   const canExtend = game.can_extend !== false;
+  const daysLeft = getDaysUntil(game.storage_expires_at);
+  const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
 
   const handleClick = () => {
     if (isExpired) {
@@ -1315,6 +1317,25 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
           title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
         />
       </div>
+
+      {isNearExpiry && (
+        <div className="mt-2 flex items-center justify-between border-t border-gray-700 pt-2">
+          <span className="flex items-center gap-1.5 text-sm text-yellow-400">
+            <Clock size={14} />
+            Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}
+          </span>
+          {canExtend && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={RefreshCw}
+              onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
+            >
+              Extend Storage
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

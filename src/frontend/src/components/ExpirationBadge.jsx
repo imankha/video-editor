@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Clock } from 'lucide-react';
 
-function getDaysUntil(isoDateStr) {
+export function getDaysUntil(isoDateStr) {
   if (!isoDateStr) return null;
   const now = new Date();
   const expiry = new Date(isoDateStr);

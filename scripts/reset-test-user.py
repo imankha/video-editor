@@ -121,20 +121,50 @@ def download_from_r2(r2_client, bucket, r2_key, local_path):
     print(f"  Downloaded from R2: {r2_key}")
 
 
-def restart_fly_machines(env_name):
+def _fly_env(config):
+    """Build env dict for flyctl subprocesses, injecting FLY_ACCESS_TOKEN if needed.
+
+    Checks (in order): env var FLY_ACCESS_TOKEN, .env file FLY_API_TOKEN,
+    then reads ~/.fly/config.yml as a last resort.
+    """
+    import os
+    env = os.environ.copy()
+    token = (
+        os.environ.get("FLY_ACCESS_TOKEN")
+        or os.environ.get("FLY_API_TOKEN")
+        or config.get("FLY_API_TOKEN")
+    )
+    if not token:
+        fly_config = Path.home() / ".fly" / "config.yml"
+        if fly_config.exists():
+            for line in fly_config.read_text().splitlines():
+                if line.startswith("access_token:"):
+                    token = line.split(":", 1)[1].strip()
+                    break
+    if token:
+        env["FLY_ACCESS_TOKEN"] = token
+    return env
+
+
+def restart_fly_machines(env_name, config):
     """Restart all running Fly.io machines to clear cached DB state."""
     app_name = FLY_APPS.get(env_name)
     if not app_name:
         return
+
+    fly_subprocess_env = _fly_env(config)
 
     print(f"\n--- Restarting Fly.io machines ({app_name}) ---")
     try:
         result = subprocess.run(
             ["fly", "machines", "list", "-a", app_name, "--json"],
             capture_output=True, text=True, timeout=30,
+            env=fly_subprocess_env,
         )
         if result.returncode != 0:
             print(f"  WARNING: Could not list machines: {result.stderr.strip()}")
+            print(f"  To fix: add FLY_API_TOKEN=<token> to your .env.{env_name} file,")
+            print(f"  or run: fly machines restart -a {app_name} --select")
             return
 
         import json
@@ -150,6 +180,7 @@ def restart_fly_machines(env_name):
             r = subprocess.run(
                 ["fly", "machines", "restart", mid, "-a", app_name],
                 capture_output=True, text=True, timeout=60,
+                env=fly_subprocess_env,
             )
             if r.returncode == 0:
                 print(f"  Restarted {mid}")
@@ -283,7 +314,7 @@ def main():
 
     # Restart Fly.io machines to clear cached state
     if is_remote and not args.no_restart:
-        restart_fly_machines(args.env)
+        restart_fly_machines(args.env, config)
 
     print(f"\n=== Done. User '{args.email}' fully removed from {args.env}. ===")
     print(f"Next Google login with this email will create a fresh account.")
