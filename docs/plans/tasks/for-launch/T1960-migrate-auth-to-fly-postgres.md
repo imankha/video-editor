@@ -363,6 +363,27 @@ See original T1960 audit for the full list of files importing from auth_db.py. s
 - T1290 (Auth DB Restore Must Succeed) — entire restore mechanism becomes unnecessary
 - T1750 (Share Backend Model & API) — sharing.sqlite migrates to Postgres here
 - T1580 (Game Storage Credits) — game_storage_refs table added to auth.sqlite as interim; migrates to Postgres here
+- T1583 (Auto-Export Pipeline) — adds `get_users_for_hash()` to auth_db.py + asyncio sweep loop; see migration notes below
+
+### T1583 Migration Notes (Auto-Export Pipeline)
+
+T1583 (shipped before T1960) adds the following to auth_db.py that must be migrated:
+
+**New function: `get_users_for_hash(blake3_hash) -> list[dict]`**
+- Returns all `(user_id, profile_id)` pairs referencing a game hash
+- Query: `SELECT user_id, profile_id FROM game_storage_refs WHERE blake3_hash = ?`
+- Postgres migration: straightforward — same query with `$1` parameter
+
+**Sweep loop in main.py: `run_sweep_loop()`**
+- asyncio background task started on app startup
+- Calls `get_expired_hashes()` and `get_users_for_hash()` from auth_db.py
+- Calls `get_next_expiry()` (new auth_db function) to determine sleep duration
+- All three functions query `game_storage_refs` — migrate together
+- The sweep also accesses per-user profile.sqlite (games, raw_clips, final_videos) — that part stays as-is
+
+**New function: `get_next_expiry() -> datetime | None`**
+- Query: `SELECT MIN(storage_expires_at) FROM game_storage_refs WHERE storage_expires_at > datetime('now')`
+- Used by sweep loop to determine next wake time ("cron till next event" pattern)
 
 ### Risks
 - **Migration downtime**: Need a brief maintenance window to migrate data and switch over
