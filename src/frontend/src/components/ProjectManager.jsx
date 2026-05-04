@@ -1277,7 +1277,6 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
             {isNew && game.video_duration > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
-            <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
             <span>{new Date(game.created_at).toLocaleDateString()}</span>
