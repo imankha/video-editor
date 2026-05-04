@@ -43,6 +43,21 @@ export function RecapPlayerModal({ game, onClose }) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handler = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const video = videoRef.current;
+        if (!video) return;
+        if (video.paused) video.play();
+        else video.pause();
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [isFullscreen]);
+
   const {
     isPlaying,
     virtualTime,
@@ -102,7 +117,7 @@ export function RecapPlayerModal({ game, onClose }) {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
+        <div className={`flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0 ${isFullscreen ? 'hidden' : ''}`}>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600/20 rounded-lg">
               <Play size={20} className="text-blue-400" />
@@ -142,12 +157,15 @@ export function RecapPlayerModal({ game, onClose }) {
 
           {/* Video + controls */}
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 flex items-center justify-center bg-black p-2">
+            <div className="flex-1 flex items-center justify-center bg-black p-2 min-h-0">
               <video
                 ref={videoRef}
                 src={recapData.url}
                 autoPlay
-                className="max-w-full max-h-full rounded-lg"
+                className={isFullscreen
+                  ? 'w-full h-full object-contain'
+                  : 'max-w-full max-h-full rounded-lg'
+                }
               />
             </div>
 
