@@ -22,6 +22,8 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
           endTime: clip.recap_end,
         };
 
+        const hasDetails = notes || tags.length > 0;
+
         return (
           <div key={clip.id} ref={isActive ? activeRef : null}>
             <ClipListItem
@@ -31,13 +33,25 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
               isPlaybackActive={isActive}
               onClick={() => onSeekToClip(clip.id)}
             />
-            {notes && (
+            {hasDetails && (
               <div
-                className="px-3 pb-1.5 -mt-0.5 text-xs text-gray-500 truncate cursor-pointer"
+                className="px-3 pb-1.5 -mt-0.5 cursor-pointer"
                 onClick={() => onSeekToClip(clip.id)}
-                title={notes}
               >
-                {notes}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map(tag => (
+                      <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {notes && (
+                  <p className="text-xs text-gray-500 truncate mt-0.5" title={notes}>
+                    {notes}
+                  </p>
+                )}
               </div>
             )}
           </div>

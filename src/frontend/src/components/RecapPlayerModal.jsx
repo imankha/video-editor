@@ -112,32 +112,34 @@ export function RecapPlayerModal({ game, onClose }) {
         ref={contentRef}
         className={`relative bg-gray-800 shadow-2xl flex flex-col ${
           isFullscreen
-            ? 'w-full h-full'
+            ? 'w-screen h-screen'
             : 'rounded-xl border border-gray-700 w-full max-w-6xl mx-4 max-h-[90vh]'
         }`}
       >
-        {/* Header */}
-        <div className={`flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0 ${isFullscreen ? 'hidden' : ''}`}>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-600/20 rounded-lg">
-              <Play size={20} className="text-blue-400" />
+        {/* Header — hidden in fullscreen */}
+        {!isFullscreen && (
+          <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600/20 rounded-lg">
+                <Play size={20} className="text-blue-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">{game.name}</h2>
+                <p className="text-xs text-gray-400">Game Recap</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">{game.name}</h2>
-              <p className="text-xs text-gray-400">Game Recap</p>
-            </div>
+            <button
+              onClick={onClose}
+              className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              <X size={20} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
+        )}
 
         {/* Content: sidebar + video */}
         <div className="flex flex-1 min-h-0">
-          {/* Clips sidebar */}
+          {/* Clips sidebar — hidden in fullscreen */}
           {hasClips && !isFullscreen && (
             <div className="w-64 border-r border-gray-700 flex-shrink-0">
               <div className="p-2 border-b border-gray-700">
@@ -157,13 +159,17 @@ export function RecapPlayerModal({ game, onClose }) {
 
           {/* Video + controls */}
           <div className="flex-1 flex flex-col min-w-0">
-            <div className="flex-1 flex items-center justify-center bg-black p-2 min-h-0">
+            <div className={
+              isFullscreen
+                ? 'relative flex-1 min-h-0 bg-black'
+                : 'flex-1 flex items-center justify-center bg-black p-2 min-h-0'
+            }>
               <video
                 ref={videoRef}
                 src={recapData.url}
                 autoPlay
                 className={isFullscreen
-                  ? 'w-full h-full object-contain'
+                  ? 'absolute inset-0 w-full h-full object-contain'
                   : 'max-w-full max-h-full rounded-lg'
                 }
               />
@@ -185,7 +191,7 @@ export function RecapPlayerModal({ game, onClose }) {
                   onSeekWithinSegment={seekWithinSegment}
                   onStartScrub={startScrub}
                   onEndScrub={endScrub}
-                  onExitPlayback={onClose}
+                  onExitPlayback={isFullscreen ? toggleFullscreen : onClose}
                   playbackRate={playbackRate}
                   onPlaybackRateChange={changePlaybackRate}
                   isFullscreen={isFullscreen}
