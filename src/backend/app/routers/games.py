@@ -801,6 +801,33 @@ async def get_recap_data(game_id: int):
     return {"url": url, "clips": clips}
 
 
+@router.get("/{game_id:int}/brilliant-clips")
+async def get_brilliant_clips(game_id: int):
+    """Get brilliant clip exports for a game (5-star or 4-star fallback auto-exports)."""
+    from app.queries import latest_final_videos_subquery
+
+    user_id = get_current_user_id()
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            f"""SELECT fv.id, fv.name, fv.duration
+                FROM final_videos fv
+                WHERE fv.source_type = 'brilliant_clip'
+                  AND fv.game_id = ?
+                  AND fv.published_at IS NOT NULL
+                  AND fv.id IN ({latest_final_videos_subquery()})
+                ORDER BY fv.id""",
+            (game_id,),
+        ).fetchall()
+
+    clips = [
+        {"id": row["id"], "name": row["name"] or f"Clip {row['id']}", "duration": row["duration"]}
+        for row in rows
+    ]
+    return {"clips": clips}
+
+
 class ExtendStorageRequest(BaseModel):
     days: int = Field(..., ge=1, le=365)
 

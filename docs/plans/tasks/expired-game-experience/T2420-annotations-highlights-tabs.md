@@ -1,6 +1,6 @@
 # T2420: Annotations + Highlights Tabs
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-05-03
