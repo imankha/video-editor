@@ -962,10 +962,6 @@ export function ProjectManager({
         <RecapPlayerModal
           game={recapGame}
           onClose={() => setRecapGame(null)}
-          onExtend={() => {
-            setRecapGame(null);
-            setExtensionGame(recapGame);
-          }}
         />
       )}
 

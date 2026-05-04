@@ -1,15 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Play } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useRecapPlayback } from './recap/useRecapPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
 import { PlaybackControls } from '../modes/annotate/components/PlaybackControls';
 
-export function RecapPlayerModal({ game, onClose, onExtend }) {
+export function RecapPlayerModal({ game, onClose }) {
   const [recapData, setRecapData] = useState(null);
   const [error, setError] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef(null);
+  const contentRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,6 +28,20 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
       });
     return () => { cancelled = true; };
   }, [game.id]);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      contentRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
 
   const {
     isPlaying,
@@ -49,7 +65,7 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
   if (error) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
         <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700 p-8">
           <div className="text-center text-red-400">{error}</div>
           <Button onClick={onClose} variant="secondary" className="w-full mt-4">Close</Button>
@@ -61,7 +77,7 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
   if (!recapData) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
         <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg mx-4 border border-gray-700 p-8">
           <div className="flex items-center justify-center text-gray-400">
             <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-600 border-t-blue-400" />
@@ -75,9 +91,16 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
-      <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl mx-4 border border-gray-700 flex flex-col max-h-[90vh]">
+      <div
+        ref={contentRef}
+        className={`relative bg-gray-800 shadow-2xl flex flex-col ${
+          isFullscreen
+            ? 'w-full h-full'
+            : 'rounded-xl border border-gray-700 w-full max-w-6xl mx-4 max-h-[90vh]'
+        }`}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -100,14 +123,14 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
         {/* Content: sidebar + video */}
         <div className="flex flex-1 min-h-0">
           {/* Clips sidebar */}
-          {hasClips && (
+          {hasClips && !isFullscreen && (
             <div className="w-64 border-r border-gray-700 flex-shrink-0">
               <div className="p-2 border-b border-gray-700">
                 <span className="text-xs text-gray-400 font-medium">
                   {recapData.clips.length} clips
                 </span>
               </div>
-              <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 220px)' }}>
+              <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 160px)' }}>
                 <RecapClipsSidebar
                   clips={recapData.clips}
                   activeClipId={activeClipId}
@@ -147,26 +170,14 @@ export function RecapPlayerModal({ game, onClose, onExtend }) {
                   onExitPlayback={onClose}
                   playbackRate={playbackRate}
                   onPlaybackRateChange={changePlaybackRate}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
                   videoARef={videoRef}
                   videoBRef={videoRef}
                 />
               </div>
             )}
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="flex gap-2 p-4 border-t border-gray-700 flex-shrink-0">
-          <Button
-            onClick={onExtend}
-            className="flex-1 flex items-center justify-center gap-2"
-          >
-            <Calendar size={16} />
-            Extend Storage
-          </Button>
-          <Button onClick={onClose} variant="secondary" className="flex-1">
-            Close
-          </Button>
         </div>
       </div>
     </div>

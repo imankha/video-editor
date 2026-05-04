@@ -63,6 +63,7 @@ export function useRecapPlayback(videoRef, clips) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    setIsPlaying(!video.paused);
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     video.addEventListener('play', onPlay);
@@ -71,7 +72,7 @@ export function useRecapPlayback(videoRef, clips) {
       video.removeEventListener('play', onPlay);
       video.removeEventListener('pause', onPause);
     };
-  }, [videoRef]);
+  }, [videoRef, totalVirtualDuration]);
 
   const seekToClip = useCallback((clipId) => {
     const seg = segments.find(s => s.clipId === clipId);

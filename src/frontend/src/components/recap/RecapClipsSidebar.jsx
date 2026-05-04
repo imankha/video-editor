@@ -12,10 +12,12 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
     <div className="flex flex-col h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600">
       {clips.map((clip, index) => {
         const isActive = clip.id === activeClipId;
+        const tags = Array.isArray(clip.tags) ? clip.tags : [];
+        const notes = clip.notes || '';
         const region = {
           rating: clip.rating || 3,
-          tags: Array.isArray(clip.tags) ? clip.tags : [],
-          notes: clip.notes || '',
+          tags,
+          notes,
           name: clip.name || '',
           endTime: clip.recap_end,
         };
@@ -29,6 +31,15 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
               isPlaybackActive={isActive}
               onClick={() => onSeekToClip(clip.id)}
             />
+            {notes && (
+              <div
+                className="px-3 pb-1.5 -mt-0.5 text-xs text-gray-500 truncate cursor-pointer"
+                onClick={() => onSeekToClip(clip.id)}
+                title={notes}
+              >
+                {notes}
+              </div>
+            )}
           </div>
         );
       })}
