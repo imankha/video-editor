@@ -1190,7 +1190,14 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
             {isExpired && hasRecap && (
-              <Play size={14} className="text-blue-400" title="Watch recap" />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onPlayRecap?.(); }}
+                className="p-1 rounded hover:bg-blue-900/50 transition-colors"
+                title="Watch recap"
+              >
+                <Play size={14} className="text-blue-400" />
+              </button>
             )}
             <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
           </div>
