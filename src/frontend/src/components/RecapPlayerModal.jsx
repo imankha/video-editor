@@ -140,22 +140,44 @@ export function RecapPlayerModal({ game, onClose }) {
         {/* Content: sidebar + video */}
         <div className="flex flex-1 min-h-0">
           {/* Clips sidebar — hidden in fullscreen */}
-          {hasClips && !isFullscreen && (
-            <div className="w-64 border-r border-gray-700 flex-shrink-0">
-              <div className="p-2 border-b border-gray-700">
-                <span className="text-xs text-gray-400 font-medium">
-                  {recapData.clips.length} clips
-                </span>
+          {hasClips && !isFullscreen && (() => {
+            const activeClip = recapData.clips.find(c => c.id === activeClipId);
+            const tags = activeClip && Array.isArray(activeClip.tags) ? activeClip.tags : [];
+            const notes = activeClip?.notes || '';
+
+            return (
+              <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
+                <div className="p-2 border-b border-gray-700">
+                  <span className="text-xs text-gray-400 font-medium">
+                    {recapData.clips.length} clips
+                  </span>
+                </div>
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  <RecapClipsSidebar
+                    clips={recapData.clips}
+                    activeClipId={activeClipId}
+                    onSeekToClip={seekToClip}
+                  />
+                </div>
+                {(notes || tags.length > 0) && (
+                  <div className="border-t border-gray-700 p-3 flex-shrink-0">
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mb-1.5">
+                        {tags.map(tag => (
+                          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {notes && (
+                      <p className="text-xs text-gray-400 leading-relaxed">{notes}</p>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="overflow-y-auto" style={{ maxHeight: 'calc(90vh - 160px)' }}>
-                <RecapClipsSidebar
-                  clips={recapData.clips}
-                  activeClipId={activeClipId}
-                  onSeekToClip={seekToClip}
-                />
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Video + controls */}
           <div className="flex-1 flex flex-col min-w-0">
