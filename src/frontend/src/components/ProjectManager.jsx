@@ -1171,12 +1171,12 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
 
     return (
       <div
-        className="group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750"
+        className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
       >
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <Gamepad2 size={18} className="text-gray-500 flex-shrink-0" />
+              <Gamepad2 size={18} className="text-yellow-500 flex-shrink-0" />
               <h3 className="text-white font-medium truncate">{game.name}</h3>
               <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
             </div>
