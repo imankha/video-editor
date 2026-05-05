@@ -1210,10 +1210,12 @@ def load_annotations_from_db(game_id: int) -> list:
         cursor = conn.cursor()
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
-            SELECT id, start_time, end_time, name, rating, tags, notes, video_sequence, auto_project_id
-            FROM raw_clips
-            WHERE game_id = ?
-            ORDER BY video_sequence, end_time
+            SELECT rc.id, rc.start_time, rc.end_time, rc.name, rc.rating, rc.tags, rc.notes, rc.video_sequence,
+                   CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL THEN rc.auto_project_id ELSE NULL END AS auto_project_id
+            FROM raw_clips rc
+            LEFT JOIN projects p ON p.id = rc.auto_project_id
+            WHERE rc.game_id = ?
+            ORDER BY rc.video_sequence, rc.end_time
         """, (game_id,))
         rows = cursor.fetchall()
 

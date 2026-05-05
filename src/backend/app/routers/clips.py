@@ -924,8 +924,16 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         project_created = False
         if update.create_project:
             if auto_project_id:
-                logger.info(f"[CreateReel] Clip {clip_id} already has auto_project_id={auto_project_id}, skipping")
-            else:
+                cursor.execute(
+                    "SELECT id FROM projects WHERE id = ? AND archived_at IS NULL",
+                    (auto_project_id,),
+                )
+                if cursor.fetchone():
+                    logger.info(f"[CreateReel] Clip {clip_id} already has auto_project_id={auto_project_id}, skipping")
+                else:
+                    logger.info(f"[CreateReel] Clip {clip_id} had stale auto_project_id={auto_project_id}, clearing")
+                    auto_project_id = None
+            if not auto_project_id:
                 clip_name = update.name if update.name is not None else clip['name']
                 logger.info(f"[CreateReel] Creating reel for clip {clip_id}, name={clip_name!r}")
                 auto_project_id = _create_auto_project_for_clip(cursor, clip_id, clip_name)
