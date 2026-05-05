@@ -48,19 +48,21 @@ export function ProjectProvider({ children }) {
     return () => { cancelled = true; };
   }, [projectId]);
 
-  // Refresh project data
+  // Refresh project data — returns the fetched project (or null)
   const refresh = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) return null;
 
     try {
       const response = await fetch(`${API_BASE}/api/projects/${projectId}`);
       if (response.ok) {
         const data = await response.json();
         setProject(data);
+        return data;
       }
     } catch (err) {
       console.error('[ProjectContext] Failed to refresh:', err);
     }
+    return null;
   }, [projectId]);
 
   const value = {

@@ -350,10 +350,18 @@ export function OverlayScreen({
       // project data doesn't include working_video_url. This happens when React renders
       // OverlayScreen before the refreshed project data has propagated.
       // Recovery: refresh project once to get the URL. If still missing, clear the flag.
+      // We handle both outcomes inline because when the project has no working video,
+      // the effect deps (project?.working_video_url, working_video_id) stay null
+      // and the effect would never re-run to reach the else branch.
       if (!workingVideoRecoveryAttemptedRef.current) {
         workingVideoRecoveryAttemptedRef.current = true;
         console.log('[OverlayScreen] isLoadingWorkingVideo=true but no URL — refreshing project to get presigned URL');
-        refreshProject();
+        refreshProject().then((freshProject) => {
+          if (!freshProject?.working_video_url) {
+            console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
+            setIsLoadingWorkingVideo(false);
+          }
+        });
       } else {
         console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
         setIsLoadingWorkingVideo(false);
