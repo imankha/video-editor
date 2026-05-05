@@ -23,6 +23,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthGateModal />
     <AuthErrorBanner />
     {/* T1650: Global report button — visible on every screen */}
-    <ReportProblemButton className="fixed bottom-3 right-3 z-[55] text-xs text-gray-500 hover:text-gray-300" />
+    <ReportProblemButton className="fixed bottom-4 right-4 z-[9999] bg-gray-800/90 border border-gray-600 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors" />
   </React.StrictMode>,
 )

@@ -116,7 +116,7 @@ export function ReportProblemButton({ className = '' }) {
       <button
         type="button"
         onClick={handleOpen}
-        className={`text-xs text-gray-400 hover:text-gray-200 ${className}`}
+        className={className || 'text-sm text-gray-400 hover:text-gray-200'}
       >
         Report a problem
       </button>

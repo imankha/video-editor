@@ -911,7 +911,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    */
   const isUrlExpiredError = useCallback(() => {
     if (!error) return false;
-    return error.includes('connection lost') || error.includes('expired');
+    return error.includes('connection lost') || error.includes('expired') || error.includes('interrupted');
   }, [error]);
 
   // Adjust playback rate based on current segment speed

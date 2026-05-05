@@ -87,6 +87,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
     stepBackward,
     restart,
     handlers,
+    clearError,
+    isUrlExpiredError,
+    loadVideoFromStreamingUrl,
   } = useVideo(null, null);
 
   // Zoom hook
@@ -209,6 +212,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
+
+  const handleRetryVideo = useCallback(async () => {
+    if (!annotateGameId) return;
+    clearError();
+    await handleLoadGame(annotateGameId);
+  }, [annotateGameId, clearError, handleLoadGame]);
 
   // Keep gameIdRef updated for handleBackToProjects
   useEffect(() => {
@@ -516,6 +525,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
         loadingProgress={loadingProgress}
         loadingElapsedSeconds={loadingElapsedSeconds}
         error={videoError}
+        isUrlExpiredError={isUrlExpiredError}
+        onRetryVideo={handleRetryVideo}
         handlers={handlers}
         // Fullscreen state
         annotateFullscreen={annotateFullscreen}

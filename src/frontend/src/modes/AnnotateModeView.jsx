@@ -27,6 +27,8 @@ export function AnnotateModeView({
   loadingProgress = null,
   loadingElapsedSeconds = 0,
   error = null,
+  isUrlExpiredError = () => false,
+  onRetryVideo,
   handlers,
 
   // Fullscreen state
@@ -311,6 +313,8 @@ export function AnnotateModeView({
                 loadingProgress={loadingProgress}
                 loadingElapsedSeconds={loadingElapsedSeconds}
                 error={error}
+                isUrlExpiredError={isUrlExpiredError}
+                onRetryVideo={onRetryVideo}
                 loadingMessage="Loading video..."
                 overlays={[
                   // NotesOverlay - shows name, rating, notes for the active clip.
