@@ -68,9 +68,6 @@ export function AnnotateModeView({
   annotateSelectedLayer,
   onLayerSelect,
 
-  // Upload state
-  isUploadingGameVideo,
-
   // T710: Annotation playback
   playback,
   lockScrub,
@@ -429,9 +426,9 @@ export function AnnotateModeView({
             <div className="space-y-2">
               <button
                 onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
-                disabled={!hasAnnotateClips || isUploadingGameVideo}
+                disabled={!hasAnnotateClips}
                 className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  !hasAnnotateClips || isUploadingGameVideo
+                  !hasAnnotateClips
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     : 'bg-green-600 hover:bg-green-700 text-white'
                 }`}
