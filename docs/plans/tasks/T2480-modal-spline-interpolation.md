@@ -56,6 +56,26 @@ These were discovered while debugging the overlay WYSIWYG mismatch and apply to 
 5. [ ] Audit crop keyframe bounds filters for epsilon tolerance
 6. [ ] Redeploy Modal functions
 
+## Debugging Logging (add temporarily if needed)
+
+If the crop position doesn't match the editor preview, add these logs to the Modal framing render loop to diagnose:
+
+```python
+# After sorting keyframes, log what arrived:
+logger.info(f"[{job_id}] Crop keyframes: {len(sorted_keyframes)}, "
+            f"time range: {sorted_keyframes[0]['time']:.3f}-{sorted_keyframes[-1]['time']:.3f}")
+for i, kf in enumerate(sorted_keyframes):
+    logger.info(f"[{job_id}]   KF {i}: t={kf['time']:.3f} x={kf['x']:.1f} y={kf['y']:.1f} "
+                f"w={kf['width']:.1f} h={kf['height']:.1f}")
+
+# Every 30 frames, log interpolated vs nearest keyframe:
+if frame_idx % 30 == 0:
+    logger.info(f"[{job_id}] Frame {frame_idx} t={time:.3f}: "
+                f"crop x={crop['x']:.1f} y={crop['y']:.1f} w={crop['width']:.1f} h={crop['height']:.1f}")
+```
+
+Access via: `timeout 5 modal app logs reel-ballers-video-v2`
+
 ## Acceptance Criteria
 
 - [ ] Both Modal `_interpolate_crop` functions use Catmull-Rom spline

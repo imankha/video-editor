@@ -314,17 +314,6 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
 
     sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
 
-    # Diagnostic: log all regions and their keyframes
-    for ri, region in enumerate(sorted_regions):
-        kfs = region.get('keyframes', [])
-        logger.info(f"[{job_id}] Region {ri}: time={region['start_time']:.3f}-{region['end_time']:.3f}, "
-                     f"keyframes={len(kfs)}, videoWidth={region.get('videoWidth')}, videoHeight={region.get('videoHeight')}")
-        for ki, kf in enumerate(kfs):
-            logger.info(f"[{job_id}]   KF {ki}: time={kf.get('time'):.3f}, "
-                         f"x={kf.get('x'):.1f}, y={kf.get('y'):.1f}, "
-                         f"radiusX={kf.get('radiusX'):.1f}, radiusY={kf.get('radiusY'):.1f}, "
-                         f"opacity={kf.get('opacity')}")
-
     ffmpeg_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo", "-pix_fmt", "bgr24",
@@ -371,9 +360,9 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
                         'x': kf['x'] * scale_x, 'y': kf['y'] * scale_y,
                         'radiusX': kf['radiusX'] * scale_x, 'radiusY': kf['radiusY'] * scale_y,
                     } for kf in active_region.get('keyframes', [])]
-                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type, job_id=job_id, frame_idx=frame_idx)
+                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type)
                 else:
-                    frame = _render_highlight(frame, active_region, current_time, effect_type, job_id=job_id, frame_idx=frame_idx)
+                    frame = _render_highlight(frame, active_region, current_time, effect_type)
 
             try:
                 if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
@@ -648,8 +637,7 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
     }
 
 
-def _render_highlight(frame, region: dict, current_time: float, effect_type: str,
-                      job_id: str = "", frame_idx: int = 0):
+def _render_highlight(frame, region: dict, current_time: float, effect_type: str):
     """
     Render highlight overlay on a single frame.
 
@@ -674,8 +662,6 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     result = _spline_interpolate_highlight(sorted_kf, current_time)
 
     if result is None:
-        if frame_idx % 30 == 0:
-            logger.info(f"[{job_id}] Frame {frame_idx} t={current_time:.3f}: interpolate returned None")
         return frame
 
     x = result['x']
@@ -684,10 +670,6 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     radiusY = result['radiusY']
     opacity = result['opacity']
     color = result.get('color')
-
-    if frame_idx % 30 == 0:
-        logger.info(f"[{job_id}] Frame {frame_idx} t={current_time:.3f}: "
-                     f"interp x={x:.1f}, y={y:.1f}, rX={radiusX:.1f}, rY={radiusY:.1f}")
 
     height, width = frame.shape[:2]
     center = (int(x), int(y))
