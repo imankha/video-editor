@@ -578,7 +578,19 @@ def _process_frames_to_ffmpeg(
     # Sort regions by start time for efficient lookup
     sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
 
+    # Diagnostic: log all regions and their keyframes
+    for ri, region in enumerate(sorted_regions):
+        kfs = region.get('keyframes', [])
+        logger.info(f"[Overlay Export] Region {ri}: time={region['start_time']:.3f}-{region['end_time']:.3f}, "
+                     f"keyframes={len(kfs)}, videoWidth={region.get('videoWidth')}, videoHeight={region.get('videoHeight')}")
+        for ki, kf in enumerate(kfs):
+            logger.info(f"[Overlay Export]   KF {ki}: time={kf.get('time'):.3f}, "
+                         f"x={kf.get('x'):.1f}, y={kf.get('y'):.1f}, "
+                         f"radiusX={kf.get('radiusX'):.1f}, radiusY={kf.get('radiusY'):.1f}, "
+                         f"opacity={kf.get('opacity')}")
+
     frame_idx = 0
+    logged_first_interp = False
     try:
         while True:
             ret, frame = cap.read()
@@ -602,7 +614,24 @@ def _process_frames_to_ffmpeg(
                     kf for kf in active_region['keyframes']
                     if active_region['start_time'] <= kf['time'] <= active_region['end_time']
                 ]
+
+                # Log filtered keyframe count once per region activation
+                if not logged_first_interp:
+                    logger.info(f"[Overlay Export] Region active at t={current_time:.3f}: "
+                                 f"{len(region_keyframes)} keyframes after bounds filter "
+                                 f"(of {len(active_region['keyframes'])} total)")
+                    logged_first_interp = True
+
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
+
+                # Log interpolation at keyframe times and a few sample points
+                if frame_idx % 30 == 0 and highlight:
+                    logger.info(f"[Overlay Export] Frame {frame_idx} t={current_time:.3f}: "
+                                 f"interp x={highlight['x']:.1f}, y={highlight['y']:.1f}, "
+                                 f"radiusX={highlight['radiusX']:.1f}, radiusY={highlight['radiusY']:.1f}")
+                elif frame_idx % 30 == 0 and highlight is None:
+                    logger.info(f"[Overlay Export] Frame {frame_idx} t={current_time:.3f}: "
+                                 f"interpolate_highlight returned None")
                 if highlight is not None:
                     # Check if keyframe coordinates need to be scaled from detection space to working video space
                     # Detection may have run on source video (e.g., 2560x1440) but rendering is on working video (e.g., 1080x1920)
