@@ -3,6 +3,7 @@ import { Scissors, Upload, Download, X, AlertCircle, Loader, ArrowLeft } from 'l
 import { Button } from '../../../components/shared/Button';
 import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
+import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
 
 /**
@@ -30,6 +31,12 @@ export function ClipsSidePanel({
   videoRef,
   onScrubLock,
   onScrubUnlock,
+  showAddClipForm = false,
+  currentTime,
+  onCreateClip,
+  onUpdateClip,
+  onOverlayResume,
+  onOverlayClose,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -240,7 +247,7 @@ export function ClipsSidePanel({
           </div>
 
           {/* Details Editor (desktop only - on mobile it takes over the full panel) */}
-          {!isMobile && selectedRegion && (
+          {!isMobile && selectedRegion && !showAddClipForm && (
             <ClipDetailsEditor
               region={selectedRegion}
               onUpdate={(updates) => onUpdateRegion(selectedRegion.id, updates)}
@@ -251,6 +258,22 @@ export function ClipsSidePanel({
               videoRef={videoRef}
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
+            />
+          )}
+
+          {/* Add Clip form (desktop, non-fullscreen only) */}
+          {!isMobile && showAddClipForm && (
+            <AnnotateFullscreenOverlay
+              isVisible={true}
+              currentTime={currentTime}
+              videoDuration={videoDuration}
+              onCreateClip={onCreateClip}
+              onUpdateClip={onUpdateClip}
+              onResume={onOverlayResume}
+              onClose={onOverlayClose}
+              onSeek={onSeek}
+              videoRef={videoRef}
+              layout="inline"
             />
           )}
         </>

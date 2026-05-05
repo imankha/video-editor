@@ -413,6 +413,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
           videoRef={videoRef}
           onScrubLock={lockScrub}
           onScrubUnlock={unlockScrub}
+          showAddClipForm={showAnnotateOverlay && !annotateFullscreen}
+          currentTime={currentTime}
+          onCreateClip={handleFullscreenCreateClip}
+          onUpdateClip={handleFullscreenUpdateClip}
+          onOverlayResume={handleOverlayResume}
+          onOverlayClose={handleOverlayClose}
         />
       </div>
       {/* Mobile sidebar overlay */}

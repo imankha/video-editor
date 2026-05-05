@@ -1,8 +1,33 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Star, X, Check, Plus } from 'lucide-react';
 import { positions, soccerTags, generateClipName } from '../constants/soccerTags';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
+
+// Persists across mounts within the same page session
+let savedDockPosition = 'left';
+
+function DockPositionSelector({ position, onPositionChange }) {
+  return (
+    <div className="flex gap-1 flex-shrink-0" title="Dock position">
+      {['left', 'right'].map(side => (
+        <button
+          key={side}
+          onClick={() => onPositionChange(side)}
+          className={`relative w-[28px] h-[22px] rounded border transition-colors ${
+            position === side
+              ? 'border-green-500 bg-gray-700'
+              : 'border-gray-600 bg-gray-800 hover:border-gray-400'
+          }`}
+        >
+          <span className={`absolute ${side === 'left' ? 'left-[3px]' : 'right-[3px]'} top-[3px] bottom-[3px] w-[5px] rounded-sm transition-colors ${
+            position === side ? 'bg-green-400' : 'bg-gray-500'
+          }`} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 // Rating notation map
 const RATING_NOTATION = {
@@ -112,8 +137,16 @@ export function AnnotateFullscreenOverlay({
   onClose,
   onSeek,
   videoRef,
+  isFullscreen = false,
+  layout = 'overlay',
 }) {
   const isEditMode = !!existingClip;
+
+  const [dockPosition, setDockPosition] = useState(savedDockPosition);
+  const handleDockChange = useCallback((pos) => {
+    savedDockPosition = pos;
+    setDockPosition(pos);
+  }, []);
 
   const [rating, setRating] = useState(DEFAULT_RATING);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -276,25 +309,25 @@ export function AnnotateFullscreenOverlay({
 
   if (!isVisible) return null;
 
-  return (
-    <div className="absolute inset-0 z-50 flex items-center justify-start pl-4 pointer-events-none">
-      <div
-        className="bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl border border-gray-700 max-h-[90vh] overflow-y-auto pointer-events-auto"
-        onMouseDown={(e) => e.stopPropagation()}
-        onWheel={(e) => e.stopPropagation()}
-      >
+  const formContent = (
+    <>
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-white">
+          <h3 className={`${layout === 'inline' ? 'text-sm' : 'text-lg'} font-semibold text-white`}>
             {isEditMode ? 'Edit Clip' : 'Add Clip'}
           </h3>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-700 rounded transition-colors"
-            title="Cancel (Esc)"
-          >
-            <X size={20} className="text-gray-400" />
-          </button>
+          <div className="flex items-center gap-2">
+            {layout === 'overlay' && (
+              <DockPositionSelector position={dockPosition} onPositionChange={handleDockChange} />
+            )}
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-gray-700 rounded transition-colors"
+              title="Cancel (Esc)"
+            >
+              <X size={20} className="text-gray-400" />
+            </button>
+          </div>
         </div>
 
         {/* Clip scrub region - visual timeline for selecting start/end */}
@@ -401,6 +434,27 @@ export function AnnotateFullscreenOverlay({
             Cancel
           </button>
         </div>
+    </>
+  );
+
+  if (layout === 'inline') {
+    return (
+      <div className="border-t border-gray-700 p-3 overflow-y-auto">
+        {formContent}
+      </div>
+    );
+  }
+
+  const isRight = dockPosition === 'right';
+
+  return (
+    <div className={`absolute ${isRight ? 'right-0' : 'left-0'} top-0 bottom-0 z-50 flex items-stretch`}>
+      <div
+        className={`bg-gray-900/95 p-5 shadow-2xl border-gray-700 pointer-events-auto w-[400px] overflow-y-auto ${isRight ? 'border-l' : 'border-r'}`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onWheel={(e) => e.stopPropagation()}
+      >
+        {formContent}
       </div>
     </div>
   );

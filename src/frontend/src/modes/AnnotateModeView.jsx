@@ -348,9 +348,10 @@ export function AnnotateModeView({
               />
             </div>
 
-            {/* AnnotateFullscreenOverlay - rendered outside VideoPlayer to avoid
-                <video> GPU compositing painting over the panel (see T755) */}
-            {showAnnotateOverlay && (
+            {/* AnnotateFullscreenOverlay - only rendered in fullscreen mode.
+                In non-fullscreen, the form renders in the sidebar (ClipsSidePanel).
+                Rendered outside VideoPlayer to avoid <video> GPU compositing painting over the panel (see T755) */}
+            {showAnnotateOverlay && annotateFullscreen && (
               <AnnotateFullscreenOverlay
                 isVisible={showAnnotateOverlay}
                 currentTime={currentTime}
@@ -362,6 +363,7 @@ export function AnnotateModeView({
                 onClose={onOverlayClose}
                 onSeek={seek}
                 videoRef={videoRef}
+                isFullscreen={annotateFullscreen}
               />
             )}
 
