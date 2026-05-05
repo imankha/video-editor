@@ -1249,9 +1249,9 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
             size="sm"
             icon={Trash2}
             onClick={handleDelete}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+            title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
           >
-            Delete
+            Remove
           </Button>
         </div>
       </div>
