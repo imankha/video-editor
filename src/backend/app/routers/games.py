@@ -571,6 +571,22 @@ async def activate_game(game_id: int):
                         (fps, game_id)
                     )
 
+        # Backfill working_clips created before activation (fps was NULL
+        # because game_videos hadn't been probed yet during pending creation)
+        cursor.execute("""
+            UPDATE working_clips
+            SET fps = (
+                SELECT gv.fps FROM raw_clips rc
+                JOIN game_videos gv ON gv.game_id = rc.game_id
+                    AND gv.sequence = COALESCE(rc.video_sequence, 1)
+                WHERE rc.id = working_clips.raw_clip_id
+            )
+            WHERE fps IS NULL
+            AND raw_clip_id IN (
+                SELECT id FROM raw_clips WHERE game_id = ?
+            )
+        """, (game_id,))
+
         # T1580: Compute total size and deduct storage credits
         cursor.execute(
             "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
