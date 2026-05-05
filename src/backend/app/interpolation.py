@@ -5,7 +5,47 @@ Uses Catmull-Rom cubic spline to match frontend interpolation.
 """
 
 from typing import List, Dict, Any
-from app.ai_upscaler.keyframe_interpolator import _find_spline_indices, _spline_prop
+
+
+def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+    t2 = t * t
+    t3 = t2 * t
+    return 0.5 * (
+        (2 * p1)
+        + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    )
+
+
+def _find_spline_indices(sorted_kf, time):
+    if len(sorted_kf) < 2:
+        return None
+    p1_idx = -1
+    p2_idx = -1
+    for i, kf in enumerate(sorted_kf):
+        if kf['time'] <= time:
+            p1_idx = i
+        if kf['time'] > time and p2_idx == -1:
+            p2_idx = i
+            break
+    if p1_idx == -1 or p2_idx == -1:
+        return None
+    duration = sorted_kf[p2_idx]['time'] - sorted_kf[p1_idx]['time']
+    if duration == 0:
+        return None
+    progress = (time - sorted_kf[p1_idx]['time']) / duration
+    p0_idx = max(0, p1_idx - 1)
+    p3_idx = min(len(sorted_kf) - 1, p2_idx + 1)
+    return p0_idx, p1_idx, p2_idx, p3_idx, progress
+
+
+def _spline_prop(sorted_kf, indices, prop):
+    p0_idx, p1_idx, p2_idx, p3_idx, progress = indices
+    return _catmull_rom(
+        sorted_kf[p0_idx][prop], sorted_kf[p1_idx][prop],
+        sorted_kf[p2_idx][prop], sorted_kf[p3_idx][prop], progress,
+    )
 
 
 def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, float]:
