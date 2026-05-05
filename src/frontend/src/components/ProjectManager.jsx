@@ -1178,7 +1178,10 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
             <div className="flex items-center gap-2">
               <Gamepad2 size={18} className="text-yellow-500 flex-shrink-0" />
               <h3 className="text-white font-medium truncate">{game.name}</h3>
-              <ExpirationBadge expiresAt={game.storage_expires_at} canExtend={canExtend} onClick={onExtend} />
+              <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-400 flex-shrink-0">
+                <Clock size={10} />
+                Expired
+              </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
               <span>{new Date(game.created_at).toLocaleDateString()}</span>
