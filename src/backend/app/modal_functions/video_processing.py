@@ -590,6 +590,36 @@ def _catmull_rom(p0, p1, p2, p3, t):
     )
 
 
+def _find_spline_indices(sorted_kf, time):
+    if len(sorted_kf) < 2:
+        return None
+    p1_idx = -1
+    p2_idx = -1
+    for i, kf in enumerate(sorted_kf):
+        if kf['time'] <= time:
+            p1_idx = i
+        if kf['time'] > time and p2_idx == -1:
+            p2_idx = i
+            break
+    if p1_idx == -1 or p2_idx == -1:
+        return None
+    duration = sorted_kf[p2_idx]['time'] - sorted_kf[p1_idx]['time']
+    if duration == 0:
+        return None
+    progress = (time - sorted_kf[p1_idx]['time']) / duration
+    p0_idx = max(0, p1_idx - 1)
+    p3_idx = min(len(sorted_kf) - 1, p2_idx + 1)
+    return p0_idx, p1_idx, p2_idx, p3_idx, progress
+
+
+def _spline_prop(sorted_kf, indices, prop):
+    p0_idx, p1_idx, p2_idx, p3_idx, progress = indices
+    return _catmull_rom(
+        sorted_kf[p0_idx][prop], sorted_kf[p1_idx][prop],
+        sorted_kf[p2_idx][prop], sorted_kf[p3_idx][prop], progress,
+    )
+
+
 def _spline_interpolate_highlight(sorted_kf, current_time):
     """Catmull-Rom spline interpolation matching frontend interpolateHighlightSpline."""
     if not sorted_kf:
@@ -1063,7 +1093,7 @@ def _get_realesrgan_model():
 
 
 def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
-    """Interpolate crop position at a given time.
+    """Interpolate crop position using Catmull-Rom spline.
 
     Args:
         sorted_keyframes: Keyframes pre-sorted by time (caller must sort).
@@ -1072,31 +1102,27 @@ def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
     if not sorted_keyframes:
         return None
 
-    # Before first keyframe - use first
+    if len(sorted_keyframes) == 1:
+        return sorted_keyframes[0].copy()
+
     if time <= sorted_keyframes[0]['time']:
         return sorted_keyframes[0].copy()
 
-    # After last keyframe - use last
     if time >= sorted_keyframes[-1]['time']:
         return sorted_keyframes[-1].copy()
 
-    # Find surrounding keyframes
-    for i in range(len(sorted_keyframes) - 1):
-        kf1 = sorted_keyframes[i]
-        kf2 = sorted_keyframes[i + 1]
+    indices = _find_spline_indices(sorted_keyframes, time)
+    if indices is None:
+        nearest = min(sorted_keyframes, key=lambda k: abs(k['time'] - time))
+        return nearest.copy()
 
-        if kf1['time'] <= time <= kf2['time']:
-            # Linear interpolation
-            t = (time - kf1['time']) / (kf2['time'] - kf1['time'])
-            return {
-                'time': time,
-                'x': kf1['x'] + t * (kf2['x'] - kf1['x']),
-                'y': kf1['y'] + t * (kf2['y'] - kf1['y']),
-                'width': kf1['width'] + t * (kf2['width'] - kf1['width']),
-                'height': kf1['height'] + t * (kf2['height'] - kf1['height']),
-            }
-
-    return sorted_keyframes[-1].copy()
+    return {
+        'time': time,
+        'x': _spline_prop(sorted_keyframes, indices, 'x'),
+        'y': _spline_prop(sorted_keyframes, indices, 'y'),
+        'width': _spline_prop(sorted_keyframes, indices, 'width'),
+        'height': _spline_prop(sorted_keyframes, indices, 'height'),
+    }
 
 
 @app.function(

@@ -200,36 +200,77 @@ def _get_model_fully_optimized(device='cuda', gpu_type='T4'):
 
 
 # ============================================================================
-# Interpolation Helper
+# Interpolation Helpers
 # ============================================================================
 
+def _catmull_rom(p0, p1, p2, p3, t):
+    t2 = t * t
+    t3 = t2 * t
+    return 0.5 * (
+        (2 * p1)
+        + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    )
+
+
+def _find_spline_indices(sorted_kf, time):
+    if len(sorted_kf) < 2:
+        return None
+    p1_idx = -1
+    p2_idx = -1
+    for i, kf in enumerate(sorted_kf):
+        if kf['time'] <= time:
+            p1_idx = i
+        if kf['time'] > time and p2_idx == -1:
+            p2_idx = i
+            break
+    if p1_idx == -1 or p2_idx == -1:
+        return None
+    duration = sorted_kf[p2_idx]['time'] - sorted_kf[p1_idx]['time']
+    if duration == 0:
+        return None
+    progress = (time - sorted_kf[p1_idx]['time']) / duration
+    p0_idx = max(0, p1_idx - 1)
+    p3_idx = min(len(sorted_kf) - 1, p2_idx + 1)
+    return p0_idx, p1_idx, p2_idx, p3_idx, progress
+
+
+def _spline_prop(sorted_kf, indices, prop):
+    p0_idx, p1_idx, p2_idx, p3_idx, progress = indices
+    return _catmull_rom(
+        sorted_kf[p0_idx][prop], sorted_kf[p1_idx][prop],
+        sorted_kf[p2_idx][prop], sorted_kf[p3_idx][prop], progress,
+    )
+
+
 def _interpolate_crop(keyframes: list, time: float) -> dict:
-    """Interpolate crop position at a given time."""
+    """Interpolate crop position using Catmull-Rom spline."""
     if not keyframes:
         return None
 
     sorted_kf = sorted(keyframes, key=lambda k: k['time'])
+
+    if len(sorted_kf) == 1:
+        return sorted_kf[0].copy()
 
     if time <= sorted_kf[0]['time']:
         return sorted_kf[0].copy()
     if time >= sorted_kf[-1]['time']:
         return sorted_kf[-1].copy()
 
-    for i in range(len(sorted_kf) - 1):
-        kf1 = sorted_kf[i]
-        kf2 = sorted_kf[i + 1]
+    indices = _find_spline_indices(sorted_kf, time)
+    if indices is None:
+        nearest = min(sorted_kf, key=lambda k: abs(k['time'] - time))
+        return nearest.copy()
 
-        if kf1['time'] <= time <= kf2['time']:
-            t = (time - kf1['time']) / (kf2['time'] - kf1['time'])
-            return {
-                'time': time,
-                'x': kf1['x'] + t * (kf2['x'] - kf1['x']),
-                'y': kf1['y'] + t * (kf2['y'] - kf1['y']),
-                'width': kf1['width'] + t * (kf2['width'] - kf1['width']),
-                'height': kf1['height'] + t * (kf2['height'] - kf1['height']),
-            }
-
-    return sorted_kf[-1].copy()
+    return {
+        'time': time,
+        'x': _spline_prop(sorted_kf, indices, 'x'),
+        'y': _spline_prop(sorted_kf, indices, 'y'),
+        'width': _spline_prop(sorted_kf, indices, 'width'),
+        'height': _spline_prop(sorted_kf, indices, 'height'),
+    }
 
 
 # ============================================================================

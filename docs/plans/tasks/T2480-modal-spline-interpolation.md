@@ -1,6 +1,6 @@
 # T2480: Modal Spline Interpolation for Crop
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-05-05
