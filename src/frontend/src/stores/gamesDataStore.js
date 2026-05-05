@@ -16,9 +16,7 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
-import { useAuthStore } from './authStore';
 import { PROFILING_ENABLED } from '../utils/profiling';
-import { useProjectsStore } from './projectsStore';
 
 // Module-level refs for fetch cancellation
 let _fetchController = null;
@@ -53,6 +51,7 @@ export const useGamesDataStore = create((set, get) => ({
   fetchGames: async ({ force = false } = {}) => {
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
+    const { useAuthStore } = await import('./authStore');
     if (!useAuthStore.getState().isAuthenticated) {
       set({ games: [], readyGames: [], isLoading: false });
       return [];
@@ -283,6 +282,7 @@ export const useGamesDataStore = create((set, get) => ({
       }
 
       get().invalidateGames();
+      const { useProjectsStore } = await import('./projectsStore');
       useProjectsStore.getState().fetchProjects({ force: true });
       set({ isLoading: false });
       return true;

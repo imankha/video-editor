@@ -14,7 +14,6 @@ import { create } from 'zustand';
 import { API_BASE } from '../config';
 import { useQuestStore } from './questStore';
 import { PROFILING_ENABLED } from '../utils/profiling';
-import { useAuthStore } from './authStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -40,6 +39,7 @@ export const useProjectsStore = create((set, get) => ({
   fetchProjects: async ({ force = false } = {}) => {
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
+    const { useAuthStore } = await import('./authStore');
     if (!useAuthStore.getState().isAuthenticated) {
       set({ projects: [], loading: false });
       return [];
