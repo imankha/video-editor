@@ -2,7 +2,7 @@
 Keyframe Interpolation Module
 
 Handles interpolation of crop and highlight keyframes:
-- Linear interpolation between keyframes
+- Catmull-Rom cubic spline interpolation between keyframes
 - Highlight rendering with transformations
 - Coordinate system conversions
 """
@@ -10,6 +10,63 @@ Handles interpolation of crop and highlight keyframes:
 import cv2
 import numpy as np
 from typing import List, Dict, Any, Optional, Tuple
+
+
+def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
+    """Catmull-Rom spline interpolation between four points."""
+    t2 = t * t
+    t3 = t2 * t
+    return 0.5 * (
+        (2 * p1)
+        + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    )
+
+
+def _find_spline_indices(sorted_kf: list, time: float):
+    """
+    Find surrounding keyframes for cubic spline interpolation.
+    Returns (p0_idx, p1_idx, p2_idx, p3_idx, progress) or None.
+    """
+    if len(sorted_kf) < 2:
+        return None
+
+    p1_idx = -1
+    p2_idx = -1
+
+    for i, kf in enumerate(sorted_kf):
+        if kf['time'] <= time:
+            p1_idx = i
+        if kf['time'] > time and p2_idx == -1:
+            p2_idx = i
+            break
+
+    if p1_idx == -1 or p2_idx == -1:
+        return None
+
+    duration = sorted_kf[p2_idx]['time'] - sorted_kf[p1_idx]['time']
+    if duration == 0:
+        return None
+
+    progress = (time - sorted_kf[p1_idx]['time']) / duration
+
+    p0_idx = max(0, p1_idx - 1)
+    p3_idx = min(len(sorted_kf) - 1, p2_idx + 1)
+
+    return p0_idx, p1_idx, p2_idx, p3_idx, progress
+
+
+def _spline_prop(sorted_kf: list, indices: tuple, prop: str) -> float:
+    """Interpolate a single property using Catmull-Rom spline."""
+    p0_idx, p1_idx, p2_idx, p3_idx, progress = indices
+    return _catmull_rom(
+        sorted_kf[p0_idx][prop],
+        sorted_kf[p1_idx][prop],
+        sorted_kf[p2_idx][prop],
+        sorted_kf[p3_idx][prop],
+        progress,
+    )
 
 
 class KeyframeInterpolator:
@@ -28,7 +85,9 @@ class KeyframeInterpolator:
         time: float
     ) -> Dict[str, float]:
         """
-        Interpolate crop values between keyframes for a given time
+        Interpolate crop values between keyframes using Catmull-Rom cubic spline.
+
+        Must match the frontend's interpolateCropSpline() exactly.
 
         Args:
             keyframes: List of keyframe dicts with 'time', 'x', 'y', 'width', 'height'
@@ -43,37 +102,22 @@ class KeyframeInterpolator:
         if len(keyframes) == 1:
             return keyframes[0]
 
-        # Find surrounding keyframes
-        before_kf = None
-        after_kf = None
-
-        for kf in keyframes:
-            if kf['time'] <= time:
-                before_kf = kf
-            if kf['time'] > time and after_kf is None:
-                after_kf = kf
-                break
-
-        # If before first keyframe, return first
-        if before_kf is None:
+        if time <= keyframes[0]['time']:
             return keyframes[0]
 
-        # If after last keyframe, return last
-        if after_kf is None:
-            return before_kf
+        if time >= keyframes[-1]['time']:
+            return keyframes[-1]
 
-        # Linear interpolation between keyframes
-        duration = after_kf['time'] - before_kf['time']
-        if duration == 0:
-            return before_kf
-
-        progress = (time - before_kf['time']) / duration
+        indices = _find_spline_indices(keyframes, time)
+        if indices is None:
+            nearest = min(keyframes, key=lambda k: abs(k['time'] - time))
+            return nearest
 
         return {
-            'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
-            'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
-            'width': before_kf['width'] + (after_kf['width'] - before_kf['width']) * progress,
-            'height': before_kf['height'] + (after_kf['height'] - before_kf['height']) * progress,
+            'x': _spline_prop(keyframes, indices, 'x'),
+            'y': _spline_prop(keyframes, indices, 'y'),
+            'width': _spline_prop(keyframes, indices, 'width'),
+            'height': _spline_prop(keyframes, indices, 'height'),
             'time': time
         }
 
@@ -83,65 +127,53 @@ class KeyframeInterpolator:
         time: float
     ) -> Optional[Dict[str, Any]]:
         """
-        Interpolate highlight values between keyframes for a given time
+        Interpolate highlight values between keyframes using Catmull-Rom cubic spline.
+
+        Must match the frontend's interpolateHighlightSpline() exactly so
+        the exported video matches the overlay editor preview.
 
         Args:
             keyframes: List of highlight keyframe dicts with 'time', 'x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'
-                      x, y are pixel coordinates in original video space, radiusX/radiusY are pixel values
             time: Time in seconds
 
         Returns:
-            Interpolated highlight parameters, or None if time is after last keyframe
+            Interpolated highlight parameters, or None if no active highlight
         """
         if len(keyframes) == 0:
             return None
 
-        # Filter out keyframes with None time values and sort by time
         valid_keyframes = [k for k in keyframes if k.get('time') is not None]
         if len(valid_keyframes) == 0:
             return None
         sorted_kf = sorted(valid_keyframes, key=lambda k: k['time'])
 
-        # If time is after the last keyframe, no highlight should be rendered
         if time > sorted_kf[-1]['time']:
             return None
 
         if len(sorted_kf) == 1:
             return sorted_kf[0]
 
-        # Find surrounding keyframes
-        before_kf = None
-        after_kf = None
-
-        for kf in sorted_kf:
-            if kf['time'] <= time:
-                before_kf = kf
-            if kf['time'] > time and after_kf is None:
-                after_kf = kf
-                break
-
-        # If before first keyframe, return first
-        if before_kf is None:
+        if time <= sorted_kf[0]['time']:
             return sorted_kf[0]
 
-        # If after last keyframe (shouldn't happen due to check above), return None
-        if after_kf is None:
-            return before_kf
+        if time >= sorted_kf[-1]['time']:
+            return sorted_kf[-1]
 
-        # Linear interpolation between keyframes
-        duration = after_kf['time'] - before_kf['time']
-        if duration == 0:
-            return before_kf
+        indices = _find_spline_indices(sorted_kf, time)
+        if indices is None:
+            # Fallback: nearest keyframe
+            nearest = min(sorted_kf, key=lambda k: abs(k['time'] - time))
+            return nearest
 
-        progress = (time - before_kf['time']) / duration
+        p0_idx, p1_idx, p2_idx, p3_idx, progress = indices
 
         return {
-            'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
-            'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
-            'radiusX': before_kf['radiusX'] + (after_kf['radiusX'] - before_kf['radiusX']) * progress,
-            'radiusY': before_kf['radiusY'] + (after_kf['radiusY'] - before_kf['radiusY']) * progress,
-            'opacity': before_kf['opacity'] + (after_kf['opacity'] - before_kf['opacity']) * progress,
-            'color': before_kf['color'],  # Use color from before keyframe (no interpolation for color)
+            'x': _spline_prop(sorted_kf, indices, 'x'),
+            'y': _spline_prop(sorted_kf, indices, 'y'),
+            'radiusX': _spline_prop(sorted_kf, indices, 'radiusX'),
+            'radiusY': _spline_prop(sorted_kf, indices, 'radiusY'),
+            'opacity': max(0.0, min(1.0, _spline_prop(sorted_kf, indices, 'opacity'))),
+            'color': sorted_kf[p1_idx]['color'],
             'time': time
         }
 

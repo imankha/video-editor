@@ -1,16 +1,16 @@
 """
 Crop interpolation utilities for FFmpeg filter generation.
 
-This module provides functions for interpolating crop values between keyframes
-and generating FFmpeg-compatible filter expressions.
+Uses Catmull-Rom cubic spline to match frontend interpolation.
 """
 
 from typing import List, Dict, Any
+from app.ai_upscaler.keyframe_interpolator import _find_spline_indices, _spline_prop
 
 
 def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, float]:
     """
-    Interpolate crop values between keyframes for a given time.
+    Interpolate crop values between keyframes using Catmull-Rom cubic spline.
 
     Args:
         keyframes: List of keyframe dictionaries with 'time', 'x', 'y', 'width', 'height'
@@ -28,34 +28,22 @@ def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, 
     if len(keyframes) == 1:
         return keyframes[0]
 
-    # Find surrounding keyframes
-    before_kf = None
-    after_kf = None
-
-    for kf in keyframes:
-        if kf['time'] <= time:
-            before_kf = kf
-        if kf['time'] > time and after_kf is None:
-            after_kf = kf
-            break
-
-    # If before first keyframe, return first
-    if before_kf is None:
+    if time <= keyframes[0]['time']:
         return keyframes[0]
 
-    # If after last keyframe, return last
-    if after_kf is None:
-        return before_kf
+    if time >= keyframes[-1]['time']:
+        return keyframes[-1]
 
-    # Linear interpolation between keyframes
-    duration = after_kf['time'] - before_kf['time']
-    progress = (time - before_kf['time']) / duration
+    indices = _find_spline_indices(keyframes, time)
+    if indices is None:
+        nearest = min(keyframes, key=lambda k: abs(k['time'] - time))
+        return nearest
 
     return {
-        'x': before_kf['x'] + (after_kf['x'] - before_kf['x']) * progress,
-        'y': before_kf['y'] + (after_kf['y'] - before_kf['y']) * progress,
-        'width': before_kf['width'] + (after_kf['width'] - before_kf['width']) * progress,
-        'height': before_kf['height'] + (after_kf['height'] - before_kf['height']) * progress
+        'x': _spline_prop(keyframes, indices, 'x'),
+        'y': _spline_prop(keyframes, indices, 'y'),
+        'width': _spline_prop(keyframes, indices, 'width'),
+        'height': _spline_prop(keyframes, indices, 'height'),
     }
 
 
