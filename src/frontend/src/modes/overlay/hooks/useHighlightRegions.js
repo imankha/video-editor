@@ -21,7 +21,7 @@ import { HighlightColor } from '../../../constants/highlightColors';
 
 const DEFAULT_REGION_DURATION = 2.0; // seconds
 const MIN_REGION_DURATION = 0.5; // seconds
-const TIME_EPSILON = 0.001; // 1ms tolerance for floating point comparison
+const TIME_EPSILON = 0.04; // ~1 frame at 30fps — frame-to-time conversion can place keyframes slightly past region bounds
 const MIN_KEYFRAME_DISTANCE_FRAMES = 5; // Minimum 5 frames (~0.167s at 30fps) between keyframes
 
 export default function useHighlightRegions(videoMetadata) {

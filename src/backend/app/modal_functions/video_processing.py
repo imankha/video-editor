@@ -314,6 +314,17 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
 
     sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
 
+    # Diagnostic: log all regions and their keyframes
+    for ri, region in enumerate(sorted_regions):
+        kfs = region.get('keyframes', [])
+        logger.info(f"[{job_id}] Region {ri}: time={region['start_time']:.3f}-{region['end_time']:.3f}, "
+                     f"keyframes={len(kfs)}, videoWidth={region.get('videoWidth')}, videoHeight={region.get('videoHeight')}")
+        for ki, kf in enumerate(kfs):
+            logger.info(f"[{job_id}]   KF {ki}: time={kf.get('time'):.3f}, "
+                         f"x={kf.get('x'):.1f}, y={kf.get('y'):.1f}, "
+                         f"radiusX={kf.get('radiusX'):.1f}, radiusY={kf.get('radiusY'):.1f}, "
+                         f"opacity={kf.get('opacity')}")
+
     ffmpeg_cmd = [
         "ffmpeg", "-y",
         "-f", "rawvideo", "-pix_fmt", "bgr24",
@@ -360,9 +371,9 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
                         'x': kf['x'] * scale_x, 'y': kf['y'] * scale_y,
                         'radiusX': kf['radiusX'] * scale_x, 'radiusY': kf['radiusY'] * scale_y,
                     } for kf in active_region.get('keyframes', [])]
-                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type)
+                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type, job_id=job_id, frame_idx=frame_idx)
                 else:
-                    frame = _render_highlight(frame, active_region, current_time, effect_type)
+                    frame = _render_highlight(frame, active_region, current_time, effect_type, job_id=job_id, frame_idx=frame_idx)
 
             try:
                 if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
@@ -579,11 +590,70 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
     logger.info(f"[{job_id}] Overlay export complete: {frame_idx} frames")
 
 
-def _render_highlight(frame, region: dict, current_time: float, effect_type: str):
+def _catmull_rom(p0, p1, p2, p3, t):
+    t2 = t * t
+    t3 = t2 * t
+    return 0.5 * (
+        (2 * p1)
+        + (-p0 + p2) * t
+        + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+        + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+    )
+
+
+def _spline_interpolate_highlight(sorted_kf, current_time):
+    """Catmull-Rom spline interpolation matching frontend interpolateHighlightSpline."""
+    if not sorted_kf:
+        return None
+    if current_time > sorted_kf[-1]['time']:
+        return None
+    if len(sorted_kf) == 1:
+        return sorted_kf[0]
+    if current_time <= sorted_kf[0]['time']:
+        return sorted_kf[0]
+    if current_time >= sorted_kf[-1]['time']:
+        return sorted_kf[-1]
+
+    p1_idx = -1
+    p2_idx = -1
+    for i, kf in enumerate(sorted_kf):
+        if kf['time'] <= current_time:
+            p1_idx = i
+        if kf['time'] > current_time and p2_idx == -1:
+            p2_idx = i
+            break
+    if p1_idx == -1 or p2_idx == -1:
+        return min(sorted_kf, key=lambda k: abs(k['time'] - current_time))
+
+    duration = sorted_kf[p2_idx]['time'] - sorted_kf[p1_idx]['time']
+    if duration == 0:
+        return sorted_kf[p1_idx]
+    progress = (current_time - sorted_kf[p1_idx]['time']) / duration
+
+    p0_idx = max(0, p1_idx - 1)
+    p3_idx = min(len(sorted_kf) - 1, p2_idx + 1)
+
+    def sp(prop):
+        return _catmull_rom(
+            sorted_kf[p0_idx][prop], sorted_kf[p1_idx][prop],
+            sorted_kf[p2_idx][prop], sorted_kf[p3_idx][prop], progress,
+        )
+
+    return {
+        'x': sp('x'), 'y': sp('y'),
+        'radiusX': sp('radiusX'), 'radiusY': sp('radiusY'),
+        'opacity': max(0.0, min(1.0, sp('opacity'))),
+        'color': sorted_kf[p1_idx].get('color'),
+        'time': current_time,
+    }
+
+
+def _render_highlight(frame, region: dict, current_time: float, effect_type: str,
+                      job_id: str = "", frame_idx: int = 0):
     """
     Render highlight overlay on a single frame.
 
-    Interpolates between keyframes and applies the specified effect.
+    Uses Catmull-Rom cubic spline interpolation matching frontend.
     """
     import cv2
     import numpy as np
@@ -592,51 +662,32 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     if not keyframes:
         return frame
 
-    # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
-    # should not influence rendering (user may have shrunk the region)
     start_time = region.get("start_time")
     end_time = region.get("end_time")
     if start_time is not None and end_time is not None:
-        keyframes = [kf for kf in keyframes if start_time <= kf["time"] <= end_time]
+        eps = 0.04
+        keyframes = [kf for kf in keyframes if start_time - eps <= kf["time"] <= end_time + eps]
         if not keyframes:
             return frame
 
-    # Find surrounding keyframes for interpolation
-    kf_before = None
-    kf_after = None
+    sorted_kf = sorted(keyframes, key=lambda k: k['time'])
+    result = _spline_interpolate_highlight(sorted_kf, current_time)
 
-    for kf in keyframes:
-        if kf["time"] <= current_time:
-            kf_before = kf
-        if kf["time"] >= current_time and kf_after is None:
-            kf_after = kf
-
-    if kf_before is None and kf_after is None:
+    if result is None:
+        if frame_idx % 30 == 0:
+            logger.info(f"[{job_id}] Frame {frame_idx} t={current_time:.3f}: interpolate returned None")
         return frame
 
-    # Use nearest keyframe if at boundary
-    if kf_before is None:
-        kf_before = kf_after
-    if kf_after is None:
-        kf_after = kf_before
+    x = result['x']
+    y = result['y']
+    radiusX = result['radiusX']
+    radiusY = result['radiusY']
+    opacity = result['opacity']
+    color = result.get('color')
 
-    # Interpolate between keyframes
-    if kf_before["time"] == kf_after["time"]:
-        t = 0
-    else:
-        t = (current_time - kf_before["time"]) / (kf_after["time"] - kf_before["time"])
-
-    def lerp(a, b, t):
-        return a + (b - a) * t
-
-    x = lerp(kf_before["x"], kf_after["x"], t)
-    y = lerp(kf_before["y"], kf_after["y"], t)
-    radiusX = lerp(kf_before["radiusX"], kf_after["radiusX"], t)
-    radiusY = lerp(kf_before["radiusY"], kf_after["radiusY"], t)
-    opacity = lerp(kf_before.get("opacity", 0.15), kf_after.get("opacity", 0.15), t)
-
-    # Get color from keyframe (interpolate would be complex, use kf_before's color)
-    color = kf_before.get("color")
+    if frame_idx % 30 == 0:
+        logger.info(f"[{job_id}] Frame {frame_idx} t={current_time:.3f}: "
+                     f"interp x={x:.1f}, y={y:.1f}, rX={radiusX:.1f}, rY={radiusY:.1f}")
 
     height, width = frame.shape[:2]
     center = (int(x), int(y))

@@ -610,9 +610,10 @@ def _process_frames_to_ffmpeg(
             if active_region:
                 # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
                 # should not influence rendering (user may have shrunk the region)
+                eps = 0.04
                 region_keyframes = [
                     kf for kf in active_region['keyframes']
-                    if active_region['start_time'] <= kf['time'] <= active_region['end_time']
+                    if active_region['start_time'] - eps <= kf['time'] <= active_region['end_time'] + eps
                 ]
 
                 # Log filtered keyframe count once per region activation
