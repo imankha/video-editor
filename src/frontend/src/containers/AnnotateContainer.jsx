@@ -694,9 +694,18 @@ export function AnnotateContainer({
     togglePlay();
   }, [closeOverlay, togglePlay]);
 
-  /**
-   * Handle annotate region selection - selects the region AND seeks to its start
-   */
+  // Filter clip regions to only show clips for the current video
+  const filteredClipRegions = useMemo(() => {
+    if (!gameVideos) return clipRegions; // single-video: show all
+    return clipRegions.filter(r => r.videoSequence === currentVideoSequence);
+  }, [clipRegions, gameVideos, currentVideoSequence]);
+
+  // Filtered getRegionAtTime — only matches clips from the current video half
+  const filteredGetRegionAtTime = useCallback((time) => {
+    if (!gameVideos) return getAnnotateRegionAtTime(time);
+    return filteredClipRegions.find(r => time >= r.startTime && time <= r.endTime) || null;
+  }, [gameVideos, getAnnotateRegionAtTime, filteredClipRegions]);
+
   /**
    * Timeline seek — wraps seek() with overlay management.
    * When the user clicks the timeline (a gesture) while the overlay is open,
@@ -931,18 +940,6 @@ export function AnnotateContainer({
       height: video.height || prev?.height,
     }));
   }, [gameVideos, activeVideoIndex, setAnnotateVideoUrl, setAnnotateVideoMetadata]);
-
-  // Filter clip regions to only show clips for the current video
-  const filteredClipRegions = useMemo(() => {
-    if (!gameVideos) return clipRegions; // single-video: show all
-    return clipRegions.filter(r => r.videoSequence === currentVideoSequence);
-  }, [clipRegions, gameVideos, currentVideoSequence]);
-
-  // Filtered getRegionAtTime — only matches clips from the current video half
-  const filteredGetRegionAtTime = useCallback((time) => {
-    if (!gameVideos) return getAnnotateRegionAtTime(time);
-    return filteredClipRegions.find(r => time >= r.startTime && time <= r.endTime) || null;
-  }, [gameVideos, getAnnotateRegionAtTime, filteredClipRegions]);
 
   // Filtered regions with layout (for timeline display)
   const filteredRegionsWithLayout = useMemo(() => {
