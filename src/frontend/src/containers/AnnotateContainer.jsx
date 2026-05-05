@@ -706,11 +706,11 @@ export function AnnotateContainer({
   const handleTimelineSeek = useCallback((time) => {
     seek(time);
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
-      if (!getAnnotateRegionAtTime(time)) {
+      if (!filteredGetRegionAtTime(time)) {
         closeOverlay();
       }
     }
-  }, [seek, selectionState, getAnnotateRegionAtTime, closeOverlay]);
+  }, [seek, selectionState, filteredGetRegionAtTime, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
     const region = clipRegions.find(r => r.id === regionId);
@@ -741,7 +741,7 @@ export function AnnotateContainer({
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
 
     const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
-    const regionAtPlayhead = getAnnotateRegionAtTime(currentTime);
+    const regionAtPlayhead = filteredGetRegionAtTime(currentTime);
 
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
@@ -751,7 +751,7 @@ export function AnnotateContainer({
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, selectionState, getAnnotateRegionAtTime, clipRegions, selectClip, deselectClip]);
+  }, [annotateVideoUrl, currentTime, selectionState, filteredGetRegionAtTime, clipRegions, selectClip, deselectClip]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
@@ -938,6 +938,12 @@ export function AnnotateContainer({
     return clipRegions.filter(r => r.videoSequence === currentVideoSequence);
   }, [clipRegions, gameVideos, currentVideoSequence]);
 
+  // Filtered getRegionAtTime — only matches clips from the current video half
+  const filteredGetRegionAtTime = useCallback((time) => {
+    if (!gameVideos) return getAnnotateRegionAtTime(time);
+    return filteredClipRegions.find(r => time >= r.startTime && time <= r.endTime) || null;
+  }, [gameVideos, getAnnotateRegionAtTime, filteredClipRegions]);
+
   // Filtered regions with layout (for timeline display)
   const filteredRegionsWithLayout = useMemo(() => {
     if (!gameVideos) return annotateRegionsWithLayout;
@@ -985,7 +991,7 @@ export function AnnotateContainer({
     updateClipRegion: updateClipRegionWithSync,
     deleteClipRegion,
     importAnnotations: importAnnotationsWithRawClips,
-    getAnnotateRegionAtTime,
+    getAnnotateRegionAtTime: filteredGetRegionAtTime,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED
     lockScrub, // Suppress auto-deselect during sidebar scrub
