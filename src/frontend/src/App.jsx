@@ -605,6 +605,11 @@ function App() {
       {/* Downloads Panel */}
       <DownloadsPanel
         onOpenProject={(projectId) => {
+          // Reset stores to clear stale data from previous project
+          useProjectDataStore.getState().reset();
+          useFramingStore.getState().reset();
+          useOverlayStore.getState().reset();
+          useVideoStore.getState().reset();
           // Only re-fetch project if it's not already selected
           if (projectId !== selectedProjectId) {
             selectProject(projectId);

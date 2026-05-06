@@ -1,5 +1,7 @@
 # T2500: Veo Link Import
 
+**Status: SUPERSEDED** — Absorbed into [Video Link Import epic](../video-import/EPIC.md) (T2600-T2630), which adds Trace support and restructures into POC-first approach.
+
 ## Summary
 Let users paste a Veo match URL (e.g. `https://app.veo.co/matches/20260502-may-2-2026-42640-pm-v09accc3/`) in the Add Game dialog instead of downloading and re-uploading. Backend fetches the full-quality MP4 directly from Veo's CDN.
 

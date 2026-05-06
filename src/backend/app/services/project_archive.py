@@ -258,12 +258,10 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 f"{len(archive.get('working_videos', []))} videos"
             )
 
-        # 3. Delete archive from R2 (only after successful DB insert)
-        if delete_from_r2(user_id, r2_path):
-            logger.info(f"Deleted archive from R2: {full_key}")
-        else:
-            logger.warning(f"Failed to delete archive from R2: {full_key}")
-            # Don't fail the restore if delete fails - data is in DB now
+        # Archive intentionally NOT deleted from R2 here. The DB write above
+        # hasn't been synced to R2 yet (middleware does that after the handler).
+        # If sync fails, keeping the archive allows the user to retry restore.
+        # The archive gets overwritten on the next publish.
 
         return True
 
