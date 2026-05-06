@@ -610,12 +610,9 @@ function App() {
           useFramingStore.getState().reset();
           useOverlayStore.getState().reset();
           useVideoStore.getState().reset();
-          // Refresh project list (name may have changed via gallery rename)
+          // Always re-fetch: name may have changed via gallery rename
           fetchProjects({ force: true });
-          // Only re-fetch project if it's not already selected
-          if (projectId !== selectedProjectId) {
-            selectProject(projectId);
-          }
+          selectProject(projectId);
           // Default to framing mode when opening a completed reel
           setEditorMode(EDITOR_MODES.FRAMING);
         }}
