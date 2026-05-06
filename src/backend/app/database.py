@@ -724,6 +724,10 @@ def ensure_database():
             CREATE INDEX IF NOT EXISTS idx_export_jobs_type_status
             ON export_jobs(type, status)
         """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_export_jobs_unacknowledged
+            ON export_jobs(status, acknowledged_at, completed_at DESC)
+        """)
 
         # Before/After tracking - links final videos to their source footage
         # Used to generate before/after comparison videos
