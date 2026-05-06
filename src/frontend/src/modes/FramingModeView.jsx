@@ -212,11 +212,6 @@ export function FramingModeView({
   // Context
   cropContextValue,
 }) {
-  const DIM_PRESETS = [
-    { label: 'Dim', value: 0.2 },
-    { label: 'Dark', value: 0.7 },
-    { label: 'Preview', value: 1.0 },
-  ];
   const [dimOpacity, setDimOpacity] = useState(0.2);
 
   return (
@@ -289,21 +284,19 @@ export function FramingModeView({
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-400 mr-2">Background:</span>
-                <div className="flex gap-1">
-                  {DIM_PRESETS.map(preset => (
-                    <button
-                      key={preset.label}
-                      onClick={() => setDimOpacity(preset.value)}
-                      className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                        dimOpacity === preset.value
-                          ? 'bg-blue-600 text-white'
-                          : 'text-gray-300 hover:bg-gray-700'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
+                <span className="text-xs text-gray-300 mr-1.5">Dim</span>
+                <button
+                  onClick={() => setDimOpacity(dimOpacity === 0.2 ? 0.7 : 0.2)}
+                  className="relative w-8 h-4 rounded-full transition-colors"
+                  style={{ backgroundColor: dimOpacity === 0.7 ? '#2563eb' : '#4b5563' }}
+                  aria-label="Toggle background darkness"
+                >
+                  <span
+                    className="absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform"
+                    style={{ transform: dimOpacity === 0.7 ? 'translateX(16px)' : 'translateX(0)' }}
+                  />
+                </button>
+                <span className="text-xs text-gray-300 ml-1.5">Dark</span>
               </div>
               <ZoomControls
                 zoom={zoom}
