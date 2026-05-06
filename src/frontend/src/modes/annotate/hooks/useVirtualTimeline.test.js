@@ -182,16 +182,81 @@ describe('buildVirtualTimeline', () => {
   });
 
   describe('cross-video support', () => {
-    it('preserves videoSequence in segments', () => {
+    it('sorts by videoSequence first, then startTime', () => {
       const clips = [
         { id: 'a', startTime: 10, endTime: 25, videoSequence: 1 },
         { id: 'b', startTime: 5, endTime: 15, videoSequence: 2 },
       ];
       const timeline = buildVirtualTimeline(clips);
 
-      // Sorted by startTime: b (5-15, seq 2) then a (10-25, seq 1)
-      expect(timeline.segments[0].videoSequence).toBe(2);
-      expect(timeline.segments[1].videoSequence).toBe(1);
+      // Seq 1 comes before seq 2 regardless of startTime
+      expect(timeline.segments[0].videoSequence).toBe(1);
+      expect(timeline.segments[0].clipId).toBe('a');
+      expect(timeline.segments[1].videoSequence).toBe(2);
+      expect(timeline.segments[1].clipId).toBe('b');
+    });
+
+    it('sorts by startTime within the same videoSequence', () => {
+      const clips = [
+        { id: 'c', startTime: 300, endTime: 315, videoSequence: 1 },
+        { id: 'a', startTime: 60, endTime: 75, videoSequence: 1 },
+        { id: 'b', startTime: 180, endTime: 195, videoSequence: 1 },
+      ];
+      const timeline = buildVirtualTimeline(clips);
+
+      expect(timeline.segments[0].clipId).toBe('a');
+      expect(timeline.segments[1].clipId).toBe('b');
+      expect(timeline.segments[2].clipId).toBe('c');
+    });
+
+    it('interleaves clips from multiple halves correctly', () => {
+      // Simulates real bug: 2nd half clips have lower startTimes than late 1st half clips
+      const clips = [
+        { id: 'h1_late', startTime: 2400, endTime: 2415, videoSequence: 1 },
+        { id: 'h2_early', startTime: 30, endTime: 45, videoSequence: 2 },
+        { id: 'h1_early', startTime: 120, endTime: 135, videoSequence: 1 },
+        { id: 'h2_late', startTime: 1800, endTime: 1815, videoSequence: 2 },
+      ];
+      const timeline = buildVirtualTimeline(clips);
+
+      // All first-half clips before all second-half clips
+      expect(timeline.segments.map(s => s.clipId)).toEqual([
+        'h1_early', 'h1_late', 'h2_early', 'h2_late',
+      ]);
+    });
+
+    it('treats null/undefined videoSequence as sequence 1', () => {
+      const clips = [
+        { id: 'b', startTime: 5, endTime: 15, videoSequence: 2 },
+        { id: 'a', startTime: 10, endTime: 25 },  // no videoSequence
+      ];
+      const timeline = buildVirtualTimeline(clips);
+
+      // null defaults to seq 1, so 'a' comes first
+      expect(timeline.segments[0].clipId).toBe('a');
+      expect(timeline.segments[0].videoSequence).toBeNull();
+      expect(timeline.segments[1].clipId).toBe('b');
+      expect(timeline.segments[1].videoSequence).toBe(2);
+    });
+
+    it('builds correct virtual offsets across sequences', () => {
+      const clips = [
+        { id: 'h2', startTime: 10, endTime: 20, videoSequence: 2 },  // 10s
+        { id: 'h1', startTime: 100, endTime: 115, videoSequence: 1 }, // 15s
+      ];
+      const timeline = buildVirtualTimeline(clips);
+
+      // h1 (seq 1) first: virtual [0, 15)
+      expect(timeline.segments[0].clipId).toBe('h1');
+      expect(timeline.segments[0].virtualStart).toBe(0);
+      expect(timeline.segments[0].virtualEnd).toBe(15);
+
+      // h2 (seq 2) second: virtual [15, 25)
+      expect(timeline.segments[1].clipId).toBe('h2');
+      expect(timeline.segments[1].virtualStart).toBe(15);
+      expect(timeline.segments[1].virtualEnd).toBe(25);
+
+      expect(timeline.totalVirtualDuration).toBe(25);
     });
 
     it('handles null videoSequence', () => {

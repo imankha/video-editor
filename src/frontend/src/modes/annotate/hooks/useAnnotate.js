@@ -66,8 +66,13 @@ export function generateTsvContent(clipRegions) {
   // Header row
   const header = REQUIRED_COLUMNS.join('\t');
 
-  // Sort by endTime to match display order
-  const sorted = [...clipRegions].sort((a, b) => a.endTime - b.endTime);
+  // Sort by videoSequence (half), then endTime within each half
+  const sorted = [...clipRegions].sort((a, b) => {
+    const seqA = a.videoSequence ?? 1;
+    const seqB = b.videoSequence ?? 1;
+    if (seqA !== seqB) return seqA - seqB;
+    return a.endTime - b.endTime;
+  });
 
   // Generate data rows
   const rows = sorted.map(region => {
@@ -336,8 +341,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   const regionsWithLayout = useMemo(() => {
     if (!duration) return [];
 
-    // Sort by endTime for chronological display order
-    const sorted = [...clipRegions].sort((a, b) => a.endTime - b.endTime);
+    // Sort by videoSequence (half), then endTime within each half
+    const sorted = [...clipRegions].sort((a, b) => {
+      const seqA = a.videoSequence ?? 1;
+      const seqB = b.videoSequence ?? 1;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.endTime - b.endTime;
+    });
 
     return sorted.map((region, index) => {
       const regionDuration = region.endTime - region.startTime;

@@ -21,7 +21,12 @@ export function buildVirtualTimeline(clips) {
   }
 
   // Sort by startTime (defensive — caller should already sort)
-  const sorted = [...clips].sort((a, b) => a.startTime - b.startTime);
+  const sorted = [...clips].sort((a, b) => {
+    const seqA = a.videoSequence ?? 1;
+    const seqB = b.videoSequence ?? 1;
+    if (seqA !== seqB) return seqA - seqB;
+    return a.startTime - b.startTime;
+  });
 
   // Build segments with virtual offsets
   let virtualOffset = 0;

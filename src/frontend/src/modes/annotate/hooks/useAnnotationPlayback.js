@@ -56,7 +56,12 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
   // Build timeline from clips (stable reference via ref)
   const rebuildTimeline = useCallback(() => {
-    const sorted = [...clips].sort((a, b) => a.startTime - b.startTime);
+    const sorted = [...clips].sort((a, b) => {
+      const seqA = a.videoSequence ?? 1;
+      const seqB = b.videoSequence ?? 1;
+      if (seqA !== seqB) return seqA - seqB;
+      return a.startTime - b.startTime;
+    });
     timelineRef.current = buildVirtualTimeline(sorted);
     return timelineRef.current;
   }, [clips]);

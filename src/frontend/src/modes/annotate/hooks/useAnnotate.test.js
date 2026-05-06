@@ -44,7 +44,7 @@ describe('useAnnotate', () => {
       expect(lines[1]).toBe('1:00\t3\t\t\t15.0\t');
     });
 
-    it('sorts clips by endTime', () => {
+    it('sorts clips by endTime within same sequence', () => {
       const clipRegions = [
         { id: 'clip_2', startTime: 120, endTime: 135, name: 'Second', tags: [], notes: '', rating: 4 },
         { id: 'clip_1', startTime: 30, endTime: 45, name: 'First', tags: [], notes: '', rating: 5 }
@@ -55,6 +55,36 @@ describe('useAnnotate', () => {
 
       expect(lines[1]).toContain('First');
       expect(lines[2]).toContain('Second');
+    });
+
+    it('sorts by videoSequence first, then endTime', () => {
+      const clipRegions = [
+        { id: 'h2_early', startTime: 30, endTime: 45, name: '2nd Half Early', tags: [], notes: '', rating: 3, videoSequence: 2 },
+        { id: 'h1_late', startTime: 2400, endTime: 2415, name: '1st Half Late', tags: [], notes: '', rating: 4, videoSequence: 1 },
+        { id: 'h1_early', startTime: 60, endTime: 75, name: '1st Half Early', tags: [], notes: '', rating: 5, videoSequence: 1 },
+      ];
+
+      const result = generateTsvContent(clipRegions);
+      const lines = result.split('\n');
+
+      // First half clips first (sorted by endTime within half), then second half
+      expect(lines[1]).toContain('1st Half Early');
+      expect(lines[2]).toContain('1st Half Late');
+      expect(lines[3]).toContain('2nd Half Early');
+    });
+
+    it('treats null videoSequence as sequence 1 for sorting', () => {
+      const clipRegions = [
+        { id: 'h2', startTime: 10, endTime: 25, name: 'Second Half', tags: [], notes: '', rating: 3, videoSequence: 2 },
+        { id: 'no_seq', startTime: 500, endTime: 515, name: 'No Sequence', tags: [], notes: '', rating: 4 },
+      ];
+
+      const result = generateTsvContent(clipRegions);
+      const lines = result.split('\n');
+
+      // null videoSequence treated as seq 1, so it comes before seq 2
+      expect(lines[1]).toContain('No Sequence');
+      expect(lines[2]).toContain('Second Half');
     });
 
     it('sanitizes notes with tabs and newlines', () => {

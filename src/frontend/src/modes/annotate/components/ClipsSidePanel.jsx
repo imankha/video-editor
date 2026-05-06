@@ -14,6 +14,7 @@ import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
  */
 export function ClipsSidePanel({
   clipRegions,
+  allClipRegions,
   selectedRegionId,
   activePlaybackClipId = null,
   onSelectRegion,
@@ -91,9 +92,10 @@ export function ClipsSidePanel({
   };
 
   const handleExportClick = () => {
-    if (clipRegions.length === 0) return;
+    const exportRegions = allClipRegions || clipRegions;
+    if (exportRegions.length === 0) return;
 
-    const tsvContent = generateTsvContent(clipRegions);
+    const tsvContent = generateTsvContent(exportRegions);
     const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
     const url = URL.createObjectURL(blob);
 
@@ -230,7 +232,12 @@ export function ClipsSidePanel({
               </div>
             ) : (
               // Sort by endTime to match timeline order
-              [...clipRegions].sort((a, b) => a.endTime - b.endTime).map((region, index) => (
+              [...clipRegions].sort((a, b) => {
+                const seqA = a.videoSequence ?? 1;
+                const seqB = b.videoSequence ?? 1;
+                if (seqA !== seqB) return seqA - seqB;
+                return a.endTime - b.endTime;
+              }).map((region, index) => (
                 <ClipListItem
                   key={region.id}
                   region={region}
