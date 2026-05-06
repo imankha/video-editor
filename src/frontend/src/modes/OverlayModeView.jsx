@@ -248,7 +248,7 @@ export function OverlayModeView({
               {effectiveOverlayMetadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span>{effectiveOverlayMetadata.framerate} fps</span>
+                  <span>{Math.round(effectiveOverlayMetadata.framerate)} fps</span>
                 </>
               )}
             </div>

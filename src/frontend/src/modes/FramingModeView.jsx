@@ -268,7 +268,7 @@ export function FramingModeView({
               {metadata.framerate && (
                 <>
                   <span className="text-gray-600">•</span>
-                  <span>{metadata.framerate} fps</span>
+                  <span>{Math.round(metadata.framerate)} fps</span>
                 </>
               )}
             </div>
