@@ -53,9 +53,12 @@ logger = logging.getLogger(__name__)
 # T2020: File-based log retention — survives Fly.io's ~47-line buffer limit
 LOG_DIR = Path("/tmp/logs")
 LOG_DIR.mkdir(parents=True, exist_ok=True)
-_file_handler = logging.handlers.TimedRotatingFileHandler(
-    LOG_DIR / "app.log", when="midnight", backupCount=1, encoding="utf-8"
-)
+if sys.platform == "win32":
+    _file_handler = logging.FileHandler(LOG_DIR / "app.log", encoding="utf-8")
+else:
+    _file_handler = logging.handlers.TimedRotatingFileHandler(
+        LOG_DIR / "app.log", when="midnight", backupCount=1, encoding="utf-8"
+    )
 _file_handler.setFormatter(logging.Formatter(
     '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
