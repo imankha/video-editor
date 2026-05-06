@@ -868,7 +868,7 @@ async def restore_project_from_archive(download_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT project_id FROM final_videos WHERE id = ?
+            SELECT project_id, name FROM final_videos WHERE id = ?
         """, (download_id,))
         row = cursor.fetchone()
 
@@ -876,6 +876,7 @@ async def restore_project_from_archive(download_id: int):
             raise HTTPException(status_code=404, detail="Download not found")
 
         project_id = row['project_id']
+        fv_name = row['name']
 
         # Unpublish: moving back to draft removes from My Reels
         cursor.execute(
@@ -904,6 +905,15 @@ async def restore_project_from_archive(download_id: int):
             status_code=500,
             detail="Failed to restore project from archive"
         )
+
+    # Propagate reel name to restored project (user may have renamed in gallery)
+    if fv_name:
+        with get_db_connection() as conn:
+            conn.cursor().execute(
+                "UPDATE projects SET name = ? WHERE id = ?",
+                (fv_name, project_id),
+            )
+            conn.commit()
 
     logger.info(f"Restored project {project_id} from archive for user {user_id}")
     return {"project_id": project_id, "restored": True}
