@@ -231,6 +231,10 @@ Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
+| | **[R2 CDN Video Serving](tasks/r2-cdn/EPIC.md)** | 9 | 5 | 1.8 | | | **Move video serving from Fly.io proxy to Cloudflare edge. HTTP/2, CDN caching, zero egress. Backend becomes API-only.** |
+| T2550 | ↳ [CDN + Auth Worker](tasks/r2-cdn/T2550-r2-custom-domain-cdn.md) | 8 | 4 | 2.0 | TODO | [ ] | Custom domain + Worker deployed together (no public bucket gap). HMAC auth, pass-through for working/final/raw videos, CDN caching. Game clips stay on Fly.io proxy. |
+| T2560 | ↳ [Edge Byte-Range Clamping](tasks/r2-cdn/T2560-edge-video-worker.md) | 7 | 5 | 1.4 | TODO | [ ] | Port 3-window clamping from `clips.py` to Worker. Feature-flagged with Fly.io fallback. Highest-risk task, isolated. |
+| T2570 | ↳ [Remove Fly.io Video Proxy](tasks/r2-cdn/T2570-remove-flyio-video-proxy.md) | 4 | 3 | 1.3 | TODO | [ ] | Delete proxy endpoints, transfer R2 client, frontend socket management. Only after T2560 stable 2+ weeks in prod. |
 | | **[Session Scaling Epic](tasks/session-scaling/EPIC.md)** | 8 | 5 | 1.6 | | | **Session pinning + write-back R2 sync + data loss recovery. Makes per-user SQLite correct and fast at multi-machine scale.** |
 | T1190 | ↳ [Session & Machine Pinning](tasks/session-scaling/T1190-session-machine-pinning.md) | 9 | 6 | 1.5 | TODO | [x] | Pin sessions to machines via fly-replay; includes session expiry, single active session enforcement (absorbs T420) |
 | T2250 | ↳ [Write-Back R2 Sync](tasks/session-scaling/T2250-write-back-r2-sync.md) | 8 | 5 | 1.6 | TODO | [ ] | Move R2 sync from blocking-per-gesture to periodic background (~3 min). Sync on sign-out, export, session invalidation. Writes respond in <5ms instead of ~200ms. |
@@ -362,5 +366,6 @@ IDs use gaps of 10 to allow insertions:
 - `T2410-T2430` - Expired Game Experience epic
 - `T2450-T2470` - Auto-Export Reliability epic
 - `T2480` - Modal Spline Interpolation
+- `T2550-T2570` - R2 CDN Video Serving epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
