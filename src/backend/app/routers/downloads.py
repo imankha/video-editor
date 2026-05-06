@@ -232,6 +232,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.rating_counts,
                 fv.watched_at,
                 fv.duration as fv_duration,
+                fv.name as fv_name,
                 COALESCE(fv.name, p.name) as project_name
             FROM final_videos fv
             LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
@@ -459,21 +460,16 @@ async def list_downloads(source_type: Optional[str] = None):
                     group_key = "Other"
 
             # Determine display name
+            # fv.name is the single source of truth when set (covers both
+            # export-time name and user rename). Only fall back to derived
+            # names when fv.name is NULL (legacy custom project exports).
             display_name = None
 
-            if row['source_type'] == SourceType.ANNOTATED_GAME.value and game_names:
-                # Annotated games: use generated game name
+            if row['fv_name']:
+                display_name = row['fv_name']
+            elif row['source_type'] == SourceType.ANNOTATED_GAME.value and game_names:
                 display_name = game_names[0]
-            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
-                # For brilliant_clips, raw_clip.name IS the source of truth
-                bc_data = brilliant_clip_data.get(row['project_id'])
-                if bc_data and bc_data['name']:
-                    display_name = bc_data['name']
-                elif row['project_name']:
-                    # Fallback to project name if raw_clip not found
-                    display_name = row['project_name']
             elif row['project_name']:
-                # Custom projects: use project name
                 display_name = row['project_name']
 
             # Final fallbacks if no name found
