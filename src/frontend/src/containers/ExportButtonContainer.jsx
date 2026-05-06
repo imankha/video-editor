@@ -244,6 +244,7 @@ export function ExportButtonContainer({
   const exportTimingRef = useRef(null);
   const backgroundExportRef = useRef(false); // T760: tracks if export was dispatched as 202 background
   const disconnectedRef = useRef(false); // Sync mirror of `disconnected` state for catch-block reads
+  const overlayTransitionFiredRef = useRef(false); // Guard: prevent duplicate onProceedToOverlay from WS + HTTP race
 
   // Get progress from the global export store for this project
   const currentExportFromStore = Object.values(activeExports)
@@ -336,7 +337,8 @@ export function ExportButtonContainer({
           backgroundExportRef.current = false;
         }
 
-        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
+        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING && !overlayTransitionFiredRef.current) {
+          overlayTransitionFiredRef.current = true;
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
         if (onExportComplete) {
@@ -399,7 +401,8 @@ export function ExportButtonContainer({
           response.data.output_filename
         );
         // T1670: Transition to overlay on retry path (same as WS onComplete)
-        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING) {
+        if (onProceedToOverlay && editorMode === EDITOR_MODES.FRAMING && !overlayTransitionFiredRef.current) {
+          overlayTransitionFiredRef.current = true;
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
         if (onExportComplete) await onExportComplete();
@@ -568,6 +571,7 @@ export function ExportButtonContainer({
 
     const exportId = generateExportId();
     exportIdRef.current = exportId;
+    overlayTransitionFiredRef.current = false;
     handleExportStart(exportId);
 
     let renderRequestAccepted = false;
@@ -686,7 +690,8 @@ export function ExportButtonContainer({
             filename: renderResponse.data.filename
           });
 
-          if (onProceedToOverlay) {
+          if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
+            overlayTransitionFiredRef.current = true;
             onProceedToOverlay(null, buildClipMetadata(clips), projectId);
           }
           if (onExportComplete) {
@@ -810,7 +815,8 @@ export function ExportButtonContainer({
             console.log('[ExportButtonContainer] Built clip metadata for overlay:', clipMetadata);
           }
 
-          if (onProceedToOverlay) {
+          if (onProceedToOverlay && !overlayTransitionFiredRef.current) {
+            overlayTransitionFiredRef.current = true;
             await onProceedToOverlay(null, clipMetadata, projectId);
           }
 

@@ -15,6 +15,7 @@
 | T2030 | [Archive Sync Regression in Publish](tasks/T2030-archive-sync-regression.md) | 7 | 2 | P0 | DONE | [ ] | `publish_to_my_reels()` calls `archive_project()` synchronously (no `asyncio.to_thread`). Regression from 9e58feb0 — old export path used threading. Blocks event loop during R2 upload + DB deletes. |
 | T2020 | [On-Machine Log Retention](tasks/T2020-fly-log-retention.md) | 6 | 2 | P1 | DONE | [ ] | Fly.io log buffer retains ~47 lines. Lost all evidence from prod outage. Add `TimedRotatingFileHandler` to `/tmp/logs/` with daily rotation + debug endpoint to read remotely. |
 | T2000 | [Overlapping Crop Keyframes](tasks/T2000-overlapping-crop-keyframes.md) | 6 | 4 | P1 | DONE | [ ] | Two crop keyframe diamonds overlap at clip start on framing timeline. `ensurePermanentKeyframes` duplicates frame-0 keyframe on restore when saved keyframes already include one; dedup logic from T1400 doesn't cover restore path. |
+| T2600 | [Archive Msgpack Migration](tasks/T2600-archive-msgpack-migration.md) | 7 | 3 | P1 | TODO | [x] | Archives stored as JSON cause lossy roundtrip for binary columns. Switch to msgpack end-to-end + migrate all live user archives. |
 
 ### Prior Bug Fixes (Complete)
 
