@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
 
+let _fetchPromise = null;
+
 /**
  * Credit Store - Manages credit balance (T530)
  *
@@ -19,17 +21,23 @@ export const useCreditStore = create((set, get) => ({
   loaded: false,
 
   fetchCredits: async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/credits`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      set({
-        balance: data.balance,
-        loaded: true,
-      });
-    } catch {
-      // Best-effort — credits are not blocking on fetch failure
-    }
+    if (_fetchPromise) return _fetchPromise;
+    _fetchPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/credits`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        set({
+          balance: data.balance,
+          loaded: true,
+        });
+      } catch {
+        // Best-effort — credits are not blocking on fetch failure
+      } finally {
+        _fetchPromise = null;
+      }
+    })();
+    return _fetchPromise;
   },
 
   setBalance: (balance) => set({ balance }),
