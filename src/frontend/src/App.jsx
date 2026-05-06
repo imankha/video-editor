@@ -112,6 +112,8 @@ function App() {
       }
     };
 
+    let initialLoadInProgress = true;
+
     initSession().then((session) => {
       // T1330: only fetch per-user data when authenticated. Pre-login we
       // show the empty app shell; per-user stores stay empty until login.
@@ -121,6 +123,7 @@ function App() {
         // as incomplete — that's the onboarding UI.
         useQuestStore.getState().fetchDefinitions();
         useQuestStore.getState().fetchProgress();
+        initialLoadInProgress = false;
         dismissPreloader();
         return;
       }
@@ -150,6 +153,7 @@ function App() {
         Promise.resolve(p).then(tick, tick);
       });
       setTimeout(tryDismiss, 8000);
+      initialLoadInProgress = false;
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
       const authReturnMode = sessionStorage.getItem('authReturnMode');
@@ -243,13 +247,14 @@ function App() {
     }).catch((err) => {
       console.error('[App] Session init failed after retries:', err);
       useAuthStore.getState().setSessionState(false);
+      initialLoadInProgress = false;
       dismissPreloader();
     });
 
     // T1330: fire the same per-user data fetches when the user logs in
     // (same-device path — cross-device recovery reloads instead).
     const unsubAuth = useAuthStore.subscribe((state, prev) => {
-      if (state.isAuthenticated && !prev.isAuthenticated) {
+      if (state.isAuthenticated && !prev.isAuthenticated && !initialLoadInProgress) {
         warmAllUserVideos();
         useProfileStore.getState().fetchProfiles();
         useProjectsStore.getState().fetchProjects();
