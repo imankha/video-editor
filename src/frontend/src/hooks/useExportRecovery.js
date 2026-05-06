@@ -42,113 +42,94 @@ export function useExportRecovery() {
       if (!session.isAuthenticated) return;
       console.log('[ExportRecovery] Fetching active exports from backend...');
 
+      const [activeResult, unacknowledgedResult] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/exports/active`),
+        fetch(`${API_BASE}/api/exports/unacknowledged`),
+      ]);
+
+      // Process active exports
       try {
-        const response = await fetch(`${API_BASE}/api/exports/active`);
-        if (!response.ok) {
-          console.warn('[ExportRecovery] Failed to fetch active exports:', response.status);
-          return;
-        }
+        if (activeResult.status !== 'fulfilled') {
+          console.error('[ExportRecovery] Failed to load exports:', activeResult.reason);
+        } else if (!activeResult.value.ok) {
+          console.warn('[ExportRecovery] Failed to fetch active exports:', activeResult.value.status);
+        } else {
+          const data = await activeResult.value.json();
+          const serverExports = data.exports || [];
 
-        const data = await response.json();
-        const serverExports = data.exports || [];
+          console.log(`[ExportRecovery] Found ${serverExports.length} active exports`);
 
-        console.log(`[ExportRecovery] Found ${serverExports.length} active exports`);
+          setExportsFromServer(serverExports);
 
-        // Populate store with server data (this is the source of truth)
-        setExportsFromServer(serverExports);
+          for (const exp of serverExports) {
+            if (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) {
+              console.log(`[ExportRecovery] Checking Modal status for ${exp.job_id}`);
 
-        // For each processing export, check Modal status ONCE
-        // This handles the case where Modal finished while user was away
-        for (const exp of serverExports) {
-          if (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) {
-            console.log(`[ExportRecovery] Checking Modal status for ${exp.job_id}`);
+              const stillRunning = await checkModalStatusOnce(exp);
 
-            // Poll Modal status once to check real state
-            const stillRunning = await checkModalStatusOnce(exp);
+              if (stillRunning) {
+                console.log(`[ExportRecovery] Connecting WebSocket for ${exp.job_id}`);
 
-            if (stillRunning) {
-              // Connect WebSocket for still-processing exports
-              console.log(`[ExportRecovery] Connecting WebSocket for ${exp.job_id}`);
+                setupSilenceTimeout(exp);
 
-              // Set up silence timeout - if no WebSocket progress in 60s, re-poll
-              setupSilenceTimeout(exp);
-
-              await exportWebSocketManager.connect(exp.job_id, {
-                onProgress: () => {
-                  // Reset silence timeout on any progress
-                  resetSilenceTimeout(exp);
-                },
-                onComplete: () => {
-                  clearSilenceTimeout(exp.job_id);
-                },
-                onError: () => {
-                  clearSilenceTimeout(exp.job_id);
-                },
-              });
+                await exportWebSocketManager.connect(exp.job_id, {
+                  onProgress: () => {
+                    resetSilenceTimeout(exp);
+                  },
+                  onComplete: () => {
+                    clearSilenceTimeout(exp.job_id);
+                  },
+                  onError: () => {
+                    clearSilenceTimeout(exp.job_id);
+                  },
+                });
+              }
             }
           }
+
+          console.log('[ExportRecovery] Recovery complete');
         }
-
-        console.log('[ExportRecovery] Recovery complete');
-
-        // T12: Fetch and notify about exports that completed while away
-        await showCompletedExportNotifications();
       } catch (err) {
         console.error('[ExportRecovery] Failed to load exports:', err);
       }
-    }
 
-    /**
-     * T12: Fetch unacknowledged completed exports and show notifications.
-     * These are exports that completed while the user was away.
-     */
-    async function showCompletedExportNotifications() {
+      // Process unacknowledged exports (completed while user was away)
       try {
-        const response = await fetch(`${API_BASE}/api/exports/unacknowledged`);
-        if (!response.ok) {
-          console.warn('[ExportRecovery] Failed to fetch unacknowledged exports:', response.status);
-          return;
-        }
+        if (unacknowledgedResult.status !== 'fulfilled') {
+          console.error('[ExportRecovery] Failed to show completed export notifications:', unacknowledgedResult.reason);
+        } else if (!unacknowledgedResult.value.ok) {
+          console.warn('[ExportRecovery] Failed to fetch unacknowledged exports:', unacknowledgedResult.value.status);
+        } else {
+          const data = await unacknowledgedResult.value.json();
+          const completedExports = data.exports || [];
 
-        const data = await response.json();
-        const completedExports = data.exports || [];
+          if (completedExports.length === 0) {
+            console.log('[ExportRecovery] No unacknowledged completed exports');
+          } else {
+            console.log(`[ExportRecovery] Found ${completedExports.length} exports that completed while away`);
 
-        if (completedExports.length === 0) {
-          console.log('[ExportRecovery] No unacknowledged completed exports');
-          return;
-        }
+            const jobIdsToAcknowledge = [];
+            for (const exp of completedExports) {
+              if (exp.status === ExportStatus.COMPLETE) {
+                completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
+              } else if (exp.status === ExportStatus.ERROR) {
+                failExport(exp.job_id, exp.error || 'Export failed');
+              }
+              jobIdsToAcknowledge.push(exp.job_id);
+            }
 
-        console.log(`[ExportRecovery] Found ${completedExports.length} exports that completed while away`);
-
-        // Show notifications for each completed export
-        const jobIdsToAcknowledge = [];
-        for (const exp of completedExports) {
-          const displayName = exp.type === 'annotate'
-            ? (exp.game_name || `Game ${exp.game_id}`)
-            : (exp.project_name || `Project ${exp.project_id}`);
-
-          if (exp.status === ExportStatus.COMPLETE) {
-            // Update store — GlobalExportIndicator handles the toast
-            completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
-          } else if (exp.status === ExportStatus.ERROR) {
-            // Update store — GlobalExportIndicator handles the toast
-            failExport(exp.job_id, exp.error || 'Export failed');
-          }
-
-          jobIdsToAcknowledge.push(exp.job_id);
-        }
-
-        // Acknowledge all shown notifications to prevent duplicates
-        if (jobIdsToAcknowledge.length > 0) {
-          try {
-            await fetch(`${API_BASE}/api/exports/acknowledge`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(jobIdsToAcknowledge),
-            });
-            console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
-          } catch (ackErr) {
-            console.warn('[ExportRecovery] Failed to acknowledge exports:', ackErr);
+            if (jobIdsToAcknowledge.length > 0) {
+              try {
+                await fetch(`${API_BASE}/api/exports/acknowledge`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(jobIdsToAcknowledge),
+                });
+                console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
+              } catch (ackErr) {
+                console.warn('[ExportRecovery] Failed to acknowledge exports:', ackErr);
+              }
+            }
           }
         }
       } catch (err) {
