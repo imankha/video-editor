@@ -7,6 +7,8 @@ import { useGamesDataStore } from './gamesDataStore';
 import { useProjectsStore } from './projectsStore';
 import { track } from '../utils/analytics';
 
+let _checkAdminPromise = null;
+
 export const useAuthStore = create((set, get) => ({
   // State
   isAuthenticated: false,
@@ -25,14 +27,20 @@ export const useAuthStore = create((set, get) => ({
 
   // T550: Check if the current user is an admin
   checkAdmin: async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      set({ isAdmin: data.is_admin, adminEnvironment: data.environment || null });
-    } catch {
-      // Best-effort — non-critical
-    }
+    if (_checkAdminPromise) return _checkAdminPromise;
+    _checkAdminPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        set({ isAdmin: data.is_admin, adminEnvironment: data.environment || null });
+      } catch {
+        // Best-effort — non-critical
+      } finally {
+        _checkAdminPromise = null;
+      }
+    })();
+    return _checkAdminPromise;
   },
 
   // Gate action: shows modal if not authenticated, runs action if authenticated
