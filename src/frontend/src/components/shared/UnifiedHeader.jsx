@@ -1,4 +1,4 @@
-import { Home, ShieldCheck } from 'lucide-react';
+import { Home, ShieldCheck, ChevronRight } from 'lucide-react';
 import { Breadcrumb } from './Breadcrumb';
 import { Button } from './Button';
 import { ModeSwitcher } from './ModeSwitcher';
@@ -54,6 +54,7 @@ export function UnifiedHeader({
           onClick={onHomeClick}
           title="Home"
         />
+        <ChevronRight className="w-4 h-4 text-gray-600" />
         <div className="min-w-0">
           <Breadcrumb
             type={breadcrumbType}
