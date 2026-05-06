@@ -886,27 +886,30 @@ async def restore_project_from_archive(download_id: int):
         conn.commit()
 
         # Check if project is in DB and not archived (has working data)
-        cursor.execute("SELECT id, archived_at FROM projects WHERE id = ?", (project_id,))
+        cursor.execute("SELECT id, name, archived_at FROM projects WHERE id = ?", (project_id,))
         project_row = cursor.fetchone()
-        if project_row and not project_row['archived_at']:
-            logger.info(f"Project {project_id} already in DB and not archived, no restore needed")
-            return {"project_id": project_id, "restored": False}
+        needs_archive_restore = not project_row or project_row['archived_at']
 
-    # Check if archive exists
-    if not is_project_archived(project_id, user_id):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project archive not found. Project {project_id} may not have been archived."
+        logger.info(
+            f"[Restore] download_id={download_id} project_id={project_id} "
+            f"fv_name={fv_name!r} project_name={project_row['name'] if project_row else None!r} "
+            f"needs_archive_restore={needs_archive_restore}"
         )
 
-    # Restore from archive
-    if not restore_project(project_id, user_id):
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to restore project from archive"
-        )
+    if needs_archive_restore:
+        if not is_project_archived(project_id, user_id):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project archive not found. Project {project_id} may not have been archived."
+            )
 
-    # Propagate reel name to restored project (user may have renamed in gallery)
+        if not restore_project(project_id, user_id):
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to restore project from archive"
+            )
+
+    # Propagate reel name to project (user may have renamed in gallery)
     if fv_name:
         with get_db_connection() as conn:
             conn.cursor().execute(
@@ -914,6 +917,7 @@ async def restore_project_from_archive(download_id: int):
                 (fv_name, project_id),
             )
             conn.commit()
+            logger.info(f"[Restore] Updated project {project_id} name to {fv_name!r}")
 
-    logger.info(f"Restored project {project_id} from archive for user {user_id}")
-    return {"project_id": project_id, "restored": True}
+    logger.info(f"[Restore] Complete: project_id={project_id} restored={needs_archive_restore}")
+    return {"project_id": project_id, "restored": needs_archive_restore}
