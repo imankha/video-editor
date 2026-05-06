@@ -37,6 +37,7 @@ export const useProjectDataStore = create((set, get) => ({
   clipMetadataCache: {},
 
   // API loading state
+  clipsLoadedAt: 0,
   clipsFetching: false,
   clipsError: null,
 
@@ -117,27 +118,39 @@ export const useProjectDataStore = create((set, get) => ({
   // Batch update for loading project clips
   setProjectClips: ({ clips, aspectRatio }) => set((state) => ({
     clips,
+    clipsLoadedAt: Date.now(),
     selectedClipId: clips.length > 0 ? clips[0].id : null,
     aspectRatio: aspectRatio || state.aspectRatio,
   })),
 
   // ========== API Methods ==========
 
-  fetchClips: async (projectId) => {
-    if (!projectId) return [];
+  _clipsInflight: null,
+
+  fetchClips: (projectId) => {
+    if (!projectId) return Promise.resolve([]);
+
+    const existing = get()._clipsInflight;
+    if (existing && existing.projectId === projectId) return existing.promise;
 
     set({ clipsFetching: true, clipsError: null });
-    try {
-      const response = await fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`);
-      if (!response.ok) throw new Error('Failed to fetch clips');
-      const data = await response.json();
-      set({ clips: data, clipsFetching: false });
-      return data;
-    } catch (err) {
-      set({ clipsError: err.message, clipsFetching: false });
-      console.error('[projectDataStore] fetchClips error:', err);
-      return [];
-    }
+    const promise = fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`)
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to fetch clips');
+        return response.json();
+      })
+      .then(data => {
+        set({ clips: data, clipsLoadedAt: Date.now(), clipsFetching: false, _clipsInflight: null });
+        return data;
+      })
+      .catch(err => {
+        set({ clipsError: err.message, clipsFetching: false, _clipsInflight: null });
+        console.error('[projectDataStore] fetchClips error:', err);
+        return [];
+      });
+
+    set({ _clipsInflight: { projectId, promise } });
+    return promise;
   },
 
   saveFramingEdits: async (projectId, clipId, framingData) => {

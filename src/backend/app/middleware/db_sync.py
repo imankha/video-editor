@@ -643,6 +643,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             if is_sync_failed(user_id) and not is_sync_attempt_in_progress(user_id):
                 response.headers["X-Sync-Status"] = sync_status if (had_writes or had_user_db_writes) else "failed"
 
+            # Default Cache-Control for GET JSON responses that don't set their own.
+            # stale-while-revalidate lets the browser serve cached data instantly on
+            # rapid re-fetches (e.g. mode switches) while refreshing in the background.
+            if (
+                request.method == "GET"
+                and "cache-control" not in response.headers
+                and response.headers.get("content-type", "").startswith("application/json")
+            ):
+                response.headers["Cache-Control"] = "private, no-cache, stale-while-revalidate=5"
+
             return response
 
         except Exception as e:

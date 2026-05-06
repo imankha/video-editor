@@ -109,6 +109,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Sync-Status"],
+    max_age=86400,
 )
 
 # Single combined middleware for user context + R2 sync.

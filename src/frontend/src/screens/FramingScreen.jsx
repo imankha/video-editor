@@ -401,8 +401,8 @@ export function FramingScreen({
     return clipRange;
   }, [selectedClip, getClipVideoConfig]);
 
-  // Re-fetch clips on mount — picks up any changes made in annotate mode
-  // (e.g., updated start_time/end_time, new clips, deleted clips)
+  // Re-fetch clips on mount — picks up any changes made in annotate mode.
+  // fetchClips dedupes in-flight requests, so concurrent calls from useProjectLoader are free.
   useEffect(() => {
     if (projectId) fetchClips(projectId);
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only refresh

@@ -77,6 +77,7 @@ export function useProjectLoader() {
     setLoading,
     updateClipMetadata,
     setClipMetadataCache,
+    fetchClips,
     reset: resetProjectData,
   } = useProjectDataStore();
   const resetFramingStore = useFramingStore(state => state.reset);
@@ -128,9 +129,8 @@ export function useProjectLoader() {
       onProgress({ stage: 'clips', message: 'Loading clips...' });
       setLoading(true, 'clips');
 
-      // Fetch project clips — raw backend data
-      const clipsResponse = await fetch(`${API_BASE}/api/clips/projects/${projectId}/clips`);
-      const clipsData = clipsResponse.ok ? await clipsResponse.json() : [];
+      // Fetch project clips via store (deduped if FramingScreen also calls fetchClips)
+      const clipsData = await fetchClips(projectId);
 
       console.log('[useProjectLoader] Fetched clips:', clipsData.length);
 
