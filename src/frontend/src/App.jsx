@@ -604,15 +604,17 @@ function App() {
 
       {/* Downloads Panel */}
       <DownloadsPanel
-        onOpenProject={(projectId) => {
+        onOpenProject={async (projectId) => {
           // Reset stores to clear stale data from previous project
           useProjectDataStore.getState().reset();
           useFramingStore.getState().reset();
           useOverlayStore.getState().reset();
           useVideoStore.getState().reset();
           // Always re-fetch: name may have changed via gallery rename
-          fetchProjects({ force: true });
-          selectProject(projectId);
+          await Promise.all([
+            fetchProjects({ force: true }),
+            selectProject(projectId),
+          ]);
           // Default to framing mode when opening a completed reel
           setEditorMode(EDITOR_MODES.FRAMING);
         }}

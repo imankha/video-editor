@@ -66,8 +66,5 @@ export function getClipDisplayName(clip, fallback = '') {
  */
 export function getProjectDisplayName(project) {
   if (!project) return '';
-  if (project.is_auto_created && project.clips?.[0]) {
-    return getClipDisplayName(project.clips[0], project.name);
-  }
   return project.name || '';
 }
