@@ -439,7 +439,7 @@ export function AnnotateFullscreenOverlay({
 
   if (layout === 'inline') {
     return (
-      <div className="border-t border-gray-700 p-3 overflow-y-auto">
+      <div data-add-clip-form className="border-t border-gray-700 p-3 overflow-y-auto">
         {formContent}
       </div>
     );

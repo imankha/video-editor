@@ -69,9 +69,14 @@ export function QuestPanel({ inline = false }) {
 
   // T1030: Measure clip details position for annotate mode anchoring
   const [clipDetailsBottom, setClipDetailsBottom] = useState(340); // fallback
+  const [addClipFormOpen, setAddClipFormOpen] = useState(false);
   useEffect(() => {
-    if (editorMode !== 'annotate') return;
+    if (editorMode !== 'annotate') {
+      setAddClipFormOpen(false);
+      return;
+    }
     const measure = () => {
+      setAddClipFormOpen(!!document.querySelector('[data-add-clip-form]'));
       const el = document.querySelector('[data-clip-details]');
       if (el) {
         const bottom = window.innerHeight - el.getBoundingClientRect().top + QUEST_PANEL_GAP;
@@ -170,7 +175,7 @@ export function QuestPanel({ inline = false }) {
 
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || !definitions || !questDef || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
+  if ((hidden || !loaded || !definitions || !questDef || addClipFormOpen || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
