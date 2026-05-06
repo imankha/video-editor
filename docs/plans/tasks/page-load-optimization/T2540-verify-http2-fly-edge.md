@@ -4,39 +4,35 @@
 **Priority:** P1
 **Complexity:** 2
 **Impact:** 6
-**Status:** TODO
+**Status:** TESTING
 
-## Problem
+## Result: No-Op — HTTP/2 Already Active
 
-Many requests in the HAR show 40-60ms of TLS connection setup overhead. With 12 parallel API requests on page load, the browser opens multiple TCP connections (HTTP/1.1 limit: 6-8 per domain). Each new connection incurs a TLS handshake. HTTP/2 multiplexing would send all requests over a single connection.
+Verified 2026-05-05: HTTP/2 multiplexing is already working on Fly.io edge. No configuration changes needed.
 
-## Evidence
+## Evidence (Production HAR: app.reelballers.com-annotate.har)
 
-HAR timing breakdown for parallel batch at t=60ms:
-- First 6-8 requests: `conn=43-57ms` (new TLS connections)
-- Remaining requests: `conn=-3ms` (reused connections after first batch completes)
+**All 34 API requests to reel-ballers-api.fly.dev use `http/2.0` with `conn=-1.0ms`** — confirming HTTP/2 multiplexing is active and all requests share a single connection.
 
-Total wasted on connection overhead: ~240-360ms across all requests.
+Protocol distribution across entire HAR:
+- `http/2.0`: 34 requests (all Fly.io API calls) — **conn=-1.0ms** (reused)
+- `h3`: 8 requests (Stripe, Google, Cloudflare CDN)
+- `HTTP/1.1`: 3 requests (R2 presigned URLs) — conn=36-43ms
 
-## Investigation
+The 40-60ms connection overhead originally mentioned came from:
+1. **R2 presigned URLs** (e41331ed...r2.cloudflarestorage.com) — HTTP/1.1, conn=36-43ms. Different domain, outside our control.
+2. **Third-party scripts** (Stripe, Cloudflare Insights) — different domains, expected behavior.
 
-1. Check what protocol the browser actually negotiated (HAR may contain this in `httpVersion` field)
-2. Fly.io edge terminates TLS — check if it advertises h2 ALPN
-3. `curl -v --http2 https://reel-ballers-api.fly.dev/api/health` to test
-4. Check if Fly.io's internal proxy (fly-proxy) downgrades to HTTP/1.1 before reaching the app
+## Why It Works
 
-## Implementation (if needed)
-
-If HTTP/2 is not active:
-- Fly.io edge should handle h2 by default for HTTPS — may need `[[services.ports]]` config change
-- Or: if the API domain is separate from the frontend domain, the browser can't reuse the frontend's h2 connection — consider proxying API requests through the same origin
+Fly.io's edge proxy (`fly-proxy`) handles ALPN negotiation automatically for all HTTPS connections. The `[http_service]` config with `force_https = true` in `fly.production.toml` ensures all traffic goes through the TLS-terminating edge, which advertises h2 support.
 
 ## Test Plan
 
-- [ ] `curl --http2 -v` confirms h2 negotiation
-- [ ] HAR shows `h2` in httpVersion field
-- [ ] Connection overhead drops from 40-60ms to ~0ms for parallel requests
+- [x] HAR shows `http/2.0` in httpVersion for all 34 Fly.io API requests
+- [x] Connection timing is -1.0ms (reused) for all API requests — no per-request TLS overhead
+- [x] The 40-60ms overhead is isolated to third-party domains (R2, Stripe) — not actionable
 
 ## Files
 
-- Fly.io deployment config (if changes needed)
+- `src/backend/fly.production.toml` — no changes needed
