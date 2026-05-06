@@ -328,6 +328,23 @@ export function useDownloads(isOpen = false) {
     };
   }, []);
 
+  const renameDownload = useCallback(async (downloadId, name) => {
+    setDownloads(prev => prev.map(d =>
+      d.id === downloadId ? { ...d, project_name: name } : d
+    ));
+    try {
+      const response = await fetch(`${API_BASE_URL}/downloads/${downloadId}/name`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      if (!response.ok) throw new Error('Failed to rename');
+    } catch (err) {
+      console.error('[useDownloads] renameDownload error:', err);
+      setError(err.message);
+    }
+  }, []);
+
   const markWatched = useCallback(async (downloadId) => {
     setDownloads(prev => prev.map(d =>
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
@@ -363,6 +380,7 @@ export function useDownloads(isOpen = false) {
     downloadFile,
     getDownloadUrl,
     getStreamingUrl,
+    renameDownload,
     markWatched,
     setFilter,
 

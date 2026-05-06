@@ -806,6 +806,25 @@ async def mark_watched(download_id: int):
         return {"success": True}
 
 
+@router.patch("/{download_id}/name")
+async def rename_download(download_id: int, body: dict):
+    """Rename a reel in My Reels."""
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE final_videos SET name = ? WHERE id = ? AND published_at IS NOT NULL",
+            (name, download_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Download not found")
+        conn.commit()
+        return {"success": True, "name": name}
+
+
 @router.post("/publish/{project_id}")
 async def publish_to_my_reels(project_id: int):
     """Publish a project's latest final video to My Reels.

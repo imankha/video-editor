@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2 } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Pencil } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -53,6 +53,7 @@ export function DownloadsPanel({
     downloadingId,
     getDownloadUrl,
     getStreamingUrl,
+    renameDownload,
     markWatched,
     formatFileSize,
     formatDuration,
@@ -73,6 +74,10 @@ export function DownloadsPanel({
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
   const watchTimerRef = useRef(null);
+
+  // State for inline rename
+  const [editingId, setEditingId] = useState(null);
+  const [editingName, setEditingName] = useState('');
 
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
@@ -271,9 +276,40 @@ export function DownloadsPanel({
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="text-white font-medium truncate">
-              {download.project_name}
-            </div>
+            {editingId === download.id ? (
+              <input
+                autoFocus
+                className="w-full bg-gray-600 text-white font-medium px-1 py-0.5 rounded border border-cyan-500 outline-none text-sm"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const trimmed = editingName.trim();
+                    if (trimmed && trimmed !== download.project_name) {
+                      renameDownload(download.id, trimmed);
+                    }
+                    setEditingId(null);
+                  } else if (e.key === 'Escape') {
+                    setEditingId(null);
+                  }
+                }}
+                onBlur={() => {
+                  const trimmed = editingName.trim();
+                  if (trimmed && trimmed !== download.project_name) {
+                    renameDownload(download.id, trimmed);
+                  }
+                  setEditingId(null);
+                }}
+              />
+            ) : (
+              <div
+                className="text-white font-medium truncate cursor-pointer hover:text-cyan-300 transition-colors"
+                onClick={() => { setEditingId(download.id); setEditingName(download.project_name || ''); }}
+                title="Click to rename"
+              >
+                {download.project_name}
+              </div>
+            )}
             {(showFilename || showSourceType) && (
               <div className="text-sm text-gray-400 truncate">
                 {showFilename ? download.filename : sourceTypeLabel}
