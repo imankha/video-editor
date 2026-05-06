@@ -80,10 +80,14 @@ def _finalize_overlay_export(
         is_auto_project = cursor.fetchone() is not None
         source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
 
+        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+        project_row = cursor.fetchone()
+        fv_name = project_row['name'] if project_row else f"Video {project_id}"
+
         cursor.execute("""
-            INSERT INTO final_videos (project_id, filename, version, source_type)
-            VALUES (?, ?, ?, ?)
-        """, (project_id, output_filename, next_version, source_type))
+            INSERT INTO final_videos (project_id, filename, version, source_type, name)
+            VALUES (?, ?, ?, ?, ?)
+        """, (project_id, output_filename, next_version, source_type, fv_name))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1071,11 +1075,15 @@ async def export_final(
         is_auto_project = cursor.fetchone() is not None
         source_type = 'brilliant_clip' if is_auto_project else 'custom_project'
 
+        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+        project_row = cursor.fetchone()
+        fv_name = project_row['name'] if project_row else f"Video {project_id}"
+
         # Create new final video entry with version number and source_type
         cursor.execute("""
-            INSERT INTO final_videos (project_id, filename, version, source_type)
-            VALUES (?, ?, ?, ?)
-        """, (project_id, filename, next_version, source_type))
+            INSERT INTO final_videos (project_id, filename, version, source_type, name)
+            VALUES (?, ?, ?, ?, ?)
+        """, (project_id, filename, next_version, source_type, fv_name))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 

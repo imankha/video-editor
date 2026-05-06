@@ -232,10 +232,8 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.rating_counts,
                 fv.watched_at,
                 fv.duration as fv_duration,
-                fv.name as fv_name,
-                COALESCE(fv.name, p.name) as project_name
+                fv.name as fv_name
             FROM final_videos fv
-            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL
         """
@@ -259,10 +257,7 @@ async def list_downloads(source_type: Optional[str] = None):
             if row['project_id']:
                 project_ids_to_fetch.add(row['project_id'])
 
-        # Fetch raw_clip data for brilliant_clip exports
-        # For brilliant_clips, raw_clip.name IS the source of truth (project.name is a copy)
-        # Also need game_id for grouping since brilliant_clips don't have working_clips
-        brilliant_clip_data = {}
+        # Fetch game_id for brilliant_clip exports (needed for grouping)
         brilliant_project_ids = [
             row['project_id'] for row in rows
             if row['source_type'] == SourceType.BRILLIANT_CLIP.value
@@ -271,15 +266,11 @@ async def list_downloads(source_type: Optional[str] = None):
         if brilliant_project_ids:
             placeholders = ','.join(['?' for _ in brilliant_project_ids])
             cursor.execute(f"""
-                SELECT auto_project_id, name, game_id
+                SELECT auto_project_id, game_id
                 FROM raw_clips
                 WHERE auto_project_id IN ({placeholders})
             """, brilliant_project_ids)
             for rc_row in cursor.fetchall():
-                brilliant_clip_data[rc_row['auto_project_id']] = {
-                    'name': rc_row['name'],
-                    'game_id': rc_row['game_id']
-                }
                 if rc_row['game_id']:
                     game_ids_to_fetch.add(rc_row['game_id'])
 
@@ -459,29 +450,13 @@ async def list_downloads(source_type: Optional[str] = None):
                 except (ValueError, AttributeError):
                     group_key = "Other"
 
-            # Determine display name
-            # fv.name is the single source of truth when set (covers both
-            # export-time name and user rename). Only fall back to derived
-            # names when fv.name is NULL (legacy custom project exports).
-            display_name = None
-
-            if row['fv_name']:
-                display_name = row['fv_name']
-            elif row['source_type'] == SourceType.ANNOTATED_GAME.value and game_names:
-                display_name = game_names[0]
-            elif row['project_name']:
-                display_name = row['project_name']
-
-            # Final fallbacks if no name found
+            # fv.name is the single source of truth for display name
+            display_name = row['fv_name']
             if not display_name:
-                if game_names:
-                    display_name = game_names[0]
-                else:
-                    try:
-                        source_type_enum = SourceType(row['source_type'])
-                        display_name = source_type_enum.display_label
-                    except (ValueError, TypeError):
-                        display_name = f"Video {row['id']}"
+                logger.warning(
+                    f"[Downloads] final_video id={row['id']} has NULL name — re-export to fix."
+                )
+                display_name = f"Video {row['id']}"
 
             # T56: Calculate duration on the fly (not stored - derivable data)
             if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
@@ -519,19 +494,6 @@ async def list_downloads(source_type: Optional[str] = None):
                 group_key=group_key
             ))
 
-        # Log single warning for missing projects (data integrity issue from past R2 sync bug)
-        missing_project_ids = [
-            row['project_id'] for row in rows
-            if row['source_type'] == SourceType.BRILLIANT_CLIP.value
-            and row['project_id']
-            and not row['project_name']
-        ]
-        if missing_project_ids:
-            logger.warning(
-                f"[Downloads] {len(missing_project_ids)} brilliant_clip exports have missing projects "
-                f"(project_ids: {missing_project_ids[:5]}{'...' if len(missing_project_ids) > 5 else ''}). "
-                f"This is a historical data integrity issue."
-            )
 
         return DownloadListResponse(
             downloads=downloads,
@@ -574,9 +536,8 @@ async def download_file(download_id: int):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT fv.filename, COALESCE(fv.name, p.name) as project_name
+            SELECT fv.filename, fv.name as project_name
             FROM final_videos fv
-            LEFT JOIN projects p ON fv.project_id = p.id AND fv.project_id IS NOT NULL
             WHERE fv.id = ?
         """, (download_id,))
         row = cursor.fetchone()

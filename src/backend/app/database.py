@@ -1040,6 +1040,19 @@ def ensure_database():
             cursor.execute("UPDATE final_videos SET published_at = created_at WHERE published_at IS NULL")
             logger.info("[Migration] Added published_at to final_videos, back-filled existing rows")
 
+        # Backfill fv.name for rows that lack it (single source of truth for display name)
+        cursor.execute("""
+            UPDATE final_videos SET name = (
+                SELECT COALESCE(p.name, 'Video ' || final_videos.id)
+                FROM projects p WHERE p.id = final_videos.project_id
+            )
+            WHERE name IS NULL AND project_id IS NOT NULL
+        """)
+        cursor.execute("""
+            UPDATE final_videos SET name = 'Video ' || id
+            WHERE name IS NULL AND project_id IS NULL
+        """)
+
         # T1583: auto-export pipeline columns
         game_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(games)").fetchall()}
         if 'auto_export_status' not in game_cols:
