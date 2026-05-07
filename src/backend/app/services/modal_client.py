@@ -29,6 +29,7 @@ import os
 import asyncio
 import logging
 import multiprocessing
+import multiprocessing.managers
 import time
 import socket
 from concurrent.futures import ProcessPoolExecutor
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 # --- Subprocess isolation for local processing (T2640) ---
 
 _process_pool: ProcessPoolExecutor | None = None
+_mp_manager: multiprocessing.managers.SyncManager | None = None
 
 
 def _get_process_pool() -> ProcessPoolExecutor:
@@ -47,8 +49,15 @@ def _get_process_pool() -> ProcessPoolExecutor:
     return _process_pool
 
 
+def _get_mp_manager() -> multiprocessing.managers.SyncManager:
+    global _mp_manager
+    if _mp_manager is None:
+        _mp_manager = multiprocessing.Manager()
+    return _mp_manager
+
+
 def _subprocess_worker(sync_fn, kwargs, queue):
-    """Run sync_fn in child process, sending progress via queue."""
+    """Run sync_fn in child process, sending progress via manager queue."""
     def progress_sink(pct, msg, phase):
         try:
             queue.put_nowait({"type": "progress", "progress": pct, "message": msg, "phase": phase})
@@ -59,13 +68,12 @@ def _subprocess_worker(sync_fn, kwargs, queue):
     try:
         return sync_fn(**kwargs)
     except Exception as e:
-        logger.error(f"[Subprocess] Worker failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
 async def _run_in_subprocess(sync_fn, kwargs: dict, progress_callback=None) -> dict:
     """Execute sync_fn in a subprocess, bridging progress to async callback."""
-    queue = multiprocessing.Queue()
+    queue = _get_mp_manager().Queue()
     loop = asyncio.get_running_loop()
     pool = _get_process_pool()
 
