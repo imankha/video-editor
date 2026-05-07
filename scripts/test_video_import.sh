@@ -36,7 +36,8 @@ echo "=== Getting profile ==="
 PROFILES_RESP=$(curl -s -b /tmp/rb-cookies.txt "$BASE_URL/api/profiles")
 PROFILE_ID=$(echo "$PROFILES_RESP" | python -c "
 import sys, json
-profiles = json.load(sys.stdin)
+data = json.load(sys.stdin)
+profiles = data.get('profiles', data) if isinstance(data, dict) else data
 if isinstance(profiles, list) and profiles:
     print(profiles[0].get('id', ''))
 else:
@@ -111,7 +112,7 @@ echo "$VEO_BODY" | python -m json.tool 2>/dev/null || echo "$VEO_BODY"
 VEO_IMPORT_ID=$(echo "$VEO_BODY" | python -c "import sys,json; print(json.load(sys.stdin).get('import_id',''))" 2>/dev/null || echo "")
 
 if [ -n "$VEO_IMPORT_ID" ]; then
-  poll_import "$VEO_IMPORT_ID" "Veo"
+  poll_import "$VEO_IMPORT_ID" "Veo" || true
 else
   echo "ERROR: No import_id in response"
 fi
@@ -140,7 +141,7 @@ echo "$TRACE_BODY" | python -m json.tool 2>/dev/null || echo "$TRACE_BODY"
 TRACE_IMPORT_ID=$(echo "$TRACE_BODY" | python -c "import sys,json; print(json.load(sys.stdin).get('import_id',''))" 2>/dev/null || echo "")
 
 if [ -n "$TRACE_IMPORT_ID" ]; then
-  poll_import "$TRACE_IMPORT_ID" "Trace"
+  poll_import "$TRACE_IMPORT_ID" "Trace" || true
 else
   echo "ERROR: No import_id in response"
 fi

@@ -30,7 +30,6 @@ from app.services.trace_import import (
     TRACE_URL_PATTERN,
 )
 from app.storage import (
-    get_r2_client,
     r2_global_key,
     r2_head_object_global,
     r2_delete_object_global,
@@ -255,32 +254,26 @@ async def _import_trace(
     progress["status"] = ImportStatus.CHECKING_CREDITS
     _check_and_deduct_credits(user_id, estimated_size, import_id)
 
-    # 3. Remux + upload each half
+    # 3. Remux + upload halves in parallel
     progress["status"] = ImportStatus.DOWNLOADING
-    video_refs = []
-    total_downloaded = 0
 
-    for i, video in enumerate(info.videos):
+    async def _process_half(video) -> tuple[str, int, int]:
         variant_url = await resolve_best_variant(video.m3u8_url)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             local_path = str(Path(tmpdir) / f"half{video.half}.mp4")
 
-            # Remux HLS -> MP4 (runs ffmpeg in subprocess)
             await asyncio.to_thread(
                 remux_hls_to_mp4, variant_url, local_path, None, 600,
             )
 
             file_size = Path(local_path).stat().st_size
-            total_downloaded += file_size
 
-            # Upload to R2
             progress["status"] = ImportStatus.UPLOADING
             blake3_hash = await asyncio.to_thread(
                 upload_file_to_r2, local_path, f"games/_import_{import_id}_h{video.half}.mp4",
             )
 
-            # Dedup check + move to final key
             final_r2_key = f"games/{blake3_hash}.mp4"
             final_full_key = r2_global_key(final_r2_key)
             temp_full_key = r2_global_key(f"games/_import_{import_id}_h{video.half}.mp4")
@@ -292,10 +285,15 @@ async def _import_trace(
             else:
                 _r2_copy_and_delete(temp_full_key, final_full_key)
 
-            video_refs.append((blake3_hash, file_size, video.half))
+            return (blake3_hash, file_size, video.half)
 
-        progress["downloaded_bytes"] = total_downloaded
-        progress["progress_pct"] = int(50 + (i + 1) / len(info.videos) * 40)
+    video_refs = list(await asyncio.gather(
+        *[_process_half(v) for v in info.videos]
+    ))
+    video_refs.sort(key=lambda x: x[2])
+
+    progress["downloaded_bytes"] = sum(v[1] for v in video_refs)
+    progress["progress_pct"] = 90
 
     # 4. Create game
     progress["status"] = ImportStatus.CREATING_GAME
@@ -399,8 +397,10 @@ def _create_game_record(
 def _r2_copy_and_delete(source_key: str, dest_key: str):
     """Server-side copy in R2, then delete the source."""
     from app.utils.retry import retry_r2_call, TIER_1
+    from app.storage import get_r2_transfer_client
 
-    client = get_r2_client()
+    # Use transfer client (120s timeout) — default client times out on large objects
+    client = get_r2_transfer_client()
     if not client:
         raise RuntimeError("R2 client not available")
 
