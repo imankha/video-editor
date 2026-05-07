@@ -94,11 +94,53 @@ Helper module: `src/backend/app/services/veo_import.py` — small, focused:
 
 ## Success Criteria
 
-- [ ] Test fetches a real Veo match page and extracts the CDN URL
-- [ ] Test verifies the CDN URL returns video/mp4 via HEAD
-- [ ] Test streams at least the first 10MB to R2 and verifies it's valid video data
-- [ ] Error cases return clear, actionable error messages
-- [ ] Total test runtime < 60s (not downloading full 3GB in CI)
+- [x] Test fetches a real Veo match page and extracts the CDN URL
+- [x] Test verifies the CDN URL returns video/mp4 via HEAD
+- [x] Test streams at least the first 10MB to R2 and verifies it's valid video data
+- [x] Error cases return clear, actionable error messages
+- [x] Total test runtime < 60s (not downloading full 3GB in CI)
+
+## Proven Usage
+
+```python
+from app.services.veo_import import (
+    parse_veo_url,          # validate + extract match slug
+    resolve_veo_download_url,  # scrape page -> CDN download URL + file size + title
+    stream_to_r2,           # stream download -> multipart upload to R2
+    VeoImportError,         # all errors are this type
+)
+
+# 1. Resolve URL to download info (async, ~1-2s)
+info = await resolve_veo_download_url("https://app.veo.co/matches/some-match-slug/")
+# info.download_url  = "https://download.veocdn.com/.../video.mp4"
+# info.file_size     = 3222919323  (bytes)
+# info.title         = "WCFC vs Rebels SC"  (from og:title, for auto-fill)
+
+# 2. Stream to R2 (async, minutes for full game)
+blake3_hash = await stream_to_r2(
+    download_url=info.download_url,
+    r2_key=f"games/{blake3_hash}.mp4",  # or a temp key, rename after hash known
+    expected_size=info.file_size,
+    max_bytes=None,  # None = download full file
+)
+
+# 3. Use blake3_hash to create game (dedup key)
+# The R2 key should be games/{blake3_hash}.mp4 for dedup.
+# Since we don't know the hash until after download, either:
+#   a) Stream to a temp key, then R2 copy to final key (extra op but clean)
+#   b) Stream to final key using a pre-computed hash (not possible here)
+#   c) Accept the temp key and register the hash in the DB
+```
+
+### Key facts for downstream tasks (T2620, T2630)
+
+- **No auth needed** -- Veo match pages and CDN are public
+- **Single MP4 per game** -- maps to `per_game` video mode (no halves)
+- **og:title format** -- `"Team A vs Team B"` -- parse to extract opponent name
+- **File sizes** -- 500MB to 3GB typical
+- **Blake3 hash caveat** -- hash is computed during download, so the R2 key can't use it upfront. T2620 needs a two-step approach: stream to temp key, then copy/rename.
+- **SSRF guard** -- download URL is validated to `*.veocdn.com` before streaming
+- **Event loop blocking** -- `stream_to_r2` calls sync boto3 inside async. For production (T2620), wrap R2 calls in `asyncio.to_thread` or run in a background task.
 
 ## Files Affected
 - `src/backend/app/services/veo_import.py` (new)

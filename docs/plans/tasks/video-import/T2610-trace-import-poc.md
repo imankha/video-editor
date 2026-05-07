@@ -409,17 +409,58 @@ Helper module: `src/backend/app/services/trace_import.py`:
 
 ## Success Criteria
 
-- [ ] Test queries Trace GraphQL and gets game video URLs
-- [ ] Test correctly filters FullGameVideo (non-superfly) and identifies both halves
-- [ ] Test remuxes at least 10 HLS segments to valid MP4 via ffmpeg
-- [ ] Test uploads remuxed MP4 to R2 and verifies it's valid
-- [ ] Error cases return clear, actionable error messages
-- [ ] Total test runtime < 90s (partial download, not full game)
+- [x] Test queries Trace GraphQL and gets game video URLs
+- [x] Test correctly filters FullGameVideo (non-superfly) and identifies both halves
+- [x] Test remuxes at least 10 HLS segments to valid MP4 via ffmpeg
+- [x] Test uploads remuxed MP4 to R2 and verifies it's valid
+- [x] Error cases return clear, actionable error messages
+- [x] Total test runtime < 90s (partial download, not full game)
+
+## Proven Usage
+
+```python
+from app.services.trace_import import (
+    parse_trace_url,        # validate + extract hash_key + game_id
+    resolve_trace_videos,   # GraphQL -> video info per half + metadata
+    resolve_best_variant,   # master m3u8 -> highest-quality variant URL
+    remux_hls_to_mp4,       # ffmpeg -c copy to MP4 (no re-encode)
+    upload_file_to_r2,      # local file -> multipart upload + blake3 hash
+    TraceImportError,       # all errors are this type
+)
+
+# 1. Resolve game metadata + HLS URLs (async, ~1-2s)
+info = await resolve_trace_videos("https://go.traceup.com/traceid/athlete/SD3TRsE6-/watch/10046397/players")
+# info.videos      = [TraceVideoInfo(half=1, m3u8_url=...), TraceVideoInfo(half=2, m3u8_url=...)]
+# info.home_team   = "Albion SC Santa Monica G10 Academy"
+# info.away_team   = "Beach Futbol Club Gu10 Sb Partida #2"
+# info.full_date   = "2026-04-26T20:00:00.000Z"
+# info.home_score  = 5
+# info.away_score  = 3
+
+# 2. For each half: resolve best variant + remux (sync, minutes per half)
+for video in info.videos:
+    variant_url = await resolve_best_variant(video.m3u8_url)  # -> 1080p variant
+    remux_hls_to_mp4(variant_url, f"/tmp/half{video.half}.mp4")  # ffmpeg -c copy
+
+# 3. Upload each half to R2 (sync, seconds per half for small files)
+blake3_hash = upload_file_to_r2("/tmp/half1.mp4", "games/{hash}.mp4")
+```
+
+### Key facts for downstream tasks (T2620, T2630)
+
+- **Anonymous GraphQL** -- user_id=0, empty token works for all public games
+- **Two halves per game** -- maps to `per_half` video mode, each half is a separate file
+- **HLS -> MP4 remux** -- ffmpeg copies codec (no re-encode), ~2-5 min per half at ~1.3GB
+- **Temp file needed** -- unlike Veo (direct stream), Trace requires ffmpeg to write a local temp file before R2 upload
+- **Metadata available** -- home/away teams, scores, date, sport type for auto-fill
+- **Superfly filter** -- FullGameVideo moments include player-tracking views; filter by `"superfly" not in dynamic_hls`
+- **1080p always** -- `resolve_best_variant` picks the highest bandwidth variant (video_3000k.m3u8)
+- **Blocking calls** -- `remux_hls_to_mp4` and `upload_file_to_r2` are sync; for production (T2620), run in background task or thread
 
 ## Files Affected
 - `src/backend/app/services/trace_import.py` (new)
 - `src/backend/tests/test_trace_import.py` (new)
 
 ## Open Questions
-- Should we always download 1080p, or let users choose quality? (Recommendation: always 1080p — the app needs highest resolution for good crops)
+- Should we always download 1080p, or let users choose quality? (Recommendation: always 1080p -- the app needs highest resolution for good crops)
 - Trace game with >2 halves (extra time, penalties)? Need to check if those appear as separate FullGameVideo moments.
