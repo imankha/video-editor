@@ -2893,13 +2893,13 @@ def process_clips_ai(
 ingest_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg")
-    .pip_install("boto3", "blake3", "httpx")
+    .pip_install("boto3", "blake3", "httpx", "psutil")
 )
 
 
 @app.function(
     image=ingest_image,
-    cpu=4,
+    cpu=2,
     memory=8192,
     timeout=3600,
     secrets=[modal.Secret.from_name("r2-credentials")],
@@ -2922,24 +2922,54 @@ def ingest_video_to_r2(
         Final:    {"status": "success", "blake3_hash": "...", "file_size": int}
     """
     import blake3 as blake3_mod
+    import socket
     import subprocess
     import time
+    import psutil
+
+    platform = "veo" if source_type == "direct" else "trace"
+    container_id = socket.gethostname()
+
+    def _mem_mb():
+        proc = psutil.Process()
+        return proc.memory_info().rss / (1024 * 1024)
 
     try:
         r2 = get_r2_client()
         bucket = os.environ["R2_BUCKET_NAME"]
 
+        logger.info(
+            f"[ingest] START platform={platform} source_type={source_type} "
+            f"container={container_id} mem={_mem_mb():.0f}MB"
+        )
         yield {"progress": 5, "phase": "downloading", "message": "Starting download..."}
 
         with tempfile.TemporaryDirectory() as temp_dir:
             local_path = os.path.join(temp_dir, "video.mp4")
             start = time.time()
+            phase_times = {}
 
             hashed_during_download = False
 
             if source_type == "hls":
                 # FFmpeg remux: HLS → MP4 (copy codec, no re-encode)
                 yield {"progress": 10, "phase": "downloading", "message": "Remuxing HLS stream..."}
+                dl_start = time.time()
+                # Probe CDN headers on the m3u8 manifest
+                try:
+                    import httpx as _httpx
+                    _probe = _httpx.head(source_url, timeout=10, follow_redirects=True)
+                    cdn_headers = {
+                        k: v for k, v in _probe.headers.items()
+                        if k.lower() in (
+                            "x-cache", "cf-cache-status", "age", "x-served-by",
+                            "x-amz-cf-pop", "x-amz-cf-id", "via", "server",
+                            "x-cache-hits",
+                        )
+                    }
+                    logger.info(f"[ingest] CDN_HEADERS platform={platform} m3u8_status={_probe.status_code} headers={cdn_headers}")
+                except Exception as probe_err:
+                    logger.info(f"[ingest] CDN_HEADERS platform={platform} probe_failed={probe_err}")
                 cmd = [
                     "ffmpeg", "-y",
                     "-i", source_url,
@@ -2950,15 +2980,31 @@ def ingest_video_to_r2(
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=3000)
                 if result.returncode != 0:
                     raise RuntimeError(f"FFmpeg remux failed: {result.stderr[-500:]}")
+                # Log ffmpeg speed/bitrate from stderr (last few lines have summary)
+                stderr_lines = result.stderr.strip().split("\n")
+                ffmpeg_summary = [l for l in stderr_lines[-5:] if l.strip()]
+                logger.info(f"[ingest] FFMPEG_SUMMARY platform={platform} lines={ffmpeg_summary}")
+                phase_times["download_remux"] = time.time() - dl_start
             else:
                 # Direct download via httpx — hash incrementally during download
                 import httpx
                 yield {"progress": 10, "phase": "downloading", "message": "Downloading video..."}
+                dl_start = time.time()
                 dl_hasher = blake3_mod.blake3()
                 with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
                     with client.stream("GET", source_url) as resp:
                         if resp.status_code != 200:
                             raise RuntimeError(f"Download failed: HTTP {resp.status_code}")
+                        cdn_headers = {
+                            k: v for k, v in resp.headers.items()
+                            if k.lower() in (
+                                "x-cache", "cf-cache-status", "age", "x-served-by",
+                                "x-amz-cf-pop", "x-amz-cf-id", "via", "server",
+                                "x-cache-hits", "x-fastly-request-id",
+                                "accept-ranges", "content-length",
+                            )
+                        }
+                        logger.info(f"[ingest] CDN_HEADERS platform={platform} headers={cdn_headers}")
                         total = int(resp.headers.get("content-length", 0))
                         downloaded = 0
                         with open(local_path, "wb") as f:
@@ -2969,15 +3015,22 @@ def ingest_video_to_r2(
                                 if total > 0:
                                     pct = 10 + int((downloaded / total) * 40)
                                     yield {"progress": pct, "phase": "downloading", "message": f"Downloading... {downloaded // (1024*1024)}MB / {total // (1024*1024)}MB"}
+                phase_times["download"] = time.time() - dl_start
                 hashed_during_download = True
                 blake3_hash = dl_hasher.hexdigest()
 
-            dl_elapsed = time.time() - start
             file_size = os.path.getsize(local_path)
-            logger.info(f"[ingest] Download complete: {file_size / (1024*1024):.1f}MB in {dl_elapsed:.1f}s")
+            dl_phase = "download_remux" if source_type == "hls" else "download"
+            dl_speed = (file_size / (1024 * 1024)) / phase_times[dl_phase] if phase_times[dl_phase] > 0 else 0
+            logger.info(
+                f"[ingest] DOWNLOAD platform={platform} size={file_size / (1024*1024):.1f}MB "
+                f"time={phase_times[dl_phase]:.1f}s speed={dl_speed:.1f}MB/s "
+                f"hashed_inline={hashed_during_download} mem={_mem_mb():.0f}MB"
+            )
 
             if not hashed_during_download:
                 yield {"progress": 55, "phase": "hashing", "message": "Computing file hash..."}
+                hash_start = time.time()
                 hasher = blake3_mod.blake3()
                 with open(local_path, "rb") as f:
                     while True:
@@ -2986,15 +3039,26 @@ def ingest_video_to_r2(
                             break
                         hasher.update(data)
                 blake3_hash = hasher.hexdigest()
+                phase_times["hash"] = time.time() - hash_start
+                hash_speed = (file_size / (1024 * 1024)) / phase_times["hash"] if phase_times["hash"] > 0 else 0
+                logger.info(
+                    f"[ingest] HASH platform={platform} time={phase_times['hash']:.1f}s "
+                    f"speed={hash_speed:.1f}MB/s mem={_mem_mb():.0f}MB"
+                )
 
-            logger.info(f"[ingest] blake3={blake3_hash[:16]}...")
+            logger.info(f"[ingest] blake3={blake3_hash[:16]}... platform={platform}")
             yield {"progress": 65, "phase": "uploading", "message": "Checking for duplicates..."}
 
             # Dedup: skip upload if final key already exists
             final_key = f"games/{blake3_hash}.mp4"
             try:
                 r2.head_object(Bucket=bucket, Key=final_key)
-                logger.info(f"[ingest] Dedup hit: {final_key} already exists")
+                total_elapsed = time.time() - start
+                logger.info(
+                    f"[ingest] DEDUP platform={platform} hash={blake3_hash[:16]}... "
+                    f"size={file_size / (1024*1024):.1f}MB total={total_elapsed:.1f}s "
+                    f"phases={phase_times} container={container_id}"
+                )
                 yield {"progress": 100, "phase": "complete", "message": "Video already exists (dedup)"}
                 yield {
                     "status": "success",
@@ -3016,6 +3080,7 @@ def ingest_video_to_r2(
 
             try:
                 part_size = 100 * 1024 * 1024  # 100MB
+                read_start = time.time()
                 chunks = []
                 with open(local_path, "rb") as f:
                     while True:
@@ -3023,17 +3088,28 @@ def ingest_video_to_r2(
                         if not data:
                             break
                         chunks.append(data)
+                phase_times["read_chunks"] = time.time() - read_start
+                logger.info(
+                    f"[ingest] CHUNKS platform={platform} parts={len(chunks)} "
+                    f"read_time={phase_times['read_chunks']:.1f}s mem={_mem_mb():.0f}MB"
+                )
+
+                part_timings = {}
 
                 def _upload_part(part_number, data):
+                    t0 = time.time()
                     resp = r2.upload_part(
                         Bucket=bucket, Key=final_key,
                         UploadId=upload_id, PartNumber=part_number,
                         Body=data,
                     )
+                    elapsed = time.time() - t0
+                    part_timings[part_number] = elapsed
                     return {"PartNumber": part_number, "ETag": resp["ETag"]}
 
                 total_parts = len(chunks)
                 parts = []
+                upload_start = time.time()
                 with ThreadPoolExecutor(max_workers=4) as executor:
                     futures = {
                         executor.submit(_upload_part, i + 1, chunk): i + 1
@@ -3043,6 +3119,22 @@ def ingest_video_to_r2(
                         parts.append(future.result())
                         pct = 70 + int((len(parts) / total_parts) * 25)
                         yield {"progress": pct, "phase": "uploading", "message": f"Uploading... {len(parts)}/{total_parts} parts"}
+
+                phase_times["upload"] = time.time() - upload_start
+
+                sorted_timings = sorted(part_timings.items())
+                per_part = " ".join(f"p{n}={t:.1f}s" for n, t in sorted_timings)
+                avg_part = sum(part_timings.values()) / len(part_timings) if part_timings else 0
+                sum_part = sum(part_timings.values())
+                parallelism = sum_part / phase_times["upload"] if phase_times["upload"] > 0 else 0
+                upload_speed = (file_size / (1024 * 1024)) / phase_times["upload"] if phase_times["upload"] > 0 else 0
+                logger.info(
+                    f"[ingest] UPLOAD platform={platform} parts={total_parts} "
+                    f"wall={phase_times['upload']:.1f}s sum_thread={sum_part:.1f}s "
+                    f"parallelism={parallelism:.1f}x speed={upload_speed:.1f}MB/s "
+                    f"avg_part={avg_part:.1f}s mem={_mem_mb():.0f}MB"
+                )
+                logger.info(f"[ingest] UPLOAD_PARTS platform={platform} {per_part}")
 
                 parts.sort(key=lambda p: p["PartNumber"])
                 r2.complete_multipart_upload(
@@ -3054,7 +3146,11 @@ def ingest_video_to_r2(
                 raise
 
             total_elapsed = time.time() - start
-            logger.info(f"[ingest] Upload complete: {final_key}, {file_size / (1024*1024):.1f}MB in {total_elapsed:.1f}s")
+            logger.info(
+                f"[ingest] COMPLETE platform={platform} hash={blake3_hash[:16]}... "
+                f"size={file_size / (1024*1024):.1f}MB total={total_elapsed:.1f}s "
+                f"phases={phase_times} container={container_id} mem={_mem_mb():.0f}MB"
+            )
 
             yield {"progress": 100, "phase": "complete", "message": "Import complete"}
             yield {
