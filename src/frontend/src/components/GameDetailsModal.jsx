@@ -54,11 +54,11 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const dropdownRef = useRef(null);
 
   // Import state
-  const [videoSource, setVideoSource] = useState('upload');
+  const [videoSource, setVideoSource] = useState('link');
   const [importUrl, setImportUrl] = useState('');
   const [importState, setImportState] = useState(null);
   const [importError, setImportError] = useState('');
-  const [showHelp, setShowHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(true);
   const [helpTab, setHelpTab] = useState('veo');
   const navigatedRef = useRef(false);
 
@@ -320,8 +320,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setImportUrl('');
     setImportState(null);
     setImportError('');
-    setVideoSource('upload');
-    setShowHelp(false);
+    setVideoSource('link');
+    setShowHelp(true);
   }, []);
 
   const submitGame = useCallback(async () => {
@@ -695,20 +695,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               <div className="flex gap-2 mb-3">
                 <button
                   type="button"
-                  onClick={() => setVideoSource('upload')}
-                  disabled={isSubmitting}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                    videoSource === 'upload'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  } disabled:opacity-50`}
-                >
-                  <Upload size={14} />
-                  Upload File
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setVideoSource('link')}
+                  onClick={() => { setVideoSource('link'); setShowHelp(true); }}
                   disabled={isSubmitting}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
                     videoSource === 'link'
@@ -718,6 +705,19 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                 >
                   <Link size={14} />
                   Paste Link
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setVideoSource('upload'); setShowHelp(false); }}
+                  disabled={isSubmitting}
+                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                    videoSource === 'upload'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  } disabled:opacity-50`}
+                >
+                  <Upload size={14} />
+                  Upload File
                 </button>
               </div>
 
