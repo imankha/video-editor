@@ -202,12 +202,10 @@ def _validate_video_in_r2(blake3_hash: str) -> None:
         )
 
 
-def _probe_fps_from_r2(blake3_hash: str) -> Optional[float]:
+def _probe_video_metadata(blake3_hash: str) -> Optional[dict]:
     """
-    T1500: Byte-range fetch the just-uploaded game video and ffprobe for fps.
-    Width/height arrive from the client (already on VideoReference) — only fps
-    is unreliable from the browser, so we probe server-side here. Returns None
-    on failure; the backfill script catches stragglers.
+    Probe a game video in R2 via ffprobe for fps, duration, width, height.
+    Returns dict with all available fields, or None on failure.
     """
     from app.storage import get_r2_client, R2_BUCKET
     from app.services.video_probe import probe_r2_video
@@ -215,10 +213,9 @@ def _probe_fps_from_r2(blake3_hash: str) -> Optional[float]:
         client = get_r2_client()
         if client is None:
             return None
-        meta = probe_r2_video(client, R2_BUCKET, f"games/{blake3_hash}.mp4")
-        return meta.get("fps") if meta else None
+        return probe_r2_video(client, R2_BUCKET, f"games/{blake3_hash}.mp4")
     except Exception as e:
-        logger.warning(f"[T1500] fps probe failed for {blake3_hash}: {e}")
+        logger.warning(f"[games] video probe failed for {blake3_hash}: {e}")
         return None
 
 
@@ -229,9 +226,10 @@ def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference], skip
     probed when the game is activated after upload completes.
     """
     for video in videos:
-        # T1500: capture fps server-side via byte-range ffprobe so project loads
-        # can skip the per-clip metadata probe.
-        fps = None if skip_fps_probe else _probe_fps_from_r2(video.blake3_hash.lower())
+        fps = None
+        if not skip_fps_probe:
+            meta = _probe_video_metadata(video.blake3_hash.lower())
+            fps = meta.get("fps") if meta else None
         cursor.execute("""
             INSERT INTO game_videos (game_id, blake3_hash, sequence, duration,
                                      video_width, video_height, video_size, fps)
@@ -381,7 +379,6 @@ async def create_game(request: CreateGameRequest):
         single_hash = request.videos[0].blake3_hash.lower() if len(request.videos) == 1 else None
         single_filename = f"{single_hash}.mp4" if single_hash else None
 
-        # Compute total duration and use first video's dimensions
         total_duration = None
         video_width = None
         video_height = None
@@ -393,6 +390,19 @@ async def create_game(request: CreateGameRequest):
             video_height = request.videos[0].height
             sizes = [v.file_size for v in request.videos if v.file_size]
             total_size = sum(sizes) if sizes else None
+
+            missing = []
+            if not total_duration:
+                missing.append("duration")
+            if not video_width or not video_height:
+                missing.append("dimensions")
+            if not total_size:
+                missing.append("size")
+            if missing:
+                logger.warning(
+                    f"[create_game] Missing metadata from client: {', '.join(missing)}. "
+                    f"Will backfill from R2 probe at activation."
+                )
 
         cursor.execute("""
             INSERT INTO games (
@@ -558,25 +568,80 @@ async def activate_game(game_id: int):
         if game['blake3_hash']:
             _validate_video_in_r2(game['blake3_hash'])
 
-        # Backfill FPS for videos that were inserted without it (pending creation)
+        # Backfill missing metadata from R2 probe (pending games skip probe at creation)
         for row in video_rows:
             cursor.execute(
-                "SELECT fps FROM game_videos WHERE game_id = ? AND blake3_hash = ?",
+                "SELECT fps, duration, video_width, video_height FROM game_videos WHERE game_id = ? AND blake3_hash = ?",
                 (game_id, row['blake3_hash'])
             )
             gv = cursor.fetchone()
-            if gv and not gv['fps']:
-                fps = _probe_fps_from_r2(row['blake3_hash'])
-                if fps:
-                    cursor.execute(
-                        "UPDATE game_videos SET fps = ? WHERE game_id = ? AND blake3_hash = ?",
-                        (fps, game_id, row['blake3_hash'])
-                    )
-                    # Also update legacy column on games table
-                    cursor.execute(
-                        "UPDATE games SET video_fps = ? WHERE id = ? AND video_fps IS NULL",
-                        (fps, game_id)
-                    )
+            if not gv:
+                continue
+
+            needs_probe = not gv['fps'] or not gv['duration'] or not gv['video_width'] or not gv['video_height']
+            if not needs_probe:
+                continue
+
+            meta = _probe_video_metadata(row['blake3_hash'])
+            if not meta:
+                logger.warning(f"[activate] probe failed for game={game_id} hash={row['blake3_hash']}, metadata will remain incomplete")
+                continue
+
+            gv_updates = []
+            gv_params = []
+            if not gv['fps'] and meta.get('fps'):
+                gv_updates.append("fps = ?")
+                gv_params.append(meta['fps'])
+            if not gv['duration'] and meta.get('duration'):
+                gv_updates.append("duration = ?")
+                gv_params.append(meta['duration'])
+            if not gv['video_width'] and meta.get('width'):
+                gv_updates.append("video_width = ?")
+                gv_params.append(meta['width'])
+            if not gv['video_height'] and meta.get('height'):
+                gv_updates.append("video_height = ?")
+                gv_params.append(meta['height'])
+
+            if gv_updates:
+                logger.info(f"[activate] backfilling game_videos game={game_id} hash={row['blake3_hash']}: {', '.join(gv_updates)}")
+                cursor.execute(
+                    f"UPDATE game_videos SET {', '.join(gv_updates)} WHERE game_id = ? AND blake3_hash = ?",
+                    (*gv_params, game_id, row['blake3_hash'])
+                )
+
+            if meta.get('fps'):
+                cursor.execute(
+                    "UPDATE games SET video_fps = ? WHERE id = ? AND video_fps IS NULL",
+                    (meta['fps'], game_id)
+                )
+
+        # Backfill games table aggregates from game_videos
+        cursor.execute("""
+            SELECT SUM(duration) as total_duration, SUM(video_size) as total_size,
+                   MIN(video_width) as width, MIN(video_height) as height
+            FROM game_videos WHERE game_id = ?
+        """, (game_id,))
+        agg = cursor.fetchone()
+        if agg:
+            game_updates = []
+            game_params = []
+            if agg['total_duration']:
+                game_updates.append("video_duration = COALESCE(video_duration, ?)")
+                game_params.append(agg['total_duration'])
+            if agg['total_size']:
+                game_updates.append("video_size = COALESCE(video_size, ?)")
+                game_params.append(agg['total_size'])
+            if agg['width']:
+                game_updates.append("video_width = COALESCE(video_width, ?)")
+                game_params.append(agg['width'])
+            if agg['height']:
+                game_updates.append("video_height = COALESCE(video_height, ?)")
+                game_params.append(agg['height'])
+            if game_updates:
+                cursor.execute(
+                    f"UPDATE games SET {', '.join(game_updates)} WHERE id = ?",
+                    (*game_params, game_id)
+                )
 
         # Backfill working_clips created before activation (fps was NULL
         # because game_videos hadn't been probed yet during pending creation)

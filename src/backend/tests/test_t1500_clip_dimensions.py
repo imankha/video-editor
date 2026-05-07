@@ -170,9 +170,11 @@ def test_game_video_insert_probes_fps_from_r2(monkeypatch):
     from app.routers import games as games_module
 
     def fake_probe(blake3_hash: str):
-        return 29.97 if blake3_hash == "hash9003" else None
+        if blake3_hash == "hash9003":
+            return {"fps": 29.97, "duration": 10.0, "width": 1920, "height": 1080}
+        return None
 
-    monkeypatch.setattr(games_module, "_probe_fps_from_r2", fake_probe)
+    monkeypatch.setattr(games_module, "_probe_video_metadata", fake_probe)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -240,3 +242,84 @@ def test_library_add_leaves_nulls_when_game_video_missing_dims():
         assert row['width'] is None
         assert row['height'] is None
         assert row['fps'] is None
+
+
+def test_activate_backfills_all_metadata(monkeypatch):
+    """
+    When a pending game is activated, the probe should backfill ALL missing
+    metadata (duration, width, height, fps) on both game_videos and games tables.
+    """
+    from app.routers import games as games_module
+    from app.constants import GameStatus
+
+    def fake_probe(blake3_hash: str):
+        if blake3_hash == "hash9004":
+            return {"fps": 29.97, "duration": 120.5, "width": 1920, "height": 1080}
+        return None
+
+    def fake_validate(blake3_hash: str):
+        pass
+
+    def fake_deduct(user_id, cost, source=None, reference_id=None):
+        return {"success": True, "balance": 100}
+
+    def fake_upload_cost(size):
+        return 1
+
+    def fake_expires():
+        from datetime import datetime
+        return datetime(2026, 12, 31)
+
+    def fake_insert_ref(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(games_module, "_probe_video_metadata", fake_probe)
+    monkeypatch.setattr(games_module, "_validate_video_in_r2", fake_validate)
+    monkeypatch.setattr(games_module, "deduct_credits", fake_deduct)
+    monkeypatch.setattr(games_module, "calculate_upload_cost", fake_upload_cost)
+    monkeypatch.setattr(games_module, "storage_expires_at", fake_expires)
+    monkeypatch.setattr(games_module, "insert_game_storage_ref", fake_insert_ref)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO games (id, name, blake3_hash, video_filename, video_size, status) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (9004, "test pending game", "hash9004", "hash9004.mp4", 5000000, GameStatus.PENDING),
+        )
+        cursor.execute(
+            "INSERT INTO game_videos (game_id, blake3_hash, sequence, video_size) "
+            "VALUES (?, ?, ?, ?)",
+            (9004, "hash9004", 1, 5000000),
+        )
+        conn.commit()
+
+        # Verify metadata is NULL before activation
+        cursor.execute("SELECT duration, video_width, video_height, fps FROM game_videos WHERE game_id = ?", (9004,))
+        row = cursor.fetchone()
+        assert row['duration'] is None
+        assert row['video_width'] is None
+        assert row['video_height'] is None
+        assert row['fps'] is None
+
+    import asyncio
+    asyncio.run(games_module.activate_game(9004))
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # game_videos should be backfilled
+        cursor.execute("SELECT duration, video_width, video_height, fps FROM game_videos WHERE game_id = ?", (9004,))
+        gv = cursor.fetchone()
+        assert gv['duration'] == pytest.approx(120.5)
+        assert gv['video_width'] == 1920
+        assert gv['video_height'] == 1080
+        assert gv['fps'] == pytest.approx(29.97)
+
+        # games table should also be backfilled
+        cursor.execute("SELECT video_duration, video_width, video_height, video_fps FROM games WHERE id = ?", (9004,))
+        g = cursor.fetchone()
+        assert g['video_duration'] == pytest.approx(120.5)
+        assert g['video_width'] == 1920
+        assert g['video_height'] == 1080
+        assert g['video_fps'] == pytest.approx(29.97)
