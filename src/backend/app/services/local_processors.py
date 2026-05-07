@@ -503,6 +503,8 @@ async def local_ingest(
         with tempfile.TemporaryDirectory(prefix="ingest_") as temp_dir:
             local_path = os.path.join(temp_dir, "video.mp4")
 
+            hashed_during_download = False
+
             if source_type == "hls":
                 if progress_callback:
                     try:
@@ -527,6 +529,7 @@ async def local_ingest(
                     except Exception:
                         pass
                 import httpx
+                dl_hasher = blake3.blake3()
                 async with httpx.AsyncClient(
                     timeout=httpx.Timeout(300.0, connect=30.0),
                 ) as client:
@@ -536,29 +539,30 @@ async def local_ingest(
                         with open(local_path, "wb") as f:
                             async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
                                 f.write(chunk)
+                                dl_hasher.update(chunk)
+                hashed_during_download = True
+                blake3_hash = dl_hasher.hexdigest()
 
             file_size = Path(local_path).stat().st_size
             dl_time = time.time() - start_time
             logger.info(f"[LocalProcessor] Download complete: {file_size / (1024*1024):.1f}MB in {dl_time:.1f}s")
 
-            if progress_callback:
-                try:
-                    await progress_callback(55, "Computing file hash...", "hashing")
-                except Exception:
-                    pass
-
-            # blake3 hash
-            hasher = blake3.blake3()
-            def _compute_hash():
-                with open(local_path, "rb") as f:
-                    while True:
-                        data = f.read(100 * 1024 * 1024)
-                        if not data:
-                            break
-                        hasher.update(data)
-                return hasher.hexdigest()
-
-            blake3_hash = await asyncio.to_thread(_compute_hash)
+            if not hashed_during_download:
+                if progress_callback:
+                    try:
+                        await progress_callback(55, "Computing file hash...", "hashing")
+                    except Exception:
+                        pass
+                hasher = blake3.blake3()
+                def _compute_hash():
+                    with open(local_path, "rb") as f:
+                        while True:
+                            data = f.read(100 * 1024 * 1024)
+                            if not data:
+                                break
+                            hasher.update(data)
+                    return hasher.hexdigest()
+                blake3_hash = await asyncio.to_thread(_compute_hash)
             logger.info(f"[LocalProcessor] blake3={blake3_hash[:16]}...")
 
             if progress_callback:
@@ -596,32 +600,46 @@ async def local_ingest(
                 if not client:
                     return {"status": "error", "error": "R2 client not available"}
 
-                parts = []
-                part_number = 1
                 part_size = 100 * 1024 * 1024
 
-                def _upload_parts():
-                    nonlocal part_number
+                def _upload_parts_parallel():
+                    from concurrent.futures import ThreadPoolExecutor, as_completed
                     from app.utils.retry import retry_r2_call, TIER_1
+
+                    chunks = []
                     with open(local_path, "rb") as f:
                         while True:
                             data = f.read(part_size)
                             if not data:
                                 break
-                            response = retry_r2_call(
-                                client.upload_part,
-                                Bucket=R2_BUCKET,
-                                Key=final_full_key,
-                                UploadId=upload_id,
-                                PartNumber=part_number,
-                                Body=data,
-                                operation=f"upload_part {final_full_key} #{part_number}",
-                                **TIER_1,
-                            )
-                            parts.append({"PartNumber": part_number, "ETag": response["ETag"]})
-                            part_number += 1
+                            chunks.append(data)
 
-                await asyncio.to_thread(_upload_parts)
+                    def _upload_one(part_number, data):
+                        response = retry_r2_call(
+                            client.upload_part,
+                            Bucket=R2_BUCKET,
+                            Key=final_full_key,
+                            UploadId=upload_id,
+                            PartNumber=part_number,
+                            Body=data,
+                            operation=f"upload_part {final_full_key} #{part_number}",
+                            **TIER_1,
+                        )
+                        return {"PartNumber": part_number, "ETag": response["ETag"]}
+
+                    parts = []
+                    with ThreadPoolExecutor(max_workers=4) as executor:
+                        futures = {
+                            executor.submit(_upload_one, i + 1, chunk): i + 1
+                            for i, chunk in enumerate(chunks)
+                        }
+                        for future in as_completed(futures):
+                            parts.append(future.result())
+
+                    parts.sort(key=lambda p: p["PartNumber"])
+                    return parts
+
+                parts = await asyncio.to_thread(_upload_parts_parallel)
 
                 success = await asyncio.to_thread(
                     r2_complete_multipart_upload, final_full_key, upload_id, parts

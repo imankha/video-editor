@@ -2899,8 +2899,8 @@ ingest_image = (
 
 @app.function(
     image=ingest_image,
-    cpu=2,
-    memory=4096,
+    cpu=4,
+    memory=8192,
     timeout=3600,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
@@ -2935,6 +2935,8 @@ def ingest_video_to_r2(
             local_path = os.path.join(temp_dir, "video.mp4")
             start = time.time()
 
+            hashed_during_download = False
+
             if source_type == "hls":
                 # FFmpeg remux: HLS → MP4 (copy codec, no re-encode)
                 yield {"progress": 10, "phase": "downloading", "message": "Remuxing HLS stream..."}
@@ -2949,9 +2951,10 @@ def ingest_video_to_r2(
                 if result.returncode != 0:
                     raise RuntimeError(f"FFmpeg remux failed: {result.stderr[-500:]}")
             else:
-                # Direct download via httpx
+                # Direct download via httpx — hash incrementally during download
                 import httpx
                 yield {"progress": 10, "phase": "downloading", "message": "Downloading video..."}
+                dl_hasher = blake3_mod.blake3()
                 with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
                     with client.stream("GET", source_url) as resp:
                         if resp.status_code != 200:
@@ -2961,26 +2964,28 @@ def ingest_video_to_r2(
                         with open(local_path, "wb") as f:
                             for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
                                 f.write(chunk)
+                                dl_hasher.update(chunk)
                                 downloaded += len(chunk)
                                 if total > 0:
                                     pct = 10 + int((downloaded / total) * 40)
                                     yield {"progress": pct, "phase": "downloading", "message": f"Downloading... {downloaded // (1024*1024)}MB / {total // (1024*1024)}MB"}
+                hashed_during_download = True
+                blake3_hash = dl_hasher.hexdigest()
 
             dl_elapsed = time.time() - start
             file_size = os.path.getsize(local_path)
             logger.info(f"[ingest] Download complete: {file_size / (1024*1024):.1f}MB in {dl_elapsed:.1f}s")
 
-            yield {"progress": 55, "phase": "hashing", "message": "Computing file hash..."}
-
-            # Compute blake3 hash
-            hasher = blake3_mod.blake3()
-            with open(local_path, "rb") as f:
-                while True:
-                    data = f.read(100 * 1024 * 1024)  # 100MB chunks
-                    if not data:
-                        break
-                    hasher.update(data)
-            blake3_hash = hasher.hexdigest()
+            if not hashed_during_download:
+                yield {"progress": 55, "phase": "hashing", "message": "Computing file hash..."}
+                hasher = blake3_mod.blake3()
+                with open(local_path, "rb") as f:
+                    while True:
+                        data = f.read(100 * 1024 * 1024)
+                        if not data:
+                            break
+                        hasher.update(data)
+                blake3_hash = hasher.hexdigest()
 
             logger.info(f"[ingest] blake3={blake3_hash[:16]}...")
             yield {"progress": 65, "phase": "uploading", "message": "Checking for duplicates..."}
@@ -3002,32 +3007,44 @@ def ingest_video_to_r2(
                 if e.response["Error"]["Code"] != "404":
                     raise
 
-            # Multipart upload to final key directly
+            # Multipart upload to final key directly (parallel)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
             yield {"progress": 70, "phase": "uploading", "message": "Uploading to storage..."}
             mpu = r2.create_multipart_upload(Bucket=bucket, Key=final_key, ContentType="video/mp4")
             upload_id = mpu["UploadId"]
 
             try:
-                parts = []
-                part_number = 1
                 part_size = 100 * 1024 * 1024  # 100MB
-
+                chunks = []
                 with open(local_path, "rb") as f:
                     while True:
                         data = f.read(part_size)
                         if not data:
                             break
-                        resp = r2.upload_part(
-                            Bucket=bucket, Key=final_key,
-                            UploadId=upload_id, PartNumber=part_number,
-                            Body=data,
-                        )
-                        parts.append({"PartNumber": part_number, "ETag": resp["ETag"]})
-                        uploaded_bytes = part_number * part_size
-                        pct = 70 + int(min(uploaded_bytes / file_size, 1.0) * 25)
-                        yield {"progress": pct, "phase": "uploading", "message": f"Uploading... part {part_number}"}
-                        part_number += 1
+                        chunks.append(data)
 
+                def _upload_part(part_number, data):
+                    resp = r2.upload_part(
+                        Bucket=bucket, Key=final_key,
+                        UploadId=upload_id, PartNumber=part_number,
+                        Body=data,
+                    )
+                    return {"PartNumber": part_number, "ETag": resp["ETag"]}
+
+                total_parts = len(chunks)
+                parts = []
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {
+                        executor.submit(_upload_part, i + 1, chunk): i + 1
+                        for i, chunk in enumerate(chunks)
+                    }
+                    for future in as_completed(futures):
+                        parts.append(future.result())
+                        pct = 70 + int((len(parts) / total_parts) * 25)
+                        yield {"progress": pct, "phase": "uploading", "message": f"Uploading... {len(parts)}/{total_parts} parts"}
+
+                parts.sort(key=lambda p: p["PartNumber"])
                 r2.complete_multipart_upload(
                     Bucket=bucket, Key=final_key, UploadId=upload_id,
                     MultipartUpload={"Parts": parts},
