@@ -2886,6 +2886,172 @@ def process_clips_ai(
         }
 
 
+# ============================================================================
+# Video Ingest (CPU-only) — download/remux → blake3 → upload to R2
+# ============================================================================
+
+ingest_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg")
+    .pip_install("boto3", "blake3", "httpx")
+)
+
+
+@app.function(
+    image=ingest_image,
+    cpu=2,
+    memory=4096,
+    timeout=3600,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+)
+def ingest_video_to_r2(
+    source_url: str,
+    source_type: str,
+):
+    """
+    Download (or remux) a video, compute blake3, upload directly to R2.
+
+    Generator function — yields progress updates, final yield has status key.
+
+    Args:
+        source_url: Direct MP4 URL (source_type="direct") or m3u8 URL (source_type="hls")
+        source_type: "direct" (Veo — stream download) or "hls" (Trace — ffmpeg remux)
+
+    Yields:
+        Progress: {"progress": 0-100, "phase": "...", "message": "..."}
+        Final:    {"status": "success", "blake3_hash": "...", "file_size": int}
+    """
+    import blake3 as blake3_mod
+    import subprocess
+    import time
+
+    try:
+        r2 = get_r2_client()
+        bucket = os.environ["R2_BUCKET_NAME"]
+
+        yield {"progress": 5, "phase": "downloading", "message": "Starting download..."}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            local_path = os.path.join(temp_dir, "video.mp4")
+            start = time.time()
+
+            if source_type == "hls":
+                # FFmpeg remux: HLS → MP4 (copy codec, no re-encode)
+                yield {"progress": 10, "phase": "downloading", "message": "Remuxing HLS stream..."}
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", source_url,
+                    "-c", "copy",
+                    "-movflags", "+faststart",
+                    local_path,
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=3000)
+                if result.returncode != 0:
+                    raise RuntimeError(f"FFmpeg remux failed: {result.stderr[-500:]}")
+            else:
+                # Direct download via httpx
+                import httpx
+                yield {"progress": 10, "phase": "downloading", "message": "Downloading video..."}
+                with httpx.Client(timeout=httpx.Timeout(300.0, connect=30.0)) as client:
+                    with client.stream("GET", source_url) as resp:
+                        if resp.status_code != 200:
+                            raise RuntimeError(f"Download failed: HTTP {resp.status_code}")
+                        total = int(resp.headers.get("content-length", 0))
+                        downloaded = 0
+                        with open(local_path, "wb") as f:
+                            for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                                f.write(chunk)
+                                downloaded += len(chunk)
+                                if total > 0:
+                                    pct = 10 + int((downloaded / total) * 40)
+                                    yield {"progress": pct, "phase": "downloading", "message": f"Downloading... {downloaded // (1024*1024)}MB / {total // (1024*1024)}MB"}
+
+            dl_elapsed = time.time() - start
+            file_size = os.path.getsize(local_path)
+            logger.info(f"[ingest] Download complete: {file_size / (1024*1024):.1f}MB in {dl_elapsed:.1f}s")
+
+            yield {"progress": 55, "phase": "hashing", "message": "Computing file hash..."}
+
+            # Compute blake3 hash
+            hasher = blake3_mod.blake3()
+            with open(local_path, "rb") as f:
+                while True:
+                    data = f.read(100 * 1024 * 1024)  # 100MB chunks
+                    if not data:
+                        break
+                    hasher.update(data)
+            blake3_hash = hasher.hexdigest()
+
+            logger.info(f"[ingest] blake3={blake3_hash[:16]}...")
+            yield {"progress": 65, "phase": "uploading", "message": "Checking for duplicates..."}
+
+            # Dedup: skip upload if final key already exists
+            final_key = f"games/{blake3_hash}.mp4"
+            try:
+                r2.head_object(Bucket=bucket, Key=final_key)
+                logger.info(f"[ingest] Dedup hit: {final_key} already exists")
+                yield {"progress": 100, "phase": "complete", "message": "Video already exists (dedup)"}
+                yield {
+                    "status": "success",
+                    "blake3_hash": blake3_hash,
+                    "file_size": file_size,
+                    "dedup": True,
+                }
+                return
+            except r2.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] != "404":
+                    raise
+
+            # Multipart upload to final key directly
+            yield {"progress": 70, "phase": "uploading", "message": "Uploading to storage..."}
+            mpu = r2.create_multipart_upload(Bucket=bucket, Key=final_key, ContentType="video/mp4")
+            upload_id = mpu["UploadId"]
+
+            try:
+                parts = []
+                part_number = 1
+                part_size = 100 * 1024 * 1024  # 100MB
+
+                with open(local_path, "rb") as f:
+                    while True:
+                        data = f.read(part_size)
+                        if not data:
+                            break
+                        resp = r2.upload_part(
+                            Bucket=bucket, Key=final_key,
+                            UploadId=upload_id, PartNumber=part_number,
+                            Body=data,
+                        )
+                        parts.append({"PartNumber": part_number, "ETag": resp["ETag"]})
+                        uploaded_bytes = part_number * part_size
+                        pct = 70 + int(min(uploaded_bytes / file_size, 1.0) * 25)
+                        yield {"progress": pct, "phase": "uploading", "message": f"Uploading... part {part_number}"}
+                        part_number += 1
+
+                r2.complete_multipart_upload(
+                    Bucket=bucket, Key=final_key, UploadId=upload_id,
+                    MultipartUpload={"Parts": parts},
+                )
+            except Exception:
+                r2.abort_multipart_upload(Bucket=bucket, Key=final_key, UploadId=upload_id)
+                raise
+
+            total_elapsed = time.time() - start
+            logger.info(f"[ingest] Upload complete: {final_key}, {file_size / (1024*1024):.1f}MB in {total_elapsed:.1f}s")
+
+            yield {"progress": 100, "phase": "complete", "message": "Import complete"}
+            yield {
+                "status": "success",
+                "blake3_hash": blake3_hash,
+                "file_size": file_size,
+                "dedup": False,
+            }
+
+    except Exception as e:
+        logger.error(f"[ingest] Failed: {e}", exc_info=True)
+        yield {"status": "error", "error": str(e), "progress": 0, "phase": "error"}
+
+
 # Local testing entrypoint
 @app.local_entrypoint()
 def main():
@@ -2899,6 +3065,7 @@ def main():
     print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling")
     print("  - detect_players_modal: YOLO player detection")
     print("  - process_clips_ai: Unified multi-clip AI upscaling")
+    print("  - ingest_video_to_r2: Download/remux video and upload to R2 (CPU-only)")
     print()
     print("Deploy with: modal deploy video_processing.py")
     print()

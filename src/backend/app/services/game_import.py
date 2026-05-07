@@ -8,33 +8,22 @@ Runs as a background task with progress tracking.
 
 import asyncio
 import logging
-import tempfile
 import uuid
-from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Optional
 
 from app.services.veo_import import (
     resolve_veo_download_url,
-    stream_to_r2 as veo_stream_to_r2,
     VeoImportError,
     VEO_URL_PATTERN,
 )
 from app.services.trace_import import (
     resolve_trace_videos,
     resolve_best_variant,
-    remux_hls_to_mp4,
-    upload_file_to_r2,
     TraceImportError,
     TRACE_URL_PATTERN,
 )
-from app.storage import (
-    r2_global_key,
-    r2_head_object_global,
-    r2_delete_object_global,
-    R2_BUCKET,
-)
+from app.services.modal_client import call_modal_ingest
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +162,6 @@ async def _import_veo(
     info = await resolve_veo_download_url(url)
     progress["total_bytes"] = info.file_size
 
-    # Auto-fill from metadata
     if not opponent_name and info.title:
         opponent_name = info.title
 
@@ -181,32 +169,27 @@ async def _import_veo(
     progress["status"] = ImportStatus.CHECKING_CREDITS
     await asyncio.to_thread(_check_and_deduct_credits, user_id, info.file_size, import_id)
 
-    # 3. Stream to R2 (temp key, since we don't know hash yet)
+    # 3. Download + hash + upload via Modal (or local fallback)
     progress["status"] = ImportStatus.DOWNLOADING
-    temp_r2_key = f"games/_import_{import_id}.mp4"
 
-    blake3_hash = await veo_stream_to_r2(
-        download_url=info.download_url,
-        r2_key=temp_r2_key,
-        expected_size=info.file_size,
+    async def _progress_cb(pct, msg, phase):
+        progress["progress_pct"] = int(pct * 0.9)  # Scale to 0-90
+
+    result = await call_modal_ingest(
+        source_url=info.download_url,
+        source_type="direct",
+        progress_callback=_progress_cb,
     )
 
-    # 4. Dedup: check if final key already exists
-    final_r2_key = f"games/{blake3_hash}.mp4"
-    final_full_key = r2_global_key(final_r2_key)
-    temp_full_key = r2_global_key(temp_r2_key)
+    if result.get("status") != "success":
+        raise VeoImportError(f"Ingest failed: {result.get('error', 'unknown')}")
 
-    existing = await asyncio.to_thread(r2_head_object_global, final_full_key)
-    if existing:
-        logger.info(f"[game_import] Dedup hit: {blake3_hash} already in R2")
-        await asyncio.to_thread(r2_delete_object_global, temp_full_key)
-    else:
-        await asyncio.to_thread(_r2_copy_and_delete, temp_full_key, final_full_key)
-
-    progress["downloaded_bytes"] = info.file_size
+    blake3_hash = result["blake3_hash"]
+    file_size = result["file_size"]
+    progress["downloaded_bytes"] = file_size
     progress["progress_pct"] = 90
 
-    # 5. Create game
+    # 4. Create game
     progress["status"] = ImportStatus.CREATING_GAME
     game_id = await asyncio.to_thread(
         _create_game_record,
@@ -215,7 +198,7 @@ async def _import_veo(
         opponent_name=opponent_name,
         game_date=game_date,
         game_type=game_type,
-        videos=[(blake3_hash, info.file_size, 1)],
+        videos=[(blake3_hash, file_size, 1)],
     )
 
     progress["status"] = ImportStatus.COMPLETE
@@ -239,15 +222,14 @@ async def _import_trace(
     progress["status"] = ImportStatus.RESOLVING
     info = await resolve_trace_videos(url)
 
-    # Auto-fill from metadata
     if not opponent_name:
         opponent_name = f"{info.home_team} vs {info.away_team}" if info.home_team and info.away_team else None
     if not game_date and info.full_date:
-        game_date = info.full_date[:10]  # "2026-04-26T20:00:00.000Z" -> "2026-04-26"
+        game_date = info.full_date[:10]
 
     # 2. Check credits (estimate size from duration: ~1.3GB per half at 1080p)
     estimated_size = sum(
-        int((v.duration or 2400) * 650_000)  # ~5Mbps = 650KB/s
+        int((v.duration or 2400) * 650_000)
         for v in info.videos
     )
     progress["total_bytes"] = estimated_size
@@ -255,38 +237,23 @@ async def _import_trace(
     progress["status"] = ImportStatus.CHECKING_CREDITS
     await asyncio.to_thread(_check_and_deduct_credits, user_id, estimated_size, import_id)
 
-    # 3. Remux + upload halves in parallel
+    # 3. Remux + upload halves via Modal (parallel)
     progress["status"] = ImportStatus.DOWNLOADING
 
     async def _process_half(video) -> tuple[str, int, int]:
         variant_url = await resolve_best_variant(video.m3u8_url)
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_path = str(Path(tmpdir) / f"half{video.half}.mp4")
+        result = await call_modal_ingest(
+            source_url=variant_url,
+            source_type="hls",
+        )
 
-            await asyncio.to_thread(
-                remux_hls_to_mp4, variant_url, local_path, None, 1800,
+        if result.get("status") != "success":
+            raise TraceImportError(
+                f"Ingest failed for half {video.half}: {result.get('error', 'unknown')}"
             )
 
-            file_size = Path(local_path).stat().st_size
-
-            progress["status"] = ImportStatus.UPLOADING
-            blake3_hash = await asyncio.to_thread(
-                upload_file_to_r2, local_path, f"games/_import_{import_id}_h{video.half}.mp4",
-            )
-
-            final_r2_key = f"games/{blake3_hash}.mp4"
-            final_full_key = r2_global_key(final_r2_key)
-            temp_full_key = r2_global_key(f"games/_import_{import_id}_h{video.half}.mp4")
-
-            existing = await asyncio.to_thread(r2_head_object_global, final_full_key)
-            if existing:
-                logger.info(f"[game_import] Dedup hit half {video.half}: {blake3_hash}")
-                await asyncio.to_thread(r2_delete_object_global, temp_full_key)
-            else:
-                await asyncio.to_thread(_r2_copy_and_delete, temp_full_key, final_full_key)
-
-            return (blake3_hash, file_size, video.half)
+        return (result["blake3_hash"], result["file_size"], video.half)
 
     video_refs = list(await asyncio.gather(
         *[_process_half(v) for v in info.videos]
@@ -396,24 +363,3 @@ def _create_game_record(
     return game_id
 
 
-def _r2_copy_and_delete(source_key: str, dest_key: str):
-    """Server-side copy in R2, then delete the source."""
-    from app.utils.retry import retry_r2_call, TIER_1
-    from app.storage import get_r2_transfer_client
-
-    # Use transfer client (120s timeout) — default client times out on large objects
-    client = get_r2_transfer_client()
-    if not client:
-        raise RuntimeError("R2 client not available")
-
-    retry_r2_call(
-        client.copy_object,
-        Bucket=R2_BUCKET,
-        Key=dest_key,
-        CopySource={"Bucket": R2_BUCKET, "Key": source_key},
-        operation=f"copy {source_key} -> {dest_key}",
-        **TIER_1,
-    )
-
-    r2_delete_object_global(source_key)
-    logger.info(f"[game_import] Moved {source_key} -> {dest_key}")

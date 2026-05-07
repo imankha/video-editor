@@ -467,6 +467,193 @@ async def local_framing(
         return {"status": "error", "error": str(e)}
 
 
+async def local_ingest(
+    source_url: str,
+    source_type: str,
+    progress_callback=None,
+) -> dict:
+    """
+    Local fallback for Modal ingest_video_to_r2.
+
+    Same interface: download/remux → blake3 → upload to R2 directly.
+    This is what game_import.py previously did inline on Fly.io.
+    """
+    import blake3
+    from app.storage import (
+        get_r2_transfer_client,
+        r2_create_multipart_upload,
+        r2_complete_multipart_upload,
+        r2_abort_multipart_upload,
+        r2_global_key,
+        r2_head_object_global,
+        R2_BUCKET,
+    )
+    from app.services.ffmpeg_errors import run_ffmpeg
+
+    logger.info(f"[LocalProcessor] Ingest starting: source_type={source_type}")
+    start_time = time.time()
+
+    if progress_callback:
+        try:
+            await progress_callback(5, "Starting download...", "downloading")
+        except Exception:
+            pass
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="ingest_") as temp_dir:
+            local_path = os.path.join(temp_dir, "video.mp4")
+
+            if source_type == "hls":
+                if progress_callback:
+                    try:
+                        await progress_callback(10, "Remuxing HLS stream...", "downloading")
+                    except Exception:
+                        pass
+                await asyncio.to_thread(
+                    run_ffmpeg,
+                    [
+                        "ffmpeg", "-y",
+                        "-i", source_url,
+                        "-c", "copy",
+                        "-movflags", "+faststart",
+                        local_path,
+                    ],
+                    timeout=1800,
+                )
+            else:
+                if progress_callback:
+                    try:
+                        await progress_callback(10, "Downloading video...", "downloading")
+                    except Exception:
+                        pass
+                import httpx
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(300.0, connect=30.0),
+                ) as client:
+                    async with client.stream("GET", source_url) as resp:
+                        if resp.status_code != 200:
+                            return {"status": "error", "error": f"Download failed: HTTP {resp.status_code}"}
+                        with open(local_path, "wb") as f:
+                            async for chunk in resp.aiter_bytes(chunk_size=1024 * 1024):
+                                f.write(chunk)
+
+            file_size = Path(local_path).stat().st_size
+            dl_time = time.time() - start_time
+            logger.info(f"[LocalProcessor] Download complete: {file_size / (1024*1024):.1f}MB in {dl_time:.1f}s")
+
+            if progress_callback:
+                try:
+                    await progress_callback(55, "Computing file hash...", "hashing")
+                except Exception:
+                    pass
+
+            # blake3 hash
+            hasher = blake3.blake3()
+            def _compute_hash():
+                with open(local_path, "rb") as f:
+                    while True:
+                        data = f.read(100 * 1024 * 1024)
+                        if not data:
+                            break
+                        hasher.update(data)
+                return hasher.hexdigest()
+
+            blake3_hash = await asyncio.to_thread(_compute_hash)
+            logger.info(f"[LocalProcessor] blake3={blake3_hash[:16]}...")
+
+            if progress_callback:
+                try:
+                    await progress_callback(65, "Checking for duplicates...", "uploading")
+                except Exception:
+                    pass
+
+            # Dedup check
+            final_key = f"games/{blake3_hash}.mp4"
+            final_full_key = r2_global_key(final_key)
+            existing = await asyncio.to_thread(r2_head_object_global, final_full_key)
+            if existing:
+                logger.info(f"[LocalProcessor] Dedup hit: {final_key}")
+                return {
+                    "status": "success",
+                    "blake3_hash": blake3_hash,
+                    "file_size": file_size,
+                    "dedup": True,
+                }
+
+            if progress_callback:
+                try:
+                    await progress_callback(70, "Uploading to storage...", "uploading")
+                except Exception:
+                    pass
+
+            # Multipart upload to final key
+            upload_id = await asyncio.to_thread(r2_create_multipart_upload, final_full_key)
+            if not upload_id:
+                return {"status": "error", "error": "Failed to create multipart upload"}
+
+            try:
+                client = get_r2_transfer_client()
+                if not client:
+                    return {"status": "error", "error": "R2 client not available"}
+
+                parts = []
+                part_number = 1
+                part_size = 100 * 1024 * 1024
+
+                def _upload_parts():
+                    nonlocal part_number
+                    from app.utils.retry import retry_r2_call, TIER_1
+                    with open(local_path, "rb") as f:
+                        while True:
+                            data = f.read(part_size)
+                            if not data:
+                                break
+                            response = retry_r2_call(
+                                client.upload_part,
+                                Bucket=R2_BUCKET,
+                                Key=final_full_key,
+                                UploadId=upload_id,
+                                PartNumber=part_number,
+                                Body=data,
+                                operation=f"upload_part {final_full_key} #{part_number}",
+                                **TIER_1,
+                            )
+                            parts.append({"PartNumber": part_number, "ETag": response["ETag"]})
+                            part_number += 1
+
+                await asyncio.to_thread(_upload_parts)
+
+                success = await asyncio.to_thread(
+                    r2_complete_multipart_upload, final_full_key, upload_id, parts
+                )
+                if not success:
+                    return {"status": "error", "error": "Failed to complete multipart upload"}
+
+            except Exception:
+                await asyncio.to_thread(r2_abort_multipart_upload, final_full_key, upload_id)
+                raise
+
+            total_time = time.time() - start_time
+            logger.info(f"[LocalProcessor] Ingest complete: {final_key}, {file_size / (1024*1024):.1f}MB in {total_time:.1f}s")
+
+            if progress_callback:
+                try:
+                    await progress_callback(100, "Import complete", "complete")
+                except Exception:
+                    pass
+
+            return {
+                "status": "success",
+                "blake3_hash": blake3_hash,
+                "file_size": file_size,
+                "dedup": False,
+            }
+
+    except Exception as e:
+        logger.error(f"[LocalProcessor] Ingest failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 async def local_framing_mock(
     job_id: str,
     user_id: str,
