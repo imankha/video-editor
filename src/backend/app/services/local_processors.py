@@ -672,6 +672,423 @@ async def local_ingest(
         return {"status": "error", "error": str(e)}
 
 
+# --- Sync functions for subprocess isolation (T2640) ---
+# These run in a child process via ProcessPoolExecutor.
+# All I/O is sync, progress_callback is a plain function (writes to queue).
+
+
+def _overlay_sync(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    highlight_regions: list,
+    effect_type: str = "dark_overlay",
+    video_duration: float = None,
+    progress_callback=None,
+) -> dict:
+    from app.storage import download_from_r2, upload_to_r2
+    from app.routers.export.overlay import _process_frames_to_ffmpeg
+
+    logger.info(f"[Subprocess] Overlay job {job_id} starting")
+    start_time = time.time()
+
+    if progress_callback:
+        progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="overlay_") as temp_dir:
+            input_path = os.path.join(temp_dir, "input.mp4")
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            if not download_from_r2(user_id, input_key, Path(input_path)):
+                return {"status": "error", "error": "Failed to download from R2"}
+
+            download_time = time.time() - start_time
+            logger.info(f"[Subprocess] Downloaded in {download_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(10, "Processing frames...", ExportPhase.PROCESSING)
+
+            if not highlight_regions:
+                import shutil
+                shutil.copy(input_path, output_path)
+            else:
+                def frame_progress(progress: int, message: str):
+                    if progress_callback:
+                        scaled = 10 + int(progress * 0.8)
+                        progress_callback(scaled, message, ExportPhase.PROCESSING)
+
+                _process_frames_to_ffmpeg(
+                    input_path,
+                    output_path,
+                    highlight_regions,
+                    effect_type,
+                    frame_progress,
+                )
+
+            process_time = time.time() - start_time - download_time
+            logger.info(f"[Subprocess] Processed in {process_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(92, "Uploading result...", ExportPhase.UPLOAD)
+
+            if not upload_to_r2(user_id, output_key, Path(output_path)):
+                return {"status": "error", "error": "Failed to upload to R2"}
+
+            total_time = time.time() - start_time
+            logger.info(f"[Subprocess] Overlay job {job_id} completed in {total_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(100, "Complete!", ExportPhase.COMPLETE)
+
+            return {"status": "success", "output_key": output_key}
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Overlay job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+def _framing_sync(
+    job_id: str,
+    user_id: str,
+    input_key: str,
+    output_key: str,
+    keyframes: list,
+    output_width: int = 810,
+    output_height: int = 1440,
+    fps: int = 30,
+    video_duration: float = None,
+    segment_data: dict = None,
+    include_audio: bool = True,
+    export_mode: str = "quality",
+    source_start_time: float = 0.0,
+    source_end_time: float = None,
+    progress_callback=None,
+) -> dict:
+    from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
+    import ffmpeg as ffmpeg_lib
+
+    logger.info(f"[Subprocess] Framing job {job_id} starting")
+    logger.info(f"[Subprocess] Source range: {source_start_time}s - {source_end_time}s")
+    logger.info(f"[Subprocess] Target: {output_width}x{output_height} @ {fps}fps")
+
+    start_time = time.time()
+
+    if progress_callback:
+        progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
+
+    try:
+        try:
+            from app.ai_upscaler import AIVideoUpscaler
+        except (ImportError, OSError, AttributeError) as e:
+            logger.error(f"[Subprocess] AI upscaler not available: {e}")
+            return {"status": "error", "error": f"AI upscaler not available: {e}"}
+
+        with tempfile.TemporaryDirectory(prefix="framing_") as temp_dir:
+            input_path = os.path.join(temp_dir, "input.mp4")
+            output_path = os.path.join(temp_dir, "output.mp4")
+
+            if input_key.startswith("games/") and source_end_time:
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[Subprocess] Streaming clip range {source_start_time}s-{source_end_time}s via presigned URL")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url, ss=source_start_time, to=source_end_time)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else "(no stderr)"
+                    logger.error(f"[Subprocess] ffmpeg range extract failed. stderr:\n{stderr}")
+                    return {"status": "error", "error": f"Failed to extract clip range from R2: {stderr[-500:]}"}
+            elif input_key.startswith("games/"):
+                source_url = generate_presigned_url_global(input_key)
+                logger.info(f"[Subprocess] Streaming full game video via presigned URL (no range)")
+                try:
+                    (
+                        ffmpeg_lib
+                        .input(source_url)
+                        .output(input_path, c='copy')
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True)
+                    )
+                except ffmpeg_lib.Error as e:
+                    stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else "(no stderr)"
+                    logger.error(f"[Subprocess] ffmpeg full-stream failed. stderr:\n{stderr}")
+                    return {"status": "error", "error": f"Failed to stream video from R2: {stderr[-500:]}"}
+            else:
+                if not download_from_r2(user_id, input_key, Path(input_path)):
+                    return {"status": "error", "error": f"Failed to download {input_key} from R2"}
+
+            download_time = time.time() - start_time
+            logger.info(f"[Subprocess] Input ready in {download_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(15, "Processing with AI upscaler...", ExportPhase.PROCESSING)
+
+            upscaler = AIVideoUpscaler(
+                device='cuda',
+                export_mode=export_mode,
+                enable_source_preupscale=False,
+                enable_diffusion_sr=False,
+                sr_model_name='realesr_general_x4v3'
+            )
+
+            if upscaler.upsampler is None:
+                return {"status": "error", "error": "AI SR model failed to load"}
+
+            is_fast_mode = export_mode.upper() == "FAST"
+            if is_fast_mode:
+                progress_ranges = {
+                    'ai_upscale': (15, 95),
+                    'ffmpeg_encode': (95, 100)
+                }
+            else:
+                progress_ranges = {
+                    'ai_upscale': (15, 30),
+                    'ffmpeg_pass1': (30, 85),
+                    'ffmpeg_encode': (85, 100)
+                }
+
+            def sync_progress(current, total, message, phase='ai_upscale'):
+                if progress_callback:
+                    if phase not in progress_ranges:
+                        phase = 'ai_upscale'
+                    start_pct, end_pct = progress_ranges[phase]
+                    phase_progress = (current / total) if total > 0 else 0
+                    overall = start_pct + (phase_progress * (end_pct - start_pct))
+                    progress_callback(overall, message, phase)
+
+            is_pre_extracted = input_key.startswith("games/") and source_end_time
+            clip_offset = 0 if is_pre_extracted else source_start_time
+            clip_duration = (source_end_time - source_start_time) if source_end_time else None
+
+            adjusted_keyframes = [
+                {**kf, 'time': kf['time'] + clip_offset}
+                for kf in keyframes
+            ]
+
+            adjusted_segment_data = None
+            if segment_data:
+                adjusted_segment_data = {**segment_data}
+                trim_start = segment_data.get('trim_start', 0)
+                trim_end = segment_data.get('trim_end', clip_duration or 0)
+                adjusted_segment_data['trim_start'] = trim_start + clip_offset
+                adjusted_segment_data['trim_end'] = trim_end + clip_offset
+                if 'segments' in segment_data:
+                    adjusted_segment_data['segments'] = [
+                        {**seg, 'start': seg['start'] + clip_offset, 'end': seg['end'] + clip_offset}
+                        for seg in segment_data['segments']
+                    ]
+            elif clip_offset > 0:
+                adjusted_segment_data = {
+                    'trim_start': clip_offset,
+                    'trim_end': clip_offset + (clip_duration or 0),
+                }
+
+            result = upscaler.process_video_with_upscale(
+                input_path=input_path,
+                output_path=output_path,
+                keyframes=adjusted_keyframes,
+                target_fps=fps,
+                export_mode=export_mode,
+                progress_callback=sync_progress,
+                segment_data=adjusted_segment_data,
+                include_audio=include_audio,
+            )
+
+            process_time = time.time() - start_time - download_time
+            logger.info(f"[Subprocess] Processed in {process_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(92, "Uploading result...", ExportPhase.UPLOAD)
+
+            if not upload_to_r2(user_id, output_key, Path(output_path)):
+                return {"status": "error", "error": "Failed to upload to R2"}
+
+            total_time = time.time() - start_time
+            logger.info(f"[Subprocess] Framing job {job_id} completed in {total_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(100, "Complete!", ExportPhase.COMPLETE)
+
+            return {"status": "success", "output_key": output_key}
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Framing job {job_id} failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+def _ingest_sync(
+    source_url: str,
+    source_type: str,
+    progress_callback=None,
+) -> dict:
+    import blake3
+    from app.storage import (
+        get_r2_transfer_client,
+        r2_create_multipart_upload,
+        r2_complete_multipart_upload,
+        r2_abort_multipart_upload,
+        r2_global_key,
+        r2_head_object_global,
+        R2_BUCKET,
+    )
+    from app.services.ffmpeg_errors import run_ffmpeg
+
+    logger.info(f"[Subprocess] Ingest starting: source_type={source_type}")
+    start_time = time.time()
+
+    if progress_callback:
+        progress_callback(5, "Starting download...", "downloading")
+
+    try:
+        with tempfile.TemporaryDirectory(prefix="ingest_") as temp_dir:
+            local_path = os.path.join(temp_dir, "video.mp4")
+
+            hashed_during_download = False
+
+            if source_type == "hls":
+                if progress_callback:
+                    progress_callback(10, "Remuxing HLS stream...", "downloading")
+                run_ffmpeg(
+                    [
+                        "ffmpeg", "-y",
+                        "-i", source_url,
+                        "-c", "copy",
+                        "-movflags", "+faststart",
+                        local_path,
+                    ],
+                    timeout=1800,
+                )
+            else:
+                if progress_callback:
+                    progress_callback(10, "Downloading video...", "downloading")
+                import httpx
+                dl_hasher = blake3.blake3()
+                with httpx.Client(
+                    timeout=httpx.Timeout(300.0, connect=30.0),
+                ) as client:
+                    with client.stream("GET", source_url) as resp:
+                        if resp.status_code != 200:
+                            return {"status": "error", "error": f"Download failed: HTTP {resp.status_code}"}
+                        with open(local_path, "wb") as f:
+                            for chunk in resp.iter_bytes(chunk_size=1024 * 1024):
+                                f.write(chunk)
+                                dl_hasher.update(chunk)
+                hashed_during_download = True
+                blake3_hash = dl_hasher.hexdigest()
+
+            file_size = Path(local_path).stat().st_size
+            dl_time = time.time() - start_time
+            logger.info(f"[Subprocess] Download complete: {file_size / (1024*1024):.1f}MB in {dl_time:.1f}s")
+
+            if not hashed_during_download:
+                if progress_callback:
+                    progress_callback(55, "Computing file hash...", "hashing")
+                hasher = blake3.blake3()
+                with open(local_path, "rb") as f:
+                    while True:
+                        data = f.read(100 * 1024 * 1024)
+                        if not data:
+                            break
+                        hasher.update(data)
+                blake3_hash = hasher.hexdigest()
+            logger.info(f"[Subprocess] blake3={blake3_hash[:16]}...")
+
+            if progress_callback:
+                progress_callback(65, "Checking for duplicates...", "uploading")
+
+            final_key = f"games/{blake3_hash}.mp4"
+            final_full_key = r2_global_key(final_key)
+            existing = r2_head_object_global(final_full_key)
+            if existing:
+                logger.info(f"[Subprocess] Dedup hit: {final_key}")
+                return {
+                    "status": "success",
+                    "blake3_hash": blake3_hash,
+                    "file_size": file_size,
+                    "dedup": True,
+                }
+
+            if progress_callback:
+                progress_callback(70, "Uploading to storage...", "uploading")
+
+            upload_id = r2_create_multipart_upload(final_full_key)
+            if not upload_id:
+                return {"status": "error", "error": "Failed to create multipart upload"}
+
+            try:
+                client = get_r2_transfer_client()
+                if not client:
+                    return {"status": "error", "error": "R2 client not available"}
+
+                part_size = 100 * 1024 * 1024
+
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                from app.utils.retry import retry_r2_call, TIER_1
+
+                chunks = []
+                with open(local_path, "rb") as f:
+                    while True:
+                        data = f.read(part_size)
+                        if not data:
+                            break
+                        chunks.append(data)
+
+                def _upload_one(part_number, data):
+                    response = retry_r2_call(
+                        client.upload_part,
+                        Bucket=R2_BUCKET,
+                        Key=final_full_key,
+                        UploadId=upload_id,
+                        PartNumber=part_number,
+                        Body=data,
+                        operation=f"upload_part {final_full_key} #{part_number}",
+                        **TIER_1,
+                    )
+                    return {"PartNumber": part_number, "ETag": response["ETag"]}
+
+                parts = []
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    futures = {
+                        executor.submit(_upload_one, i + 1, chunk): i + 1
+                        for i, chunk in enumerate(chunks)
+                    }
+                    for future in as_completed(futures):
+                        parts.append(future.result())
+
+                parts.sort(key=lambda p: p["PartNumber"])
+
+                success = r2_complete_multipart_upload(final_full_key, upload_id, parts)
+                if not success:
+                    return {"status": "error", "error": "Failed to complete multipart upload"}
+
+            except Exception:
+                r2_abort_multipart_upload(final_full_key, upload_id)
+                raise
+
+            total_time = time.time() - start_time
+            logger.info(f"[Subprocess] Ingest complete: {final_key}, {file_size / (1024*1024):.1f}MB in {total_time:.1f}s")
+
+            if progress_callback:
+                progress_callback(100, "Import complete", "complete")
+
+            return {
+                "status": "success",
+                "blake3_hash": blake3_hash,
+                "file_size": file_size,
+                "dedup": False,
+            }
+
+    except Exception as e:
+        logger.error(f"[Subprocess] Ingest failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
 async def local_framing_mock(
     job_id: str,
     user_id: str,

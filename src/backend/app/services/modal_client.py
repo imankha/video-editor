@@ -28,10 +28,69 @@ Usage:
 import os
 import asyncio
 import logging
+import multiprocessing
 import time
 import socket
+from concurrent.futures import ProcessPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+# --- Subprocess isolation for local processing (T2640) ---
+
+_process_pool: ProcessPoolExecutor | None = None
+
+
+def _get_process_pool() -> ProcessPoolExecutor:
+    global _process_pool
+    if _process_pool is None:
+        _process_pool = ProcessPoolExecutor(max_workers=2)
+    return _process_pool
+
+
+def _subprocess_worker(sync_fn, kwargs, queue):
+    """Run sync_fn in child process, sending progress via queue."""
+    def progress_sink(pct, msg, phase):
+        try:
+            queue.put_nowait({"type": "progress", "progress": pct, "message": msg, "phase": phase})
+        except Exception:
+            pass
+
+    kwargs["progress_callback"] = progress_sink
+    try:
+        return sync_fn(**kwargs)
+    except Exception as e:
+        logger.error(f"[Subprocess] Worker failed: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
+
+
+async def _run_in_subprocess(sync_fn, kwargs: dict, progress_callback=None) -> dict:
+    """Execute sync_fn in a subprocess, bridging progress to async callback."""
+    queue = multiprocessing.Queue()
+    loop = asyncio.get_running_loop()
+    pool = _get_process_pool()
+
+    future = loop.run_in_executor(pool, _subprocess_worker, sync_fn, kwargs, queue)
+
+    while not future.done():
+        while True:
+            try:
+                msg = queue.get_nowait()
+                if progress_callback and msg.get("type") == "progress":
+                    await progress_callback(msg["progress"], msg["message"], msg["phase"])
+            except Exception:
+                break
+        await asyncio.sleep(0.05)
+
+    # Drain remaining progress messages after process completes
+    while True:
+        try:
+            msg = queue.get_nowait()
+            if progress_callback and msg.get("type") == "progress":
+                await progress_callback(msg["progress"], msg["message"], msg["phase"])
+        except Exception:
+            break
+
+    return future.result()
 
 # Retry configuration for transient network errors
 NETWORK_RETRY_ATTEMPTS = 3
@@ -490,25 +549,27 @@ async def call_modal_framing_ai(
         )
 
     if not _modal_enabled:
-        # Use local fallback with same interface
-        from app.services.local_processors import local_framing
-        logger.info(f"[Modal] Using local fallback for framing job {job_id}")
-        return await local_framing(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            keyframes=keyframes,
-            output_width=output_width,
-            output_height=output_height,
-            fps=fps,
-            video_duration=video_duration,
-            segment_data=segment_data,
+        from app.services.local_processors import _framing_sync
+        logger.info(f"[Modal] Using local subprocess for framing job {job_id}")
+        return await _run_in_subprocess(
+            _framing_sync,
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "input_key": input_key,
+                "output_key": output_key,
+                "keyframes": keyframes,
+                "output_width": output_width,
+                "output_height": output_height,
+                "fps": fps,
+                "video_duration": video_duration,
+                "segment_data": segment_data,
+                "include_audio": include_audio,
+                "export_mode": export_mode,
+                "source_start_time": source_start_time,
+                "source_end_time": source_end_time,
+            },
             progress_callback=progress_callback,
-            include_audio=include_audio,
-            export_mode=export_mode,
-            source_start_time=source_start_time,
-            source_end_time=source_end_time,
         )
 
     # Convert raw user_id to R2-prefixed user_id for Modal
@@ -953,17 +1014,19 @@ async def call_modal_overlay(
         {"status": "error", "error": "..."}
     """
     if not _modal_enabled:
-        # Use local fallback with same interface
-        from app.services.local_processors import local_overlay
-        logger.info(f"[Modal] Using local fallback for overlay job {job_id}")
-        return await local_overlay(
-            job_id=job_id,
-            user_id=user_id,
-            input_key=input_key,
-            output_key=output_key,
-            highlight_regions=highlight_regions,
-            effect_type=effect_type,
-            video_duration=video_duration,
+        from app.services.local_processors import _overlay_sync
+        logger.info(f"[Modal] Using local subprocess for overlay job {job_id}")
+        return await _run_in_subprocess(
+            _overlay_sync,
+            {
+                "job_id": job_id,
+                "user_id": user_id,
+                "input_key": input_key,
+                "output_key": output_key,
+                "highlight_regions": highlight_regions,
+                "effect_type": effect_type,
+                "video_duration": video_duration,
+            },
             progress_callback=progress_callback,
         )
 
@@ -1331,11 +1394,11 @@ async def call_modal_ingest(
         {"status": "error", "error": "..."}
     """
     if not _modal_enabled:
-        from app.services.local_processors import local_ingest
-        logger.info(f"[Modal] Using local fallback for ingest ({source_type})")
-        return await local_ingest(
-            source_url=source_url,
-            source_type=source_type,
+        from app.services.local_processors import _ingest_sync
+        logger.info(f"[Modal] Using local subprocess for ingest ({source_type})")
+        return await _run_in_subprocess(
+            _ingest_sync,
+            {"source_url": source_url, "source_type": source_type},
             progress_callback=progress_callback,
         )
 
