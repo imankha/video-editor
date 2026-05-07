@@ -262,7 +262,7 @@ def remux_hls_to_mp4(
     try:
         run_ffmpeg(cmd, timeout=timeout)
     except FFmpegError as e:
-        raise TraceImportError(f"FFmpeg remux failed: {e.message}") from e
+        raise TraceImportError(f"FFmpeg remux failed: {e}") from e
 
 
 def upload_file_to_r2(local_path: str, r2_key: str) -> str:

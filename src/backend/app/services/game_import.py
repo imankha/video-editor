@@ -265,7 +265,7 @@ async def _import_trace(
             local_path = str(Path(tmpdir) / f"half{video.half}.mp4")
 
             await asyncio.to_thread(
-                remux_hls_to_mp4, variant_url, local_path, None, 600,
+                remux_hls_to_mp4, variant_url, local_path, None, 1800,
             )
 
             file_size = Path(local_path).stat().st_size
