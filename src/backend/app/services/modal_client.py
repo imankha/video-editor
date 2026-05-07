@@ -43,6 +43,10 @@ MODAL_JOB_RETRY_ATTEMPTS = 3  # total attempts (1 initial + 2 retries)
 MODAL_JOB_RETRY_DELAY = 3.0  # initial delay in seconds
 MODAL_JOB_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
 
+# Timeout configuration for ingest jobs
+INGEST_PER_ATTEMPT_TIMEOUT = 600  # seconds — matches Modal function timeout (2x worst expected)
+INGEST_PROGRESS_STALL_TIMEOUT = 180  # seconds — no progress update for 3 min → abort attempt
+
 
 def _is_transient_network_error(error: Exception) -> bool:
     """
@@ -93,6 +97,9 @@ def classify_modal_error(error: Exception) -> str:
     Returns:
         'transient' or 'deterministic'
     """
+    if isinstance(error, asyncio.TimeoutError):
+        return "transient"
+
     error_msg = str(error).lower()
     error_type = type(error).__name__.lower()
 
@@ -1365,8 +1372,28 @@ async def call_modal_ingest(
                 except StopIteration:
                     return None
 
+            attempt_start = time.time()
+
             while True:
-                update = await loop.run_in_executor(None, next_item, gen)
+                elapsed = time.time() - attempt_start
+                remaining = INGEST_PER_ATTEMPT_TIMEOUT - elapsed
+                if remaining <= 0:
+                    raise asyncio.TimeoutError(
+                        f"Ingest attempt timed out after {INGEST_PER_ATTEMPT_TIMEOUT}s"
+                    )
+
+                stall_limit = min(INGEST_PROGRESS_STALL_TIMEOUT, remaining)
+
+                try:
+                    update = await asyncio.wait_for(
+                        loop.run_in_executor(None, next_item, gen),
+                        timeout=stall_limit,
+                    )
+                except asyncio.TimeoutError:
+                    raise asyncio.TimeoutError(
+                        f"Ingest stalled — no progress for {INGEST_PROGRESS_STALL_TIMEOUT}s"
+                    )
+
                 if update is None:
                     break
 
@@ -1439,8 +1466,12 @@ async def call_modal_ingest(
                 break
 
     total_elapsed = time.time() - job_start_time
-    logger.error(f"[Modal] Ingest failed: {last_error}", exc_info=True)
-    return {"status": "error", "error": _translate_modal_error(last_error)}
+    logger.error(f"[Modal] Ingest failed after {MODAL_JOB_RETRY_ATTEMPTS} attempts ({total_elapsed:.0f}s): {last_error}", exc_info=True)
+    return {
+        "status": "error",
+        "error": "Import failed after multiple attempts. The video server may be slow right now — please try again later, or upload the file directly.",
+        "error_code": "INGEST_EXHAUSTED",
+    }
 
 
 # Test function

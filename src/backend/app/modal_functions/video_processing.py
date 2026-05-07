@@ -2901,7 +2901,7 @@ ingest_image = (
     image=ingest_image,
     cpu=2,
     memory=8192,
-    timeout=3600,
+    timeout=600,
     secrets=[modal.Secret.from_name("r2-credentials")],
 )
 def ingest_video_to_r2(
