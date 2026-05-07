@@ -65,7 +65,14 @@ Poll `GET /api/games/imports/{import_id}/progress` every 2s during download.
 - Invalid URL → inline validation error below input
 - Private/deleted game → "This game may be private. Make sure it's set to Public on [Veo/Trace]."
 - Insufficient credits → same credit gate as file upload
-- Download failed → "Import failed. Please try again or upload the file directly."
+- Download failed (single attempt) → "Import failed. Please try again or upload the file directly."
+- **Import exhausted (all retries failed)** → Backend returns `error_code: "INGEST_EXHAUSTED"`. Show a distinct error state:
+  - Header: "Import unavailable right now"
+  - Body: "We tried to import this video 3 times but the video server is responding too slowly. This usually resolves on its own."
+  - Primary action: "Try Again Later" (dismisses modal)
+  - Secondary action: "Upload File Instead" (switches to Upload File tab with the same game details pre-filled)
+  - Do NOT auto-retry from the UI — the backend already exhausted 3 attempts with backoff
+- **Import timeout (single attempt, retrying)** → Progress bar shows "Retrying... attempt 2/3" (already sent via progress callback from backend). Keep the modal open, don't show an error yet — only show error after all attempts are exhausted.
 
 ### gameDetails Object Extension
 

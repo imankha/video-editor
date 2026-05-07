@@ -24,6 +24,7 @@ from app.services.trace_import import (
     TRACE_URL_PATTERN,
 )
 from app.services.modal_client import call_modal_ingest
+from app.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,22 @@ def get_import_progress(import_id: str) -> Optional[dict]:
     return _imports.get(import_id)
 
 
+async def _broadcast_status(import_id: str, progress: dict):
+    """Broadcast import progress to all connected WebSocket clients."""
+    await manager.send_progress(import_id, {
+        "import_id": progress["import_id"],
+        "status": progress["status"],
+        "platform": progress["platform"],
+        "progress_pct": progress["progress_pct"],
+        "downloaded_bytes": progress["downloaded_bytes"],
+        "total_bytes": progress["total_bytes"],
+        "error": progress.get("error"),
+        "error_code": progress.get("error_code"),
+        "game_id": progress.get("game_id"),
+        "message": progress.get("message", ""),
+    })
+
+
 def start_import(
     url: str,
     user_id: str,
@@ -94,7 +111,9 @@ def start_import(
         "downloaded_bytes": 0,
         "total_bytes": 0,
         "error": None,
+        "error_code": None,
         "game_id": None,
+        "message": "",
     }
     _user_locks[user_id] = import_id
 
@@ -142,6 +161,7 @@ async def _run_import(
         logger.error(f"[game_import] Import {import_id} failed: {e}")
         progress["status"] = ImportStatus.ERROR
         progress["error"] = str(e)
+        await _broadcast_status(import_id, progress)
     finally:
         _user_locks.pop(user_id, None)
 
@@ -159,6 +179,7 @@ async def _import_veo(
 
     # 1. Resolve
     progress["status"] = ImportStatus.RESOLVING
+    await _broadcast_status(import_id, progress)
     info = await resolve_veo_download_url(url)
     progress["total_bytes"] = info.file_size
 
@@ -167,13 +188,18 @@ async def _import_veo(
 
     # 2. Check credits
     progress["status"] = ImportStatus.CHECKING_CREDITS
+    await _broadcast_status(import_id, progress)
     await asyncio.to_thread(_check_and_deduct_credits, user_id, info.file_size, import_id)
 
     # 3. Download + hash + upload via Modal (or local fallback)
     progress["status"] = ImportStatus.DOWNLOADING
+    await _broadcast_status(import_id, progress)
 
     async def _progress_cb(pct, msg, phase):
         progress["progress_pct"] = int(pct * 0.9)  # Scale to 0-90
+        if msg:
+            progress["message"] = msg
+        await _broadcast_status(import_id, progress)
 
     result = await call_modal_ingest(
         source_url=info.download_url,
@@ -182,15 +208,21 @@ async def _import_veo(
     )
 
     if result.get("status") != "success":
-        raise VeoImportError(f"Ingest failed: {result.get('error', 'unknown')}")
+        progress["status"] = ImportStatus.ERROR
+        progress["error"] = result.get("error", "Ingest failed")
+        progress["error_code"] = result.get("error_code")
+        await _broadcast_status(import_id, progress)
+        return
 
     blake3_hash = result["blake3_hash"]
     file_size = result["file_size"]
     progress["downloaded_bytes"] = file_size
     progress["progress_pct"] = 90
+    progress["message"] = ""
 
     # 4. Create game
     progress["status"] = ImportStatus.CREATING_GAME
+    await _broadcast_status(import_id, progress)
     game_id = await asyncio.to_thread(
         _create_game_record,
         user_id=user_id,
@@ -204,6 +236,7 @@ async def _import_veo(
     progress["status"] = ImportStatus.COMPLETE
     progress["progress_pct"] = 100
     progress["game_id"] = game_id
+    await _broadcast_status(import_id, progress)
     logger.info(f"[game_import] Veo import complete: game_id={game_id}")
 
 
@@ -220,6 +253,7 @@ async def _import_trace(
 
     # 1. Resolve
     progress["status"] = ImportStatus.RESOLVING
+    await _broadcast_status(import_id, progress)
     info = await resolve_trace_videos(url)
 
     if not opponent_name:
@@ -235,10 +269,12 @@ async def _import_trace(
     progress["total_bytes"] = estimated_size
 
     progress["status"] = ImportStatus.CHECKING_CREDITS
+    await _broadcast_status(import_id, progress)
     await asyncio.to_thread(_check_and_deduct_credits, user_id, estimated_size, import_id)
 
     # 3. Remux + upload halves via Modal (parallel)
     progress["status"] = ImportStatus.DOWNLOADING
+    await _broadcast_status(import_id, progress)
 
     async def _process_half(video) -> tuple[str, int, int]:
         variant_url = await resolve_best_variant(video.m3u8_url)
@@ -249,6 +285,8 @@ async def _import_trace(
         )
 
         if result.get("status") != "success":
+            if result.get("error_code"):
+                progress["error_code"] = result["error_code"]
             raise TraceImportError(
                 f"Ingest failed for half {video.half}: {result.get('error', 'unknown')}"
             )
@@ -265,6 +303,7 @@ async def _import_trace(
 
     # 4. Create game
     progress["status"] = ImportStatus.CREATING_GAME
+    await _broadcast_status(import_id, progress)
     game_id = await asyncio.to_thread(
         _create_game_record,
         user_id=user_id,
@@ -278,6 +317,7 @@ async def _import_trace(
     progress["status"] = ImportStatus.COMPLETE
     progress["progress_pct"] = 100
     progress["game_id"] = game_id
+    await _broadcast_status(import_id, progress)
     logger.info(f"[game_import] Trace import complete: game_id={game_id}, halves={len(video_refs)}")
 
 
@@ -361,5 +401,3 @@ def _create_game_record(
 
     logger.info(f"[game_import] Created game {game_id}: {display_name}")
     return game_id
-
-
