@@ -225,6 +225,16 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     }
   }, [importState?.status, importState?.game_id, onCreateGame]);
 
+  // Toast on import error
+  useEffect(() => {
+    if (importState?.status === 'error') {
+      const msg = importState.credits_refunded > 0
+        ? `Import failed: ${importState.error}. ${importState.credits_refunded} credits refunded.`
+        : `Import failed: ${importState.error || 'Please try again.'}`;
+      toast.error(msg);
+    }
+  }, [importState?.status]);
+
   const filteredTournaments = existingTournaments.filter(t =>
     t.toLowerCase().includes(tournamentName.toLowerCase())
   );
