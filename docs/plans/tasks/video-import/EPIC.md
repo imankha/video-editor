@@ -74,12 +74,14 @@ Both platforms return game metadata we can use to pre-fill the Add Game form:
 | T2600 | [Veo Import POC](T2600-veo-import-poc.md) | TODO |
 | T2610 | [Trace Import POC](T2610-trace-import-poc.md) | TODO |
 | T2620 | [Import Backend Service](T2620-import-backend-service.md) | TODO |
+| T2625 | [Modal Video Ingest](T2625-modal-video-ingest.md) | TODO |
 | T2630 | [Add Game Import UI](T2630-add-game-import-ui.md) | TODO |
 
 **Sequencing rationale:**
 - T2600 + T2610 run in parallel — independent POC tests proving server-to-server works for each platform. Must pass before any production code.
 - T2620 builds the real backend service after POCs prove the concept. Unified endpoint handling both platforms with progress tracking.
-- T2630 is the UI — only starts after T2620 is complete. Adds "Paste Link" option to GameDetailsModal with per-platform help content.
+- T2625 moves heavy I/O (ffmpeg, blake3, R2 upload) off Fly.io to Modal. Must complete before UI — staging testing proved Fly.io can't handle multi-GB ffmpeg/hash workloads.
+- T2630 is the UI — only starts after T2625 is complete. Adds "Paste Link" option to GameDetailsModal with per-platform help content.
 
 ## Completion Criteria
 
