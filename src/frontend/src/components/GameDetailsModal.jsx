@@ -56,22 +56,28 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   // Import state
   const [videoSource, setVideoSource] = useState('link');
   const [importUrl, setImportUrl] = useState('');
+  const [importUrls, setImportUrls] = useState(['', '']);
   const [importState, setImportState] = useState(null);
   const [importError, setImportError] = useState('');
   const [showHelp, setShowHelp] = useState(true);
   const [helpTab, setHelpTab] = useState('veo');
   const navigatedRef = useRef(false);
 
+  const isPerHalfLink = videoSource === 'link' && videoMode === VideoMode.PER_HALF;
+
   const detectedPlatform = useMemo(() => {
+    if (isPerHalfLink) {
+      const first = importUrls[0]?.trim();
+      if (!first) return null;
+      return detectPlatform(first);
+    }
     if (!importUrl.trim()) return null;
     return detectPlatform(importUrl);
-  }, [importUrl]);
+  }, [importUrl, importUrls, isPerHalfLink]);
 
-  // Auto-set videoMode when platform detected
+  // Auto-set videoMode when Trace detected (Trace always handles halves)
   useEffect(() => {
-    if (detectedPlatform === 'veo') {
-      setVideoMode(VideoMode.PER_GAME);
-    } else if (detectedPlatform === 'trace') {
+    if (detectedPlatform === 'trace') {
       setVideoMode(VideoMode.PER_HALF);
     }
   }, [detectedPlatform]);
@@ -293,7 +299,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   }, [isSubmitting, getVideoFile]);
 
   const hasVideo = videoSource === 'link'
-    ? importUrl.trim().length > 0
+    ? (isPerHalfLink
+        ? importUrls[0].trim().length > 0 && importUrls[1].trim().length > 0
+        : importUrl.trim().length > 0)
     : (videoMode === VideoMode.PER_GAME ? selectedFile : (halfFiles[0] && halfFiles[1]));
   const isValid = opponentName.trim() && gameDate && hasVideo;
 
@@ -318,6 +326,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setVideoMode(VideoMode.PER_GAME);
     setHalfFiles([null, null]);
     setImportUrl('');
+    setImportUrls(['', '']);
     setImportState(null);
     setImportError('');
     setVideoSource('link');
@@ -328,16 +337,21 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setIsSubmitting(true);
     try {
       if (videoSource === 'link') {
+        const payload = {
+          opponent_name: opponentName.trim(),
+          game_date: gameDate,
+          game_type: gameType,
+        };
+        if (isPerHalfLink) {
+          payload.urls = importUrls.map(u => u.trim());
+        } else {
+          payload.url = importUrl.trim();
+        }
         const res = await fetch(`${API_BASE}/api/games/import-url`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({
-            url: importUrl.trim(),
-            opponent_name: opponentName.trim(),
-            game_date: gameDate,
-            game_type: gameType,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!res.ok) {
@@ -376,7 +390,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     } finally {
       setIsSubmitting(false);
     }
-  }, [videoSource, importUrl, opponentName, gameDate, gameType, tournamentName, selectedFile, videoMode, halfFiles, onCreateGame, onClose, resetForm]);
+  }, [videoSource, importUrl, importUrls, isPerHalfLink, opponentName, gameDate, gameType, tournamentName, selectedFile, videoMode, halfFiles, onCreateGame, onClose, resetForm]);
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
@@ -656,8 +670,8 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               </div>
             )}
 
-            {/* Video Format - hidden when link mode with detected platform */}
-            {!(videoSource === 'link' && detectedPlatform) && (
+            {/* Video Format - hidden when Trace detected (halves resolved automatically) */}
+            {!(videoSource === 'link' && detectedPlatform === 'trace') && (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1.5">
                   Video Format *
@@ -724,38 +738,91 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               {videoSource === 'link' ? (
                 /* Paste Link UI */
                 <div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={importUrl}
-                      onChange={(e) => { setImportUrl(e.target.value); setImportError(''); }}
-                      placeholder="Paste a Veo or Trace game link"
-                      className={`w-full px-3 py-2 pr-8 bg-gray-900 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 ${
-                        importError
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
-                          : detectedPlatform
-                            ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
-                            : 'border-gray-600 focus:border-green-500 focus:ring-green-500'
-                      }`}
-                      disabled={isSubmitting}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowHelp(!showHelp)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                    >
-                      <HelpCircle size={16} />
-                    </button>
-                  </div>
+                  {isPerHalfLink ? (
+                    /* Per-half: two URL inputs */
+                    <div className="space-y-2">
+                      {['1st Half', '2nd Half'].map((label, index) => {
+                        const val = importUrls[index] || '';
+                        const plat = val.trim() ? detectPlatform(val) : null;
+                        return (
+                          <div key={label}>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={(e) => {
+                                  setImportUrls(prev => {
+                                    const updated = [...prev];
+                                    updated[index] = e.target.value;
+                                    return updated;
+                                  });
+                                  setImportError('');
+                                }}
+                                placeholder={`${label} — paste Veo link`}
+                                className={`w-full px-3 py-2 pr-8 bg-gray-900 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 ${
+                                  importError
+                                    ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                                    : plat
+                                      ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+                                      : 'border-gray-600 focus:border-green-500 focus:ring-green-500'
+                                }`}
+                                disabled={isSubmitting}
+                              />
+                              {index === 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowHelp(!showHelp)}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                                >
+                                  <HelpCircle size={16} />
+                                </button>
+                              )}
+                            </div>
+                            {plat && (
+                              <p className="mt-1 text-xs text-green-400 flex items-center gap-1">
+                                <CheckCircle size={12} />
+                                {plat === 'veo' ? 'Veo match detected' : 'Trace game detected'}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    /* Single URL input */
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={importUrl}
+                        onChange={(e) => { setImportUrl(e.target.value); setImportError(''); }}
+                        placeholder="Paste a Veo or Trace game link"
+                        className={`w-full px-3 py-2 pr-8 bg-gray-900 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-1 ${
+                          importError
+                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                            : detectedPlatform
+                              ? 'border-green-500 focus:border-green-500 focus:ring-green-500'
+                              : 'border-gray-600 focus:border-green-500 focus:ring-green-500'
+                        }`}
+                        disabled={isSubmitting}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowHelp(!showHelp)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                      >
+                        <HelpCircle size={16} />
+                      </button>
+                    </div>
+                  )}
 
-                  {/* Platform detection badge */}
-                  {detectedPlatform && (
+                  {/* Platform detection badge (single URL mode only) */}
+                  {!isPerHalfLink && detectedPlatform && (
                     <p className="mt-1.5 text-xs text-green-400 flex items-center gap-1">
                       <CheckCircle size={12} />
                       {detectedPlatform === 'veo' ? 'Veo match detected' : 'Trace game detected'}
                     </p>
                   )}
-                  {!detectedPlatform && importUrl.trim() && !importError && (
+                  {!isPerHalfLink && !detectedPlatform && importUrl.trim() && !importError && (
                     <p className="mt-1.5 text-xs text-gray-500">Supports Veo and Trace links</p>
                   )}
 

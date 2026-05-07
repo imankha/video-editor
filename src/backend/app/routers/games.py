@@ -641,7 +641,8 @@ async def activate_game(game_id: int):
 
 
 class ImportUrlRequest(BaseModel):
-    url: str = Field(..., description="Veo or Trace game URL")
+    url: Optional[str] = Field(None, description="Single Veo or Trace game URL")
+    urls: Optional[list[str]] = Field(None, description="Per-half Veo URLs [first_half, second_half]")
     opponent_name: Optional[str] = None
     game_date: Optional[str] = None
     game_type: Optional[str] = None
@@ -649,17 +650,22 @@ class ImportUrlRequest(BaseModel):
 
 @router.post("/import-url", status_code=202)
 async def import_from_url(request: ImportUrlRequest):
-    """Import a game from a Veo or Trace URL.
+    """Import a game from Veo or Trace URL(s).
 
-    Detects the platform, validates the URL, and starts a background
-    download. Returns immediately with an import_id for progress polling.
+    Accepts either a single `url` or a `urls` list (for per-half Veo imports).
+    Detects the platform, validates, and starts a background download.
+    Returns immediately with an import_id for progress polling.
     """
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
+    urls = request.urls or ([request.url] if request.url else [])
+    if not urls:
+        raise HTTPException(status_code=400, detail="No URL provided")
+
     try:
         result = start_import(
-            url=request.url,
+            urls=urls,
             user_id=user_id,
             profile_id=profile_id,
             opponent_name=request.opponent_name,

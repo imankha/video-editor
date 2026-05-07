@@ -82,15 +82,18 @@ async def _broadcast_status(import_id: str, progress: dict):
 
 
 def start_import(
-    url: str,
+    urls: list[str],
     user_id: str,
     profile_id: str,
     opponent_name: Optional[str] = None,
     game_date: Optional[str] = None,
     game_type: Optional[str] = None,
 ) -> dict:
-    """Validate URL and start background import. Returns immediately."""
-    platform = detect_platform(url)
+    """Validate URL(s) and start background import. Returns immediately."""
+    platform = detect_platform(urls[0])
+    for u in urls[1:]:
+        if detect_platform(u) != platform:
+            raise ValueError("All URLs must be from the same platform.")
 
     # Enforce one import per user
     existing = _user_locks.get(user_id)
@@ -120,7 +123,7 @@ def start_import(
     asyncio.create_task(
         _run_import(
             import_id=import_id,
-            url=url,
+            urls=urls,
             platform=platform,
             user_id=user_id,
             profile_id=profile_id,
@@ -135,7 +138,7 @@ def start_import(
 
 async def _run_import(
     import_id: str,
-    url: str,
+    urls: list[str],
     platform: Platform,
     user_id: str,
     profile_id: str,
@@ -149,12 +152,12 @@ async def _run_import(
     try:
         if platform == Platform.VEO:
             await _import_veo(
-                import_id, url, user_id, profile_id,
+                import_id, urls, user_id, profile_id,
                 opponent_name, game_date, game_type,
             )
         else:
             await _import_trace(
-                import_id, url, user_id, profile_id,
+                import_id, urls[0], user_id, profile_id,
                 opponent_name, game_date, game_type,
             )
     except (VeoImportError, TraceImportError, Exception) as e:
@@ -168,7 +171,7 @@ async def _run_import(
 
 async def _import_veo(
     import_id: str,
-    url: str,
+    urls: list[str],
     user_id: str,
     profile_id: str,
     opponent_name: Optional[str],
@@ -176,47 +179,68 @@ async def _import_veo(
     game_type: Optional[str],
 ):
     progress = _imports[import_id]
+    is_per_half = len(urls) > 1
 
-    # 1. Resolve
+    # 1. Resolve all URLs
     progress["status"] = ImportStatus.RESOLVING
     await _broadcast_status(import_id, progress)
-    info = await resolve_veo_download_url(url)
-    progress["total_bytes"] = info.file_size
+    infos = await asyncio.gather(*[resolve_veo_download_url(u) for u in urls])
+    total_size = sum(i.file_size for i in infos)
+    progress["total_bytes"] = total_size
 
-    if not opponent_name and info.title:
-        opponent_name = info.title
+    if not opponent_name and infos[0].title:
+        opponent_name = infos[0].title
 
     # 2. Check credits
     progress["status"] = ImportStatus.CHECKING_CREDITS
     await _broadcast_status(import_id, progress)
-    await asyncio.to_thread(_check_and_deduct_credits, user_id, info.file_size, import_id)
+    await asyncio.to_thread(_check_and_deduct_credits, user_id, total_size, import_id)
 
-    # 3. Download + hash + upload via Modal (or local fallback)
+    # 3. Download + hash + upload via Modal
     progress["status"] = ImportStatus.DOWNLOADING
     await _broadcast_status(import_id, progress)
 
-    async def _progress_cb(pct, msg, phase):
-        progress["progress_pct"] = int(pct * 0.9)  # Scale to 0-90
-        if msg:
-            progress["message"] = msg
-        await _broadcast_status(import_id, progress)
+    if is_per_half:
+        async def _ingest_half(info, sequence) -> tuple[str, int, int]:
+            result = await call_modal_ingest(
+                source_url=info.download_url,
+                source_type="direct",
+            )
+            if result.get("status") != "success":
+                if result.get("error_code"):
+                    progress["error_code"] = result["error_code"]
+                raise VeoImportError(
+                    f"Ingest failed for half {sequence}: {result.get('error', 'unknown')}"
+                )
+            return (result["blake3_hash"], result["file_size"], sequence)
 
-    result = await call_modal_ingest(
-        source_url=info.download_url,
-        source_type="direct",
-        progress_callback=_progress_cb,
-    )
+        video_refs = list(await asyncio.gather(
+            *[_ingest_half(info, seq + 1) for seq, info in enumerate(infos)]
+        ))
+        video_refs.sort(key=lambda x: x[2])
+    else:
+        async def _progress_cb(pct, msg, phase):
+            progress["progress_pct"] = int(pct * 0.9)
+            if msg:
+                progress["message"] = msg
+            await _broadcast_status(import_id, progress)
 
-    if result.get("status") != "success":
-        progress["status"] = ImportStatus.ERROR
-        progress["error"] = result.get("error", "Ingest failed")
-        progress["error_code"] = result.get("error_code")
-        await _broadcast_status(import_id, progress)
-        return
+        result = await call_modal_ingest(
+            source_url=infos[0].download_url,
+            source_type="direct",
+            progress_callback=_progress_cb,
+        )
 
-    blake3_hash = result["blake3_hash"]
-    file_size = result["file_size"]
-    progress["downloaded_bytes"] = file_size
+        if result.get("status") != "success":
+            progress["status"] = ImportStatus.ERROR
+            progress["error"] = result.get("error", "Ingest failed")
+            progress["error_code"] = result.get("error_code")
+            await _broadcast_status(import_id, progress)
+            return
+
+        video_refs = [(result["blake3_hash"], result["file_size"], 1)]
+
+    progress["downloaded_bytes"] = sum(v[1] for v in video_refs)
     progress["progress_pct"] = 90
     progress["message"] = ""
 
@@ -230,14 +254,14 @@ async def _import_veo(
         opponent_name=opponent_name,
         game_date=game_date,
         game_type=game_type,
-        videos=[(blake3_hash, file_size, 1)],
+        videos=video_refs,
     )
 
     progress["status"] = ImportStatus.COMPLETE
     progress["progress_pct"] = 100
     progress["game_id"] = game_id
     await _broadcast_status(import_id, progress)
-    logger.info(f"[game_import] Veo import complete: game_id={game_id}")
+    logger.info(f"[game_import] Veo import complete: game_id={game_id}, halves={len(video_refs)}")
 
 
 async def _import_trace(
