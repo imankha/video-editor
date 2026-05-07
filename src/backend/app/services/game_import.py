@@ -179,7 +179,7 @@ async def _import_veo(
 
     # 2. Check credits
     progress["status"] = ImportStatus.CHECKING_CREDITS
-    _check_and_deduct_credits(user_id, info.file_size, import_id)
+    await asyncio.to_thread(_check_and_deduct_credits, user_id, info.file_size, import_id)
 
     # 3. Stream to R2 (temp key, since we don't know hash yet)
     progress["status"] = ImportStatus.DOWNLOADING
@@ -196,19 +196,20 @@ async def _import_veo(
     final_full_key = r2_global_key(final_r2_key)
     temp_full_key = r2_global_key(temp_r2_key)
 
-    existing = r2_head_object_global(final_full_key)
+    existing = await asyncio.to_thread(r2_head_object_global, final_full_key)
     if existing:
         logger.info(f"[game_import] Dedup hit: {blake3_hash} already in R2")
-        r2_delete_object_global(temp_full_key)
+        await asyncio.to_thread(r2_delete_object_global, temp_full_key)
     else:
-        _r2_copy_and_delete(temp_full_key, final_full_key)
+        await asyncio.to_thread(_r2_copy_and_delete, temp_full_key, final_full_key)
 
     progress["downloaded_bytes"] = info.file_size
     progress["progress_pct"] = 90
 
     # 5. Create game
     progress["status"] = ImportStatus.CREATING_GAME
-    game_id = _create_game_record(
+    game_id = await asyncio.to_thread(
+        _create_game_record,
         user_id=user_id,
         profile_id=profile_id,
         opponent_name=opponent_name,
@@ -252,7 +253,7 @@ async def _import_trace(
     progress["total_bytes"] = estimated_size
 
     progress["status"] = ImportStatus.CHECKING_CREDITS
-    _check_and_deduct_credits(user_id, estimated_size, import_id)
+    await asyncio.to_thread(_check_and_deduct_credits, user_id, estimated_size, import_id)
 
     # 3. Remux + upload halves in parallel
     progress["status"] = ImportStatus.DOWNLOADING
@@ -278,12 +279,12 @@ async def _import_trace(
             final_full_key = r2_global_key(final_r2_key)
             temp_full_key = r2_global_key(f"games/_import_{import_id}_h{video.half}.mp4")
 
-            existing = r2_head_object_global(final_full_key)
+            existing = await asyncio.to_thread(r2_head_object_global, final_full_key)
             if existing:
                 logger.info(f"[game_import] Dedup hit half {video.half}: {blake3_hash}")
-                r2_delete_object_global(temp_full_key)
+                await asyncio.to_thread(r2_delete_object_global, temp_full_key)
             else:
-                _r2_copy_and_delete(temp_full_key, final_full_key)
+                await asyncio.to_thread(_r2_copy_and_delete, temp_full_key, final_full_key)
 
             return (blake3_hash, file_size, video.half)
 
@@ -297,7 +298,8 @@ async def _import_trace(
 
     # 4. Create game
     progress["status"] = ImportStatus.CREATING_GAME
-    game_id = _create_game_record(
+    game_id = await asyncio.to_thread(
+        _create_game_record,
         user_id=user_id,
         profile_id=profile_id,
         opponent_name=opponent_name,
