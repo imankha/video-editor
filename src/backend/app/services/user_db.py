@@ -278,8 +278,9 @@ def refund_credits(
     amount: int,
     reference_id: str,
     video_seconds: Optional[float] = None,
+    source: str = "framing_refund",
 ) -> int:
-    """Refund credits for a failed export. Returns new balance."""
+    """Refund credits for a failed operation. Returns new balance."""
     with get_user_db_connection(user_id) as conn:
         # Ensure credits row exists
         conn.execute(
@@ -292,8 +293,8 @@ def refund_credits(
         )
         conn.execute(
             """INSERT INTO credit_transactions (user_id, amount, source, reference_id, video_seconds)
-               VALUES (?, ?, 'framing_refund', ?, ?)""",
-            (user_id, amount, reference_id, video_seconds),
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, amount, source, reference_id, video_seconds),
         )
         conn.commit()
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()

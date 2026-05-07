@@ -75,13 +75,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     return detectPlatform(importUrl);
   }, [importUrl, importUrls, isPerHalfLink]);
 
-  // Auto-set videoMode when Trace detected (Trace always handles halves)
-  useEffect(() => {
-    if (detectedPlatform === 'trace') {
-      setVideoMode(VideoMode.PER_HALF);
-    }
-  }, [detectedPlatform]);
-
   // Fetch existing tournaments when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -138,11 +131,25 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       return `${proto}//${window.location.host}/ws/import/${importId}`;
     }
 
+    let notFoundCount = 0;
     function startPolling() {
       pollInterval = setInterval(async () => {
         try {
           const res = await fetch(`${API_BASE}/api/games/imports/${importId}/progress`, { credentials: 'include' });
+          if (res.status === 404) {
+            notFoundCount++;
+            if (notFoundCount >= 3 && !closed) {
+              setImportState(prev => ({
+                ...prev,
+                status: 'error',
+                error: 'Import lost — the server may have restarted. Please try again.',
+              }));
+              clearInterval(pollInterval);
+            }
+            return;
+          }
           if (!res.ok) return;
+          notFoundCount = 0;
           const data = await res.json();
           if (!closed) setImportState(data);
           if (data.status === 'complete' || data.status === 'error') {
@@ -512,12 +519,17 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                 <Loader2 size={32} className="mx-auto mb-3 text-green-400 animate-spin" />
                 <h3 className="text-white font-medium mb-1">
                   {importState.status === 'downloading'
-                    ? `Downloading from ${importState.platform === 'veo' ? 'Veo' : 'Trace'}...`
+                    ? `Importing from ${importState.platform === 'veo' ? 'Veo' : 'Trace'}...`
                     : IMPORT_STATUS_MESSAGES[importState.status] || 'Processing...'}
                 </h3>
                 {importState.status === 'downloading' && (
                   <>
-                    <div className="mt-4 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    {importState.message && (
+                      <p className={`text-sm mb-2 ${importState.message.includes('Retrying') ? 'text-yellow-400' : 'text-gray-400'}`}>
+                        {importState.message}
+                      </p>
+                    )}
+                    <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-green-500 transition-all duration-500"
                         style={{ width: `${importState.progress_pct || 0}%` }}
@@ -532,9 +544,6 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                       <span>{importState.progress_pct || 0}%</span>
                     </div>
                   </>
-                )}
-                {importState.message && importState.message.includes('Retrying') && (
-                  <p className="text-yellow-400 text-sm mt-2">{importState.message}</p>
                 )}
               </div>
             )}

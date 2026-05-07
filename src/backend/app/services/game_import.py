@@ -164,6 +164,16 @@ async def _run_import(
         logger.error(f"[game_import] Import {import_id} failed: {e}")
         progress["status"] = ImportStatus.ERROR
         progress["error"] = str(e)
+
+        credits_charged = progress.get("_credits_charged", 0)
+        if credits_charged > 0:
+            try:
+                from app.services.user_db import refund_credits
+                refund_credits(user_id, credits_charged, reference_id=import_id, source="import_refund")
+                logger.info(f"[game_import] Refunded {credits_charged} credits for failed import {import_id}")
+            except Exception as refund_err:
+                logger.error(f"[game_import] Failed to refund {credits_charged} credits: {refund_err}")
+
         await _broadcast_status(import_id, progress)
     finally:
         _user_locks.pop(user_id, None)
@@ -198,7 +208,9 @@ async def _import_veo(
 
     # 3. Download + hash + upload via Modal
     progress["status"] = ImportStatus.DOWNLOADING
+    progress["message"] = "Connecting to processing server..."
     await _broadcast_status(import_id, progress)
+    logger.info(f"[game_import] Starting download via call_modal_ingest for {import_id}")
 
     if is_per_half:
         async def _ingest_half(info, sequence) -> tuple[str, int, int]:
@@ -298,14 +310,27 @@ async def _import_trace(
 
     # 3. Remux + upload halves via Modal (parallel)
     progress["status"] = ImportStatus.DOWNLOADING
+    progress["message"] = "Connecting to processing server..."
     await _broadcast_status(import_id, progress)
+
+    num_halves = len(info.videos)
+    half_progress = {v.half: 0 for v in info.videos}
 
     async def _process_half(video) -> tuple[str, int, int]:
         variant_url = await resolve_best_variant(video.m3u8_url)
 
+        async def _progress_cb(pct, msg, phase):
+            half_progress[video.half] = max(0, min(pct, 100))
+            combined = sum(half_progress.values()) / num_halves
+            progress["progress_pct"] = int(combined * 0.9)
+            if msg:
+                progress["message"] = f"Half {video.half}: {msg}" if num_halves > 1 else msg
+            await _broadcast_status(import_id, progress)
+
         result = await call_modal_ingest(
             source_url=variant_url,
             source_type="hls",
+            progress_callback=_progress_cb,
         )
 
         if result.get("status") != "success":
@@ -357,6 +382,7 @@ def _check_and_deduct_credits(user_id: str, total_bytes: int, import_id: str):
             f"Insufficient credits. Required: {cost}, balance: {result['balance']}"
         )
 
+    _imports[import_id]["_credits_charged"] = cost
     logger.info(f"[game_import] Deducted {cost} credits for import {import_id}")
 
 
@@ -370,7 +396,9 @@ def _create_game_record(
 ) -> int:
     """Create game + game_videos rows, activate immediately (video already in R2)."""
     from app.database import get_db_connection
-    from app.routers.games import generate_game_display_name, _probe_fps_from_r2
+    from app.routers.games import generate_game_display_name
+    from app.services.video_probe import probe_r2_video
+    from app.storage import get_r2_client, R2_BUCKET
     from app.services.storage_credits import storage_expires_at
     from app.services.auth_db import insert_game_storage_ref
 
@@ -403,17 +431,26 @@ def _create_game_record(
         ))
         game_id = cursor.lastrowid
 
+        r2_client = get_r2_client()
         for blake3_hash, file_size, sequence in videos:
-            fps = _probe_fps_from_r2(blake3_hash)
-            cursor.execute("""
-                INSERT INTO game_videos (game_id, blake3_hash, sequence, video_size, fps)
-                VALUES (?, ?, ?, ?, ?)
-            """, (game_id, blake3_hash, sequence, file_size, fps))
+            meta = None
+            if r2_client:
+                meta = probe_r2_video(r2_client, R2_BUCKET, f"games/{blake3_hash}.mp4")
+            fps = meta.get("fps") if meta else None
+            duration = meta.get("duration") if meta else None
+            width = meta.get("width") if meta else None
+            height = meta.get("height") if meta else None
 
-            if fps and sequence == 1:
+            cursor.execute("""
+                INSERT INTO game_videos (game_id, blake3_hash, sequence, video_size, fps,
+                                         duration, video_width, video_height)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (game_id, blake3_hash, sequence, file_size, fps, duration, width, height))
+
+            if sequence == 1 and (fps or duration):
                 cursor.execute(
-                    "UPDATE games SET video_fps = ? WHERE id = ?",
-                    (fps, game_id)
+                    "UPDATE games SET video_fps = COALESCE(?, video_fps), video_duration = COALESCE(?, video_duration) WHERE id = ?",
+                    (fps, duration, game_id)
                 )
 
         conn.commit()

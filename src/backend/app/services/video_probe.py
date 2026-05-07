@@ -72,7 +72,7 @@ def probe_r2_video(s3_client, bucket: str, key: str) -> Optional[dict]:
                 "-analyzeduration", "500000",
                 "-probesize", "5000000",
                 "-select_streams", "v:0",
-                "-show_entries", "stream=r_frame_rate,width,height",
+                "-show_entries", "stream=r_frame_rate,width,height:format=duration",
                 "-of", "json",
                 url,
             ],
@@ -89,10 +89,13 @@ def probe_r2_video(s3_client, bucket: str, key: str) -> Optional[dict]:
         fps_str = stream.get("r_frame_rate", "30/1")
         num, _, den = fps_str.partition("/")
         fps = float(num) / float(den) if den else float(num)
+        fmt = parsed.get("format") or {}
+        duration = float(fmt["duration"]) if fmt.get("duration") else None
         return {
             "width": int(stream["width"]),
             "height": int(stream["height"]),
             "fps": fps,
+            "duration": duration,
         }
     except Exception as e:
         logger.warning(f"[video_probe] probe_r2_video failed for {key}: {e}")

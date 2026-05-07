@@ -5,6 +5,7 @@ Resolves a Veo match URL to a direct CDN download URL, then streams the
 MP4 to R2 via multipart upload while computing the blake3 hash on-the-fly.
 """
 
+import asyncio
 import re
 import logging
 from dataclasses import dataclass
@@ -218,7 +219,9 @@ async def stream_to_r2(
                         part_data = bytes(buffer[:PART_SIZE])
                         buffer = bytearray(buffer[PART_SIZE:])
 
-                        etag = _upload_part(client, full_key, upload_id, part_number, part_data)
+                        etag = await asyncio.to_thread(
+                            _upload_part, client, full_key, upload_id, part_number, part_data
+                        )
                         parts.append({"PartNumber": part_number, "ETag": etag})
                         part_number += 1
 
@@ -230,11 +233,15 @@ async def stream_to_r2(
 
         # Upload remaining buffer as final part
         if buffer:
-            etag = _upload_part(client, full_key, upload_id, part_number, bytes(buffer))
+            etag = await asyncio.to_thread(
+                _upload_part, client, full_key, upload_id, part_number, bytes(buffer)
+            )
             parts.append({"PartNumber": part_number, "ETag": etag})
 
         # Complete multipart upload
-        success = r2_complete_multipart_upload(full_key, upload_id, parts)
+        success = await asyncio.to_thread(
+            r2_complete_multipart_upload, full_key, upload_id, parts
+        )
         if not success:
             raise VeoImportError("Failed to complete multipart upload")
 
@@ -246,10 +253,10 @@ async def stream_to_r2(
         return blake3_hash
 
     except VeoImportError:
-        r2_abort_multipart_upload(full_key, upload_id)
+        await asyncio.to_thread(r2_abort_multipart_upload, full_key, upload_id)
         raise
     except Exception as e:
-        r2_abort_multipart_upload(full_key, upload_id)
+        await asyncio.to_thread(r2_abort_multipart_upload, full_key, upload_id)
         raise VeoImportError(f"Stream to R2 failed: {e}") from e
 
 
