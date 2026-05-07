@@ -59,7 +59,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [importUrls, setImportUrls] = useState(['', '']);
   const [importState, setImportState] = useState(null);
   const [importError, setImportError] = useState('');
-  const [showHelp, setShowHelp] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
   const [helpTab, setHelpTab] = useState('veo');
   const navigatedRef = useRef(false);
 
@@ -330,7 +330,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     setImportState(null);
     setImportError('');
     setVideoSource('link');
-    setShowHelp(true);
+    setShowHelp(false);
   }, []);
 
   const submitGame = useCallback(async () => {
@@ -709,7 +709,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
               <div className="flex gap-2 mb-3">
                 <button
                   type="button"
-                  onClick={() => { setVideoSource('link'); setShowHelp(true); }}
+                  onClick={() => { setVideoSource('link'); setShowHelp(false); }}
                   disabled={isSubmitting}
                   className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1.5 ${
                     videoSource === 'link'
@@ -772,9 +772,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                                 <button
                                   type="button"
                                   onClick={() => setShowHelp(!showHelp)}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-gray-700 text-green-400 hover:bg-gray-600 hover:text-green-300 transition-colors"
                                 >
-                                  <HelpCircle size={16} />
+                                  <HelpCircle size={18} />
                                 </button>
                               )}
                             </div>
@@ -808,9 +808,9 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                       <button
                         type="button"
                         onClick={() => setShowHelp(!showHelp)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full bg-gray-700 text-green-400 hover:bg-gray-600 hover:text-green-300 transition-colors"
                       >
-                        <HelpCircle size={16} />
+                        <HelpCircle size={18} />
                       </button>
                     </div>
                   )}
@@ -857,9 +857,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                       {helpTab === 'veo' ? (
                         <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
                           <li>Open your game on <span className="text-white">app.veo.co</span></li>
-                          <li>Click the share icon (or three-dot menu)</li>
-                          <li>Copy the link</li>
-                          <li>Paste it here</li>
+                          <li>Select the 3 dots for your game</li>
+                          <li>Select <span className="text-white">Share</span></li>
+                          <li>Click <span className="text-white">Copy link</span></li>
+                          <li>Paste it above</li>
                         </ol>
                       ) : (
                         <ol className="text-xs text-gray-400 space-y-1 list-decimal list-inside">
