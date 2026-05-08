@@ -532,6 +532,13 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                     ? `Importing from ${importState.platform === 'veo' ? 'Veo' : 'Trace'}...`
                     : IMPORT_STATUS_MESSAGES[importState.status] || 'Processing...'}
                 </h3>
+                {(opponentName || gameDate || tournamentName) && (
+                  <div className="text-sm text-gray-400 mb-2 space-y-0.5">
+                    {opponentName && <p className="text-white font-medium">{opponentName}</p>}
+                    {gameDate && <p>{gameDate}</p>}
+                    {tournamentName && <p className="text-gray-500">{tournamentName}</p>}
+                  </div>
+                )}
                 {importState.status === 'downloading' && (
                   <>
                     {importState.message && (
