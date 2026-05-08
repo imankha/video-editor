@@ -3,7 +3,7 @@
 **DRAFT — For Attorney Review. Do not publish without legal counsel approval.**
 
 **Effective Date:** [DATE TBD]
-**Last Updated:** May 7, 2026
+**Last Updated:** May 8, 2026
 
 Reel Ballers ("we," "us," or "our") operates the Reel Ballers video editing application (the "Service"). This Privacy Policy describes how we collect, use, disclose, and protect your personal information when you use our Service.
 
@@ -57,9 +57,9 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 
 ### Video Content
 
-**Video files and metadata.** Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events.
+**Video files and metadata.** Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. All video content is uploaded by the user from their own device or cloud storage; Reel Ballers does not access, scrape, or pull content from any third-party platform or service.
 
-We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata.
+We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata. We do not verify the source, ownership, or licensing status of video content uploaded by users.
 
 ### Information We Do NOT Collect
 

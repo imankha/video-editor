@@ -3,7 +3,7 @@
 **DRAFT — For Attorney Review. Do not publish without legal counsel approval.**
 
 **Effective Date:** [DATE TBD]
-**Last Updated:** May 7, 2026
+**Last Updated:** May 8, 2026
 
 ---
 
@@ -38,7 +38,18 @@ By using the Service, you represent and warrant that:
 
 ### Your Content Rights
 
-You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to Reel Ballers, including the right to upload video depicting any individuals shown. If you upload video recorded by a third party (such as a club camera system, Veo, or Trace), you represent that you have permission to use and redistribute that content.
+You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to Reel Ballers, including but not limited to:
+
+- The right to upload, edit, and redistribute video depicting any individuals shown
+- The right to create derivative works (clips, highlights, cropped versions) from the content you upload
+- Compliance with any terms of service, license agreements, or usage restrictions imposed by the original source of the content (including but not limited to club camera systems, league recording platforms, or any third-party video service)
+- Any required consents from individuals depicted in the content, including parental or guardian consent for minors
+
+If you upload video obtained from a third-party platform or recording service, **you are solely responsible for ensuring that your use of that content -- including uploading it to Reel Ballers, editing it, and exporting or sharing the results -- is permitted** under that platform's terms of service and applicable law. Reel Ballers does not verify the source of content you upload and assumes no responsibility for your compliance with third-party terms.
+
+### No Monitoring Obligation
+
+Reel Ballers has no obligation to pre-screen, monitor, or verify the source, ownership, or legality of content uploaded by users. We are a video editing tool. You bring the content; you are responsible for it.
 
 ---
 
@@ -60,12 +71,36 @@ You agree NOT to:
 - Interfere with or disrupt the Service or servers
 - Use automated systems (bots, scrapers) to access the Service
 - Resell or redistribute the Service without authorization
+- Use the Service to circumvent access controls, download restrictions, or terms of service of any third-party platform
+- Upload content that you know or reasonably should know you do not have the right to use
 
 We reserve the right to suspend or terminate accounts that violate this policy.
 
 ---
 
-## 5. Content Ownership and License
+## 5. Third-Party Content and Services
+
+### Reel Ballers as a Neutral Tool
+
+Reel Ballers is a video editing tool. We do not host, source, or provide video content. All content on the Service is uploaded by users from their own devices or cloud storage. We have no knowledge of, and assume no responsibility for, the original source of any content uploaded to the Service.
+
+### Third-Party Platforms
+
+Some users may upload content originally recorded by third-party services (such as club camera systems, league recording platforms, or other video providers). Reel Ballers has no relationship with, endorsement of, or affiliation with any such third-party platform. We do not access, scrape, or pull content from any third-party service.
+
+You are solely responsible for:
+
+- Complying with the terms of service of any platform from which you obtained your content
+- Ensuring you have the right to upload, edit, and redistribute such content
+- Obtaining any required permissions or licenses from the content's original source or rights holder
+
+### No Verification
+
+We do not and cannot verify whether content uploaded to our Service was lawfully obtained, properly licensed, or authorized for redistribution by the original source. By uploading content, you accept full legal responsibility for that content and its use.
+
+---
+
+## 6. Content Ownership and License
 
 ### Your Content
 
@@ -88,7 +123,7 @@ This license terminates when you delete your content or your account. Upon delet
 
 ---
 
-## 6. Storage Credits and Payments
+## 7. Storage Credits and Payments
 
 - The Service uses a storage credit system. Games expire after 30 days unless credits are applied.
 - Payments are processed by Stripe. We do not store your credit card information.
@@ -97,38 +132,53 @@ This license terminates when you delete your content or your account. Upon delet
 
 ---
 
-## 7. Service Availability
+## 8. Disclaimer of Warranties
 
-- The Service is provided "as is" and "as available."
-- We do not guarantee uninterrupted or error-free operation.
-- We may modify, suspend, or discontinue the Service at any time with reasonable notice.
-- We perform maintenance that may result in temporary unavailability.
+THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+WITHOUT LIMITING THE FOREGOING, REEL BALLERS DOES NOT WARRANT THAT:
+
+- The Service will be uninterrupted or error-free
+- The results obtained from the Service will be accurate or reliable
+- The quality of any content processed through the Service will meet your expectations
+- Any content you upload is lawfully obtained, properly licensed, or non-infringing
+
+Reel Ballers is a video editing tool. We process content as directed by you. We make no representations regarding the legality, ownership, or licensing status of content you upload. We do not verify whether you have the right to use, edit, or redistribute any content.
+
+We may modify, suspend, or discontinue the Service at any time with reasonable notice. We perform maintenance that may result in temporary unavailability.
 
 ---
 
-## 8. Limitation of Liability
+## 9. Limitation of Liability
 
 TO THE MAXIMUM EXTENT PERMITTED BY LAW:
 
-- Reel Ballers shall not be liable for any indirect, incidental, special, consequential, or punitive damages.
-- Our total liability shall not exceed the amount you paid us in the 12 months preceding the claim.
+- Reel Ballers shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to damages for loss of profits, goodwill, data, or other intangible losses.
+- Our total aggregate liability for all claims arising out of or relating to these Terms or the Service shall not exceed the greater of (a) the amounts you paid to us in the 12 months preceding the claim, or (b) fifty dollars ($50).
 - We are not liable for loss of data due to user error, account deletion, or service discontinuation after reasonable notice.
-- We are not liable for content uploaded by other users.
+- We are not liable for content uploaded by users, including any claims that such content infringes third-party rights.
+- We are not liable for any claims arising from your use of content obtained from third-party platforms, recording services, or any other source. You assume all risk associated with the content you upload.
+- We are not liable for your violation of any third-party terms of service, license agreement, or applicable law in connection with content you upload to or export from the Service.
 
 ---
 
-## 9. Indemnification
+## 10. Indemnification
 
-You agree to indemnify and hold harmless Reel Ballers, its officers, directors, and employees from any claims, damages, or expenses arising from:
+You agree to defend, indemnify, and hold harmless Reel Ballers, its officers, directors, employees, agents, and affiliates from and against any and all claims, damages, obligations, losses, liabilities, costs, and expenses (including but not limited to attorney's fees) arising from:
 
 - Your use of the Service
-- Content you upload
+- Content you upload, edit, export, or share using the Service
 - Your violation of these Terms
-- Your violation of any third party's rights
+- Your violation of any third party's rights, including intellectual property rights
+- Your violation of any third-party platform's terms of service in connection with content you upload
+- Any claim that content you uploaded to the Service was obtained, used, or redistributed without proper authorization
+- Your violation of any applicable law or regulation
+
+This indemnification obligation survives termination of your account and these Terms.
 
 ---
 
-## 10. DMCA Takedown Procedure
+## 11. DMCA Takedown Procedure
 
 We respect intellectual property rights. If you believe content on our Service infringes your copyright:
 
@@ -136,7 +186,7 @@ We respect intellectual property rights. If you believe content on our Service i
 
 Send a DMCA takedown notice to: [copyright@reelballers.com](mailto:copyright@reelballers.com)
 
-**Designated Agent for DMCA Notices:** [Name and address TBD]
+**Designated Agent for DMCA Notices:** Mohammad Iman Khabazian, Reel Ballers
 
 Your notice must include:
 
@@ -160,7 +210,7 @@ We will process counter-notices in accordance with the DMCA.
 
 ---
 
-## 11. Dispute Resolution
+## 12. Dispute Resolution
 
 ### Governing Law
 
@@ -176,22 +226,22 @@ Before filing any formal dispute, you agree to contact us at [privacy@reelballer
 
 ---
 
-## 12. Termination
+## 13. Termination
 
 - You may terminate your account at any time through Account Settings or by contacting us.
 - We may terminate or suspend your account for violation of these Terms.
 - Upon termination, your content will be permanently deleted.
-- Sections 5 (license termination), 8, 9, 10, and 11 survive termination.
+- Sections 5 (Third-Party Content), 6 (License Termination), 8 (Disclaimer of Warranties), 9 (Limitation of Liability), 10 (Indemnification), and 12 (Dispute Resolution) survive termination.
 
 ---
 
-## 13. Changes to Terms
+## 14. Changes to Terms
 
 We may update these Terms from time to time. We will notify you of material changes by displaying a notice in the application. Your continued use after changes constitutes acceptance.
 
 ---
 
-## 14. Contact
+## 15. Contact
 
 **Reel Ballers**
 
