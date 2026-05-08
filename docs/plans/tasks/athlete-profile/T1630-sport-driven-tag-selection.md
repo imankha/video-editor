@@ -2,41 +2,35 @@
 
 **Status:** TODO
 **Impact:** 7
-**Complexity:** 5
+**Complexity:** 4
 **Created:** 2026-04-20
 **Updated:** 2026-05-08
 
 ## Problem
 
-After T1610 (profile sport field), T1620 (tag storage + seed data), and T1625
-(custom tag editing), the annotation UI still needs to load the correct tags
-based on the active profile's sport. Currently `useAnnotate.js` imports
-directly from `soccerTags.js`.
+After T1610 (profile sport field) and T1620 (tag definitions per sport), the
+annotation UI still needs to load the correct tags based on the active profile's
+sport. Currently `useAnnotate.js` uses `DEFAULT_SPORT` from `tagRegistry.js`.
 
 ## Solution
 
 ### Frontend
 
-1. **Tag loading from API** -- `useAnnotate.js` fetches tags for the active
-   profile's sport via the API endpoint from T1620, instead of importing
-   static constants.
+1. **Read sport from profile** -- `useAnnotate.js` reads the active profile's
+   sport from `profileStore` and calls `getTagSet(sport)` instead of using
+   `DEFAULT_SPORT`.
 
-2. **Tag caching** -- Store fetched tags in a Zustand store (or profileStore)
-   to avoid re-fetching on every annotation session. Invalidate when sport
-   changes or tags are edited (T1625).
-
-3. **Position selector** -- The position picker in the annotation UI shows
+2. **Position selector** -- The position picker in the annotation UI shows
    positions for the active sport (e.g., QB/Receiver/Rusher for flag football
    instead of Attacker/Midfielder/Defender for soccer).
 
-4. **No tags state** -- When a sport has no tags (custom sport, user hasn't
-   created any yet):
+3. **No tags state** -- When a sport has no tags (custom sport not in registry):
    - Position picker is hidden
    - Tag selector is hidden
    - Clip annotation still works (rating, name, notes all functional)
    - No error or empty-state noise -- just a clean UI without tags
 
-5. **Backward compatibility** -- If sport is missing on an old profile,
+4. **Backward compatibility** -- If sport is missing on an old profile,
    default to soccer tags.
 
 ### Edge Cases
@@ -48,12 +42,12 @@ directly from `soccerTags.js`.
 - **Clip name generation** (`derive_clip_name`) uses tag names -- no change
   needed since it's tag-agnostic (works with any string).
 - **ALLOWED_TAGS validation** in `useAnnotate.js` must be dynamic, derived
-  from the fetched tag set rather than the static soccer import.
+  from the active sport's tag set rather than `DEFAULT_SPORT`.
 
 ## Relevant Files
 
-- `src/frontend/src/modes/annotate/constants/soccerTags.js` -- current static source
-- `src/frontend/src/modes/annotate/hooks/useAnnotate.js` -- imports tags, ALLOWED_TAGS
+- `src/frontend/src/modes/annotate/constants/tagRegistry.js` -- sport registry
+- `src/frontend/src/modes/annotate/hooks/useAnnotate.js` -- ALLOWED_TAGS
 - `src/frontend/src/stores/profileStore.js` -- holds active profile (with sport)
 - `src/frontend/src/components/shared/TagSelector.jsx` -- tag selection UI
 - `src/backend/app/queries.py` -- clip name generation from tags
@@ -61,15 +55,14 @@ directly from `soccerTags.js`.
 ## Depends On
 
 - T1610 (profile sport field)
-- T1620 (sport_tags table and seed data)
-- T1625 (custom tag editing -- tags must be in DB)
+- T1620 (tag definitions per sport)
 
 ## Acceptance Criteria
 
-- [ ] Annotation UI loads tags from API based on active profile's sport
+- [ ] Annotation UI shows tags matching the active profile's sport
 - [ ] Position picker shows sport-appropriate positions
 - [ ] Changing sport on profile changes available tags on next annotation session
 - [ ] Custom sports with no tags show a clean UI (no tags/positions, no errors)
 - [ ] Existing tagged clips retain their tags after sport change
-- [ ] ALLOWED_TAGS validation uses dynamic tag set, not static import
+- [ ] ALLOWED_TAGS validation uses dynamic tag set, not static default
 - [ ] Default to soccer if sport is missing or unrecognized
