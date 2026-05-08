@@ -195,8 +195,8 @@ def init_auth_db():
         """)
         db.commit()
 
-        # T1740: privacy compliance — terms acceptance and age confirmation
-        for col in ("terms_accepted_at TEXT", "terms_version TEXT", "age_confirmed_at TEXT"):
+        # T1740: privacy compliance — terms acceptance tracking
+        for col in ("terms_accepted_at TEXT", "terms_version TEXT"):
             try:
                 db.execute(f"ALTER TABLE users ADD COLUMN {col}")
             except sqlite3.OperationalError:
