@@ -4,7 +4,7 @@
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-04-20
-**Updated:** 2026-04-20
+**Updated:** 2026-05-08
 
 ## Problem
 
@@ -18,8 +18,7 @@ Add three fields to the profile:
 
 1. **athlete_name** (TEXT, nullable) -- the athlete's display name
 2. **team_name** (TEXT, nullable) -- the team they play for
-3. **sport** (TEXT, NOT NULL, default 'soccer') -- enum: soccer, american_football,
-   basketball, lacrosse, rugby
+3. **sport** (TEXT, NOT NULL, default 'soccer') -- free-text field, not an enum
 
 ### Backend
 
@@ -30,16 +29,30 @@ Add three fields to the profile:
 ### Frontend
 
 - Profile settings UI: text inputs for athlete name and team name
-- Sport dropdown with five options: Soccer, American Football, Basketball,
-  Lacrosse, Rugby
+- Sport selector: combobox dropdown listing the six supported sports (Soccer,
+  Flag Football, American Football, Basketball, Lacrosse, Rugby) with the
+  ability to type any custom sport name
+- Default selection is Soccer
+- Sport is editable at any time from the profile settings
 - Store sport in profileStore for downstream consumption
+
+### Supported Sports (pre-canned tags)
+
+These appear in the dropdown. Users can also type any other sport name.
+
+1. Soccer (default)
+2. Flag Football
+3. American Football
+4. Basketball
+5. Lacrosse
+6. Rugby
 
 ## Relevant Files
 
 - `src/backend/app/services/user_db.py` -- profile schema, CRUD queries
 - `src/backend/app/routers/profiles.py` -- profile API endpoints
 - `src/frontend/src/stores/profileStore.js` -- Zustand profile store
-- Profile UI components (to be identified)
+- `src/frontend/src/components/ManageProfilesModal.jsx` -- profile UI
 
 ## Acceptance Criteria
 
@@ -47,5 +60,5 @@ Add three fields to the profile:
 - [ ] Migration script backfills existing profiles with sport='soccer'
 - [ ] API returns and accepts all three new fields
 - [ ] Frontend UI allows editing all three fields
-- [ ] Sport dropdown shows all five options
+- [ ] Sport combobox shows six supported sports + allows custom text entry
 - [ ] Existing profiles work without changes (backward compatible)

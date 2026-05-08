@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Star, X, Check, Plus } from 'lucide-react';
-import { positions, soccerTags, generateClipName } from '../constants/soccerTags';
+import { Star, X, Plus } from 'lucide-react';
+import { getPositions, getTagSet, DEFAULT_SPORT } from '../constants/tagRegistry';
+import { generateClipName } from '../../../utils/clipDisplayName';
+import { TagSelector } from '../../../components/shared/TagSelector';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 
@@ -66,45 +68,6 @@ function StarRating({ rating, onRatingChange, size = 24 }) {
       <span className="ml-2 text-lg font-bold text-white">
         {RATING_NOTATION[rating]}
       </span>
-    </div>
-  );
-}
-
-/**
- * TagSelector - Multi-select tags grouped by position
- * Shows all tags from all positions, allowing selection from multiple positions
- */
-function TagSelector({ selectedTags, onTagToggle }) {
-  return (
-    <div className="space-y-3">
-      {positions.map((pos) => {
-        const positionTags = soccerTags[pos.id] || [];
-        return (
-          <div key={pos.id}>
-            {/* Position groups rendered without labels */}
-            <div className="flex flex-wrap gap-2">
-              {positionTags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.name);
-                return (
-                  <button
-                    key={tag.name}
-                    onClick={() => onTagToggle(tag.name)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                      isSelected
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                    title={tag.description}
-                  >
-                    {isSelected && <Check size={14} />}
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -353,8 +316,11 @@ export function AnnotateFullscreenOverlay({
         <div className="mb-4">
           <label className="block text-gray-400 text-sm mb-2">Tags</label>
           <TagSelector
+            positions={getPositions(DEFAULT_SPORT)}
+            tagsByPosition={getTagSet(DEFAULT_SPORT).tags}
             selectedTags={selectedTags}
             onTagToggle={handleTagToggle}
+            size="lg"
           />
         </div>
 

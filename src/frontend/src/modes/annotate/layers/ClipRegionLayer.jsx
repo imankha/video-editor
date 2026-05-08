@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { generateClipName } from '../constants/soccerTags';
+import { generateClipName } from '../../../utils/clipDisplayName';
 
 // Format seconds to MM:SS or HH:MM:SS
 const formatTime = (seconds) => {

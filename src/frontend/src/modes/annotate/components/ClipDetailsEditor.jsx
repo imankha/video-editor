@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Star, Check, Plus } from 'lucide-react';
-import { soccerTags, positions, generateClipName } from '../constants/soccerTags';
+import { getPositions, getTagSet, DEFAULT_SPORT } from '../constants/tagRegistry';
+import { generateClipName } from '../../../utils/clipDisplayName';
+import { TagSelector } from '../../../components/shared/TagSelector';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 
@@ -43,47 +45,6 @@ function StarRating({ rating, onRatingChange }) {
           />
         </button>
       ))}
-    </div>
-  );
-}
-
-/**
- * TagSelector - Multi-select tags grouped by position
- * Shows all tags from all positions, allowing selection from multiple positions
- */
-function TagSelector({ selectedTags, onTagToggle, compact = false }) {
-  return (
-    <div className={compact ? 'space-y-1.5' : 'space-y-2'}>
-      {positions.map((pos) => {
-        const positionTags = soccerTags[pos.id] || [];
-        return (
-          <div key={pos.id}>
-            {/* Position groups rendered without labels */}
-            <div className={`flex flex-wrap gap-1`}>
-              {positionTags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.name);
-                return (
-                  <button
-                    key={tag.name}
-                    onClick={() => onTagToggle(tag.name)}
-                    className={`flex items-center gap-1 rounded transition-colors ${
-                      compact ? 'px-1.5 py-1 text-[11px]' : 'px-2 py-1 text-xs'
-                    } ${
-                      isSelected
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                    title={tag.description}
-                  >
-                    {isSelected && <Check size={compact ? 10 : 12} />}
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -245,6 +206,8 @@ export function ClipDetailsEditor({
         <div>
           <label className="block text-gray-400 text-xs mb-1">Tags</label>
           <TagSelector
+            positions={getPositions(DEFAULT_SPORT)}
+            tagsByPosition={getTagSet(DEFAULT_SPORT).tags}
             selectedTags={region.tags || []}
             onTagToggle={handleTagToggle}
           />

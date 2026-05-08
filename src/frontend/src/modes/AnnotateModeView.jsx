@@ -4,7 +4,7 @@ import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import PlaybackControls from './annotate/components/PlaybackControls';
-import { generateClipName } from './annotate/constants/soccerTags';
+import { generateClipName } from '../utils/clipDisplayName';
 import { formatFileSize } from '../utils/fileValidation';
 
 /**

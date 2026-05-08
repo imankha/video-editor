@@ -1,32 +1,43 @@
 import { Check } from 'lucide-react';
-import { soccerTags, positions } from '../../modes/annotate/constants/soccerTags';
+
+const SIZE_CONFIG = {
+  sm: { text: 'text-[11px]', gap: 'gap-1', padding: 'px-1.5 py-1', checkSize: 10, spacing: 'space-y-1.5' },
+  md: { text: 'text-xs', gap: 'gap-1', padding: 'px-2 py-1', checkSize: 12, spacing: 'space-y-2', rounded: 'rounded' },
+  lg: { text: 'text-sm', gap: 'gap-2', padding: 'px-3 py-1.5', checkSize: 14, spacing: 'space-y-3', rounded: 'rounded-lg' },
+};
 
 /**
  * TagSelector - Multi-select tags grouped by position
- * Shows all tags from all positions, allowing selection from multiple positions
  *
+ * @param {Array} positions - Array of { id, name } position objects
+ * @param {Object} tagsByPosition - Map of positionId -> [{ name, description }]
  * @param {string[]} selectedTags - Array of selected tag names
  * @param {function} onTagToggle - Callback when tag is toggled (receives tag name)
- * @param {boolean} compact - Use compact layout (default false)
+ * @param {'sm'|'md'|'lg'} size - Visual size variant (default 'md')
+ * @param {boolean} showLabels - Show position group labels (default false)
  */
-export function TagSelector({ selectedTags = [], onTagToggle, compact = false }) {
+export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTagToggle, size = 'md', showLabels = false }) {
+  const cfg = SIZE_CONFIG[size] || SIZE_CONFIG.md;
+
   return (
-    <div className={compact ? "space-y-1" : "space-y-2"}>
+    <div className={cfg.spacing}>
       {positions.map((pos) => {
-        const positionTags = soccerTags[pos.id] || [];
+        const tags = tagsByPosition[pos.id] || [];
         return (
           <div key={pos.id}>
-            <div className={`text-gray-500 ${compact ? 'text-[10px]' : 'text-xs'} mb-1`}>
-              {pos.name}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {positionTags.map((tag) => {
+            {showLabels && (
+              <div className={`text-gray-500 ${cfg.text} mb-1`}>
+                {pos.name}
+              </div>
+            )}
+            <div className={`flex flex-wrap ${cfg.gap}`}>
+              {tags.map((tag) => {
                 const isSelected = selectedTags.includes(tag.name);
                 return (
                   <button
                     key={tag.name}
                     onClick={() => onTagToggle(tag.name)}
-                    className={`flex items-center gap-1 px-2 py-1 ${compact ? 'text-[10px]' : 'text-xs'} rounded transition-colors ${
+                    className={`flex items-center gap-1 ${cfg.padding} ${cfg.text} ${cfg.rounded || 'rounded'} transition-colors ${
                       isSelected
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
@@ -34,7 +45,7 @@ export function TagSelector({ selectedTags = [], onTagToggle, compact = false })
                     title={tag.description}
                     type="button"
                   >
-                    {isSelected && <Check size={compact ? 10 : 12} />}
+                    {isSelected && <Check size={cfg.checkSize} />}
                     {tag.name}
                   </button>
                 );

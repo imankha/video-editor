@@ -1,7 +1,7 @@
 import React from 'react';
 import { Info, Play } from 'lucide-react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
-import { generateClipName } from '../constants/soccerTags';
+import { generateClipName } from '../../../utils/clipDisplayName';
 
 // Format seconds to MM:SS or HH:MM:SS
 const formatTime = (seconds) => {

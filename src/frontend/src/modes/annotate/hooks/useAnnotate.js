@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
-import { getAllTags } from '../constants/soccerTags';
+import { getAllTagNames, DEFAULT_SPORT } from '../constants/tagRegistry';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -27,8 +27,7 @@ import { getAllTags } from '../constants/soccerTags';
  * - 5 star -> !!
  */
 
-// Derive allowed tags from soccerTags.js (single source of truth)
-const ALLOWED_TAGS = new Set(getAllTags().map(tag => tag.name));
+const ALLOWED_TAGS = getAllTagNames(DEFAULT_SPORT);
 
 // Required TSV columns in order
 const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes'];
