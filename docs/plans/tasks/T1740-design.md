@@ -42,7 +42,7 @@
 │  Legal pages render BEFORE auth gate (publicly accessible)   │
 │  Footer: Privacy | Terms | Do Not Sell (on ProjectsScreen)   │
 │  AccountSettings: + Privacy Rights section                   │
-│  Auth flow: + Age/Terms confirmation gate for new users      │
+│  Auth flow: passive consent text on login, auto accept-terms │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -52,8 +52,8 @@
 │    POST /export-data → JSON download of all user data        │
 │    DELETE /delete-account → full deletion (R2 + auth + local)│
 │                                                              │
-│  auth_db: + terms_accepted_at, terms_version, age_confirmed  │
-│  POST /api/auth/init: returns needs_age_confirmation flag    │
+│  auth_db: + terms_accepted_at, terms_version (no age col)    │
+│  GET /api/auth/me: returns needs_terms_acceptance flag       │
 │  POST /api/auth/accept-terms: stores consent                 │
 │  GPC middleware: logs Sec-GPC header                          │
 └─────────────────────────────────────────────────────────────┘
@@ -152,58 +152,44 @@ Only shown on ProjectsScreen (the "home" view) — not inside editor screens.
 </footer>
 ```
 
-### Phase 4: Age Verification & Terms Acceptance
+### Phase 4: Passive Terms Acceptance (Part 2 Override 1)
 
-**Backend — auth_db.py:** Add columns via idempotent ALTER TABLE pattern (same as `credit_summary`, `picture_url`):
+**Backend — auth_db.py:** Add columns via idempotent ALTER TABLE pattern (no `age_confirmed_at`):
 
 ```python
-for col, default in [
-    ("terms_accepted_at", "TEXT"),
-    ("terms_version", "TEXT"),
-    ("age_confirmed_at", "TEXT"),
-]:
+for col in ("terms_accepted_at TEXT", "terms_version TEXT"):
     try:
-        db.execute(f"ALTER TABLE users ADD COLUMN {col} {default}")
+        db.execute(f"ALTER TABLE users ADD COLUMN {col}")
     except sqlite3.OperationalError:
         pass
 ```
 
-**Backend — auth.py:** New endpoint `POST /api/auth/accept-terms`:
+**Backend — auth.py:** `POST /api/auth/accept-terms` records passive consent:
 
 ```python
 @router.post("/accept-terms")
 async def accept_terms(request: Request):
-    """Store age confirmation and terms acceptance for new users."""
+    """Record terms acceptance for the current user (passive consent)."""
     user_id = get_current_user_id()
     body = await request.json()
     version = body.get("terms_version", "2026-05-07")
     now = datetime.utcnow().isoformat()
-
     with get_auth_db() as db:
-        db.execute("""
-            UPDATE users SET terms_accepted_at = ?, terms_version = ?, age_confirmed_at = ?
-            WHERE user_id = ?
-        """, (now, version, now, user_id))
+        db.execute(
+            "UPDATE users SET terms_accepted_at = ?, terms_version = ? WHERE user_id = ?",
+            (now, version, user_id),
+        )
         db.commit()
     sync_auth_db_to_r2()
     return {"accepted": True}
 ```
 
-**Backend — modify `GET /api/auth/whoami`:** Add `needs_age_confirmation` field:
+**Backend — `GET /whoami` and `/me`:** Return `needs_terms_acceptance` field.
 
-```python
-@router.get("/whoami")
-async def whoami():
-    user_id = get_current_user_id()
-    with get_auth_db() as db:
-        row = db.execute("SELECT terms_accepted_at FROM users WHERE user_id = ?", (user_id,)).fetchone()
-    needs_confirmation = row and not row["terms_accepted_at"]
-    return {"user_id": user_id, "needs_age_confirmation": needs_confirmation}
-```
-
-**Frontend — authStore:** After session check, if `needs_age_confirmation` is true, show confirmation modal. New state: `needsAgeConfirmation`. The modal renders:
-- "By continuing, you confirm you are 18+ and agree to our Privacy Policy and Terms of Service"
-- "I Confirm" button → calls `POST /api/auth/accept-terms` → clears gate
+**Frontend — passive consent approach (no blocking modal):**
+- AuthGateModal shows passive consent text: "By continuing, you agree to our Privacy Policy and Terms of Service"
+- sessionInit.js auto-fires `POST /accept-terms` after first successful `/api/auth/init` if `needs_terms_acceptance` is true
+- AgeConfirmationModal deleted — zero additional UI friction
 
 ### Phase 5: Consumer Rights (Backend + Frontend)
 
@@ -281,7 +267,7 @@ No behavioral change needed (we don't sell/share data).
 |------|----------|-----------|
 | Account deletion: immediate vs grace period? | **Immediate** | CCPA says "delete upon request." The 14-day R2 grace pattern is for game expiry, not account deletion. Users who delete mean it. |
 | Landing page legal links: host on landing or app? | **Link to app** (`app.reelballers.com/privacy`) | Single source of truth. Landing page is a separate Vite project — duplicating legal content creates drift risk. |
-| Age gate: checkbox vs button? | **Button** ("I Confirm, I am 18+") | Simpler UX, single click. A checkbox + submit is two actions for the same thing. |
+| Age gate: checkbox vs button vs passive? | **Passive consent** (Part 2 override) | Users are parents/coaches by definition. COPPA applies to children in videos, not account holders. Consent text on login screen + auto accept-terms on first login. Zero friction. |
 | Legal page navigation: close button vs standalone? | **Standalone** (no close) | These are public URLs. Users arriving from Google shouldn't see a "close" button with nowhere to go. Link to homepage instead. |
 | Data export format: ZIP vs JSON? | **JSON** | All data is structured. Video files are too large to include — provide presigned URLs instead. JSON is simpler to generate and inspect. |
 | Terms version format? | **Date string** (`"2026-05-07"`) | Simple, sortable, no need for semver on legal docs. |
