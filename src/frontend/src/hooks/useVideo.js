@@ -352,7 +352,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
    * Toggle play/pause - async to handle play() promise
    */
   const togglePlay = async () => {
-    if (isPlaying) {
+    // Use video element's paused state as source of truth to handle desync
+    // between isPlaying store state and actual video state (e.g., stuck buffering)
+    if (videoRef.current && !videoRef.current.paused) {
       pause();
     } else {
       await play();
@@ -540,19 +542,29 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
     let rafId;
     const updateTime = () => {
-      // Skip updates if buffering or seeking
-      if (videoRef.current && !isSeeking && !isBuffering) {
-        // Additional check: video has current frame data available
-        const readyState = videoRef.current.readyState;
-        if (readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          const newTime = videoToClip(videoRef.current.currentTime);
-          // Clamp playback at clip end
-          if (clipDuration && newTime >= clipDuration) {
-            videoRef.current.pause();
-            videoRef.current.currentTime = clipToVideo(clipDuration);
-            setCurrentTime(clipDuration);
-          } else {
-            setCurrentTime(newTime);
+      if (videoRef.current) {
+        // Desync fix: store says playing but video element is actually paused.
+        // This can happen when the video gets stuck buffering and the browser
+        // silently gives up, or during rapid clip switching.
+        if (videoRef.current.paused) {
+          console.warn('[VIDEO] Desync: isPlaying=true but video.paused=true, syncing');
+          setIsPlaying(false);
+          return;
+        }
+
+        // Skip time updates if buffering or seeking
+        if (!isSeeking && !isBuffering) {
+          const readyState = videoRef.current.readyState;
+          if (readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+            const newTime = videoToClip(videoRef.current.currentTime);
+            // Clamp playback at clip end
+            if (clipDuration && newTime >= clipDuration) {
+              videoRef.current.pause();
+              videoRef.current.currentTime = clipToVideo(clipDuration);
+              setCurrentTime(clipDuration);
+            } else {
+              setCurrentTime(newTime);
+            }
           }
         }
       }

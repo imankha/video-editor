@@ -9,15 +9,48 @@ import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
  * Sent silently with the report (not shown to user).
  * Returns a Promise<string|null>.
  */
+function captureVideoFrames() {
+  const frames = new Map();
+  document.querySelectorAll('video').forEach((video) => {
+    if (!video.videoWidth) return;
+    try {
+      const c = document.createElement('canvas');
+      c.width = video.videoWidth;
+      c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      const dataUrl = c.toDataURL('image/jpeg', 0.8);
+      frames.set(video, dataUrl);
+    } catch {
+      // Cross-origin video — canvas tainted, skip
+    }
+  });
+  return frames;
+}
+
 async function captureScreenshot() {
   try {
+    const videoFrames = captureVideoFrames();
     const mod = await import('html2canvas');
     const html2canvas = mod.default || mod;
+    const originalVideos = [...document.querySelectorAll('video')];
     const canvas = await html2canvas(document.body, {
       scale: 0.75,
       useCORS: true,
       logging: false,
       backgroundColor: '#111827',
+      onclone: (_doc, clonedBody) => {
+        const clonedVideos = clonedBody.querySelectorAll('video');
+        clonedVideos.forEach((clonedVideo, i) => {
+          const dataUrl = videoFrames.get(originalVideos[i]);
+          if (!dataUrl) return;
+          const img = _doc.createElement('img');
+          img.src = dataUrl;
+          img.style.cssText = clonedVideo.style.cssText;
+          img.className = clonedVideo.className;
+          img.style.objectFit = 'contain';
+          clonedVideo.replaceWith(img);
+        });
+      },
     });
     return canvas.toDataURL('image/jpeg', 0.6);
   } catch (err) {
