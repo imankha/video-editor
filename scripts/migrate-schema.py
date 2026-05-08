@@ -37,6 +37,9 @@ AUTH_DB = USER_DATA / "auth.sqlite"
 # Format: (table_name, column_definition)
 # PENDING_MIGRATIONS_START
 MIGRATIONS = [
+    ("profiles", "athlete_name TEXT"),
+    ("profiles", "team_name TEXT"),
+    ("profiles", "sport TEXT NOT NULL DEFAULT 'soccer'"),
 ]
 # PENDING_MIGRATIONS_END
 
@@ -219,6 +222,19 @@ def main():
 
                 tmp_db.unlink(missing_ok=True)
 
+            # Migrate user.sqlite (profiles table lives here)
+            user_db_key = f"{app_env}/users/{user_id}/user.sqlite"
+            tmp_user_db = Path(tempfile.mktemp(suffix=".sqlite"))
+            try:
+                r2.download_file(bucket, user_db_key, str(tmp_user_db))
+                changed = migrate_db(str(tmp_user_db), "user.sqlite: ")
+                if changed:
+                    checkpoint_and_upload(tmp_user_db, r2, bucket, user_db_key)
+            except Exception as e:
+                print(f"  user.sqlite: download failed ({e})")
+            finally:
+                tmp_user_db.unlink(missing_ok=True)
+
     else:
         # Dev: migrate local DBs
         if args.email:
@@ -245,6 +261,9 @@ def main():
             for db_path in profiles_dir.glob("*/profile.sqlite"):
                 profile_id = db_path.parent.name
                 migrate_db(str(db_path), f"Profile {profile_id}: ")
+            user_db = user_dir / "user.sqlite"
+            if user_db.exists():
+                migrate_db(str(user_db), "user.sqlite: ")
 
 
 if __name__ == "__main__":

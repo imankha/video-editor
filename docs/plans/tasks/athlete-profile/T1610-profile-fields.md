@@ -1,4 +1,4 @@
-# T1610: Profile Fields — Athlete Name, Team Name, Sport
+# T1610: Profile Fields — Nickname, Team Name, Sport
 
 **Status:** TODO
 **Impact:** 7
@@ -16,7 +16,7 @@ downstream features (overlays, quest copy, sport-specific tags).
 
 Add three fields to the profile:
 
-1. **athlete_name** (TEXT, nullable) -- the athlete's display name
+1. **athlete_name** (TEXT, nullable) -- the athlete's nickname (not real name, avoids PII)
 2. **team_name** (TEXT, nullable) -- the team they play for
 3. **sport** (TEXT, NOT NULL, default 'soccer') -- free-text field, not an enum
 

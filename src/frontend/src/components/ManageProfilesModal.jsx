@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Pencil, Trash2, ArrowLeft } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
+import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue } from '../modes/annotate/constants/tagRegistry';
 
 /**
  * Pre-defined profile colors.
@@ -53,9 +54,12 @@ function ColorSelector({ value, onChange, usedColors = [] }) {
 // Profile Form (shared for Add and Edit)
 // ---------------------------------------------------------------------------
 
-function ProfileForm({ title, initialName = '', initialColor, usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save' }) {
+function ProfileForm({ title, initialName = '', initialColor, initialAthleteName = '', initialTeamName = '', initialSport = 'soccer', usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save' }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor || getNextColor(usedColors));
+  const [athleteName, setAthleteName] = useState(initialAthleteName);
+  const [teamName, setTeamName] = useState(initialTeamName);
+  const [sport, setSport] = useState(sportDisplayName(initialSport) || 'Soccer');
   const [submitting, setSubmitting] = useState(false);
 
   const trimmedName = name.trim();
@@ -69,7 +73,8 @@ function ProfileForm({ title, initialName = '', initialColor, usedColors, existi
     if (!canSubmit) return;
     setSubmitting(true);
     try {
-      await onSubmit(trimmedName, color);
+      const sportValue = sport.trim() ? sportStoredValue(sport.trim()) : 'soccer';
+      await onSubmit(trimmedName, color, athleteName.trim(), teamName.trim(), sportValue);
     } finally {
       setSubmitting(false);
     }
@@ -107,6 +112,44 @@ function ProfileForm({ title, initialName = '', initialColor, usedColors, existi
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
           <ColorSelector value={color} onChange={setColor} usedColors={usedColors} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Nickname</label>
+          <input
+            type="text"
+            value={athleteName}
+            onChange={(e) => setAthleteName(e.target.value)}
+            placeholder="e.g. Lightning"
+            maxLength={30}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Team Name</label>
+          <input
+            type="text"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
+            placeholder="e.g. FC United"
+            maxLength={50}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">Sport</label>
+          <input
+            type="text"
+            list="profile-sport-options"
+            value={sport}
+            onChange={(e) => setSport(e.target.value)}
+            placeholder="Select or type a sport"
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+          />
+          <datalist id="profile-sport-options">
+            {SUPPORTED_SPORTS.map(s => (
+              <option key={s.id} value={s.name} />
+            ))}
+          </datalist>
         </div>
       </div>
 
@@ -166,15 +209,15 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, mode, onClose]);
 
-  const handleAddProfile = useCallback(async (name, color) => {
-    await createProfile(name, color);
+  const handleAddProfile = useCallback(async (name, color, athleteName, teamName, sport) => {
+    await createProfile(name, color, { athleteName: athleteName || undefined, teamName: teamName || undefined, sport });
     setMode('list');
     onClose();
   }, [createProfile, onClose]);
 
-  const handleEditProfile = useCallback(async (name, color) => {
+  const handleEditProfile = useCallback(async (name, color, athleteName, teamName, sport) => {
     if (editingProfile) {
-      await updateProfile(editingProfile.id, { name, color });
+      await updateProfile(editingProfile.id, { name, color, athleteName, teamName, sport });
     }
     setEditingProfile(null);
     setMode('list');
@@ -242,8 +285,10 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                     <span className="text-white text-sm font-medium truncate block">
                       {p.name || 'Default'}
                     </span>
-                    {p.isCurrent && (
-                      <span className="text-xs text-gray-400">Active</span>
+                    {(p.athleteName || p.teamName || p.isCurrent) && (
+                      <span className="text-xs text-gray-400 truncate block">
+                        {[p.athleteName, p.teamName, p.isCurrent && 'Active'].filter(Boolean).join(' · ')}
+                      </span>
                     )}
                   </div>
 
@@ -297,6 +342,9 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             title="Edit Profile"
             initialName={editingProfile.name || ''}
             initialColor={editingProfile.color}
+            initialAthleteName={editingProfile.athleteName || ''}
+            initialTeamName={editingProfile.teamName || ''}
+            initialSport={editingProfile.sport || 'soccer'}
             usedColors={usedColors.filter(c => c !== editingProfile.color)}
             existingNames={existingNamesForEdit}
             submitLabel="Save"

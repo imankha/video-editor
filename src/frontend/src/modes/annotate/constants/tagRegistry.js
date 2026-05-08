@@ -6,6 +6,27 @@ const TAG_SETS = {
 
 const DEFAULT_SPORT = 'soccer';
 
+export const SUPPORTED_SPORTS = [
+  { id: 'soccer', name: 'Soccer' },
+  { id: 'flag_football', name: 'Flag Football' },
+  { id: 'american_football', name: 'American Football' },
+  { id: 'basketball', name: 'Basketball' },
+  { id: 'lacrosse', name: 'Lacrosse' },
+  { id: 'rugby', name: 'Rugby' },
+];
+
+export function sportDisplayName(storedValue) {
+  if (!storedValue) return '';
+  const match = SUPPORTED_SPORTS.find(s => s.id === storedValue);
+  return match ? match.name : storedValue;
+}
+
+export function sportStoredValue(displayName) {
+  if (!displayName) return '';
+  const match = SUPPORTED_SPORTS.find(s => s.name.toLowerCase() === displayName.toLowerCase());
+  return match ? match.id : displayName;
+}
+
 export function getTagSet(sport) {
   return TAG_SETS[sport] || null;
 }
