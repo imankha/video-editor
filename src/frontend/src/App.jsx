@@ -569,8 +569,6 @@ function App() {
         <AnnotateScreen
           onClearSelection={clearSelection}
           onModeChange={handleModeChange}
-          isAdmin={isAdmin}
-          onAdminClick={() => setEditorMode(EDITOR_MODES.ADMIN)}
         />
       )}
 
@@ -591,8 +589,6 @@ function App() {
             framingOutOfSync={framingChangedSinceExport && hasOverlayVideo}
             hasAnnotateVideo={canEditInAnnotate}
             isLoadingWorkingVideo={isLoadingWorkingVideo}
-            isAdmin={isAdmin}
-            onAdminClick={() => setEditorMode(EDITOR_MODES.ADMIN)}
           />
 
           {/* Mode-specific views */}

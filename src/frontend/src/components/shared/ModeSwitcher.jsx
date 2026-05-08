@@ -95,8 +95,8 @@ export function ModeSwitcher({
           ${isActive
             ? `${activeColor} text-white shadow-lg`
             : isAvailable
-              ? 'text-gray-400 hover:text-white hover:bg-white/10'
-              : 'text-gray-600 cursor-not-allowed opacity-40'
+              ? 'text-white/70 hover:text-white hover:bg-white/10'
+              : 'text-white/30 cursor-not-allowed'
           }
           ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
         `}

@@ -33,7 +33,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
  *
  * @see AppJSX_REDUCTION/TASK-05-finalize-annotate-screen.md
  */
-export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdminClick }) {
+export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Editor mode (for navigation between screens)
   const setEditorMode = useEditorStore(state => state.setEditorMode);
 
@@ -479,8 +479,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange, isAdmin, onAdmi
             hasWorkingVideo={!!selectedProject?.working_video_id}
             hasOverlayVideo={false}
             hasAnnotateVideo={true}
-            isAdmin={isAdmin}
-            onAdminClick={onAdminClick}
             extraControls={
               <button
                 onClick={() => setShowMobileSidebar(true)}
