@@ -535,8 +535,6 @@ function App() {
             <a href="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
             <span>|</span>
             <a href="/terms" className="hover:text-gray-300 transition-colors">Terms of Service</a>
-            <span>|</span>
-            <a href="/privacy#your-rights" className="hover:text-gray-300 transition-colors">Do Not Sell or Share My Personal Information</a>
           </footer>
         </div>
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}

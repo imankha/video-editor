@@ -61,29 +61,29 @@ def migrate_r2(env_name: str) -> None:
     from dotenv import load_dotenv
     import os
 
-    env_file = PROJECT_ROOT / "src" / "backend" / ".env"
-    if env_file.exists():
-        load_dotenv(env_file)
+    load_dotenv(PROJECT_ROOT / ".env")
 
-    account_id = os.getenv("R2_ACCOUNT_ID")
+    endpoint = os.getenv("R2_ENDPOINT")
     access_key = os.getenv("R2_ACCESS_KEY_ID")
     secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
     bucket = os.getenv("R2_BUCKET", "reel-ballers-users")
 
-    if not all([account_id, access_key, secret_key]):
+    if not all([endpoint, access_key, secret_key]):
         print("R2 credentials not configured — skipping R2 migration")
         return
 
     client = boto3.client(
         "s3",
-        endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+        endpoint_url=endpoint,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
         config=BotoConfig(signature_version="s3v4", retries={"max_attempts": 2}),
         region_name="auto",
     )
 
-    r2_key = f"{env_name}/auth/auth.sqlite"
+    env_map = {"prod": "production", "staging": "staging", "dev": "dev"}
+    r2_prefix = env_map.get(env_name, env_name)
+    r2_key = f"{r2_prefix}/auth/auth.sqlite"
     print(f"\n  Downloading {r2_key} from R2...")
 
     with tempfile.NamedTemporaryFile(suffix=".sqlite", delete=False) as tmp:
