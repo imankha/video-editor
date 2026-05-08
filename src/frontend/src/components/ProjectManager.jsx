@@ -394,6 +394,7 @@ export function ProjectManager({
   const handleCreateGame = useCallback(async (gameDetails) => {
     if (gameDetails.importComplete) {
       setShowGameDetailsModal(false);
+      useQuestStore.getState().fetchProgress({ force: true });
       if (onLoadGame) onLoadGame(gameDetails.gameId);
       return;
     }
