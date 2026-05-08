@@ -200,7 +200,6 @@ export function PrivacyPolicy() {
         {/* Section 11 */}
         <Section id="contact" title="11. Contact Us">
           <p className="mb-2"><strong className="text-white">Reel Ballers</strong></p>
-          <p className="mb-2">[PHYSICAL ADDRESS]</p>
           <p>Privacy inquiries: <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a></p>
         </Section>
       </div>

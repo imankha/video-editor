@@ -176,7 +176,6 @@ export function TermsOfService() {
         {/* Section 14 */}
         <Section id="contact" title="14. Contact">
           <p className="mb-2"><strong className="text-white">Reel Ballers</strong></p>
-          <p className="mb-2">[PHYSICAL ADDRESS]</p>
           <p>Email: <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a></p>
         </Section>
       </div>

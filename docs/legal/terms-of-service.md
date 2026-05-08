@@ -184,6 +184,5 @@ We may update these Terms from time to time. We will notify you of material chan
 ## 14. Contact
 
 **Reel Ballers**
-[PHYSICAL ADDRESS]
 
 **Email:** [privacy@reelballers.com](mailto:privacy@reelballers.com)

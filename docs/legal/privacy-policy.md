@@ -213,7 +213,6 @@ Your continued use of the Service after changes constitutes acceptance of the up
 ## 11. Contact Us
 
 **Reel Ballers**
-[PHYSICAL ADDRESS]
 
 **Privacy inquiries:** [privacy@reelballers.com](mailto:privacy@reelballers.com)
 

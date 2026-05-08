@@ -20,7 +20,7 @@ FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
 # T1740: CAN-SPAM compliant footer for all emails
 _CAN_SPAM_FOOTER = """
 <p style="color: #6b7280; font-size: 11px; margin-top: 16px; text-align: center;">
-  Reel Ballers, [PHYSICAL ADDRESS]<br/>
+  Reel Ballers<br/>
   <a href="https://app.reelballers.com/privacy" style="color: #6b7280;">Privacy Policy</a>
 </p>
 """
