@@ -5,6 +5,7 @@ import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from './annotate/constants/soccerTags';
+import { formatFileSize } from '../utils/fileValidation';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -254,18 +255,24 @@ export function AnnotateModeView({
       {annotateVideoMetadata && !annotateFullscreen && (
         <div className="hidden sm:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
-            <span>
-              <span className="text-gray-400">Resolution:</span>{' '}
-              {annotateVideoMetadata.resolution}
-            </span>
-            <span>
-              <span className="text-gray-400">Format:</span>{' '}
-              {annotateVideoMetadata.format?.toUpperCase() || 'MP4'}
-            </span>
-            <span>
-              <span className="text-gray-400">Size:</span>{' '}
-              {annotateVideoMetadata.sizeFormatted || `${(annotateVideoMetadata.size / (1024 * 1024)).toFixed(2)} MB`}
-            </span>
+            {annotateVideoMetadata.resolution && (
+              <span>
+                <span className="text-gray-400">Resolution:</span>{' '}
+                {annotateVideoMetadata.resolution}
+              </span>
+            )}
+            {annotateVideoMetadata.format && (
+              <span>
+                <span className="text-gray-400">Format:</span>{' '}
+                {annotateVideoMetadata.format.toUpperCase()}
+              </span>
+            )}
+            {annotateVideoMetadata.size > 0 && (
+              <span>
+                <span className="text-gray-400">Size:</span>{' '}
+                {formatFileSize(annotateVideoMetadata.size)}
+              </span>
+            )}
           </div>
         </div>
       )}

@@ -77,6 +77,13 @@ export function formatFileSize(bytes) {
   const k = 1024;
   const sizes = ['Bytes', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const value = bytes / Math.pow(k, i);
 
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  let decimals;
+  if (i === 0) decimals = 0;
+  else if (value >= 100) decimals = 0;
+  else if (value >= 10) decimals = 1;
+  else decimals = 1;
+
+  return parseFloat(value.toFixed(decimals)) + ' ' + sizes[i];
 }
