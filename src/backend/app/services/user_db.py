@@ -79,8 +79,6 @@ _USER_DB_SCHEMA = """
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         color TEXT NOT NULL,
-        athlete_name TEXT,
-        team_name TEXT,
         sport TEXT NOT NULL DEFAULT 'soccer',
         is_default INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime('now'))
@@ -647,7 +645,7 @@ def get_profiles(user_id: str) -> list[dict]:
     """Return all profiles for a user, ordered by creation time."""
     with get_user_db_connection(user_id) as conn:
         rows = conn.execute(
-            "SELECT id, name, color, athlete_name, team_name, sport, is_default, created_at FROM profiles ORDER BY created_at"
+            "SELECT id, name, color, sport, is_default, created_at FROM profiles ORDER BY created_at"
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -751,28 +749,24 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
     return False
 
 
-def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, athlete_name: str = None, team_name: str = None, sport: str = "soccer") -> None:
+def create_profile(user_id: str, profile_id: str, name: str, color: str, is_default: bool = False, sport: str = "soccer") -> None:
     """Insert a new profile row."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(
-            "INSERT INTO profiles (id, name, color, is_default, athlete_name, team_name, sport) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (profile_id, name, color, 1 if is_default else 0, athlete_name, team_name, sport),
+            "INSERT INTO profiles (id, name, color, is_default, sport) VALUES (?, ?, ?, ?, ?)",
+            (profile_id, name, color, 1 if is_default else 0, sport),
         )
         conn.commit()
     logger.info(f"[UserDB] Created profile {profile_id} ({name}) for user {user_id}")
 
 
-def update_profile(user_id: str, profile_id: str, name: Optional[str] = None, color: Optional[str] = None, athlete_name: Optional[str] = None, team_name: Optional[str] = None, sport: Optional[str] = None) -> None:
+def update_profile(user_id: str, profile_id: str, name: Optional[str] = None, color: Optional[str] = None, sport: Optional[str] = None) -> None:
     """Update profile fields."""
     with get_user_db_connection(user_id) as conn:
         if name is not None:
             conn.execute("UPDATE profiles SET name = ? WHERE id = ?", (name, profile_id))
         if color is not None:
             conn.execute("UPDATE profiles SET color = ? WHERE id = ?", (color, profile_id))
-        if athlete_name is not None:
-            conn.execute("UPDATE profiles SET athlete_name = ? WHERE id = ?", (athlete_name, profile_id))
-        if team_name is not None:
-            conn.execute("UPDATE profiles SET team_name = ? WHERE id = ?", (team_name, profile_id))
         if sport is not None:
             conn.execute("UPDATE profiles SET sport = ? WHERE id = ?", (sport, profile_id))
         conn.commit()

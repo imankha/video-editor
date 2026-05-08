@@ -49,16 +49,12 @@ router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 class CreateProfileRequest(BaseModel):
     name: str
     color: str
-    athleteName: Optional[str] = None
-    teamName: Optional[str] = None
     sport: Optional[str] = None
 
 
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
     color: Optional[str] = None
-    athleteName: Optional[str] = None
-    teamName: Optional[str] = None
     sport: Optional[str] = None
 
 
@@ -85,8 +81,6 @@ async def list_profiles():
             "id": p["id"],
             "name": p["name"],
             "color": p["color"],
-            "athleteName": p["athlete_name"],
-            "teamName": p["team_name"],
             "sport": p["sport"],
             "isDefault": bool(p["is_default"]),
             "isCurrent": p["id"] == selected,
@@ -113,7 +107,7 @@ async def create_profile(request: CreateProfileRequest):
     name = request.name.strip()
 
     sport = request.sport or "soccer"
-    db_create_profile(user_id, new_id, name, request.color, athlete_name=request.athleteName, team_name=request.teamName, sport=sport)
+    db_create_profile(user_id, new_id, name, request.color, sport=sport)
     set_selected_profile_id(user_id, new_id)
 
     # Initialize DB for new profile
@@ -125,7 +119,7 @@ async def create_profile(request: CreateProfileRequest):
 
     logger.info(f"Created profile {new_id} ({name}) for user {user_id}")
 
-    return {"id": new_id, "name": name, "color": request.color, "athleteName": request.athleteName, "teamName": request.teamName, "sport": sport}
+    return {"id": new_id, "name": name, "color": request.color, "sport": sport}
 
 
 @router.put("/current")
@@ -166,8 +160,6 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
 
     name = profile["name"]
     color = profile["color"]
-    athlete_name = profile["athlete_name"]
-    team_name = profile["team_name"]
     sport = profile["sport"]
 
     if request.name is not None:
@@ -182,18 +174,14 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
 
     if request.color is not None:
         color = request.color
-    if request.athleteName is not None:
-        athlete_name = request.athleteName
-    if request.teamName is not None:
-        team_name = request.teamName
     if request.sport is not None:
         sport = request.sport
 
-    db_update_profile(user_id, profile_id, name=name, color=color, athlete_name=athlete_name, team_name=team_name, sport=sport)
+    db_update_profile(user_id, profile_id, name=name, color=color, sport=sport)
 
     logger.info(f"Updated profile {profile_id} for user {user_id}")
 
-    return {"id": profile_id, "name": name, "color": color, "athleteName": athlete_name, "teamName": team_name, "sport": sport}
+    return {"id": profile_id, "name": name, "color": color, "sport": sport}
 
 
 @router.delete("/{profile_id}")

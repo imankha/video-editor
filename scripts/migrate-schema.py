@@ -37,8 +37,6 @@ AUTH_DB = USER_DATA / "auth.sqlite"
 # Format: (table_name, column_definition)
 # PENDING_MIGRATIONS_START
 MIGRATIONS = [
-    ("profiles", "athlete_name TEXT"),
-    ("profiles", "team_name TEXT"),
     ("profiles", "sport TEXT NOT NULL DEFAULT 'soccer'"),
 ]
 # PENDING_MIGRATIONS_END

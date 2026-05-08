@@ -96,13 +96,11 @@ export const useProfileStore = create((set, get) => ({
     }
   },
 
-  createProfile: async (name, color, { athleteName, teamName, sport } = {}) => {
+  createProfile: async (name, color, { sport } = {}) => {
     set({ error: null });
 
     try {
       const body = { name, color };
-      if (athleteName) body.athleteName = athleteName;
-      if (teamName) body.teamName = teamName;
       if (sport) body.sport = sport;
       const response = await fetch(`${API_BASE}/api/profiles`, {
         method: 'POST',

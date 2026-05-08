@@ -139,16 +139,18 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2410 | ↳ [Playback-Mode Recap Viewer](tasks/expired-game-experience/T2410-playback-mode-recap-viewer.md) | 7 | 5 | 1.4 | DONE | [ ] | Replace RecapPlayerModal with read-only playback mode showing annotations, clip navigation |
 | T2420 | ↳ [Annotations + Highlights Tabs](tasks/expired-game-experience/T2420-annotations-highlights-tabs.md) | 6 | 4 | 1.5 | DONE | [ ] | Two video modes: all annotated clips, or just 5-star highlights |
 | T2430 | ↳ [Brilliant Clips in My Reels](tasks/expired-game-experience/T2430-brilliant-clips-in-my-reels.md) | 6 | 2 | 3.0 | DONE | [ ] | Ensure auto-exported 5-star clips are filterable and always accessible in My Reels |
-| T2500 | [Veo Link Import](tasks/for-alpha/T2500-veo-link-import.md) | 8 | 4 | 2.0 | SUPERSEDED | [ ] | Absorbed into Video Link Import epic (T2600-T2630). |
-| | **[Video Link Import](tasks/video-import/EPIC.md)** | 9 | 5 | 1.8 | | | **Paste Veo/Trace game URL in Add Game → server-to-server download to R2. Eliminates 3GB download+re-upload friction.** |
-| T2600 | ↳ [Veo Import POC](tasks/video-import/T2600-veo-import-poc.md) | 8 | 3 | 2.7 | DONE | [ ] | Integration test: parse Veo URL → extract CDN download URL → stream MP4 to R2. Proves concept before production code. |
-| T2610 | ↳ [Trace Import POC](tasks/video-import/T2610-trace-import-poc.md) | 8 | 4 | 2.0 | DONE | [ ] | Integration test: parse Trace URL → GraphQL query (anon) → HLS manifest → ffmpeg remux → upload to R2. Proves concept. |
-| T2620 | ↳ [Import Backend Service](tasks/video-import/T2620-import-backend-service.md) | 9 | 5 | 1.8 | DONE | [ ] | Unified POST /api/games/import-url for both platforms. Progress tracking, credit check, background download, game creation. |
-| T2625 | ↳ [Modal Video Ingest](tasks/video-import/T2625-modal-video-ingest.md) | 9 | 4 | 2.3 | DONE | [ ] | Move ffmpeg remux + blake3 + R2 upload off Fly.io to Modal. Unified `ingest_video_to_r2()` handles both direct (Veo) and HLS (Trace). Eliminates R2 CopyObject. |
-| T2627 | ↳ [Optimize Modal Ingest](tasks/video-import/T2627-optimize-modal-ingest.md) | 7 | 3 | 2.3 | DONE | [ ] | Hash-during-download + parallel multipart upload. Reduces 3GB Veo import from ~5.5 min to ~2 min. |
-| T2628 | ↳ [Ingest Timeout & Retry](tasks/video-import/T2628-modal-ingest-timeout-retry.md) | 8 | 3 | 2.7 | DONE | [ ] | Reduce Modal timeout to 2x expected, per-attempt caller-side timeout, progress stall detection, structured error codes for UI. |
-| T2630 | ↳ [Add Game Import UI](tasks/video-import/T2630-add-game-import-ui.md) | 8 | 4 | 2.0 | DONE | [ ] | "Paste Link" tab in GameDetailsModal, platform detection, progress bar, help icon with per-platform instructions. |
-| T2635 | ↳ [Import Failure UX](tasks/video-import/T2635-import-failure-ux.md) | 7 | 3 | 2.3 | DONE | [ ] | Failed imports: toast with error + refund amount, no ghost game cards, form resets for retry. |
+| T2500 | ~~[Veo Link Import](tasks/for-alpha/T2500-veo-link-import.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Entire Video Link Import epic removed by T2680 (legal risk). |
+| T2670 | [Upload Slow Connection Optimization](tasks/T2670-upload-slow-connection-optimization.md) | 7 | 4 | 1.8 | TODO | [ ] | 25MB parts (from 100MB), per-part retry with backoff, adaptive concurrency, save every part. Fixes failed uploads on 5-10 Mbps connections. |
+| T2680 | [Remove Video Link Import](tasks/T2680-remove-video-link-import.md) | 9 | 3 | 3.0 | TODO | [ ] | Remove all Veo/Trace link import code (T2600-T2635). Legal risk: ToS violation, CFAA, no DMCA safe harbor. Adopt CapCut liability profile -- user-upload only. |
+| | ~~**[Video Link Import](tasks/video-import/EPIC.md)**~~ | 9 | 5 | 1.8 | | | ~~**REMOVED by T2680 -- legal liability too high. See task for full analysis.**~~ |
+| T2600 | ↳ ~~[Veo Import POC](tasks/video-import/T2600-veo-import-poc.md)~~ | 8 | 3 | 2.7 | REMOVED | [ ] | Removed by T2680 |
+| T2610 | ↳ ~~[Trace Import POC](tasks/video-import/T2610-trace-import-poc.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Removed by T2680 |
+| T2620 | ↳ ~~[Import Backend Service](tasks/video-import/T2620-import-backend-service.md)~~ | 9 | 5 | 1.8 | REMOVED | [ ] | Removed by T2680 |
+| T2625 | ↳ ~~[Modal Video Ingest](tasks/video-import/T2625-modal-video-ingest.md)~~ | 9 | 4 | 2.3 | REMOVED | [ ] | Removed by T2680 |
+| T2627 | ↳ ~~[Optimize Modal Ingest](tasks/video-import/T2627-optimize-modal-ingest.md)~~ | 7 | 3 | 2.3 | REMOVED | [ ] | Removed by T2680 |
+| T2628 | ↳ ~~[Ingest Timeout & Retry](tasks/video-import/T2628-modal-ingest-timeout-retry.md)~~ | 8 | 3 | 2.7 | REMOVED | [ ] | Removed by T2680 |
+| T2630 | ↳ ~~[Add Game Import UI](tasks/video-import/T2630-add-game-import-ui.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Removed by T2680 |
+| T2635 | ↳ ~~[Import Failure UX](tasks/video-import/T2635-import-failure-ux.md)~~ | 7 | 3 | 2.3 | REMOVED | [ ] | Removed by T2680 |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TESTING | [x] | DB schema: athlete_name, team_name, sport (free-text, not enum) + combobox UI with 6 supported sports + custom entry. (Absorbs T1073) |
@@ -380,5 +382,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2450-T2470` - Auto-Export Reliability epic
 - `T2480` - Modal Spline Interpolation
 - `T2550-T2570` - R2 CDN Video Serving epic
+- `T2670` - Upload Slow Connection Optimization
+- `T2680` - Remove Video Link Import (legal)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
