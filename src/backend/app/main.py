@@ -80,6 +80,7 @@ logging.getLogger("s3transfer").setLevel(logging.WARNING)
 # Import routers and websocket handler
 from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router, gallery_shares_router, shared_router
 from app.routers.exports import router as exports_router
+from app.routers.privacy import router as privacy_router
 from app.websocket import websocket_export_progress
 from app.user_context import set_current_user_id, get_current_user_id
 from app.session_init import user_session_init
@@ -121,6 +122,13 @@ app.add_middleware(
 # the call_next() boundary. See db_sync.py for details.
 app.add_middleware(RequestContextMiddleware)
 
+# T1740: Log Global Privacy Control signal for CCPA compliance records
+@app.middleware("http")
+async def gpc_signal_middleware(request, call_next):
+    if request.headers.get("Sec-GPC") == "1":
+        logging.getLogger(__name__).debug(f"[Privacy] GPC signal detected: {request.url.path}")
+    return await call_next(request)
+
 # Include routers
 app.include_router(health_router)
 app.include_router(export_router)
@@ -141,6 +149,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(gallery_shares_router)
 app.include_router(shared_router)
+app.include_router(privacy_router)
 
 # T1530/T1531: debug endpoints (profile listing/reading). Gated internally
 # by DEBUG_ENDPOINTS_ENABLED=true.

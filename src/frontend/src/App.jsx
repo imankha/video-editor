@@ -17,6 +17,9 @@ import { SECTION_NAMES } from './config/displayNames';
 import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
+import { TermsOfService } from './components/TermsOfService';
+import { AgeConfirmationModal } from './components/AgeConfirmationModal';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -277,6 +280,14 @@ function App() {
     return match ? match[1] : null;
   });
 
+  // T1740: Detect /privacy and /terms URLs for public legal pages
+  const [legalPage] = useState(() => {
+    const path = window.location.pathname;
+    if (path === '/privacy') return 'privacy';
+    if (path === '/terms') return 'terms';
+    return null;
+  });
+
   const handleCloseShared = useCallback(() => {
     setSharedToken(null);
     window.history.replaceState({}, '', '/');
@@ -488,6 +499,10 @@ function App() {
     setGlobalExportProgress,
   ]);
 
+  // T1740: Public legal pages — accessible without authentication (CalOPPA requirement)
+  if (legalPage === 'privacy') return <PrivacyPolicy />;
+  if (legalPage === 'terms') return <TermsOfService />;
+
   // Block rendering until session is resolved — prevents data fetches from firing
   // before the user identity is established (would fall back to DEFAULT_USER_ID)
   if (isCheckingSession) return null;
@@ -516,6 +531,14 @@ function App() {
             />
           {/* Quest panel — static, flows after project content (T1600) */}
           <QuestPanel inline />
+          {/* T1740: Legal footer */}
+          <footer className="text-center py-6 text-xs text-gray-500 space-x-3">
+            <a href="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
+            <span>|</span>
+            <a href="/terms" className="hover:text-gray-300 transition-colors">Terms of Service</a>
+            <span>|</span>
+            <a href="/privacy#your-rights" className="hover:text-gray-300 transition-colors">Do Not Sell or Share My Personal Information</a>
+          </footer>
         </div>
         {/* Global Export Indicator - shows progress on ProjectsScreen too */}
         <GlobalExportIndicator />
@@ -525,6 +548,8 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
+        {/* T1740: Age/terms confirmation gate */}
+        <AgeConfirmationModal />
         {/* Toast Notifications */}
         <ToastContainer />
         {/* Admin button — fixed top-right, visible only to admins */}

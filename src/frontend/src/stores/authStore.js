@@ -18,6 +18,7 @@ export const useAuthStore = create((set, get) => ({
   pictureUrl: null,  // T430: Google profile picture URL
   showAuthModal: false,
   showAccountSettings: false,  // T430: Account settings panel
+  needsAgeConfirmation: false,  // T1740: Age/terms gate for new users
   pendingAction: null,
   isCheckingSession: true,  // true until initial session check completes
   // T1510: impersonation state — { id, email, expires_at } | null
