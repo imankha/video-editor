@@ -19,7 +19,6 @@ import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
-import { AgeConfirmationModal } from './components/AgeConfirmationModal';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -548,8 +547,6 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
-        {/* T1740: Age/terms confirmation gate */}
-        <AgeConfirmationModal />
         {/* Toast Notifications */}
         <ToastContainer />
         {/* Admin button — fixed top-right, visible only to admins */}

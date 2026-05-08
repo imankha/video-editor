@@ -1,7 +1,7 @@
 """
 T1740: Migrate auth DB for privacy compliance columns.
 
-Adds terms_accepted_at, terms_version, age_confirmed_at to the users table.
+Adds terms_accepted_at and terms_version to the users table.
 
 These columns are also added idempotently by auth_db.init_tables() on server
 boot, so this script is only needed for manual pre-deploy verification or
@@ -25,7 +25,6 @@ AUTH_DB = USER_DATA / "auth.sqlite"
 NEW_COLUMNS = [
     "terms_accepted_at TEXT",
     "terms_version TEXT",
-    "age_confirmed_at TEXT",
 ]
 
 

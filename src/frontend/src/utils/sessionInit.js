@@ -206,8 +206,8 @@ export async function initSession() {
         pictureUrl = meData.picture_url || null;
         impersonator = meData.impersonator || null;
         _currentUserId = userId;
-        if (meData.needs_age_confirmation) {
-          useAuthStore.setState({ needsAgeConfirmation: true });
+        if (meData.needs_terms_acceptance) {
+          useAuthStore.setState({ needsTermsAcceptance: true });
         }
         console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}${impersonator ? ` [impersonated by ${impersonator.email}]` : ''}`);
       } else {
@@ -249,6 +249,17 @@ export async function initSession() {
     _profileId = initData.profile_id;
     _currentProfileId = initData.profile_id;
     updatePreloader(40, 'Getting things ready...');
+
+    if (useAuthStore.getState().needsTermsAcceptance) {
+      fetch(`${API_BASE}/api/auth/accept-terms`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ terms_version: '2026-05-07' }),
+      }).then(() => {
+        useAuthStore.setState({ needsTermsAcceptance: false });
+      }).catch(() => {});
+    }
 
     return {
       profileId: initData.profile_id,

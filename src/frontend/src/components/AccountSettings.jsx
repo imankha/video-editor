@@ -160,9 +160,13 @@ export function AccountSettings() {
               <span className="text-xs text-green-400 font-medium">Active</span>
             </div>
 
-            <p className="text-xs text-gray-500">
-              Questions? <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a>
-            </p>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Privacy Policy</a>
+              <span>|</span>
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Terms of Service</a>
+              <span>|</span>
+              <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">Contact</a>
+            </div>
           </div>
 
           {/* Delete confirmation */}

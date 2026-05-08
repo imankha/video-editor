@@ -105,6 +105,13 @@ export function AuthGateModal() {
           {/* Shared OTP flow — resetKey forces internal state reset when modal reopens */}
           <OtpAuthForm resetKey={showAuthModal} />
 
+          <p className="text-xs text-gray-500 text-center">
+            By continuing, you agree to our{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Privacy Policy</a>
+            {' '}and{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Terms of Service</a>.
+          </p>
+
           {/* T1650: Report a problem — sends console logs to admins */}
           <div className="flex justify-center pt-2">
             <ReportProblemButton />

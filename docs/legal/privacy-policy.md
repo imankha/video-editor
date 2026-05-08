@@ -31,24 +31,45 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 
 ### Information You Provide
 
-| Category | Examples | Purpose |
-|----------|----------|---------|
-| Account Information | Email address, Google profile picture URL, Google ID | Account creation and authentication |
-| Video Content | Game footage uploaded by you (may contain identifiable minors) | Video processing, clip extraction, highlight creation |
-| Payment Information | Credit card data (processed entirely by Stripe; we do not store card numbers) | Payment for storage credits |
+| Category | Specific Data | Source |
+|----------|--------------|--------|
+| **Account data** | Email address | User-provided (Google OAuth or email OTP) |
+| **Account data** | Google ID (`sub` claim) | Google OAuth |
+| **Account data** | Profile picture URL | Google OAuth |
+| **Game metadata** | Opponent name, game date, tournament name, game type | User-provided when adding a game |
+| **Payment data** | Credit card and billing details | Processed entirely by Stripe; never stored on our servers |
 
 ### Information Collected Automatically
 
-| Category | Examples | Purpose |
-|----------|----------|---------|
-| Session Data | Session tokens (httponly cookie: `rb_session`) | Authentication and session management |
-| Usage Analytics | Page views, feature usage (collected via Cloudflare Web Analytics — no cookies, no PII) | Service improvement |
+| Category | Specific Data | Source |
+|----------|--------------|--------|
+| **Session data** | Session token (httponly cookie: `rb_session`) | Generated at login; used solely for authentication |
+| **Payment data** | Stripe customer ID | Created by Stripe when you make a purchase |
+| **Usage data** | Page views (anonymous, no PII) | Cloudflare Web Analytics (cookieless, privacy-focused) |
+| **Device data** | User agent string | HTTP headers; logged only in admin impersonation audit trail |
+
+### Information Derived from Your Content
+
+| Category | Specific Data | How We Derive It |
+|----------|--------------|-----------------|
+| **Video metadata** | Duration, resolution, frame rate, file size, file hash (blake3) | Automatically extracted from videos you upload |
+| **Editing data** | Clip selections, crop keyframes, overlay settings, export job records | Created through your editing actions in the Service |
+
+### Video Content
+
+**Video files and metadata.** Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events.
+
+We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata.
 
 ### Information We Do NOT Collect
 
-- We do not collect biometric data. Video framing/cropping is performed manually by users.
-- We do not use facial recognition or automated identification of individuals in videos.
-- We do not collect location data, device identifiers, or advertising identifiers.
+- No biometric data (video framing/cropping is performed manually by users)
+- No facial recognition or automated identification of individuals in videos
+- No location data (beyond what may exist in video metadata, which we do not extract)
+- No advertising identifiers
+- No cross-site tracking
+- No contact lists or social graphs
+- No data from children directly (children do not create accounts)
 
 ---
 
@@ -56,12 +77,13 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 
 We use your personal information to:
 
-- Provide, maintain, and improve the Service
-- Process video uploads and generate highlights
-- Process payments and manage storage credits
-- Send transactional emails (OTP codes, share notifications)
-- Respond to support requests
-- Comply with legal obligations
+- **Provide the Service:** Process, enhance, crop, overlay, and export your video clips as you direct.
+- **Authenticate you:** Verify your identity and maintain your session.
+- **Process payments:** Complete purchases via Stripe.
+- **Video content:** We use video you upload for processing, enhancement, and export as you direct. We may also analyze video metadata and content to identify games across multiple users' uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.
+- **Improve the Service:** Understand usage patterns through anonymous, aggregate analytics (Cloudflare Web Analytics).
+- **Communicate with you:** Send transactional emails related to your account (OTP codes, export completion, share notifications).
+- **Comply with legal obligations.**
 
 We do **not** use your information to:
 
@@ -85,6 +107,10 @@ We share your information only with service providers who assist in operating th
 | **Google** | Google ID, email, profile picture | OAuth authentication |
 | **Stripe** | Payment data (handled entirely by Stripe) | Payment processing |
 | **Cloudflare Web Analytics** | Anonymous page view data (no PII) | Privacy-preserving analytics |
+
+**With other users (future feature).** We may introduce features that allow users who recorded the same game to share or access each other's uploads. If we do, we will provide you with controls to opt in or out of such sharing, and we will notify you before enabling any sharing of your content. We will never share your video with other users without your explicit consent at the time of sharing.
+
+**Legal requirements.** We may disclose information if required by law, subpoena, or other legal process, or if we believe in good faith that disclosure is necessary to protect our rights, protect your safety or the safety of others, or investigate fraud.
 
 **We do not sell or share your personal information** as defined by the CCPA/CPRA. We have no advertising partners, data brokers, or third-party tracking.
 
@@ -138,13 +164,13 @@ We will verify your identity before fulfilling requests. We respond within 45 da
 
 ## 6. Children's Privacy (COPPA)
 
-**Reel Ballers is designed for adults (18+).** Our users are parents, guardians, and coaches who upload youth sports footage.
+**Reel Ballers is designed for parents, guardians, and coaches** of youth athletes. Children do not create accounts on our Service.
 
-- **Children do not create accounts.** All account holders must confirm they are 18 years of age or older.
-- **Children may appear in video content** uploaded by their parent, guardian, or authorized coach.
+- **Children are data subjects in videos, not account holders.** Our users are adults who upload and edit video of youth sporting events. Children appear in video content uploaded by their parent, guardian, or authorized coach.
 - **We do not knowingly collect personal information from children under 13** (or under 16 for CCPA purposes).
-- **No biometric data is extracted.** Video framing and cropping are manual operations performed by the user.
+- **No biometric data is extracted.** Video framing and cropping are manual operations performed by the user. We do not use facial recognition or detection.
 - **No automated identification** of individuals in videos is performed.
+- **No profiles of depicted individuals.** We do not build profiles of individuals who appear in videos.
 
 If you believe a child under 13 has somehow created an account, please contact us immediately at [privacy@reelballers.com](mailto:privacy@reelballers.com) and we will delete the account.
 

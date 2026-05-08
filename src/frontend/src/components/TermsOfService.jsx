@@ -61,26 +61,31 @@ export function TermsOfService() {
         {/* Section 3 */}
         <Section id="responsibilities" title="3. User Representations and Responsibilities">
           <p className="mb-3">By using the Service, you represent and warrant that:</p>
-          <ul className="list-disc pl-5 space-y-1">
+          <ul className="list-disc pl-5 space-y-1 mb-4">
             <li>You are at least 18 years of age</li>
             <li>You are the parent, legal guardian, or authorized coach of any minor depicted in content you upload</li>
             <li>You have the legal authority to upload and process content depicting minors</li>
-            <li>You will not upload content you do not have the right to use</li>
             <li>You will comply with all applicable laws regarding content depicting minors</li>
           </ul>
+
+          <h4 className="text-white font-medium mb-2">Your Content Rights</h4>
+          <p>You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to Reel Ballers, including the right to upload video depicting any individuals shown. If you upload video recorded by a third party (such as a club camera system, Veo, or Trace), you represent that you have permission to use and redistribute that content.</p>
         </Section>
 
         {/* Section 4 */}
         <Section id="acceptable-use" title="4. Acceptable Use Policy">
-          <p className="mb-3">You agree NOT to:</p>
+          <h4 className="text-white font-medium mb-2">Prohibited Content</h4>
+          <p className="mb-4">You may not upload content that is: (a) unlawful, harmful, threatening, abusive, or harassing; (b) depicts the exploitation or abuse of any person, especially minors; (c) infringes any third party&apos;s intellectual property rights; (d) contains malware or harmful code; or (e) violates any applicable law or regulation.</p>
+
+          <h4 className="text-white font-medium mb-2">Intended Use</h4>
+          <p className="mb-4">Reel Ballers is designed for youth sports video editing. You agree to use the Service only for uploading and editing sports-related video content. We reserve the right to remove content that falls outside this intended use.</p>
+
+          <h4 className="text-white font-medium mb-2">Prohibited Activities</h4>
           <ul className="list-disc pl-5 space-y-1">
-            <li>Upload content depicting abuse, exploitation, or harm</li>
-            <li>Upload content you do not own or have rights to</li>
-            <li>Use the Service for any illegal purpose</li>
-            <li>Attempt to gain unauthorized access to other users' data</li>
+            <li>Attempt to gain unauthorized access to other users&apos; data</li>
             <li>Interfere with or disrupt the Service</li>
             <li>Use bots or automated systems to access the Service</li>
-            <li>Upload content containing malware</li>
+            <li>Resell or redistribute the Service without authorization</li>
           </ul>
           <p className="mt-3">We reserve the right to suspend or terminate accounts that violate this policy.</p>
         </Section>
@@ -138,7 +143,7 @@ export function TermsOfService() {
 
         {/* Section 10 */}
         <Section id="dmca" title="10. DMCA Takedown Procedure">
-          <p className="mb-3">If you believe content infringes your copyright, send a DMCA notice to <a href="mailto:privacy@reelballers.com" className="text-blue-400 hover:underline">privacy@reelballers.com</a> including:</p>
+          <p className="mb-3">If you believe content on Reel Ballers infringes your copyright, send a DMCA notice to <a href="mailto:copyright@reelballers.com" className="text-blue-400 hover:underline">copyright@reelballers.com</a> including:</p>
           <ol className="list-decimal pl-5 space-y-1 mb-4">
             <li>Identification of the copyrighted work</li>
             <li>Identification of the infringing material with location</li>

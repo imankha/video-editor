@@ -148,27 +148,27 @@ async def init_session():
 async def whoami():
     """Return the current user ID and terms acceptance status."""
     user_id = get_current_user_id()
-    needs_confirmation = False
+    needs_terms = False
     with get_auth_db() as db:
         row = db.execute(
             "SELECT terms_accepted_at FROM users WHERE user_id = ?", (user_id,)
         ).fetchone()
         if row and not row["terms_accepted_at"]:
-            needs_confirmation = True
-    return {"user_id": user_id, "needs_age_confirmation": needs_confirmation}
+            needs_terms = True
+    return {"user_id": user_id, "needs_terms_acceptance": needs_terms}
 
 
 @router.post("/accept-terms")
 async def accept_terms(request: Request):
-    """Store age confirmation and terms acceptance for the current user."""
+    """Record terms acceptance for the current user (passive consent)."""
     user_id = get_current_user_id()
     body = await request.json()
     version = body.get("terms_version", "2026-05-07")
     now = datetime.utcnow().isoformat()
     with get_auth_db() as db:
         db.execute(
-            "UPDATE users SET terms_accepted_at = ?, terms_version = ?, age_confirmed_at = ? WHERE user_id = ?",
-            (now, version, now, user_id),
+            "UPDATE users SET terms_accepted_at = ?, terms_version = ? WHERE user_id = ?",
+            (now, version, user_id),
         )
         db.commit()
     sync_auth_db_to_r2()
@@ -372,12 +372,12 @@ async def auth_me(request: Request):
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
     picture_url = None
-    needs_age_confirmation = False
+    needs_terms_acceptance = False
     try:
         user_record = get_user_by_id(user_id)
         if user_record:
             picture_url = user_record["picture_url"]
-            needs_age_confirmation = not user_record.get("terms_accepted_at")
+            needs_terms_acceptance = not user_record.get("terms_accepted_at")
     except Exception:
         logger.exception(f"[Auth] /me: get_user_by_id failed for user={user_id} (ignored)")
 
@@ -396,7 +396,7 @@ async def auth_me(request: Request):
         "is_authenticated": True,
         "picture_url": picture_url,
         "impersonator": impersonator,
-        "needs_age_confirmation": needs_age_confirmation,
+        "needs_terms_acceptance": needs_terms_acceptance,
     }
 
 
