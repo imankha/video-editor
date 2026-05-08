@@ -187,7 +187,14 @@ function App() {
       </div>
 
       {/* Footer */}
-      <footer className="container mx-auto px-4 py-8 text-center text-gray-500">
+      <footer className="container mx-auto px-4 py-8 text-center text-gray-500 space-y-2">
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <a href="https://app.reelballers.com/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
+          <span>|</span>
+          <a href="https://app.reelballers.com/terms" className="hover:text-gray-300 transition-colors">Terms of Service</a>
+          <span>|</span>
+          <a href="https://app.reelballers.com/privacy#your-rights" className="hover:text-gray-300 transition-colors">Do Not Sell or Share</a>
+        </div>
         <p>&copy; {new Date().getFullYear()} ReelBallers. All rights reserved.</p>
       </footer>
     </div>

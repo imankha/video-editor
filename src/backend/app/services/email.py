@@ -17,6 +17,14 @@ logger = logging.getLogger(__name__)
 RESEND_API_URL = "https://api.resend.com/emails"
 FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
 
+# T1740: CAN-SPAM compliant footer for all emails
+_CAN_SPAM_FOOTER = """
+<p style="color: #6b7280; font-size: 11px; margin-top: 16px; text-align: center;">
+  Reel Ballers<br/>
+  <a href="https://app.reelballers.com/privacy" style="color: #6b7280;">Privacy Policy</a>
+</p>
+"""
+
 
 async def send_otp_email(to_email: str, code: str) -> None:
     """Send a 6-digit OTP code to the given email address via Resend."""
@@ -37,6 +45,7 @@ async def send_otp_email(to_email: str, code: str) -> None:
       <p style="color: #6b7280; font-size: 12px;">
         If you didn't request this code, you can safely ignore this email.
       </p>
+      {_CAN_SPAM_FOOTER}
     </div>
     """
 
@@ -227,6 +236,10 @@ async def send_share_email(
       <p style="color: #9ca3af; font-size: 12px;">
         Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
       </p>
+      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
+        You received this because {_html_escape(sharer_email)} shared a video with you on Reel Ballers.
+      </p>
+      {_CAN_SPAM_FOOTER}
     </div>
     """
 

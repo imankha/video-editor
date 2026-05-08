@@ -78,6 +78,7 @@ async def _broadcast_status(import_id: str, progress: dict):
         "error_code": progress.get("error_code"),
         "game_id": progress.get("game_id"),
         "message": progress.get("message", ""),
+        "credits_refunded": progress.get("credits_refunded", 0),
     })
 
 
@@ -171,6 +172,7 @@ async def _run_import(
                 from app.services.user_db import refund_credits
                 refund_credits(user_id, credits_charged, reference_id=import_id, source="import_refund")
                 logger.info(f"[game_import] Refunded {credits_charged} credits for failed import {import_id}")
+                progress["credits_refunded"] = credits_charged
             except Exception as refund_err:
                 logger.error(f"[game_import] Failed to refund {credits_charged} credits: {refund_err}")
 

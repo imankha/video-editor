@@ -206,6 +206,9 @@ export async function initSession() {
         pictureUrl = meData.picture_url || null;
         impersonator = meData.impersonator || null;
         _currentUserId = userId;
+        if (meData.needs_age_confirmation) {
+          useAuthStore.setState({ needsAgeConfirmation: true });
+        }
         console.log(`[Auth:Init] /me OK: user=${userId}, email=${email}${impersonator ? ` [impersonated by ${impersonator.email}]` : ''}`);
       } else {
         console.log(`[Auth:Init] /me returned ${meResponse.status} — unauthenticated`);

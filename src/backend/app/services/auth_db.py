@@ -195,6 +195,13 @@ def init_auth_db():
         """)
         db.commit()
 
+        # T1740: privacy compliance — terms acceptance and age confirmation
+        for col in ("terms_accepted_at TEXT", "terms_version TEXT", "age_confirmed_at TEXT"):
+            try:
+                db.execute(f"ALTER TABLE users ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass
+
         # T1330: drop any NULL-email (guest) rows + rebuild users with NOT NULL email.
         _migrate_users_email_not_null(db)
 
@@ -643,7 +650,7 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
     """Look up a user by user_id."""
     with get_auth_db() as db:
         row = db.execute(
-            "SELECT user_id, email, google_id, verified_at, created_at, picture_url FROM users WHERE user_id = ?",
+            "SELECT user_id, email, google_id, verified_at, created_at, picture_url, terms_accepted_at FROM users WHERE user_id = ?",
             (user_id,)
         ).fetchone()
         if row:
