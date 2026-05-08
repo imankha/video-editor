@@ -251,16 +251,15 @@ def main():
                 return
             user_dirs = [USER_DATA / row["user_id"]]
         else:
-            user_dirs = [d for d in USER_DATA.iterdir() if d.is_dir() and (d / "profiles").exists()]
+            user_dirs = [d for d in USER_DATA.iterdir() if d.is_dir() and ((d / "profiles").exists() or (d / "user.sqlite").exists())]
 
         for user_dir in user_dirs:
-            profiles_dir = user_dir / "profiles"
-            if not profiles_dir.exists():
-                continue
             print(f"\n--- {user_dir.name} ---")
-            for db_path in profiles_dir.glob("*/profile.sqlite"):
-                profile_id = db_path.parent.name
-                migrate_db(str(db_path), f"Profile {profile_id}: ")
+            profiles_dir = user_dir / "profiles"
+            if profiles_dir.exists():
+                for db_path in profiles_dir.glob("*/profile.sqlite"):
+                    profile_id = db_path.parent.name
+                    migrate_db(str(db_path), f"Profile {profile_id}: ")
             user_db = user_dir / "user.sqlite"
             if user_db.exists():
                 migrate_db(str(user_db), "user.sqlite: ")
