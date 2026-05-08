@@ -34,24 +34,32 @@ By using the Service, you represent and warrant that:
 - You are at least 18 years of age
 - You are the parent, legal guardian, or authorized coach of any minor depicted in video content you upload
 - You have the legal authority to upload and process content depicting minors
-- You will not upload content that you do not have the right to use
-- You will not upload content that is illegal, harmful, threatening, abusive, or otherwise objectionable
 - You will comply with all applicable laws regarding content depicting minors
+
+### Your Content Rights
+
+You represent and warrant that you have all necessary rights, licenses, and permissions to upload content to Reel Ballers, including the right to upload video depicting any individuals shown. If you upload video recorded by a third party (such as a club camera system, Veo, or Trace), you represent that you have permission to use and redistribute that content.
 
 ---
 
 ## 4. Acceptable Use Policy
 
+### Prohibited Content
+
+You may not upload content that is: (a) unlawful, harmful, threatening, abusive, or harassing; (b) depicts the exploitation or abuse of any person, especially minors; (c) infringes any third party's intellectual property rights; (d) contains malware or harmful code; or (e) violates any applicable law or regulation.
+
+### Intended Use
+
+Reel Ballers is designed for youth sports video editing. You agree to use the Service only for uploading and editing sports-related video content. We reserve the right to remove content that falls outside this intended use.
+
+### Prohibited Activities
+
 You agree NOT to:
 
-- Upload content depicting abuse, exploitation, or harm to any person
-- Upload content you do not own or have rights to
-- Use the Service for any illegal purpose
 - Attempt to gain unauthorized access to the Service or other users' data
 - Interfere with or disrupt the Service or servers
 - Use automated systems (bots, scrapers) to access the Service
 - Resell or redistribute the Service without authorization
-- Upload content containing malware or harmful code
 
 We reserve the right to suspend or terminate accounts that violate this policy.
 
@@ -126,7 +134,9 @@ We respect intellectual property rights. If you believe content on our Service i
 
 ### Filing a Notice
 
-Send a DMCA takedown notice to: [privacy@reelballers.com](mailto:privacy@reelballers.com)
+Send a DMCA takedown notice to: [copyright@reelballers.com](mailto:copyright@reelballers.com)
+
+**Designated Agent for DMCA Notices:** [Name and address TBD]
 
 Your notice must include:
 
