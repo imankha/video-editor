@@ -392,16 +392,10 @@ export function ProjectManager({
 
   // Handle game creation with details
   const handleCreateGame = useCallback(async (gameDetails) => {
-    if (gameDetails.importComplete) {
-      setShowGameDetailsModal(false);
-      useQuestStore.getState().fetchProgress({ force: true });
-      if (onLoadGame) onLoadGame(gameDetails.gameId);
-      return;
-    }
     if (onAnnotateWithFile) {
       await onAnnotateWithFile(gameDetails);
     }
-  }, [onAnnotateWithFile, onLoadGame]);
+  }, [onAnnotateWithFile]);
 
   // ProjectsScreen already fetches games on mount — no need to duplicate here.
   // The tab-switch effect below handles refreshing when user switches to games tab.
