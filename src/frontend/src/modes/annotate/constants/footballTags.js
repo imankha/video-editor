@@ -31,7 +31,7 @@ export const footballTags = {
   defensive_back: [
     { name: "Interception", description: "Catching a pass intended for the offense." },
     { name: "Pass Breakup", description: "Deflecting or disrupting a pass without intercepting." },
-    { name: "Tackle", description: "Bringing down the ball carrier in the open field." },
+    { name: "Forced Fumble", description: "Stripping or knocking the ball loose from the carrier." },
   ],
   kicker: [
     { name: "Field Goal", description: "Successful kick through the uprights for 3 points." },

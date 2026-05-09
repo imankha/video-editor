@@ -5,14 +5,14 @@ export const basketballTags = {
     { name: "Steal", description: "Taking the ball from the opposing team." },
   ],
   forward: [
-    { name: "Scoring", description: "Baskets from any range: layups, mid-range, three-pointers, dunks." },
+    { name: "Dunk", description: "Powerful finish at the rim by slamming the ball through the hoop." },
     { name: "Rebound", description: "Grabbing the ball after a missed shot." },
-    { name: "Block", description: "Deflecting or swatting an opponent's shot attempt." },
+    { name: "Fastbreak", description: "Pushing the ball up court quickly for an easy scoring chance." },
   ],
   center: [
     { name: "Post Move", description: "Skilled footwork and finishing in the low post area." },
-    { name: "Rebound", description: "Grabbing the ball after a missed shot." },
     { name: "Block", description: "Deflecting or swatting an opponent's shot attempt." },
+    { name: "Screen", description: "Setting a pick to free a teammate for a shot or drive." },
   ],
 };
 

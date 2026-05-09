@@ -22,7 +22,7 @@ export const flagFootballTags = {
   defensive_back: [
     { name: "Interception", description: "Catching a pass intended for the offense." },
     { name: "Pass Breakup", description: "Deflecting or disrupting a pass without intercepting." },
-    { name: "Flag Pull", description: "Pulling the ball carrier's flag to end the play." },
+    { name: "Coverage", description: "Staying with a receiver to deny the pass." },
   ],
 };
 

@@ -11,12 +11,11 @@ export const lacrosseTags = {
   ],
   defense: [
     { name: "Check", description: "Legal stick check that dislodges the ball from an opponent." },
-    { name: "Ground Ball", description: "Winning possession of a loose ball." },
     { name: "Clear", description: "Moving the ball from the defensive end past midfield." },
+    { name: "Caused Turnover", description: "Forcing the opponent to lose possession through a check or pressure." },
   ],
   goalie: [
     { name: "Save", description: "Goalkeeper stopping a shot." },
-    { name: "Clear", description: "Moving the ball from the defensive end past midfield." },
     { name: "Outlet", description: "Quick pass after a save to start the transition." },
   ],
 };
