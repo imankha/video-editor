@@ -541,14 +541,29 @@ export function ExportButtonContainer({
     disconnectedRef.current = false;
     uploadCompleteRef.current = false;
 
-    // Health check
-    try {
+    // Health check — retry once on timeout to handle Fly.io cold starts
+    const healthCheck = async (timeoutMs) => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      const healthResponse = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      if (!healthResponse.ok) {
-        throw new Error(`Server returned ${healthResponse.status}: ${healthResponse.statusText}`);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const resp = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
+      }
+    };
+    try {
+      try {
+        await healthCheck(10000);
+      } catch (firstErr) {
+        if (firstErr.name === 'AbortError') {
+          setProgressMessage('Server waking up, retrying...');
+          await healthCheck(20000);
+        } else {
+          throw firstErr;
+        }
       }
     } catch (healthErr) {
       console.error('[ExportButtonContainer] Server health check failed:', healthErr);
