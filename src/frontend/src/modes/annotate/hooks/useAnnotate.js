@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
-import { getAllTagNames, DEFAULT_SPORT } from '../constants/tagRegistry';
+import { getAllSupportedTagNames } from '../constants/tagRegistry';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -27,7 +27,7 @@ import { getAllTagNames, DEFAULT_SPORT } from '../constants/tagRegistry';
  * - 5 star -> !!
  */
 
-const ALLOWED_TAGS = getAllTagNames(DEFAULT_SPORT);
+const ALLOWED_TAGS = getAllSupportedTagNames();
 
 // Required TSV columns in order
 const REQUIRED_COLUMNS = ['start_time', 'rating', 'tags', 'clip_name', 'clip_duration', 'notes'];

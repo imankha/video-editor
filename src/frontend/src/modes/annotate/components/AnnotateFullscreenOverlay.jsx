@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Star, X, Plus } from 'lucide-react';
-import { getPositions, getTagSet, DEFAULT_SPORT } from '../constants/tagRegistry';
+import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { useCurrentProfile } from '../../../stores';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 
@@ -104,6 +105,9 @@ export function AnnotateFullscreenOverlay({
   layout = 'overlay',
 }) {
   const isEditMode = !!existingClip;
+  const currentProfile = useCurrentProfile();
+  const sport = currentProfile?.sport || 'soccer';
+  const tagSet = getTagSet(sport);
 
   const [dockPosition, setDockPosition] = useState(savedDockPosition);
   const handleDockChange = useCallback((pos) => {
@@ -313,16 +317,18 @@ export function AnnotateFullscreenOverlay({
         </div>
 
         {/* Tag Selection */}
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Tags</label>
-          <TagSelector
-            positions={getPositions(DEFAULT_SPORT)}
-            tagsByPosition={getTagSet(DEFAULT_SPORT).tags}
-            selectedTags={selectedTags}
-            onTagToggle={handleTagToggle}
-            size="lg"
-          />
-        </div>
+        {tagSet && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Tags</label>
+            <TagSelector
+              positions={getPositions(sport)}
+              tagsByPosition={tagSet.tags}
+              selectedTags={selectedTags}
+              onTagToggle={handleTagToggle}
+              size="lg"
+            />
+          </div>
+        )}
 
         {/* Clip Name - always rendered to keep panel height stable */}
         <div className="mb-4">

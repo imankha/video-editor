@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, Star, Check, Plus } from 'lucide-react';
-import { getPositions, getTagSet, DEFAULT_SPORT } from '../constants/tagRegistry';
+import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { useCurrentProfile } from '../../../stores';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 
@@ -73,6 +74,10 @@ export function ClipDetailsEditor({
   onScrubLock,
   onScrubUnlock,
 }) {
+  const currentProfile = useCurrentProfile();
+  const sport = currentProfile?.sport || 'soccer';
+  const tagSet = getTagSet(sport);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [reelRequested, setReelRequested] = useState(false);
 
@@ -203,15 +208,17 @@ export function ClipDetailsEditor({
         </div>
 
         {/* Tags Selection */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">Tags</label>
-          <TagSelector
-            positions={getPositions(DEFAULT_SPORT)}
-            tagsByPosition={getTagSet(DEFAULT_SPORT).tags}
-            selectedTags={region.tags || []}
-            onTagToggle={handleTagToggle}
-          />
-        </div>
+        {tagSet && (
+          <div>
+            <label className="block text-gray-400 text-xs mb-1">Tags</label>
+            <TagSelector
+              positions={getPositions(sport)}
+              tagsByPosition={tagSet.tags}
+              selectedTags={region.tags || []}
+              onTagToggle={handleTagToggle}
+            />
+          </div>
+        )}
 
         {/* Name Input */}
         <div className="flex items-center gap-2">

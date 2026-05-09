@@ -3,6 +3,8 @@ import { X, Upload, Film, Loader } from 'lucide-react';
 import { Button, StarRating, TagSelector } from './shared';
 import { generateClipName } from '../utils/clipDisplayName';
 import { ensureUniqueName, getExistingNamesForGame } from '../utils/uniqueName';
+import { getPositions, getTagSet } from '../modes/annotate/constants/tagRegistry';
+import { useCurrentProfile } from '../stores';
 
 /**
  * UploadClipModal - Modal for uploading a clip with metadata
@@ -26,6 +28,10 @@ export function UploadClipModal({
   selectedFile,
   existingClips = [],
 }) {
+  const currentProfile = useCurrentProfile();
+  const sport = currentProfile?.sport || 'soccer';
+  const tagSet = getTagSet(sport);
+
   // Form state
   const [name, setName] = useState('');
   const [isNameManual, setIsNameManual] = useState(false);
@@ -179,7 +185,14 @@ export function UploadClipModal({
           <div>
             <label className="block text-sm text-gray-400 mb-2">Tags</label>
             <div className="max-h-48 overflow-y-auto pr-2">
-              <TagSelector selectedTags={selectedTags} onTagToggle={handleTagToggle} compact />
+              {tagSet && (
+                <TagSelector
+                  positions={getPositions(sport)}
+                  tagsByPosition={tagSet.tags}
+                  selectedTags={selectedTags}
+                  onTagToggle={handleTagToggle}
+                />
+              )}
             </div>
           </div>
 

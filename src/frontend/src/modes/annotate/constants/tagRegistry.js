@@ -65,4 +65,16 @@ export function getAllTagNames(sport) {
   return new Set(getAllTags(sport).map(t => t.name));
 }
 
+export function getAllSupportedTagNames() {
+  const names = new Set();
+  for (const sportData of Object.values(TAG_SETS)) {
+    for (const tags of Object.values(sportData.tags)) {
+      for (const tag of tags) {
+        names.add(tag.name);
+      }
+    }
+  }
+  return names;
+}
+
 export { DEFAULT_SPORT };
