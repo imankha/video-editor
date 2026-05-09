@@ -113,19 +113,25 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Sport</label>
-          <input
-            type="text"
-            list="profile-sport-options"
-            value={sport}
-            onChange={(e) => setSport(e.target.value)}
-            placeholder="Select or type a sport"
-            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
-          />
-          <datalist id="profile-sport-options">
+          <select
+            value={SUPPORTED_SPORTS.some(s => s.name === sport) ? sport : '__custom__'}
+            onChange={(e) => setSport(e.target.value === '__custom__' ? '' : e.target.value)}
+            className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+          >
             {SUPPORTED_SPORTS.map(s => (
-              <option key={s.id} value={s.name} />
+              <option key={s.id} value={s.name}>{s.name}</option>
             ))}
-          </datalist>
+            <option value="__custom__">Other</option>
+          </select>
+          {!SUPPORTED_SPORTS.some(s => s.name === sport) && (
+            <input
+              type="text"
+              value={sport}
+              onChange={(e) => setSport(e.target.value)}
+              placeholder="Type your sport"
+              className="w-full mt-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+            />
+          )}
         </div>
       </div>
 
