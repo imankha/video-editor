@@ -1,7 +1,17 @@
 import { soccerTags, positions as soccerPositions } from './soccerTags';
+import { flagFootballTags, positions as flagFootballPositions } from './flagFootballTags';
+import { footballTags, positions as footballPositions } from './footballTags';
+import { basketballTags, positions as basketballPositions } from './basketballTags';
+import { lacrosseTags, positions as lacrossePositions } from './lacrosseTags';
+import { rugbyTags, positions as rugbyPositions } from './rugbyTags';
 
 const TAG_SETS = {
   soccer: { positions: soccerPositions, tags: soccerTags },
+  flag_football: { positions: flagFootballPositions, tags: flagFootballTags },
+  american_football: { positions: footballPositions, tags: footballTags },
+  basketball: { positions: basketballPositions, tags: basketballTags },
+  lacrosse: { positions: lacrossePositions, tags: lacrosseTags },
+  rugby: { positions: rugbyPositions, tags: rugbyTags },
 };
 
 const DEFAULT_SPORT = 'soccer';
