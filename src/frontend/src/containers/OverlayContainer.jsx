@@ -136,9 +136,6 @@ export function OverlayContainer({
     return null;
   }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, framingVideoFile]);
 
-  // Player detection for click-to-track feature
-  const playerDetectionEnabled = editorMode === EDITOR_MODES.OVERLAY && isTimeInEnabledRegion(currentTime);
-
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);
 
@@ -156,9 +153,29 @@ export function OverlayContainer({
   // The clicked detection is cleared when the user plays or manually scrubs.
   const [clickedDetection, setClickedDetection] = useState(null);
 
+  // Log detection frame map when regions change (one-time per region set)
+  useEffect(() => {
+    if (!highlightRegions?.length) return;
+    const regionSummaries = highlightRegions.map(r => {
+      const fps = r.fps || highlightRegionsFramerate || 30;
+      const startFrame = Math.round(r.startTime * fps);
+      const endFrame = Math.round(r.endTime * fps);
+      const detFrames = (r.detections || []).map(d => d.frame ?? Math.round(d.timestamp * fps));
+      return `  ${r.id}: frames[${startFrame}-${endFrame}] time[${r.startTime.toFixed(3)}-${r.endTime.toFixed(3)}]s fps=${fps} detectionFrames=[${detFrames.join(',')}]`;
+    });
+    console.log(`[DetectionSeek] REGION MAP (${highlightRegions.length} regions):\n${regionSummaries.join('\n')}`);
+  }, [highlightRegions, highlightRegionsFramerate]);
+
+  // Player detection for click-to-track feature
+  // When clickedDetection is set, bypass region check — the user explicitly clicked a marker,
+  // so detection must stay enabled even if browser seek lands slightly outside the region boundary.
+  const playerDetectionEnabled = editorMode === EDITOR_MODES.OVERLAY &&
+    (clickedDetection != null || isTimeInEnabledRegion(currentTime));
+
   // Handler for when a detection marker is clicked
   const handleDetectionMarkerClick = useCallback((detection) => {
     // detection = { regionId, frame, boxes, videoWidth, videoHeight }
+    console.log(`[DetectionSeek] SET clickedDetection frame=${detection.frame} boxes=${detection.boxes?.length} regionId=${detection.regionId}`);
     setClickedDetection(detection);
   }, []);
 
@@ -183,6 +200,7 @@ export function OverlayContainer({
     const frameDistance = Math.abs(currentFrame - clickedFrame);
 
     if (frameDistance > DETECTION_FRAME_THRESHOLD) {
+      console.log(`[DetectionSeek] CLEAR clickedDetection: currentFrame=${currentFrame} clickedFrame=${clickedFrame} distance=${frameDistance} currentTime=${currentTime.toFixed(6)}s`);
       setClickedDetection(null);
     }
   }, [currentTime, clickedDetection, highlightRegionsFramerate]);
@@ -202,6 +220,7 @@ export function OverlayContainer({
     // PRIORITY 1: If user clicked a detection marker, show that detection directly
     // This is immune to browser seek imprecision - clicking green marker ALWAYS shows boxes
     if (clickedDetection && clickedDetection.boxes?.length > 0) {
+      console.log(`[DetectionSeek] RENDER via clickedDetection frame=${clickedDetection.frame} playerDetectionEnabled=${playerDetectionEnabled} currentTime=${currentTime.toFixed(6)}s`);
       return {
         detections: clickedDetection.boxes,
         videoWidth: clickedDetection.videoWidth || 0,

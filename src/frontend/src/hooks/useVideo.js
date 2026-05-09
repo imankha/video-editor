@@ -42,6 +42,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // during the swap so the user never sees "format not supported".
   const isRecoveringRef = useRef(false);
 
+  // Detection seek timing: tracks when seek was initiated for latency measurement
+  const seekTimingRef = useRef(null);
+
   // T1400: monotonic load id + watchdog timer handle so range-fallback
   // warnings can be correlated across concurrent/serial loads and cleared
   // on loadeddata/error/unmount.
@@ -385,10 +388,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         : Math.max(0, Math.min(time, effectiveDuration));
 
       const target = clipToVideo(validTime);
+      const fps = getFramerate(videoRef.current);
+      seekTimingRef.current = { t0: performance.now(), requestedTime: time, validTime, videoTarget: target, fps };
+      console.log(`[DetectionSeek] SEEK requested=${time.toFixed(6)}s clamped=${validTime.toFixed(6)}s videoElement=${target.toFixed(6)}s requestedFrame=${Math.round(time * fps)} clampedFrame=${Math.round(validTime * fps)}`);
       setIsSeeking(true);
-      setCurrentTime(validTime); // Optimistic update: UI responds instantly (playhead, timestamps, selection)
-      videoRef.current.currentTime = target; // Translate clip time → video element time
-      // The seeked event (handleSeeked) will refine with the actual displayed frame time
+      setCurrentTime(validTime);
+      videoRef.current.currentTime = target;
     }
   };
 
@@ -587,7 +592,18 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const handleSeeked = () => {
     setIsSeeking(false);
     if (videoRef.current) {
-      setCurrentTime(videoToClip(videoRef.current.currentTime));
+      const actualVideoTime = videoRef.current.currentTime;
+      const actualClipTime = videoToClip(actualVideoTime);
+      if (seekTimingRef.current) {
+        const { t0, validTime, fps } = seekTimingRef.current;
+        const latencyMs = Math.round(performance.now() - t0);
+        const requestedFrame = Math.round(validTime * fps);
+        const actualFrame = Math.round(actualClipTime * fps);
+        const frameDelta = actualFrame - requestedFrame;
+        console.log(`[DetectionSeek] SEEKED latency=${latencyMs}ms actualVideoTime=${actualVideoTime.toFixed(6)}s actualClipTime=${actualClipTime.toFixed(6)}s requestedFrame=${requestedFrame} actualFrame=${actualFrame} frameDelta=${frameDelta}`);
+        seekTimingRef.current = null;
+      }
+      setCurrentTime(actualClipTime);
     }
   };
 

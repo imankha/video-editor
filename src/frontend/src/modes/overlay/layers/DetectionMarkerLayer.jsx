@@ -110,7 +110,9 @@ export default function DetectionMarkerLayer({
               // to avoid clip-boundary ambiguity, so no offset is needed here.
               if (onSeek) {
                 if (marker.frame !== undefined && marker.fps) {
-                  onSeek(frameToTime(marker.frame, marker.fps));
+                  const seekTarget = frameToTime(marker.frame, marker.fps);
+                  console.log(`[DetectionSeek] CLICK marker frame=${marker.frame} fps=${marker.fps} seekTarget=${seekTarget.toFixed(6)}s boxes=${marker.boxCount}`);
+                  onSeek(seekTarget);
                 } else {
                   console.warn(`[DetectionMarkerLayer] Missing frame/fps data for marker at ${marker.timestamp}s - using timestamp. Re-export framing to fix.`);
                   onSeek(marker.timestamp);
