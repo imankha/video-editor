@@ -164,11 +164,6 @@ async def ws_export_progress(websocket: WebSocket, export_id: str):
     await websocket_export_progress(websocket, export_id)
 
 
-@app.websocket("/ws/import/{import_id}")
-async def ws_import_progress(websocket: WebSocket, import_id: str):
-    """WebSocket endpoint for real-time import progress updates"""
-    await websocket_export_progress(websocket, import_id)
-
 
 def get_git_version_info():
     """Get git commit hash and branch name for logging"""
