@@ -152,12 +152,6 @@ class TestRunInSubprocess:
 class TestSyncFunctionPickling:
     """Verify sync processor functions can be pickled (required for ProcessPoolExecutor)."""
 
-    def test_ingest_sync_picklable(self):
-        from app.services.local_processors import _ingest_sync
-        pickled = pickle.dumps(_ingest_sync)
-        restored = pickle.loads(pickled)
-        assert callable(restored)
-
     def test_framing_sync_picklable(self):
         from app.services.local_processors import _framing_sync
         pickled = pickle.dumps(_framing_sync)
@@ -179,28 +173,6 @@ class TestSyncFunctionPickling:
 
 class TestSubprocessImports:
     """Test that sync functions can import app modules when run in a child process."""
-
-    @pytest.mark.asyncio
-    async def test_ingest_sync_imports_in_subprocess(self):
-        """Run _ingest_sync in subprocess with a URL that will fail fast,
-        just to verify module imports work in the child process."""
-        from app.services.modal_client import _run_in_subprocess
-        from app.services.local_processors import _ingest_sync
-
-        result = await _run_in_subprocess(
-            _ingest_sync,
-            {
-                "source_url": "http://localhost:1/nonexistent.mp4",
-                "source_type": "direct",
-            },
-        )
-        # Should fail on download, not on import
-        assert result["status"] == "error"
-        assert "error" in result
-        # The error should be about connection, not about missing modules
-        error_lower = result["error"].lower()
-        assert "import" not in error_lower or "httpx" not in error_lower, \
-            f"Import error in subprocess: {result['error']}"
 
     @pytest.mark.asyncio
     async def test_overlay_sync_imports_in_subprocess(self):
@@ -226,23 +198,6 @@ class TestSubprocessImports:
         assert "modulenotfounderror" not in error_lower, \
             f"Module import failed in subprocess: {result['error']}"
 
-    @pytest.mark.asyncio
-    async def test_ingest_sync_hls_imports_in_subprocess(self):
-        """Test HLS path imports (uses run_ffmpeg)."""
-        from app.services.modal_client import _run_in_subprocess
-        from app.services.local_processors import _ingest_sync
-
-        result = await _run_in_subprocess(
-            _ingest_sync,
-            {
-                "source_url": "http://localhost:1/nonexistent.m3u8",
-                "source_type": "hls",
-            },
-        )
-        assert result["status"] == "error"
-        error_lower = result["error"].lower()
-        assert "modulenotfounderror" not in error_lower, \
-            f"Module import failed in subprocess: {result['error']}"
 
 
 class TestProgressBridging:

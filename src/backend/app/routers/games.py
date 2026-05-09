@@ -41,12 +41,6 @@ from app.services.auth_db import (
     get_storage_refs_for_user,
 )
 
-from app.services.game_import import (
-    start_import,
-    get_import_progress,
-    detect_platform,
-    ImportStatus,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -704,52 +698,6 @@ async def activate_game(game_id: int):
         "upload_cost_charged": upload_cost,
     }
 
-
-class ImportUrlRequest(BaseModel):
-    url: Optional[str] = Field(None, description="Single Veo or Trace game URL")
-    urls: Optional[list[str]] = Field(None, description="Per-half Veo URLs [first_half, second_half]")
-    opponent_name: Optional[str] = None
-    game_date: Optional[str] = None
-    game_type: Optional[str] = None
-
-
-@router.post("/import-url", status_code=202)
-async def import_from_url(request: ImportUrlRequest):
-    """Import a game from Veo or Trace URL(s).
-
-    Accepts either a single `url` or a `urls` list (for per-half Veo imports).
-    Detects the platform, validates, and starts a background download.
-    Returns immediately with an import_id for progress polling.
-    """
-    user_id = get_current_user_id()
-    profile_id = get_current_profile_id()
-
-    urls = request.urls or ([request.url] if request.url else [])
-    if not urls:
-        raise HTTPException(status_code=400, detail="No URL provided")
-
-    try:
-        result = start_import(
-            urls=urls,
-            user_id=user_id,
-            profile_id=profile_id,
-            opponent_name=request.opponent_name,
-            game_date=request.game_date,
-            game_type=request.game_type,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return result
-
-
-@router.get("/imports/{import_id}/progress")
-async def get_import_status(import_id: str):
-    """Poll import progress. Returns current status, percentage, and game_id when complete."""
-    progress = get_import_progress(import_id)
-    if not progress:
-        raise HTTPException(status_code=404, detail="Import not found")
-    return progress
 
 
 @router.get("")

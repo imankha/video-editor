@@ -110,10 +110,6 @@ MODAL_JOB_RETRY_ATTEMPTS = 3  # total attempts (1 initial + 2 retries)
 MODAL_JOB_RETRY_DELAY = 3.0  # initial delay in seconds
 MODAL_JOB_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
 
-# Timeout configuration for ingest jobs
-INGEST_PER_ATTEMPT_TIMEOUT = 600  # seconds — matches Modal function timeout (2x worst expected)
-INGEST_PROGRESS_STALL_TIMEOUT = 180  # seconds — no progress update for 3 min → abort attempt
-
 
 def _is_transient_network_error(error: Exception) -> bool:
     """
@@ -339,7 +335,6 @@ _process_framing_ai_fn = None
 _process_framing_ai_parallel_fn = None
 _detect_players_fn = None
 _detect_players_batch_fn = None
-_ingest_video_fn = None
 
 
 def modal_enabled() -> bool:
@@ -1363,187 +1358,6 @@ async def call_modal_detect_players_batch(
 
 
 
-def _get_ingest_video_fn():
-    """Get a reference to the deployed ingest_video_to_r2 function."""
-    global _ingest_video_fn
-
-    if _ingest_video_fn is not None:
-        return _ingest_video_fn
-
-    try:
-        import modal
-        _ingest_video_fn = modal.Function.from_name(MODAL_APP_NAME, "ingest_video_to_r2")
-        logger.info(f"[Modal] Connected to: {MODAL_APP_NAME}/ingest_video_to_r2")
-        return _ingest_video_fn
-    except Exception as e:
-        logger.error(f"[Modal] Failed to connect to ingest_video_to_r2: {e}")
-        raise RuntimeError(f"Modal ingest_video_to_r2 not available: {e}")
-
-
-async def call_modal_ingest(
-    source_url: str,
-    source_type: str,
-    progress_callback=None,
-) -> dict:
-    """
-    Call Modal ingest_video_to_r2 for downloading/remuxing video and uploading to R2.
-
-    CPU-only function (no GPU). Handles both direct downloads (Veo) and HLS remux (Trace).
-
-    When MODAL_ENABLED=false, uses local fallback with same interface.
-
-    Args:
-        source_url: Direct MP4 URL or m3u8 URL
-        source_type: "direct" (Veo) or "hls" (Trace)
-        progress_callback: Optional async callable(progress, message, phase)
-
-    Returns:
-        {"status": "success", "blake3_hash": "...", "file_size": int} or
-        {"status": "error", "error": "..."}
-    """
-    if not _modal_enabled:
-        from app.services.local_processors import _ingest_sync
-        logger.info(f"[Modal] Using local subprocess for ingest ({source_type})")
-        return await _run_in_subprocess(
-            _ingest_sync,
-            {"source_url": source_url, "source_type": source_type},
-            progress_callback=progress_callback,
-        )
-
-    _log_modal_job_start(
-        job_type="ingest",
-        job_id="ingest",
-        user_id="global",
-        modal_app=MODAL_APP_NAME,
-        extra={"source_type": source_type},
-    )
-
-    job_start_time = time.time()
-
-    last_error = None
-    for attempt in range(1, MODAL_JOB_RETRY_ATTEMPTS + 1):
-        try:
-            loop = asyncio.get_running_loop()
-            ingest_fn = _get_ingest_video_fn()
-
-            def get_generator():
-                return ingest_fn.remote_gen(
-                    source_url=source_url,
-                    source_type=source_type,
-                )
-
-            gen = await loop.run_in_executor(None, get_generator)
-
-            result = None
-            last_progress = None
-
-            def next_item(generator):
-                try:
-                    return next(generator)
-                except StopIteration:
-                    return None
-
-            attempt_start = time.time()
-
-            while True:
-                elapsed = time.time() - attempt_start
-                remaining = INGEST_PER_ATTEMPT_TIMEOUT - elapsed
-                if remaining <= 0:
-                    raise asyncio.TimeoutError(
-                        f"Ingest attempt timed out after {INGEST_PER_ATTEMPT_TIMEOUT}s"
-                    )
-
-                stall_limit = min(INGEST_PROGRESS_STALL_TIMEOUT, remaining)
-
-                try:
-                    update = await asyncio.wait_for(
-                        loop.run_in_executor(None, next_item, gen),
-                        timeout=stall_limit,
-                    )
-                except asyncio.TimeoutError:
-                    raise asyncio.TimeoutError(
-                        f"Ingest stalled — no progress for {INGEST_PROGRESS_STALL_TIMEOUT}s"
-                    )
-
-                if update is None:
-                    break
-
-                if "status" in update:
-                    result = update
-                    break
-
-                progress = update.get("progress", 0)
-                message = update.get("message", "Processing...")
-                phase = update.get("phase", "processing")
-
-                if last_progress is None or abs(progress - last_progress) >= 5:
-                    logger.info(f"[Modal] Ingest progress: {progress}% - {message}")
-                    last_progress = progress
-
-                if progress_callback:
-                    try:
-                        await progress_callback(progress, message, phase)
-                    except Exception as e:
-                        logger.warning(f"[Modal] Ingest progress callback failed: {e}")
-
-            total_elapsed = time.time() - job_start_time
-
-            _log_modal_job_end(
-                job_type="ingest",
-                job_id="ingest",
-                user_id="global",
-                modal_app=MODAL_APP_NAME,
-                elapsed=total_elapsed,
-                status=result.get("status", "unknown") if result else "no_result",
-            )
-
-            return result or {"status": "error", "error": "No result received from Modal"}
-
-        except Exception as e:
-            last_error = e
-            total_elapsed = time.time() - job_start_time
-            error_class = classify_modal_error(e)
-
-            _log_modal_job_end(
-                job_type="ingest",
-                job_id="ingest",
-                user_id="global",
-                modal_app=MODAL_APP_NAME,
-                elapsed=total_elapsed,
-                status="error",
-                error=e,
-                error_class=error_class,
-                attempt=attempt,
-            )
-
-            if error_class == "transient" and attempt < MODAL_JOB_RETRY_ATTEMPTS:
-                delay = MODAL_JOB_RETRY_DELAY * (MODAL_JOB_RETRY_BACKOFF ** (attempt - 1))
-                logger.warning(
-                    f"[Modal] Ingest transient error on attempt {attempt}/{MODAL_JOB_RETRY_ATTEMPTS}, "
-                    f"retrying in {delay:.0f}s: {e}"
-                )
-                if progress_callback:
-                    try:
-                        await progress_callback(
-                            -1,
-                            f"Retrying... attempt {attempt + 1}/{MODAL_JOB_RETRY_ATTEMPTS}",
-                            "retry",
-                        )
-                    except Exception:
-                        pass
-                await asyncio.sleep(delay)
-                continue
-            else:
-                break
-
-    total_elapsed = time.time() - job_start_time
-    logger.error(f"[Modal] Ingest failed after {MODAL_JOB_RETRY_ATTEMPTS} attempts ({total_elapsed:.0f}s): {last_error}", exc_info=True)
-    return {
-        "status": "error",
-        "error": "Import failed after multiple attempts. The video server may be slow right now — please try again later, or upload the file directly.",
-        "error_code": "INGEST_EXHAUSTED",
-    }
-
 
 # Test function
 if __name__ == "__main__":
@@ -1557,7 +1371,6 @@ if __name__ == "__main__":
             print("  - process_framing_ai: Crop with Real-ESRGAN AI upscaling (T4 GPU)")
             print("  - detect_players_modal: YOLO player detection (T4 GPU)")
             print("  - process_clips_ai: Unified multi-clip AI upscaling (GPU)")
-            print("  - ingest_video_to_r2: Download/remux and upload to R2 (CPU)")
         else:
             print("Modal is disabled - set MODAL_ENABLED=true to enable")
 

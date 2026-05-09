@@ -306,6 +306,21 @@ Make the app usable on mobile phones. Currently desktop-first layout breaks on n
 |----|------|-------------|
 | T1073 | [Team + Athlete Name on Profile](tasks/for-launch/T1073-team-athlete-name-profile.md) | T1610 (Profile Fields) in Athlete Profile epic |
 
+## Removed (Legal)
+
+| ID | Task | Reason |
+|----|------|--------|
+| | **[Video Link Import](tasks/video-import/EPIC.md)** | **Entire epic removed -- Veo/Trace ToS violation, CFAA risk, no DMCA safe harbor. See T2680.** |
+| T2500 | [Veo Link Import](tasks/for-alpha/T2500-veo-link-import.md) | Removed by T2680 |
+| T2600 | ↳ [Veo Import POC](tasks/video-import/T2600-veo-import-poc.md) | Removed by T2680 |
+| T2610 | ↳ [Trace Import POC](tasks/video-import/T2610-trace-import-poc.md) | Removed by T2680 |
+| T2620 | ↳ [Import Backend Service](tasks/video-import/T2620-import-backend-service.md) | Removed by T2680 |
+| T2625 | ↳ [Modal Video Ingest](tasks/video-import/T2625-modal-video-ingest.md) | Removed by T2680 |
+| T2627 | ↳ [Optimize Modal Ingest](tasks/video-import/T2627-optimize-modal-ingest.md) | Removed by T2680 |
+| T2628 | ↳ [Ingest Timeout & Retry](tasks/video-import/T2628-modal-ingest-timeout-retry.md) | Removed by T2680 |
+| T2630 | ↳ [Add Game Import UI](tasks/video-import/T2630-add-game-import-ui.md) | Removed by T2680 |
+| T2635 | ↳ [Import Failure UX](tasks/video-import/T2635-import-failure-ux.md) | Removed by T2680 |
+
 ## Won't Do
 
 | ID | Task | Reason |

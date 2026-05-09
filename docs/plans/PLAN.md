@@ -139,18 +139,8 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2410 | ↳ [Playback-Mode Recap Viewer](tasks/expired-game-experience/T2410-playback-mode-recap-viewer.md) | 7 | 5 | 1.4 | DONE | [ ] | Replace RecapPlayerModal with read-only playback mode showing annotations, clip navigation |
 | T2420 | ↳ [Annotations + Highlights Tabs](tasks/expired-game-experience/T2420-annotations-highlights-tabs.md) | 6 | 4 | 1.5 | DONE | [ ] | Two video modes: all annotated clips, or just 5-star highlights |
 | T2430 | ↳ [Brilliant Clips in My Reels](tasks/expired-game-experience/T2430-brilliant-clips-in-my-reels.md) | 6 | 2 | 3.0 | DONE | [ ] | Ensure auto-exported 5-star clips are filterable and always accessible in My Reels |
-| T2500 | ~~[Veo Link Import](tasks/for-alpha/T2500-veo-link-import.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Entire Video Link Import epic removed by T2680 (legal risk). |
 | T2670 | [Upload Slow Connection Optimization](tasks/T2670-upload-slow-connection-optimization.md) | 7 | 4 | 1.8 | TODO | [ ] | 25MB parts (from 100MB), per-part retry with backoff, adaptive concurrency, save every part. Fixes failed uploads on 5-10 Mbps connections. |
 | T2680 | [Remove Video Link Import](tasks/T2680-remove-video-link-import.md) | 9 | 3 | 3.0 | TODO | [ ] | Remove all Veo/Trace link import code (T2600-T2635). Legal risk: ToS violation, CFAA, no DMCA safe harbor. Adopt CapCut liability profile -- user-upload only. |
-| | ~~**[Video Link Import](tasks/video-import/EPIC.md)**~~ | 9 | 5 | 1.8 | | | ~~**REMOVED by T2680 -- legal liability too high. See task for full analysis.**~~ |
-| T2600 | ↳ ~~[Veo Import POC](tasks/video-import/T2600-veo-import-poc.md)~~ | 8 | 3 | 2.7 | REMOVED | [ ] | Removed by T2680 |
-| T2610 | ↳ ~~[Trace Import POC](tasks/video-import/T2610-trace-import-poc.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Removed by T2680 |
-| T2620 | ↳ ~~[Import Backend Service](tasks/video-import/T2620-import-backend-service.md)~~ | 9 | 5 | 1.8 | REMOVED | [ ] | Removed by T2680 |
-| T2625 | ↳ ~~[Modal Video Ingest](tasks/video-import/T2625-modal-video-ingest.md)~~ | 9 | 4 | 2.3 | REMOVED | [ ] | Removed by T2680 |
-| T2627 | ↳ ~~[Optimize Modal Ingest](tasks/video-import/T2627-optimize-modal-ingest.md)~~ | 7 | 3 | 2.3 | REMOVED | [ ] | Removed by T2680 |
-| T2628 | ↳ ~~[Ingest Timeout & Retry](tasks/video-import/T2628-modal-ingest-timeout-retry.md)~~ | 8 | 3 | 2.7 | REMOVED | [ ] | Removed by T2680 |
-| T2630 | ↳ ~~[Add Game Import UI](tasks/video-import/T2630-add-game-import-ui.md)~~ | 8 | 4 | 2.0 | REMOVED | [ ] | Removed by T2680 |
-| T2635 | ↳ ~~[Import Failure UX](tasks/video-import/T2635-import-failure-ux.md)~~ | 7 | 3 | 2.3 | REMOVED | [ ] | Removed by T2680 |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | TESTING | [x] | DB schema: athlete_name, team_name, sport (free-text, not enum) + combobox UI with 6 supported sports + custom entry. (Absorbs T1073) |
