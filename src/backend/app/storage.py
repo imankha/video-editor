@@ -117,6 +117,7 @@ def get_r2_client():
                 max_pool_connections=25,  # 10 for upload threads + 15 headroom
                 connect_timeout=5,
                 read_timeout=30,
+                retries={"max_attempts": 0},
             ),
             region_name="auto"
         )
@@ -507,7 +508,7 @@ def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
         return False
 
 
-def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes) -> bool:
+def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: bool = False) -> bool:
     """
     Upload bytes directly to R2 without writing to disk.
 
@@ -515,13 +516,15 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes) -> bool:
         user_id: User namespace
         relative_path: Path relative to user_data/<user_id>/
         data: Bytes to upload
+        fast: Use the sync client (short timeouts). Use for small payloads (<1MB)
+              where a 30s stall on a cold connection is unacceptable.
 
     Returns:
         True if upload succeeded, False otherwise
     """
     from io import BytesIO
 
-    client = get_r2_client()
+    client = get_r2_sync_client() if fast else get_r2_client()
     if not client:
         return False
 

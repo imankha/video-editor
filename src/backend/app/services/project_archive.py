@@ -116,7 +116,7 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
                 # 6. Upload to R2
                 r2_path = _get_archive_r2_key(project_id)
-                if not upload_bytes_to_r2(user_id, r2_path, archive_bytes):
+                if not upload_bytes_to_r2(user_id, r2_path, archive_bytes, fast=True):
                     logger.error(f"Failed to upload archive to R2 for project {project_id}")
                     return False
 
