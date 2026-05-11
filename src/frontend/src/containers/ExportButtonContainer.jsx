@@ -236,6 +236,7 @@ export function ExportButtonContainer({
   const [reconnectionFailed, setReconnectionFailed] = useState(false);
   const [showInsufficientCredits, setShowInsufficientCredits] = useState(null);
   const [showBuyCredits, setShowBuyCredits] = useState(false);
+  const [retrying, setRetrying] = useState(false);
 
   // Refs for tracking export state
   const exportIdRef = useRef(null);
@@ -382,6 +383,7 @@ export function ExportButtonContainer({
     const exportId = exportIdRef.current;
     if (!exportId) return;
 
+    setRetrying(true);
     setProgressMessage('Checking export status...');
 
     try {
@@ -419,7 +421,8 @@ export function ExportButtonContainer({
         handleExportEnd();
       } else {
         // Still running — reset WS backoff and reconnect
-        setProgressMessage('Export still running — reconnecting...');
+        const progress = response.data.progress;
+        setProgressMessage(progress ? `Export at ${progress}% — still running` : 'Export still running — reconnecting...');
         setReconnectionFailed(false);
         exportWebSocketManager.resetReconnect(exportId);
         await connectWebSocket(exportId);
@@ -427,6 +430,8 @@ export function ExportButtonContainer({
     } catch (retryErr) {
       console.warn('[ExportButtonContainer] Retry connection failed:', retryErr.message);
       setProgressMessage('Could not reach server — will keep trying...');
+    } finally {
+      setRetrying(false);
     }
   }, [connectWebSocket, completeExportInStore, onExportComplete, onProceedToOverlay, editorMode, clips, projectId]);
 
@@ -1073,6 +1078,7 @@ export function ExportButtonContainer({
     failedExport,
     disconnected: disconnected || (isOffline && isExporting),
     reconnectionFailed,
+    retrying,
     isFramingMode,
     isDarkOverlay,
 

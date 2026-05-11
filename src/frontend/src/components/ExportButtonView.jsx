@@ -27,6 +27,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   failedExport,
   disconnected,
   reconnectionFailed,
+  retrying,
   isFramingMode,
   isDarkOverlay,
 
@@ -223,13 +224,18 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         <div className="text-amber-400 text-sm bg-amber-900/20 border border-amber-800 rounded p-2">
           {reconnectionFailed ? (
             <>
-              <span>Could not reconnect to server. Export may still be running.</span>
+              <div className="flex items-center gap-2">
+                <Loader size={14} className="animate-spin" />
+                <span>Monitoring export via server polling...</span>
+              </div>
               <div className="flex gap-2 mt-2">
                 <button
                   onClick={onRetryConnection}
-                  className="px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors"
+                  disabled={retrying}
+                  className="px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  Check status
+                  {retrying && <Loader size={10} className="animate-spin" />}
+                  {retrying ? 'Checking...' : 'Check status'}
                 </button>
                 <button
                   onClick={onDismissExport}
@@ -247,9 +253,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               </div>
               <button
                 onClick={onRetryConnection}
-                className="mt-2 px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors"
+                disabled={retrying}
+                className="mt-2 px-3 py-1 text-xs bg-amber-800/50 hover:bg-amber-700/50 border border-amber-700 rounded transition-colors disabled:opacity-50 flex items-center gap-1.5"
               >
-                Retry connection
+                {retrying && <Loader size={10} className="animate-spin" />}
+                {retrying ? 'Checking...' : 'Retry connection'}
               </button>
             </>
           )}

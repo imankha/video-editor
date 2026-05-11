@@ -555,6 +555,23 @@ class ExportWebSocketManager {
         return data;
       }
 
+      // Still running: update store so progress message stays fresh
+      const currentPercent = store.activeExports[exportId]?.progress?.percent || 0;
+      store.updateExportProgress(exportId, {
+        percent: currentPercent,
+        message: 'Export running on server...',
+        projectId: data.project_id,
+        type: data.type,
+      });
+
+      if (callbacks.onProgress) {
+        try {
+          callbacks.onProgress(currentPercent, 'Export running on server...');
+        } catch (e2) {
+          console.warn(`[ExportWSManager] onProgress callback error:`, e2);
+        }
+      }
+
       return data;
     } catch (e) {
       console.warn(`[ExportWSManager] Failed to poll status for ${exportId}:`, e);

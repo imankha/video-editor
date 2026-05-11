@@ -57,6 +57,7 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         failedExport={container.failedExport}
         disconnected={container.disconnected}
         reconnectionFailed={container.reconnectionFailed}
+        retrying={container.retrying}
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
         hasUnframedClips={container.hasUnframedClips}

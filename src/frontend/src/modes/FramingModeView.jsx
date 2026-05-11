@@ -60,6 +60,7 @@ const ExportButtonSection = forwardRef(function ExportButtonSection({
         failedExport={container.failedExport}
         disconnected={container.disconnected}
         reconnectionFailed={container.reconnectionFailed}
+        retrying={container.retrying}
         isFramingMode={container.isFramingMode}
         isDarkOverlay={container.isDarkOverlay}
         hasUnframedClips={container.hasUnframedClips}
