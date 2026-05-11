@@ -1,15 +1,17 @@
 """
 Project Archive Service for Video Editor.
 
-Archives completed projects to R2 as JSON files to reduce active database size.
+Archives completed projects to R2 as msgpack files to reduce active database size.
 Projects are archived when the user clicks "Move to My Reels" (publish) and
 can be restored when the user clicks "Open Reel as Draft" from the gallery.
 
-Archive location: {user_id}/archive/{project_id}.json
+Archive location: {user_id}/archive/{project_id}.msgpack
 """
 
 import json
 import logging
+
+import msgpack
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -28,16 +30,19 @@ from app.storage import (
     r2_key,
 )
 from app.user_context import get_current_user_id
-from app.utils.encoding import decode_data, encode_data
+from app.utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
 
-# Archive schema version for future migrations
-ARCHIVE_VERSION = 1
+ARCHIVE_VERSION = 2
 
 
 def _get_archive_r2_key(project_id: int) -> str:
-    """Get the R2 key for a project's archive JSON."""
+    """Get the R2 key for a project's archive."""
+    return f"archive/{project_id}.msgpack"
+
+
+def _get_legacy_archive_r2_key(project_id: int) -> str:
     return f"archive/{project_id}.json"
 
 
@@ -45,21 +50,23 @@ _BINARY_COLUMNS = {'crop_data', 'timing_data', 'segments_data', 'highlights_data
 
 
 def _row_to_dict(row) -> Dict[str, Any]:
-    """Convert a sqlite3.Row to a dictionary, decoding binary columns to JSON-safe objects."""
+    """Convert a sqlite3.Row to a dictionary. Binary columns stay as raw bytes for msgpack."""
     result = {}
     for key in row.keys():
         value = row[key]
         if key in _BINARY_COLUMNS and isinstance(value, bytes):
-            value = decode_data(value)
+            pass
+        elif isinstance(value, datetime):
+            value = value.isoformat()
         result[key] = value
     return result
 
 
 def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
     """
-    Archive a completed project to R2 as JSON.
+    Archive a completed project to R2 as msgpack.
 
-    Serializes project, working_clips, and working_videos to JSON,
+    Serializes project, working_clips, and working_videos to msgpack,
     uploads to R2, then deletes from the database.
     The final_videos row is kept in DB for gallery listing.
 
@@ -101,7 +108,7 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 """, (project_id,))
                 working_videos_data = [_row_to_dict(row) for row in cursor.fetchall()]
 
-                # 4. Build archive JSON
+                # 4. Build archive
                 archive = {
                     "version": ARCHIVE_VERSION,
                     "archived_at": datetime.utcnow().isoformat() + "Z",
@@ -110,9 +117,8 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     "working_videos": working_videos_data,
                 }
 
-                # 5. Serialize to JSON
-                archive_json = json.dumps(archive, indent=2, default=str)
-                archive_bytes = archive_json.encode('utf-8')
+                # 5. Serialize to msgpack
+                archive_bytes = msgpack.packb(archive, use_bin_type=True, default=str)
 
                 # 6. Upload to R2
                 r2_path = _get_archive_r2_key(project_id)
@@ -156,8 +162,8 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
     """
     Restore a project from R2 archive back to the database.
 
-    Downloads the archive JSON from R2, inserts records back into DB,
-    sets restored_at timestamp, then deletes the archive from R2.
+    Downloads the archive from R2 (msgpack or legacy JSON fallback),
+    inserts records back into DB, sets restored_at timestamp.
 
     Args:
         project_id: ID of the project to restore
@@ -174,7 +180,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
         user_id = get_current_user_id()
 
     try:
-        # 1. Download archive JSON from R2
+        # 1. Download archive from R2
         client = get_r2_client()
         if not client:
             logger.error("R2 client not available for restore")
@@ -182,14 +188,29 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
         r2_path = _get_archive_r2_key(project_id)
         full_key = r2_key(user_id, r2_path)
+        legacy_format = False
 
         try:
             response = client.get_object(Bucket=R2_BUCKET, Key=full_key)
             archive_bytes = response['Body'].read()
-            archive = json.loads(archive_bytes.decode('utf-8'))
+            archive = msgpack.unpackb(archive_bytes, raw=False)
         except client.exceptions.NoSuchKey:
-            logger.warning(f"Archive not found in R2 for project {project_id}")
-            return False
+            # Fall back to legacy JSON format
+            legacy_r2_path = _get_legacy_archive_r2_key(project_id)
+            legacy_full_key = r2_key(user_id, legacy_r2_path)
+            try:
+                response = client.get_object(Bucket=R2_BUCKET, Key=legacy_full_key)
+                archive_bytes = response['Body'].read()
+                archive = json.loads(archive_bytes.decode('utf-8'))
+                legacy_format = True
+                full_key = legacy_full_key
+                logger.info(f"Using legacy JSON archive for project {project_id}")
+            except client.exceptions.NoSuchKey:
+                logger.warning(f"Archive not found in R2 for project {project_id}")
+                return False
+            except Exception as e:
+                logger.error(f"Failed to download legacy archive from R2: {e}")
+                return False
         except Exception as e:
             logger.error(f"Failed to download archive from R2: {e}")
             return False
@@ -220,12 +241,15 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                     values
                 )
 
-            # Insert working_clips (re-encode binary columns to msgpack)
+            # Insert working_clips
             for clip in archive.get("working_clips", []):
                 columns = list(clip.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                values = [encode_data(clip[col]) if col in _BINARY_COLUMNS and clip[col] is not None else clip[col] for col in columns]
+                if legacy_format:
+                    values = [encode_data(clip[col]) if col in _BINARY_COLUMNS and clip[col] is not None else clip[col] for col in columns]
+                else:
+                    values = [clip[col] for col in columns]
 
                 cursor.execute(
                     f"INSERT INTO working_clips ({column_names}) VALUES ({placeholders})",
@@ -237,7 +261,10 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 columns = list(video.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                values = [encode_data(video[col]) if col in _BINARY_COLUMNS and video[col] is not None else video[col] for col in columns]
+                if legacy_format:
+                    values = [encode_data(video[col]) if col in _BINARY_COLUMNS and video[col] is not None else video[col] for col in columns]
+                else:
+                    values = [video[col] for col in columns]
 
                 cursor.execute(
                     f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",
@@ -501,4 +528,7 @@ def is_project_archived(project_id: int, user_id: Optional[str] = None) -> bool:
 
     from app.storage import file_exists_in_r2
     r2_path = _get_archive_r2_key(project_id)
-    return file_exists_in_r2(user_id, r2_path)
+    if file_exists_in_r2(user_id, r2_path):
+        return True
+    legacy_r2_path = _get_legacy_archive_r2_key(project_id)
+    return file_exists_in_r2(user_id, legacy_r2_path)
