@@ -252,6 +252,7 @@ async function uploadParts(
     if (throughputSamples.length < 3) return;
     const avg = throughputSamples.reduce((a, b) => a + b, 0) / throughputSamples.length;
     const mbPerSec = avg / (1024 * 1024);
+    const prevConcurrency = concurrency;
     if (mbPerSec > 10) {
       concurrency = Math.min(4, MAX_CONCURRENCY);
     } else if (mbPerSec < 2) {
@@ -259,6 +260,7 @@ async function uploadParts(
     } else {
       concurrency = 2;
     }
+    console.log(`[Upload] throughput=${mbPerSec.toFixed(1)}MB/s concurrency=${prevConcurrency}->${concurrency} samples=${throughputSamples.length}`);
   };
 
   const queue = [...parts];
@@ -282,11 +284,12 @@ async function uploadParts(
           updateTotalProgress();
           executing.delete(promise);
 
-          // Track throughput
           const startTime = partStartTimes.get(part.part_number);
           if (startTime) {
             const elapsed = (performance.now() - startTime) / 1000;
             if (elapsed > 0) {
+              const partMbps = (partBytes / elapsed) / (1024 * 1024);
+              console.log(`[Upload] part=${part.part_number} size=${(partBytes >> 20)}MB time=${elapsed.toFixed(1)}s speed=${partMbps.toFixed(1)}MB/s`);
               throughputSamples.push(partBytes / elapsed);
               if (throughputSamples.length > MAX_SAMPLES) throughputSamples.shift();
             }
