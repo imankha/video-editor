@@ -46,7 +46,7 @@ BLAKE3_PATTERN = re.compile(r'^[a-f0-9]{64}$')
 MAX_FILE_SIZE = 10 * 1024 * 1024 * 1024  # 10GB
 
 # Part size for multipart uploads
-PART_SIZE = 100 * 1024 * 1024  # 100MB
+PART_SIZE = 25 * 1024 * 1024  # 25MB
 
 
 def validate_blake3_hash(hash_value: str) -> bool:

@@ -148,6 +148,30 @@ async function uploadPart(file, part, onProgress, faststartInfo = null) {
   });
 }
 
+async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessionId, completedResults) {
+  const MAX_RETRIES = 3;
+  const BACKOFF_MS = [1000, 2000, 4000];
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await uploadPart(file, part, onProgress, faststartInfo);
+    } catch (error) {
+      const msg = error.message || '';
+      const isRetryable = msg.includes('network error') || /upload failed: 5\d\d/.test(msg);
+
+      if (!isRetryable || attempt === MAX_RETRIES) {
+        if (sessionId && completedResults.length > 0) {
+          await saveCompletedParts(sessionId, completedResults.splice(0)).catch(() => {});
+        }
+        throw error;
+      }
+
+      console.warn(`[Upload] Part ${part.part_number} attempt ${attempt + 1} failed: ${msg}, retrying in ${BACKOFF_MS[attempt]}ms`);
+      await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
+    }
+  }
+}
+
 /**
  * Save completed parts to backend for resume support
  * @param {string} sessionId - Upload session ID
@@ -174,7 +198,7 @@ async function saveCompletedParts(sessionId, parts) {
  * @param {string} sessionId - Upload session ID for saving progress
  * @param {Array} completedParts - Already completed parts (for resume)
  * @param {number} totalBytes - Total bytes including completed parts
- * @param {number} concurrency - Max concurrent uploads (default 3)
+ * @param {number} concurrency - Initial concurrent uploads (default 2, adapts based on throughput)
  * @returns {Promise<Array>} - Array of { part_number, etag } (all parts including completed)
  */
 async function uploadParts(
@@ -184,7 +208,7 @@ async function uploadParts(
   sessionId = null,
   completedParts = [],
   totalBytes = null,
-  concurrency = 3,
+  concurrency = 2,
   faststartInfo = null
 ) {
   const results = [...completedParts]; // Start with already completed parts
@@ -195,10 +219,7 @@ async function uploadParts(
     (sum, p) => sum + (p.end_byte - p.start_byte + 1),
     0
   );
-  const completedBytes = completedParts.reduce((sum, p) => {
-    // Estimate completed part sizes (100MB each except possibly last)
-    return sum + 100 * 1024 * 1024;
-  }, 0);
+  const completedBytes = (totalBytes || remainingBytes) - remainingBytes;
   const total = totalBytes || remainingBytes + completedBytes;
 
   // Initialize progress with completed parts
@@ -217,34 +238,67 @@ async function uploadParts(
     updateTotalProgress();
   }
 
-  // Parts to save in batches (save every 3 parts to reduce requests)
   const partsToSave = [];
-  const SAVE_BATCH_SIZE = 3;
+  const SAVE_BATCH_SIZE = 1;
 
-  // Upload parts with concurrency limit
+  // Adaptive concurrency: track throughput per completed part
+  const throughputSamples = [];
+  const MAX_SAMPLES = 5;
+  const MAX_CONCURRENCY = 6;
+  let partsCompletedSinceAdjust = 0;
+  const partStartTimes = new Map();
+
+  const adjustConcurrency = () => {
+    if (throughputSamples.length < 3) return;
+    const avg = throughputSamples.reduce((a, b) => a + b, 0) / throughputSamples.length;
+    const mbPerSec = avg / (1024 * 1024);
+    if (mbPerSec > 10) {
+      concurrency = Math.min(4, MAX_CONCURRENCY);
+    } else if (mbPerSec < 2) {
+      concurrency = 1;
+    } else {
+      concurrency = 2;
+    }
+  };
+
   const queue = [...parts];
   const executing = new Set();
 
   while (queue.length > 0 || executing.size > 0) {
-    // Start new uploads up to concurrency limit
     while (queue.length > 0 && executing.size < concurrency) {
       const part = queue.shift();
+      partStartTimes.set(part.part_number, performance.now());
 
-      const promise = uploadPart(file, part, (loaded) => {
+      const promise = uploadPartWithRetry(file, part, (loaded) => {
         partProgress.set(part.part_number, loaded);
         updateTotalProgress();
-      }, faststartInfo)
+      }, faststartInfo, sessionId, partsToSave)
         .then((result) => {
           results.push(result);
           partsToSave.push(result);
-          partProgress.set(
-            part.part_number,
-            part.end_byte - part.start_byte + 1
-          );
+
+          const partBytes = part.end_byte - part.start_byte + 1;
+          partProgress.set(part.part_number, partBytes);
           updateTotalProgress();
           executing.delete(promise);
 
-          // Save completed parts in batches for resume support
+          // Track throughput
+          const startTime = partStartTimes.get(part.part_number);
+          if (startTime) {
+            const elapsed = (performance.now() - startTime) / 1000;
+            if (elapsed > 0) {
+              throughputSamples.push(partBytes / elapsed);
+              if (throughputSamples.length > MAX_SAMPLES) throughputSamples.shift();
+            }
+            partStartTimes.delete(part.part_number);
+          }
+
+          partsCompletedSinceAdjust++;
+          if (partsCompletedSinceAdjust >= 5) {
+            adjustConcurrency();
+            partsCompletedSinceAdjust = 0;
+          }
+
           if (sessionId && partsToSave.length >= SAVE_BATCH_SIZE) {
             const batch = partsToSave.splice(0, partsToSave.length);
             saveCompletedParts(sessionId, batch);
@@ -258,7 +312,6 @@ async function uploadParts(
       executing.add(promise);
     }
 
-    // Wait for at least one to complete
     if (executing.size > 0) {
       await Promise.race(executing);
     }
@@ -424,7 +477,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
     prepareData.upload_session_id,
     completedParts,
     uploadSize,
-    3,
+    2,
     faststartInfo
   );
   console.log(`[DIAG upload-freeze] uploadParts ${((performance.now() - __diagUploadStart) / 1000).toFixed(1)}s parts=${prepareData.parts.length}`);
