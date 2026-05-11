@@ -24,10 +24,8 @@ from app.storage import (
     get_r2_client,
 )
 from app.services.auth_db import (
-    get_auth_db,
     get_user_by_id,
     invalidate_user_sessions,
-    sync_auth_db_to_r2,
 )
 from app.user_context import get_current_user_id
 
@@ -173,11 +171,10 @@ async def delete_account(request: Request):
     # 3. Delete auth DB records (sessions + user)
     try:
         invalidate_user_sessions(user_id)
-        with get_auth_db() as db:
-            db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-            db.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
-            db.commit()
-        sync_auth_db_to_r2()
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         logger.info(f"[Privacy] Cleared auth DB records for user={user_id}")
     except Exception as e:
         logger.error(f"[Privacy] Auth DB cleanup failed: {e}")

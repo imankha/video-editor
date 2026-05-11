@@ -12,7 +12,6 @@ Tests cover:
 """
 
 import sqlite3
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -24,24 +23,18 @@ from fastapi.testclient import TestClient
 # ---------------------------------------------------------------------------
 
 @pytest.fixture()
-def isolated_auth_db(tmp_path):
-    """Fresh auth.sqlite for each test."""
-    db_path = tmp_path / "auth.sqlite"
-    with patch("app.services.auth_db.AUTH_DB_PATH", db_path), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True):
-        from app.services.auth_db import init_auth_db, create_user
-        init_auth_db()
-        create_user("admin-user", email="imankh@gmail.com")
-        create_user("regular-user", email="other@example.com")
-        yield db_path
+def isolated_auth_db(pg_conn):
+    """Fresh Postgres with admin + regular user."""
+    from app.services.auth_db import create_user
+    create_user("admin-user", email="imankh@gmail.com")
+    create_user("regular-user", email="other@example.com")
+    yield
 
 
 @pytest.fixture()
 def client(isolated_auth_db, tmp_path):
     """TestClient wired to a test user context."""
-    with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.database.USER_DATA_BASE", tmp_path), \
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
         from app.main import app
@@ -58,46 +51,49 @@ def _auth_headers(user_id: str) -> dict:
 
 class TestAdminUsersTable:
     def test_table_exists_after_init(self, isolated_auth_db):
-        conn = sqlite3.connect(str(isolated_auth_db))
-        row = conn.execute("SELECT count(*) FROM admin_users").fetchone()
-        conn.close()
-        assert row[0] >= 1
+        from app.services.auth_db import get_auth_db
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) as cnt FROM admin_users")
+            row = cur.fetchone()
+        assert row["cnt"] >= 1
 
     def test_seed_email_present(self, isolated_auth_db):
-        conn = sqlite3.connect(str(isolated_auth_db))
-        row = conn.execute(
-            "SELECT 1 FROM admin_users WHERE email = 'imankh@gmail.com'"
-        ).fetchone()
-        conn.close()
+        from app.services.auth_db import get_auth_db
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT 1 FROM admin_users WHERE email = 'imankh@gmail.com'"
+            )
+            row = cur.fetchone()
         assert row is not None
 
     def test_seed_is_idempotent(self, isolated_auth_db):
-        """Calling init_auth_db() again must not raise or duplicate the seed."""
-        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-             patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True):
-            from app.services.auth_db import init_auth_db
-            init_auth_db()  # second call
-        conn = sqlite3.connect(str(isolated_auth_db))
-        row = conn.execute("SELECT count(*) FROM admin_users WHERE email = 'imankh@gmail.com'").fetchone()
-        conn.close()
-        assert row[0] == 1
+        """Re-seeding must not raise or duplicate the seed."""
+        from app.services.pg import _SEED_SQL
+        from app.services.auth_db import get_auth_db
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute(_SEED_SQL)
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT count(*) as cnt FROM admin_users WHERE email = 'imankh@gmail.com'")
+            row = cur.fetchone()
+        assert row["cnt"] == 1
 
 
 class TestIsAdmin:
     def test_admin_user_returns_true(self, isolated_auth_db):
-        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db):
-            from app.services.auth_db import is_admin
-            assert is_admin("admin-user") is True
+        from app.services.auth_db import is_admin
+        assert is_admin("admin-user") is True
 
     def test_regular_user_returns_false(self, isolated_auth_db):
-        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db):
-            from app.services.auth_db import is_admin
-            assert is_admin("regular-user") is False
+        from app.services.auth_db import is_admin
+        assert is_admin("regular-user") is False
 
     def test_unknown_user_returns_false(self, isolated_auth_db):
-        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db):
-            from app.services.auth_db import is_admin
-            assert is_admin("nonexistent-user") is False
+        from app.services.auth_db import is_admin
+        assert is_admin("nonexistent-user") is False
 
 
 # ---------------------------------------------------------------------------
@@ -173,7 +169,6 @@ class TestAdminGrantCredits:
 class TestGpuAggregation:
     def test_gpu_usage_sums_across_profiles(self, tmp_path, isolated_auth_db):
         """GPU seconds from multiple profile DBs are summed correctly."""
-        # Create a fake profile DB with export_jobs containing gpu_seconds
         profile_dir = tmp_path / "regular-user" / "profiles" / "profile-1"
         profile_dir.mkdir(parents=True)
         db_path = profile_dir / "profile.sqlite"
@@ -194,9 +189,7 @@ class TestGpuAggregation:
         conn.commit()
         conn.close()
 
-        with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-             patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-             patch("app.database.USER_DATA_BASE", tmp_path), \
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
              patch("app.routers.admin.USER_DATA_BASE", tmp_path):
             from app.routers.admin import _compute_gpu_total_single
             total = _compute_gpu_total_single(db_path)

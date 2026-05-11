@@ -13,8 +13,6 @@ Covers:
 """
 
 import asyncio
-import sqlite3
-from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -33,37 +31,19 @@ UNKNOWN_EMAIL = "stranger@example.com"
 
 
 @pytest.fixture()
-def isolated_auth_db(tmp_path):
-    db_path = tmp_path / "auth.sqlite"
-    with patch("app.services.auth_db.AUTH_DB_PATH", db_path), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True):
-        from app.services.auth_db import init_auth_db, create_user
-        init_auth_db()
-        create_user(SHARER_ID, email=SHARER_EMAIL)
-        create_user(RECIPIENT_ID, email=RECIPIENT_EMAIL)
-        yield db_path
+def isolated_auth_db(pg_conn):
+    from app.services.auth_db import create_user
+    create_user(SHARER_ID, email=SHARER_EMAIL)
+    create_user(RECIPIENT_ID, email=RECIPIENT_EMAIL)
+    yield
 
 
 @pytest.fixture()
-def isolated_sharing_db(tmp_path):
-    db_path = tmp_path / "sharing.sqlite"
-    with patch("app.services.sharing_db.SHARING_DB_PATH", db_path), \
-         patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-        from app.services.sharing_db import init_sharing_db
-        init_sharing_db()
-        yield db_path
-
-
-@pytest.fixture()
-def client(isolated_auth_db, isolated_sharing_db, tmp_path):
+def client(isolated_auth_db, tmp_path):
     from app.session_init import _init_cache
     _init_cache[SHARER_ID] = {"profile_id": "testdefault", "is_new_user": False}
     _init_cache[RECIPIENT_ID] = {"profile_id": "testdefault", "is_new_user": False}
-    with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.services.sharing_db.SHARING_DB_PATH", isolated_sharing_db), \
-         patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True), \
-         patch("app.database.USER_DATA_BASE", tmp_path), \
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
         from app.main import app
@@ -98,20 +78,19 @@ def _seed_final_video(client, user_id: str = SHARER_ID) -> int:
 # ---------------------------------------------------------------------------
 
 class TestSharingDbCrud:
-    def test_create_shares(self, isolated_sharing_db):
+    def test_create_shares(self, isolated_auth_db):
         from app.services.sharing_db import create_shares, get_share_by_token
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            shares = create_shares(
-                video_id=1,
-                sharer_user_id=SHARER_ID,
-                sharer_profile_id="testdefault",
-                video_filename="vid.mp4",
-                video_name="My Video",
-                video_duration=10.0,
-                recipient_emails=[RECIPIENT_EMAIL, UNKNOWN_EMAIL],
-                is_public=False,
-            )
+        shares = create_shares(
+            video_id=1,
+            sharer_user_id=SHARER_ID,
+            sharer_profile_id="testdefault",
+            video_filename="vid.mp4",
+            video_name="My Video",
+            video_duration=10.0,
+            recipient_emails=[RECIPIENT_EMAIL, UNKNOWN_EMAIL],
+            is_public=False,
+        )
 
         assert len(shares) == 2
         assert shares[0]["recipient_email"] == RECIPIENT_EMAIL
@@ -120,15 +99,14 @@ class TestSharingDbCrud:
         share = get_share_by_token(shares[0]["share_token"])
         assert share is not None
         assert share["video_filename"] == "vid.mp4"
-        assert share["is_public"] == 0
+        assert share["is_public"] is False
 
-    def test_list_shares_for_video(self, isolated_sharing_db):
+    def test_list_shares_for_video(self, isolated_auth_db):
         from app.services.sharing_db import create_shares, list_shares_for_video
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
-            create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["c@d.com"], True)
-            create_shares(2, SHARER_ID, "p1", "w.mp4", "W", 8.0, ["e@f.com"], False)
+        create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
+        create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["c@d.com"], True)
+        create_shares(2, SHARER_ID, "p1", "w.mp4", "W", 8.0, ["e@f.com"], False)
 
         shares = list_shares_for_video(1, SHARER_ID)
         assert len(shares) == 2
@@ -136,43 +114,39 @@ class TestSharingDbCrud:
         shares_other = list_shares_for_video(1, "other-user")
         assert len(shares_other) == 0
 
-    def test_revoke_share(self, isolated_sharing_db):
+    def test_revoke_share(self, isolated_auth_db):
         from app.services.sharing_db import create_shares, revoke_share, get_share_by_token
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
-            token = shares[0]["share_token"]
+        shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
+        token = shares[0]["share_token"]
 
-            assert revoke_share(token, SHARER_ID) is True
-            assert revoke_share(token, SHARER_ID) is False  # already revoked
+        assert revoke_share(token, SHARER_ID) is True
+        assert revoke_share(token, SHARER_ID) is False  # already revoked
 
         share = get_share_by_token(token)
         assert share["revoked_at"] is not None
 
-    def test_revoke_wrong_user(self, isolated_sharing_db):
+    def test_revoke_wrong_user(self, isolated_auth_db):
         from app.services.sharing_db import create_shares, revoke_share
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
-            assert revoke_share(shares[0]["share_token"], "other-user") is False
+        shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
+        assert revoke_share(shares[0]["share_token"], "other-user") is False
 
-    def test_update_visibility(self, isolated_sharing_db):
+    def test_update_visibility(self, isolated_auth_db):
         from app.services.sharing_db import create_shares, update_share_visibility, get_share_by_token
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
-            token = shares[0]["share_token"]
+        shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["a@b.com"], False)
+        token = shares[0]["share_token"]
 
-            assert update_share_visibility(token, True, SHARER_ID) is True
+        assert update_share_visibility(token, True, SHARER_ID) is True
 
         share = get_share_by_token(token)
-        assert share["is_public"] == 1
+        assert share["is_public"] is True
 
-    def test_emails_normalized_to_lowercase(self, isolated_sharing_db):
+    def test_emails_normalized_to_lowercase(self, isolated_auth_db):
         from app.services.sharing_db import create_shares
 
-        with patch("app.services.sharing_db.sync_sharing_db_to_r2", return_value=True):
-            shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["UPPER@EMAIL.COM"], False)
+        shares = create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, ["UPPER@EMAIL.COM"], False)
 
         assert shares[0]["recipient_email"] == "upper@email.com"
 

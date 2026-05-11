@@ -9,7 +9,7 @@ get_next_expiry() and sleeps until then (capped at 24h).
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from .auth_db import (
     delete_grace_deletion,
@@ -84,7 +84,7 @@ async def _run_sweep_loop():
             if next_expiry is None:
                 delay = MAX_DELAY
             else:
-                delay = (next_expiry - datetime.utcnow()).total_seconds()
+                delay = (next_expiry - datetime.now(timezone.utc)).total_seconds()
                 delay = max(delay, MIN_DELAY)
                 delay = min(delay, MAX_DELAY)
 

@@ -2,8 +2,14 @@
 Pytest configuration and shared fixtures for backend tests.
 """
 
+import os
+from contextlib import contextmanager
+from pathlib import Path
+
+import psycopg2
 import pytest
 import numpy as np
+from psycopg2.extras import RealDictCursor
 from unittest.mock import Mock, MagicMock, patch
 
 
@@ -30,6 +36,83 @@ def _set_default_profile_context():
     from app.profile_context import reset_profile_id
     reset_profile_id()
     _init_cache.clear()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _mock_pg_startup():
+    """Prevent app startup from crashing when DATABASE_URL is not set.
+
+    Tests that need real Postgres use the pg_conn fixture, which patches
+    get_pg() directly and overrides this no-op.
+
+    Also provides a stub get_pg that returns None from queries instead of
+    crashing, so middleware auth checks (validate_session) gracefully
+    return None rather than raising RuntimeError.
+    """
+    from unittest.mock import AsyncMock
+
+    @contextmanager
+    def _stub_get_pg():
+        """No-op Postgres connection for tests without DATABASE_URL."""
+        conn = MagicMock()
+        cur = MagicMock()
+        cur.fetchone.return_value = None
+        cur.fetchall.return_value = []
+        conn.cursor.return_value = cur
+        yield conn
+
+    with patch("app.services.pg.init_pg_pool"), \
+         patch("app.services.pg.init_pg_schema"), \
+         patch("app.services.pg.get_pg", _stub_get_pg), \
+         patch("app.services.auth_db.get_pg", _stub_get_pg), \
+         patch("app.services.sharing_db.get_pg", _stub_get_pg), \
+         patch("app.services.cleanup.start_cleanup_loop", new_callable=AsyncMock), \
+         patch("app.services.cleanup.stop_cleanup_loop", new_callable=AsyncMock):
+        yield
+
+
+@pytest.fixture
+def pg_conn(monkeypatch):
+    """Provide a clean Postgres database for auth/sharing tests.
+
+    Ensures schema exists, truncates all tables, seeds admin_users,
+    and patches get_pg() everywhere to bypass the connection pool.
+    """
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
+
+    from app.services.pg import _SCHEMA_DDL, _SEED_SQL
+
+    dsn = os.environ["DATABASE_URL"]
+
+    setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    setup.autocommit = True
+    cur = setup.cursor()
+    cur.execute(_SCHEMA_DDL)
+    cur.execute("""
+        TRUNCATE admin_users, users, sessions, otp_codes, game_storage_refs,
+                 r2_grace_deletions, shared_videos, impersonation_audit CASCADE
+    """)
+    cur.execute(_SEED_SQL)
+    setup.close()
+
+    @contextmanager
+    def mock_get_pg():
+        conn = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    monkeypatch.setattr("app.services.pg.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.auth_db.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.services.sharing_db.get_pg", mock_get_pg)
+
+    yield dsn
 
 
 @pytest.fixture

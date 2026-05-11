@@ -317,18 +317,12 @@ async def startup_event():
     else:
         logger.info("[Startup] R2 disabled — using local database only")
 
-    # T405: Initialize central auth database.
-    # T1290: Restore is mandatory when R2 is enabled — if the R2 fetch fails
-    # after 3 attempts we raise and let Fly.io restart the process rather
-    # than silently come up with an empty auth DB (which wipes every
-    # session and email→user_id record).
-    from app.services.auth_db import restore_auth_db_or_fail
-    restore_auth_db_or_fail()
-    logger.info("[Startup] Central auth DB initialized")
-
-    from app.services.sharing_db import restore_sharing_db_or_fail
-    restore_sharing_db_or_fail()
-    logger.info("[Startup] Sharing DB initialized")
+    # T1960: Initialize Postgres connection pool + schema for global data
+    # (auth, sharing, game storage refs). Per-user SQLite stays as-is.
+    from app.services.pg import init_pg_pool, init_pg_schema
+    init_pg_pool()
+    init_pg_schema()
+    logger.info("[Startup] Postgres pool + schema initialized")
 
     # Default user 'a' init removed — all users now go through auth.
     # Profile context is set per-request by the middleware.
@@ -346,11 +340,21 @@ async def startup_event():
     from app.services.sweep_scheduler import start_sweep_loop
     await start_sweep_loop()
 
+    # T1960: Hourly cleanup of expired sessions + OTP codes
+    from app.services.cleanup import start_cleanup_loop
+    await start_cleanup_loop()
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     from app.services.sweep_scheduler import stop_sweep_loop
     await stop_sweep_loop()
+
+    from app.services.cleanup import stop_cleanup_loop
+    await stop_cleanup_loop()
+
+    from app.services.pg import close_pg_pool
+    close_pg_pool()
 
 
 @app.exception_handler(Exception)

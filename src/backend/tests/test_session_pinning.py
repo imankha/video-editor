@@ -26,29 +26,17 @@ MACHINE_B = "d286530f900128"
 
 
 @pytest.fixture()
-def isolated_auth_db(tmp_path):
-    """Fresh auth.sqlite for each test."""
-    db_path = tmp_path / "auth.sqlite"
-    with patch("app.services.auth_db.AUTH_DB_PATH", db_path), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.services.auth_db.persist_session_to_r2"), \
-         patch("app.services.auth_db.delete_session_from_r2"):
-        from app.services.auth_db import init_auth_db, create_user, _session_cache, _session_cache_lock
-        init_auth_db()
-        create_user("test-user", email="test@example.com")
-        with _session_cache_lock:
-            _session_cache.clear()
-        yield db_path
+def isolated_auth_db(pg_conn):
+    """Fresh Postgres for each test."""
+    from app.services.auth_db import create_user
+    create_user("test-user", email="test@example.com")
+    yield
 
 
 @pytest.fixture()
 def client_on_machine_a(isolated_auth_db, tmp_path):
     """TestClient where the server thinks it's Machine A."""
-    with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.services.auth_db.persist_session_to_r2"), \
-         patch("app.services.auth_db.delete_session_from_r2"), \
-         patch("app.database.USER_DATA_BASE", tmp_path), \
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()), \
          patch.dict(os.environ, {"FLY_MACHINE_ID": MACHINE_A}), \
@@ -60,11 +48,7 @@ def client_on_machine_a(isolated_auth_db, tmp_path):
 @pytest.fixture()
 def client_no_fly(isolated_auth_db, tmp_path):
     """TestClient with no FLY_MACHINE_ID (local dev)."""
-    with patch("app.services.auth_db.AUTH_DB_PATH", isolated_auth_db), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.services.auth_db.persist_session_to_r2"), \
-         patch("app.services.auth_db.delete_session_from_r2"), \
-         patch("app.database.USER_DATA_BASE", tmp_path), \
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()), \
          patch("app.middleware.db_sync.FLY_MACHINE_ID", "", create=True):
@@ -205,7 +189,6 @@ class TestSingleSession:
         """Creating a new session via _issue_session_cookie invalidates old ones."""
         from app.services.auth_db import (
             create_session, validate_session, invalidate_user_sessions,
-            _session_cache, _session_cache_lock,
         )
         old_sid = create_session("test-user")
         assert validate_session(old_sid) is not None
@@ -213,15 +196,12 @@ class TestSingleSession:
         invalidate_user_sessions("test-user")
         new_sid = create_session("test-user")
 
-        with _session_cache_lock:
-            _session_cache.clear()
-
         assert validate_session(old_sid) is None
         assert validate_session(new_sid) is not None
 
-    def test_login_endpoint_enforces_single_session(self, client_on_machine_a, isolated_auth_db):
+    def test_login_endpoint_enforces_single_session(self, client_on_machine_a):
         """The login flow should invalidate old sessions before creating new one."""
-        from app.services.auth_db import create_session, validate_session, _session_cache, _session_cache_lock
+        from app.services.auth_db import create_session, validate_session
 
         old_sid = create_session("test-user")
         assert validate_session(old_sid) is not None
@@ -236,9 +216,6 @@ class TestSingleSession:
             )
         assert r.status_code == 200
 
-        with _session_cache_lock:
-            _session_cache.clear()
-
         assert validate_session(old_sid) is None
 
 
@@ -249,7 +226,7 @@ class TestSingleSession:
 class TestCookieOnLogin:
     """Login response should include fly_machine_id cookie alongside rb_session."""
 
-    def test_google_login_sets_machine_cookie(self, client_on_machine_a, isolated_auth_db):
+    def test_google_login_sets_machine_cookie(self, client_on_machine_a):
         """Google auth response includes fly_machine_id cookie."""
         with patch("app.routers.auth._verify_google_token", return_value={
             "email": "test@example.com",
@@ -263,7 +240,7 @@ class TestCookieOnLogin:
         assert "rb_session" in r.cookies
         assert r.cookies.get("fly_machine_id") == MACHINE_A
 
-    def test_login_no_machine_cookie_in_local_dev(self, client_no_fly, isolated_auth_db):
+    def test_login_no_machine_cookie_in_local_dev(self, client_no_fly):
         """No fly_machine_id cookie when FLY_MACHINE_ID is not set."""
         with patch("app.routers.auth._verify_google_token", return_value={
             "email": "test@example.com",
@@ -337,7 +314,7 @@ class TestFlyReplayMiddlewareASGI:
     """Direct ASGI-level tests for FlyReplayMiddleware."""
 
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_ws_mismatch_sends_replay(self):
         """WebSocket with mismatched cookie gets fly-replay rejection."""
@@ -472,7 +449,7 @@ class TestCookieAttributeConsistency:
             result[name] = header_val.lower()
         return result
 
-    def test_login_cookies_have_matching_attributes(self, client_on_machine_a, isolated_auth_db):
+    def test_login_cookies_have_matching_attributes(self, client_on_machine_a):
         """rb_session and fly_machine_id set on login must share attributes."""
         with patch("app.routers.auth._verify_google_token", return_value={
             "email": "test@example.com",

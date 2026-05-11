@@ -2,13 +2,12 @@
 Hard-delete user accounts. Unlike reset-test-user.py (which clears profile data
 but leaves the user record + R2 prefix intact for re-login testing), this script:
 
-  1. Deletes the user row from auth.sqlite (+ sessions, credit_transactions)
+  1. Deletes the user row from Postgres (+ sessions, game_storage_refs)
   2. Purges the full R2 prefix {app_env}/users/{uid}/ (profile DBs, clips, etc.)
   3. Removes the local user_data/{uid}/ directory
-  4. Uploads cleaned auth.sqlite back to R2
-  5. Restarts Fly.io machines (staging/prod) to clear cached DB state
+  4. Restarts Fly.io machines (staging/prod) to clear cached state
 
-Games in R2 (games/<hash>.mp4) are NEVER touched — shared across users.
+Games in R2 (games/<hash>.mp4) are NEVER touched -- shared across users.
 
 Usage (from project root):
     cd src/backend && .venv/Scripts/python.exe ../../scripts/delete_user.py \\
@@ -24,14 +23,15 @@ from __future__ import annotations
 
 import argparse
 import shutil
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
 
+import psycopg2
+from psycopg2.extras import RealDictCursor
+
 PROJECT_ROOT = Path(__file__).parent.parent
 USER_DATA = PROJECT_ROOT / "user_data"
-AUTH_DB = USER_DATA / "auth.sqlite"
 
 FLY_APPS = {
     "staging": "reel-ballers-api-staging",
@@ -51,7 +51,7 @@ def load_env(env_name: str) -> dict:
                 continue
             k, _, v = line.partition("=")
             config[k.strip()] = v.strip()
-    for key in ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"):
+    for key in ("R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET", "DATABASE_URL"):
         if key not in config:
             print(f"ERROR: {key} missing in {env_file}"); sys.exit(1)
     config.setdefault("APP_ENV", env_name)
@@ -71,8 +71,11 @@ def get_r2_client(config):
     )
 
 
+def get_pg_conn(config):
+    return psycopg2.connect(config["DATABASE_URL"], cursor_factory=RealDictCursor)
+
+
 def purge_r2_prefix(s3, bucket: str, prefix: str, dry_run: bool) -> int:
-    """Delete every object under prefix. Returns count deleted."""
     paginator = s3.get_paginator("list_objects_v2")
     total = 0
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -85,7 +88,6 @@ def purge_r2_prefix(s3, bucket: str, prefix: str, dry_run: bool) -> int:
             for k in keys:
                 print(f"    would delete: {k['Key']}")
         else:
-            # delete_objects takes max 1000 per call
             for i in range(0, len(keys), 1000):
                 s3.delete_objects(Bucket=bucket, Delete={"Objects": keys[i:i+1000]})
     return total
@@ -119,34 +121,34 @@ def restart_fly(env_name: str) -> None:
 
 
 def delete_one(user_id: str, email: str, app_env: str, bucket: str,
-               s3, auth_conn, is_remote: bool, dry_run: bool) -> None:
+               s3, pg_conn, dry_run: bool) -> None:
     print(f"\n=== Deleting user_id={user_id} ({email}) in {app_env} ===")
 
-    # 1. Purge R2 prefix {env}/users/{uid}/
     prefix = f"{app_env}/users/{user_id}/"
     print(f"  R2 purge: {prefix}")
     count = purge_r2_prefix(s3, bucket, prefix, dry_run)
     print(f"    {'would delete' if dry_run else 'deleted'} {count} R2 objects")
 
-    # 2. Delete local user_data/{uid}/
     local_dir = USER_DATA / user_id
     if local_dir.exists():
         print(f"  local purge: {local_dir}")
         if not dry_run:
             shutil.rmtree(local_dir, ignore_errors=True)
 
-    # 3. Delete auth.sqlite rows
-    for table in ("credit_transactions", "sessions", "users"):
-        try:
-            if dry_run:
-                cnt = auth_conn.execute(
-                    f"SELECT COUNT(*) FROM {table} WHERE user_id = ?", (user_id,)
-                ).fetchone()[0]
-                print(f"    would delete {cnt} rows from auth.{table}")
-            else:
-                auth_conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
-        except sqlite3.OperationalError:
-            pass
+    cur = pg_conn.cursor()
+    for table in ("game_storage_refs", "sessions", "shared_videos"):
+        if dry_run:
+            cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE user_id = %s", (user_id,))
+            cnt = cur.fetchone()["cnt"]
+            print(f"    would delete {cnt} rows from {table}")
+        else:
+            cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
+
+    if dry_run:
+        cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from users")
+    else:
+        cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
 
 
 def main():
@@ -164,33 +166,20 @@ def main():
     config = load_env(args.env)
     app_env = config["APP_ENV"]
     bucket = config["R2_BUCKET"]
-    is_remote = args.env in ("staging", "prod")
     print(f"Environment: {args.env} (APP_ENV={app_env}, bucket={bucket}) dry_run={args.dry_run}")
 
     s3 = get_r2_client(config)
+    pg_conn = get_pg_conn(config)
+    cur = pg_conn.cursor()
 
-    # Pull fresh auth.sqlite for remote envs
-    if is_remote:
-        auth_key = f"{app_env}/auth/auth.sqlite"
-        print(f"\n--- Downloading {auth_key} ---")
-        AUTH_DB.parent.mkdir(parents=True, exist_ok=True)
-        s3.download_file(bucket, auth_key, str(AUTH_DB))
-
-    if not AUTH_DB.exists():
-        print(f"ERROR: auth DB not found at {AUTH_DB}"); sys.exit(1)
-
-    conn = sqlite3.connect(str(AUTH_DB))
-    conn.row_factory = sqlite3.Row
-
-    # Resolve target users
     if args.email:
-        rows = conn.execute("SELECT user_id, email FROM users WHERE email = ?",
-                            (args.email,)).fetchall()
+        cur.execute("SELECT user_id, email FROM users WHERE email = %s", (args.email,))
     elif args.all_except:
-        rows = conn.execute("SELECT user_id, email FROM users WHERE email != ?",
-                            (args.all_except,)).fetchall()
+        cur.execute("SELECT user_id, email FROM users WHERE email != %s", (args.all_except,))
     else:
-        rows = conn.execute("SELECT user_id, email FROM users").fetchall()
+        cur.execute("SELECT user_id, email FROM users")
+
+    rows = cur.fetchall()
 
     if not rows:
         print("No matching users found.")
@@ -206,24 +195,13 @@ def main():
             print("Aborted."); return
 
     for r in rows:
-        delete_one(r["user_id"], r["email"], app_env, bucket,
-                   s3, conn, is_remote, args.dry_run)
+        delete_one(r["user_id"], r["email"], app_env, bucket, s3, pg_conn, args.dry_run)
 
     if not args.dry_run:
-        conn.commit()
-    conn.close()
+        pg_conn.commit()
+    pg_conn.close()
 
-    # Upload cleaned auth.sqlite back
-    if is_remote and not args.dry_run:
-        # WAL checkpoint first
-        c = sqlite3.connect(str(AUTH_DB))
-        c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-        c.close()
-        auth_key = f"{app_env}/auth/auth.sqlite"
-        s3.upload_file(str(AUTH_DB), bucket, auth_key)
-        print(f"\n--- Uploaded cleaned {auth_key} ---")
-
-    if is_remote and not args.no_restart and not args.dry_run:
+    if args.env in ("staging", "prod") and not args.no_restart and not args.dry_run:
         restart_fly(args.env)
 
     print(f"\n=== Done. Deleted {len(rows)} user(s) from {args.env}. ===")
