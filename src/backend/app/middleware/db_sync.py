@@ -62,6 +62,7 @@ from ..user_context import set_current_user_id, set_current_req_id
 
 logger = logging.getLogger(__name__)
 
+FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 # Thresholds for slow request warnings (in seconds)
@@ -355,6 +356,26 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
 
+        # --- T1190: Fly.io machine pinning ---
+        should_set_machine_cookie = False
+        if FLY_MACHINE_ID:
+            pinned = request.cookies.get("fly_machine_id")
+            if pinned and pinned != FLY_MACHINE_ID:
+                if request.headers.get("fly-replay-src"):
+                    logger.warning(
+                        f"[Replay] Circuit-breaker: machine {pinned} unavailable, "
+                        f"handling on {FLY_MACHINE_ID}"
+                    )
+                    should_set_machine_cookie = True
+                else:
+                    logger.info(f"[Replay] Replaying to {pinned} (current: {FLY_MACHINE_ID})")
+                    return Response(
+                        status_code=200,
+                        headers={"fly-replay": f"instance={pinned}"},
+                    )
+            elif not pinned:
+                should_set_machine_cookie = True
+
         # --- User context setup (T405: cookie-first, header-fallback) ---
         user_id = None
         auth_source = "none"
@@ -432,14 +453,28 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         )
 
         if not should_sync:
-            return await call_next(request)
+            response = await call_next(request)
+            if should_set_machine_cookie:
+                response.set_cookie(
+                    key="fly_machine_id", value=FLY_MACHINE_ID,
+                    max_age=30 * 24 * 60 * 60, httponly=True,
+                    samesite="lax", secure=APP_ENV == "production", path="/",
+                )
+            return response
 
         # T1531: serialize WRITE requests per user (R2 version race protection).
         # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
         # next request after a write will see locally-committed state since we
         # commit BEFORE releasing the lock.
         async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
-            return await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
+            response = await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
+            if should_set_machine_cookie:
+                response.set_cookie(
+                    key="fly_machine_id", value=FLY_MACHINE_ID,
+                    max_age=30 * 24 * 60 * 60, httponly=True,
+                    samesite="lax", secure=APP_ENV == "production", path="/",
+                )
+            return response
 
     async def _sync_aware_flow(
         self,

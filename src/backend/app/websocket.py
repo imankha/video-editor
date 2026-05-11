@@ -165,14 +165,6 @@ async def websocket_export_progress(websocket: WebSocket, export_id: str):
     logger.info(f"[WS] WebSocket endpoint HIT for export_id: {export_id}")
     await manager.connect(export_id, websocket)
 
-    # Send machine ID so the frontend can pin subsequent requests to this machine
-    fly_machine_id = os.getenv("FLY_MACHINE_ID", "")
-    if fly_machine_id:
-        try:
-            await websocket.send_json({"type": "connected", "machineId": fly_machine_id})
-        except Exception:
-            pass
-
     try:
         # Keep connection alive and wait for messages
         while True:

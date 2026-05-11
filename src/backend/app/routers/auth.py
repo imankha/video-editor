@@ -276,6 +276,7 @@ def _find_or_create_user(email: str, *, google_id: str | None = None) -> str:
 
 
 def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
+    invalidate_user_sessions(user_id)
     session_id = create_session(user_id)
     response = JSONResponse(content=payload)
     response.set_cookie(
@@ -287,6 +288,17 @@ def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
         secure=_SECURE_COOKIES,
         path="/",
     )
+    fly_machine_id = os.getenv("FLY_MACHINE_ID", "")
+    if fly_machine_id:
+        response.set_cookie(
+            key="fly_machine_id",
+            value=fly_machine_id,
+            max_age=30 * 24 * 60 * 60,
+            httponly=True,
+            samesite=_SAMESITE,
+            secure=_SECURE_COOKIES,
+            path="/",
+        )
     return response
 
 

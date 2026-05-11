@@ -122,6 +122,12 @@ app.add_middleware(
 # the call_next() boundary. See db_sync.py for details.
 app.add_middleware(RequestContextMiddleware)
 
+# T1190: ASGI-level WebSocket replay. Must be added AFTER RequestContextMiddleware
+# so it becomes the outermost middleware (last added = outermost in Starlette).
+# HTTP scopes pass through; only WebSocket scopes are checked for fly_machine_id.
+from app.middleware.fly_replay import FlyReplayMiddleware
+app.add_middleware(FlyReplayMiddleware)
+
 # T1740: Log Global Privacy Control signal for CCPA compliance records
 @app.middleware("http")
 async def gpc_signal_middleware(request, call_next):

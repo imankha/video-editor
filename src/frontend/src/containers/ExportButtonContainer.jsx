@@ -671,16 +671,13 @@ export function ExportButtonContainer({
           await connectWebSocket(exportId);
 
           setProgressMessage('Starting render...');
-          // Pin export request to the same Fly.io machine as our WebSocket connection
-          const machineId = exportWebSocketManager.getMachineId();
-          const pinHeaders = machineId ? { 'fly-force-instance-id': machineId } : {};
           const renderResponse = await axios.post(endpoint, {
             project_id: projectId,
             export_id: exportId,
             export_mode: EXPORT_CONFIG.exportMode,
             target_fps: EXPORT_CONFIG.targetFps,
             include_audio: includeAudio
-          }, { headers: pinHeaders });
+          });
           renderRequestAccepted = true;
 
           // Refresh quest progress now that export job exists in DB
@@ -725,14 +722,11 @@ export function ExportButtonContainer({
           await connectWebSocket(exportId);
 
           setProgressMessage('Starting render...');
-          // Pin overlay request to the same Fly.io machine as our WebSocket connection
-          const overlayMachineId = exportWebSocketManager.getMachineId();
-          const overlayPinHeaders = overlayMachineId ? { 'fly-force-instance-id': overlayMachineId } : {};
           const renderResponse = await axios.post(`${API_BASE}/api/export/render-overlay`, {
             project_id: projectId,
             export_id: exportId,
             effect_type: highlightEffectType
-          }, { headers: overlayPinHeaders });
+          });
           renderRequestAccepted = true;
 
           // T760: 202 = background processing, completion comes via WebSocket
@@ -778,15 +772,12 @@ export function ExportButtonContainer({
       // Connect WebSocket for real-time progress updates
       await connectWebSocket(exportId);
 
-      // Send export request (pin to same Fly.io machine as WebSocket)
-      const legacyMachineId = exportWebSocketManager.getMachineId();
       const response = await axios.post(
         endpoint,
         formData,
         {
           headers: {
             'Content-Type': 'multipart/form-data',
-            ...(legacyMachineId ? { 'fly-force-instance-id': legacyMachineId } : {}),
           },
           responseType: editorMode === EDITOR_MODES.FRAMING ? 'json' : 'blob',
           onUploadProgress: (progressEvent) => {

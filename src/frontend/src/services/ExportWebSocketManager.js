@@ -36,9 +36,6 @@ class ExportWebSocketManager {
     // { ws: WebSocket, keepaliveInterval: number, reconnectAttempt: number, reconnectTimeout: number }
     this.connections = new Map();
 
-    // Fly.io machine ID from the WebSocket server (for request pinning)
-    this.machineId = null;
-
     // Callbacks for external listeners (e.g., components that want to know about events)
     this.eventListeners = new Map();
   }
@@ -193,13 +190,6 @@ class ExportWebSocketManager {
 
     try {
       const message = JSON.parse(trimmedData);
-
-      // Fly.io machine ID for request pinning (sent on connect)
-      if (message.type === 'connected' && message.machineId) {
-        this.machineId = message.machineId;
-        console.log(`[ExportWSManager] Pinned to machine ${message.machineId}`);
-        return;
-      }
 
       // Extract all fields from the message - backend sends projectId, type, projectName, phase
       // T12: Also extract gameId and gameName for annotate exports
@@ -589,14 +579,6 @@ class ExportWebSocketManager {
       // Reset attempt counter so onReconnect fires on success
       connectionInfo.reconnectAttempt = 1;
     }
-  }
-
-  /**
-   * Get the Fly.io machine ID that our WebSocket is connected to.
-   * Used to pin export HTTP requests to the same machine via fly-force-instance-id header.
-   */
-  getMachineId() {
-    return this.machineId;
   }
 
   /**
