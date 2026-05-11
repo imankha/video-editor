@@ -50,15 +50,7 @@ _BINARY_COLUMNS = {'crop_data', 'timing_data', 'segments_data', 'highlights_data
 
 def _row_to_dict(row) -> Dict[str, Any]:
     """Convert a sqlite3.Row to a dictionary. Binary columns stay as raw bytes for msgpack."""
-    result = {}
-    for key in row.keys():
-        value = row[key]
-        if key in _BINARY_COLUMNS and isinstance(value, bytes):
-            pass
-        elif isinstance(value, datetime):
-            value = value.isoformat()
-        result[key] = value
-    return result
+    return {key: row[key] for key in row.keys()}
 
 
 def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
