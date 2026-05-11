@@ -63,6 +63,8 @@ from ..user_context import set_current_user_id, set_current_req_id
 logger = logging.getLogger(__name__)
 
 FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
+_SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+_SAMESITE = "none" if _SECURE_COOKIES else "lax"
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 # Thresholds for slow request warnings (in seconds)
@@ -125,6 +127,9 @@ WRITE_METHODS = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 _USER_WRITE_LOCKS: dict[str, asyncio.Lock] = {}
 _USER_WRITE_LOCKS_GUARD = threading.Lock()
 WRITE_LOCK_WAIT_LOG_MS = 50  # log when a writer waited longer than this for the lock
+# T2720: max seconds to wait for the R2 upload lock before deferring sync.
+# Prevents middleware from blocking ~14s behind the export worker's upload.
+_SYNC_LOCK_TIMEOUT = 0.5
 
 
 def _get_user_write_lock(user_id: str) -> asyncio.Lock:
@@ -458,7 +463,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 response.set_cookie(
                     key="fly_machine_id", value=FLY_MACHINE_ID,
                     max_age=30 * 24 * 60 * 60, httponly=True,
-                    samesite="lax", secure=APP_ENV == "production", path="/",
+                    samesite=_SAMESITE, secure=_SECURE_COOKIES, path="/",
                 )
             return response
 
@@ -472,7 +477,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 response.set_cookie(
                     key="fly_machine_id", value=FLY_MACHINE_ID,
                     max_age=30 * 24 * 60 * 60, httponly=True,
-                    samesite="lax", secure=APP_ENV == "production", path="/",
+                    samesite=_SAMESITE, secure=_SECURE_COOKIES, path="/",
                 )
             return response
 
@@ -571,7 +576,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 sub_prof.enable()
                             t0 = time.perf_counter()
                             try:
-                                return sync_db_to_r2_explicit(_user_id, _profile_id)
+                                return sync_db_to_r2_explicit(_user_id, _profile_id, lock_timeout=_SYNC_LOCK_TIMEOUT)
                             finally:
                                 elapsed_ms = (time.perf_counter() - t0) * 1000
                                 timing['profile_ms'] = elapsed_ms
@@ -591,7 +596,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                                 sub_prof.enable()
                             t0 = time.perf_counter()
                             try:
-                                return sync_user_db_to_r2_explicit(_user_id)
+                                return sync_user_db_to_r2_explicit(_user_id, lock_timeout=_SYNC_LOCK_TIMEOUT)
                             finally:
                                 elapsed_ms = (time.perf_counter() - t0) * 1000
                                 timing['user_ms'] = elapsed_ms
@@ -639,13 +644,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     elif had_writes:
                         _user_id = user_id
                         _profile_id = profile_id
-                        result = await asyncio.to_thread(sync_db_to_r2_explicit, _user_id, _profile_id)
+                        result = await asyncio.to_thread(sync_db_to_r2_explicit, _user_id, _profile_id, _SYNC_LOCK_TIMEOUT)
                         db_status = "ok" if result else "failed"
                         user_sync_success = True
                     else:
                         # had_user_db_writes only
                         db_status = "ok"
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_r2_explicit, user_id)
+                        user_sync_success = await asyncio.to_thread(sync_user_db_to_r2_explicit, user_id, _SYNC_LOCK_TIMEOUT)
 
                     if db_status == "conflict":
                         sync_status = "conflict"

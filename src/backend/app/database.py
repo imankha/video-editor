@@ -1235,7 +1235,7 @@ def get_user_data_path_explicit(user_id: str, profile_id: str) -> Path:
     return USER_DATA_BASE / user_id / "profiles" / profile_id
 
 
-def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
+def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | None = None) -> bool:
     """
     Sync the profile database to R2 without relying on ContextVars.
 
@@ -1256,6 +1256,7 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
 
     success, new_version = sync_database_to_r2_with_version(
         user_id, db_path, current_version, skip_version_check=True,
+        lock_timeout=lock_timeout,
     )
 
     if success and new_version is not None:
@@ -1267,7 +1268,7 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str) -> bool:
         return False
 
 
-def sync_user_db_to_r2_explicit(user_id: str) -> bool:
+def sync_user_db_to_r2_explicit(user_id: str, lock_timeout: float | None = None) -> bool:
     """
     Sync user.sqlite to R2 without relying on ContextVars.
 
@@ -1287,6 +1288,7 @@ def sync_user_db_to_r2_explicit(user_id: str) -> bool:
     local_version = get_local_user_db_version(user_id)
     success, new_version = sync_user_db_to_r2_with_version(
         user_id, db_path, local_version, skip_version_check=True,
+        lock_timeout=lock_timeout,
     )
 
     if success and new_version is not None:

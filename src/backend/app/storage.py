@@ -772,6 +772,7 @@ def sync_database_to_r2_with_version(
     local_db_path: Path,
     current_version: Optional[int],
     skip_version_check: bool = False,
+    lock_timeout: float | None = None,
 ) -> Tuple[bool, Optional[int]]:
     """
     Upload the user's database to R2 with version metadata.
@@ -846,7 +847,19 @@ def sync_database_to_r2_with_version(
         # T1539: serialize PutObject per user+key to prevent R2 429s
         upload_lock = get_upload_lock(user_id, "profile")
         lock_wait_start = time.perf_counter()
-        with upload_lock:
+        # T2720: optional timeout so middleware can bail out instead of
+        # blocking ~14s behind the export worker's upload
+        if lock_timeout is not None:
+            acquired = upload_lock.acquire(timeout=lock_timeout)
+            if not acquired:
+                logger.info(
+                    f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
+                    f"user={user_id} db=profile"
+                )
+                return False, None
+        else:
+            upload_lock.acquire()
+        try:
             lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
             if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
                 logger.info(
@@ -859,6 +872,8 @@ def sync_database_to_r2_with_version(
                 ExtraArgs={"Metadata": {"db-version": str(new_version)}},
                 operation=f"db_sync_upload {user_id}", **TIER_1,
             )
+        finally:
+            upload_lock.release()
         if PROFILING_ENABLED:
             upload_ms = (time.perf_counter() - t_upload) * 1000
             total_ms = (time.perf_counter() - t_total) * 1000
@@ -1012,6 +1027,7 @@ def sync_user_db_to_r2_with_version(
     local_db_path: Path,
     current_version: Optional[int],
     skip_version_check: bool = False,
+    lock_timeout: float | None = None,
 ) -> Tuple[bool, Optional[int]]:
     """Upload user.sqlite to R2 with version metadata. Same pattern as profile DB.
 
@@ -1074,7 +1090,18 @@ def sync_user_db_to_r2_with_version(
         # T1539: serialize PutObject per user+key to prevent R2 429s
         upload_lock = get_upload_lock(user_id, "user")
         lock_wait_start = time.perf_counter()
-        with upload_lock:
+        # T2720: optional timeout (same pattern as profile DB above)
+        if lock_timeout is not None:
+            acquired = upload_lock.acquire(timeout=lock_timeout)
+            if not acquired:
+                logger.info(
+                    f"[SYNC] Upload lock busy >{lock_timeout}s, deferring "
+                    f"user={user_id} db=user"
+                )
+                return False, None
+        else:
+            upload_lock.acquire()
+        try:
             lock_wait_ms = (time.perf_counter() - lock_wait_start) * 1000
             if lock_wait_ms >= UPLOAD_LOCK_WAIT_LOG_MS:
                 logger.info(
@@ -1087,6 +1114,8 @@ def sync_user_db_to_r2_with_version(
                 ExtraArgs={"Metadata": {"db-version": str(new_version)}},
                 operation=f"user_db_sync_upload {user_id}", **TIER_1,
             )
+        finally:
+            upload_lock.release()
         if PROFILING_ENABLED:
             upload_ms = (time.perf_counter() - t_upload) * 1000
             total_ms = (time.perf_counter() - t_total) * 1000

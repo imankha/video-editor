@@ -1,4 +1,5 @@
 """T1190: Session & Machine Pinning via Fly.io Replay Headers.
+T2720: Post-Export R2 Sync Lock Timeout.
 
 Tests for:
 - fly_machine_id cookie set on authenticated responses
@@ -6,10 +7,14 @@ Tests for:
 - Circuit-breaker: fallback when target machine unavailable
 - Single active session enforcement on login
 - WebSocket ASGI middleware replay
+- Cookie attribute consistency (samesite, secure, httponly)
+- Sync lock timeout prevents 14s stall behind export worker
 """
 
+import asyncio
 import os
 import sqlite3
+import time
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -310,3 +315,319 @@ class TestAllowlistedPaths:
             cookies={"fly_machine_id": MACHINE_B},
         )
         assert r.headers.get("fly-replay") == f"instance={MACHINE_B}"
+
+
+# ---------------------------------------------------------------------------
+# 8. WebSocket ASGI middleware (FlyReplayMiddleware) unit tests
+# ---------------------------------------------------------------------------
+
+def _make_ws_scope(cookies=None, headers=None):
+    """Build a minimal ASGI WebSocket scope."""
+    raw_headers = []
+    if cookies:
+        cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
+        raw_headers.append((b"cookie", cookie_str.encode()))
+    for name, val in (headers or {}).items():
+        raw_headers.append((name.encode() if isinstance(name, str) else name,
+                            val.encode() if isinstance(val, str) else val))
+    return {"type": "websocket", "headers": raw_headers}
+
+
+class TestFlyReplayMiddlewareASGI:
+    """Direct ASGI-level tests for FlyReplayMiddleware."""
+
+    def _run(self, coro):
+        return asyncio.get_event_loop().run_until_complete(coro)
+
+    def test_ws_mismatch_sends_replay(self):
+        """WebSocket with mismatched cookie gets fly-replay rejection."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        sent = []
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        async def mock_send(msg):
+            sent.append(msg)
+
+        scope = _make_ws_scope(cookies={"fly_machine_id": MACHINE_B})
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+            self._run(mw(scope, None, mock_send))
+
+        assert not inner_called
+        assert len(sent) == 2
+        assert sent[0]["type"] == "websocket.http.response.start"
+        assert sent[0]["status"] == 400
+        replay_header = dict(sent[0]["headers"])
+        assert replay_header[b"fly-replay"] == f"instance={MACHINE_B}".encode()
+        assert sent[1]["type"] == "websocket.http.response.body"
+
+    def test_ws_matching_cookie_passes_through(self):
+        """WebSocket with matching cookie passes to inner app."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        scope = _make_ws_scope(cookies={"fly_machine_id": MACHINE_A})
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+            self._run(mw(scope, None, None))
+
+        assert inner_called
+
+    def test_ws_no_cookie_passes_through(self):
+        """WebSocket with no fly_machine_id cookie passes to inner app."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        scope = _make_ws_scope()
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+            self._run(mw(scope, None, None))
+
+        assert inner_called
+
+    def test_ws_circuit_breaker_passes_through(self):
+        """WebSocket with mismatch + fly-replay-src (circuit-breaker) passes through."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        scope = _make_ws_scope(
+            cookies={"fly_machine_id": MACHINE_B},
+            headers={"fly-replay-src": f"instance={MACHINE_B};region=lax;t=1234"},
+        )
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+            self._run(mw(scope, None, None))
+
+        assert inner_called
+
+    def test_ws_no_fly_env_passes_through(self):
+        """When FLY_MACHINE_ID is empty, all WebSocket traffic passes through."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        scope = _make_ws_scope(cookies={"fly_machine_id": MACHINE_B})
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", ""):
+            self._run(mw(scope, None, None))
+
+        assert inner_called
+
+    def test_http_scope_always_passes_through(self):
+        """HTTP scopes are ignored by FlyReplayMiddleware (handled by db_sync)."""
+        from app.middleware.fly_replay import FlyReplayMiddleware
+
+        inner_called = False
+
+        async def inner(scope, receive, send):
+            nonlocal inner_called
+            inner_called = True
+
+        scope = {"type": "http", "headers": []}
+        mw = FlyReplayMiddleware(inner)
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+            self._run(mw(scope, None, None))
+
+        assert inner_called
+
+
+# ---------------------------------------------------------------------------
+# 9. Cookie attribute consistency
+# ---------------------------------------------------------------------------
+
+class TestCookieAttributeConsistency:
+    """fly_machine_id cookies must have the same samesite/secure/httponly/path
+    attributes as rb_session to ensure both travel together on cross-origin
+    requests."""
+
+    def _parse_set_cookies(self, response):
+        """Parse all Set-Cookie headers into {name: header_string} dict."""
+        result = {}
+        for header_val in response.headers.get_list("set-cookie"):
+            name = header_val.split("=", 1)[0].strip()
+            result[name] = header_val.lower()
+        return result
+
+    def test_login_cookies_have_matching_attributes(self, client_on_machine_a, isolated_auth_db):
+        """rb_session and fly_machine_id set on login must share attributes."""
+        with patch("app.routers.auth._verify_google_token", return_value={
+            "email": "test@example.com",
+            "sub": "google-id-123",
+        }):
+            r = client_on_machine_a.post(
+                "/api/auth/google",
+                json={"token": "fake-token"},
+            )
+        assert r.status_code == 200
+        cookies = self._parse_set_cookies(r)
+        assert "rb_session" in cookies
+        assert "fly_machine_id" in cookies
+
+        for attr in ["httponly", "path=/"]:
+            assert attr in cookies["rb_session"], f"rb_session missing {attr}"
+            assert attr in cookies["fly_machine_id"], f"fly_machine_id missing {attr}"
+
+        rb_has_secure = "secure" in cookies["rb_session"]
+        fly_has_secure = "secure" in cookies["fly_machine_id"]
+        assert rb_has_secure == fly_has_secure, "secure attribute mismatch"
+
+    def test_middleware_cookie_attributes(self, client_on_machine_a):
+        """fly_machine_id set by middleware (first request) has correct attributes."""
+        r = client_on_machine_a.get(
+            "/api/auth/me",
+            headers={"X-User-ID": "test-user"},
+        )
+        cookies = self._parse_set_cookies(r)
+        assert "fly_machine_id" in cookies
+        cookie = cookies["fly_machine_id"]
+        assert "httponly" in cookie
+        assert "path=/" in cookie
+
+
+# ---------------------------------------------------------------------------
+# T2720: Post-Export R2 Sync Lock Timeout
+# ---------------------------------------------------------------------------
+
+class TestSyncLockTimeout:
+    """T2720: Middleware sync defers when the export worker holds the upload lock."""
+
+    def _make_db(self, path):
+        conn = sqlite3.connect(str(path))
+        conn.execute("CREATE TABLE t (id INTEGER)")
+        conn.close()
+
+    def test_profile_sync_defers_when_lock_held(self, tmp_path):
+        """Profile sync with lock_timeout returns (False, None) when lock is busy."""
+        from app.storage import sync_database_to_r2_with_version, get_upload_lock
+
+        user_id = "test-lock-profile"
+        db_path = tmp_path / "profile.sqlite"
+        self._make_db(db_path)
+
+        lock = get_upload_lock(user_id, "profile")
+        lock.acquire()
+        try:
+            start = time.perf_counter()
+            with patch("app.storage.R2_ENABLED", True), \
+                 patch("app.storage.get_r2_sync_client", return_value=MagicMock()), \
+                 patch("app.storage.r2_key", return_value="u/profile.sqlite"), \
+                 patch("app.storage.R2_BUCKET", "test-bucket"):
+                success, version = sync_database_to_r2_with_version(
+                    user_id, db_path, current_version=1,
+                    skip_version_check=True, lock_timeout=0.1,
+                )
+            elapsed = time.perf_counter() - start
+
+            assert success is False
+            assert version is None
+            assert elapsed < 2.0
+        finally:
+            lock.release()
+
+    def test_user_sync_defers_when_lock_held(self, tmp_path):
+        """User DB sync with lock_timeout returns (False, None) when lock is busy."""
+        from app.storage import sync_user_db_to_r2_with_version, get_upload_lock
+
+        user_id = "test-lock-user"
+        db_path = tmp_path / "user.sqlite"
+        self._make_db(db_path)
+
+        lock = get_upload_lock(user_id, "user")
+        lock.acquire()
+        try:
+            start = time.perf_counter()
+            with patch("app.storage.R2_ENABLED", True), \
+                 patch("app.storage.get_r2_sync_client", return_value=MagicMock()), \
+                 patch("app.storage._user_db_r2_key", return_value="u/user.sqlite"), \
+                 patch("app.storage.R2_BUCKET", "test-bucket"):
+                success, version = sync_user_db_to_r2_with_version(
+                    user_id, db_path, current_version=1,
+                    skip_version_check=True, lock_timeout=0.1,
+                )
+            elapsed = time.perf_counter() - start
+
+            assert success is False
+            assert version is None
+            assert elapsed < 2.0
+        finally:
+            lock.release()
+
+    def test_sync_proceeds_with_timeout_when_lock_free(self, tmp_path):
+        """Sync with lock_timeout still works normally when the lock is available."""
+        from app.storage import sync_database_to_r2_with_version
+
+        user_id = "test-lock-free"
+        db_path = tmp_path / "profile.sqlite"
+        self._make_db(db_path)
+
+        mock_client = MagicMock()
+        with patch("app.storage.R2_ENABLED", True), \
+             patch("app.storage.get_r2_sync_client", return_value=mock_client), \
+             patch("app.storage.r2_key", return_value="u/profile.sqlite"), \
+             patch("app.storage.R2_BUCKET", "test-bucket"):
+            success, version = sync_database_to_r2_with_version(
+                user_id, db_path, current_version=1,
+                skip_version_check=True, lock_timeout=0.5,
+            )
+
+        assert success is True
+        assert version == 2
+
+    def test_default_no_timeout_blocks(self, tmp_path):
+        """Without lock_timeout (default), sync blocks until lock is released."""
+        from app.storage import sync_database_to_r2_with_version, get_upload_lock
+        import threading
+
+        user_id = "test-blocking"
+        db_path = tmp_path / "profile.sqlite"
+        self._make_db(db_path)
+
+        lock = get_upload_lock(user_id, "profile")
+        lock.acquire()
+
+        result = {}
+
+        def release_after_delay():
+            time.sleep(0.3)
+            lock.release()
+
+        threading.Thread(target=release_after_delay, daemon=True).start()
+
+        mock_client = MagicMock()
+        with patch("app.storage.R2_ENABLED", True), \
+             patch("app.storage.get_r2_sync_client", return_value=mock_client), \
+             patch("app.storage.r2_key", return_value="u/profile.sqlite"), \
+             patch("app.storage.R2_BUCKET", "test-bucket"):
+            start = time.perf_counter()
+            success, version = sync_database_to_r2_with_version(
+                user_id, db_path, current_version=1,
+                skip_version_check=True,
+            )
+            elapsed = time.perf_counter() - start
+
+        assert success is True
+        assert elapsed >= 0.2
