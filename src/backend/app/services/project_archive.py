@@ -8,7 +8,6 @@ can be restored when the user clicks "Open Reel as Draft" from the gallery.
 Archive location: {user_id}/archive/{project_id}.msgpack
 """
 
-import json
 import logging
 
 import msgpack
@@ -29,7 +28,6 @@ from app.storage import (
     r2_key,
 )
 from app.user_context import get_current_user_id
-from app.utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +37,6 @@ ARCHIVE_VERSION = 2
 def _get_archive_r2_key(project_id: int) -> str:
     """Get the R2 key for a project's archive."""
     return f"archive/{project_id}.msgpack"
-
-
-def _get_legacy_archive_r2_key(project_id: int) -> str:
-    return f"archive/{project_id}.json"
-
-
-_BINARY_COLUMNS = {'crop_data', 'timing_data', 'segments_data', 'highlights_data', 'input_data'}
 
 
 def _row_to_dict(row) -> Dict[str, Any]:
@@ -153,8 +144,8 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
     """
     Restore a project from R2 archive back to the database.
 
-    Downloads the archive from R2 (msgpack or legacy JSON fallback),
-    inserts records back into DB, sets restored_at timestamp.
+    Downloads the msgpack archive from R2, inserts records back into DB,
+    sets restored_at timestamp.
 
     Args:
         project_id: ID of the project to restore
@@ -179,29 +170,14 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
         r2_path = _get_archive_r2_key(project_id)
         full_key = r2_key(user_id, r2_path)
-        legacy_format = False
 
         try:
             response = client.get_object(Bucket=R2_BUCKET, Key=full_key)
             archive_bytes = response['Body'].read()
             archive = msgpack.unpackb(archive_bytes, raw=False)
         except client.exceptions.NoSuchKey:
-            # Fall back to legacy JSON format
-            legacy_r2_path = _get_legacy_archive_r2_key(project_id)
-            legacy_full_key = r2_key(user_id, legacy_r2_path)
-            try:
-                response = client.get_object(Bucket=R2_BUCKET, Key=legacy_full_key)
-                archive_bytes = response['Body'].read()
-                archive = json.loads(archive_bytes.decode('utf-8'))
-                legacy_format = True
-                full_key = legacy_full_key
-                logger.info(f"Using legacy JSON archive for project {project_id}")
-            except client.exceptions.NoSuchKey:
-                logger.warning(f"Archive not found in R2 for project {project_id}")
-                return False
-            except Exception as e:
-                logger.error(f"Failed to download legacy archive from R2: {e}")
-                return False
+            logger.warning(f"Archive not found in R2 for project {project_id}")
+            return False
         except Exception as e:
             logger.error(f"Failed to download archive from R2: {e}")
             return False
@@ -237,11 +213,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 columns = list(clip.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                if legacy_format:
-                    values = [encode_data(clip[col]) if col in _BINARY_COLUMNS and clip[col] is not None else clip[col] for col in columns]
-                else:
-                    values = [clip[col] for col in columns]
-
+                values = [clip[col] for col in columns]
                 cursor.execute(
                     f"INSERT INTO working_clips ({column_names}) VALUES ({placeholders})",
                     values
@@ -252,11 +224,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 columns = list(video.keys())
                 placeholders = ", ".join(["?" for _ in columns])
                 column_names = ", ".join(columns)
-                if legacy_format:
-                    values = [encode_data(video[col]) if col in _BINARY_COLUMNS and video[col] is not None else video[col] for col in columns]
-                else:
-                    values = [video[col] for col in columns]
-
+                values = [video[col] for col in columns]
                 cursor.execute(
                     f"INSERT INTO working_videos ({column_names}) VALUES ({placeholders})",
                     values
@@ -519,7 +487,4 @@ def is_project_archived(project_id: int, user_id: Optional[str] = None) -> bool:
 
     from app.storage import file_exists_in_r2
     r2_path = _get_archive_r2_key(project_id)
-    if file_exists_in_r2(user_id, r2_path):
-        return True
-    legacy_r2_path = _get_legacy_archive_r2_key(project_id)
-    return file_exists_in_r2(user_id, legacy_r2_path)
+    return file_exists_in_r2(user_id, r2_path)
