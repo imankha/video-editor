@@ -304,6 +304,17 @@ export function keyframeReducer(state, action) {
       const guardedKeyframes = removeBoundaryDuplicates(guarded);
 
       if (guardedKeyframes.length < 2) {
+        if (guardedKeyframes.length === 1 && guardedKeyframes[0].frame === 0) {
+          // Single keyframe at frame 0: end boundary unknown (only start was saved
+          // by a surgical gesture before full-state export). Accept the restore --
+          // SET_END_FRAME will add the end boundary once duration/trimRange loads.
+          return {
+            ...state,
+            machineState: KeyframeStates.INITIALIZED,
+            keyframes: guardedKeyframes,
+            isEndKeyframeExplicit: false
+          };
+        }
         console.warn('[keyframeController] Restore produced < 2 keyframes (degenerate data) — skipping, will auto-init');
         return state;
       }

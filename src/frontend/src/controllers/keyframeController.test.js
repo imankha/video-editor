@@ -864,14 +864,25 @@ describe('keyframeController', () => {
   // ============================================================================
 
   describe('degenerate data guards', () => {
-    it('RESTORE_KEYFRAMES with single keyframe at frame 0 does not initialize', () => {
+    it('RESTORE_KEYFRAMES with single keyframe at frame 0 initializes for SET_END_FRAME', () => {
       const state = createInitialState();
       const saved = [{ frame: 0, origin: 'permanent', x: 100, y: 0, width: 1920, height: 1080 }];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
-      expect(newState.machineState).toBe(KeyframeStates.UNINITIALIZED);
-      expect(newState.keyframes).toEqual([]);
+      // Accepts the single keyframe so SET_END_FRAME can add the end boundary
+      expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
+      expect(newState.keyframes.length).toBe(1);
+      expect(newState.keyframes[0].frame).toBe(0);
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.isEndKeyframeExplicit).toBe(false);
+
+      // SET_END_FRAME then completes the boundary pair
+      const withEnd = keyframeReducer(newState, actions.setEndFrame(300));
+      expect(withEnd.keyframes.length).toBe(2);
+      expect(withEnd.keyframes[0].frame).toBe(0);
+      expect(withEnd.keyframes[1].frame).toBe(300);
+      expect(withEnd.keyframes[1].origin).toBe('permanent');
     });
 
     it('RESTORE_KEYFRAMES with single keyframe at non-zero frame still works', () => {
