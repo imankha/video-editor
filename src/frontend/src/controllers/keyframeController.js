@@ -303,6 +303,11 @@ export function keyframeReducer(state, action) {
       const guarded = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
       const guardedKeyframes = removeBoundaryDuplicates(guarded);
 
+      if (guardedKeyframes.length < 2) {
+        console.warn('[keyframeController] Restore produced < 2 keyframes (degenerate data) — skipping, will auto-init');
+        return state;
+      }
+
       const startKf = guardedKeyframes[0];
       const endKf = guardedKeyframes[guardedKeyframes.length - 1];
       const isEndExplicit = JSON.stringify({ x: startKf.x, y: startKf.y, width: startKf.width, height: startKf.height }) !==
@@ -481,13 +486,14 @@ export function keyframeReducer(state, action) {
 
     case ActionTypes.SET_END_FRAME: {
       const { endFrame } = action.payload;
-      // Filter out keyframes beyond the new endFrame (trim shrinking range)
-      // and ensure permanent boundary keyframes exist at 0 and endFrame
       const trimmed = state.keyframes.filter(kf => kf.frame <= endFrame);
       const guarded = removeBoundaryDuplicates(ensurePermanentKeyframes(
         trimmed.length > 0 ? trimmed : state.keyframes,
         endFrame
       ));
+      if (guarded.length < 2) {
+        return state;
+      }
       return {
         ...state,
         keyframes: guarded

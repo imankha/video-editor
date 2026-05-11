@@ -860,6 +860,52 @@ describe('keyframeController', () => {
   });
 
   // ============================================================================
+  // T2710: DEGENERATE DATA GUARDS
+  // ============================================================================
+
+  describe('degenerate data guards', () => {
+    it('RESTORE_KEYFRAMES with single keyframe at frame 0 does not initialize', () => {
+      const state = createInitialState();
+      const saved = [{ frame: 0, origin: 'permanent', x: 100, y: 0, width: 1920, height: 1080 }];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
+
+      expect(newState.machineState).toBe(KeyframeStates.UNINITIALIZED);
+      expect(newState.keyframes).toEqual([]);
+    });
+
+    it('RESTORE_KEYFRAMES with single keyframe at non-zero frame still works', () => {
+      const state = createInitialState();
+      const saved = [{ frame: 50, origin: 'user', x: 100, y: 0, width: 1920, height: 1080 }];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
+
+      expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
+      expect(newState.keyframes.length).toBe(2);
+      expect(newState.keyframes[0].frame).toBe(0);
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.keyframes[1].frame).toBe(50);
+      expect(newState.keyframes[1].origin).toBe('permanent');
+    });
+
+    it('SET_END_FRAME to 0 preserves current keyframes', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 90, origin: 'permanent', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null
+      };
+
+      const newState = keyframeReducer(state, actions.setEndFrame(0));
+
+      expect(newState.keyframes.length).toBeGreaterThanOrEqual(2);
+    });
+  });
+
+  // ============================================================================
   // UNKNOWN ACTION
   // ============================================================================
 
