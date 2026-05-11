@@ -10,6 +10,7 @@ Tests the full roundtrip including the API endpoints the frontend calls:
 - GET /api/export/projects/{id}/overlay-data → highlights_data
 """
 
+import json
 import pytest
 import uuid
 from fastapi.testclient import TestClient
@@ -390,3 +391,78 @@ class TestRestoreEndpointIntegration:
         assert len(clips) >= 1
         assert isinstance(clips[0]["crop_data"], list)
         assert len(clips[0]["crop_data"]) == 2
+
+
+class TestLegacyJsonFallback:
+    """T2600: Verify restore works for pre-migration JSON archives."""
+
+    def test_restore_from_legacy_json_archive(self, project_with_overlay_and_framing):
+        """Restoring a JSON archive (legacy format) should produce correct msgpack bytes in DB."""
+        project_id, clip_id, working_video_id = project_with_overlay_and_framing
+
+        from app.services.project_archive import (
+            archive_project, restore_project,
+            _get_archive_r2_key, _get_legacy_archive_r2_key,
+        )
+        from app.storage import R2_ENABLED, get_r2_client, R2_BUCKET, r2_key, upload_bytes_to_r2
+
+        if not R2_ENABLED:
+            pytest.skip("R2 not enabled")
+
+        # 1. Archive normally (creates .msgpack)
+        assert archive_project(project_id, TEST_USER_ID) is True
+
+        # 2. Download the msgpack archive, convert to legacy JSON, upload as .json
+        r2_client = get_r2_client()
+        msgpack_path = _get_archive_r2_key(project_id)
+        msgpack_key = r2_key(TEST_USER_ID, msgpack_path)
+
+        import msgpack as mp
+        response = r2_client.get_object(Bucket=R2_BUCKET, Key=msgpack_key)
+        archive = mp.unpackb(response['Body'].read(), raw=False)
+
+        # Decode binary columns to JSON-safe objects (simulating old V1 format)
+        for clip in archive.get("working_clips", []):
+            for col in ("crop_data", "timing_data", "segments_data", "highlights_data", "input_data"):
+                if col in clip and isinstance(clip[col], bytes):
+                    clip[col] = decode_data(clip[col])
+        for video in archive.get("working_videos", []):
+            for col in ("crop_data", "timing_data", "segments_data", "highlights_data", "input_data"):
+                if col in video and isinstance(video[col], bytes):
+                    video[col] = decode_data(video[col])
+
+        archive["version"] = 1
+        legacy_json = json.dumps(archive, default=str).encode("utf-8")
+
+        # Upload as .json, delete .msgpack
+        json_path = _get_legacy_archive_r2_key(project_id)
+        upload_bytes_to_r2(TEST_USER_ID, json_path, legacy_json, fast=True)
+        r2_client.delete_object(Bucket=R2_BUCKET, Key=msgpack_key)
+
+        # 3. Restore from legacy JSON
+        assert restore_project(project_id, TEST_USER_ID) is True
+
+        # 4. Verify data integrity
+        overlay_resp = client.get(f"/api/export/projects/{project_id}/overlay-data")
+        assert overlay_resp.status_code == 200
+        overlay = overlay_resp.json()
+        assert overlay["has_data"] is True
+        assert len(overlay["highlights_data"]) == 2
+        assert overlay["highlights_data"][0]["id"] == "region-test001"
+
+        clips_resp = client.get(f"/api/clips/projects/{project_id}/clips")
+        assert clips_resp.status_code == 200
+        clips = clips_resp.json()
+        assert len(clips) >= 1
+        assert isinstance(clips[0]["crop_data"], list)
+        assert len(clips[0]["crop_data"]) == 2
+
+        # Binary columns should be bytes in DB (not strings)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT highlights_data FROM working_videos WHERE project_id = ? ORDER BY version DESC LIMIT 1",
+                (project_id,)
+            )
+            raw = cursor.fetchone()[0]
+        assert isinstance(raw, bytes), f"Expected bytes after legacy restore, got {type(raw).__name__}"

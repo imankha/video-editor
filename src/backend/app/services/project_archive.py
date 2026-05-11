@@ -24,7 +24,6 @@ from app.queries import latest_working_clips_subquery
 from app.storage import (
     R2_ENABLED,
     upload_bytes_to_r2,
-    delete_from_r2,
     get_r2_client,
     R2_BUCKET,
     r2_key,
