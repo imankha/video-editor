@@ -19,7 +19,7 @@
 | T2700 | [Export Retry UX Deception](tasks/T2700-export-retry-ux-deception.md) | 7 | 3 | P1 | TESTING | [ ] | Retry button during WS disconnect gives zero feedback; progress bar frozen; user assumes export is broken. Fix: loading state, show poll progress, distinguish reconnecting vs polling. |
 | T2710 | [Keyframe Invariant Violations on Restore](tasks/T2710-keyframe-invariant-violations-on-restore.md) | 5 | 3 | P2 | TESTING | [ ] | Dev-only validation fires on framing screen entry -- keyframe state violates boundary/origin invariants during clip restoration. Signals data integrity issue in framing pipeline. |
 | T2720 | [Post-Export R2 Sync Stall](tasks/T2720-post-export-sync-stall.md) | 8 | 4 | P0 | TESTING | [ ] | Export worker's _sync_after_export holds R2 upload lock for ~14s; all frontend requests during framing-to-overlay transition block behind it. User sees frozen UI for 14s after export completes. |
-| T2600 | [Archive Msgpack Migration](tasks/T2600-archive-msgpack-migration.md) | 7 | 3 | P1 | TODO | [x] | Archives stored as JSON cause lossy roundtrip for binary columns. Switch to msgpack end-to-end + migrate all live user archives. |
+| T2600 | [Archive Msgpack Migration](tasks/T2600-archive-msgpack-migration.md) | 7 | 3 | P1 | TESTING | [x] | Archives stored as JSON cause lossy roundtrip for binary columns. Switch to msgpack end-to-end + migrate all live user archives. |
 
 ### Prior Bug Fixes (Complete)
 
