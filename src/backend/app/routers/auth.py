@@ -147,9 +147,11 @@ async def whoami():
     user_id = get_current_user_id()
     needs_terms = False
     with get_auth_db() as db:
-        row = db.execute(
-            "SELECT terms_accepted_at FROM users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        cur = db.cursor()
+        cur.execute(
+            "SELECT terms_accepted_at FROM users WHERE user_id = %s", (user_id,)
+        )
+        row = cur.fetchone()
         if row and not row["terms_accepted_at"]:
             needs_terms = True
     return {"user_id": user_id, "needs_terms_acceptance": needs_terms}

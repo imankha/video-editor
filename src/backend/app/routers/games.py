@@ -758,11 +758,12 @@ async def list_games():
 
             video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
 
-            expires_at_str = expiry_by_hash.get(row['blake3_hash'])
-            if expires_at_str:
+            expires_at_val = expiry_by_hash.get(row['blake3_hash'])
+            if expires_at_val:
                 try:
-                    is_expired = datetime.fromisoformat(expires_at_str) < datetime.utcnow()
-                except ValueError:
+                    exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
+                    is_expired = exp_dt.replace(tzinfo=None) < datetime.utcnow()
+                except (ValueError, TypeError):
                     is_expired = False
                 storage_status = 'expired' if is_expired else 'active'
             elif row['auto_export_status']:
@@ -791,7 +792,7 @@ async def list_games():
                 'viewed_duration': row['viewed_duration'] or 0,
                 'status': row['status'] or 'ready',
                 'storage_status': storage_status,
-                'storage_expires_at': expires_at_str,
+                'storage_expires_at': expires_at_val,
                 'video_size': row['video_size'],
                 'auto_export_status': row['auto_export_status'],
                 'recap_video_url': row['recap_video_url'],
@@ -948,7 +949,8 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         ref = get_game_storage_ref(user_id, profile_id, game['blake3_hash']) if game['blake3_hash'] else None
         current_expiry = ref['storage_expires_at'] if ref else None
         if current_expiry:
-            base = max(datetime.fromisoformat(current_expiry), datetime.utcnow())
+            exp_dt = current_expiry if isinstance(current_expiry, datetime) else datetime.fromisoformat(current_expiry)
+            base = max(exp_dt.replace(tzinfo=None), datetime.utcnow())
         else:
             base = datetime.utcnow()
         new_expiry = storage_expires_at(from_dt=base, days=request.days)
