@@ -397,7 +397,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       {/* Sidebar - hidden on mobile, visible on sm+ */}
       <div className="hidden sm:flex">
         <ClipsSidePanel
-          clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+          clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
           allClipRegions={isMultiVideo ? clipRegions : undefined}
           selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
           activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
@@ -428,7 +428,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
-              clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+              clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
               allClipRegions={isMultiVideo ? clipRegions : undefined}
               selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
               activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
@@ -551,7 +551,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         annotateRegionsWithLayout={isMultiVideo ? filteredRegionsWithLayout : annotateRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
         hasAnnotateClips={isMultiVideo ? filteredClipRegions.length > 0 : hasAnnotateClips}
-        clipRegions={isMultiVideo ? filteredClipRegions : clipRegions}
+        clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
         isEditMode={isEditMode}
         // Handlers
         onSelectRegion={handleSelectAnnotateRegion}

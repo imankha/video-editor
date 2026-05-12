@@ -417,12 +417,12 @@ export function ProjectManager({
     }
   }, [projects, loading]);
 
-  // Also refetch when switching to games tab or when opening modal
+  // Refetch games when opening "new project" modal (needs fresh game list)
   useEffect(() => {
-    if ((activeTab === 'games' || showNewProjectModal) && onFetchGames) {
+    if (showNewProjectModal && onFetchGames) {
       onFetchGames();
     }
-  }, [activeTab, showNewProjectModal, onFetchGames]);
+  }, [showNewProjectModal, onFetchGames]);
 
   // Handle project creation from the new modal
   const handleProjectCreated = useCallback(async (project) => {

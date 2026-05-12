@@ -312,7 +312,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         request_start = time.perf_counter()
         meta: dict = {"sync_duration": 0.0, "handler_duration": 0.0,
-                      "user_id": None, "inflight_entry": 0, "inflight_exit": 0}
+                      "user_id": None, "inflight_entry": 0, "inflight_exit": 0,
+                      "auth_ms": 0, "init_ms": 0}
         try:
             return await self._dispatch_impl(request, call_next, meta)
         finally:
@@ -348,9 +349,13 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     f"{req_id_suffix}{profile_suffix}"
                 )
             profile_timing_suffix = f" profile={profile_path}" if profile_path else ""
+            auth_ms = meta["auth_ms"]
+            init_ms = meta["init_ms"]
             logger.info(
                 f"[REQ_TIMING] {method} {path} user={meta.get('user_id') or 'none'} "
                 f"total_ms={int(total_ms)} "
+                f"auth_ms={int(auth_ms)} "
+                f"init_ms={int(init_ms)} "
                 f"handler_ms={int(handler_duration * 1000)} "
                 f"sync_ms={int(sync_duration * 1000)} "
                 f"inflight_entry={meta['inflight_entry']} "
@@ -388,7 +393,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # 1. Try session cookie → central auth DB
         session_id = request.cookies.get("rb_session")
         if session_id:
+            auth_start = time.perf_counter()
             session = validate_session(session_id)
+            meta["auth_ms"] = (time.perf_counter() - auth_start) * 1000
             if session:
                 user_id = session["user_id"]
                 auth_source = "session"
@@ -447,7 +454,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         elif not skip_session_init:
             if profile_id:
                 logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
+            init_start = time.perf_counter()
             init_result = user_session_init(user_id)
+            meta["init_ms"] = (time.perf_counter() - init_start) * 1000
             profile_id = init_result.get("profile_id")
             if profile_id:
                 set_current_profile_id(profile_id)

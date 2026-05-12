@@ -14,6 +14,7 @@ Get the app ready for alpha testers. Core functionality works, performance is ac
 | T1030 | [Quest UI Relocation](T1030-quest-ui-relocation.md) | TODO |
 | T1040 | [Force Login on Add Game](T1040-force-login-add-game.md) | DONE |
 | T980 | [Clip-Scoped Scrub Bar](../T980-clip-scoped-scrub-playback.md) | TODO |
+| T2750 | [Unified Multi-Video Experience](T2750-unified-multi-video-experience.md) | TODO |
 
 ## Completion Criteria
 

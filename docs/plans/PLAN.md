@@ -145,6 +145,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2430 | ↳ [Brilliant Clips in My Reels](tasks/expired-game-experience/T2430-brilliant-clips-in-my-reels.md) | 6 | 2 | 3.0 | DONE | [ ] | Ensure auto-exported 5-star clips are filterable and always accessible in My Reels |
 | T2670 | [Upload Slow Connection Optimization](tasks/T2670-upload-slow-connection-optimization.md) | 7 | 4 | 1.8 | DONE | [ ] | 25MB parts (from 100MB), per-part retry with backoff, adaptive concurrency, save every part. Fixes failed uploads on 5-10 Mbps connections. |
 | T2680 | [Remove Video Link Import](tasks/T2680-remove-video-link-import.md) | 9 | 3 | 3.0 | DONE | [x] | Remove all Veo/Trace link import code (T2600-T2635). Legal risk: ToS violation, CFAA, no DMCA safe harbor. Adopt CapCut liability profile -- user-upload only. |
+| T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | TODO | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | DONE | [x] | DB schema: athlete_name, team_name, sport (free-text, not enum) + combobox UI with 6 supported sports + custom entry. (Absorbs T1073) |
@@ -379,5 +380,6 @@ IDs use gaps of 10 to allow insertions:
 - `T2550-T2570` - R2 CDN Video Serving epic
 - `T2670` - Upload Slow Connection Optimization
 - `T2680` - Remove Video Link Import (legal)
+- `T2750` - Unified Multi-Video Experience
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
