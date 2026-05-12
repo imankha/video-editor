@@ -61,7 +61,7 @@ Reel Ballers has no obligation to pre-screen, monitor, or verify the source, own
 
 ### Prohibited Content
 
-You may not upload content that is: (a) unlawful, harmful, threatening, abusive, or harassing; (b) depicts the exploitation or abuse of any person, especially minors; (c) infringes any third party's intellectual property rights; (d) contains malware or harmful code; or (e) violates any applicable law or regulation.
+You may not upload content that is: (a) unlawful, harmful, threatening, abusive, or harassing; (b) depicts the exploitation or abuse of any person, especially minors; (c) infringes any third party's intellectual property rights; (d) contains malware or harmful code; (e) violates any applicable law or regulation; or (f) contains special categories of sensitive personal data, including data revealing racial or ethnic origin, political opinions, religious or philosophical beliefs, trade union membership, genetic data, health data, or data concerning a person's sex life or sexual orientation, except to the extent such data is incidentally present in sports video footage uploaded in the normal course of using the Service.
 
 ### Intended Use
 
@@ -79,6 +79,10 @@ You agree NOT to:
 - Upload content that you know or reasonably should know you do not have the right to use
 
 We reserve the right to suspend or terminate accounts that violate this policy.
+
+### Content Removal
+
+Reel Ballers reserves the right, but has no obligation, to review, edit, refuse to post, or remove any content uploaded to the Service, at our sole discretion and without prior notice. We shall not be liable to you or any third party for any such action. This right exists independently of our DMCA takedown procedure (Section 11).
 
 ---
 
@@ -163,6 +167,7 @@ TO THE MAXIMUM EXTENT PERMITTED BY LAW:
 - We are not liable for content uploaded by users, including any claims that such content infringes third-party rights.
 - We are not liable for any claims arising from your use of content obtained from third-party platforms, recording services, or any other source. You assume all risk associated with the content you upload.
 - We are not liable for your violation of any third-party terms of service, license agreement, or applicable law in connection with content you upload to or export from the Service.
+- We are not liable for any loss or damage arising from any service outage, interruption, delay, or failure, whether planned or unplanned, including but not limited to loss of data, lost revenue, or inability to access or process content.
 
 ---
 
@@ -177,6 +182,10 @@ You agree to defend, indemnify, and hold harmless Reel Ballers, its officers, di
 - Your violation of any third-party platform's terms of service in connection with content you upload
 - Any claim that content you uploaded to the Service was obtained, used, or redistributed without proper authorization
 - Your violation of any applicable law or regulation
+
+### Defense and Settlement
+
+In any claim subject to indemnification under this section, Reel Ballers may, at its sole discretion, require you to assume control of the defense of such claim at your expense. You shall not settle any claim subject to indemnification without the prior written consent of Reel Ballers. Both parties agree to provide reasonable assistance to each other as may be required to defend any relevant claim.
 
 This indemnification obligation survives termination of your account and these Terms.
 
@@ -233,19 +242,25 @@ Before filing any formal dispute, you agree to contact us at [privacy@reelballer
 ## 13. Termination
 
 - You may terminate your account at any time through Account Settings or by contacting us.
-- We may terminate or suspend your account for violation of these Terms.
-- Upon termination, your content will be permanently deleted.
-- Sections 5 (Third-Party Content), 6 (License Termination), 8 (Disclaimer of Warranties), 9 (Limitation of Liability), 10 (Indemnification), and 12 (Dispute Resolution) survive termination.
+- We may terminate or suspend your account for violation of these Terms, or at our discretion for any reason with reasonable notice.
+- Upon termination, your content will be permanently deleted within 45 days.
+- Sections 5 (Third-Party Content), 6 (License Termination), 8 (Disclaimer of Warranties), 9 (Limitation of Liability), 10 (Indemnification), 12 (Dispute Resolution), and 14 (Force Majeure) survive termination.
 
 ---
 
-## 14. Changes to Terms
+## 14. Force Majeure
+
+Reel Ballers shall not be liable for any failure or delay in performing its obligations under these Terms where such failure or delay results from circumstances beyond our reasonable control, including but not limited to: acts of God, natural disasters, fire, flood, earthquake, pandemic or epidemic, war, terrorism, civil unrest, government action or regulation, labor disputes, power or telecommunications failure, cyber-attacks, denial-of-service attacks, failure of third-party hosting or cloud infrastructure providers, or interruptions to internet connectivity. In such events, our obligations shall be suspended for the duration of the force majeure event.
+
+---
+
+## 15. Changes to Terms
 
 We may update these Terms from time to time. We will notify you of material changes by displaying a notice in the application. Your continued use after changes constitutes acceptance.
 
 ---
 
-## 15. Contact
+## 16. Contact
 
 **Reel Ballers**
 

@@ -22,8 +22,10 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 7. [Cookies and Tracking Technologies](#7-cookies-and-tracking-technologies)
 8. [Do Not Track / Global Privacy Control](#8-do-not-track--global-privacy-control)
 9. [Security](#9-security)
-10. [Changes to This Policy](#10-changes-to-this-policy)
-11. [Contact Us](#11-contact-us)
+10. [International Data Transfers](#10-international-data-transfers)
+11. [Data Breach Notification](#11-data-breach-notification)
+12. [Changes to This Policy](#12-changes-to-this-policy)
+13. [Contact Us](#13-contact-us)
 
 ---
 
@@ -70,6 +72,7 @@ We do not extract biometric data from videos. Our framing (crop/zoom) feature us
 - No cross-site tracking
 - No contact lists or social graphs
 - No data from children directly (children do not create accounts)
+- No special categories of sensitive personal data (racial/ethnic origin, political opinions, religious beliefs, health data, sexual orientation) are intentionally collected or processed, except to the extent incidentally present in sports video footage
 
 ---
 
@@ -225,10 +228,25 @@ We implement appropriate technical and organizational measures to protect your p
 - Per-user database isolation (each user's data stored in separate SQLite databases)
 - No shared access between user accounts
 - Processing artifacts deleted immediately after use
+- Access to personal data is limited to personnel with a legitimate business need, who are subject to a duty of confidentiality
+
+While we take reasonable precautions, no method of transmission over the Internet or electronic storage is 100% secure. We cannot guarantee absolute security of your data. You are responsible for maintaining the confidentiality of your account credentials.
 
 ---
 
-## 10. Changes to This Policy
+## 10. International Data Transfers
+
+Your data may be processed by our service providers in locations outside your jurisdiction. Our service providers (Cloudflare, Modal, Fly.io, Stripe, Resend) may process data in the United States and other countries. We rely on each provider's compliance frameworks (including Standard Contractual Clauses where applicable) to ensure adequate protection of your data during any cross-border transfer.
+
+---
+
+## 11. Data Breach Notification
+
+In the event of a security breach that results in unauthorized access to your personal information, we will notify affected users within the timeframes required by applicable law (72 hours under CCPA where feasible). Notification will be sent via the email address associated with your account. We will also notify relevant regulatory authorities as required by law.
+
+---
+
+## 12. Changes to This Policy
 
 We will notify you of material changes to this policy by:
 - Displaying a notice in the application
@@ -238,7 +256,7 @@ Your continued use of the Service after changes constitutes acceptance of the up
 
 ---
 
-## 11. Contact Us
+## 13. Contact Us
 
 **Reel Ballers**
 
