@@ -128,7 +128,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | | **[Share Engagement Epic](tasks/sharing/EPIC.md)** | 6 | 3 | 1.8 | | | **Recipient discovery, email notifications — polish on core sharing** |
 | T1800 | ↳ [User Picker Component](tasks/sharing/T1800-user-picker-component.md) | 6 | 3 | 2.0 | DONE | [x] | Email autocomplete from prior shares, account lookup (green/yellow). Upgrades core share modal input. |
 | T1760 | ↳ [Share Email Delivery](tasks/sharing/T1760-share-email-delivery.md) | 7 | 3 | 2.3 | DONE | [x] | Resend integration for share emails (reused by player tagging); fire-and-forget |
-| T1790 | [Shared Reel Download Button](tasks/for-alpha/T1790-shared-reel-download-button.md) | 6 | 2 | 3.0 | TODO | [ ] | Add download button to shared video overlay so recipients can save the reel to their device |
+| T1790 | [Shared Reel Download Button](tasks/for-alpha/T1790-shared-reel-download-button.md) | 6 | 2 | 3.0 | TESTING | [ ] | Add download button to shared video overlay so recipients can save the reel to their device |
 | | **[Storage Credits Epic](tasks/storage-credits/EPIC.md)** | 10 | 5 | 2.0 | | | **Gates virality -- every shared/invited user adds unmetered R2 cost without this. Must ship before sharing goes live.** |
 | T1580 | ↳ [Game Storage Credits](tasks/storage-credits/T1580-game-storage-credits.md) | 10 | 5 | 2.0 | DONE | [x] | Size-based upload cost, 30-day expiry, 8cr new accounts |
 | T1581 | ↳ [Storage Extension UX](tasks/storage-credits/T1581-storage-extension-ux.md) | 9 | 4 | 2.3 | DONE | [x] | ExpirationBadge on game cards + credit-based extension modal |
