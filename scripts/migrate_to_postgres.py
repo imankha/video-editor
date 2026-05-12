@@ -24,6 +24,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src" / "backend"))
 
 
 def load_env(env_name):
@@ -86,15 +87,29 @@ def parse_datetime(val):
 
 def parse_json(val):
     """Convert JSON text to Python dict for JSONB columns."""
-    if val is None:
+    if val is None or val == 0:
         return None
     if isinstance(val, dict):
         return json.dumps(val)
+    if not isinstance(val, str):
+        return None
     try:
         parsed = json.loads(val)
         return json.dumps(parsed)
     except (json.JSONDecodeError, TypeError):
-        return val
+        return None
+
+
+_MISSING = object()
+
+
+def _get(row, key, default=None):
+    """Safe .get() for sqlite3.Row which doesn't support .get()."""
+    try:
+        val = row[key]
+        return val if val is not None else default
+    except (IndexError, KeyError):
+        return default
 
 
 def migrate_users(sqlite_conn, pg_cur, dry_run=False):
@@ -114,12 +129,12 @@ def migrate_users(sqlite_conn, pg_cur, dry_run=False):
             (
                 row["user_id"],
                 row["email"],
-                row.get("google_id"),
-                parse_datetime(row.get("verified_at")),
-                parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
-                parse_datetime(row.get("last_seen_at")),
-                row.get("picture_url"),
-                parse_json(row.get("credit_summary")),
+                _get(row, "google_id"),
+                parse_datetime(_get(row, "verified_at")),
+                parse_datetime(_get(row, "created_at")) or datetime.now(timezone.utc),
+                parse_datetime(_get(row, "last_seen_at")),
+                _get(row, "picture_url"),
+                parse_json(_get(row, "credit_summary")),
             ),
         )
         count += 1
@@ -142,9 +157,9 @@ def migrate_sessions(sqlite_conn, pg_cur, dry_run=False):
                 row["session_id"],
                 row["user_id"],
                 parse_datetime(row["expires_at"]),
-                parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
-                row.get("impersonator_user_id"),
-                parse_datetime(row.get("impersonation_expires_at")),
+                parse_datetime(_get(row, "created_at")) or datetime.now(timezone.utc),
+                _get(row, "impersonator_user_id"),
+                parse_datetime(_get(row, "impersonation_expires_at")),
             ),
         )
         count += 1
@@ -168,9 +183,9 @@ def migrate_otp_codes(sqlite_conn, pg_cur, dry_run=False):
                 row["email"],
                 row["code"],
                 parse_datetime(row["expires_at"]),
-                parse_datetime(row.get("used_at")),
-                row.get("attempts", 0),
-                parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
+                parse_datetime(_get(row, "used_at")),
+                _get(row, "attempts", 0),
+                parse_datetime(_get(row, "created_at")) or datetime.now(timezone.utc),
             ),
         )
         count += 1
@@ -213,9 +228,9 @@ def migrate_impersonation_audit(sqlite_conn, pg_cur, dry_run=False):
                 row["admin_user_id"],
                 row["target_user_id"],
                 row["action"],
-                row.get("ip"),
-                row.get("user_agent"),
-                parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
+                _get(row, "ip"),
+                _get(row, "user_agent"),
+                parse_datetime(_get(row, "created_at")) or datetime.now(timezone.utc),
             ),
         )
         count += 1
@@ -234,6 +249,7 @@ def migrate_game_storage_refs(sqlite_conn, pg_cur, dry_run=False):
             count += 1
             continue
         try:
+            pg_cur.execute("SAVEPOINT sp_ref")
             pg_cur.execute(
                 """INSERT INTO game_storage_refs (user_id, profile_id, blake3_hash,
                                                   game_size_bytes, storage_expires_at, created_at)
@@ -243,14 +259,15 @@ def migrate_game_storage_refs(sqlite_conn, pg_cur, dry_run=False):
                     row["user_id"],
                     row["profile_id"],
                     row["blake3_hash"],
-                    row.get("game_size_bytes", 0),
+                    _get(row, "game_size_bytes", 0),
                     parse_datetime(row["storage_expires_at"]),
-                    parse_datetime(row.get("created_at")) or datetime.now(timezone.utc),
+                    parse_datetime(_get(row, "created_at")) or datetime.now(timezone.utc),
                 ),
             )
+            pg_cur.execute("RELEASE SAVEPOINT sp_ref")
             count += 1
         except psycopg2.errors.ForeignKeyViolation:
-            pg_cur.connection.rollback()
+            pg_cur.execute("ROLLBACK TO SAVEPOINT sp_ref")
             skipped += 1
             print(f"  WARNING: Skipped ref for unknown user_id={row['user_id']}")
     if skipped:
@@ -290,6 +307,7 @@ def migrate_shared_videos(sqlite_conn, pg_cur, dry_run=False):
             count += 1
             continue
         try:
+            pg_cur.execute("SAVEPOINT sp_share")
             pg_cur.execute(
                 """INSERT INTO shared_videos (share_token, video_id, sharer_user_id,
                                               sharer_profile_id, video_filename, video_name,
@@ -303,18 +321,19 @@ def migrate_shared_videos(sqlite_conn, pg_cur, dry_run=False):
                     row["sharer_user_id"],
                     row["sharer_profile_id"],
                     row["video_filename"],
-                    row.get("video_name"),
-                    row.get("video_duration"),
+                    _get(row, "video_name"),
+                    _get(row, "video_duration"),
                     row["recipient_email"],
-                    bool(row.get("is_public", 0)),
-                    parse_datetime(row.get("shared_at")) or datetime.now(timezone.utc),
-                    parse_datetime(row.get("revoked_at")),
-                    parse_datetime(row.get("watched_at")),
+                    bool(_get(row, "is_public", 0)),
+                    parse_datetime(_get(row, "shared_at")) or datetime.now(timezone.utc),
+                    parse_datetime(_get(row, "revoked_at")),
+                    parse_datetime(_get(row, "watched_at")),
                 ),
             )
+            pg_cur.execute("RELEASE SAVEPOINT sp_share")
             count += 1
         except psycopg2.errors.ForeignKeyViolation:
-            pg_cur.connection.rollback()
+            pg_cur.execute("ROLLBACK TO SAVEPOINT sp_share")
             skipped += 1
             print(f"  WARNING: Skipped share for unknown sharer_user_id={row['sharer_user_id']}")
     if skipped:
@@ -369,12 +388,22 @@ def main():
             sharing_conn = sqlite3.connect(str(sharing_path))
             sharing_conn.row_factory = sqlite3.Row
 
-        # Connect to Postgres
-        print("\nStep 2: Connect to Postgres + ensure schema")
-        pg_conn = psycopg2.connect(config["DATABASE_URL"], cursor_factory=RealDictCursor)
-        pg_conn.autocommit = False
-        pg_cur = pg_conn.cursor()
+        try:
+            _run_migration(auth_conn, sharing_conn, config, args.dry_run)
+        finally:
+            auth_conn.close()
+            if sharing_conn:
+                sharing_conn.close()
 
+
+def _run_migration(auth_conn, sharing_conn, config, dry_run):
+    # Connect to Postgres
+    print("\nStep 2: Connect to Postgres + ensure schema")
+    pg_conn = psycopg2.connect(config["DATABASE_URL"], cursor_factory=RealDictCursor)
+    pg_conn.autocommit = False
+    pg_cur = pg_conn.cursor()
+
+    try:
         from app.services.pg import _SCHEMA_DDL, _SEED_SQL
         pg_cur.execute(_SCHEMA_DDL)
         pg_cur.execute(_SEED_SQL)
@@ -385,36 +414,23 @@ def main():
         print("\nStep 3: Migrate data")
         results = {}
 
-        print("  Migrating users...")
-        results["users"] = migrate_users(auth_conn, pg_cur, args.dry_run)
-
-        if not args.dry_run:
-            pg_conn.commit()
-
-        print("  Migrating sessions...")
-        results["sessions"] = migrate_sessions(auth_conn, pg_cur, args.dry_run)
-
-        print("  Migrating otp_codes...")
-        results["otp_codes"] = migrate_otp_codes(auth_conn, pg_cur, args.dry_run)
-
-        print("  Migrating admin_users...")
-        results["admin_users"] = migrate_admin_users(auth_conn, pg_cur, args.dry_run)
-
-        print("  Migrating impersonation_audit...")
-        results["impersonation_audit"] = migrate_impersonation_audit(auth_conn, pg_cur, args.dry_run)
-
-        print("  Migrating game_storage_refs...")
-        results["game_storage_refs"] = migrate_game_storage_refs(auth_conn, pg_cur, args.dry_run)
-
-        print("  Migrating r2_grace_deletions...")
-        results["r2_grace_deletions"] = migrate_r2_grace_deletions(auth_conn, pg_cur, args.dry_run)
-
+        tables = [
+            ("users", lambda: migrate_users(auth_conn, pg_cur, dry_run)),
+            ("sessions", lambda: migrate_sessions(auth_conn, pg_cur, dry_run)),
+            ("otp_codes", lambda: migrate_otp_codes(auth_conn, pg_cur, dry_run)),
+            ("admin_users", lambda: migrate_admin_users(auth_conn, pg_cur, dry_run)),
+            ("impersonation_audit", lambda: migrate_impersonation_audit(auth_conn, pg_cur, dry_run)),
+            ("game_storage_refs", lambda: migrate_game_storage_refs(auth_conn, pg_cur, dry_run)),
+            ("r2_grace_deletions", lambda: migrate_r2_grace_deletions(auth_conn, pg_cur, dry_run)),
+        ]
         if sharing_conn:
-            print("  Migrating shared_videos...")
-            results["shared_videos"] = migrate_shared_videos(sharing_conn, pg_cur, args.dry_run)
+            tables.append(("shared_videos", lambda: migrate_shared_videos(sharing_conn, pg_cur, dry_run)))
 
-        if not args.dry_run:
-            pg_conn.commit()
+        for name, migrate_fn in tables:
+            print(f"  Migrating {name}...")
+            results[name] = migrate_fn()
+            if not dry_run:
+                pg_conn.commit()
 
         # Verify row counts
         print("\nStep 4: Verify row counts")
@@ -427,7 +443,7 @@ def main():
                 all_ok = False
             print(f"  {table:<25} {total:>8} {migrated:>10}  {status}")
 
-        if not args.dry_run:
+        if not dry_run:
             # Cross-check Postgres counts
             print("\n  Postgres row counts:")
             for table in results:
@@ -435,19 +451,16 @@ def main():
                 pg_count = pg_cur.fetchone()["cnt"]
                 print(f"    {table}: {pg_count}")
 
-        auth_conn.close()
-        if sharing_conn:
-            sharing_conn.close()
-        pg_conn.close()
-
         print(f"\n{'='*60}")
-        if args.dry_run:
+        if dry_run:
             print("DRY RUN complete. No data was written to Postgres.")
         elif all_ok:
             print("Migration complete. All rows migrated successfully.")
         else:
             print("Migration complete with warnings. Check output above.")
         print(f"{'='*60}\n")
+    finally:
+        pg_conn.close()
 
 
 if __name__ == "__main__":
