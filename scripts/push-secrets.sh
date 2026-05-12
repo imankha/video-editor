@@ -14,8 +14,11 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Variables managed in fly.*.toml [env] — skip these (toml is their source of truth)
-TOML_VARS="APP_ENV ENV DEBUG CLEAR_PENDING_JOBS_ON_STARTUP MODAL_ENABLED CORS_ORIGINS"
+# Variables to skip during secrets push:
+# - TOML vars: managed in fly.*.toml [env] section
+# - DATABASE_URL: managed by `fly postgres attach` (flycast address);
+#   .env files have localhost proxy URLs for local script access, NOT for Fly
+SKIP_VARS="APP_ENV ENV DEBUG CLEAR_PENDING_JOBS_ON_STARTUP MODAL_ENABLED CORS_ORIGINS DATABASE_URL"
 
 env_name="${1:-}"
 dry_run=false
@@ -58,7 +61,7 @@ while IFS= read -r line; do
 
   # Skip variables managed in fly.toml
   skip=false
-  for toml_var in $TOML_VARS; do
+  for toml_var in $SKIP_VARS; do
     if [[ "$key" == "$toml_var" ]]; then
       skip=true
       break
@@ -74,7 +77,7 @@ while IFS= read -r line; do
 done < "$env_file"
 
 if [[ ${#skipped[@]} -gt 0 ]]; then
-  echo "[secrets] Skipped (managed in fly.toml): ${skipped[*]}"
+  echo "[secrets] Skipped (managed externally): ${skipped[*]}"
 fi
 
 echo "[secrets] Pushing ${#secrets_args[@]} secrets to $fly_app:"
