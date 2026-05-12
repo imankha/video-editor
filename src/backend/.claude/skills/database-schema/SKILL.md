@@ -1,18 +1,20 @@
 ---
 name: database-schema
-description: "SQLite database patterns for the video editor. Version-based identity, latest queries, FK constraints. Apply when writing queries, creating tables, or working with versioned data."
+description: "Per-user SQLite patterns for clips, projects, credits. Version-based identity, latest queries, FK constraints. Does NOT cover auth/sharing/sessions (those use Fly Postgres -- see pg.py)."
 license: MIT
 author: video-editor
-version: 1.0.0
+version: 2.0.0
 ---
 
-# Database Schema
+# Database Schema (Per-User SQLite)
 
-SQLite patterns for version-based data management.
+SQLite patterns for version-based data management in per-user databases (clips, projects, credits).
+
+**This skill covers per-user SQLite only.** Auth, sharing, sessions, and admin data use Fly Postgres -- see `app/services/pg.py` for schema DDL, `app/services/auth_db.py` and `app/services/sharing_db.py` for queries.
 
 ## When to Apply
-- Writing database queries
-- Creating or modifying tables
+- Writing per-user database queries (clips, projects, credits)
+- Creating or modifying per-user tables
 - Working with versioned clips/videos
 - Debugging "wrong version" issues
 

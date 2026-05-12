@@ -1,19 +1,30 @@
 ---
 name: persistence-model
-description: "SQLite + R2 cloud sync architecture. Version-based sync, batched writes, conflict detection. Apply when working with database operations, user data persistence, or cloud sync."
+description: "Per-user SQLite + R2 cloud sync architecture. Version-based sync, batched writes, conflict detection. Apply when working with per-user data (clips, projects, credits). Does NOT apply to auth/sharing/sessions -- those use Fly Postgres via get_pg()."
 license: MIT
 author: video-editor
-version: 1.0.0
+version: 2.0.0
 ---
 
 # Persistence Model
 
-Single source of truth architecture: SQLite per-user, synced to Cloudflare R2 with version tracking.
+## Two Database Systems
+
+| System | What it stores | Technology | Access pattern |
+|--------|---------------|------------|----------------|
+| **Fly Postgres** | Users, sessions, shares, admin, storage refs | `psycopg2` via `get_pg()` context manager | `%s` params, `RealDictCursor`, `row["col"]` |
+| **Per-user SQLite** | Clips, projects, credits, transactions | `sqlite3` via `get_user_db_connection()` | `?` params, `sqlite3.Row`, `row["col"]` |
+
+**This skill covers the per-user SQLite + R2 sync system only.** For Postgres auth/sharing, see `app/services/pg.py`, `app/services/auth_db.py`, `app/services/sharing_db.py`.
+
+## Per-User SQLite Architecture
+
+Single source of truth: SQLite per-user, synced to Cloudflare R2 with version tracking.
 
 ## When to Apply
-- Creating database operations
-- Implementing data persistence
-- Working with user data
+- Creating per-user database operations (clips, projects, credits)
+- Implementing per-user data persistence
+- Working with user data that syncs to R2
 - Debugging sync issues
 - Understanding data flow
 
@@ -71,7 +82,7 @@ Frontend                    Backend                     R2 Storage
 
 ---
 
-## Database Location
+## Database Location (Per-User SQLite Only)
 
 ```
 user_data/{user_id}/profile.sqlite   # Local
@@ -79,6 +90,8 @@ reel-ballers-users/{user_id}/profile.sqlite   # R2
 ```
 
 Dev default: `C:\Users\imank\projects\video-editor\user_data\a\profile.sqlite`
+
+**Note:** `auth.sqlite` and `sharing.sqlite` no longer exist. Auth/sharing data lives in Fly Postgres.
 
 ---
 

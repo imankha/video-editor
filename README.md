@@ -8,7 +8,7 @@ A browser-based video editing application with three-mode workflow: **Annotate**
 |-------|------------|
 | **Frontend** | React 18 + Vite + Zustand (port 5173) |
 | **Backend** | FastAPI + Python (uvicorn, port 8000) |
-| **Database** | SQLite (per-user, synced to R2) |
+| **Database** | Fly Postgres (auth/sharing/sessions) + SQLite per-user (clips/projects, synced to R2) |
 | **Storage** | Cloudflare R2 (S3-compatible) |
 | **Video Processing** | FFmpeg (required in PATH) |
 | **AI Upscaling** | Real-ESRGAN, RIFE (optional) |

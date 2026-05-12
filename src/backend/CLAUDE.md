@@ -22,11 +22,11 @@ cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
 | Skill | Priority | Description |
 |-------|----------|-------------|
 | [api-guidelines](.claude/skills/api-guidelines/SKILL.md) | CRITICAL | R2 storage, parameterized queries |
-| [persistence-model](.claude/skills/persistence-model/SKILL.md) | CRITICAL | SQLite + R2 sync, version tracking |
+| [persistence-model](.claude/skills/persistence-model/SKILL.md) | CRITICAL | Per-user SQLite + R2 sync, version tracking (NOT auth/sharing -- those use Postgres) |
 | [bug-reproduction](.claude/skills/bug-reproduction/SKILL.md) | CRITICAL | Test-first bug fixing |
 | [performance-optimization](.claude/skills/performance-optimization/SKILL.md) | CRITICAL | Attribute slow requests via req_id grep-chain; fix instrumentation before optimizing |
 | [type-safety](.claude/skills/type-safety/SKILL.md) | HIGH | Use `str, Enum` classes, no magic strings |
-| [database-schema](.claude/skills/database-schema/SKILL.md) | HIGH | Version identity, latest queries, FK cascades |
+| [database-schema](.claude/skills/database-schema/SKILL.md) | HIGH | Per-user SQLite: version identity, latest queries, FK cascades |
 | [gesture-based-sync](.claude/skills/gesture-based-sync/SKILL.md) | HIGH | Action-based API instead of full blobs |
 | [lint](.claude/skills/lint/SKILL.md) | MEDIUM | Import check + mypy |
 
@@ -36,6 +36,15 @@ cd src/backend && .venv/Scripts/python.exe -c "from app.main import app"
 ```python
 from app.database import RAW_CLIPS_PATH, WORKING_VIDEOS_PATH
 file_path = RAW_CLIPS_PATH / filename
+```
+
+### Postgres (Auth/Sharing/Sessions)
+```python
+from app.services.pg import get_pg
+with get_pg() as conn:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+    row = cur.fetchone()  # returns dict (RealDictCursor)
 ```
 
 ### R2 Storage
@@ -76,6 +85,8 @@ cursor.execute(
 - Don't send full state blobs (use gesture-based actions)
 - Don't add print() statements in committed code
 - Don't use `.get()` on `sqlite3.Row` - use bracket notation `row['column']` instead
+- Auth/sharing/sessions use Postgres (`app/services/pg.py`) -- use `get_pg()` context manager, `%s` params, `psycopg2.extras.RealDictCursor`
+- Per-user data (clips, projects, credits) uses SQLite (`app/services/user_db.py`) -- use `?` params, `sqlite3.Row`
 
 ## Modal Functions
 

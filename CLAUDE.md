@@ -8,8 +8,8 @@ Browser-based video editor: **Annotate** (clip extraction) → **Framing** (crop
 |-------|------------|
 | Frontend | React 18 + Vite + Zustand + Tailwind (port 5173) |
 | Backend | FastAPI + Python 3.11 (port 8000) |
-| Database | SQLite per-user, synced to R2 |
-| Storage | Cloudflare R2 |
+| Database | Fly Postgres (auth/sharing/sessions) + SQLite per-user (clips/projects, synced to R2) |
+| Storage | Cloudflare R2 (user media + per-user SQLite) |
 | GPU | Modal (cloud) or local FFmpeg + Real-ESRGAN |
 
 ## Data Safety Rules

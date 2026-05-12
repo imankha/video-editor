@@ -373,9 +373,17 @@ from app.services.export_helpers import (
 
 ## Database Reference
 
-- Location: `user_data/{user_id}/database.sqlite`
-- Dev default: `user_data/a/database.sqlite`
-- R2 sync: Download on startup if newer, upload on mutations
+**Two database systems:**
+
+| System | Data | Access | Params |
+|--------|------|--------|--------|
+| **Fly Postgres** | Auth, sessions, shares, admin, storage refs | `get_pg()` context manager | `%s` |
+| **Per-user SQLite** | Clips, projects, credits, transactions | `get_user_db_connection()` | `?` |
+
+- Per-user SQLite location: `user_data/{user_id}/profile.sqlite`
+- Per-user SQLite syncs to R2: download on startup if newer, upload on mutations
+- Postgres schema: `app/services/pg.py` (`_SCHEMA_DDL`)
+- Auth/sharing queries: `app/services/auth_db.py`, `app/services/sharing_db.py`
 
 ---
 

@@ -96,6 +96,7 @@ Screen (fetches data, guards readiness)
 - Parameterized SQL queries (never string interpolation)
 - Python enums use `str, Enum` mixin
 - No `.get()` on `sqlite3.Row` -- use bracket notation `row['column']`
+- Auth/sharing/sessions use Postgres (`get_pg()`, `%s` params) -- per-user data uses SQLite (`?` params)
 - No `print()` in committed code
 
 ### Project Principles (from CLAUDE.md)
@@ -162,7 +163,8 @@ The reviewer reads the diff against the design doc and produces findings organiz
 
 6. Backend-Specific (if applicable)
    - [ ] SQL parameterized (no f-strings in queries)
-   - [ ] No `.get()` on sqlite3.Row
+   - [ ] No `.get()` on sqlite3.Row (per-user SQLite)
+   - [ ] Correct DB system used: Postgres (`get_pg()`, `%s`) for auth/sharing, SQLite (`?`) for per-user data
    - [ ] No print statements
    - [ ] Router -> Service separation maintained
 
