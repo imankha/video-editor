@@ -26,7 +26,7 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    ```
    Use a 5-minute timeout (300000ms). The script handles:
    - Pre-flight checks (branch, clean tree, origin sync)
-   - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (single source of truth)
+   - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (except DATABASE_URL, managed by `fly postgres attach`)
    - Backend: `fly deploy` + health check
    - Frontend: `npm run build:production` + `wrangler pages deploy` + site verify
    - **TESTING → DONE**: promotes all TESTING tasks in PLAN.md to DONE
@@ -36,7 +36,7 @@ Deploy the app to production using `scripts/deploy_production.sh`.
 
 ## Secrets Management
 
-**Single source of truth:** Root `.env` files contain all backend env vars per environment.
+Root `.env` files contain most backend env vars per environment.
 
 | File | Environment | Fly.io App |
 |------|-------------|------------|
@@ -44,10 +44,16 @@ Deploy the app to production using `scripts/deploy_production.sh`.
 | `.env.staging` | Staging | reel-ballers-api-staging |
 | `.env.prod` | Production | reel-ballers-api |
 
+**Exception — DATABASE_URL has split ownership:**
+- **On Fly.io**: managed by `fly postgres attach` (uses `*.flycast:5432` internal DNS). Never pushed by `push-secrets.sh`.
+- **In `.env.*` files**: localhost proxy URLs for running scripts locally (requires `fly proxy` running).
+- **In `.env` (dev)**: points to local docker-compose Postgres (`localhost:5432`).
+
 To update secrets:
 1. Edit the `.env.*` file
 2. Run `bash scripts/push-secrets.sh <staging|production>` to push to Fly.io
 3. The production deploy script runs this automatically
+4. To change DATABASE_URL on Fly, use `fly secrets set` directly (not `.env` files)
 
 Frontend public keys live in `src/frontend/.env.*` files (Vite build-time requirement).
 Non-secret config (APP_ENV, CORS_ORIGINS, etc.) lives in `fly.*.toml` `[env]` sections.
