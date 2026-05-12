@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader, Lock } from 'lucide-react';
+import { X, AlertCircle, Loader, Lock, Download } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
@@ -64,8 +64,24 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   }
 
   if (state === 'ready' && share) {
+    const handleDownload = async () => {
+      try {
+        const resp = await fetch(share.video_url);
+        if (!resp.ok) return;
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = share.video_name || 'shared-video.mp4';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch {
+        // Cross-origin or network failure — user can retry
+      }
+    };
+
     return (
-      <Overlay onClose={onClose} title={share.video_name}>
+      <Overlay onClose={onClose} title={share.video_name} onDownload={handleDownload}>
         <MediaPlayer
           src={share.video_url}
           autoPlay
@@ -99,7 +115,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   );
 }
 
-function Overlay({ children, onClose, title }) {
+function Overlay({ children, onClose, title, onDownload }) {
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -119,12 +135,23 @@ function Overlay({ children, onClose, title }) {
           <h3 className="text-white text-sm md:text-base font-medium truncate">
             {title || 'Shared Video'}
           </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-1"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-1">
+            {onDownload && (
+              <button
+                onClick={onDownload}
+                className="text-gray-400 hover:text-white transition-colors p-1"
+                aria-label="Download video"
+              >
+                <Download size={20} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-white transition-colors p-1"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
           {children}
