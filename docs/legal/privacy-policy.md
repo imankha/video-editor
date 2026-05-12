@@ -57,7 +57,7 @@ This policy is designed to comply with the California Consumer Privacy Act (CCPA
 
 ### Video Content
 
-**Video files and metadata.** Video files you upload, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. All video content is uploaded by the user from their own device or cloud storage; Reel Ballers does not access, scrape, or pull content from any third-party platform or service.
+**Video files and metadata.** Video files you upload from your own device, along with derived metadata such as duration, resolution, frame rate, file hashes, and game identification signals. Video files contain visual depictions of individuals, including minors participating in sporting events. All video content is uploaded by the user from their own device; Reel Ballers does not access, download, scrape, or pull content from any third-party platform or service on a user's behalf.
 
 We do not extract biometric data from videos. Our framing (crop/zoom) feature uses manual crop controls, not facial recognition or detection. We do not extract GPS or location data from video metadata. We do not verify the source, ownership, or licensing status of video content uploaded by users.
 
@@ -77,7 +77,7 @@ We do not extract biometric data from videos. Our framing (crop/zoom) feature us
 
 We use your personal information to:
 
-- **Provide the Service:** Process, enhance, crop, overlay, and export your video clips as you direct.
+- **Provide the Service:** Process, enhance, crop, overlay, and export your video clips solely as you direct.
 - **Authenticate you:** Verify your identity and maintain your session.
 - **Process payments:** Complete purchases via Stripe.
 - **Video content:** We use video you upload for processing, enhancement, and export as you direct. We may also analyze video metadata and content to identify games across multiple users' uploads, enabling shared viewing experiences and collaborative features in the future. This analysis may include comparing video characteristics (timing, location, visual similarity) to determine whether separate uploads depict the same game.
@@ -109,6 +109,8 @@ We share your information only with service providers who assist in operating th
 | **Cloudflare Web Analytics** | Anonymous page view data (no PII) | Privacy-preserving analytics |
 
 **With other users (future feature).** We may introduce features that allow users who recorded the same game to share or access each other's uploads. If we do, we will provide you with controls to opt in or out of such sharing, and we will notify you before enabling any sharing of your content. We will never share your video with other users without your explicit consent at the time of sharing.
+
+**User-initiated sharing.** When you use the Service's sharing features (share links), you are directing us to make that content accessible to the recipients you choose. We do not independently select, curate, or recommend content for distribution. You are solely responsible for ensuring you have the right to share content depicting any individuals, including obtaining any required consents from parents or guardians of minors.
 
 **Legal requirements.** We may disclose information if required by law, subpoena, or other legal process, or if we believe in good faith that disclosure is necessary to protect our rights, protect your safety or the safety of others, or investigate fraud.
 
@@ -209,7 +211,7 @@ We use **Cloudflare Web Analytics**, which is a privacy-preserving analytics ser
 ## 8. Do Not Track / Global Privacy Control
 
 - **Do Not Track (DNT):** Our analytics (Cloudflare Web Analytics) do not use cookies or track across sites, so DNT signals are effectively honored by default.
-- **Global Privacy Control (GPC):** We honor the GPC signal (`Sec-GPC: 1`). Since we do not sell or share personal information, receiving a GPC signal requires no change in our behavior — your data is already protected. We log GPC signals for compliance record-keeping.
+- **Global Privacy Control (GPC):** We honor the GPC signal (`Sec-GPC: 1`). We do not sell your personal information or share it for cross-context behavioral advertising (as those terms are defined under the CCPA/CPRA). We do disclose limited data to service providers who help operate the Service (see Section 3), but these disclosures are for operational purposes only and do not constitute "selling" or "sharing" under California law. Receiving a GPC signal requires no change in our behavior. We log GPC signals for compliance record-keeping.
 
 ---
 
