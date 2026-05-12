@@ -126,4 +126,94 @@ export function useVirtualTimeline(clips) {
   return useMemo(() => buildVirtualTimeline(clips), [clips]);
 }
 
+/**
+ * Build a virtual timeline from full video durations (not clips).
+ * Maps N video files into one continuous virtual timeline.
+ *
+ * @param {Array<{sequence: number, duration: number}>} gameVideos
+ * @returns {FullVideoTimeline|null}
+ */
+export function buildFullVideoTimeline(gameVideos) {
+  if (!gameVideos || gameVideos.length === 0) return null;
+
+  const sorted = [...gameVideos].sort((a, b) => a.sequence - b.sequence);
+
+  let offset = 0;
+  const segments = sorted.map((video, index) => {
+    const seg = {
+      videoIndex: index,
+      videoSequence: video.sequence,
+      virtualStart: offset,
+      virtualEnd: offset + video.duration,
+      duration: video.duration,
+    };
+    offset += video.duration;
+    return seg;
+  });
+
+  const totalDuration = offset;
+
+  function virtualToActual(vt) {
+    const clamped = Math.max(0, Math.min(vt, totalDuration));
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const isLast = i === segments.length - 1;
+      if (clamped >= seg.virtualStart && (isLast ? clamped <= seg.virtualEnd : clamped < seg.virtualEnd)) {
+        return {
+          videoIndex: seg.videoIndex,
+          videoSequence: seg.videoSequence,
+          actualTime: clamped - seg.virtualStart,
+        };
+      }
+    }
+
+    const last = segments[segments.length - 1];
+    return {
+      videoIndex: last.videoIndex,
+      videoSequence: last.videoSequence,
+      actualTime: last.duration,
+    };
+  }
+
+  function actualToVirtual(videoIndex, actualTime) {
+    if (videoIndex < 0 || videoIndex >= segments.length) return 0;
+    const seg = segments[videoIndex];
+    const clamped = Math.max(0, Math.min(actualTime, seg.duration));
+    return seg.virtualStart + clamped;
+  }
+
+  function getVideoOffset(videoSequence) {
+    if (videoSequence == null) return 0;
+    const seg = segments.find(s => s.videoSequence === videoSequence);
+    return seg?.virtualStart ?? 0;
+  }
+
+  function getVideoBoundaries() {
+    return segments.slice(1).map(s => s.virtualStart);
+  }
+
+  function clampToVideo(virtualStart, virtualEnd) {
+    const startResult = virtualToActual(virtualStart);
+    const seg = segments[startResult.videoIndex];
+    const clampedVirtualEnd = Math.min(virtualEnd, seg.virtualEnd);
+    const actualEnd = clampedVirtualEnd - seg.virtualStart;
+    return {
+      startTime: startResult.actualTime,
+      endTime: actualEnd,
+      videoSequence: startResult.videoSequence,
+    };
+  }
+
+  return {
+    segments,
+    totalDuration,
+    virtualToActual,
+    actualToVirtual,
+    getVideoOffset,
+    getVideoBoundaries,
+    clampToVideo,
+  };
+}
+
 export default useVirtualTimeline;

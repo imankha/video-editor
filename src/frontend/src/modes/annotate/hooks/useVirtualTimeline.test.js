@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildVirtualTimeline } from './useVirtualTimeline';
+import { buildVirtualTimeline, buildFullVideoTimeline } from './useVirtualTimeline';
 
 describe('buildVirtualTimeline', () => {
   it('returns empty timeline for no clips', () => {
@@ -265,6 +265,276 @@ describe('buildVirtualTimeline', () => {
       ];
       const timeline = buildVirtualTimeline(clips);
       expect(timeline.segments[0].videoSequence).toBeNull();
+    });
+  });
+});
+
+describe('buildFullVideoTimeline', () => {
+  const twoHalves = [
+    { sequence: 1, duration: 2700, url: 'http://example.com/v1.mp4' },
+    { sequence: 2, duration: 2700, url: 'http://example.com/v2.mp4' },
+  ];
+
+  it('returns null for null/undefined input', () => {
+    expect(buildFullVideoTimeline(null)).toBeNull();
+    expect(buildFullVideoTimeline(undefined)).toBeNull();
+  });
+
+  it('returns null for empty array', () => {
+    expect(buildFullVideoTimeline([])).toBeNull();
+  });
+
+  describe('single video', () => {
+    const single = [{ sequence: 1, duration: 2700, url: 'http://example.com/v1.mp4' }];
+
+    it('builds timeline with one segment', () => {
+      const tl = buildFullVideoTimeline(single);
+      expect(tl.segments).toHaveLength(1);
+      expect(tl.totalDuration).toBe(2700);
+    });
+
+    it('segment covers full range', () => {
+      const tl = buildFullVideoTimeline(single);
+      expect(tl.segments[0]).toMatchObject({
+        videoIndex: 0,
+        videoSequence: 1,
+        virtualStart: 0,
+        virtualEnd: 2700,
+        duration: 2700,
+      });
+    });
+
+    it('virtualToActual is identity for single video', () => {
+      const tl = buildFullVideoTimeline(single);
+      const result = tl.virtualToActual(1000);
+      expect(result.videoIndex).toBe(0);
+      expect(result.videoSequence).toBe(1);
+      expect(result.actualTime).toBe(1000);
+    });
+  });
+
+  describe('two halves (standard soccer game)', () => {
+    it('builds timeline with two segments', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.segments).toHaveLength(2);
+      expect(tl.totalDuration).toBe(5400);
+    });
+
+    it('first segment covers 0 to first duration', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.segments[0]).toMatchObject({
+        videoIndex: 0,
+        videoSequence: 1,
+        virtualStart: 0,
+        virtualEnd: 2700,
+        duration: 2700,
+      });
+    });
+
+    it('second segment starts where first ends', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.segments[1]).toMatchObject({
+        videoIndex: 1,
+        videoSequence: 2,
+        virtualStart: 2700,
+        virtualEnd: 5400,
+        duration: 2700,
+      });
+    });
+  });
+
+  describe('three videos', () => {
+    const three = [
+      { sequence: 1, duration: 1800, url: 'http://example.com/v1.mp4' },
+      { sequence: 2, duration: 2700, url: 'http://example.com/v2.mp4' },
+      { sequence: 3, duration: 900, url: 'http://example.com/v3.mp4' },
+    ];
+
+    it('builds correct cumulative offsets', () => {
+      const tl = buildFullVideoTimeline(three);
+      expect(tl.segments).toHaveLength(3);
+      expect(tl.totalDuration).toBe(5400);
+      expect(tl.segments[0].virtualStart).toBe(0);
+      expect(tl.segments[1].virtualStart).toBe(1800);
+      expect(tl.segments[2].virtualStart).toBe(4500);
+    });
+  });
+
+  describe('sorts by sequence', () => {
+    it('handles out-of-order input', () => {
+      const outOfOrder = [
+        { sequence: 2, duration: 2700, url: 'http://example.com/v2.mp4' },
+        { sequence: 1, duration: 2700, url: 'http://example.com/v1.mp4' },
+      ];
+      const tl = buildFullVideoTimeline(outOfOrder);
+      expect(tl.segments[0].videoSequence).toBe(1);
+      expect(tl.segments[1].videoSequence).toBe(2);
+    });
+  });
+
+  describe('virtualToActual', () => {
+    it('maps time in first video correctly', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(1000);
+      expect(result.videoIndex).toBe(0);
+      expect(result.videoSequence).toBe(1);
+      expect(result.actualTime).toBe(1000);
+    });
+
+    it('maps time in second video correctly', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(3000);
+      expect(result.videoIndex).toBe(1);
+      expect(result.videoSequence).toBe(2);
+      expect(result.actualTime).toBe(300);
+    });
+
+    it('maps exact boundary to second video start', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(2700);
+      expect(result.videoIndex).toBe(1);
+      expect(result.videoSequence).toBe(2);
+      expect(result.actualTime).toBe(0);
+    });
+
+    it('maps time 0 to first video start', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(0);
+      expect(result.videoIndex).toBe(0);
+      expect(result.actualTime).toBe(0);
+    });
+
+    it('maps end of total duration to last video end', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(5400);
+      expect(result.videoIndex).toBe(1);
+      expect(result.actualTime).toBe(2700);
+    });
+
+    it('clamps negative values', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(-100);
+      expect(result.videoIndex).toBe(0);
+      expect(result.actualTime).toBe(0);
+    });
+
+    it('clamps values beyond total duration', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.virtualToActual(10000);
+      expect(result.videoIndex).toBe(1);
+      expect(result.actualTime).toBe(2700);
+    });
+  });
+
+  describe('actualToVirtual', () => {
+    it('maps first video time correctly', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(0, 1000)).toBe(1000);
+    });
+
+    it('maps second video time with offset', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(1, 300)).toBe(3000);
+    });
+
+    it('maps start of second video', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(1, 0)).toBe(2700);
+    });
+
+    it('maps end of second video', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(1, 2700)).toBe(5400);
+    });
+
+    it('clamps actualTime to video duration', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(0, 5000)).toBe(2700);
+    });
+
+    it('clamps negative actualTime', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(1, -100)).toBe(2700);
+    });
+
+    it('returns 0 for invalid videoIndex', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.actualToVirtual(-1, 100)).toBe(0);
+      expect(tl.actualToVirtual(5, 100)).toBe(0);
+    });
+  });
+
+  describe('getVideoOffset', () => {
+    it('returns 0 for first video', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.getVideoOffset(1)).toBe(0);
+    });
+
+    it('returns first video duration for second video', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.getVideoOffset(2)).toBe(2700);
+    });
+
+    it('returns 0 for unknown sequence', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.getVideoOffset(99)).toBe(0);
+    });
+
+    it('returns 0 for null sequence', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.getVideoOffset(null)).toBe(0);
+    });
+  });
+
+  describe('getVideoBoundaries', () => {
+    it('returns empty for single video', () => {
+      const single = [{ sequence: 1, duration: 2700, url: 'u' }];
+      const tl = buildFullVideoTimeline(single);
+      expect(tl.getVideoBoundaries()).toEqual([]);
+    });
+
+    it('returns boundary at first video duration for two halves', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      expect(tl.getVideoBoundaries()).toEqual([2700]);
+    });
+
+    it('returns multiple boundaries for N videos', () => {
+      const three = [
+        { sequence: 1, duration: 1800, url: 'u' },
+        { sequence: 2, duration: 2700, url: 'u' },
+        { sequence: 3, duration: 900, url: 'u' },
+      ];
+      const tl = buildFullVideoTimeline(three);
+      expect(tl.getVideoBoundaries()).toEqual([1800, 4500]);
+    });
+  });
+
+  describe('clampToVideo', () => {
+    it('returns same times when clip is within a single video', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.clampToVideo(100, 200);
+      expect(result).toEqual({ startTime: 100, endTime: 200, videoSequence: 1 });
+    });
+
+    it('clamps endTime to first video boundary', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.clampToVideo(2600, 2800);
+      expect(result).toEqual({ startTime: 2600, endTime: 2700, videoSequence: 1 });
+    });
+
+    it('clip in second video returns correct sequence', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.clampToVideo(3000, 3100);
+      expect(result.videoSequence).toBe(2);
+      expect(result.startTime).toBe(300);
+      expect(result.endTime).toBe(400);
+    });
+
+    it('clamps clip that spans boundary', () => {
+      const tl = buildFullVideoTimeline(twoHalves);
+      const result = tl.clampToVideo(2600, 2800);
+      expect(result.endTime).toBe(2700);
+      expect(result.videoSequence).toBe(1);
     });
   });
 });
