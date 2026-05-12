@@ -18,7 +18,7 @@ actions must go through the auth modal first.
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import httpx
 import logging
 import os
@@ -50,7 +50,6 @@ from app.services.auth_db import (
     get_user_by_id,
     update_last_seen,
     update_picture_url,
-    sync_auth_db_to_r2,
     get_auth_db,
 )
 
@@ -98,13 +97,11 @@ def _reset_test_account(user_id: str, email: str) -> None:
                     client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": keys})
             logger.info(f"[Auth] Deleted R2 data under {prefix}")
 
-    from app.services.auth_db import AUTH_DB_PATH
-    conn = sqlite3.connect(str(AUTH_DB_PATH))
-    for table, col in [("sessions", "user_id"), ("users", "user_id")]:
-        conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (user_id,))
-    conn.commit()
-    conn.close()
-    sync_auth_db_to_r2()
+    invalidate_user_sessions(user_id)
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")
 
 
@@ -150,9 +147,11 @@ async def whoami():
     user_id = get_current_user_id()
     needs_terms = False
     with get_auth_db() as db:
-        row = db.execute(
-            "SELECT terms_accepted_at FROM users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        cur = db.cursor()
+        cur.execute(
+            "SELECT terms_accepted_at FROM users WHERE user_id = %s", (user_id,)
+        )
+        row = cur.fetchone()
         if row and not row["terms_accepted_at"]:
             needs_terms = True
     return {"user_id": user_id, "needs_terms_acceptance": needs_terms}
@@ -164,14 +163,12 @@ async def accept_terms(request: Request):
     user_id = get_current_user_id()
     body = await request.json()
     version = body.get("terms_version", "2026-05-07")
-    now = datetime.utcnow().isoformat()
-    with get_auth_db() as db:
-        db.execute(
-            "UPDATE users SET terms_accepted_at = ?, terms_version = ? WHERE user_id = ?",
-            (now, version, user_id),
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET terms_accepted_at = now(), terms_version = %s WHERE user_id = %s",
+            (version, user_id),
         )
-        db.commit()
-    sync_auth_db_to_r2()
     logger.info(f"[Auth] Terms accepted: user={user_id} version={version}")
     return {"accepted": True}
 
@@ -440,27 +437,27 @@ async def send_otp(body: SendOtpRequest, request: Request):
         logger.warning(f"[Auth] OTP send rejected — invalid email: '{email}', req_id={req_id}, ua={user_agent}")
         raise HTTPException(status_code=400, detail="Invalid email address")
 
-    one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
-    with get_auth_db() as db:
-        row = db.execute(
-            "SELECT COUNT(*) as cnt FROM otp_codes WHERE email = ? AND created_at > ?",
-            (email, one_hour_ago),
-        ).fetchone()
-        if row["cnt"] >= _MAX_CODES_PER_HOUR:
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM otp_codes WHERE email = %s AND created_at > now() - interval '1 hour'",
+            (email,),
+        )
+        if cur.fetchone()["cnt"] >= _MAX_CODES_PER_HOUR:
             raise HTTPException(
                 status_code=429,
                 detail="Too many codes requested. Please try again later.",
             )
 
     code = str(secrets.randbelow(900000) + 100000)
-    expires_at = (datetime.utcnow() + timedelta(minutes=_OTP_EXPIRY_MINUTES)).isoformat()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=_OTP_EXPIRY_MINUTES)
 
-    with get_auth_db() as db:
-        db.execute(
-            "INSERT INTO otp_codes (email, code, expires_at) VALUES (?, ?, ?)",
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO otp_codes (email, code, expires_at) VALUES (%s, %s, %s)",
             (email, code, expires_at),
         )
-        db.commit()
 
     from app.services.email import send_otp_email
 
@@ -492,31 +489,33 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
         logger.warning(f"[Auth] OTP verify rejected — invalid code format: '{code}', email={email}, req_id={req_id}, ua={user_agent}")
         raise HTTPException(status_code=400, detail="Invalid code format")
 
-    with get_auth_db() as db:
-        row = db.execute(
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
             """SELECT id, code, expires_at, attempts
                FROM otp_codes
-               WHERE email = ? AND used_at IS NULL
+               WHERE email = %s AND used_at IS NULL
                ORDER BY created_at DESC LIMIT 1""",
             (email,),
-        ).fetchone()
+        )
+        row = cur.fetchone()
 
     if not row:
         raise HTTPException(status_code=400, detail="No pending code. Please request a new one.")
 
-    if datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
+    if row["expires_at"] < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Code expired. Please request a new one.")
 
     if row["attempts"] >= _MAX_ATTEMPTS_PER_CODE:
         raise HTTPException(status_code=400, detail="Too many attempts. Please request a new code.")
 
     if row["code"] != code:
-        with get_auth_db() as db:
-            db.execute(
-                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = ?",
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE otp_codes SET attempts = attempts + 1 WHERE id = %s",
                 (row["id"],),
             )
-            db.commit()
         remaining = _MAX_ATTEMPTS_PER_CODE - row["attempts"] - 1
         logger.warning(f"[Auth] OTP code mismatch for {email}: {remaining} attempts left, req_id={req_id}, ua={user_agent}")
         raise HTTPException(
@@ -524,12 +523,12 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             detail=f"Invalid code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
         )
 
-    with get_auth_db() as db:
-        db.execute(
-            "UPDATE otp_codes SET used_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), row["id"]),
+    with get_auth_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE otp_codes SET used_at = now() WHERE id = %s",
+            (row["id"],),
         )
-        db.commit()
 
     user_id = _find_or_create_user(email)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")

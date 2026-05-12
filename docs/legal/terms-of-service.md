@@ -47,9 +47,13 @@ You represent and warrant that you have all necessary rights, licenses, and perm
 
 If you upload video obtained from a third-party platform or recording service, **you are solely responsible for ensuring that your use of that content -- including uploading it to Reel Ballers, editing it, and exporting or sharing the results -- is permitted** under that platform's terms of service and applicable law. Reel Ballers does not verify the source of content you upload and assumes no responsibility for your compliance with third-party terms.
 
+### Sharing Responsibility
+
+When you use any sharing feature (share links, exports shared externally), you are choosing to distribute content through the Service. You are solely responsible for ensuring you have the right to share that content, including obtaining any required consents from individuals depicted in the content (or their parents/guardians, in the case of minors). Reel Ballers does not review, approve, or endorse any content you choose to share.
+
 ### No Monitoring Obligation
 
-Reel Ballers has no obligation to pre-screen, monitor, or verify the source, ownership, or legality of content uploaded by users. We are a video editing tool. You bring the content; you are responsible for it.
+Reel Ballers has no obligation to pre-screen, monitor, or verify the source, ownership, or legality of content uploaded by users. We are a video editing tool that processes content solely at your direction. You bring the content; you are responsible for it.
 
 ---
 
@@ -82,11 +86,11 @@ We reserve the right to suspend or terminate accounts that violate this policy.
 
 ### Reel Ballers as a Neutral Tool
 
-Reel Ballers is a video editing tool. We do not host, source, or provide video content. All content on the Service is uploaded by users from their own devices or cloud storage. We have no knowledge of, and assume no responsibility for, the original source of any content uploaded to the Service.
+Reel Ballers is a video editing tool that processes content solely at the user's direction. We do not host, source, or provide video content. All content on the Service is uploaded by users from their own devices. We have no knowledge of, and assume no responsibility for, the original source of any content uploaded to the Service. We do not access, download, scrape, or pull content from any third-party service on a user's behalf.
 
 ### Third-Party Platforms
 
-Some users may upload content originally recorded by third-party services (such as club camera systems, league recording platforms, or other video providers). Reel Ballers has no relationship with, endorsement of, or affiliation with any such third-party platform. We do not access, scrape, or pull content from any third-party service.
+Some users may upload content originally recorded by third-party services (such as club camera systems, league recording platforms, or other video providers). Reel Ballers has no relationship, agreement, license, partnership, endorsement of, or affiliation with any such third-party platform. We do not access, scrape, or pull content from any third-party service. The user's decision to upload content from a third-party source to our Service is made independently and entirely outside of our control.
 
 You are solely responsible for:
 
@@ -113,9 +117,9 @@ By uploading content, you grant Reel Ballers a limited, non-exclusive, royalty-f
 - Store your content on our servers and cloud storage providers
 - Process your content (transcode, crop, upscale, overlay) as directed by you
 - Display your content back to you within the Service
-- Transmit your content to recipients you explicitly share with
+- Transmit your content to recipients you explicitly share with via the Service's sharing features
 
-This license exists solely to operate the Service on your behalf. We will not use your content for any other purpose (marketing, training, sublicensing, etc.).
+This license exists solely to operate the Service on your behalf and at your direction. We will not use your content for any other purpose (marketing, training, sublicensing, etc.). We do not independently decide to process, distribute, or publish your content -- every action taken on your content is initiated by you.
 
 ### License Termination
 
@@ -214,11 +218,11 @@ We will process counter-notices in accordance with the DMCA.
 
 ### Governing Law
 
-These Terms are governed by the laws of the State of California, without regard to conflict of law principles.
+These Terms and any disputes arising out of or related to them or the Service shall be governed by and construed in accordance with the laws of the State of California, without regard to conflict of law principles.
 
 ### Venue
 
-Any disputes shall be resolved in the state or federal courts located in California.
+Any legal action or proceeding arising out of or related to these Terms or the Service shall be brought exclusively in the state or federal courts located in the State of California, and you consent to the personal jurisdiction of such courts.
 
 ### Informal Resolution
 

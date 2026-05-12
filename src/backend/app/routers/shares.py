@@ -13,7 +13,8 @@ shared_router (/api/shared):
 
 import asyncio
 import logging
-from typing import Optional
+from datetime import datetime
+from typing import Optional, Union
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -68,7 +69,7 @@ class ShareDetailResponse(BaseModel):
     video_duration: Optional[float]
     video_url: Optional[str]
     is_public: bool
-    shared_at: str
+    shared_at: Union[str, datetime]
 
 
 class ShareListItem(BaseModel):
@@ -76,8 +77,8 @@ class ShareListItem(BaseModel):
     share_token: str
     recipient_email: str
     is_public: bool
-    shared_at: str
-    revoked_at: Optional[str]
+    shared_at: Union[str, datetime]
+    revoked_at: Optional[Union[str, datetime]]
 
 
 class ContactsResponse(BaseModel):

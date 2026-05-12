@@ -540,19 +540,19 @@ def get_credit_stats_for_admin() -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Credit summary sync to auth.sqlite (best-effort)
+# Credit summary sync to Postgres (best-effort)
 # ---------------------------------------------------------------------------
 
 def _update_credit_summary(user_id: str, balance: int) -> None:
-    """Best-effort update of credit_summary in auth.sqlite for admin panel."""
+    """Best-effort update of credit_summary in Postgres for admin panel."""
     try:
         from .auth_db import get_auth_db
-        with get_auth_db() as db:
-            db.execute(
-                "UPDATE users SET credit_summary = ? WHERE user_id = ?",
+        with get_auth_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE users SET credit_summary = %s WHERE user_id = %s",
                 (balance, user_id),
             )
-            db.commit()
     except Exception as e:
         logger.warning(f"[UserDB] Failed to update credit_summary for {user_id}: {e}")
 

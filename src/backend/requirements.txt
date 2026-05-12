@@ -125,6 +125,7 @@ pure_eval==0.2.3
 py-cpuinfo==9.0.0
 pyasn1==0.6.1
 pyasn1_modules==0.4.2
+psycopg2-binary==2.9.10
 pydantic==2.5.0
 pydantic_core==2.14.1
 Pygments==2.19.2

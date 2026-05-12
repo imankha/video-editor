@@ -4,14 +4,13 @@ Reset ALL user accounts across local and R2 environments.
 Leaves games data intact.
 
 Deletes:
-  1. All rows from users, sessions, credit_transactions in auth.sqlite
-  2. All local user_data/ folders (preserves auth.sqlite)
-  3. All R2 objects under {env}/users/ for dev, staging, prod
-  4. Syncs cleaned auth.sqlite to R2
+  1. All rows from users, sessions in Postgres
+  2. All local user_data/ folders
+  3. All R2 objects under {env}/users/ for dev, staging
 
 Does NOT delete:
   - {env}/games/ (shared game videos)
-  - auth.sqlite file itself (just empties the tables)
+  - Postgres tables themselves (just empties them)
 
 Usage:
     cd src/backend
@@ -20,32 +19,38 @@ Usage:
 """
 
 import argparse
+import os
 import shutil
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
+
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
 
-from app.services.auth_db import AUTH_DB_PATH, sync_auth_db_to_r2
 from app.storage import get_r2_client, R2_BUCKET, R2_ENABLED
 
 ALL_ENVS = ["dev", "staging"]
-PROTECTED_LOCAL = {"auth.sqlite"}
 
 
-def clear_auth_db(dry_run: bool) -> None:
-    """Delete all rows from users, sessions, credit_transactions."""
-    conn = sqlite3.connect(str(AUTH_DB_PATH))
-    for table in ["credit_transactions", "sessions", "users"]:
-        count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+def get_pg_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"], cursor_factory=RealDictCursor)
+
+
+def clear_postgres(dry_run: bool) -> None:
+    conn = get_pg_conn()
+    cur = conn.cursor()
+    for table in ["sessions", "game_storage_refs", "r2_grace_deletions", "shared_videos", "users"]:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+        count = cur.fetchone()["cnt"]
         print(f"  {table}: {count} rows")
         if not dry_run and count:
-            conn.execute(f"DELETE FROM {table}")
+            cur.execute(f"DELETE FROM {table}")
 
     if not dry_run:
         conn.commit()
@@ -54,29 +59,27 @@ def clear_auth_db(dry_run: bool) -> None:
 
 
 def delete_local_folders(dry_run: bool) -> None:
-    """Delete all user_data/ subfolders except protected ones."""
     user_data = Path(__file__).parent.parent.parent.parent / "user_data"
+    if not user_data.exists():
+        print("  No user_data directory found")
+        return
+
     deleted = 0
     skipped = 0
 
     for item in sorted(user_data.iterdir()):
-        if item.name in PROTECTED_LOCAL:
-            skipped += 1
-            continue
         if not item.is_dir():
             skipped += 1
             continue
-
         if not dry_run:
             shutil.rmtree(item)
         deleted += 1
 
     action = "would delete" if dry_run else "deleted"
-    print(f"  {action} {deleted} folders, skipped {skipped} (protected)")
+    print(f"  {action} {deleted} folders, skipped {skipped}")
 
 
 def delete_r2_users(dry_run: bool) -> None:
-    """Delete all R2 objects under {env}/users/ for all environments."""
     if not R2_ENABLED:
         print("  R2 not enabled, skipping")
         return
@@ -100,13 +103,9 @@ def delete_r2_users(dry_run: bool) -> None:
             total_deleted += len(keys)
 
             if not dry_run:
-                # R2/S3 batch delete: max 1000 per request
                 for i in range(0, len(keys), 1000):
                     batch = keys[i:i + 1000]
-                    client.delete_objects(
-                        Bucket=R2_BUCKET,
-                        Delete={"Objects": batch},
-                    )
+                    client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": batch})
 
         action = "would delete" if dry_run else "deleted"
         if total_deleted:
@@ -124,57 +123,24 @@ def main():
         print("=== DRY RUN ===\n")
 
     if not args.dry_run:
-        confirm = input("Delete ALL accounts (local + R2 dev/staging/prod)? Type 'yes': ")
+        confirm = input("Delete ALL accounts (local + R2 dev/staging)? Type 'yes': ")
         if confirm != "yes":
             print("Aborted")
             sys.exit(0)
         print()
 
-    print("[1/4] Auth database:")
-    clear_auth_db(args.dry_run)
+    print("[1/3] Postgres database:")
+    clear_postgres(args.dry_run)
     print()
 
-    print("[2/4] Local user folders:")
+    print("[2/3] Local user folders:")
     delete_local_folders(args.dry_run)
     print()
 
-    print("[3/4] R2 user data (all environments):")
+    print("[3/3] R2 user data (all environments):")
     delete_r2_users(args.dry_run)
     print()
 
-    print("[4/5] Sync auth.sqlite to R2:")
-    if not args.dry_run:
-        if sync_auth_db_to_r2():
-            print("  Synced")
-        else:
-            print("  Failed or R2 not enabled")
-    else:
-        print("  (skipped)")
-
-    print()
-    print("[5/5] Restart staging server (so it re-reads from R2):")
-    if not args.dry_run:
-        try:
-            result = subprocess.run(
-                ["fly", "machines", "restart", "-a", "reel-ballers-api-staging", "--force"],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                print("  Staging server restarted")
-            else:
-                stderr = result.stderr.strip()
-                if "suspended" in stderr.lower() or "stopped" in stderr.lower():
-                    print("  Machine is suspended — will restore from R2 on next request")
-                else:
-                    print(f"  Restart failed: {stderr or result.stdout.strip()}")
-        except FileNotFoundError:
-            print("  fly CLI not found — manually restart staging or wait for auto-suspend")
-        except subprocess.TimeoutExpired:
-            print("  Restart timed out — server may still be restarting")
-    else:
-        print("  (skipped)")
-
-    print()
     print("Done!" if not args.dry_run else "Dry run complete. Re-run without --dry-run to execute.")
 
 

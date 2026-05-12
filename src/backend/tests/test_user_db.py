@@ -22,30 +22,22 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def isolated_user_db(tmp_path):
-    """Fresh temp databases for each test.
-
-    Patches auth.sqlite path, user_db USER_DATA_BASE, and clears
-    the initialized-DB cache so every test starts clean.
-    """
-    auth_db_path = tmp_path / "auth.sqlite"
+def isolated_user_db(pg_conn, tmp_path, monkeypatch):
+    """Fresh temp databases for each test."""
     user_data_base = tmp_path / "user_data"
     user_data_base.mkdir()
-
-    with patch("app.services.auth_db.AUTH_DB_PATH", auth_db_path), \
-         patch("app.services.auth_db.sync_auth_db_to_r2", return_value=True), \
-         patch("app.services.user_db.USER_DATA_BASE", user_data_base), \
-         patch("app.services.user_db._initialized_user_dbs", set()), \
-         patch("app.services.user_db._update_credit_summary") as mock_summary:
-        from app.services.auth_db import init_auth_db, create_user
-        init_auth_db()
-        create_user("user-a", email="a@example.com")
-        create_user("user-b", email="b@example.com")
-        yield {
-            "tmp_path": tmp_path,
-            "user_data_base": user_data_base,
-            "mock_summary": mock_summary,
-        }
+    monkeypatch.setattr("app.services.user_db.USER_DATA_BASE", user_data_base)
+    monkeypatch.setattr("app.services.user_db._initialized_user_dbs", set())
+    mock_summary = MagicMock()
+    monkeypatch.setattr("app.services.user_db._update_credit_summary", mock_summary)
+    from app.services.auth_db import create_user
+    create_user("user-a", email="a@example.com")
+    create_user("user-b", email="b@example.com")
+    yield {
+        "tmp_path": tmp_path,
+        "user_data_base": user_data_base,
+        "mock_summary": mock_summary,
+    }
 
 
 # -----------------------------------------------------------------------
