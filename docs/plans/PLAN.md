@@ -145,6 +145,14 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2430 | ↳ [Brilliant Clips in My Reels](tasks/expired-game-experience/T2430-brilliant-clips-in-my-reels.md) | 6 | 2 | 3.0 | DONE | [ ] | Ensure auto-exported 5-star clips are filterable and always accessible in My Reels |
 | T2670 | [Upload Slow Connection Optimization](tasks/T2670-upload-slow-connection-optimization.md) | 7 | 4 | 1.8 | DONE | [ ] | 25MB parts (from 100MB), per-part retry with backoff, adaptive concurrency, save every part. Fixes failed uploads on 5-10 Mbps connections. |
 | T2680 | [Remove Video Link Import](tasks/T2680-remove-video-link-import.md) | 9 | 3 | 3.0 | DONE | [x] | Remove all Veo/Trace link import code (T2600-T2635). Legal risk: ToS violation, CFAA, no DMCA safe harbor. Adopt CapCut liability profile -- user-upload only. |
+| | **[Team Sharing Alpha](tasks/team-sharing-alpha/EPIC.md)** | 8 | 4 | 2.0 | | | **Tag teammates during annotation, share filtered clips via email, auto-add to recipient's account** |
+| T2800 | ↳ [Teammate Tag Data Model](tasks/team-sharing-alpha/T2800-teammate-tag-data-model.md) | 8 | 3 | 2.7 | TODO | [x] | `tagged_teammates` JSON + `my_athlete` boolean on raw_clips. `teammate_emails` table. Autocomplete APIs. |
+| T2810 | ↳ [Annotation UI: Tags + My Athlete](tasks/team-sharing-alpha/T2810-annotation-tags-my-athlete-ui.md) | 7 | 3 | 2.3 | TODO | [ ] | Free-text tag input with autocomplete + "My Athlete" toggle in annotation dialog |
+| T2820 | ↳ [Share with Tagged Players](tasks/team-sharing-alpha/T2820-share-with-tagged-players.md) | 8 | 4 | 2.0 | TODO | [ ] | Button in annotation mode: per-tag email input, stores mappings, multi-email per tag |
+| T2830 | ↳ [Game + Annotation Materialization](tasks/team-sharing-alpha/T2830-game-annotation-materialization.md) | 9 | 5 | 1.8 | TODO | [x] | Create game ref + filtered annotations in recipient's profile. Overlap merging. Email delivery. |
+| T2840 | ↳ [Shared Annotation View](tasks/team-sharing-alpha/T2840-shared-annotation-view.md) | 7 | 4 | 1.8 | TODO | [ ] | Non-user playback with annotations + signup CTA. Materialization on signup. |
+| T2850 | ↳ [Share Game](tasks/team-sharing-alpha/T2850-share-game.md) | 7 | 3 | 2.3 | TODO | [ ] | Share button on game cards via UserPicker. Profile picker for recipient. |
+| T2860 | ↳ [My Athlete Filter in New Reel](tasks/team-sharing-alpha/T2860-my-athlete-reel-filter.md) | 6 | 2 | 3.0 | TODO | [ ] | Filter clips by "My Athlete" in reel creation clip selector |
 | T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | TODO | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
@@ -313,13 +321,7 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Pri | Migr | Description |
 |----|------|--------|-----|------|-------------|
-| | **[Teammate Sharing](tasks/sharing/EPIC.md)** | | 1.5 | | **Teammate annotations, game sharing with friends, tag-at-framing clip delivery** |
-| T1810 | ↳ [Teammate Annotation Model](tasks/sharing/T1810-player-tag-data-model.md) | TODO | 3.5 | [x] | `is_teammate` boolean on raw_clips, API support for toggle + filter |
-| T1820 | ↳ [Teammate Toggle UI](tasks/sharing/T1820-annotation-player-tagging-ui.md) | TODO | 3.0 | [ ] | "My Athlete" / "Teammate" toggle in annotation dialog |
-| T1830 | ↳ [Shared Content Inbox & Claim](tasks/sharing/T1830-shared-content-inbox.md) | TODO | 1.6 | [x] | pending_shares in auth.sqlite, inbox UI, claim flow with content materialization |
-| T1850 | ↳ [Share Game](tasks/sharing/T1850-share-game-with-team.md) | TODO | 2.0 | [ ] | Share game with friends via UserPicker, no cost to recipient |
-| T1840 | ↳ [Tag Teammate at Framing](tasks/sharing/T1840-cross-user-clip-delivery.md) | TODO | 1.8 | [ ] | During framing export wait, prompt to tag + share; delivers game + clip + My Reels entry |
-| T1860 | ↳ [Reel Creation Teammate Filter](tasks/sharing/T1860-reel-creation-player-filter.md) | TODO | 2.3 | [ ] | "My Athlete" / "Teammate" filter in GameClipSelectorModal |
+| | ~~**[Teammate Sharing](tasks/sharing/EPIC.md)**~~ | | | | **SUPERSEDED** | | **Moved to For Alpha as [Team Sharing Alpha](tasks/team-sharing-alpha/EPIC.md). T1830 scrapped, T1840 scrapped.** |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 
@@ -381,5 +383,6 @@ IDs use gaps of 10 to allow insertions:
 - `T2670` - Upload Slow Connection Optimization
 - `T2680` - Remove Video Link Import (legal)
 - `T2750` - Unified Multi-Video Experience
+- `T2800-T2860` - Team Sharing Alpha epic
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.

@@ -89,18 +89,20 @@ Recipient discovery, email notifications — polish on core sharing.
 | T1800 | [User Picker Component](T1800-user-picker-component.md) | TESTING | Email autocomplete from prior shares, account lookup (green/yellow) |
 | T1760 | [Share Email Delivery](T1760-share-email-delivery.md) | TESTING | Resend integration for share notifications (reused by teammate sharing) |
 
-### Phase 3: Teammate Sharing (Post Launch)
+### Phase 3: Teammate Sharing -- SUPERSEDED
 
-Teammate annotations, game sharing with friends, tag-at-framing clip delivery.
+**Moved to [Team Sharing Alpha](../team-sharing-alpha/EPIC.md) epic (For Alpha milestone).**
+
+Redesigned with named teammate tags (not boolean), direct materialization (no inbox/claim), and share-from-annotation flow. Tag-at-framing scrapped.
 
 | ID | Task | Status | Description |
 |----|------|--------|-------------|
-| T1810 | [Teammate Annotation Model](T1810-player-tag-data-model.md) | TODO | `is_teammate` boolean on raw_clips, API support |
-| T1820 | [Teammate Toggle UI](T1820-annotation-player-tagging-ui.md) | TODO | "My Athlete" / "Teammate" toggle in annotation dialog |
-| T1830 | [Shared Content Inbox & Claim](T1830-shared-content-inbox.md) | TODO | pending_shares in auth.sqlite, inbox UI, claim flow with materialization |
-| T1850 | [Share Game](T1850-share-game-with-team.md) | TODO | Share game with friends via UserPicker, no cost to recipient |
-| T1840 | [Tag Teammate at Framing](T1840-cross-user-clip-delivery.md) | TODO | During framing export wait, prompt to tag + share; delivers game + clip + My Reels |
-| T1860 | [Reel Creation Teammate Filter](T1860-reel-creation-player-filter.md) | TODO | "My Athlete" / "Teammate" filter in GameClipSelectorModal |
+| T1810 | [Teammate Annotation Model](T1810-player-tag-data-model.md) | SUPERSEDED | Replaced by T2800 (named tags instead of boolean) |
+| T1820 | [Teammate Toggle UI](T1820-annotation-player-tagging-ui.md) | SUPERSEDED | Replaced by T2810 (free-text tags + my_athlete toggle) |
+| T1830 | [Shared Content Inbox & Claim](T1830-shared-content-inbox.md) | WON'T DO | Scrapped -- replaced by direct materialization (T2830) |
+| T1850 | [Share Game](T1850-share-game-with-team.md) | SUPERSEDED | Replaced by T2850 (minor adjustments) |
+| T1840 | [Tag Teammate at Framing](T1840-cross-user-clip-delivery.md) | WON'T DO | Scrapped -- not needed for Alpha |
+| T1860 | [Reel Creation Teammate Filter](T1860-reel-creation-player-filter.md) | SUPERSEDED | Replaced by T2860 (simplified to my_athlete boolean filter) |
 
 ## Completion Criteria
 
