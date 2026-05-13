@@ -17,8 +17,13 @@ function mockFetch(responses = {}) {
     }
     if (url.includes('/share-with-teammates') && opts?.method === 'POST') {
       const body = JSON.parse(opts.body);
-      const sharedTags = body.recipients.map(r => r.tag_name);
-      return { ok: true, json: async () => ({ success: true, shared_tags: sharedTags }) };
+      const results = body.recipients.map(r => ({
+        tag_name: r.tag_name,
+        status: 'sent',
+        emails: r.emails.map(e => ({ email: e, sent: true })),
+      }));
+      const sentTags = results.map(r => r.tag_name);
+      return { ok: true, json: async () => ({ results, sent_tags: sentTags, failed_tags: [] }) };
     }
     return { ok: true, json: async () => ({}) };
   });
@@ -140,12 +145,12 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('shows success state after sharing', async () => {
+  it('shows per-tag results after sharing', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
     fireEvent.click(screen.getByRole('button', { name: /share/i }));
     await waitFor(() => {
-      expect(screen.getByText('Clips shared successfully')).toBeTruthy();
+      expect(screen.getByText('Email sent')).toBeTruthy();
     });
   });
 
@@ -194,5 +199,38 @@ describe('ShareWithTeammatesModal', () => {
       expect(tagNames).not.toContain('Jake');
       expect(tagNames).toContain('Player 7');
     });
+  });
+
+  it('shows failed status when email delivery fails', async () => {
+    globalThis.fetch = vi.fn(async (url, opts) => {
+      if (url.includes('/teammate-emails') && (!opts || opts.method !== 'PUT')) {
+        return { ok: true, json: async () => ({ Jake: [{ id: 1, email: 'mom@test.com', created_at: '2026-01-01' }] }) };
+      }
+      if (url.includes('/teammate-emails') && opts?.method === 'PUT') {
+        return { ok: true, json: async () => ({}) };
+      }
+      if (url.includes('/share-with-teammates') && opts?.method === 'POST') {
+        return {
+          ok: true,
+          json: async () => ({
+            results: [{ tag_name: 'Jake', status: 'failed', emails: [{ email: 'mom@test.com', sent: false }] }],
+            sent_tags: [],
+            failed_tags: ['Jake'],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+
+    const onSharedTagsChange = vi.fn();
+    render(<ShareWithTeammatesModal {...defaultProps} tagCounts={{ Jake: 3 }} onSharedTagsChange={onSharedTagsChange} />);
+    await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /share/i }));
+    await waitFor(() => {
+      expect(screen.getByText('Email failed')).toBeTruthy();
+      expect(screen.getByText('mom@test.com (failed)')).toBeTruthy();
+    });
+    expect(onSharedTagsChange).not.toHaveBeenCalled();
   });
 });

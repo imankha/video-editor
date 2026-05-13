@@ -28,7 +28,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
+  const [shareResults, setShareResults] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,7 +85,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
   const handleEmailsChange = useCallback((tag, emails) => {
     setTagEmails(prev => ({ ...prev, [tag]: emails }));
     setError(null);
-    setSuccess(false);
+    setShareResults(null);
   }, []);
 
   const shareableRecipients = useMemo(() => {
@@ -104,7 +104,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
     return count;
   }, [unsentTags, checkedTags, tagEmails]);
 
-  const canSubmit = shareableRecipients.length > 0 && !isSubmitting && !success;
+  const canSubmit = shareableRecipients.length > 0 && !isSubmitting && !shareResults;
 
   const handleShare = async () => {
     if (!canSubmit) return;
@@ -152,9 +152,21 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
       }
 
       const data = await shareResp.json();
-      onSharedTagsChange?.([...sharedTagNames, ...data.shared_tags]);
-      setSuccess(true);
-      toast.success(`Shared with ${shareableRecipients.length} teammate${shareableRecipients.length === 1 ? '' : 's'}`);
+      setShareResults(data.results);
+
+      if (data.sent_tags.length > 0) {
+        onSharedTagsChange?.([...sharedTagNames, ...data.sent_tags]);
+      }
+
+      if (data.failed_tags.length === 0) {
+        toast.success(`Shared with ${data.sent_tags.length} teammate${data.sent_tags.length === 1 ? '' : 's'}`);
+      } else if (data.sent_tags.length === 0) {
+        toast.error('Failed to send all share emails');
+      } else {
+        toast.error(`Failed to email: ${data.failed_tags.join(', ')}`, {
+          message: `${data.sent_tags.length} sent successfully`,
+        });
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -194,7 +206,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
           ) : (
             <>
               {/* Unsent tags -- actionable */}
-              {unsentTags.length > 0 && !success && (
+              {unsentTags.length > 0 && !shareResults && (
                 <div className="space-y-3">
                   {unsentTags.length > 0 && sentTags.length > 0 && (
                     <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide">Not yet shared</h4>
@@ -241,13 +253,47 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
                 </div>
               )}
 
-              {/* Success message */}
-              {success && (
-                <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
-                  <Check size={16} className="text-green-400" />
-                  <span className="text-green-400 text-sm font-medium">
-                    Clips shared successfully
-                  </span>
+              {/* Per-tag share results */}
+              {shareResults && (
+                <div className="space-y-2">
+                  {shareResults.map(result => (
+                    <div
+                      key={result.tag_name}
+                      className={`rounded-lg border p-3 flex items-start gap-3 ${
+                        result.status === 'sent'
+                          ? 'border-green-700/50 bg-green-900/20'
+                          : 'border-red-700/50 bg-red-900/20'
+                      }`}
+                    >
+                      {result.status === 'sent' ? (
+                        <Check size={16} className="text-green-400 mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
+                      )}
+                      <div>
+                        <span className={`font-medium ${result.status === 'sent' ? 'text-green-300' : 'text-red-300'}`}>
+                          {result.tag_name}
+                        </span>
+                        <span className={`text-sm ml-2 ${result.status === 'sent' ? 'text-green-400/70' : 'text-red-400/70'}`}>
+                          {result.status === 'sent' ? 'Email sent' : 'Email failed'}
+                        </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {result.emails.map(e => (
+                            <span
+                              key={e.email}
+                              className={`text-xs px-2 py-0.5 rounded ${
+                                e.sent
+                                  ? 'text-green-400/70 bg-green-900/30'
+                                  : 'text-red-400/70 bg-red-900/30'
+                              }`}
+                            >
+                              {e.email}{!e.sent && ' (failed)'}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -285,7 +331,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
               )}
 
               {/* All shared state */}
-              {unsentTags.length === 0 && !success && (
+              {unsentTags.length === 0 && !shareResults && (
                 <div className="text-center py-4 text-gray-400 text-sm">
                   All tagged teammates have been shared with
                 </div>
@@ -304,9 +350,9 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>
-            {success || unsentTags.length === 0 ? 'Done' : 'Cancel'}
+            {shareResults || unsentTags.length === 0 ? 'Done' : 'Cancel'}
           </Button>
-          {unsentTags.length > 0 && !success && (
+          {unsentTags.length > 0 && !shareResults && (
             <Button
               variant="cyan"
               onClick={handleShare}

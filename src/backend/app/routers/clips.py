@@ -2067,21 +2067,49 @@ async def get_teammate_shares(game_id: int):
 
 @router.post("/share-with-teammates")
 async def share_with_teammates(request: ShareWithTeammatesRequest):
-    """Record teammate shares for a game. T2830 extends with materialization + email."""
+    """Share clips with tagged teammates via email.
+
+    Per-tag results: only tags where ALL emails were delivered successfully
+    are recorded in teammate_shares. Failed tags remain "unsent" so the user
+    can retry.
+
+    T2830 plugs in real email delivery + annotation materialization here.
+    Until then, all recipients return status="sent".
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM games WHERE id = ?", (request.game_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
 
-        shared_tags = []
+        results = []
         for recipient in request.recipients:
-            cursor.execute("""
-                INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, created_at)
-                VALUES (?, ?, datetime('now'))
-            """, (request.game_id, recipient.tag_name))
-            shared_tags.append(recipient.tag_name)
+            # T2830: Replace this block with real email delivery.
+            # For each email: attempt send, collect successes/failures.
+            # Only record in teammate_shares if ALL emails for this tag succeeded.
+            email_results = []
+            all_sent = True
+            for email in recipient.emails:
+                # T2830: send_share_email(game_id, recipient.tag_name, email)
+                sent = True  # placeholder until T2830
+                email_results.append({"email": email, "sent": sent})
+                if not sent:
+                    all_sent = False
+
+            if all_sent:
+                cursor.execute("""
+                    INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, created_at)
+                    VALUES (?, ?, datetime('now'))
+                """, (request.game_id, recipient.tag_name))
+
+            results.append({
+                "tag_name": recipient.tag_name,
+                "status": "sent" if all_sent else "failed",
+                "emails": email_results,
+            })
 
         conn.commit()
 
-    return {"success": True, "shared_tags": shared_tags}
+    sent_tags = [r["tag_name"] for r in results if r["status"] == "sent"]
+    failed_tags = [r["tag_name"] for r in results if r["status"] == "failed"]
+    return {"results": results, "sent_tags": sent_tags, "failed_tags": failed_tags}
