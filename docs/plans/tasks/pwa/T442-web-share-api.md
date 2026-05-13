@@ -7,13 +7,17 @@
 
 ## Problem
 
-After exporting a highlight reel, sharing it to social media or messaging requires: download file → open target app → find upload/attach → select file → post. This is 4-5 steps of friction that kills sharing momentum. Building individual integrations per platform (Instagram, TikTok, YouTube, WhatsApp, iMessage) is high-maintenance and still doesn't cover all platforms.
+After exporting a highlight reel, sharing it to social media or messaging requires: download file -> open target app -> find upload/attach -> select file -> post. This is 4-5 steps of friction that kills sharing momentum. Building individual integrations per platform (Instagram, TikTok, YouTube, WhatsApp, iMessage) is high-maintenance and still doesn't cover all platforms.
+
+Getting reels onto **Instagram Reels and TikTok** is the highest-value flow. When a parent shares a .mp4 file to Instagram on mobile, it opens directly in the IG Reels creator with the video pre-loaded. Same for TikTok. The Web Share API makes this a one-tap action.
 
 ## Solution
 
-Use the Web Share API to invoke the device's native share sheet directly from the gallery. One tap after export opens the OS-level share UI with every app the user has installed. Zero platform-specific integrations needed.
+Use the Web Share API to invoke the device's native share sheet directly from the gallery AND from the export-complete toast. One tap after export opens the OS-level share UI with every app the user has installed. Zero platform-specific integrations needed.
 
-**Replaces T1090 (Social Media Auto-Posting)** — the Web Share API covers more platforms with zero maintenance.
+**Replaces T1090 (Social Media Auto-Posting)** -- the Web Share API covers more platforms with zero maintenance.
+
+**Critical UX: Post-export share toast.** When an export finishes, show a prominent toast/banner with a "Share" button. Parents shouldn't have to navigate to Gallery to share -- the share action should be immediate, right when the reel is done. This is the difference between 80% and 20% share rates.
 
 ## Architecture
 
@@ -47,10 +51,11 @@ await navigator.share({
 
 ## Key Decisions
 
-- Share the actual video file, not just a link — recipients see the video inline in their chat/feed
-- Include athlete name + clip description as share text (pre-fills caption)
+- Share the actual video file, not just a link -- recipients see the video inline in their chat/feed
+- Include athlete name + clip description as share text (pre-fills IG/TikTok caption)
 - Fallback to shareable link (from Core Sharing epic T1780) when file sharing unsupported
-- "Share" button on gallery cards AND on the export-complete toast
+- **Post-export toast is the primary share surface** -- "Share" button on export-complete toast AND gallery cards
+- File name includes athlete name for social context: `{athlete}-highlight.mp4`
 
 ## Implementation
 

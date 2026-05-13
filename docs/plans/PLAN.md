@@ -148,14 +148,28 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | | **[Team Sharing Alpha](tasks/team-sharing-alpha/EPIC.md)** | 8 | 4 | 2.0 | | | **Tag teammates during annotation, share filtered clips via email, auto-add to recipient's account** |
 | T2800 | ↳ [Teammate Tag Data Model](tasks/team-sharing-alpha/T2800-teammate-tag-data-model.md) | 8 | 3 | 2.7 | TESTING | [x] | `tagged_teammates` JSON + `my_athlete` boolean on raw_clips. `teammate_emails` table. Autocomplete APIs. |
 | T2810 | ↳ [Annotation UI: Tags + My Athlete](tasks/team-sharing-alpha/T2810-annotation-tags-my-athlete-ui.md) | 7 | 3 | 2.3 | TESTING | [x] | Free-text tag input with autocomplete + "My Athlete" toggle in annotation dialog |
-| T2820 | ↳ [Share with Tagged Players](tasks/team-sharing-alpha/T2820-share-with-tagged-players.md) | 8 | 4 | 2.0 | TODO | [ ] | Button in annotation mode: per-tag email input, stores mappings, multi-email per tag |
-| T2825 | ↳ [Shares Table Refactor](tasks/team-sharing-alpha/T2825-shares-table-refactor.md) | 8 | 3 | 2.7 | TODO | [x] | Normalize `shared_videos` into base `shares` + `share_videos` + `share_games`. Migration script. |
+| T2820 | ↳ [Share with Tagged Players](tasks/team-sharing-alpha/T2820-share-with-tagged-players.md) | 8 | 4 | 2.0 | TESTING | [ ] | Button in annotation mode: per-tag email input, stores mappings, multi-email per tag |
+| T2825 | ↳ [Shares Table Refactor](tasks/team-sharing-alpha/T2825-shares-table-refactor.md) | 8 | 3 | 2.7 | TESTING | [x] | Normalize `shared_videos` into base `shares` + `share_videos` + `share_games`. Migration script. |
 | T2830 | ↳ [Game + Annotation Materialization](tasks/team-sharing-alpha/T2830-game-annotation-materialization.md) | 9 | 5 | 1.8 | TODO | [x] | Create game ref + filtered annotations in recipient's profile. Overlap merging. Email delivery. |
 | T2840 | ↳ [Shared Annotation View](tasks/team-sharing-alpha/T2840-shared-annotation-view.md) | 7 | 4 | 1.8 | TODO | [ ] | Non-user playback with annotations + signup CTA. Materialization on signup. |
 | T2850 | ↳ [Share Game](tasks/team-sharing-alpha/T2850-share-game.md) | 7 | 3 | 2.3 | TODO | [ ] | Share button on game cards via UserPicker. Profile picker for recipient. |
 | T2860 | ↳ [My Athlete Filter in New Reel](tasks/team-sharing-alpha/T2860-my-athlete-reel-filter.md) | 6 | 2 | 3.0 | TODO | [ ] | Filter clips by "My Athlete" in reel creation clip selector |
 | T2870 | [SQLite JSON to MsgPack](tasks/T2870-sqlite-json-to-msgpack.md) | 5 | 3 | 1.7 | TESTING | [x] | Migrate all JSON TEXT columns (`tags`, `tagged_teammates`, `default_highlight_regions`, etc.) to msgpack for consistency with binary data columns. |
 | T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | TESTING | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
+| | **PWA Quick Wins** | | | | | | **Installable app + native share sheet + screen wake lock. Foundation for all PWA features.** |
+| T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
+| T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
+| T446 | ↳ [Screen Wake Lock](tasks/pwa/T446-screen-wake-lock.md) | 5 | 1 | 5.0 | TODO | [ ] | Prevent screen dimming during Annotate mode. ~20 LOC, no backend. |
+| | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 9 | 7 | 1.3 | | | **Full rebuild: CTA above fold, before/after proof, pricing, 4 features, sample reels, mobile sticky bar** |
+| T2300 | ↳ [Visual Foundation & Design System](tasks/landing-page-redesign/T2300-visual-foundation.md) | 7 | 3 | 2.3 | TODO | [ ] | Color palette shift (navy, not purple), accent color, typography (General Sans/Sohne), background treatment |
+| T2310 | ↳ [Sticky Nav & CTA System](tasks/landing-page-redesign/T2310-sticky-nav-cta.md) | 9 | 4 | 2.3 | TODO | [ ] | Sticky nav with condensing, CTA button, mobile hamburger, mobile sticky bottom bar (5-10% conversion lift) |
+| T2320 | ↳ [Hero Section](tasks/landing-page-redesign/T2320-hero-section.md) | 10 | 4 | 2.5 | TODO | [ ] | "From Upload to IG in 5 minutes." + CTA above fold + phone mockup with real looping reel |
+| T2330 | ↳ [Before/After Section](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Side-by-side synced video loops: "Same moment. Different reel." The most important section on the page. |
+| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
+| T2350 | ↳ [Features Redesign](tasks/landing-page-redesign/T2350-features-redesign.md) | 7 | 3 | 2.3 | TODO | [ ] | Cut from 6 to 4 tiles. Each maps to a competitive gap vs Veo/Trace. Custom icons, no "AI" in headings. |
+| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
+| T2370 | ↳ [Positioning & Pricing](tasks/landing-page-redesign/T2370-positioning-pricing.md) | 8 | 4 | 2.0 | TODO | [ ] | "You already have Veo or Trace" positioning + 3-tier credit pricing table |
+| T2380 | ↳ [FAQ, Final CTA & Footer](tasks/landing-page-redesign/T2380-faq-cta-footer.md) | 5 | 2 | 2.5 | TODO | [ ] | 6-question FAQ accordion, "Make the reel" final CTA, footer with voice-as-marketing tagline |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | DONE | [x] | DB schema: athlete_name, team_name, sport (free-text, not enum) + combobox UI with 6 supported sports + custom entry. (Absorbs T1073) |
@@ -222,12 +236,12 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 |----|------|--------|-------|-----|--------|------|-------------|
 | T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | DONE | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
-| | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 | | | **Installable app + native share sheet + background export + push notifications** |
-| T441 | ↳ [PWA Install & Landing Page](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt, landing page email capture. Foundation for all PWA features. |
-| T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels — one tap to Instagram/WhatsApp/iMessage/any app. Replaces T1090. |
-| T443 | ↳ [Background Sync](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close — service worker tracks Modal job, notifies on completion. |
+| | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 | | | **Background export + push notifications + background uploads + share target + offline playback** |
+| T443 | ↳ [Background Export Tracking](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close -- service worker tracks Modal job, notifies on completion. |
 | T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
-| T445 | ↳ [Landing Page Before/After Clips](tasks/pwa/T445-landing-page-before-after-clips.md) | 7 | 2 | 3.5 | SUPERSEDED | [ ] | Absorbed into Landing Page Redesign epic (T2330) |
+| T447 | ↳ [Background Fetch for Uploads](tasks/pwa/T447-background-fetch-uploads.md) | 8 | 4 | 2.0 | TODO | [ ] | Multi-GB game uploads survive app close/switch. Parents upload at the field on cellular. THE differentiator. |
+| T448 | ↳ [Share Target API](tasks/pwa/T448-share-target-api.md) | 7 | 3 | 2.3 | TODO | [ ] | Receive videos FROM camera roll directly into Reel Ballers upload flow. Eliminates file picker friction. |
+| T449 | ↳ [Offline Reel Playback](tasks/pwa/T449-offline-reel-playback.md) | 6 | 3 | 2.0 | TODO | [ ] | Cache exported reels for offline viewing + persistent storage. Show reels without cell signal. |
 | T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
 | | **[Overlay System v2](tasks/overlay-v2/EPIC.md)** | 9 | 7 | 1.3 | | | **Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits.** |
 | T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
@@ -301,18 +315,10 @@ Scale, performance, and reliability — must be solid before feature work.
 
 Target audience: highly engaged soccer parents with enough technical ability to use the app. Reach them where they already spend attention.
 
+Landing Page Redesign epic moved to For Alpha -- alpha testers refer friends, and the landing page is the conversion funnel.
+
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|
-| | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 9 | 7 | 1.3 | | | **Full rebuild: CTA above fold, before/after proof, pricing, 4 features, sample reels, mobile sticky bar** |
-| T2300 | ↳ [Visual Foundation & Design System](tasks/landing-page-redesign/T2300-visual-foundation.md) | 7 | 3 | 2.3 | TODO | [ ] | Color palette shift (navy, not purple), accent color, typography (General Sans/Sohne), background treatment |
-| T2310 | ↳ [Sticky Nav & CTA System](tasks/landing-page-redesign/T2310-sticky-nav-cta.md) | 9 | 4 | 2.3 | TODO | [ ] | Sticky nav with condensing, CTA button, mobile hamburger, mobile sticky bottom bar (5-10% conversion lift) |
-| T2320 | ↳ [Hero Section](tasks/landing-page-redesign/T2320-hero-section.md) | 10 | 4 | 2.5 | TODO | [ ] | "From Upload to IG in 5 minutes." + CTA above fold + phone mockup with real looping reel |
-| T2330 | ↳ [Before/After Section](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Side-by-side synced video loops: "Same moment. Different reel." The most important section on the page. |
-| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
-| T2350 | ↳ [Features Redesign](tasks/landing-page-redesign/T2350-features-redesign.md) | 7 | 3 | 2.3 | TODO | [ ] | Cut from 6 to 4 tiles. Each maps to a competitive gap vs Veo/Trace. Custom icons, no "AI" in headings. |
-| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
-| T2370 | ↳ [Positioning & Pricing](tasks/landing-page-redesign/T2370-positioning-pricing.md) | 8 | 4 | 2.0 | TODO | [ ] | "You already have Veo or Trace" positioning + 3-tier credit pricing table |
-| T2380 | ↳ [FAQ, Final CTA & Footer](tasks/landing-page-redesign/T2380-faq-cta-footer.md) | 5 | 2 | 2.5 | TODO | [ ] | 6-question FAQ accordion, "Make the reel" final CTA, footer with voice-as-marketing tagline |
 | T445 | [Vehicle Window Cards](tasks/T445-business-cards.md) | 6 | 2 | 3.0 | TODO | [ ] | Design + print cards to place on vehicle windows at games promoting reelballers.com with QR code. Targets parents already at the field. |
 | T1930 | [Influencer Marketing](tasks/marketing/T1930-influencer-marketing.md) | 8 | 4 | 2.0 | TODO | [ ] | Identify top influencers that youth soccer parents follow who align with video technology use. Outreach strategy + partnership plan. |
 
@@ -386,5 +392,6 @@ IDs use gaps of 10 to allow insertions:
 - `T2680` - Remove Video Link Import (legal)
 - `T2750` - Unified Multi-Video Experience
 - `T2800-T2860` - Team Sharing Alpha epic
+- `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
