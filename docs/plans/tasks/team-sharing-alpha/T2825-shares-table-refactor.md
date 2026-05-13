@@ -1,6 +1,6 @@
 # T2825: Shares Table Refactor (Base + Extensions)
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** None (infrastructure refactor, no dependency on T2800-T2820)
 **Blocks:** T2830 (Game + Annotation Materialization), T2850 (Share Game)

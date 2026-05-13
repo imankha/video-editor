@@ -3,6 +3,7 @@ import { Star, X, Plus } from 'lucide-react';
 import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
@@ -103,6 +104,7 @@ export function AnnotateFullscreenOverlay({
   videoRef,
   isFullscreen = false,
   layout = 'overlay',
+  teammateSuggestions = [],
 }) {
   const isEditMode = !!existingClip;
   const currentProfile = useCurrentProfile();
@@ -135,9 +137,13 @@ export function AnnotateFullscreenOverlay({
     Math.min(currentTime + DEFAULT_CLIP_AFTER, videoDuration || Infinity)
   );
   const [notes, setNotes] = useState('');
+  const [taggedTeammates, setTaggedTeammates] = useState([]);
+  const [myAthlete, setMyAthlete] = useState(true);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
   const notesRef = useRef(null);
+  const handleSaveRef = useRef(null);
+  const handleRatingChangeRef = useRef(null);
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
@@ -150,6 +156,8 @@ export function AnnotateFullscreenOverlay({
       setScrubStartTime(existingClip.startTime);
       setScrubEndTime(existingClip.endTime);
       setNotes(existingClip.notes || '');
+      setTaggedTeammates(existingClip.tagged_teammates || []);
+      setMyAthlete(existingClip.my_athlete ?? true);
       setCreateProject(!!existingClip.autoProjectId);
       setCreateProjectManuallySet(!!existingClip.autoProjectId);
     } else {
@@ -160,6 +168,8 @@ export function AnnotateFullscreenOverlay({
       setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_BEFORE));
       setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
       setNotes('');
+      setTaggedTeammates([]);
+      setMyAthlete(true);
       setCreateProject(DEFAULT_RATING === 5);
       setCreateProjectManuallySet(false);
     }
@@ -182,12 +192,12 @@ export function AnnotateFullscreenOverlay({
     }
   }, [isVisible]);
 
-  // Handle keyboard shortcuts
+  // Handle keyboard shortcuts — uses handleSaveRef to avoid stale closures
+  // (taggedTeammates, myAthlete, createProject would be stale without the ref)
   useEffect(() => {
     if (!isVisible) return;
 
     const handleKeyDown = (e) => {
-      // Don't intercept if typing in an input
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
         if (e.key === 'Escape') {
           e.preventDefault();
@@ -198,19 +208,18 @@ export function AnnotateFullscreenOverlay({
 
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        handleSave();
+        handleSaveRef.current();
       } else if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key >= '1' && e.key <= '5') {
-        // Number keys to set rating
-        handleRatingChange(parseInt(e.key, 10));
+        handleRatingChangeRef.current(parseInt(e.key, 10));
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isVisible, rating, scrubStartTime, scrubEndTime, notes, existingClip, selectedTags, clipName]);
+  }, [isVisible, onClose]);
 
   const handleRatingChange = (newRating) => {
     setRating(newRating);
@@ -218,6 +227,7 @@ export function AnnotateFullscreenOverlay({
       setCreateProject(newRating === 5);
     }
   };
+  handleRatingChangeRef.current = handleRatingChange;
 
   const handleTagToggle = (tagName) => {
     setSelectedTags((prev) =>
@@ -235,8 +245,6 @@ export function AnnotateFullscreenOverlay({
   const handleSave = () => {
     const clipDuration = scrubEndTime - scrubStartTime;
     if (isEditMode) {
-      // Update existing clip with new start/end times
-      // Only include name if it was manually edited, otherwise leave empty for auto-generation
       onUpdateClip(existingClip.id, {
         startTime: scrubStartTime,
         endTime: scrubEndTime,
@@ -244,11 +252,11 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
+        tagged_teammates: taggedTeammates,
+        my_athlete: myAthlete,
         createProject,
       });
     } else {
-      // Create new clip using scrub region start/end
-      // Only include name if it was manually edited, otherwise leave empty for auto-generation
       const clipData = {
         startTime: scrubStartTime,
         duration: clipDuration,
@@ -256,11 +264,12 @@ export function AnnotateFullscreenOverlay({
         tags: selectedTags,
         name: isNameManuallyEdited ? clipName : '',
         notes,
+        tagged_teammates: taggedTeammates,
+        my_athlete: myAthlete,
         createProject,
       };
       onCreateClip(clipData);
     }
-    // Reset form
     setRating(DEFAULT_RATING);
     setSelectedTags([]);
     setClipName('');
@@ -268,11 +277,13 @@ export function AnnotateFullscreenOverlay({
     setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE));
     setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
+    setTaggedTeammates([]);
+    setMyAthlete(true);
     setCreateProject(DEFAULT_RATING === 5);
     setCreateProjectManuallySet(false);
-    // Resume playback
     onResume();
   };
+  handleSaveRef.current = handleSave;
 
   if (!isVisible) return null;
 
@@ -358,6 +369,34 @@ export function AnnotateFullscreenOverlay({
             className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
             rows={2}
           />
+        </div>
+
+        {/* Teammates */}
+        <div className="mb-4">
+          <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+          <TeammateTagInput
+            teammates={taggedTeammates}
+            onChange={setTaggedTeammates}
+            suggestions={teammateSuggestions}
+          />
+        </div>
+
+        {/* My Athlete Toggle */}
+        <div className="mb-4 flex items-center gap-2">
+          <label className="text-gray-400 text-sm">My Athlete</label>
+          <button
+            type="button"
+            onClick={() => setMyAthlete(prev => !prev)}
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              myAthlete ? 'bg-cyan-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                myAthlete ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
         </div>
 
         {/* Create Reel — toggle in create mode, button in edit mode */}

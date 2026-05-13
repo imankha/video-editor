@@ -2072,31 +2072,90 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     Per-tag results: only tags where ALL emails were delivered successfully
     are recorded in teammate_shares. Failed tags remain "unsent" so the user
     can retry.
-
-    T2830 plugs in real email delivery + annotation materialization here.
-    Until then, all recipients return status="sent".
     """
+    import asyncio
+    from app.services.email import send_teammate_share_email
+    from app.services.auth_db import get_user_by_id
+    from app.services.sharing_db import create_game_share, revoke_share
+    from app.profile_context import get_current_profile_id
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    sharer = get_user_by_id(user_id)
+    sharer_email = sharer["email"] if sharer else user_id
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM games WHERE id = ?", (request.game_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, name FROM games WHERE id = ?", (request.game_id,))
+        game = cursor.fetchone()
+        if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        game_name = game["name"] or "Untitled Game"
+
+        # Count clips per tag — tagged_teammates is msgpack, must decode in Python
+        tag_names = {r.tag_name for r in request.recipients}
+        cursor.execute(
+            "SELECT tagged_teammates FROM raw_clips WHERE game_id = ?",
+            (request.game_id,),
+        )
+        tag_clip_counts = {t: 0 for t in tag_names}
+        for row in cursor.fetchall():
+            teammates = decode_data(row["tagged_teammates"])
+            if not teammates:
+                continue
+            for t in teammates:
+                if t in tag_clip_counts:
+                    tag_clip_counts[t] += 1
 
         results = []
         for recipient in request.recipients:
-            # T2830: Replace this block with real email delivery.
-            # For each email: attempt send, collect successes/failures.
-            # Only record in teammate_shares if ALL emails for this tag succeeded.
+            clip_count = tag_clip_counts.get(recipient.tag_name, 0)
             email_results = []
             all_sent = True
-            for email in recipient.emails:
-                # T2830: send_share_email(game_id, recipient.tag_name, email)
-                sent = True  # placeholder until T2830
-                email_results.append({"email": email, "sent": sent})
-                if not sent:
-                    all_sent = False
 
-            if all_sent:
+            # Create share records first to get tokens for email links
+            share_records = []
+            for email in recipient.emails:
+                try:
+                    share = create_game_share(
+                        game_id=request.game_id,
+                        tag_name=recipient.tag_name,
+                        sharer_user_id=user_id,
+                        sharer_profile_id=profile_id,
+                        recipient_email=email,
+                    )
+                    share_records.append(share)
+                except Exception as e:
+                    logger.error(f"[share-with-teammates] Failed to create game share record: {e}")
+                    share_records.append(None)
+
+            # Send emails with share links
+            tasks = {}
+            for email, share in zip(recipient.emails, share_records):
+                tasks[email] = send_teammate_share_email(
+                    recipient_email=email,
+                    sharer_email=sharer_email,
+                    tag_name=recipient.tag_name,
+                    game_name=game_name,
+                    clip_count=clip_count,
+                    share_token=share["share_token"] if share else None,
+                )
+
+            if tasks:
+                send_results = await asyncio.gather(*tasks.values())
+                for (email, share), sent in zip(
+                    zip(recipient.emails, share_records), send_results
+                ):
+                    email_results.append({"email": email, "sent": sent})
+                    if not sent:
+                        all_sent = False
+                        if share:
+                            try:
+                                revoke_share(share["share_token"], user_id)
+                            except Exception:
+                                pass
+
+            if all_sent and email_results:
                 cursor.execute("""
                     INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, created_at)
                     VALUES (?, ?, datetime('now'))

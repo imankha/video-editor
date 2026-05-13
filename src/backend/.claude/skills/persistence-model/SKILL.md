@@ -85,13 +85,15 @@ Frontend                    Backend                     R2 Storage
 ## Database Location (Per-User SQLite Only)
 
 ```
-user_data/{user_id}/profile.sqlite   # Local
-reel-ballers-users/{user_id}/profile.sqlite   # R2
+user_data/{user_id}/profiles/{profile_id}/profile.sqlite   # Local
+reel-ballers-users/{user_id}/profile.sqlite                 # R2
 ```
 
-Dev default: `C:\Users\imank\projects\video-editor\user_data\a\profile.sqlite`
+**Finding user_id:** Always query Postgres `users` table (`SELECT user_id FROM users WHERE email = %s`). Never use `user_data/auth.sqlite` — it is a stale pre-migration artifact.
 
-**Note:** `auth.sqlite` and `sharing.sqlite` no longer exist. Auth/sharing data lives in Fly Postgres.
+**Finding profile_id:** Check `user_data/{user_id}/user.sqlite` → `user_settings` table → `selected_profile` key.
+
+**Note:** `auth.sqlite` and `sharing.sqlite` no longer exist. Auth/sharing data lives in Fly Postgres. Email-named directories in `user_data/` (e.g. `imankh@gmail.com/`) are also stale artifacts — real user directories use UUID user_ids from Postgres.
 
 ---
 

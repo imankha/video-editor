@@ -271,6 +271,77 @@ async def send_share_email(
         return False
 
 
+async def send_teammate_share_email(
+    recipient_email: str,
+    sharer_email: str,
+    tag_name: str,
+    game_name: str,
+    clip_count: int,
+    share_token: str | None = None,
+) -> bool:
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning("[Email] RESEND_API_KEY not configured, skipping teammate share email")
+        return False
+
+    clip_text = f"{clip_count} clip{'' if clip_count == 1 else 's'}" if clip_count > 0 else "clips"
+    share_url = _get_share_url(share_token) if share_token else None
+
+    cta_html = ""
+    if share_url:
+        cta_html = f"""
+      <a href="{_html_escape(share_url)}"
+         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+        View Clips
+      </a>
+"""
+
+    html_body = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
+      <p style="color: #e5e7eb; font-size: 16px; margin: 0 0 8px 0;">
+        {_html_escape(sharer_email)} tagged <strong style="color: #ffffff;">{_html_escape(tag_name)}</strong>
+        in {clip_text} from:
+      </p>
+      <p style="color: #ffffff; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
+        {_html_escape(game_name or "Untitled Game")}
+      </p>
+      {cta_html}
+      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
+      <p style="color: #9ca3af; font-size: 12px;">
+        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
+      </p>
+      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
+        You received this because {_html_escape(sharer_email)} shared game clips with you on Reel Ballers.
+      </p>
+      {_CAN_SPAM_FOOTER}
+    </div>
+    """
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": FROM_ADDRESS,
+                        "to": [recipient_email],
+                        "subject": f"{sharer_email} shared clips of {tag_name} with you",
+                        "html": html_body,
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_teammate_share", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Teammate share email failed: {resp.status_code} {resp.text}")
+            return False
+        logger.info(f"[Email] Teammate share email sent to {recipient_email} for tag '{tag_name}'")
+        return True
+    except Exception as e:
+        logger.error(f"[Email] Teammate share email to {recipient_email} failed: {e}")
+        return False
+
+
 def _html_escape(s: str) -> str:
     """Minimal HTML escape for email content."""
     return (s

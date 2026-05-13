@@ -380,8 +380,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
    * @param {Array} tags - Optional array of tag names
    * @param {string} name - Optional clip name (auto-generated if not provided)
    */
-  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null) => {
-    console.log('[useAnnotate] addClipRegion called with startTime:', startTime, 'duration:', duration, 'notes:', notes, 'rating:', rating, 'position:', position, 'tags:', tags, 'name:', name, 'videoSequence:', videoSequence);
+  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null, { tagged_teammates = null, my_athlete = true } = {}) => {
     if (!duration) {
       console.warn('[useAnnotate] Cannot add clip region - no duration set');
       return null;
@@ -414,8 +413,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       notes: notes || '',
       rating: rating || DEFAULT_RATING,
       videoSequence: videoSequence,
-      tagged_teammates: null,
-      my_athlete: true,
+      tagged_teammates: tagged_teammates,
+      my_athlete: my_athlete,
       color,
       createdAt: new Date()
     };

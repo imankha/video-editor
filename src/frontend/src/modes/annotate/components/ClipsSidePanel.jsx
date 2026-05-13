@@ -283,6 +283,7 @@ export function ClipsSidePanel({
               onSeek={onSeek}
               videoRef={videoRef}
               layout="inline"
+              teammateSuggestions={teammateSuggestions}
             />
           )}
         </>

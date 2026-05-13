@@ -1,6 +1,6 @@
 # T2820: Share with Tagged Players
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2800 (data model), T2810 (annotation UI)
 

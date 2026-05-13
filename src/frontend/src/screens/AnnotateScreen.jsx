@@ -621,6 +621,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}
+        teammateSuggestions={teammateSuggestions}
           />
         </div>
       </div>

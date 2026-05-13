@@ -71,12 +71,20 @@ def _mock_pg_startup():
         yield
 
 
+_TEST_USER_IDS = (
+    "admin-user", "regular-user", "sharer-user", "recipient-user",
+    "user-1", "user-2", "test-user-1", "test-user", "user-a", "user-b",
+    "other-admin", "target-user", "other-regular",
+)
+
+
 @pytest.fixture
 def pg_conn(monkeypatch):
     """Provide a clean Postgres database for auth/sharing tests.
 
-    Ensures schema exists, truncates all tables, seeds admin_users,
-    and patches get_pg() everywhere to bypass the connection pool.
+    Ensures schema exists, removes test-created users (CASCADE cleans
+    related rows), and patches get_pg() everywhere to bypass the pool.
+    Real user accounts are never touched.
     """
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent.parent.parent / ".env")
@@ -84,15 +92,22 @@ def pg_conn(monkeypatch):
     from app.services.pg import _SCHEMA_DDL, _SEED_SQL
 
     dsn = os.environ["DATABASE_URL"]
+    if "staging" in dsn or "prod" in dsn or "production" in dsn:
+        raise RuntimeError(
+            f"REFUSING to run tests: DATABASE_URL points to a non-dev database. "
+            f"DSN contains staging/prod keyword."
+        )
 
     setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     setup.autocommit = True
     cur = setup.cursor()
     cur.execute(_SCHEMA_DDL)
-    cur.execute("""
-        TRUNCATE admin_users, users, sessions, otp_codes, game_storage_refs,
-                 r2_grace_deletions, shared_videos, impersonation_audit CASCADE
-    """)
+    placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
+    cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit")
     cur.execute(_SEED_SQL)
     setup.close()
 
@@ -113,6 +128,15 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.sharing_db.get_pg", mock_get_pg)
 
     yield dsn
+
+    teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
+    teardown.autocommit = True
+    tc = teardown.cursor()
+    tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    teardown.close()
 
 
 @pytest.fixture

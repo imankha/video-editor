@@ -244,7 +244,8 @@ def main():
 
     # Delete user from Postgres
     print("\n--- Deleting user from Postgres ---")
-    for table in ("game_storage_refs", "shared_videos", "sessions"):
+    cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
+    for table in ("game_storage_refs", "sessions"):
         cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     pg_conn.commit()

@@ -614,6 +614,7 @@ export function AnnotateContainer({
       clipData.tags,
       clipData.name,
       videoSeq,
+      { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete },
     );
     if (newRegion) {
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
@@ -629,6 +630,8 @@ export function AnnotateContainer({
           tags: newRegion.tags,
           notes: newRegion.notes,
           video_sequence: videoSeq,
+          tagged_teammates: newRegion.tagged_teammates,
+          my_athlete: newRegion.my_athlete,
           ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
 

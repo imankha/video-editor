@@ -126,9 +126,10 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('calls share endpoint and updates sharedTagNames on success', async () => {
+  it('calls share endpoint, updates sharedTagNames, and closes on success', async () => {
     const onSharedTagsChange = vi.fn();
-    render(<ShareWithTeammatesModal {...defaultProps} onSharedTagsChange={onSharedTagsChange} />);
+    const onClose = vi.fn();
+    render(<ShareWithTeammatesModal {...defaultProps} onSharedTagsChange={onSharedTagsChange} onClose={onClose} />);
     await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: /share/i }));
@@ -142,15 +143,7 @@ describe('ShareWithTeammatesModal', () => {
     });
     await waitFor(() => {
       expect(onSharedTagsChange).toHaveBeenCalledWith(['Jake']);
-    });
-  });
-
-  it('shows per-tag results after sharing', async () => {
-    render(<ShareWithTeammatesModal {...defaultProps} />);
-    await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: /share/i }));
-    await waitFor(() => {
-      expect(screen.getByText('Email sent')).toBeTruthy();
+      expect(onClose).toHaveBeenCalled();
     });
   });
 
@@ -201,7 +194,7 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('shows failed status when email delivery fails', async () => {
+  it('closes modal and does not update sharedTagNames when all emails fail', async () => {
     globalThis.fetch = vi.fn(async (url, opts) => {
       if (url.includes('/teammate-emails') && (!opts || opts.method !== 'PUT')) {
         return { ok: true, json: async () => ({ Jake: [{ id: 1, email: 'mom@test.com', created_at: '2026-01-01' }] }) };
@@ -223,14 +216,15 @@ describe('ShareWithTeammatesModal', () => {
     });
 
     const onSharedTagsChange = vi.fn();
-    render(<ShareWithTeammatesModal {...defaultProps} tagCounts={{ Jake: 3 }} onSharedTagsChange={onSharedTagsChange} />);
+    const onClose = vi.fn();
+    render(<ShareWithTeammatesModal {...defaultProps} tagCounts={{ Jake: 3 }} onSharedTagsChange={onSharedTagsChange} onClose={onClose} />);
     await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: /share/i }));
     await waitFor(() => {
-      expect(screen.getByText('Email failed')).toBeTruthy();
-      expect(screen.getByText('mom@test.com (failed)')).toBeTruthy();
+      expect(screen.getByText(/failed to send emails/i)).toBeTruthy();
     });
+    expect(onClose).not.toHaveBeenCalled();
     expect(onSharedTagsChange).not.toHaveBeenCalled();
   });
 });

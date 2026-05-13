@@ -92,6 +92,7 @@ export function AnnotateModeView({
   // T2820: Share with tagged players
   onShare,
   hasUnsentShares,
+  teammateSuggestions = [],
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -427,6 +428,7 @@ export function AnnotateModeView({
                 onSeek={seek}
                 videoRef={videoRef}
                 isFullscreen={annotateFullscreen}
+                teammateSuggestions={teammateSuggestions}
               />
             )}
 

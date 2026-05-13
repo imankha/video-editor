@@ -136,7 +136,12 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
             shutil.rmtree(local_dir, ignore_errors=True)
 
     cur = pg_conn.cursor()
-    for table in ("game_storage_refs", "sessions", "shared_videos"):
+    if dry_run:
+        cur.execute("SELECT COUNT(*) as cnt FROM shares WHERE sharer_user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from shares (+ cascaded extensions)")
+    else:
+        cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
+    for table in ("game_storage_refs", "sessions"):
         if dry_run:
             cur.execute(f"SELECT COUNT(*) as cnt FROM {table} WHERE user_id = %s", (user_id,))
             cnt = cur.fetchone()["cnt"]

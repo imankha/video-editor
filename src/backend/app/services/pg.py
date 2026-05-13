@@ -88,24 +88,40 @@ CREATE TABLE IF NOT EXISTS r2_grace_deletions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS shared_videos (
+CREATE TABLE IF NOT EXISTS shares (
     id SERIAL PRIMARY KEY,
     share_token TEXT UNIQUE NOT NULL,
-    video_id INTEGER NOT NULL,
+    share_type TEXT NOT NULL CHECK (share_type IN ('video', 'game')),
     sharer_user_id TEXT NOT NULL REFERENCES users(user_id),
     sharer_profile_id TEXT NOT NULL,
-    video_filename TEXT NOT NULL,
-    video_name TEXT,
-    video_duration REAL,
     recipient_email TEXT NOT NULL,
-    is_public BOOLEAN NOT NULL DEFAULT false,
     shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at TIMESTAMPTZ,
     watched_at TIMESTAMPTZ
 );
-CREATE INDEX IF NOT EXISTS idx_shared_videos_video_sharer ON shared_videos(video_id, sharer_user_id);
-CREATE INDEX IF NOT EXISTS idx_shared_videos_sharer ON shared_videos(sharer_user_id);
-CREATE INDEX IF NOT EXISTS idx_shared_videos_recipient ON shared_videos(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(share_token);
+CREATE INDEX IF NOT EXISTS idx_shares_sharer ON shares(sharer_user_id);
+CREATE INDEX IF NOT EXISTS idx_shares_recipient ON shares(recipient_email);
+
+CREATE TABLE IF NOT EXISTS share_videos (
+    share_id INTEGER PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
+    video_id INTEGER NOT NULL,
+    video_filename TEXT NOT NULL,
+    video_name TEXT,
+    video_duration REAL,
+    is_public BOOLEAN NOT NULL DEFAULT false
+);
+CREATE INDEX IF NOT EXISTS idx_share_videos_video ON share_videos(video_id);
+
+CREATE TABLE IF NOT EXISTS share_games (
+    share_id INTEGER PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
+    game_id INTEGER NOT NULL,
+    tag_name TEXT NOT NULL,
+    recipient_profile_id TEXT,
+    materialized_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_share_games_game ON share_games(game_id);
+CREATE INDEX IF NOT EXISTS idx_share_games_recipient_profile ON share_games(recipient_profile_id);
 """
 
 _SEED_SQL = """

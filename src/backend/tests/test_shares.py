@@ -45,7 +45,8 @@ def client(isolated_auth_db, tmp_path):
     _init_cache[RECIPIENT_ID] = {"profile_id": "testdefault", "is_new_user": False}
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
-         patch("app.services.user_db._initialized_user_dbs", set()):
+         patch("app.services.user_db._initialized_user_dbs", set()), \
+         patch("app.services.email.send_share_email", new_callable=AsyncMock, return_value=True):
         from app.main import app
         yield TestClient(app, raise_server_exceptions=True)
 
@@ -484,6 +485,91 @@ class TestListSharesIncludesRevoked:
         active = [s for s in shares if s["revoked_at"] is None]
         assert len(revoked) == 1
         assert len(active) == 1
+
+
+class TestGameShareCrud:
+    def test_create_game_share(self, isolated_auth_db):
+        from app.services.sharing_db import create_game_share, get_share_by_token
+
+        share = create_game_share(
+            game_id=42,
+            tag_name="Jake",
+            sharer_user_id=SHARER_ID,
+            sharer_profile_id="testdefault",
+            recipient_email=RECIPIENT_EMAIL,
+        )
+
+        assert share["recipient_email"] == RECIPIENT_EMAIL
+        assert "share_token" in share
+
+        row = get_share_by_token(share["share_token"])
+        assert row is not None
+        assert row["share_type"] == "game"
+        assert row["video_id"] is None
+        assert row["video_filename"] is None
+
+    def test_list_shares_for_game(self, isolated_auth_db):
+        from app.services.sharing_db import create_game_share, list_shares_for_game
+
+        create_game_share(42, "Jake", SHARER_ID, "p1", "a@b.com")
+        create_game_share(42, "Sam", SHARER_ID, "p1", "c@d.com")
+        create_game_share(99, "Jake", SHARER_ID, "p1", "e@f.com")
+
+        shares = list_shares_for_game(42, SHARER_ID)
+        assert len(shares) == 2
+        assert {s["tag_name"] for s in shares} == {"Jake", "Sam"}
+
+        shares_other = list_shares_for_game(42, "other-user")
+        assert len(shares_other) == 0
+
+    def test_mark_game_share_materialized(self, isolated_auth_db):
+        from app.services.sharing_db import (
+            create_game_share, list_shares_for_game, mark_game_share_materialized,
+        )
+
+        create_game_share(42, "Jake", SHARER_ID, "p1", RECIPIENT_EMAIL)
+        shares = list_shares_for_game(42, SHARER_ID)
+        share_id = shares[0]["id"]
+
+        assert shares[0]["materialized_at"] is None
+        assert shares[0]["recipient_profile_id"] is None
+
+        assert mark_game_share_materialized(share_id, "recipient-profile-1") is True
+
+        shares = list_shares_for_game(42, SHARER_ID)
+        assert shares[0]["materialized_at"] is not None
+        assert shares[0]["recipient_profile_id"] == "recipient-profile-1"
+
+        assert mark_game_share_materialized(share_id, "other") is False
+
+    def test_game_share_revocation_cascades(self, isolated_auth_db):
+        from app.services.sharing_db import (
+            create_game_share, revoke_share, get_share_by_token,
+        )
+
+        share = create_game_share(42, "Jake", SHARER_ID, "p1", RECIPIENT_EMAIL)
+        assert revoke_share(share["share_token"], SHARER_ID) is True
+
+        row = get_share_by_token(share["share_token"])
+        assert row["revoked_at"] is not None
+
+    def test_contacts_include_game_shares(self, isolated_auth_db):
+        from app.services.sharing_db import (
+            create_game_share, create_shares, list_contacts_for_user,
+        )
+
+        create_shares(1, SHARER_ID, "p1", "v.mp4", "V", 5.0, [RECIPIENT_EMAIL], False)
+        create_game_share(42, "Jake", SHARER_ID, "p1", UNKNOWN_EMAIL)
+
+        contacts = list_contacts_for_user(SHARER_ID)
+        assert RECIPIENT_EMAIL in contacts
+        assert UNKNOWN_EMAIL in contacts
+
+    def test_game_share_email_normalized(self, isolated_auth_db):
+        from app.services.sharing_db import create_game_share
+
+        share = create_game_share(42, "Jake", SHARER_ID, "p1", "UPPER@EMAIL.COM")
+        assert share["recipient_email"] == "upper@email.com"
 
 
 class TestShareEmailDelivery:

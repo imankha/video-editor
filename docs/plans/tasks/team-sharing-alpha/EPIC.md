@@ -59,7 +59,7 @@ Ordered by dependency.
 | T2800 | [Teammate Tag Data Model](T2800-teammate-tag-data-model.md) | TESTING | `tagged_teammates` JSON array + `my_athlete` boolean on raw_clips. `teammate_emails` table in profile SQLite. Autocomplete APIs. |
 | T2810 | [Annotation UI: Tags + My Athlete](T2810-annotation-tags-my-athlete-ui.md) | TESTING | Free-text tag input with autocomplete + "My Athlete" toggle in annotation dialog |
 | T2820 | [Share with Tagged Players](T2820-share-with-tagged-players.md) | TODO | Button in annotation mode showing all game tags with per-tag email input. Stores mappings. |
-| T2825 | [Shares Table Refactor](T2825-shares-table-refactor.md) | TODO | Normalize `shared_videos` into base `shares` + `share_videos` + `share_games` extension tables. Migration script for existing data. |
+| T2825 | [Shares Table Refactor](T2825-shares-table-refactor.md) | TESTING | Normalize `shared_videos` into base `shares` + `share_videos` + `share_games` extension tables. Migration script for existing data. |
 | T2830 | [Game + Annotation Materialization](T2830-game-annotation-materialization.md) | TODO | Backend creates game ref + filtered annotations in recipient's profile. Overlap merging. Email delivery. |
 | T2840 | [Shared Annotation View](T2840-shared-annotation-view.md) | TODO | Non-user playback with annotations + signup CTA. Materialization on signup. |
 | T2850 | [Share Game](T2850-share-game.md) | TODO | Share button on game cards via UserPicker. Profile picker for recipient. |

@@ -267,7 +267,8 @@ def main():
     print(f"\n--- Clearing Postgres auth tables ---")
     for env_name, conn in pg_conns.items():
         cur = conn.cursor()
-        for table in ("game_storage_refs", "r2_grace_deletions", "shared_videos",
+        for table in ("game_storage_refs", "r2_grace_deletions",
+                       "share_games", "share_videos", "shares",
                        "sessions", "otp_codes", "users"):
             cur.execute(f"DELETE FROM {table}")
         conn.commit()
