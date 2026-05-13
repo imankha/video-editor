@@ -81,7 +81,7 @@ def detect_epic_row(task):
     if task.get('id', '').strip():
         return None
     raw_task = task.get('_raw_task', '')
-    m = re.match(r'\*\*\[(.+?)\]\((.+?EPIC\.md)\)\*\*', raw_task)
+    m = re.match(r'(?:~~)?\*\*\[(.+?)\]\((.+?EPIC\.md)\)\*\*(?:~~)?', raw_task)
     if m:
         return {'name': m.group(1), 'link': m.group(2), 'id': slugify(m.group(1))}
     return None
