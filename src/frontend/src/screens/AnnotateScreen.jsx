@@ -6,8 +6,6 @@ import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
-import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
-import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -205,32 +203,22 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T2750: Multi-video state (unified)
     gameVideos,
     currentVideoSequence,
+    multiVideo,
+    fullTimeline,
+    effectiveCurrentTime,
+    effectiveDuration,
+    effectiveSeek,
+    effectiveTogglePlay,
+    effectiveIsPlaying,
+    effectiveStepForward,
+    effectiveStepBackward,
+    effectiveSeekBackward,
+    effectiveRestart,
     // T710: Annotation playback
     playback,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
-
-  // T2750: Multi-video scrub hook (returns null for single-video)
-  const multiVideo = useMultiVideoScrub({ gameVideos });
-  const isMultiVideo = !!gameVideos;
-
-  // T2750: Build full video timeline for clip offset computation
-  const fullTimeline = useMemo(
-    () => gameVideos ? buildFullVideoTimeline(gameVideos) : null,
-    [gameVideos],
-  );
-
-  // T2750: Choose virtual or actual values based on multi-video mode
-  const effectiveCurrentTime = multiVideo?.virtualTime ?? currentTime;
-  const effectiveDuration = multiVideo?.totalDuration ?? duration;
-  const effectiveSeek = multiVideo?.seek ?? seek;
-  const effectiveTogglePlay = multiVideo?.togglePlay ?? togglePlay;
-  const effectiveIsPlaying = multiVideo?.isPlaying ?? isPlaying;
-  const effectiveStepForward = multiVideo?.stepForward ?? stepForward;
-  const effectiveStepBackward = multiVideo?.stepBackward ?? stepBackward;
-  const effectiveSeekBackward = multiVideo?.seekBackward ?? seekBackward;
-  const effectiveRestart = multiVideo?.restart ?? restart;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
   const virtualRegionsWithLayout = useMemo(() => {

@@ -99,8 +99,6 @@ export function AnnotateTimeline({
       </div>
       {/* T2750: Video boundary markers */}
       {boundaryOffsets?.map(offset => {
-        const pct = duration > 0 ? (offset / duration) * 100 : 0;
-        const left = `calc(${EDGE_PADDING}px + ${pct}% * (1 - ${2 * EDGE_PADDING} / 100))`;
         return (
           <div
             key={offset}

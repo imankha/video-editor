@@ -14,7 +14,6 @@ import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
  */
 export function ClipsSidePanel({
   clipRegions,
-  allClipRegions,
   selectedRegionId,
   activePlaybackClipId = null,
   onSelectRegion,

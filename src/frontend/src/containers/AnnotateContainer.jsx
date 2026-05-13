@@ -8,6 +8,8 @@ import { useUploadStore } from '../stores/uploadStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
+import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
+import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
 import { VideoMode, GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
@@ -82,8 +84,26 @@ export function AnnotateContainer({
   // [{ sequence, url, duration, width, height, serverUrl? }]
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
+  // T2750: Dual-video scrub for unified multi-video experience
+  const multiVideo = useMultiVideoScrub({ gameVideos });
+  const fullTimeline = useMemo(
+    () => gameVideos && gameVideos.length > 1 ? buildFullVideoTimeline(gameVideos) : null,
+    [gameVideos],
+  );
+
+  // T2750: Effective values — virtual in multi-video, actual in single
+  const effectiveCurrentTime = multiVideo?.virtualTime ?? currentTime;
+  const effectiveSeek = multiVideo?.seek ?? seek;
+  const effectiveTogglePlay = multiVideo?.togglePlay ?? togglePlay;
+  const effectiveIsPlaying = multiVideo?.isPlaying ?? isPlaying;
+  const effectiveStepForward = multiVideo?.stepForward ?? stepForward;
+  const effectiveStepBackward = multiVideo?.stepBackward ?? stepBackward;
+  const effectiveSeekBackward = multiVideo?.seekBackward ?? seekBackward;
+  const effectiveRestart = multiVideo?.restart ?? restart;
+
   // Current video's sequence number (1-based, for clip tagging)
-  const currentVideoSequence = gameVideos ? gameVideos[activeVideoIndex]?.sequence : null;
+  const currentVideoSequence = multiVideo?.currentVideoSequence
+    ?? (gameVideos ? gameVideos[activeVideoIndex]?.sequence : null);
 
   // Clip selection state machine — single source of truth for selection + overlay
   const {
@@ -522,7 +542,9 @@ export function AnnotateContainer({
    * Context (paused video, timestamp) is preserved through the auth modal.
    */
   const handleAddClipFromButton = useCallback(() => {
-    if (videoRef.current && !videoRef.current.paused) {
+    if (multiVideo) {
+      multiVideo.pause();
+    } else if (videoRef.current && !videoRef.current.paused) {
       videoRef.current.pause();
     }
     if (selectionState.type === 'SELECTED') {
@@ -530,25 +552,39 @@ export function AnnotateContainer({
     } else {
       requireAuth(() => startCreating());
     }
-  }, [videoRef, selectionState, editClip, startCreating, requireAuth]);
+  }, [videoRef, multiVideo, selectionState, editClip, startCreating, requireAuth]);
 
   /**
    * Handle creating a clip from fullscreen overlay
    * Now saves to backend in real-time (if video is uploaded and we have a gameId)
    */
   const handleFullscreenCreateClip = useCallback(async (clipData) => {
+    // T2750: In multi-video mode, clipData.startTime is virtual — convert to actual for storage
+    let startTime = clipData.startTime;
+    let clipDuration = clipData.duration;
+    let videoSeq = currentVideoSequence;
+
+    if (fullTimeline) {
+      const result = fullTimeline.virtualToActual(clipData.startTime);
+      startTime = result.actualTime;
+      videoSeq = fullTimeline.segments[result.videoIndex].videoSequence;
+      const maxDur = fullTimeline.segments[result.videoIndex].duration - result.actualTime;
+      clipDuration = Math.min(clipDuration, maxDur);
+    }
+
     const newRegion = addClipRegion(
-      clipData.startTime,
-      clipData.duration,
+      startTime,
+      clipDuration,
       clipData.notes,
       clipData.rating,
       '',
       clipData.tags,
       clipData.name,
-      currentVideoSequence,
+      videoSeq,
     );
     if (newRegion) {
-      seek(newRegion.startTime);
+      // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
+      effectiveSeek(clipData.startTime);
 
       // Save to backend if we have a game ID (game record exists in DB even during upload)
       if (annotateGameId) {
@@ -559,7 +595,7 @@ export function AnnotateContainer({
           rating: newRegion.rating,
           tags: newRegion.tags,
           notes: newRegion.notes,
-          video_sequence: currentVideoSequence,
+          video_sequence: videoSeq,
           ...(clipData.createProject != null && { create_project: clipData.createProject }),
         });
 
@@ -574,7 +610,7 @@ export function AnnotateContainer({
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, seek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence]);
+  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline]);
 
   /**
    * Update a clip region - syncs to backend
@@ -691,15 +727,21 @@ export function AnnotateContainer({
    */
   const handleOverlayResume = useCallback(() => {
     closeOverlay();
-    togglePlay();
-  }, [closeOverlay, togglePlay]);
+    effectiveTogglePlay();
+  }, [closeOverlay, effectiveTogglePlay]);
 
-  // T2750: In unified multi-video mode, getRegionAtTime needs to match against
-  // actual (per-video) times since clips store actual times. The currentTime
-  // coming in is virtual when multi-video, so we convert it to actual first.
+  // T2750: In unified multi-video mode, convert virtual time to actual and match
+  // against the correct video's clips. Clips store actual per-video times.
   const getRegionAtTimeUnified = useCallback((time) => {
-    return getAnnotateRegionAtTime(time);
-  }, [getAnnotateRegionAtTime]);
+    if (!fullTimeline) return getAnnotateRegionAtTime(time);
+    const { actualTime, videoIndex } = fullTimeline.virtualToActual(time);
+    const videoSeq = fullTimeline.segments[videoIndex].videoSequence;
+    return clipRegions.find(r =>
+      (r.videoSequence ?? 1) === videoSeq &&
+      actualTime >= r.startTime &&
+      actualTime <= r.endTime
+    ) ?? null;
+  }, [fullTimeline, getAnnotateRegionAtTime, clipRegions]);
 
   /**
    * Timeline seek — wraps seek() with overlay management.
@@ -708,13 +750,13 @@ export function AnnotateContainer({
    * scrub handle drags (which use seek() directly and should NOT close the overlay).
    */
   const handleTimelineSeek = useCallback((time) => {
-    seek(time);
+    effectiveSeek(time);
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
       if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
     }
-  }, [seek, selectionState, getRegionAtTimeUnified, closeOverlay]);
+  }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
     const region = clipRegions.find(r => r.id === regionId);
@@ -725,12 +767,17 @@ export function AnnotateContainer({
       } else {
         selectClip(regionId);
       }
-      seek(region.startTime);
+      // T2750: Convert actual startTime to virtual for seek in multi-video mode
+      let seekTarget = region.startTime;
+      if (fullTimeline && region.videoSequence) {
+        seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
+      }
+      effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
-  }, [clipRegions, selectionState, selectClip, editClip, seek]);
+  }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, fullTimeline]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING and CREATING are immune — scrub handles move playhead without deselecting
@@ -745,17 +792,27 @@ export function AnnotateContainer({
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
 
     const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
-    const regionAtPlayhead = getRegionAtTimeUnified(currentTime);
+    const regionAtPlayhead = getRegionAtTimeUnified(effectiveCurrentTime);
 
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
-      if (selectedClip && (currentTime < selectedClip.startTime - FRAME_TOLERANCE || currentTime > selectedClip.endTime + FRAME_TOLERANCE)) {
-        regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
+      if (selectedClip) {
+        // T2750: Convert actual clip times to virtual for comparison
+        let clipStart = selectedClip.startTime;
+        let clipEnd = selectedClip.endTime;
+        if (fullTimeline && selectedClip.videoSequence) {
+          const offset = fullTimeline.getVideoOffset(selectedClip.videoSequence);
+          clipStart += offset;
+          clipEnd += offset;
+        }
+        if (effectiveCurrentTime < clipStart - FRAME_TOLERANCE || effectiveCurrentTime > clipEnd + FRAME_TOLERANCE) {
+          regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
+        }
       }
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip]);
+  }, [annotateVideoUrl, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
@@ -833,14 +890,15 @@ export function AnnotateContainer({
   }, [isPlaying]);
 
   // T251: Update high-water mark as user plays/scrubs through video
+  // In multi-video mode, effectiveCurrentTime is virtual (continuous progress)
   useEffect(() => {
-    if (!annotateGameId || currentTime <= 0) return;
-    const key = currentVideoSequence || 'single';
+    if (!annotateGameId || effectiveCurrentTime <= 0) return;
+    const key = fullTimeline ? 'unified' : (currentVideoSequence || 'single');
     const prev = viewedHighWaterRef.current.get(key) || 0;
-    if (currentTime > prev) {
-      viewedHighWaterRef.current.set(key, currentTime);
+    if (effectiveCurrentTime > prev) {
+      viewedHighWaterRef.current.set(key, effectiveCurrentTime);
     }
-  }, [currentTime, annotateGameId, currentVideoSequence]);
+  }, [effectiveCurrentTime, annotateGameId, currentVideoSequence, fullTimeline]);
 
   // T251: Compute total viewed duration across all videos (for finish-annotation)
   const getViewedDuration = useCallback(() => {
@@ -852,8 +910,8 @@ export function AnnotateContainer({
     return Math.max(total, persistedViewedDurationRef.current);
   }, []);
 
-  // Computed: Effective duration
-  const effectiveDuration = annotateVideoMetadata?.duration || videoDuration || 0;
+  // Computed: Effective duration (virtual total in multi-video)
+  const effectiveDuration = multiVideo?.totalDuration ?? annotateVideoMetadata?.duration ?? videoDuration ?? 0;
 
   /**
    * Wrapper for importAnnotations that also creates raw_clips for each annotation.
@@ -974,6 +1032,16 @@ export function AnnotateContainer({
     // T2750: Multi-video state (unified mode)
     gameVideos,
     currentVideoSequence,
+    multiVideo,
+    fullTimeline,
+    effectiveCurrentTime,
+    effectiveSeek,
+    effectiveTogglePlay,
+    effectiveIsPlaying,
+    effectiveStepForward,
+    effectiveStepBackward,
+    effectiveSeekBackward,
+    effectiveRestart,
 
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,

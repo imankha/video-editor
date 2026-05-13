@@ -473,7 +473,7 @@ export function AnnotateModeView({
             <div className="mt-6">
               <AnnotateMode
                 currentTime={currentTime}
-                duration={annotateVideoMetadata?.duration || 0}
+                duration={duration || annotateVideoMetadata?.duration || 0}
                 isPlaying={isPlaying}
                 onSeek={onTimelineSeek || seek}
                 regions={annotateRegionsWithLayout}
@@ -482,6 +482,7 @@ export function AnnotateModeView({
                 onDeleteRegion={onDeleteRegion}
                 selectedLayer={annotateSelectedLayer}
                 onLayerSelect={onLayerSelect}
+                boundaryOffsets={boundaryOffsets}
               />
             </div>
           )}
