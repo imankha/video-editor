@@ -89,6 +89,9 @@ export function AnnotateModeView({
   // T2750: Multi-video scrub
   multiVideo,
   boundaryOffsets,
+  // T2820: Share with tagged players
+  onShare,
+  hasTaggedClips,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -445,6 +448,8 @@ export function AnnotateModeView({
                 onAddClip={onAddClip}
                 isEditMode={isEditMode}
                 videoRef={videoRef}
+                onShare={onShare}
+                hasTaggedClips={hasTaggedClips}
               />
             </div>
 

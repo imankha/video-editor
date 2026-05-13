@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { List, X } from 'lucide-react';
+import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -53,6 +54,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const [pendingSeekTime, setPendingSeekTime] = useState(null);
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  // T2820: Share with tagged players modal
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Get active upload from store (for restoring annotation after navigating back from Games)
   const activeUpload = useUploadStore(state => state.activeUpload);
@@ -249,6 +252,18 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       };
     });
   }, [clipRegions, fullTimeline]);
+
+  // T2820: Compute unique tags with clip counts
+  const tagCounts = useMemo(() => {
+    const counts = {};
+    clipRegions.forEach(r => {
+      (r.tagged_teammates || []).forEach(tag => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [clipRegions]);
+  const hasTaggedClips = Object.keys(tagCounts).length > 0;
 
   const handleRetryVideo = useCallback(async () => {
     if (!annotateGameId) return;
@@ -593,9 +608,20 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // T2750: Multi-video scrub
         multiVideo={multiVideo}
         boundaryOffsets={multiVideo?.boundaryOffsets}
+        // T2820: Share with tagged players
+        onShare={() => setShowShareModal(true)}
+        hasTaggedClips={hasTaggedClips}
           />
         </div>
       </div>
+      {/* T2820: Share with tagged players modal */}
+      {showShareModal && hasTaggedClips && (
+        <ShareWithTeammatesModal
+          tagCounts={tagCounts}
+          gameId={annotateGameId}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </>
   );
 }
