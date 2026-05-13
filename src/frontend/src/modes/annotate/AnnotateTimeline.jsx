@@ -30,6 +30,8 @@ export function AnnotateTimeline({
   // Layer selection props
   selectedLayer = 'clips',
   onLayerSelect,
+  // T2750: Video boundary markers
+  boundaryOffsets,
 }) {
   // Fixed layer height for Annotate (Video + Clips)
   // Video (h-12 = 3rem) + Clips (h-12 = 3rem) + margin (mt-1 = 0.25rem) + buffer
@@ -95,6 +97,18 @@ export function AnnotateTimeline({
           edgePadding={EDGE_PADDING}
         />
       </div>
+      {/* T2750: Video boundary markers */}
+      {boundaryOffsets?.map(offset => {
+        const pct = duration > 0 ? (offset / duration) * 100 : 0;
+        const left = `calc(${EDGE_PADDING}px + ${pct}% * (1 - ${2 * EDGE_PADDING} / 100))`;
+        return (
+          <div
+            key={offset}
+            className="absolute top-0 bottom-0 w-px bg-gray-500/30 pointer-events-none"
+            style={{ left: `calc(${EDGE_PADDING}px + (100% - ${2 * EDGE_PADDING}px) * ${offset / duration})`, zIndex: 5 }}
+          />
+        );
+      })}
     </TimelineBase>
   );
 }

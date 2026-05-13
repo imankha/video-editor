@@ -23,6 +23,7 @@ export default function AnnotateMode({
   onDeleteRegion,
   selectedLayer = 'clips',
   onLayerSelect,
+  boundaryOffsets,
 }) {
   if (!duration) return null;
 
@@ -39,6 +40,7 @@ export default function AnnotateMode({
         onDeleteRegion={onDeleteRegion}
         selectedLayer={selectedLayer}
         onLayerSelect={onLayerSelect}
+        boundaryOffsets={boundaryOffsets}
       />
     </div>
   );

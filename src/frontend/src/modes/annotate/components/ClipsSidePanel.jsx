@@ -92,7 +92,7 @@ export function ClipsSidePanel({
   };
 
   const handleExportClick = () => {
-    const exportRegions = allClipRegions || clipRegions;
+    const exportRegions = clipRegions;
     if (exportRegions.length === 0) return;
 
     const tsvContent = generateTsvContent(exportRegions);

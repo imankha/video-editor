@@ -86,6 +86,9 @@ export function AnnotateModeView({
   onResetZoom,
   MIN_ZOOM,
   MAX_ZOOM,
+  // T2750: Multi-video scrub
+  multiVideo,
+  boundaryOffsets,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -310,30 +313,45 @@ export function AnnotateModeView({
                 aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`
               } : undefined}
             >
-              <VideoPlayer
-                videoRef={videoRef}
-                videoUrl={annotateVideoUrl}
-                handlers={handlers}
-                onVideoClick={togglePlay}
-                isLoading={isLoading}
-                isVideoElementLoading={isVideoElementLoading}
-                loadingProgress={loadingProgress}
-                loadingElapsedSeconds={loadingElapsedSeconds}
-                error={error}
-                isUrlExpiredError={isUrlExpiredError}
-                onRetryVideo={onRetryVideo}
-                loadingMessage="Loading video..."
-                overlays={[
-                  // NotesOverlay - shows name, rating, notes for the active clip.
-                  !showAnnotateOverlay && (() => {
+              {multiVideo ? (
+                /* T2750: Dual video elements for multi-video scrub */
+                <div className="relative" style={{ aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
+                  <video
+                    ref={multiVideo.videoARef}
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                    style={{
+                      opacity: multiVideo.activeVideoLabel === 'A' ? 1 : 0,
+                      transition: 'opacity 80ms ease-in-out',
+                      zIndex: multiVideo.activeVideoLabel === 'A' ? 2 : 1,
+                    }}
+                    playsInline
+                    preload="auto"
+                  />
+                  <video
+                    ref={multiVideo.videoBRef}
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                    style={{
+                      opacity: multiVideo.activeVideoLabel === 'B' ? 1 : 0,
+                      transition: 'opacity 80ms ease-in-out',
+                      zIndex: multiVideo.activeVideoLabel === 'B' ? 2 : 1,
+                    }}
+                    playsInline
+                    preload="auto"
+                  />
+                  {/* Click to toggle play */}
+                  <div
+                    className="absolute inset-0 z-10 cursor-pointer"
+                    onClick={togglePlay}
+                    style={{ zIndex: 3 }}
+                  />
+                  {/* NotesOverlay for multi-video */}
+                  {!showAnnotateOverlay && (() => {
                     const selectedRegion = annotateSelectedRegionId
                       && clipRegions.find(r => r.id === annotateSelectedRegionId);
                     const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
                     if (!region) return null;
-
                     const displayName = region.name ||
                       generateClipName(region.rating, region.tags, region.notes);
-
                     return (displayName || region.notes) ? (
                       <NotesOverlay
                         key="annotate-notes"
@@ -344,15 +362,50 @@ export function AnnotateModeView({
                         isFullscreen={annotateFullscreen}
                       />
                     ) : null;
-                  })(),
-                ].filter(Boolean)}
-                zoom={zoom}
-                panOffset={panOffset}
-                onZoomChange={onZoomChange}
-                onPanChange={onPanChange}
-                isFullscreen={annotateFullscreen}
-                clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
-              />
+                  })()}
+                </div>
+              ) : (
+                <VideoPlayer
+                  videoRef={videoRef}
+                  videoUrl={annotateVideoUrl}
+                  handlers={handlers}
+                  onVideoClick={togglePlay}
+                  isLoading={isLoading}
+                  isVideoElementLoading={isVideoElementLoading}
+                  loadingProgress={loadingProgress}
+                  loadingElapsedSeconds={loadingElapsedSeconds}
+                  error={error}
+                  isUrlExpiredError={isUrlExpiredError}
+                  onRetryVideo={onRetryVideo}
+                  loadingMessage="Loading video..."
+                  overlays={[
+                    !showAnnotateOverlay && (() => {
+                      const selectedRegion = annotateSelectedRegionId
+                        && clipRegions.find(r => r.id === annotateSelectedRegionId);
+                      const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
+                      if (!region) return null;
+                      const displayName = region.name ||
+                        generateClipName(region.rating, region.tags, region.notes);
+                      return (displayName || region.notes) ? (
+                        <NotesOverlay
+                          key="annotate-notes"
+                          name={displayName}
+                          notes={region.notes}
+                          rating={region.rating}
+                          isVisible={true}
+                          isFullscreen={annotateFullscreen}
+                        />
+                      ) : null;
+                    })(),
+                  ].filter(Boolean)}
+                  zoom={zoom}
+                  panOffset={panOffset}
+                  onZoomChange={onZoomChange}
+                  onPanChange={onPanChange}
+                  isFullscreen={annotateFullscreen}
+                  clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
+                />
+              )}
             </div>
 
             {/* AnnotateFullscreenOverlay - only rendered in fullscreen mode.
@@ -362,7 +415,7 @@ export function AnnotateModeView({
               <AnnotateFullscreenOverlay
                 isVisible={showAnnotateOverlay}
                 currentTime={currentTime}
-                videoDuration={annotateVideoMetadata?.duration || 0}
+                videoDuration={duration || annotateVideoMetadata?.duration || 0}
                 existingClip={existingClip}
                 onCreateClip={onFullscreenCreateClip}
                 onUpdateClip={onFullscreenUpdateClip}
@@ -379,7 +432,7 @@ export function AnnotateModeView({
               <AnnotateControls
                 isPlaying={isPlaying}
                 currentTime={currentTime}
-                duration={annotateVideoMetadata?.duration || duration}
+                duration={duration || annotateVideoMetadata?.duration || 0}
                 onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
@@ -400,7 +453,7 @@ export function AnnotateModeView({
               <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-4 py-1">
                 <AnnotateMode
                   currentTime={currentTime}
-                  duration={annotateVideoMetadata?.duration || 0}
+                  duration={duration || annotateVideoMetadata?.duration || 0}
                   isPlaying={isPlaying}
                   onSeek={onTimelineSeek || seek}
                   regions={annotateRegionsWithLayout}
@@ -409,6 +462,7 @@ export function AnnotateModeView({
                   onDeleteRegion={onDeleteRegion}
                   selectedLayer={annotateSelectedLayer}
                   onLayerSelect={onLayerSelect}
+                  boundaryOffsets={boundaryOffsets}
                 />
               </div>
             )}

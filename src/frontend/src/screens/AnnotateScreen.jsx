@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { List, X } from 'lucide-react';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
@@ -6,6 +6,8 @@ import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
+import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
+import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -200,18 +202,62 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     unlockScrub,
     // Cleanup
     clearAnnotateState,
-    // T82: Multi-video
+    // T2750: Multi-video state (unified)
     gameVideos,
-    activeVideoIndex,
-    isMultiVideo,
-    handleVideoTabSwitch,
-    filteredClipRegions,
-    filteredRegionsWithLayout,
+    currentVideoSequence,
     // T710: Annotation playback
     playback,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
+
+  // T2750: Multi-video scrub hook (returns null for single-video)
+  const multiVideo = useMultiVideoScrub({ gameVideos });
+  const isMultiVideo = !!gameVideos;
+
+  // T2750: Build full video timeline for clip offset computation
+  const fullTimeline = useMemo(
+    () => gameVideos ? buildFullVideoTimeline(gameVideos) : null,
+    [gameVideos],
+  );
+
+  // T2750: Choose virtual or actual values based on multi-video mode
+  const effectiveCurrentTime = multiVideo?.virtualTime ?? currentTime;
+  const effectiveDuration = multiVideo?.totalDuration ?? duration;
+  const effectiveSeek = multiVideo?.seek ?? seek;
+  const effectiveTogglePlay = multiVideo?.togglePlay ?? togglePlay;
+  const effectiveIsPlaying = multiVideo?.isPlaying ?? isPlaying;
+  const effectiveStepForward = multiVideo?.stepForward ?? stepForward;
+  const effectiveStepBackward = multiVideo?.stepBackward ?? stepBackward;
+  const effectiveSeekBackward = multiVideo?.seekBackward ?? seekBackward;
+  const effectiveRestart = multiVideo?.restart ?? restart;
+
+  // T2750: Compute regions with virtual offsets for timeline/sidebar display
+  const virtualRegionsWithLayout = useMemo(() => {
+    if (!fullTimeline) return annotateRegionsWithLayout;
+    return annotateRegionsWithLayout.map(r => {
+      const offset = fullTimeline.getVideoOffset(r.videoSequence);
+      return {
+        ...r,
+        startTime: r.startTime + offset,
+        endTime: r.endTime + offset,
+      };
+    });
+  }, [annotateRegionsWithLayout, fullTimeline]);
+
+  const virtualClipRegions = useMemo(() => {
+    if (!fullTimeline) return clipRegions;
+    return clipRegions.map(r => {
+      const offset = fullTimeline.getVideoOffset(r.videoSequence);
+      return {
+        ...r,
+        startTime: r.startTime + offset,
+        endTime: r.endTime + offset,
+        _actualStartTime: r.startTime,
+        _actualEndTime: r.endTime,
+      };
+    });
+  }, [clipRegions, fullTimeline]);
 
   const handleRetryVideo = useCallback(async () => {
     if (!annotateGameId) return;
@@ -292,7 +338,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         if (playback?.isPlaybackMode) {
           playback.togglePlay();
         } else {
-          togglePlay();
+          effectiveTogglePlay();
         }
         return;
       }
@@ -316,15 +362,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         // Playhead layer: seek by seconds (back 4s, forward 8s)
         if (annotateSelectedLayer === 'playhead') {
           if (isLeft) {
-            seekBackward(4);
+            effectiveSeekBackward(4);
           } else {
-            seekForward(8);
+            effectiveSeek(effectiveCurrentTime + 8);
           }
           return;
         }
 
-        // Clips layer: navigate between annotated clips
-        const activeClips = isMultiVideo ? filteredClipRegions : clipRegions;
+        // T2750: All clips shown in unified mode (virtualClipRegions has virtual timestamps)
+        const activeClips = virtualClipRegions;
         if (activeClips.length > 0) {
           const sortedRegions = [...activeClips].sort((a, b) => a.startTime - b.startTime);
 
@@ -340,7 +386,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           if (targetIndex !== currentIndex || currentIndex === -1) {
             const targetRegion = sortedRegions[targetIndex];
             selectAnnotateRegion?.(targetRegion.id);
-            seek(targetRegion.startTime);
+            effectiveSeek(targetRegion.startTime);
           }
         }
       }
@@ -351,16 +397,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [
     annotateVideoUrl,
     annotateSelectedLayer,
-    clipRegions,
-    filteredClipRegions,
-    isMultiVideo,
+    virtualClipRegions,
     annotateSelectedRegionId,
     selectAnnotateRegion,
-    togglePlay,
+    effectiveTogglePlay,
+    effectiveSeek,
+    effectiveSeekBackward,
+    effectiveCurrentTime,
     playback,
-    seekForward,
-    seekBackward,
-    seek,
     showAnnotateOverlay,
     handleAddClipFromButton,
   ]);
@@ -390,15 +434,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     isLoadingRef.current = false;
   }
 
-  const clipCountDisplay = isMultiVideo ? filteredClipRegions.length : annotateClipCount;
+  const clipCountDisplay = annotateClipCount;
 
   return (
     <>
       {/* Sidebar - hidden on mobile, visible on sm+ */}
       <div className="hidden sm:flex">
         <ClipsSidePanel
-          clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
-          allClipRegions={isMultiVideo ? clipRegions : undefined}
+          clipRegions={virtualClipRegions}
           selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
           activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
           onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
@@ -407,15 +450,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onImportAnnotations={importAnnotations}
           maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
           clipCount={clipCountDisplay}
-          videoDuration={annotateVideoMetadata?.duration}
+          videoDuration={effectiveDuration}
           isLoading={isLoadingAnnotations}
           isVideoUploading={isUploadingGameVideo}
-          onSeek={seek}
-          videoRef={videoRef}
+          onSeek={effectiveSeek}
+          videoRef={multiVideo ? multiVideo.videoARef : videoRef}
           onScrubLock={lockScrub}
           onScrubUnlock={unlockScrub}
           showAddClipForm={showAnnotateOverlay && !annotateFullscreen}
-          currentTime={currentTime}
+          currentTime={effectiveCurrentTime}
           onCreateClip={handleFullscreenCreateClip}
           onUpdateClip={handleFullscreenUpdateClip}
           onOverlayResume={handleOverlayResume}
@@ -428,8 +471,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileSidebar(false)} />
           <div className="relative w-[85vw] max-w-[352px] h-full">
             <ClipsSidePanel
-              clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
-              allClipRegions={isMultiVideo ? clipRegions : undefined}
+              clipRegions={virtualClipRegions}
               selectedRegionId={playback?.isPlaybackMode ? playback.activeClipId : annotateSelectedRegionId}
               activePlaybackClipId={playback?.isPlaybackMode ? playback.activeClipId : null}
               onSelectRegion={playback?.isPlaybackMode ? playback.seekToClip : handleSelectAnnotateRegion}
@@ -438,20 +480,18 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               onImportAnnotations={importAnnotations}
               maxNotesLength={ANNOTATE_MAX_NOTES_LENGTH}
               clipCount={clipCountDisplay}
-              videoDuration={annotateVideoMetadata?.duration}
+              videoDuration={effectiveDuration}
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
               isMobile
-              onSeek={seek}
-              videoRef={videoRef}
-              onScrubLock={lockScrub}
-              onScrubUnlock={unlockScrub}
+              onSeek={effectiveSeek}
+              videoRef={multiVideo ? multiVideo.videoARef : videoRef}
               onJumpToClip={(regionId, endTime) => {
                 if (playback?.isPlaybackMode) {
                   playback.seekToClip(regionId);
                 } else {
                   handleSelectAnnotateRegion(regionId);
-                  seek(endTime);
+                  effectiveSeek(endTime);
                 }
                 setShowMobileSidebar(false);
               }}
@@ -490,42 +530,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               </button>
             }
           />
-          {/* T82: Video switcher tabs for multi-video games */}
-          {isMultiVideo && gameVideos && (
-            <div className="flex gap-2 mb-4">
-              {gameVideos.map((video, index) => {
-                const label = gameVideos.length === 2
-                  ? (index === 0 ? 'First Half' : 'Second Half')
-                  : `Part ${index + 1}`;
-                const isActive = index === activeVideoIndex;
-                const disabled = playback?.isPlaybackMode;
-                return (
-                  <button
-                    key={video.sequence}
-                    onClick={() => handleVideoTabSwitch(index)}
-                    disabled={disabled}
-                    title={disabled ? 'Exit playback to switch halves' : undefined}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* T2750: Tab UI removed -- unified timeline replaces half switching */}
           <AnnotateModeView
         // Video state
-        videoRef={videoRef}
+        videoRef={multiVideo ? multiVideo.videoARef : videoRef}
         annotateVideoUrl={annotateVideoUrl}
         annotateVideoMetadata={annotateVideoMetadata}
         annotateContainerRef={annotateContainerRef}
-        currentTime={currentTime}
-        duration={duration}
-        isPlaying={isPlaying}
+        currentTime={effectiveCurrentTime}
+        duration={effectiveDuration}
+        isPlaying={effectiveIsPlaying}
         isLoading={isVideoLoading || isUploadingGameVideo}
         isVideoElementLoading={isVideoElementLoading}
         loadingProgress={loadingProgress}
@@ -533,25 +547,25 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         error={videoError}
         isUrlExpiredError={isUrlExpiredError}
         onRetryVideo={handleRetryVideo}
-        handlers={handlers}
+        handlers={multiVideo ? {} : handlers}
         // Fullscreen state
         annotateFullscreen={annotateFullscreen}
         showAnnotateOverlay={showAnnotateOverlay}
         // Playback
-        togglePlay={togglePlay}
-        stepForward={stepForward}
-        stepBackward={stepBackward}
-        seekBackward={seekBackward}
-        restart={restart}
-        seek={seek}
+        togglePlay={effectiveTogglePlay}
+        stepForward={effectiveStepForward}
+        stepBackward={effectiveStepBackward}
+        seekBackward={effectiveSeekBackward}
+        restart={effectiveRestart}
+        seek={effectiveSeek}
         onTimelineSeek={handleTimelineSeek}
         annotatePlaybackSpeed={annotatePlaybackSpeed}
         onSpeedChange={setAnnotatePlaybackSpeed}
         // Clips/regions
-        annotateRegionsWithLayout={isMultiVideo ? filteredRegionsWithLayout : annotateRegionsWithLayout}
+        annotateRegionsWithLayout={virtualRegionsWithLayout}
         annotateSelectedRegionId={annotateSelectedRegionId}
-        hasAnnotateClips={isMultiVideo ? filteredClipRegions.length > 0 : hasAnnotateClips}
-        clipRegions={isMultiVideo && !playback?.isPlaybackMode ? filteredClipRegions : clipRegions}
+        hasAnnotateClips={hasAnnotateClips}
+        clipRegions={virtualClipRegions}
         isEditMode={isEditMode}
         // Handlers
         onSelectRegion={handleSelectAnnotateRegion}
@@ -583,6 +597,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onResetZoom={resetZoom}
         MIN_ZOOM={MIN_ZOOM}
         MAX_ZOOM={MAX_ZOOM}
+        // T2750: Multi-video scrub
+        multiVideo={multiVideo}
+        boundaryOffsets={multiVideo?.boundaryOffsets}
           />
         </div>
       </div>

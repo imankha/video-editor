@@ -694,17 +694,12 @@ export function AnnotateContainer({
     togglePlay();
   }, [closeOverlay, togglePlay]);
 
-  // Filter clip regions to only show clips for the current video
-  const filteredClipRegions = useMemo(() => {
-    if (!gameVideos) return clipRegions; // single-video: show all
-    return clipRegions.filter(r => r.videoSequence === currentVideoSequence);
-  }, [clipRegions, gameVideos, currentVideoSequence]);
-
-  // Filtered getRegionAtTime — only matches clips from the current video half
-  const filteredGetRegionAtTime = useCallback((time) => {
-    if (!gameVideos) return getAnnotateRegionAtTime(time);
-    return filteredClipRegions.find(r => time >= r.startTime && time <= r.endTime) || null;
-  }, [gameVideos, getAnnotateRegionAtTime, filteredClipRegions]);
+  // T2750: In unified multi-video mode, getRegionAtTime needs to match against
+  // actual (per-video) times since clips store actual times. The currentTime
+  // coming in is virtual when multi-video, so we convert it to actual first.
+  const getRegionAtTimeUnified = useCallback((time) => {
+    return getAnnotateRegionAtTime(time);
+  }, [getAnnotateRegionAtTime]);
 
   /**
    * Timeline seek — wraps seek() with overlay management.
@@ -715,11 +710,11 @@ export function AnnotateContainer({
   const handleTimelineSeek = useCallback((time) => {
     seek(time);
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
-      if (!filteredGetRegionAtTime(time)) {
+      if (!getRegionAtTimeUnified(time)) {
         closeOverlay();
       }
     }
-  }, [seek, selectionState, filteredGetRegionAtTime, closeOverlay]);
+  }, [seek, selectionState, getRegionAtTimeUnified, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
     const region = clipRegions.find(r => r.id === regionId);
@@ -750,7 +745,7 @@ export function AnnotateContainer({
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
 
     const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
-    const regionAtPlayhead = filteredGetRegionAtTime(currentTime);
+    const regionAtPlayhead = getRegionAtTimeUnified(currentTime);
 
     if (type === 'SELECTED') {
       const selectedClip = clipRegions.find(r => r.id === clipId);
@@ -760,7 +755,7 @@ export function AnnotateContainer({
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);
     }
-  }, [annotateVideoUrl, currentTime, selectionState, filteredGetRegionAtTime, clipRegions, selectClip, deselectClip]);
+  }, [annotateVideoUrl, currentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip]);
 
   // Effect: Sync playback speed with video element
   useEffect(() => {
@@ -921,31 +916,7 @@ export function AnnotateContainer({
     return count;
   }, [importAnnotations, saveClip]);
 
-  // T82: Simple tab-based video switching
-  // Each video is independent with its own timeline (no virtual absolute timeline)
-  const handleVideoTabSwitch = useCallback((index) => {
-    if (!gameVideos || index < 0 || index >= gameVideos.length) return;
-    if (index === activeVideoIndex) return;
-
-    const video = gameVideos[index];
-    const newUrl = video.url || video.serverUrl;
-
-    setActiveVideoIndex(index);
-    setAnnotateVideoUrl(newUrl);
-    // Update metadata to this video's duration
-    setAnnotateVideoMetadata(prev => ({
-      ...prev,
-      duration: video.duration,
-      width: video.width || prev?.width,
-      height: video.height || prev?.height,
-    }));
-  }, [gameVideos, activeVideoIndex, setAnnotateVideoUrl, setAnnotateVideoMetadata]);
-
-  // Filtered regions with layout (for timeline display)
-  const filteredRegionsWithLayout = useMemo(() => {
-    if (!gameVideos) return annotateRegionsWithLayout;
-    return annotateRegionsWithLayout.filter(r => r.videoSequence === currentVideoSequence);
-  }, [annotateRegionsWithLayout, gameVideos, currentVideoSequence]);
+  // T2750: No more tab switching or filtered regions. All clips shown unified.
 
   return {
     // State
@@ -988,7 +959,7 @@ export function AnnotateContainer({
     updateClipRegion: updateClipRegionWithSync,
     deleteClipRegion,
     importAnnotations: importAnnotationsWithRawClips,
-    getAnnotateRegionAtTime: filteredGetRegionAtTime,
+    getAnnotateRegionAtTime: getRegionAtTimeUnified,
     selectAnnotateRegion, // Raw select for keyboard shortcuts (doesn't seek)
     isEditMode, // Derived from state machine: true when SELECTED
     lockScrub, // Suppress auto-deselect during sidebar scrub
@@ -1000,15 +971,9 @@ export function AnnotateContainer({
     // Computed
     effectiveDuration,
 
-    // T82: Multi-video state
+    // T2750: Multi-video state (unified mode)
     gameVideos,
-    activeVideoIndex,
-    isMultiVideo: !!gameVideos,
-    handleVideoTabSwitch,
     currentVideoSequence,
-    // Filtered clip regions for current video (multi-video only)
-    filteredClipRegions,
-    filteredRegionsWithLayout,
 
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,
