@@ -28,6 +28,7 @@ from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
+from app.services.pg import get_pg
 from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
@@ -2072,11 +2073,22 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     Per-tag results: only tags where ALL emails were delivered successfully
     are recorded in teammate_shares. Failed tags remain "unsent" so the user
     can retry.
+
+    After successful delivery, materializes game + annotations into each
+    recipient's profile (T2830). Multi-profile or non-user recipients get
+    a pending_teammate_share record instead.
     """
     import asyncio
     from app.services.email import send_teammate_share_email
-    from app.services.auth_db import get_user_by_id
-    from app.services.sharing_db import create_game_share, revoke_share
+    from app.services.auth_db import get_user_by_id, get_user_by_email
+    from app.services.sharing_db import (
+        create_game_share, revoke_share, get_share_by_token,
+        create_pending_share,
+    )
+    from app.services.user_db import get_profiles
+    from app.services.materialization import (
+        materialize_game_share, _filter_clips_for_tag, serialize_clip_data,
+    )
     from app.profile_context import get_current_profile_id
 
     user_id = get_current_user_id()
@@ -2161,6 +2173,26 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                     VALUES (?, ?, datetime('now'))
                 """, (request.game_id, recipient.tag_name))
 
+                # T2830: Materialize for each successfully-sent email
+                for email, share in zip(recipient.emails, share_records):
+                    if not share:
+                        continue
+                    try:
+                        _materialize_or_pend(
+                            email=email,
+                            share=share,
+                            sharer_user_id=user_id,
+                            sharer_profile_id=profile_id,
+                            game_id=request.game_id,
+                            tag_name=recipient.tag_name,
+                            conn=conn,
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"[share-with-teammates] Materialization failed for "
+                            f"{email}/{recipient.tag_name}: {e}"
+                        )
+
             results.append({
                 "tag_name": recipient.tag_name,
                 "status": "sent" if all_sent else "failed",
@@ -2172,3 +2204,145 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     sent_tags = [r["tag_name"] for r in results if r["status"] == "sent"]
     failed_tags = [r["tag_name"] for r in results if r["status"] == "failed"]
     return {"results": results, "sent_tags": sent_tags, "failed_tags": failed_tags}
+
+
+def _materialize_or_pend(
+    email: str,
+    share: dict,
+    sharer_user_id: str,
+    sharer_profile_id: str,
+    game_id: int,
+    tag_name: str,
+    conn,
+):
+    """Materialize immediately for single-profile users, or create pending share."""
+    from app.services.auth_db import get_user_by_email
+    from app.services.user_db import get_profiles
+    from app.services.sharing_db import (
+        create_pending_share, get_share_by_token,
+    )
+    from app.services.materialization import (
+        materialize_game_share, _filter_clips_for_tag, serialize_clip_data,
+    )
+
+    recipient_user = get_user_by_email(email)
+    if not recipient_user:
+        # Non-user: create pending share with pre-serialized clip data
+        clip_data = _filter_clips_for_tag(conn, game_id, tag_name)
+        share_record = get_share_by_token(share["share_token"])
+        if share_record:
+            create_pending_share(
+                share_id=share_record["id"],
+                sharer_user_id=sharer_user_id,
+                sharer_profile_id=sharer_profile_id,
+                recipient_email=email,
+                game_id=game_id,
+                tag_name=tag_name,
+                clip_data_json=serialize_clip_data(clip_data),
+            )
+            logger.info(f"[share-with-teammates] Created pending share for non-user {email}")
+        return
+
+    recipient_user_id = recipient_user["user_id"]
+    profiles = get_profiles(recipient_user_id)
+
+    if len(profiles) == 1:
+        share_record = get_share_by_token(share["share_token"])
+        if share_record:
+            materialize_game_share(
+                sharer_user_id=sharer_user_id,
+                sharer_profile_id=sharer_profile_id,
+                recipient_user_id=recipient_user_id,
+                recipient_profile_id=profiles[0]["id"],
+                game_id=game_id,
+                tag_name=tag_name,
+                share_id=share_record["id"],
+            )
+            logger.info(
+                f"[share-with-teammates] Materialized for {email} "
+                f"(profile {profiles[0]['id']})"
+            )
+    else:
+        # Multi-profile: create pending share
+        clip_data = _filter_clips_for_tag(conn, game_id, tag_name)
+        share_record = get_share_by_token(share["share_token"])
+        if share_record:
+            create_pending_share(
+                share_id=share_record["id"],
+                sharer_user_id=sharer_user_id,
+                sharer_profile_id=sharer_profile_id,
+                recipient_email=email,
+                game_id=game_id,
+                tag_name=tag_name,
+                clip_data_json=serialize_clip_data(clip_data),
+            )
+            logger.info(
+                f"[share-with-teammates] Created pending share for "
+                f"multi-profile user {email}"
+            )
+
+
+class ResolvePendingSharesRequest(BaseModel):
+    pending_ids: List[int]
+    profile_id: str
+
+
+@router.post("/resolve-pending-shares")
+async def resolve_pending_shares(request: ResolvePendingSharesRequest):
+    """Resolve pending teammate shares by materializing into a chosen profile.
+
+    Called when a multi-profile user picks which profile should receive
+    shared content, or on signup for new users (T2840).
+    """
+    import json
+    from app.services.sharing_db import get_pending_shares_for_email, resolve_pending_share
+    from app.services.materialization import materialize_game_share
+
+    user_id = get_current_user_id()
+    materialized = []
+    errors = []
+
+    for pending_id in request.pending_ids:
+        # Fetch the pending share and verify it belongs to this user's email
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT id, share_id, sharer_user_id, sharer_profile_id,
+                          game_id, tag_name, clip_data
+                   FROM pending_teammate_shares
+                   WHERE id = %s AND resolved_at IS NULL""",
+                (pending_id,),
+            )
+            pending = cur.fetchone()
+
+        if not pending:
+            errors.append({"id": pending_id, "error": "not found or already resolved"})
+            continue
+
+        try:
+            clip_data = pending["clip_data"]
+            if isinstance(clip_data, str):
+                clip_data = json.loads(clip_data)
+
+            result = materialize_game_share(
+                sharer_user_id=pending["sharer_user_id"],
+                sharer_profile_id=pending["sharer_profile_id"],
+                recipient_user_id=user_id,
+                recipient_profile_id=request.profile_id,
+                game_id=pending["game_id"],
+                tag_name=pending["tag_name"],
+                share_id=pending["share_id"],
+                clip_data=clip_data,
+            )
+            resolve_pending_share(pending_id, request.profile_id)
+            materialized.append({
+                "id": pending_id,
+                "game_id": result.get("game_id"),
+                "inserted": result.get("inserted", 0),
+                "merged": result.get("merged", 0),
+            })
+        except Exception as e:
+            logger.error(f"[resolve-pending-shares] Failed for pending_id={pending_id}: {e}")
+            errors.append({"id": pending_id, "error": str(e)})
+
+    return {"materialized": materialized, "errors": errors}

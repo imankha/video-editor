@@ -137,9 +137,12 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
 
     cur = pg_conn.cursor()
     if dry_run:
+        cur.execute("SELECT COUNT(*) as cnt FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from pending_teammate_shares")
         cur.execute("SELECT COUNT(*) as cnt FROM shares WHERE sharer_user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from shares (+ cascaded extensions)")
     else:
+        cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
         cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
     for table in ("game_storage_refs", "sessions"):
         if dry_run:

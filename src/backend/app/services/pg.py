@@ -122,6 +122,22 @@ CREATE TABLE IF NOT EXISTS share_games (
 );
 CREATE INDEX IF NOT EXISTS idx_share_games_game ON share_games(game_id);
 CREATE INDEX IF NOT EXISTS idx_share_games_recipient_profile ON share_games(recipient_profile_id);
+
+CREATE TABLE IF NOT EXISTS pending_teammate_shares (
+    id SERIAL PRIMARY KEY,
+    share_id INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+    sharer_user_id TEXT NOT NULL,
+    sharer_profile_id TEXT NOT NULL,
+    recipient_email TEXT NOT NULL,
+    game_id INTEGER NOT NULL,
+    tag_name TEXT NOT NULL,
+    clip_data JSONB NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
+    resolved_at TIMESTAMPTZ,
+    resolved_profile_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_pending_shares_email ON pending_teammate_shares(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_pending_shares_share ON pending_teammate_shares(share_id);
 """
 
 _SEED_SQL = """

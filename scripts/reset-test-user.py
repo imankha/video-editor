@@ -244,6 +244,7 @@ def main():
 
     # Delete user from Postgres
     print("\n--- Deleting user from Postgres ---")
+    cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
     cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
     for table in ("game_storage_refs", "sessions"):
         cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))

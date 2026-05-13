@@ -1,6 +1,6 @@
 # T2830: Game + Annotation Materialization
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2800 (data model), T2820 (share UI), T2825 (shares table refactor)
 **Supersedes:** T1830 (Shared Content Inbox & Claim)

@@ -195,3 +195,56 @@ def mark_game_share_materialized(
             (recipient_profile_id, share_id),
         )
         return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Pending teammate shares (multi-profile / non-user recipients)
+# ---------------------------------------------------------------------------
+
+def create_pending_share(
+    share_id: int,
+    sharer_user_id: str,
+    sharer_profile_id: str,
+    recipient_email: str,
+    game_id: int,
+    tag_name: str,
+    clip_data_json: str,
+) -> int:
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO pending_teammate_shares
+               (share_id, sharer_user_id, sharer_profile_id, recipient_email,
+                game_id, tag_name, clip_data)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
+            (share_id, sharer_user_id, sharer_profile_id,
+             recipient_email.lower().strip(), game_id, tag_name, clip_data_json),
+        )
+        return cur.fetchone()["id"]
+
+
+def get_pending_shares_for_email(email: str) -> list[dict]:
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, share_id, sharer_user_id, sharer_profile_id,
+                      recipient_email, game_id, tag_name, clip_data, created_at
+               FROM pending_teammate_shares
+               WHERE recipient_email = %s AND resolved_at IS NULL
+               ORDER BY created_at""",
+            (email.lower().strip(),),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def resolve_pending_share(pending_id: int, profile_id: str) -> bool:
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE pending_teammate_shares
+               SET resolved_at = now(), resolved_profile_id = %s
+               WHERE id = %s AND resolved_at IS NULL""",
+            (profile_id, pending_id),
+        )
+        return cur.rowcount > 0
