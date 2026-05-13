@@ -56,6 +56,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T2820: Share with tagged players modal
   const [showShareModal, setShowShareModal] = useState(false);
+  // T2840: Share attribution banner
+  const [shareAttribution, setShareAttribution] = useState(() => {
+    const attr = sessionStorage.getItem('shareAttribution');
+    if (attr) sessionStorage.removeItem('shareAttribution');
+    return attr;
+  });
 
   // Get active upload from store (for restoring annotation after navigating back from Games)
   const activeUpload = useUploadStore(state => state.activeUpload);
@@ -548,6 +554,17 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               </button>
             }
           />
+          {/* T2840: Share attribution banner */}
+          {shareAttribution && (
+            <div className="flex items-center justify-between px-3 py-1.5 mb-2 rounded-lg bg-purple-900/30 border border-purple-700/40 text-sm">
+              <span className="text-gray-300">
+                Shared by <span className="text-white font-medium">{shareAttribution}</span>
+              </span>
+              <button onClick={() => setShareAttribution(null)} className="text-gray-500 hover:text-white ml-2">
+                <X size={14} />
+              </button>
+            </div>
+          )}
           {/* T2750: Tab UI removed -- unified timeline replaces half switching */}
           <AnnotateModeView
         // Video state
