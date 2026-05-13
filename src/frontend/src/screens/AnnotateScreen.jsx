@@ -56,6 +56,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T2820: Share with tagged players modal
   const [showShareModal, setShowShareModal] = useState(false);
+  const [hasSharedTeammates, setHasSharedTeammates] = useState(false);
 
   // Get active upload from store (for restoring annotation after navigating back from Games)
   const activeUpload = useUploadStore(state => state.activeUpload);
@@ -610,7 +611,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         boundaryOffsets={multiVideo?.boundaryOffsets}
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
-        hasTaggedClips={hasTaggedClips}
+        hasSharedTeammates={hasSharedTeammates}
           />
         </div>
       </div>
@@ -620,6 +621,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           tagCounts={tagCounts}
           gameId={annotateGameId}
           onClose={() => setShowShareModal(false)}
+          onShareSuccess={() => setHasSharedTeammates(true)}
         />
       )}
     </>

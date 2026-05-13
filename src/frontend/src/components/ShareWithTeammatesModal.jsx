@@ -5,7 +5,7 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 
-export function ShareWithTeammatesModal({ tagCounts, gameId, onClose }) {
+export function ShareWithTeammatesModal({ tagCounts, gameId, onClose, onShareSuccess }) {
   const [checkedTags, setCheckedTags] = useState(() => new Set(Object.keys(tagCounts)));
   const [tagEmails, setTagEmails] = useState({});
   const [storedMappings, setStoredMappings] = useState({});
@@ -132,12 +132,14 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose }) {
 
       if (shareResp.status === 404) {
         setSuccess(true);
+        onShareSuccess?.();
         toast.success(`Sharing queued for ${shareableRecipients.length} player${shareableRecipients.length === 1 ? '' : 's'}`);
       } else if (!shareResp.ok) {
         const data = await shareResp.json().catch(() => null);
         throw new Error(data?.detail || `Share failed (${shareResp.status})`);
       } else {
         setSuccess(true);
+        onShareSuccess?.();
         toast.success(`Shared with ${shareableRecipients.length} player${shareableRecipients.length === 1 ? '' : 's'}`);
       }
     } catch (err) {
@@ -162,7 +164,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose }) {
           <div className="flex items-center gap-2">
             <Share2 size={18} className="text-cyan-400" />
             <h3 className="text-lg font-semibold text-white">
-              Share w/ Tagged Teammates
+              Share With Teammates
             </h3>
           </div>
           <button

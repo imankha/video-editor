@@ -91,7 +91,7 @@ export function AnnotateModeView({
   boundaryOffsets,
   // T2820: Share with tagged players
   onShare,
-  hasTaggedClips,
+  hasSharedTeammates,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -511,9 +511,9 @@ export function AnnotateModeView({
                 {onShare && (
                   <button
                     onClick={onShare}
-                    disabled={!hasTaggedClips}
-                    className={`px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      !hasTaggedClips
+                    disabled={!hasSharedTeammates}
+                    className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                      !hasSharedTeammates
                         ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                         : 'bg-cyan-600 hover:bg-cyan-500 text-white'
                     }`}

@@ -36,7 +36,7 @@ describe('ShareWithTeammatesModal', () => {
 
   it('renders header and all tag rows', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
-    expect(screen.getByText('Share w/ Tagged Teammates')).toBeTruthy();
+    expect(screen.getByText('Share With Teammates')).toBeTruthy();
     await waitFor(() => {
       expect(screen.getByText('Jake')).toBeTruthy();
       expect(screen.getByText('Player 7')).toBeTruthy();
@@ -87,7 +87,7 @@ describe('ShareWithTeammatesModal', () => {
   it('closes on backdrop click', async () => {
     const onClose = vi.fn();
     render(<ShareWithTeammatesModal {...defaultProps} onClose={onClose} />);
-    const backdrop = screen.getByText('Share w/ Tagged Teammates').closest('.fixed');
+    const backdrop = screen.getByText('Share With Teammates').closest('.fixed');
     fireEvent.mouseDown(backdrop);
     expect(onClose).toHaveBeenCalled();
   });
