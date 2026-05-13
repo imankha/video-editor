@@ -1246,7 +1246,9 @@ async def save_overlay_data(
                 text_overlays = ?,
                 effect_type = ?
             WHERE id = ?
-        """, (encode_data(parsed_highlights) if parsed_highlights else None, text_overlays, effect_type, project['working_video_id']))
+        """, (encode_data(parsed_highlights) if parsed_highlights else None,
+              encode_data(json.loads(text_overlays)) if text_overlays and text_overlays != '[]' else None,
+              effect_type, project['working_video_id']))
 
         # Transform and save highlight data to source raw_clips
         raw_clips_updated = 0
@@ -1379,7 +1381,7 @@ async def _save_highlights_to_raw_clips(
             UPDATE raw_clips
             SET default_highlight_regions = ?
             WHERE id = ?
-        """, (json.dumps(raw_regions), raw_clip_id))
+        """, (encode_data(raw_regions) if raw_regions else None, raw_clip_id))
 
         clips_updated += 1
         logger.info(f"[Overlay Data] Saved {len(raw_regions)} regions to raw_clip {raw_clip_id}")
@@ -1453,12 +1455,7 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
         processed_raw_clip_ids.add(raw_clip_id)
 
         # Parse raw clip default highlights
-        raw_regions = []
-        if clip['default_highlight_regions']:
-            try:
-                raw_regions = json.loads(clip['default_highlight_regions'])
-            except json.JSONDecodeError:
-                continue
+        raw_regions = decode_data(clip['default_highlight_regions']) or []
 
         if not raw_regions:
             continue
@@ -1540,10 +1537,7 @@ async def get_overlay_data(project_id: int):
                     pass
 
             if result['text_overlays']:
-                try:
-                    text_overlays = json.loads(result['text_overlays'])
-                except json.JSONDecodeError:
-                    pass
+                text_overlays = decode_data(result['text_overlays']) or []
 
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']  # Can be None

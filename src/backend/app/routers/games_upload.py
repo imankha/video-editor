@@ -11,7 +11,6 @@ The blake3_hash is stored in the games table for lookup.
 
 import re
 import uuid
-import json
 import logging
 from typing import Optional, List
 from datetime import datetime
@@ -20,6 +19,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.database import get_db_connection
+from app.utils.encoding import encode_data, decode_data
 from app.constants import UploadStatus
 from app.services.storage_credits import calculate_upload_cost
 from app.services.user_db import get_credit_balance
@@ -162,12 +162,7 @@ async def prepare_upload(request: PrepareUploadRequest):
             # Validate that the R2 multipart upload session is still valid
             if r2_is_multipart_upload_valid(r2_key, upload_id):
                 # Resume existing upload - return remaining parts
-                completed_parts = []
-                if existing_pending['parts_json']:
-                    try:
-                        completed_parts = json.loads(existing_pending['parts_json'])
-                    except json.JSONDecodeError:
-                        completed_parts = []
+                completed_parts = decode_data(existing_pending['parts_json']) or []
 
                 # Generate presigned URLs for ALL parts (4 hour expiry)
                 all_parts = generate_multipart_urls(
@@ -393,12 +388,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
             )
 
         # Merge new parts with existing
-        existing_parts = []
-        if pending['parts_json']:
-            try:
-                existing_parts = json.loads(pending['parts_json'])
-            except json.JSONDecodeError:
-                existing_parts = []
+        existing_parts = decode_data(pending['parts_json']) or []
 
         # Create a map of existing parts by part_number
         parts_map = {p['part_number']: p for p in existing_parts}
@@ -416,7 +406,7 @@ async def save_upload_parts(session_id: str, request: SavePartsRequest):
         # Save to database
         cursor.execute(
             "UPDATE pending_uploads SET parts_json = ? WHERE id = ?",
-            (json.dumps(merged_parts), session_id)
+            (encode_data(merged_parts), session_id)
         )
         conn.commit()
 
@@ -457,12 +447,7 @@ async def list_pending_uploads():
                 logger.info(f"Stale pending upload detected: {row['id']}, cleaning up")
                 continue
 
-            completed_parts = []
-            if row['parts_json']:
-                try:
-                    completed_parts = json.loads(row['parts_json'])
-                except json.JSONDecodeError:
-                    pass
+            completed_parts = decode_data(row['parts_json']) or []
 
             # Calculate total parts based on file size
             total_parts = (row['file_size'] + PART_SIZE - 1) // PART_SIZE

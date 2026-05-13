@@ -551,11 +551,11 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
 
         result = []
         for clip in clips:
-            tags = json.loads(clip['tags']) if clip['tags'] else []
+            tags = decode_data(clip['tags']) or []
             generated_title = ''
             if not clip['name'] and not tags and clip['notes']:
                 generated_title = _compute_tfidf_title(clip['notes'], corpus)
-            tagged_teammates = json.loads(clip['tagged_teammates']) if clip['tagged_teammates'] else None
+            tagged_teammates = decode_data(clip['tagged_teammates'])
             my_athlete_raw = clip['my_athlete']
             my_athlete = None if my_athlete_raw is None else bool(my_athlete_raw)
             result.append(RawClipResponse(
@@ -592,12 +592,12 @@ async def get_raw_clip(clip_id: int):
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
 
-        tags = json.loads(clip['tags']) if clip['tags'] else []
+        tags = decode_data(clip['tags']) or []
         generated_title = ''
         if not clip['name'] and not tags and clip['notes']:
             corpus = _get_notes_corpus(cursor)
             generated_title = _compute_tfidf_title(clip['notes'], corpus)
-        tagged_teammates = json.loads(clip['tagged_teammates']) if clip['tagged_teammates'] else None
+        tagged_teammates = decode_data(clip['tagged_teammates'])
         my_athlete_raw = clip['my_athlete']
         my_athlete = None if my_athlete_raw is None else bool(my_athlete_raw)
         return RawClipResponse(
@@ -697,7 +697,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
         project_name = clip_name
     elif clip_data:
         rating = clip_data['rating'] or 5
-        tags = json.loads(clip_data['tags']) if clip_data['tags'] else []
+        tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
         if not tags and notes:
@@ -816,7 +816,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             old_start_time = existing['start_time']
             boundaries_changed = old_start_time != clip_data.start_time
 
-            tagged_teammates_json = json.dumps(clip_data.tagged_teammates) if clip_data.tagged_teammates is not None else None
+            tagged_teammates_encoded = encode_data(clip_data.tagged_teammates)
             my_athlete_val = 0 if clip_data.my_athlete is False else 1
 
             # Include boundaries_version increment if start_time changed
@@ -830,10 +830,10 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                 """, (
                     clip_data.name,
                     clip_data.rating,
-                    json.dumps(clip_data.tags),
+                    encode_data(clip_data.tags),
                     clip_data.notes,
                     clip_data.start_time,
-                    tagged_teammates_json,
+                    tagged_teammates_encoded,
                     my_athlete_val,
                     clip_id
                 ))
@@ -846,10 +846,10 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                 """, (
                     clip_data.name,
                     clip_data.rating,
-                    json.dumps(clip_data.tags),
+                    encode_data(clip_data.tags),
                     clip_data.notes,
                     clip_data.start_time,
-                    tagged_teammates_json,
+                    tagged_teammates_encoded,
                     my_athlete_val,
                     clip_id
                 ))
@@ -878,14 +878,14 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             )
 
         # New clip
-        tagged_teammates_json = json.dumps(clip_data.tagged_teammates) if clip_data.tagged_teammates is not None else None
+        tagged_teammates_encoded = encode_data(clip_data.tagged_teammates)
         my_athlete_val = 0 if clip_data.my_athlete is False else 1
         cursor.execute("""
             INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence, tagged_teammates, my_athlete)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, ('', clip_data.rating, json.dumps(clip_data.tags), clip_data.name,
+        """, ('', clip_data.rating, encode_data(clip_data.tags), clip_data.name,
               clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id,
-              clip_data.video_sequence, tagged_teammates_json, my_athlete_val))
+              clip_data.video_sequence, tagged_teammates_encoded, my_athlete_val))
         raw_clip_id = cursor.lastrowid
 
         # Handle explicit project creation toggle
@@ -978,7 +978,7 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
             params.append(update.rating)
         if update.tags is not None:
             updates.append("tags = ?")
-            params.append(json.dumps(update.tags))
+            params.append(encode_data(update.tags))
         if update.notes is not None:
             updates.append("notes = ?")
             params.append(update.notes)
@@ -993,7 +993,7 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
             params.append(update.video_sequence)
         if update.tagged_teammates is not None:
             updates.append("tagged_teammates = ?")
-            params.append(json.dumps(update.tagged_teammates))
+            params.append(encode_data(update.tagged_teammates))
         if update.my_athlete is not None:
             updates.append("my_athlete = ?")
             params.append(0 if update.my_athlete is False else 1)
@@ -1143,7 +1143,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
 
         result = []
         for clip in clips:
-            tags = json.loads(clip['raw_tags']) if clip['raw_tags'] else []
+            tags = decode_data(clip['raw_tags']) or []
             rating = clip['raw_rating'] or 3
             raw_filename = clip['raw_filename']
             uploaded_filename = clip['uploaded_filename']
@@ -1430,7 +1430,7 @@ async def upload_clip_with_metadata(
         """, (
             clip_filename,
             rating,
-            json.dumps(tags_list),
+            encode_data(tags_list),
             unique_name,
             notes
         ))
@@ -1970,7 +1970,9 @@ async def get_teammate_tags():
 
     tag_counts: dict[str, int] = {}
     for row in rows:
-        names = json.loads(row['tagged_teammates'])
+        names = decode_data(row['tagged_teammates'])
+        if not names:
+            continue
         for name in names:
             tag_counts[name] = tag_counts.get(name, 0) + 1
 

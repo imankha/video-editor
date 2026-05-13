@@ -13,7 +13,6 @@ from datetime import datetime
 import asyncio
 import os
 import re
-import json
 import logging
 
 from app.database import get_db_connection, get_final_videos_path
@@ -22,6 +21,7 @@ from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import archive_project, restore_project, is_project_archived
 from app.constants import SourceType
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -393,26 +393,27 @@ async def list_downloads(source_type: Optional[str] = None):
             rating_counts = None
             if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['rating_counts']:
                 try:
-                    c = json.loads(row['rating_counts'])
-                    brilliant = c.get('brilliant', 0)
-                    good = c.get('good', 0)
-                    interesting = c.get('interesting', 0)
-                    mistake = c.get('mistake', 0)
-                    blunder = c.get('blunder', 0)
-                    total = brilliant + good + interesting + mistake + blunder
-                    weighted_sum = (brilliant * 5) + (good * 4) + (interesting * 3) + (mistake * 2) + (blunder * 1)
-                    weighted_average = round(weighted_sum / total, 2) if total > 0 else None
-                    rating_counts = RatingCounts(
-                        brilliant=brilliant,
-                        good=good,
-                        interesting=interesting,
-                        mistake=mistake,
-                        blunder=blunder,
-                        total=total,
-                        weighted_average=weighted_average
-                    )
-                except (json.JSONDecodeError, KeyError):
-                    pass  # Invalid JSON, skip rating counts
+                    c = decode_data(row['rating_counts'])
+                    if c:
+                        brilliant = c.get('brilliant', 0)
+                        good = c.get('good', 0)
+                        interesting = c.get('interesting', 0)
+                        mistake = c.get('mistake', 0)
+                        blunder = c.get('blunder', 0)
+                        total = brilliant + good + interesting + mistake + blunder
+                        weighted_sum = (brilliant * 5) + (good * 4) + (interesting * 3) + (mistake * 2) + (blunder * 1)
+                        weighted_average = round(weighted_sum / total, 2) if total > 0 else None
+                        rating_counts = RatingCounts(
+                            brilliant=brilliant,
+                            good=good,
+                            interesting=interesting,
+                            mistake=mistake,
+                            blunder=blunder,
+                            total=total,
+                            weighted_average=weighted_average
+                        )
+                except (KeyError, TypeError):
+                    pass
 
             # Determine game info based on source type
             game_ids = []

@@ -1086,6 +1086,52 @@ def ensure_database():
             cursor.execute("ALTER TABLE raw_clips ADD COLUMN my_athlete INTEGER DEFAULT 1")
             logger.info("[Migration T2800] Added my_athlete to raw_clips")
 
+        # T2870: Migrate JSON TEXT columns to msgpack BLOB
+        # Same pattern as T1180 (crop_data, timing_data, etc.) — detect JSON by
+        # first byte (0x5b='[', 0x7b='{') and re-encode with msgpack in-place.
+        import json as _json
+        from .utils.encoding import encode_data as _encode
+
+        _json_columns = [
+            ("raw_clips", "id", ["tags", "tagged_teammates", "default_highlight_regions"]),
+            ("pending_uploads", "id", ["parts_json"]),
+            ("final_videos", "id", ["rating_counts"]),
+            ("working_videos", "id", ["text_overlays"]),
+        ]
+
+        for _tbl, _pk, _cols in _json_columns:
+            for _col in _cols:
+                _col_exists = any(
+                    c['name'] == _col
+                    for c in cursor.execute(f"PRAGMA table_info({_tbl})").fetchall()
+                )
+                if not _col_exists:
+                    continue
+                _rows = cursor.execute(
+                    f"SELECT {_pk}, {_col} FROM {_tbl} WHERE {_col} IS NOT NULL"
+                ).fetchall()
+                _converted = 0
+                for _row in _rows:
+                    _val = _row[_col]
+                    if isinstance(_val, str) or (isinstance(_val, bytes) and len(_val) > 0 and _val[0:1] in (b'[', b'{')):
+                        try:
+                            _parsed = _json.loads(_val)
+                            if _parsed in ([], {}, None):
+                                cursor.execute(
+                                    f"UPDATE {_tbl} SET {_col} = NULL WHERE {_pk} = ?",
+                                    (_row[_pk],),
+                                )
+                            else:
+                                cursor.execute(
+                                    f"UPDATE {_tbl} SET {_col} = ? WHERE {_pk} = ?",
+                                    (_encode(_parsed), _row[_pk]),
+                                )
+                            _converted += 1
+                        except (_json.JSONDecodeError, TypeError):
+                            pass
+                if _converted > 0:
+                    logger.info(f"[Migration T2870] {_tbl}.{_col}: {_converted} rows converted from JSON to msgpack")
+
         conn.commit()
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")
