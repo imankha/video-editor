@@ -21,7 +21,6 @@ FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
 _CAN_SPAM_FOOTER = """
 <p style="color: #6b7280; font-size: 11px; margin-top: 16px; text-align: center;">
   Reel Ballers<br/>
-  [Physical Address TBD]<br/>
   <a href="https://app.reelballers.com/privacy" style="color: #6b7280;">Privacy Policy</a>
   &nbsp;|&nbsp;
   <a href="https://app.reelballers.com/terms" style="color: #6b7280;">Terms of Service</a>
