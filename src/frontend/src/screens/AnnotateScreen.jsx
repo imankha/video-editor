@@ -217,6 +217,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     effectiveRestart,
     // T710: Annotation playback
     playback,
+    // T2810: Teammate tag suggestions
+    teammateSuggestions,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -452,6 +454,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onUpdateClip={handleFullscreenUpdateClip}
           onOverlayResume={handleOverlayResume}
           onOverlayClose={handleOverlayClose}
+          teammateSuggestions={teammateSuggestions}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -473,6 +476,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               isLoading={isLoadingAnnotations}
               isVideoUploading={isUploadingGameVideo}
               isMobile
+              teammateSuggestions={teammateSuggestions}
               onSeek={effectiveSeek}
               videoRef={multiVideo ? multiVideo.videoARef : videoRef}
               onJumpToClip={(regionId, endTime) => {

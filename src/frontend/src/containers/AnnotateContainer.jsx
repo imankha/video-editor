@@ -5,6 +5,7 @@ import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
+import { API_BASE } from '../config';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
@@ -164,6 +165,28 @@ export function AnnotateContainer({
     setAnnotateHasSelectedClip(!!annotateSelectedRegionId);
   }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
 
+
+  // T2810: Teammate tag suggestions (server baseline + locally-used tags)
+  const [serverTeammateTags, setServerTeammateTags] = useState([]);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/clips/teammate-tags`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setServerTeammateTags(data))
+      .catch(() => {});
+  }, []);
+  const teammateSuggestions = useMemo(() => {
+    const localTags = clipRegions.flatMap(r => r.tagged_teammates || []);
+    const seen = new Set();
+    const merged = [];
+    for (const tag of [...serverTeammateTags, ...localTags]) {
+      const key = tag.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(tag);
+      }
+    }
+    return merged;
+  }, [serverTeammateTags, clipRegions]);
 
   // Upload state from Zustand store (persists across page navigation)
   const uploadStore = useUploadStore();
@@ -645,6 +668,8 @@ export function AnnotateContainer({
         tags: updates.tags ?? region.tags,
         notes: updates.notes ?? region.notes,
         video_sequence: region.videoSequence ?? currentVideoSequence,
+        tagged_teammates: updates.tagged_teammates ?? region.tagged_teammates ?? null,
+        my_athlete: updates.my_athlete ?? region.my_athlete,
       };
 
       if (updates.createProject != null) {
@@ -671,6 +696,8 @@ export function AnnotateContainer({
       if (updates.startTime !== undefined) backendUpdates.start_time = updates.startTime;
       if (updates.endTime !== undefined) backendUpdates.end_time = updates.endTime;
       if (updates.createProject != null) backendUpdates.create_project = updates.createProject;
+      if (updates.tagged_teammates !== undefined) backendUpdates.tagged_teammates = updates.tagged_teammates;
+      if (updates.my_athlete !== undefined) backendUpdates.my_athlete = updates.my_athlete;
 
       // Handle duration changes - need to send computed start_time
       // Since duration changes keep endTime fixed and adjust startTime
@@ -1046,6 +1073,9 @@ export function AnnotateContainer({
 
     // Game ID (for finish-annotation call when leaving)
     annotateGameId,
+
+    // T2810: Teammate tag suggestions
+    teammateSuggestions,
 
     // T251: View progress tracking
     getViewedDuration,

@@ -10,6 +10,8 @@
 - **`my_athlete`** is stored as INTEGER (0/1) on `raw_clips`, default 1. In API responses (`RawClipResponse`) it's `boolean | null`. Null means pre-migration clip (treat as true).
 - **Existing list endpoint**: `GET /api/clips/raw?game_id={id}` returns clips with `my_athlete` field. Filter can be done client-side or add a query param to the endpoint.
 - **No `{profile_id}` in URLs**: The task spec says `/api/profiles/{id}/games/{id}/clips` but clip endpoints use `/api/clips/raw?game_id={id}`. All profile-scoped endpoints use middleware context.
+- **Frontend region data model**: `my_athlete` is available on every clip region in `useAnnotate.js`. Defaults to `true` for new clips and pre-migration clips (NULL). The toggle UI is in `ClipDetailsEditor.jsx`.
+- **`load_annotations_from_db`** (`games.py:1278`): Returns `my_athlete` as a boolean in the annotations response. Fixed in T2810 -- was previously omitted from the SELECT query.
 
 ## Problem
 

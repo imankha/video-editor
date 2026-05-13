@@ -7,9 +7,10 @@
 
 ## T2800 Implementation Reference
 
-- **`tagged_teammates`** is stored as a JSON-serialized TEXT column on `raw_clips` (may become msgpack via T2870). Parse with `json.loads()`. Value is `null` when no teammates tagged.
-- **`my_athlete`** is stored as INTEGER (0/1) on `raw_clips`, default 1. In API responses it's a boolean.
-- **Filtering clips by tag name**: Query `SELECT * FROM raw_clips WHERE game_id = ?`, then in Python filter rows where `json.loads(row['tagged_teammates'])` contains the target tag name. No SQLite JSON functions are used.
+- **`tagged_teammates`** is stored as a msgpack-encoded TEXT column on `raw_clips` (migrated to msgpack in T2870). Decode with `decode_data()` from `app.utils.encoding`. Value is `null` when no teammates tagged.
+- **`my_athlete`** is stored as INTEGER (0/1) on `raw_clips`, default 1. In API responses it's a boolean. NULL means pre-migration clip (treat as true).
+- **Filtering clips by tag name**: Query `SELECT * FROM raw_clips WHERE game_id = ?`, then in Python filter rows where `decode_data(row['tagged_teammates'])` contains the target tag name. No SQLite JSON functions are used.
+- **`load_annotations_from_db`** (`games.py:1278`): Now includes `tagged_teammates` and `my_athlete` in the SELECT and response dict (fixed in T2810). Uses `decode_data()` for `tagged_teammates` (same as `tags`).
 - **`teammate_emails` table** in profile SQLite: `(id, tag_name, email, created_at)` with UNIQUE(tag_name, email).
 
 ## Problem

@@ -73,6 +73,8 @@ export function useRawClipSave() {
           notes: clipData.notes || '',
           ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
           ...(clipData.create_project != null && { create_project: clipData.create_project }),
+          ...(clipData.tagged_teammates != null && { tagged_teammates: clipData.tagged_teammates }),
+          ...(clipData.my_athlete != null && { my_athlete: clipData.my_athlete }),
         })
       });
 
