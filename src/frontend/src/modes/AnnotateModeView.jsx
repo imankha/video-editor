@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { Play } from 'lucide-react';
+import { Play, Share2 } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
@@ -448,8 +448,6 @@ export function AnnotateModeView({
                 onAddClip={onAddClip}
                 isEditMode={isEditMode}
                 videoRef={videoRef}
-                onShare={onShare}
-                hasTaggedClips={hasTaggedClips}
               />
             </div>
 
@@ -493,22 +491,39 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Playback Annotations button - replaces old "Create Annotated Video" */}
+        {/* Playback + Share buttons */}
         {!annotateFullscreen && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-2">
-              <button
-                onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
-                disabled={!hasAnnotateClips}
-                className={`w-full px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                  !hasAnnotateClips
-                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                    : 'bg-green-600 hover:bg-green-700 text-white'
-                }`}
-              >
-                <Play size={18} />
-                <span>Playback Annotations</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
+                  disabled={!hasAnnotateClips}
+                  className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                    !hasAnnotateClips
+                      ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                >
+                  <Play size={18} />
+                  <span>Playback Annotations</span>
+                </button>
+                {onShare && (
+                  <button
+                    onClick={onShare}
+                    disabled={!hasTaggedClips}
+                    className={`px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                      !hasTaggedClips
+                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                        : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                    }`}
+                  >
+                    <Share2 size={18} />
+                    <span className="hidden sm:inline">Share w/ Tagged Teammates</span>
+                    <span className="sm:hidden">Share</span>
+                  </button>
+                )}
+              </div>
 
               <p className="text-xs text-gray-500 text-center">
                 Clips are automatically saved to your library as you annotate

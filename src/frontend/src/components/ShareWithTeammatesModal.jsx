@@ -162,7 +162,7 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose }) {
           <div className="flex items-center gap-2">
             <Share2 size={18} className="text-cyan-400" />
             <h3 className="text-lg font-semibold text-white">
-              Share with Tagged Players
+              Share w/ Tagged Teammates
             </h3>
           </div>
           <button

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX, Share2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Rewind, RotateCcw, Maximize, Minimize, Plus, Pencil, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 import { formatTime } from '../../../utils/timeFormat';
 
@@ -84,8 +84,6 @@ export function AnnotateControls({
   onAddClip,
   isEditMode = false,
   videoRef,
-  onShare,
-  hasTaggedClips = false,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
@@ -205,33 +203,6 @@ export function AnnotateControls({
             iconOnly
             onClick={onAddClip}
             title={isEditMode ? 'Edit selected clip (A)' : 'Add clip ending at current time (A)'}
-            className="flex sm:hidden"
-          />
-        )}
-
-        {/* Share with Tagged Players */}
-        {onShare && !isFullscreen && (
-          <Button
-            variant="cyan"
-            size="sm"
-            icon={Share2}
-            onClick={onShare}
-            disabled={!hasTaggedClips}
-            title="Share with tagged players"
-            className="hidden sm:flex"
-          >
-            Share
-          </Button>
-        )}
-        {onShare && !isFullscreen && (
-          <Button
-            variant="cyan"
-            size="sm"
-            icon={Share2}
-            iconOnly
-            onClick={onShare}
-            disabled={!hasTaggedClips}
-            title="Share with tagged players"
             className="flex sm:hidden"
           />
         )}
