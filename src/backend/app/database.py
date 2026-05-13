@@ -906,6 +906,21 @@ def ensure_database():
             )
         """)
 
+        # T2800: Tag name to email mapping for teammate sharing
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teammate_emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(tag_name, email)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_teammate_emails_tag
+            ON teammate_emails(tag_name)
+        """)
+
         # Initialize settings row if not exists
         cursor.execute("""
             INSERT OR IGNORE INTO user_settings (id, settings_json)
@@ -1061,6 +1076,15 @@ def ensure_database():
         if 'recap_video_url' not in game_cols:
             cursor.execute("ALTER TABLE games ADD COLUMN recap_video_url TEXT")
             logger.info("[Migration T1583] Added recap_video_url to games")
+
+        # T2800: Teammate tagging columns on raw_clips
+        clip_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(raw_clips)").fetchall()}
+        if 'tagged_teammates' not in clip_cols:
+            cursor.execute("ALTER TABLE raw_clips ADD COLUMN tagged_teammates TEXT DEFAULT NULL")
+            logger.info("[Migration T2800] Added tagged_teammates to raw_clips")
+        if 'my_athlete' not in clip_cols:
+            cursor.execute("ALTER TABLE raw_clips ADD COLUMN my_athlete INTEGER DEFAULT 1")
+            logger.info("[Migration T2800] Added my_athlete to raw_clips")
 
         conn.commit()
         _initialized_users.add(user_id)

@@ -122,6 +122,8 @@ class RawClipResponse(BaseModel):
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     game_id: Optional[int] = None
+    tagged_teammates: Optional[List[str]] = None
+    my_athlete: Optional[bool] = None
     auto_project_id: Optional[int] = None
     created_at: str
 
@@ -137,6 +139,8 @@ class RawClipCreate(BaseModel):
     notes: str = ""
     video_sequence: Optional[int] = None  # T82: which video in multi-video game (1-based)
     create_project: Optional[bool] = None
+    tagged_teammates: Optional[List[str]] = None
+    my_athlete: Optional[bool] = None
 
 
 class RawClipUpdate(BaseModel):
@@ -149,6 +153,8 @@ class RawClipUpdate(BaseModel):
     end_time: Optional[float] = None
     video_sequence: Optional[int] = None
     create_project: Optional[bool] = None
+    tagged_teammates: Optional[List[str]] = None
+    my_athlete: Optional[bool] = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -521,7 +527,7 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
 
         query = """
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
-                   game_id, auto_project_id, created_at
+                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete
             FROM raw_clips
             WHERE 1=1
         """
@@ -549,6 +555,9 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
             generated_title = ''
             if not clip['name'] and not tags and clip['notes']:
                 generated_title = _compute_tfidf_title(clip['notes'], corpus)
+            tagged_teammates = json.loads(clip['tagged_teammates']) if clip['tagged_teammates'] else None
+            my_athlete_raw = clip['my_athlete']
+            my_athlete = None if my_athlete_raw is None else bool(my_athlete_raw)
             result.append(RawClipResponse(
                 id=clip['id'],
                 filename=clip['filename'],
@@ -561,7 +570,9 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
                 end_time=clip['end_time'],
                 game_id=clip['game_id'],
                 auto_project_id=clip['auto_project_id'],
-                created_at=clip['created_at']
+                created_at=clip['created_at'],
+                tagged_teammates=tagged_teammates,
+                my_athlete=my_athlete,
             ))
         return result
 
@@ -573,7 +584,7 @@ async def get_raw_clip(clip_id: int):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
-                   game_id, auto_project_id, created_at
+                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
@@ -586,6 +597,9 @@ async def get_raw_clip(clip_id: int):
         if not clip['name'] and not tags and clip['notes']:
             corpus = _get_notes_corpus(cursor)
             generated_title = _compute_tfidf_title(clip['notes'], corpus)
+        tagged_teammates = json.loads(clip['tagged_teammates']) if clip['tagged_teammates'] else None
+        my_athlete_raw = clip['my_athlete']
+        my_athlete = None if my_athlete_raw is None else bool(my_athlete_raw)
         return RawClipResponse(
             id=clip['id'],
             filename=clip['filename'],
@@ -598,7 +612,9 @@ async def get_raw_clip(clip_id: int):
             end_time=clip['end_time'],
             game_id=clip['game_id'],
             auto_project_id=clip['auto_project_id'],
-            created_at=clip['created_at']
+            created_at=clip['created_at'],
+            tagged_teammates=tagged_teammates,
+            my_athlete=my_athlete,
         )
 
 
@@ -800,10 +816,14 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             old_start_time = existing['start_time']
             boundaries_changed = old_start_time != clip_data.start_time
 
+            tagged_teammates_json = json.dumps(clip_data.tagged_teammates) if clip_data.tagged_teammates is not None else None
+            my_athlete_val = 0 if clip_data.my_athlete is False else 1
+
             # Include boundaries_version increment if start_time changed
             if boundaries_changed:
                 cursor.execute("""
                     UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?,
+                        tagged_teammates = ?, my_athlete = ?,
                         boundaries_version = COALESCE(boundaries_version, 0) + 1,
                         boundaries_updated_at = datetime('now')
                     WHERE id = ?
@@ -813,12 +833,15 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     json.dumps(clip_data.tags),
                     clip_data.notes,
                     clip_data.start_time,
+                    tagged_teammates_json,
+                    my_athlete_val,
                     clip_id
                 ))
                 logger.info(f"Clip {clip_id} start_time changed, incrementing boundaries_version")
             else:
                 cursor.execute("""
-                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?
+                    UPDATE raw_clips SET name = ?, rating = ?, tags = ?, notes = ?, start_time = ?,
+                        tagged_teammates = ?, my_athlete = ?
                     WHERE id = ?
                 """, (
                     clip_data.name,
@@ -826,6 +849,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     json.dumps(clip_data.tags),
                     clip_data.notes,
                     clip_data.start_time,
+                    tagged_teammates_json,
+                    my_athlete_val,
                     clip_id
                 ))
 
@@ -853,12 +878,14 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             )
 
         # New clip
+        tagged_teammates_json = json.dumps(clip_data.tagged_teammates) if clip_data.tagged_teammates is not None else None
+        my_athlete_val = 0 if clip_data.my_athlete is False else 1
         cursor.execute("""
-            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence, tagged_teammates, my_athlete)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ('', clip_data.rating, json.dumps(clip_data.tags), clip_data.name,
               clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id,
-              clip_data.video_sequence))
+              clip_data.video_sequence, tagged_teammates_json, my_athlete_val))
         raw_clip_id = cursor.lastrowid
 
         # Handle explicit project creation toggle
@@ -964,6 +991,12 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.video_sequence is not None:
             updates.append("video_sequence = ?")
             params.append(update.video_sequence)
+        if update.tagged_teammates is not None:
+            updates.append("tagged_teammates = ?")
+            params.append(json.dumps(update.tagged_teammates))
+        if update.my_athlete is not None:
+            updates.append("my_athlete = ?")
+            params.append(0 if update.my_athlete is False else 1)
 
         # If duration changed, increment boundaries_version so framing can detect outdated clips
         if duration_changed:
@@ -1915,3 +1948,85 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
 
         logger.info(f"Removed clip {clip_id} from project {project_id}")
         return {"success": True}
+
+
+# --- T2800: Teammate tag/email endpoints ---
+
+class TeammateEmailMapping(BaseModel):
+    tag_name: str
+    email: str
+
+
+@router.get("/teammate-tags")
+async def get_teammate_tags():
+    """Return distinct tag names from raw_clips.tagged_teammates, ordered by frequency."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT tagged_teammates FROM raw_clips
+            WHERE tagged_teammates IS NOT NULL
+        """)
+        rows = cursor.fetchall()
+
+    tag_counts: dict[str, int] = {}
+    for row in rows:
+        names = json.loads(row['tagged_teammates'])
+        for name in names:
+            tag_counts[name] = tag_counts.get(name, 0) + 1
+
+    sorted_tags = sorted(tag_counts.keys(), key=lambda t: tag_counts[t], reverse=True)
+    return sorted_tags
+
+
+@router.get("/teammate-emails")
+async def get_teammate_emails():
+    """Return all teammate email mappings, grouped by tag_name."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, tag_name, email, created_at
+            FROM teammate_emails ORDER BY tag_name, id
+        """)
+        rows = cursor.fetchall()
+
+    grouped: dict[str, list] = {}
+    for row in rows:
+        tag = row['tag_name']
+        if tag not in grouped:
+            grouped[tag] = []
+        grouped[tag].append({
+            "id": row['id'],
+            "email": row['email'],
+            "created_at": row['created_at'],
+        })
+
+    return grouped
+
+
+@router.put("/teammate-emails")
+async def upsert_teammate_emails(mappings: List[TeammateEmailMapping]):
+    """Upsert tag_name -> email mappings. Duplicates are silently ignored."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        for m in mappings:
+            cursor.execute("""
+                INSERT OR IGNORE INTO teammate_emails (tag_name, email)
+                VALUES (?, ?)
+            """, (m.tag_name, m.email))
+        conn.commit()
+
+    return {"success": True, "count": len(mappings)}
+
+
+@router.delete("/teammate-emails/{mapping_id}")
+async def delete_teammate_email(mapping_id: int):
+    """Delete a single teammate email mapping."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM teammate_emails WHERE id = ?", (mapping_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Teammate email mapping not found")
+        cursor.execute("DELETE FROM teammate_emails WHERE id = ?", (mapping_id,))
+        conn.commit()
+
+    return {"success": True}
