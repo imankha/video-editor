@@ -202,10 +202,12 @@ DOMAIN_MAP = {
 }
 
 
-def _get_share_url(share_token: str) -> str:
+def _get_share_url(share_token: str, share_type: str = "video") -> str:
     from app.storage import APP_ENV
     domain = DOMAIN_MAP.get(APP_ENV, "localhost:5173")
     scheme = "http" if "localhost" in domain else "https"
+    if share_type == "game":
+        return f"{scheme}://{domain}/shared/teammate/{share_token}"
     return f"{scheme}://{domain}/shared/{share_token}"
 
 
@@ -280,11 +282,16 @@ async def send_teammate_share_email(
 ) -> bool:
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
-        logger.warning("[Email] RESEND_API_KEY not configured, skipping teammate share email")
-        return False
+        share_url = _get_share_url(share_token, "game") if share_token else "(no token)"
+        logger.warning(
+            f"[Email] DEV MODE -- teammate share email to {recipient_email} "
+            f"for tag '{tag_name}' on '{game_name}' ({clip_count} clips). "
+            f"Share URL: {share_url}"
+        )
+        return True
 
     clip_text = f"{clip_count} clip{'' if clip_count == 1 else 's'}" if clip_count > 0 else "clips"
-    share_url = _get_share_url(share_token) if share_token else None
+    share_url = _get_share_url(share_token, "game") if share_token else None
 
     cta_html = ""
     if share_url:

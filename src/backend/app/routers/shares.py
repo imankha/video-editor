@@ -12,6 +12,7 @@ shared_router (/api/shared):
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime
 from typing import Optional, Union
@@ -26,6 +27,8 @@ from ..storage import APP_ENV, generate_presigned_url_global
 from ..services.sharing_db import (
     create_shares,
     get_share_by_token,
+    get_game_share_by_token,
+    get_pending_shares_for_email,
     list_contacts_for_user,
     list_shares_for_video,
     update_share_visibility,
@@ -234,6 +237,121 @@ async def list_video_shares(video_id: int):
 # ---------------------------------------------------------------------------
 # Shared router (optional auth -- /api/shared/ is in AUTH_ALLOWLIST_PREFIXES)
 # ---------------------------------------------------------------------------
+
+@shared_router.get("/teammate/{share_token}")
+async def get_shared_teammate(share_token: str, request: Request):
+    from ..services.materialization import _filter_clips_for_tag, _open_profile_db, _collect_video_hashes
+
+    share = get_game_share_by_token(share_token)
+    if not share:
+        raise HTTPException(404, "Share not found")
+    if share["share_type"] != "game":
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This share has been revoked")
+
+    if share["materialized_at"]:
+        return {"materialized": True, "share_token": share_token}
+
+    sharer = get_user_by_id(share["sharer_user_id"])
+    sharer_email = sharer["email"] if sharer else "Unknown"
+
+    recipient_user = get_user_by_email(share["recipient_email"])
+    recipient_has_account = recipient_user is not None
+
+    pending = get_pending_shares_for_email(share["recipient_email"])
+    pending_for_share = [p for p in pending if p["share_id"] == share["id"]]
+
+    annotations = []
+    if pending_for_share and pending_for_share[0].get("clip_data"):
+        clip_data = pending_for_share[0]["clip_data"]
+        if isinstance(clip_data, str):
+            clip_data = json.loads(clip_data)
+        for clip in clip_data:
+            annotations.append({
+                "name": clip.get("name"),
+                "rating": clip.get("rating"),
+                "notes": clip.get("notes"),
+                "start_time": clip.get("start_time"),
+                "end_time": clip.get("end_time"),
+                "video_sequence": clip.get("video_sequence", 0),
+            })
+    else:
+        sharer_conn = _open_profile_db(share["sharer_user_id"], share["sharer_profile_id"])
+        if sharer_conn:
+            try:
+                clips = _filter_clips_for_tag(sharer_conn, share["game_id"], share["tag_name"])
+                for clip in clips:
+                    annotations.append({
+                        "name": clip.get("name"),
+                        "rating": clip.get("rating"),
+                        "notes": clip.get("notes"),
+                        "start_time": clip.get("start_time"),
+                        "end_time": clip.get("end_time"),
+                        "video_sequence": clip.get("video_sequence", 0),
+                    })
+            finally:
+                sharer_conn.close()
+
+    sharer_conn = _open_profile_db(share["sharer_user_id"], share["sharer_profile_id"])
+    videos = []
+    game_name = share.get("tag_name", "Shared Game")
+    if sharer_conn:
+        try:
+            cur = sharer_conn.cursor()
+            cur.execute("SELECT name FROM games WHERE id = ?", (share["game_id"],))
+            game_row = cur.fetchone()
+            if game_row:
+                game_name = game_row["name"]
+
+            cur.execute(
+                """SELECT blake3_hash, sequence, duration, fps
+                   FROM game_videos WHERE game_id = ? ORDER BY sequence""",
+                (share["game_id"],),
+            )
+            video_rows = cur.fetchall()
+            if video_rows:
+                for vrow in video_rows:
+                    r2_key = f"games/{vrow['blake3_hash']}.mp4"
+                    url = generate_presigned_url_global(r2_key)
+                    if url:
+                        videos.append({
+                            "sequence": vrow["sequence"],
+                            "url": url,
+                            "duration": vrow["duration"],
+                            "fps": vrow["fps"],
+                        })
+            else:
+                hashes = _collect_video_hashes(sharer_conn, share["game_id"])
+                if hashes:
+                    cur.execute(
+                        "SELECT video_duration, video_fps FROM games WHERE id = ?",
+                        (share["game_id"],),
+                    )
+                    g = cur.fetchone()
+                    r2_key = f"games/{hashes[0]}.mp4"
+                    url = generate_presigned_url_global(r2_key)
+                    if url:
+                        videos.append({
+                            "sequence": 0,
+                            "url": url,
+                            "duration": g["video_duration"] if g else None,
+                            "fps": g["video_fps"] if g else None,
+                        })
+        finally:
+            sharer_conn.close()
+
+    return {
+        "share_token": share_token,
+        "sharer_email": sharer_email,
+        "game_name": game_name,
+        "tag_name": share["tag_name"],
+        "videos": videos,
+        "annotations": annotations,
+        "materialized": False,
+        "recipient_has_account": recipient_has_account,
+    }
+
 
 @shared_router.get("/{share_token}", response_model=ShareDetailResponse)
 async def get_shared_video(share_token: str, request: Request):

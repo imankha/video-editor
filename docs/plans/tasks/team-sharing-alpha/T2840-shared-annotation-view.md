@@ -1,6 +1,6 @@
 # T2840: Shared Annotation View
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2825 (shares table), T2830 (materialization)
 

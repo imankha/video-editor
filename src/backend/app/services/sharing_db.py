@@ -167,6 +167,23 @@ def create_game_share(
     }
 
 
+def get_game_share_by_token(token: str) -> Optional[dict]:
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT s.id, s.share_token, s.share_type, s.sharer_user_id,
+                      s.sharer_profile_id, s.recipient_email, s.shared_at,
+                      s.revoked_at,
+                      sg.game_id, sg.tag_name, sg.recipient_profile_id,
+                      sg.materialized_at
+               FROM shares s
+               JOIN share_games sg ON sg.share_id = s.id
+               WHERE s.share_token = %s""",
+            (token,),
+        )
+        return cur.fetchone()
+
+
 def list_shares_for_game(game_id: int, sharer_user_id: str) -> list[dict]:
     with get_sharing_db() as conn:
         cur = conn.cursor()

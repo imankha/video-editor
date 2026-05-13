@@ -62,6 +62,7 @@ Ordered by dependency.
 | T2825 | [Shares Table Refactor](T2825-shares-table-refactor.md) | TESTING | Normalize `shared_videos` into base `shares` + `share_videos` + `share_games` extension tables. Migration script for existing data. |
 | T2830 | [Game + Annotation Materialization](T2830-game-annotation-materialization.md) | TODO | Backend creates game ref + filtered annotations in recipient's profile. Overlap merging. Email delivery. |
 | T2840 | [Shared Annotation View](T2840-shared-annotation-view.md) | TODO | Non-user playback with annotations + signup CTA. Materialization on signup. |
+| T2845 | [Scalability Audit](T2845-scalability-audit.md) | TODO | Audit epic PRs for scale: joins vs big tables, ever-growing shares, retention policy, materialization copies. |
 | T2850 | [Share Game](T2850-share-game.md) | TODO | Share button on game cards via UserPicker. Profile picker for recipient. |
 | T2860 | [My Athlete Filter in New Reel](T2860-my-athlete-reel-filter.md) | TODO | Filter clips by "My Athlete" in reel creation clip selector |
 

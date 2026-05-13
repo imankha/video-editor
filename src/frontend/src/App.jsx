@@ -5,6 +5,7 @@ import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
+import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { QuestPanel } from './components/QuestPanel';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -273,8 +274,15 @@ function App() {
   const isAdmin = useAuthStore(state => state.isAdmin);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
 
+  // T2840: Detect /shared/teammate/:token URL for annotation view
+  const [teammateShareToken, setTeammateShareToken] = useState(() => {
+    const match = window.location.pathname.match(/^\/shared\/teammate\/([a-f0-9-]+)$/i);
+    return match ? match[1] : null;
+  });
+
   // T1780: Detect /shared/:token URL and render overlay player
   const [sharedToken, setSharedToken] = useState(() => {
+    if (window.location.pathname.match(/^\/shared\/teammate\//i)) return null;
     const match = window.location.pathname.match(/^\/shared\/([a-f0-9-]+)$/i);
     return match ? match[1] : null;
   });
@@ -289,6 +297,11 @@ function App() {
 
   const handleCloseShared = useCallback(() => {
     setSharedToken(null);
+    window.history.replaceState({}, '', '/');
+  }, []);
+
+  const handleCloseTeammateShare = useCallback(() => {
+    setTeammateShareToken(null);
     window.history.replaceState({}, '', '/');
   }, []);
 
@@ -501,6 +514,11 @@ function App() {
   // T1740: Public legal pages — accessible without authentication (CalOPPA requirement)
   if (legalPage === 'privacy') return <PrivacyPolicy />;
   if (legalPage === 'terms') return <TermsOfService />;
+
+  // T2840: Shared annotation view — full-page, works without auth
+  if (teammateShareToken) {
+    return <SharedAnnotationView shareToken={teammateShareToken} onClose={handleCloseTeammateShare} />;
+  }
 
   // Block rendering until session is resolved — prevents data fetches from firing
   // before the user identity is established (would fall back to DEFAULT_USER_ID)
