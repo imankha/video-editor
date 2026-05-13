@@ -4,6 +4,89 @@
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2825 (shares table), T2830 (materialization)
 
+## T2830 Implementation Learnings
+
+### What T2830 built (files to reference)
+
+- **`src/backend/app/services/materialization.py`** (NEW): Core service. `materialize_game_share()` copies games + game_videos + filtered raw_clips from sharer to recipient SQLite. `serialize_clip_data()` pre-serializes clips to JSON for `pending_teammate_shares.clip_data`.
+- **`src/backend/app/services/sharing_db.py`**: Added `create_pending_share()`, `get_pending_shares_for_email(email)`, `resolve_pending_share(pending_id, profile_id)`.
+- **`src/backend/app/routers/clips.py`**: Added `POST /api/resolve-pending-shares` endpoint (takes `{pending_ids: [...], profile_id: "..."}`). Also added `_materialize_or_pend()` helper called after email delivery.
+- **`src/backend/app/services/pg.py`**: Added `pending_teammate_shares` DDL with FK CASCADE on `shares(id)`.
+
+### How pending shares work
+
+When `share_with_teammates` sends emails:
+- **Recipient exists with 1 profile**: `materialize_game_share()` runs immediately. `share_games.materialized_at` is stamped.
+- **Recipient exists with >1 profile**: `create_pending_share()` stores pre-serialized `clip_data` JSONB. Recipient must call `POST /api/resolve-pending-shares` with chosen profile_id.
+- **Recipient doesn't exist**: Same as multi-profile -- `create_pending_share()`. Resolves on signup (this task).
+
+### How to resolve pending shares
+
+```python
+POST /api/resolve-pending-shares
+Body: {"pending_ids": [1, 2, 3], "profile_id": "a1b2c3d4"}
+```
+This endpoint calls `materialize_game_share()` with the pre-serialized `clip_data` from the pending share, then stamps `resolved_at` and `resolved_profile_id`.
+
+### Key queries for the backend endpoint
+
+```python
+# Look up a game share by token
+from app.services.sharing_db import get_share_by_token
+share = get_share_by_token(token)  # returns dict with id, share_type, sharer_user_id, etc.
+
+# Join share_games for game context
+# share_games has: share_id, game_id, tag_name, recipient_profile_id, materialized_at
+# Use a JOIN or separate query on share_games WHERE share_id = share['id']
+
+# Get pending shares for a recipient email
+from app.services.sharing_db import get_pending_shares_for_email
+pending = get_pending_shares_for_email(email)  # returns list with clip_data JSONB
+
+# Get sharer's game videos for presigned URLs
+# Open sharer's SQLite (see _open_profile_db in materialization.py)
+# Query game_videos WHERE game_id = ? ORDER BY sequence
+# Use generate_presigned_url_global() from app.storage with R2 key: games/{blake3_hash}.mp4
+```
+
+### Current `/shared/:token` route problem
+
+The existing `SharedVideoOverlay.jsx` component handles ALL `/shared/:token` URLs. It calls `GET /api/shared/{token}` which only LEFT JOINs `share_videos` (not `share_games`). For game shares, it returns 200 with null video fields, then shows "restricted" because the `is_public` field from `share_videos` is null.
+
+**Options for T2840:**
+1. Add a new route `/shared/teammate/:token` (as spec'd) with a separate component
+2. OR modify the existing `/shared/:token` flow to check `share_type` and branch
+
+Option 1 is cleaner -- the share email link format (`_get_share_url()` in `email.py`) would need updating to use `/shared/teammate/{token}` for game shares.
+
+### R2 presigned URL generation for game videos
+
+```python
+from app.storage import generate_presigned_url_global
+# R2 key for game videos: "games/{blake3_hash}.mp4"
+# generate_presigned_url_global takes an r2_key and returns a presigned URL
+# The blake3_hash comes from game_videos.blake3_hash (multi-video) or games.blake3_hash (single-video)
+```
+
+### Auth bypass for testing (dev only)
+
+- Backend accepts `X-User-ID` header in dev/staging (not production)
+- Backend accepts `X-Profile-ID` header (must be 8-char hex, e.g. `a1b2c3d4`)
+- Vite proxy strips custom headers -- hit `localhost:8000` directly for API testing with auth bypass
+- Frontend auth bypass: `useAuthStore.setState({ isAuthenticated: true, email: '...', showAuthModal: false })`
+
+### Share URL format (needs updating)
+
+`_get_share_url()` in `email.py:205` currently generates `/shared/{token}` for ALL share types. T2840 should either:
+- Update this to generate `/shared/teammate/{token}` for game shares (requires passing share_type to the email function), OR
+- Keep `/shared/{token}` and have the frontend detect share_type from the API response and render accordingly.
+
+The `send_teammate_share_email()` function (email.py:279) calls `_get_share_url(share_token)` directly.
+
+### Dev email bypass
+
+`send_teammate_share_email()` in `email.py` currently logs the share URL and returns `True` when `RESEND_API_KEY` is not set (dev mode). The key is commented out in `.env` for local testing. Staging and production have it set as a Fly.io secret.
+
 ## Problem
 
 Non-users who receive a teammate share email need to see the shared annotations before signing up. They should see a playback experience showing the clips with annotation metadata (name, stars, notes), plus a clear CTA to sign up and claim the content.
