@@ -419,13 +419,7 @@ async def list_projects():
             project_id = clip_row['project_id']
             if project_id not in project_clips:
                 project_clips[project_id] = []
-            # Parse tags JSON if present
-            tags = []
-            if clip_row['tags']:
-                try:
-                    tags = json.loads(clip_row['tags']) if isinstance(clip_row['tags'], str) else clip_row['tags']
-                except:
-                    tags = []
+            tags = decode_data(clip_row['tags']) or []
             project_clips[project_id].append(ClipSummary(
                 id=clip_row['clip_id'],
                 name=clip_row['name'],
@@ -570,7 +564,7 @@ async def preview_clips(request: ClipsPreviewRequest):
             duration = max(0, end - start)
             total_duration += duration
 
-            tags = json.loads(clip['tags']) if clip['tags'] else []
+            tags = decode_data(clip['tags']) or []
             clip_name = derive_clip_name(clip['name'], clip['rating'] or 0, tags, clip['notes'] or '') or f"Clip {clip['id']}"
             clips_info.append({
                 'id': clip['id'],
@@ -734,13 +728,7 @@ async def get_project(project_id: int):
             # Resolve filename
             raw_filename = clip['raw_filename'] or ''
             filename = raw_filename or clip['uploaded_filename'] or 'unknown'
-            # Parse tags JSON
-            tags = []
-            if clip['raw_tags']:
-                try:
-                    tags = json.loads(clip['raw_tags'])
-                except json.JSONDecodeError:
-                    tags = []
+            tags = decode_data(clip['raw_tags']) or []
 
             clips.append(WorkingClipResponse(
                 id=clip['id'],
@@ -1162,7 +1150,7 @@ async def check_outdated_clips(project_id: int):
 
             if framed_version < current_version:
                 # Derive a display name for the clip
-                tags = json.loads(row['tags']) if row['tags'] else []
+                tags = decode_data(row['tags']) or []
                 clip_name = derive_clip_name(
                     row['clip_name'],
                     row['rating'] or 3,

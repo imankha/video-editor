@@ -1,4 +1,3 @@
-import json
 import msgpack
 
 
@@ -13,8 +12,6 @@ def decode_data(raw):
         return None
     if isinstance(raw, (dict, list)):
         return raw
-    if isinstance(raw, str):
-        return json.loads(raw) if raw else None
-    if len(raw) == 0:
-        return None
-    return msgpack.unpackb(raw, raw=False)
+    if isinstance(raw, bytes):
+        return msgpack.unpackb(raw, raw=False) if raw else None
+    raise TypeError(f"decode_data expects bytes, got {type(raw).__name__}")

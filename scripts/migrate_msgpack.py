@@ -1,10 +1,18 @@
 """
-T1180: Migrate JSON text columns to MessagePack binary encoding.
+Migrate JSON text columns to MessagePack binary encoding.
 
-Converts existing JSON text data to msgpack bytes in these columns:
+T1180 columns (binary data):
   - working_clips: crop_data, timing_data, segments_data
   - working_videos: highlights_data
   - export_jobs: input_data
+
+T2870 columns (JSON text -> msgpack):
+  - raw_clips: tags, tagged_teammates, default_highlight_regions
+  - pending_uploads: parts_json
+  - final_videos: rating_counts
+  - working_videos: text_overlays
+
+Empty values ([], {}) are normalized to NULL during migration.
 
 Usage:
     cd src/backend && .venv\\Scripts\\python.exe ..\\..\\scripts\\migrate_msgpack.py --env prod
@@ -29,9 +37,15 @@ USER_DATA = PROJECT_ROOT / "user_data"
 AUTH_DB = USER_DATA / "auth.sqlite"
 
 COLUMNS_TO_MIGRATE = [
+    # T1180: binary data columns
     ("working_clips", "id", ["crop_data", "timing_data", "segments_data"]),
     ("working_videos", "id", ["highlights_data"]),
     ("export_jobs", "id", ["input_data"]),
+    # T2870: JSON text columns
+    ("raw_clips", "id", ["tags", "tagged_teammates", "default_highlight_regions"]),
+    ("pending_uploads", "id", ["parts_json"]),
+    ("final_videos", "id", ["rating_counts"]),
+    ("working_videos", "id", ["text_overlays"]),
 ]
 
 
@@ -106,12 +120,19 @@ def migrate_db(db_path, dry_run=False):
                 if is_json_text(value):
                     try:
                         parsed = json.loads(value)
-                        encoded = msgpack.packb(parsed, use_bin_type=True)
-                        if not dry_run:
-                            cursor.execute(
-                                f"UPDATE {table} SET {col} = ? WHERE {pk} = ?",
-                                (encoded, row[pk])
-                            )
+                        if parsed in ([], {}, None):
+                            if not dry_run:
+                                cursor.execute(
+                                    f"UPDATE {table} SET {col} = NULL WHERE {pk} = ?",
+                                    (row[pk],),
+                                )
+                        else:
+                            encoded = msgpack.packb(parsed, use_bin_type=True)
+                            if not dry_run:
+                                cursor.execute(
+                                    f"UPDATE {table} SET {col} = ? WHERE {pk} = ?",
+                                    (encoded, row[pk])
+                                )
                         converted += 1
                     except (json.JSONDecodeError, TypeError):
                         pass

@@ -24,7 +24,7 @@ from typing import Optional
 
 from app.database import get_db_connection
 from app.constants import ExportStatus, ExportPhase
-from app.utils.encoding import encode_data
+from app.utils.encoding import encode_data, decode_data
 from app.websocket import manager, export_progress, make_progress_data
 
 logger = logging.getLogger(__name__)
@@ -287,7 +287,7 @@ def derive_project_name(project_id: int, cursor) -> Optional[str]:
     if not raw_clip:
         return project_name
 
-    tags = json.loads(raw_clip['tags']) if raw_clip['tags'] else []
+    tags = decode_data(raw_clip['tags']) or []
 
     # Import here to avoid circular imports
     from app.queries import derive_clip_name

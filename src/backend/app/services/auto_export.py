@@ -7,6 +7,8 @@ DB to R2 explicitly after every write.
 """
 
 import json
+
+from app.utils.encoding import decode_data
 import logging
 import tempfile
 import time
@@ -253,7 +255,7 @@ def _generate_recap(
                     'id': clip['id'],
                     'name': clip['name'],
                     'rating': clip['rating'],
-                    'tags': json.loads(clip['tags']) if clip['tags'] else [],
+                    'tags': decode_data(clip['tags']) or [],
                     'notes': clip['notes'] or '',
                     'recap_start': round(recap_offset, 3),
                     'recap_end': round(recap_offset + duration, 3),

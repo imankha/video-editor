@@ -18,6 +18,8 @@ import os
 import logging
 import json
 
+from app.utils.encoding import encode_data, decode_data
+
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -853,7 +855,7 @@ def _compute_recap_clips(game_id: int):
                 'id': clip['id'],
                 'name': clip['name'],
                 'rating': clip['rating'],
-                'tags': json.loads(clip['tags']) if clip['tags'] else [],
+                'tags': decode_data(clip['tags']) or [],
                 'notes': clip['notes'] or '',
                 'recap_start': round(offset, 3),
                 'recap_end': round(offset + duration, 3),
@@ -1290,8 +1292,7 @@ def load_annotations_from_db(game_id: int) -> list:
 
         annotations = []
         for row in rows:
-            # Parse tags from JSON string
-            tags = json.loads(row['tags']) if row['tags'] else []
+            tags = decode_data(row['tags']) or []
 
             # Generate default name if empty
             name = row['name']
@@ -1344,7 +1345,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
             annotation_keys.add(clip_key)
 
             tags = ann.get('tags', [])
-            tags_json = json.dumps(tags)
+            tags_encoded = encode_data(tags)
             rating = ann.get('rating', 3)
             name = ann.get('name', '')
 
@@ -1363,7 +1364,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     ann.get('start_time', 0),
                     name,
                     rating,
-                    tags_json,
+                    tags_encoded,
                     ann.get('notes', ''),
                     existing_clips[clip_key]['id']
                 ))
@@ -1375,7 +1376,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                 """, (
                     '',
                     rating,
-                    tags_json,
+                    tags_encoded,
                     name,
                     ann.get('notes', ''),
                     ann.get('start_time', 0),

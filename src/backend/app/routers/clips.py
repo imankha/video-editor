@@ -372,18 +372,24 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                         kf['origin'] = action.data.origin
                     logger.info(f"[Framing Action] Updated keyframe at frame {action.data.frame}")
                 else:
-                    # Add new
+                    # First keyframe on an empty clip becomes the permanent
+                    # start boundary — the frontend's auto-init creates permanent
+                    # boundaries in memory but only persists on user gesture.
+                    origin = action.data.origin or 'user'
+                    if len(crop_keyframes) == 0 and action.data.frame == 0:
+                        origin = 'permanent'
+
                     new_kf = {
                         'frame': action.data.frame,
                         'x': action.data.x or 0,
                         'y': action.data.y or 0,
                         'width': action.data.width or 640,
                         'height': action.data.height or 360,
-                        'origin': action.data.origin or 'user'
+                        'origin': origin
                     }
                     crop_keyframes.append(new_kf)
                     crop_keyframes.sort(key=lambda k: k.get('frame', 0))
-                    logger.info(f"[Framing Action] Added keyframe at frame {action.data.frame}")
+                    logger.info(f"[Framing Action] Added keyframe at frame {action.data.frame} origin={origin}")
 
             elif action.action == "update_crop_keyframe":
                 # Update existing keyframe
