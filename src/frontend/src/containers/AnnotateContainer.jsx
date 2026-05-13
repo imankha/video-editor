@@ -34,6 +34,7 @@ export function AnnotateContainer({
   togglePlay,
   stepForward,
   stepBackward,
+  seekBackward,
   restart,
   seek,
 

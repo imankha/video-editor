@@ -148,6 +148,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     togglePlay,
     stepForward,
     stepBackward,
+    seekBackward,
     restart,
     seek,
     uploadGameVideo, // T80: Unified upload with deduplication
