@@ -5,6 +5,12 @@
 **Depends on:** T2800 (data model -- `my_athlete` column)
 **Supersedes:** T1860 (Reel Creation Teammate Filter -- simplified)
 
+## T2800 Implementation Reference
+
+- **`my_athlete`** is stored as INTEGER (0/1) on `raw_clips`, default 1. In API responses (`RawClipResponse`) it's `boolean | null`. Null means pre-migration clip (treat as true).
+- **Existing list endpoint**: `GET /api/clips/raw?game_id={id}` returns clips with `my_athlete` field. Filter can be done client-side or add a query param to the endpoint.
+- **No `{profile_id}` in URLs**: The task spec says `/api/profiles/{id}/games/{id}/clips` but clip endpoints use `/api/clips/raw?game_id={id}`. All profile-scoped endpoints use middleware context.
+
 ## Problem
 
 When creating a reel (highlight video), users browse clips from their games to select which ones to include. Users tag some clips as "teammate" plays during annotation (my_athlete=false). When building a reel for their own kid, they don't want to comb through teammate clips.

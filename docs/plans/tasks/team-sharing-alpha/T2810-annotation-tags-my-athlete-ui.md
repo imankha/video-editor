@@ -5,6 +5,15 @@
 **Depends on:** T2800 (data model)
 **Supersedes:** T1820 (Teammate Toggle UI)
 
+## T2800 Implementation Reference
+
+- **API endpoints** (all profile-scoped, no `{profile_id}` in URL -- middleware sets active profile):
+  - `GET /api/clips/teammate-tags` -- returns `["Jake", "Player 7", ...]` sorted by frequency (for autocomplete)
+  - `POST /api/clips/raw/save` and `PUT /api/clips/raw/{clip_id}` both accept `tagged_teammates: string[]` and `my_athlete: boolean`
+- **Clip save payload**: `tagged_teammates` and `my_athlete` are optional fields on `RawClipCreate` / `RawClipUpdate`. Omitting them preserves defaults (`tagged_teammates=null`, `my_athlete=true`).
+- **Response model**: `RawClipResponse` returns `tagged_teammates: string[] | null` and `my_athlete: boolean | null`. `my_athlete` is `null` only for pre-migration clips (treat as `true`).
+- **No `{profile_id}` in URLs**: The task spec says `/api/profiles/{id}/teammate-tags` but the actual endpoint is `/api/clips/teammate-tags`. All profile-scoped endpoints use middleware context.
+
 ## Problem
 
 Users need a way to tag teammate names and toggle "my athlete" per clip during annotation. Must be fast and low-friction since users are scrubbing through video.

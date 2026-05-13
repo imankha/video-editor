@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Epic:** [Team Sharing Alpha](EPIC.md)
-**Depends on:** T2830 (materialization backend)
+**Depends on:** T2825 (shares table), T2830 (materialization logic)
 **Based on:** T1850 (Share Game with Team)
 
 ## Problem
@@ -17,11 +17,11 @@ Add a share icon/button to game cards in the home screen game list. Clicking ope
 
 ### Share Modal
 
-Reuses the existing `UserPicker` component for email entry:
-- Email input with autocomplete from prior shares (existing contacts endpoint)
+Reuses the existing `UserPicker` component (`src/frontend/src/components/shared/UserPicker.jsx`) for email entry:
+- Email input with autocomplete from prior shares (existing `GET /api/gallery/contacts` endpoint)
 - "Share" button sends the game
 
-### Backend Flow
+### Backend Endpoint
 
 ```
 POST /api/games/{game_id}/share
@@ -30,40 +30,81 @@ POST /api/games/{game_id}/share
 }
 ```
 
-For each recipient:
-1. Look up user by email
-2. If exists with 1 profile -> create game reference in their profile SQLite
-3. If exists with >1 profile -> pending share with profile picker
-4. If doesn't exist -> pending share, resolves on signup
-5. Send email via Resend with link to the game
+For each recipient email:
 
-### Game Reference
+1. **Create share record**: INSERT into `shares` (base table from T2825) with `share_type = 'game'`, then INSERT into `share_games` with `game_id` and `tag_name = NULL` (game shares aren't tag-filtered). This gives a `share_token` for the email link.
 
-A game reference in the recipient's profile SQLite points to the sharer's R2 video objects:
-- Same `blake3_hash` / `game_videos` entries
-- Same R2 path for video files
-- No R2 duplication
-- Recipient can annotate, frame, export from this game independently
+2. **Resolve recipient**: Look up email in Postgres `users` table
+   - Exists with 1 profile -> materialize immediately
+   - Exists with >1 profile -> `pending_teammate_share` with `tag_name = NULL` (profile picker on next visit)
+   - Doesn't exist -> `pending_teammate_share`, resolves on signup
+
+3. **Materialize game reference**: Reuse T2830's game reference creation logic:
+   - Create `games` row in recipient's profile SQLite (copy metadata from sharer's game)
+   - Create `game_videos` rows (copy `blake3_hash`, sequence, dimensions, fps)
+   - Create `game_storage_refs` row in Postgres (so R2 cleanup respects the reference)
+   - See T2830 "Game Reference in Profile SQLite" section for full column mapping
+
+4. **No annotation copying**: Unlike teammate shares, game-only shares do NOT copy annotations. The recipient gets raw footage to annotate themselves.
+
+5. **Send email**: Via Resend. Link format: `/shared/teammate/{share_token}`. The shared view (T2840) handles both game-only and annotation shares -- for game-only shares, it shows the video without annotation overlays.
+
+### Difference from Teammate Share (T2830)
+
+| | Teammate Share (T2830) | Game Share (T2850) |
+|---|---|---|
+| Trigger | "Share with Tagged Players" in annotation mode | Share button on game card |
+| `share_games.tag_name` | The tag name (e.g., "Jake") | NULL |
+| Annotations copied? | Yes, filtered by tag | No |
+| Overlap merging? | Yes | No (no annotations to merge) |
+| Materialization logic | Game ref + filtered clips | Game ref only |
+
+The game reference creation code (games + game_videos + game_storage_refs) is shared with T2830. Extract it as a reusable helper in T2830; this task calls it.
 
 ### No Cost to Recipient
 
-Game reference is free. Expiry follows the original uploader's storage credits. When the R2 video is deleted (uploader's credits expire), recipient also loses access to raw footage -- but any exported clips/reels survive.
+Same as T2830: game reference points to sharer's R2 objects via `blake3_hash`. No storage credits consumed. Expiry follows the original uploader's credits.
+
+## UI Layout
+
+Game card with share button:
+
+```
++------------------------------------------+
+|  vs Eagles - Nov 15          [Share] [>] |
+|  6 clips | 40:00                         |
++------------------------------------------+
+```
+
+Share modal (reuses UserPicker pattern):
+
+```
++------------------------------------------+
+|  Share Game: vs Eagles - Nov 15          |
+|                                          |
+|  Add people:                             |
+|  [friend@email.com x] [____________]    |
+|                                          |
+|  [Cancel]                       [Share]  |
++------------------------------------------+
+```
 
 ## Test Scope
 
-- Backend unit tests for game share endpoint
-- Backend unit tests for game reference creation
-- Frontend unit tests for share button + modal on game cards
-- E2E: share game, recipient sees game in their account
+- Backend unit tests for `POST /api/games/{game_id}/share` endpoint
+- Backend unit tests for game reference creation in recipient's profile (verify games + game_videos + game_storage_refs rows)
+- Frontend unit tests for share button on game cards + share modal
+- E2E: share game, recipient sees game in their account, can annotate it
 
 ## Files Affected
 
 - `src/frontend/src/modes/home/` -- share button on game cards
-- Reuse `UserPicker` from `src/frontend/src/components/shared/UserPicker.jsx`
-- `src/backend/app/routers/games.py` -- new share endpoint
-- `src/backend/app/database.py` -- game reference creation helper
-- Reuse email infrastructure from T1760
+- New component: `src/frontend/src/components/ShareGameModal.jsx` (thin wrapper around UserPicker + API call)
+- `src/backend/app/routers/games.py` -- new `POST /api/games/{game_id}/share` endpoint
+- `src/backend/app/services/sharing_db.py` -- `create_game_share()` (reuses T2825 base table insert)
+- Reuse game reference helper from T2830's `app/database.py` additions
+- Reuse email infrastructure from `app/services/email.py`
 
 ## Estimate
 
-~150 LOC frontend, ~200 LOC backend, ~100 LOC tests
+~150 LOC frontend, ~100 LOC backend (mostly reusing T2830), ~100 LOC tests

@@ -4,9 +4,21 @@
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2800 (data model), T2810 (annotation UI)
 
+## T2800 Implementation Reference
+
+- **Teammate email endpoints** (no `{profile_id}` in URL -- middleware sets profile):
+  - `GET /api/clips/teammate-emails` -- returns `{ "Jake": [{id, email, created_at}, ...], "Alex": [...] }` grouped by tag name
+  - `PUT /api/clips/teammate-emails` -- accepts `[{tag_name, email}]`, uses INSERT OR IGNORE for dedup
+  - `DELETE /api/clips/teammate-emails/{id}` -- delete single mapping
+- **Tag autocomplete**: `GET /api/clips/teammate-tags` returns distinct tag names sorted by frequency
+- **Clip data**: `tagged_teammates` is a `string[]` on each clip. To get all tags for a game, fetch clips by `game_id` and collect unique values from `tagged_teammates` arrays.
+- **No `{profile_id}` in URLs**: The task spec says `/api/profiles/{id}/...` but actual endpoints use `/api/clips/...` prefix. All profile-scoped endpoints use middleware context.
+
 ## Problem
 
 After annotating clips and tagging teammates, users need a way to share those clips with the tagged players' families. The user maps tag names to email addresses, and those mappings are stored for future reuse.
+
+See [EPIC.md](EPIC.md) for design decisions: free-text tags (no roster), multiple emails per tag name, tag-to-email mappings stored per-profile in `teammate_emails` table (T2800).
 
 ## Solution
 
@@ -20,7 +32,7 @@ Add a button to the annotation mode toolbar/action bar. Only enabled when the cu
 2. Modal opens showing all unique tag names from the current game's annotations
 3. For each tag name:
    - Checkbox (default checked) to include/exclude
-   - Email input field(s) with autocomplete from stored `teammate_emails`
+   - Email input field(s) with autocomplete from stored `teammate_emails` (T2800 API: `GET /api/profiles/{id}/teammate-emails`)
    - "Add email" to support multiple emails per tag
    - Shows count of annotations this tag appears in (e.g., "Jake -- 3 clips")
 4. User fills in emails for tags that don't have stored mappings
@@ -40,7 +52,7 @@ User focuses email field for "Jake"
 
 ### Multiple Emails Per Tag
 
-A tag like "Jake" can have multiple email addresses (e.g., mom and dad). The UI shows each as a chip with an X to remove. "Add another email" link adds a new input row.
+A tag like "Jake" can have multiple email addresses (e.g., mom and dad). The UI shows each as a chip with an X to remove. "Add another email" link adds a new input row. Reuses the chip-style pattern from `UserPicker.jsx`.
 
 ### Share API Request
 
@@ -61,7 +73,7 @@ POST /api/profiles/{profile_id}/share-with-teammates
 }
 ```
 
-Backend (T2830) handles: filtering annotations per tag, materialization, email delivery.
+This is a frontend-only task. The endpoint is implemented in T2830. This task builds the UI and fires the request; T2830 handles filtering, materialization, and email delivery.
 
 ## UI Layout
 
@@ -96,6 +108,7 @@ Backend (T2830) handles: filtering annotations per tag, materialization, email d
 - New component: `src/frontend/src/components/ShareWithTeammatesModal.jsx`
 - `src/frontend/src/modes/annotate/AnnotateMode.jsx` -- add button
 - `src/frontend/src/modes/annotate/hooks/useAnnotate.js` -- helper to collect unique tags from game
+- Reuse chip pattern from `src/frontend/src/components/shared/UserPicker.jsx`
 
 ## Estimate
 

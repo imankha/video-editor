@@ -171,6 +171,22 @@ Epics are groups of related tasks that must be implemented together in sequence.
 
 Epic tasks are **implemented in order** (top to bottom in PLAN.md). Do not start task N+1 until task N is complete. The ordering reflects dependencies between tasks within the epic.
 
+### Task File Self-Containment
+
+Each epic task file **must be self-contained for agent handoff**. An agent should be able to implement the task by reading only the task file (plus referenced central docs like EPIC.md), without needing to read other task files in the epic.
+
+**Rules:**
+
+1. **Reference EPIC.md for design decisions, don't duplicate.** Say `See [EPIC.md](EPIC.md) for design decisions: no inbox, per-player filtering, overlap merging.` Don't copy those decisions into every task file.
+
+2. **Reference sibling tasks for shared code by ID + what to reuse.** When a task reuses logic from a prior task, name the specific function/helper: `Reuse T2830's game reference helper (games + game_videos + game_storage_refs insertion).` Don't copy the implementation details.
+
+3. **Schema/data changes must include full column mappings.** When a task creates or modifies DB tables, include exact columns, types, and where values come from. For cross-profile/cross-DB data copying, specify column-by-column what gets copied, what gets set to a default, and what gets omitted.
+
+4. **Wire dependencies to specific artifacts.** When a task depends on another task's schema, API, or component, name the specific table/endpoint/component: `Depends on T2825's shares + share_games tables` not just `Depends on T2825`.
+
+5. **When tasks overlap, include a comparison table.** If two tasks do similar things (e.g., both materialize games), add a table showing what's shared vs different so the implementing agent doesn't rebuild what already exists.
+
 ### Agent Handoff
 
 Each epic task **must be handed off to its own agent** (via the standard workflow: classify, branch, implement, test). When handing off the next task in an epic:

@@ -1,6 +1,6 @@
 # T2800: Teammate Tag Data Model
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** None (foundation task)
 **Supersedes:** T1810 (Teammate Annotation Model)
