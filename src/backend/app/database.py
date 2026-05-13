@@ -921,6 +921,22 @@ def ensure_database():
             ON teammate_emails(tag_name)
         """)
 
+        # T2820: Track which tags have been shared for each game
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS teammate_shares (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                game_id INTEGER NOT NULL,
+                tag_name TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                UNIQUE(game_id, tag_name),
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_teammate_shares_game
+            ON teammate_shares(game_id)
+        """)
+
         # Initialize settings row if not exists
         cursor.execute("""
             INSERT OR IGNORE INTO user_settings (id, settings_json)

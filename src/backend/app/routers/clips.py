@@ -2038,3 +2038,50 @@ async def delete_teammate_email(mapping_id: int):
         conn.commit()
 
     return {"success": True}
+
+
+# --- T2820: Teammate share tracking endpoints ---
+
+class TeammateShareRecipient(BaseModel):
+    tag_name: str
+    emails: List[str]
+
+
+class ShareWithTeammatesRequest(BaseModel):
+    game_id: int
+    recipients: List[TeammateShareRecipient]
+
+
+@router.get("/teammate-shares/{game_id}")
+async def get_teammate_shares(game_id: int):
+    """Return tag names that have been shared for a game."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT tag_name, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
+            (game_id,)
+        )
+        rows = cursor.fetchall()
+    return [{"tag_name": row["tag_name"], "shared_at": row["created_at"]} for row in rows]
+
+
+@router.post("/share-with-teammates")
+async def share_with_teammates(request: ShareWithTeammatesRequest):
+    """Record teammate shares for a game. T2830 extends with materialization + email."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM games WHERE id = ?", (request.game_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        shared_tags = []
+        for recipient in request.recipients:
+            cursor.execute("""
+                INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, created_at)
+                VALUES (?, ?, datetime('now'))
+            """, (request.game_id, recipient.tag_name))
+            shared_tags.append(recipient.tag_name)
+
+        conn.commit()
+
+    return {"success": True, "shared_tags": shared_tags}

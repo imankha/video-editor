@@ -188,6 +188,9 @@ export function AnnotateContainer({
     return merged;
   }, [serverTeammateTags, clipRegions]);
 
+  // T2820: Shared tag names for the current game (loaded on game load, updated on share gesture)
+  const [sharedTagNames, setSharedTagNames] = useState([]);
+
   // Upload state from Zustand store (persists across page navigation)
   const uploadStore = useUploadStore();
   const activeUpload = uploadStore.activeUpload;
@@ -500,6 +503,12 @@ export function AnnotateContainer({
           pendingSelectSeekTimeRef.current = pendingClipSeekTime;
         }
       }
+
+      // T2820: Fetch shared tags for this game
+      fetch(`${API_BASE}/api/clips/teammate-shares/${gameId}`, { credentials: 'include' })
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setSharedTagNames(data.map(s => s.tag_name)))
+        .catch(() => {});
 
       setEditorMode('annotate');
     } catch (err) {
@@ -1076,6 +1085,10 @@ export function AnnotateContainer({
 
     // T2810: Teammate tag suggestions
     teammateSuggestions,
+
+    // T2820: Shared tag tracking
+    sharedTagNames,
+    setSharedTagNames,
 
     // T251: View progress tracking
     getViewedDuration,

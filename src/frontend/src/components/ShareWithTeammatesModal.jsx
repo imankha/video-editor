@@ -5,8 +5,24 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 
-export function ShareWithTeammatesModal({ tagCounts, gameId, onClose, onShareSuccess }) {
-  const [checkedTags, setCheckedTags] = useState(() => new Set(Object.keys(tagCounts)));
+export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onClose, onSharedTagsChange }) {
+  const sharedSet = useMemo(() => new Set(sharedTagNames), [sharedTagNames]);
+
+  const unsentTags = useMemo(() =>
+    Object.entries(tagCounts)
+      .filter(([tag]) => !sharedSet.has(tag))
+      .sort((a, b) => b[1] - a[1]),
+  [tagCounts, sharedSet]);
+
+  const sentTags = useMemo(() =>
+    Object.entries(tagCounts)
+      .filter(([tag]) => sharedSet.has(tag))
+      .sort((a, b) => b[1] - a[1]),
+  [tagCounts, sharedSet]);
+
+  const [checkedTags, setCheckedTags] = useState(() =>
+    new Set(unsentTags.map(([tag]) => tag))
+  );
   const [tagEmails, setTagEmails] = useState({});
   const [storedMappings, setStoredMappings] = useState({});
   const [isLoading, setIsLoading] = useState(true);
@@ -73,20 +89,20 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose, onShareSuc
   }, []);
 
   const shareableRecipients = useMemo(() => {
-    return Object.keys(tagCounts)
-      .filter(tag => checkedTags.has(tag) && tagEmails[tag]?.length > 0)
-      .map(tag => ({ tag_name: tag, emails: tagEmails[tag] }));
-  }, [tagCounts, checkedTags, tagEmails]);
+    return unsentTags
+      .filter(([tag]) => checkedTags.has(tag) && tagEmails[tag]?.length > 0)
+      .map(([tag]) => ({ tag_name: tag, emails: tagEmails[tag] }));
+  }, [unsentTags, checkedTags, tagEmails]);
 
   const totalClips = useMemo(() => {
     let count = 0;
-    for (const tag of Object.keys(tagCounts)) {
+    for (const [tag, clipCount] of unsentTags) {
       if (checkedTags.has(tag) && tagEmails[tag]?.length > 0) {
-        count += tagCounts[tag];
+        count += clipCount;
       }
     }
     return count;
-  }, [tagCounts, checkedTags, tagEmails]);
+  }, [unsentTags, checkedTags, tagEmails]);
 
   const canSubmit = shareableRecipients.length > 0 && !isSubmitting && !success;
 
@@ -130,28 +146,21 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose, onShareSuc
         }),
       });
 
-      if (shareResp.status === 404) {
-        setSuccess(true);
-        onShareSuccess?.();
-        toast.success(`Sharing queued for ${shareableRecipients.length} player${shareableRecipients.length === 1 ? '' : 's'}`);
-      } else if (!shareResp.ok) {
+      if (!shareResp.ok) {
         const data = await shareResp.json().catch(() => null);
         throw new Error(data?.detail || `Share failed (${shareResp.status})`);
-      } else {
-        setSuccess(true);
-        onShareSuccess?.();
-        toast.success(`Shared with ${shareableRecipients.length} player${shareableRecipients.length === 1 ? '' : 's'}`);
       }
+
+      const data = await shareResp.json();
+      onSharedTagsChange?.([...sharedTagNames, ...data.shared_tags]);
+      setSuccess(true);
+      toast.success(`Shared with ${shareableRecipients.length} teammate${shareableRecipients.length === 1 ? '' : 's'}`);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
-
-  const sortedTags = useMemo(() =>
-    Object.entries(tagCounts).sort((a, b) => b[1] - a[1]),
-  [tagCounts]);
 
   return (
     <div
@@ -183,70 +192,121 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, onClose, onShareSuc
               Loading email mappings...
             </div>
           ) : (
-            sortedTags.map(([tag, clipCount]) => {
-              const isChecked = checkedTags.has(tag);
-              const emails = tagEmails[tag] || [];
-              const storedForTag = (storedMappings[tag] || []).map(m => m.email);
-
-              return (
-                <div
-                  key={tag}
-                  className={`rounded-lg border p-3 transition-colors ${
-                    isChecked
-                      ? 'border-gray-600 bg-gray-750'
-                      : 'border-gray-700/50 bg-gray-800/50 opacity-60'
-                  }`}
-                >
-                  <label className="flex items-center gap-3 cursor-pointer mb-2">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => handleToggleTag(tag)}
-                      className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-gray-800"
-                    />
-                    <span className="text-white font-medium">{tag}</span>
-                    <span className="text-gray-400 text-sm">
-                      ({clipCount} clip{clipCount !== 1 ? 's' : ''})
-                    </span>
-                  </label>
-                  {isChecked && (
-                    <div className="ml-7">
-                      <UserPicker
-                        emails={emails}
-                        onChange={(updated) => handleEmailsChange(tag, updated)}
-                        contacts={storedForTag}
-                        placeholder="Enter email addresses"
-                      />
-                    </div>
+            <>
+              {/* Unsent tags -- actionable */}
+              {unsentTags.length > 0 && !success && (
+                <div className="space-y-3">
+                  {unsentTags.length > 0 && sentTags.length > 0 && (
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide">Not yet shared</h4>
                   )}
+                  {unsentTags.map(([tag, clipCount]) => {
+                    const isChecked = checkedTags.has(tag);
+                    const emails = tagEmails[tag] || [];
+                    const storedForTag = (storedMappings[tag] || []).map(m => m.email);
+
+                    return (
+                      <div
+                        key={tag}
+                        className={`rounded-lg border p-3 transition-colors ${
+                          isChecked
+                            ? 'border-cyan-600/40 bg-gray-750'
+                            : 'border-gray-700/50 bg-gray-800/50 opacity-60'
+                        }`}
+                      >
+                        <label className="flex items-center gap-3 cursor-pointer mb-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleTag(tag)}
+                            className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-gray-800"
+                          />
+                          <span className="text-white font-medium">{tag}</span>
+                          <span className="text-gray-400 text-sm">
+                            ({clipCount} clip{clipCount !== 1 ? 's' : ''})
+                          </span>
+                        </label>
+                        {isChecked && (
+                          <div className="ml-7">
+                            <UserPicker
+                              emails={emails}
+                              onChange={(updated) => handleEmailsChange(tag, updated)}
+                              contacts={storedForTag}
+                              placeholder="Enter email addresses"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })
-          )}
+              )}
 
-          {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
-              <AlertCircle size={14} />
-              {error}
-            </div>
-          )}
+              {/* Success message */}
+              {success && (
+                <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
+                  <Check size={16} className="text-green-400" />
+                  <span className="text-green-400 text-sm font-medium">
+                    Clips shared successfully
+                  </span>
+                </div>
+              )}
 
-          {success && (
-            <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
-              <Check size={16} className="text-green-400" />
-              <span className="text-green-400 text-sm font-medium">
-                Clips shared successfully
-              </span>
-            </div>
+              {/* Already shared tags -- read-only */}
+              {sentTags.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wide">Already shared</h4>
+                  {sentTags.map(([tag, clipCount]) => {
+                    const emails = tagEmails[tag] || [];
+                    return (
+                      <div
+                        key={tag}
+                        className="rounded-lg border border-gray-700/50 bg-gray-800/50 p-3 opacity-60"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Check size={16} className="text-green-500 flex-shrink-0" />
+                          <span className="text-gray-300 font-medium">{tag}</span>
+                          <span className="text-gray-500 text-sm">
+                            ({clipCount} clip{clipCount !== 1 ? 's' : ''})
+                          </span>
+                        </div>
+                        {emails.length > 0 && (
+                          <div className="ml-7 mt-1 flex flex-wrap gap-1">
+                            {emails.map(email => (
+                              <span key={email} className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded">
+                                {email}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* All shared state */}
+              {unsentTags.length === 0 && !success && (
+                <div className="text-center py-4 text-gray-400 text-sm">
+                  All tagged teammates have been shared with
+                </div>
+              )}
+
+              {error && (
+                <div className="flex items-center gap-2 text-red-400 text-sm">
+                  <AlertCircle size={14} />
+                  {error}
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-700 flex justify-end gap-3">
           <Button variant="secondary" onClick={onClose}>
-            {success ? 'Done' : 'Cancel'}
+            {success || unsentTags.length === 0 ? 'Done' : 'Cancel'}
           </Button>
-          {!success && (
+          {unsentTags.length > 0 && !success && (
             <Button
               variant="cyan"
               onClick={handleShare}

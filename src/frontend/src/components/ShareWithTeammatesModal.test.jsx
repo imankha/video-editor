@@ -15,8 +15,10 @@ function mockFetch(responses = {}) {
     if (url.includes('/teammate-emails') && opts?.method === 'PUT') {
       return { ok: true, json: async () => ({}) };
     }
-    if (url.includes('/share-with-teammates')) {
-      return { ok: false, status: 404, json: async () => ({}) };
+    if (url.includes('/share-with-teammates') && opts?.method === 'POST') {
+      const body = JSON.parse(opts.body);
+      const sharedTags = body.recipients.map(r => r.tag_name);
+      return { ok: true, json: async () => ({ success: true, shared_tags: sharedTags }) };
     }
     return { ok: true, json: async () => ({}) };
   });
@@ -26,7 +28,9 @@ describe('ShareWithTeammatesModal', () => {
   const defaultProps = {
     tagCounts: { Jake: 3, 'Player 7': 2, Alex: 1 },
     gameId: 42,
+    sharedTagNames: [],
     onClose: vi.fn(),
+    onSharedTagsChange: vi.fn(),
   };
 
   beforeEach(() => {
@@ -34,7 +38,7 @@ describe('ShareWithTeammatesModal', () => {
     globalThis.fetch = mockFetch();
   });
 
-  it('renders header and all tag rows', async () => {
+  it('renders header and all unsent tag rows', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     expect(screen.getByText('Share With Teammates')).toBeTruthy();
     await waitFor(() => {
@@ -60,7 +64,7 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('all tags are checked by default', async () => {
+  it('unsent tags are checked by default', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => {
       const checkboxes = screen.getAllByRole('checkbox');
@@ -69,12 +73,20 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('unchecking a tag dims it and hides email input', async () => {
-    render(<ShareWithTeammatesModal {...defaultProps} />);
-    await waitFor(() => expect(screen.getByText('Jake')).toBeTruthy());
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[0]);
-    expect(checkboxes[0].checked).toBe(false);
+  it('shows already-shared tags in a separate section', async () => {
+    render(<ShareWithTeammatesModal {...defaultProps} sharedTagNames={['Jake']} />);
+    await waitFor(() => {
+      expect(screen.getByText('Already shared')).toBeTruthy();
+      expect(screen.getByText('Not yet shared')).toBeTruthy();
+    });
+  });
+
+  it('already-shared tags have no checkbox', async () => {
+    render(<ShareWithTeammatesModal {...defaultProps} sharedTagNames={['Jake', 'Player 7', 'Alex']} />);
+    await waitFor(() => {
+      expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+      expect(screen.getByText('All tagged teammates have been shared with')).toBeTruthy();
+    });
   });
 
   it('closes on Escape key', async () => {
@@ -92,7 +104,7 @@ describe('ShareWithTeammatesModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('share button shows clip count for tags with emails', async () => {
+  it('share button shows clip count for checked unsent tags with emails', async () => {
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => {
       const shareBtn = screen.getByRole('button', { name: /share/i });
@@ -100,7 +112,7 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('share button disabled when no tags have emails', async () => {
+  it('share button disabled when no unsent tags have emails', async () => {
     globalThis.fetch = mockFetch({ emails: {} });
     render(<ShareWithTeammatesModal {...defaultProps} />);
     await waitFor(() => {
@@ -109,11 +121,12 @@ describe('ShareWithTeammatesModal', () => {
     });
   });
 
-  it('calls share endpoint on share click', async () => {
-    render(<ShareWithTeammatesModal {...defaultProps} />);
+  it('calls share endpoint and updates sharedTagNames on success', async () => {
+    const onSharedTagsChange = vi.fn();
+    render(<ShareWithTeammatesModal {...defaultProps} onSharedTagsChange={onSharedTagsChange} />);
     await waitFor(() => expect(screen.getByText('mom@test.com')).toBeTruthy());
-    const shareBtn = screen.getByRole('button', { name: /share/i });
-    fireEvent.click(shareBtn);
+
+    fireEvent.click(screen.getByRole('button', { name: /share/i }));
     await waitFor(() => {
       const calls = globalThis.fetch.mock.calls;
       const shareCall = calls.find(c => c[0].includes('/share-with-teammates'));
@@ -121,6 +134,9 @@ describe('ShareWithTeammatesModal', () => {
       const body = JSON.parse(shareCall[1].body);
       expect(body.game_id).toBe(42);
       expect(body.recipients).toEqual([{ tag_name: 'Jake', emails: ['mom@test.com'] }]);
+    });
+    await waitFor(() => {
+      expect(onSharedTagsChange).toHaveBeenCalledWith(['Jake']);
     });
   });
 
@@ -130,7 +146,6 @@ describe('ShareWithTeammatesModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /share/i }));
     await waitFor(() => {
       expect(screen.getByText('Clips shared successfully')).toBeTruthy();
-      expect(screen.getByRole('button', { name: /done/i })).toBeTruthy();
     });
   });
 
@@ -150,6 +165,34 @@ describe('ShareWithTeammatesModal', () => {
       expect(putCall).toBeTruthy();
       const body = JSON.parse(putCall[1].body);
       expect(body).toEqual([{ tag_name: 'Jake', email: 'new@test.com' }]);
+    });
+  });
+
+  it('excludes already-shared tags from share request', async () => {
+    globalThis.fetch = mockFetch({
+      emails: {
+        Jake: [{ id: 1, email: 'mom@test.com', created_at: '2026-01-01' }],
+        'Player 7': [{ id: 2, email: 'dad@test.com', created_at: '2026-01-01' }],
+      },
+    });
+    const onSharedTagsChange = vi.fn();
+    render(
+      <ShareWithTeammatesModal
+        {...defaultProps}
+        sharedTagNames={['Jake']}
+        onSharedTagsChange={onSharedTagsChange}
+      />
+    );
+    await waitFor(() => expect(screen.getByText('dad@test.com')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /share/i }));
+    await waitFor(() => {
+      const calls = globalThis.fetch.mock.calls;
+      const shareCall = calls.find(c => c[0].includes('/share-with-teammates'));
+      const body = JSON.parse(shareCall[1].body);
+      const tagNames = body.recipients.map(r => r.tag_name);
+      expect(tagNames).not.toContain('Jake');
+      expect(tagNames).toContain('Player 7');
     });
   });
 });

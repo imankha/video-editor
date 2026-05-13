@@ -56,7 +56,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T2820: Share with tagged players modal
   const [showShareModal, setShowShareModal] = useState(false);
-  const [hasSharedTeammates, setHasSharedTeammates] = useState(false);
 
   // Get active upload from store (for restoring annotation after navigating back from Games)
   const activeUpload = useUploadStore(state => state.activeUpload);
@@ -223,6 +222,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     playback,
     // T2810: Teammate tag suggestions
     teammateSuggestions,
+    // T2820: Shared tag tracking
+    sharedTagNames,
+    setSharedTagNames,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -265,6 +267,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     return counts;
   }, [clipRegions]);
   const hasTaggedClips = Object.keys(tagCounts).length > 0;
+
+  // Derive unsent tags: tags in current game clips that haven't been shared yet
+  const unsentTags = useMemo(() => {
+    const sharedSet = new Set(sharedTagNames);
+    return Object.keys(tagCounts).filter(tag => !sharedSet.has(tag));
+  }, [tagCounts, sharedTagNames]);
+  const hasUnsentShares = unsentTags.length > 0;
 
   const handleRetryVideo = useCallback(async () => {
     if (!annotateGameId) return;
@@ -611,7 +620,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         boundaryOffsets={multiVideo?.boundaryOffsets}
         // T2820: Share with tagged players
         onShare={() => setShowShareModal(true)}
-        hasSharedTeammates={hasSharedTeammates}
+        hasUnsentShares={hasUnsentShares}
           />
         </div>
       </div>
@@ -620,8 +629,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         <ShareWithTeammatesModal
           tagCounts={tagCounts}
           gameId={annotateGameId}
+          sharedTagNames={sharedTagNames}
           onClose={() => setShowShareModal(false)}
-          onShareSuccess={() => setHasSharedTeammates(true)}
+          onSharedTagsChange={setSharedTagNames}
         />
       )}
     </>
