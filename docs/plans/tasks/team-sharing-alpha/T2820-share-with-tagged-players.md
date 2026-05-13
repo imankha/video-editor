@@ -14,6 +14,14 @@
 - **Clip data**: `tagged_teammates` is a `string[]` on each clip. To get all tags for a game, fetch clips by `game_id` and collect unique values from `tagged_teammates` arrays.
 - **No `{profile_id}` in URLs**: The task spec says `/api/profiles/{id}/...` but actual endpoints use `/api/clips/...` prefix. All profile-scoped endpoints use middleware context.
 
+## T2810 Implementation Reference
+
+- **TeammateTagInput component**: `src/frontend/src/components/shared/TeammateTagInput.jsx` -- chip-style input with autocomplete, free-text names. Reuse for email-per-tag input if needed.
+- **Autocomplete suggestions**: Fetched once from `GET /api/clips/teammate-tags` in `AnnotateContainer.jsx`, merged with locally-used tags via `useMemo`. Passed down as `teammateSuggestions` prop through `AnnotateScreen -> ClipsSidePanel -> ClipDetailsEditor`.
+- **`tagged_teammates` on regions**: Available on `clipRegions` array in `AnnotateContainer`. To get all unique tags for a game: `clipRegions.flatMap(r => r.tagged_teammates || [])` then deduplicate. No separate API call needed for the current session's tags.
+- **`load_annotations_from_db`** (backend `games.py:1278`): Now returns `tagged_teammates` and `my_athlete` fields. `tagged_teammates` is msgpack-decoded. `my_athlete` is boolean (NULL defaults to true). This was a bug fix during T2810 -- the fields were being saved but not returned in the game annotations response.
+- **Persistence chain**: `ClipDetailsEditor.onUpdate -> ClipsSidePanel.onUpdateRegion -> AnnotateContainer.updateClipRegionWithSync`. For existing clips (has `rawClipId`), sends surgical PUT. For new clips, sends full POST. Both paths include `tagged_teammates` and `my_athlete`.
+
 ## Problem
 
 After annotating clips and tagging teammates, users need a way to share those clips with the tagged players' families. The user maps tag names to email addresses, and those mappings are stored for future reuse.

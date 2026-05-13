@@ -1282,6 +1282,7 @@ def load_annotations_from_db(game_id: int) -> list:
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
             SELECT rc.id, rc.start_time, rc.end_time, rc.name, rc.rating, rc.tags, rc.notes, rc.video_sequence,
+                   rc.tagged_teammates, rc.my_athlete,
                    CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL THEN rc.auto_project_id ELSE NULL END AS auto_project_id
             FROM raw_clips rc
             LEFT JOIN projects p ON p.id = rc.auto_project_id
@@ -1299,6 +1300,10 @@ def load_annotations_from_db(game_id: int) -> list:
             if not name:
                 name = generate_clip_name(row['rating'], tags)
 
+            tagged_teammates = decode_data(row['tagged_teammates']) if row['tagged_teammates'] else None
+            my_athlete_val = row['my_athlete']
+            my_athlete = True if my_athlete_val is None else bool(my_athlete_val)
+
             annotations.append({
                 'id': row['id'],  # raw_clip id for frontend sync
                 'raw_clip_id': row['id'],  # Also send as raw_clip_id for importAnnotations
@@ -1310,6 +1315,8 @@ def load_annotations_from_db(game_id: int) -> list:
                 'notes': row['notes'] or '',
                 'video_sequence': row['video_sequence'],  # T82: which video (null = single-video)
                 'auto_project_id': row['auto_project_id'],
+                'tagged_teammates': tagged_teammates,
+                'my_athlete': my_athlete,
             })
 
         return annotations

@@ -3,6 +3,7 @@ import { Trash2, Star, Check, Plus } from 'lucide-react';
 import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
+import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
@@ -73,6 +74,7 @@ export function ClipDetailsEditor({
   videoRef,
   onScrubLock,
   onScrubUnlock,
+  teammateSuggestions = [],
 }) {
   const currentProfile = useCurrentProfile();
   const sport = currentProfile?.sport || 'soccer';
@@ -147,6 +149,15 @@ export function ClipDetailsEditor({
   const handleNotesChange = (e) => {
     const newNotes = e.target.value.slice(0, maxNotesLength);
     onUpdate({ notes: newNotes });
+  };
+
+  const handleTeammatesChange = (newTeammates) => {
+    onUpdate({ tagged_teammates: newTeammates.length > 0 ? newTeammates : null });
+  };
+
+  const handleMyAthleteChange = () => {
+    const current = region.my_athlete ?? true;
+    onUpdate({ my_athlete: !current });
   };
 
   const handleDeleteClick = () => {
@@ -250,6 +261,34 @@ export function ClipDetailsEditor({
             placeholder="Add notes (shown as overlay during playback)"
             rows={3}
           />
+        </div>
+
+        {/* Teammates */}
+        <div>
+          <label className="block text-gray-400 text-xs mb-1">Teammates</label>
+          <TeammateTagInput
+            teammates={region.tagged_teammates || []}
+            onChange={handleTeammatesChange}
+            suggestions={teammateSuggestions}
+          />
+        </div>
+
+        {/* My Athlete Toggle */}
+        <div className="flex items-center gap-2">
+          <label className="text-gray-400 text-xs w-16 shrink-0">My Athlete</label>
+          <button
+            type="button"
+            onClick={handleMyAthleteChange}
+            className={`relative w-9 h-5 rounded-full transition-colors ${
+              (region.my_athlete ?? true) ? 'bg-cyan-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                (region.my_athlete ?? true) ? 'translate-x-4' : 'translate-x-0'
+              }`}
+            />
+          </button>
         </div>
 
         {/* Create Reel Button */}

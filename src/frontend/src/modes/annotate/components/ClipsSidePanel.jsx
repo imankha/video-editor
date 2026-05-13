@@ -37,6 +37,7 @@ export function ClipsSidePanel({
   onUpdateClip,
   onOverlayResume,
   onOverlayClose,
+  teammateSuggestions = [],
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -135,6 +136,7 @@ export function ClipsSidePanel({
               videoRef={videoRef}
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
+              teammateSuggestions={teammateSuggestions}
             />
           </div>
         </>
@@ -264,6 +266,7 @@ export function ClipsSidePanel({
               videoRef={videoRef}
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
+              teammateSuggestions={teammateSuggestions}
             />
           )}
 

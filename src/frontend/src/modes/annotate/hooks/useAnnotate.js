@@ -296,6 +296,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
           notes: (annotation.notes || '').slice(0, MAX_NOTES_LENGTH),
           rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
           videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
+          tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
+          my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
           color,
           createdAt: new Date()
         };
@@ -412,6 +414,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       notes: notes || '',
       rating: rating || DEFAULT_RATING,
       videoSequence: videoSequence,
+      tagged_teammates: null,
+      my_athlete: true,
       color,
       createdAt: new Date()
     };
@@ -501,6 +505,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
 
       if (updates.autoProjectId !== undefined) {
         updated.autoProjectId = updates.autoProjectId;
+      }
+
+      if (updates.tagged_teammates !== undefined) {
+        updated.tagged_teammates = updates.tagged_teammates;
+      }
+      if (updates.my_athlete !== undefined) {
+        updated.my_athlete = updates.my_athlete;
       }
 
       return updated;
@@ -621,6 +632,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       notes: region.notes || '',
       rating: region.rating || 3,
       video_sequence: region.videoSequence || null,
+      tagged_teammates: region.tagged_teammates || null,
+      my_athlete: region.my_athlete ?? true,
     }));
   }, [clipRegions]);
 
@@ -675,6 +688,8 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         rating: Math.max(1, Math.min(5, annotation.rating || DEFAULT_RATING)),
         videoSequence: annotation.videoSequence ?? annotation.video_sequence ?? null,
         autoProjectId: annotation.autoProjectId ?? annotation.auto_project_id ?? null,
+        tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
+        my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
         color,
         createdAt: new Date()
       };
