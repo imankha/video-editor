@@ -53,6 +53,14 @@ The Web Share API replaces the need for individual social media integrations (pr
 8. **T449 - Offline Reel Playback** -- Cache exported reels + persistent storage. Requires SW.
 9. **T1910 - Tutorial Video** -- Record walkthrough video for landing page and in-app onboarding. Independent.
 
+## Key Design Decision: Landing Page -> Web App -> PWA Install
+
+The landing page (reelballers.com) links to the web app (app.reelballers.com), NOT to a PWA install flow. The web app contains the install prompt with benefit text. Shared reel pages also show an install banner.
+
+- **Landing page** sells the product -> CTA links to web app
+- **Web app** sells the install -> persistent install icon in header with benefit text
+- **Share pages** grow the install base -> lighter install banner below the video
+
 ## Shared Context
 
 - Service worker is registered in T441 and extended by T443/T444/T447/T449
@@ -60,3 +68,4 @@ The Web Share API replaces the need for individual social media integrations (pr
 - Two-origin strategy: `reelballers.com` (landing) vs `app.reelballers.com` (PWA)
 - All PWA APIs degrade gracefully -- features are additive, not required for core functionality
 - Landing page CTAs handled by Landing Page Redesign epic (also moved to Alpha)
+- Install prompt is an in-app component, never on the landing page
