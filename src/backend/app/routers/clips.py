@@ -127,6 +127,7 @@ class RawClipResponse(BaseModel):
     my_athlete: Optional[bool] = None
     auto_project_id: Optional[int] = None
     created_at: str
+    shared_by: Optional[str] = None
 
 
 class RawClipCreate(BaseModel):
@@ -591,7 +592,8 @@ async def get_raw_clip(clip_id: int):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, filename, rating, tags, name, notes, start_time, end_time,
-                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete
+                   game_id, auto_project_id, created_at, tagged_teammates, my_athlete,
+                   shared_by
             FROM raw_clips WHERE id = ?
         """, (clip_id,))
         clip = cursor.fetchone()
@@ -622,6 +624,7 @@ async def get_raw_clip(clip_id: int):
             created_at=clip['created_at'],
             tagged_teammates=tagged_teammates,
             my_athlete=my_athlete,
+            shared_by=clip['shared_by'],
         )
 
 
@@ -2257,6 +2260,7 @@ def _materialize_or_pend(
                 game_id=game_id,
                 tag_name=tag_name,
                 share_id=share_record["id"],
+                sharer_email=sharer_email,
             )
             logger.info(
                 f"[share-with-teammates] Materialized for {email} "
@@ -2297,6 +2301,7 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
     import json
     from app.services.sharing_db import get_pending_shares_for_email, resolve_pending_share
     from app.services.materialization import materialize_game_share
+    from app.services.auth_db import get_user_by_id
 
     user_id = get_current_user_id()
     materialized = []
@@ -2324,6 +2329,8 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
             if isinstance(clip_data, str):
                 clip_data = json.loads(clip_data)
 
+            sharer = get_user_by_id(pending["sharer_user_id"])
+            pending_sharer_email = sharer["email"] if sharer else None
             result = materialize_game_share(
                 sharer_user_id=pending["sharer_user_id"],
                 sharer_profile_id=pending["sharer_profile_id"],
@@ -2333,6 +2340,7 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
                 tag_name=pending["tag_name"],
                 share_id=pending["share_id"],
                 clip_data=clip_data,
+                sharer_email=pending_sharer_email,
             )
             resolve_pending_share(pending_id, request.profile_id)
             materialized.append({

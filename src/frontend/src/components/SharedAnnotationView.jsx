@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Loader, AlertCircle } from 'lucide-react';
 import { Button } from './shared/Button';
+import { Logo } from './Logo';
 import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore } from '../stores';
 import { useEditorStore } from '../stores';
@@ -46,25 +47,39 @@ export function SharedAnnotationView({ shareToken, onClose }) {
   // Materialized: find the game and navigate to annotate
   useEffect(() => {
     if (state !== 'materialized' || !data || !isAuthenticated) return;
-    navigateToGame(data.game_blake3, data.sharer_email, onClose);
+    navigateToGame(data.game_blake3, data.sharer_email, data.first_clip_start, onClose);
   }, [state, data, isAuthenticated, onClose]);
 
   // Authenticated + unmaterialized: resolve pending shares, then navigate
   useEffect(() => {
     if (state !== 'ready' || !data || !isAuthenticated) return;
     if (!data.pending_ids || data.pending_ids.length === 0) {
-      navigateToGame(data.game_blake3, data.sharer_email, onClose);
+      navigateToGame(data.game_blake3, data.sharer_email, data.first_clip_start, onClose);
       return;
     }
 
     async function resolve() {
       try {
+        console.log('[SharedAnnotationView] Resolving pending shares:', data.pending_ids);
         const profileResp = await fetch(`${API_BASE}/api/profiles`, { credentials: 'include' });
-        if (!profileResp.ok) return;
-        const profiles = await profileResp.json();
-        const profileId = profiles.find(p => p.is_default)?.id || profiles[0]?.id;
-        if (!profileId) return;
+        if (!profileResp.ok) {
+          console.error('[SharedAnnotationView] /api/profiles failed:', profileResp.status);
+          setState('error');
+          setErrorMessage('Could not load your profile. Please try again.');
+          return;
+        }
+        const profileData = await profileResp.json();
+        const profiles = profileData.profiles || [];
+        console.log('[SharedAnnotationView] Profiles:', profiles.length);
+        const profileId = profiles.find(p => p.isDefault)?.id || profiles[0]?.id;
+        if (!profileId) {
+          console.error('[SharedAnnotationView] No profile found in response');
+          setState('error');
+          setErrorMessage('No profile found. Please try again.');
+          return;
+        }
 
+        console.log('[SharedAnnotationView] Resolving with profile:', profileId);
         const resp = await fetch(`${API_BASE}/api/clips/resolve-pending-shares`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -72,31 +87,50 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           body: JSON.stringify({ pending_ids: data.pending_ids, profile_id: profileId }),
         });
         if (resp.ok) {
+          const result = await resp.json();
+          console.log('[SharedAnnotationView] Resolve result:', result);
+          if (result.errors?.length > 0) {
+            console.error('[SharedAnnotationView] Resolve had errors:', result.errors);
+            setState('error');
+            setErrorMessage('Failed to load shared clips. Please try again.');
+            return;
+          }
+          console.log('[SharedAnnotationView] Fetching games after materialization');
           await useGamesDataStore.getState().fetchGames();
-          navigateToGame(data.game_blake3, data.sharer_email, onClose);
+          const games = useGamesDataStore.getState().games;
+          console.log('[SharedAnnotationView] Games after fetch:', games.length, 'looking for hash:', data.game_blake3);
+          navigateToGame(data.game_blake3, data.sharer_email, data.first_clip_start, onClose);
+        } else {
+          const text = await resp.text();
+          console.error('[SharedAnnotationView] Resolve failed:', resp.status, text);
+          setState('error');
+          setErrorMessage('Failed to load shared clips. Please try again.');
         }
-      } catch {
-        // Fall through to show error
+      } catch (err) {
+        console.error('[SharedAnnotationView] Resolve error:', err);
+        setState('error');
+        setErrorMessage('Something went wrong. Please try again.');
       }
     }
     resolve();
   }, [state, data, isAuthenticated, onClose]);
 
-  if (state === 'loading' || (state === 'materialized' && isAuthenticated)) {
-    return (
-      <Shell>
-        <Loader size={32} className="text-cyan-400 animate-spin" />
-        <p className="text-gray-400">Loading shared clips...</p>
-      </Shell>
-    );
-  }
-
-  if (state === 'error' || !data) {
+  if (state === 'error') {
     return (
       <Shell>
         <AlertCircle size={48} className="text-gray-500" />
         <p className="text-gray-300 text-lg">{errorMessage}</p>
         <Button variant="secondary" onClick={onClose}>Close</Button>
+      </Shell>
+    );
+  }
+
+  // Authenticated: effects handle resolve + navigation — show loading
+  if (isAuthenticated || state === 'loading' || !data) {
+    return (
+      <Shell>
+        <Loader size={32} className="text-cyan-400 animate-spin" />
+        <p className="text-gray-400">Loading shared clips...</p>
       </Shell>
     );
   }
@@ -139,20 +173,24 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 function Shell({ children }) {
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-8">
-      <div className="absolute top-4 left-4">
-        <span className="text-white font-semibold text-sm">Reel Ballers</span>
+      <div className="absolute top-4 left-4 flex items-center gap-2">
+        <Logo size={32} />
+        <span className="text-white font-semibold">Reel Ballers</span>
       </div>
       {children}
     </div>
   );
 }
 
-function navigateToGame(blake3Hash, sharerEmail, onClose) {
+function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
   const games = useGamesDataStore.getState().games;
   const game = blake3Hash ? games.find(g => g.blake3_hash === blake3Hash) : null;
 
   if (sharerEmail) {
     sessionStorage.setItem('shareAttribution', sharerEmail);
+  }
+  if (firstClipStart != null) {
+    sessionStorage.setItem('pendingClipSeekTime', firstClipStart.toString());
   }
 
   if (game) {
@@ -160,7 +198,6 @@ function navigateToGame(blake3Hash, sharerEmail, onClose) {
     useEditorStore.getState().setEditorMode('annotate');
     onClose();
   } else {
-    // Game not found yet -- refresh games and retry once
     useGamesDataStore.getState().fetchGames().then(() => {
       const refreshed = useGamesDataStore.getState().games;
       const found = blake3Hash ? refreshed.find(g => g.blake3_hash === blake3Hash) : null;

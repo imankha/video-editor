@@ -515,14 +515,14 @@ function App() {
   if (legalPage === 'privacy') return <PrivacyPolicy />;
   if (legalPage === 'terms') return <TermsOfService />;
 
-  // T2840: Shared annotation view — full-page, works without auth
-  if (teammateShareToken) {
-    return <SharedAnnotationView shareToken={teammateShareToken} onClose={handleCloseTeammateShare} />;
-  }
-
   // Block rendering until session is resolved — prevents data fetches from firing
   // before the user identity is established (would fall back to DEFAULT_USER_ID)
   if (isCheckingSession) return null;
+
+  // T2840: Shared annotation view — after session check so auth state is known
+  if (teammateShareToken) {
+    return <SharedAnnotationView shareToken={teammateShareToken} onClose={handleCloseTeammateShare} />;
+  }
 
   // T550: Admin panel — rendered regardless of project selection
   if (editorMode === EDITOR_MODES.ADMIN) {

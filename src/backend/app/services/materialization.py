@@ -16,7 +16,7 @@ from app.database import USER_DATA_BASE
 from app.services.auth_db import insert_game_storage_ref, get_game_storage_ref
 from app.services.sharing_db import mark_game_share_materialized
 from app.services.pg import get_pg
-from app.utils.encoding import decode_data
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -223,24 +223,29 @@ def _get_existing_clips(conn: sqlite3.Connection, game_id: int) -> list[dict]:
 
 
 def _insert_clip(
-    conn: sqlite3.Connection, game_id: int, clip: dict
+    conn: sqlite3.Connection, game_id: int, clip: dict,
+    shared_by: str | None = None,
 ) -> int:
     """Insert a raw_clip into recipient's DB. Returns new clip id."""
+    tags = clip.get("tags")
+    if isinstance(tags, list):
+        tags = encode_data(tags) if tags else None
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO raw_clips
            (filename, rating, tags, name, notes, start_time, end_time,
-            game_id, video_sequence, tagged_teammates, my_athlete)
-           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1)""",
+            game_id, video_sequence, tagged_teammates, my_athlete, shared_by)
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)""",
         (
             clip.get("rating", 3),
-            clip.get("tags"),
+            tags,
             clip.get("name"),
             clip.get("notes"),
             clip.get("start_time"),
             clip.get("end_time"),
             game_id,
             clip.get("video_sequence"),
+            shared_by,
         ),
     )
     return cur.lastrowid
@@ -250,6 +255,7 @@ def _materialize_clips(
     recipient_conn: sqlite3.Connection,
     recipient_game_id: int,
     incoming_clips: list[dict],
+    shared_by: str | None = None,
 ) -> dict:
     """Insert clips into recipient's DB, merging overlaps with existing clips."""
     existing = _get_existing_clips(recipient_conn, recipient_game_id)
@@ -283,7 +289,7 @@ def _materialize_clips(
                 break
 
         if not overlap_found:
-            new_id = _insert_clip(recipient_conn, recipient_game_id, clip)
+            new_id = _insert_clip(recipient_conn, recipient_game_id, clip, shared_by=shared_by)
             existing.append({
                 "id": new_id,
                 "start_time": clip.get("start_time"),
@@ -327,6 +333,7 @@ def materialize_game_share(
     tag_name: str,
     share_id: int,
     clip_data: list[dict] | None = None,
+    sharer_email: str | None = None,
 ) -> dict:
     """Materialize a game share into the recipient's profile.
 
@@ -388,7 +395,7 @@ def materialize_game_share(
                 "Cannot create game without sharer's DB (pending share with no sharer DB)"
             )
 
-        result = _materialize_clips(recipient_conn, recipient_game_id, clip_data)
+        result = _materialize_clips(recipient_conn, recipient_game_id, clip_data, shared_by=sharer_email)
         recipient_conn.commit()
 
         # Create storage refs in Postgres

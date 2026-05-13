@@ -1282,7 +1282,7 @@ def load_annotations_from_db(game_id: int) -> list:
         # Query raw_clips as the single source of truth for clip annotations
         cursor.execute("""
             SELECT rc.id, rc.start_time, rc.end_time, rc.name, rc.rating, rc.tags, rc.notes, rc.video_sequence,
-                   rc.tagged_teammates, rc.my_athlete,
+                   rc.tagged_teammates, rc.my_athlete, rc.shared_by,
                    CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL THEN rc.auto_project_id ELSE NULL END AS auto_project_id
             FROM raw_clips rc
             LEFT JOIN projects p ON p.id = rc.auto_project_id
@@ -1317,6 +1317,7 @@ def load_annotations_from_db(game_id: int) -> list:
                 'auto_project_id': row['auto_project_id'],
                 'tagged_teammates': tagged_teammates,
                 'my_athlete': my_athlete,
+                'shared_by': row['shared_by'],
             })
 
         return annotations

@@ -253,10 +253,11 @@ async def get_shared_teammate(share_token: str, request: Request):
     sharer = get_user_by_id(share["sharer_user_id"])
     sharer_email = sharer["email"] if sharer else "Unknown"
 
-    # Get game name and blake3_hash from sharer's SQLite
+    # Get game metadata from sharer's SQLite
     sharer_conn = _open_profile_db(share["sharer_user_id"], share["sharer_profile_id"])
     game_name = "Shared Game"
     game_blake3 = None
+    first_clip_start = None
     if sharer_conn:
         try:
             cur = sharer_conn.cursor()
@@ -269,6 +270,10 @@ async def get_shared_teammate(share_token: str, request: Request):
                 hashes = _collect_video_hashes(sharer_conn, share["game_id"])
                 if hashes:
                     game_blake3 = hashes[0]
+            clips = _filter_clips_for_tag(sharer_conn, share["game_id"], share["tag_name"])
+            if clips:
+                clips.sort(key=lambda c: c.get("start_time") or 0)
+                first_clip_start = clips[0].get("start_time")
         finally:
             sharer_conn.close()
 
@@ -279,12 +284,12 @@ async def get_shared_teammate(share_token: str, request: Request):
             "sharer_email": sharer_email,
             "game_name": game_name,
             "game_blake3": game_blake3,
+            "first_clip_start": first_clip_start,
         }
 
     recipient_user = get_user_by_email(share["recipient_email"])
     recipient_has_account = recipient_user is not None
 
-    # Get pending share IDs for resolution
     pending = get_pending_shares_for_email(share["recipient_email"])
     pending_for_share = [p for p in pending if p["share_id"] == share["id"]]
     pending_ids = [p["id"] for p in pending_for_share]
@@ -295,6 +300,7 @@ async def get_shared_teammate(share_token: str, request: Request):
         "game_name": game_name,
         "tag_name": share["tag_name"],
         "game_blake3": game_blake3,
+        "first_clip_start": first_clip_start,
         "pending_ids": pending_ids,
         "materialized": False,
         "recipient_has_account": recipient_has_account,

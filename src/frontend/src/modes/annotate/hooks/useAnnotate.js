@@ -689,6 +689,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         autoProjectId: annotation.autoProjectId ?? annotation.auto_project_id ?? null,
         tagged_teammates: annotation.tagged_teammates ?? annotation.taggedTeammates ?? null,
         my_athlete: annotation.my_athlete ?? annotation.myAthlete ?? true,
+        shared_by: annotation.shared_by ?? null,
         color,
         createdAt: new Date()
       };

@@ -192,6 +192,13 @@ export function ClipDetailsEditor({
           Clip Details
         </div>
 
+        {region.shared_by && (
+          <div className="flex items-center gap-2 px-2 py-1 rounded bg-purple-900/30 border border-purple-700/40">
+            <span className="text-gray-400 text-xs">Shared by</span>
+            <span className="text-white text-xs font-medium">{region.shared_by}</span>
+          </div>
+        )}
+
         {/* Clip scrub region — same visual timeline used in the Add/Edit overlay.
             onScrubLock/onScrubUnlock suppress auto-deselect during drag so that
             onSeek can preview frames without closing the sidebar. */}

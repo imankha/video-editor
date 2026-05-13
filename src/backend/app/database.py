@@ -1101,6 +1101,9 @@ def ensure_database():
         if 'my_athlete' not in clip_cols:
             cursor.execute("ALTER TABLE raw_clips ADD COLUMN my_athlete INTEGER DEFAULT 1")
             logger.info("[Migration T2800] Added my_athlete to raw_clips")
+        if 'shared_by' not in clip_cols:
+            cursor.execute("ALTER TABLE raw_clips ADD COLUMN shared_by TEXT DEFAULT NULL")
+            logger.info("[Migration T2840] Added shared_by to raw_clips")
 
         # T2870: Migrate JSON TEXT columns to msgpack BLOB
         # Same pattern as T1180 (crop_data, timing_data, etc.) — detect JSON by
