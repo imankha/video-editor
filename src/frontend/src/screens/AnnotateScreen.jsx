@@ -334,13 +334,24 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
 
-  // Handle pending seek time after video loads (from Framing mode navigation)
-  // Use videoRef.current.currentTime directly to avoid infinite loop from seek() triggering re-renders
+  // Handle pending seek time after video loads (from Framing/share navigation)
+  // Wait for loadeddata so the browser can actually seek — seeking before that
+  // either fails silently or triggers a full re-download from byte 0.
   useEffect(() => {
-    if (pendingSeekTime != null && annotateVideoUrl && videoRef.current) {
+    if (pendingSeekTime == null || !annotateVideoUrl || !videoRef.current) return;
+    const video = videoRef.current;
+
+    const doSeek = () => {
       console.log('[AnnotateScreen] Seeking to pending time:', pendingSeekTime);
-      videoRef.current.currentTime = pendingSeekTime;
+      video.currentTime = pendingSeekTime;
       setPendingSeekTime(null);
+    };
+
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      doSeek();
+    } else {
+      video.addEventListener('loadeddata', doSeek, { once: true });
+      return () => video.removeEventListener('loadeddata', doSeek);
     }
   }, [pendingSeekTime, annotateVideoUrl]);
 
