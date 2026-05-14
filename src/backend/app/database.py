@@ -967,11 +967,6 @@ def ensure_database():
         # (Previously: T900 FK cascades, published_at, fv.name backfill,
         #  T1583, T2800/T2840, T2870, T2847 -- all removed)
 
-        try:
-            cursor.execute("ALTER TABLE teammate_shares ADD COLUMN shared_clip_ids TEXT DEFAULT '[]'")
-        except Exception:
-            pass
-
         conn.commit()
 
         _initialized_users.add(user_id)
