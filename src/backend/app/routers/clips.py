@@ -1871,13 +1871,13 @@ async def update_working_clip(
         data_actually_changed = False
         if is_framing_change:
             if update.crop_data is not None:
-                if decode_data(update.crop_data) != decode_data(current_clip['crop_data']):
+                if decode_data(normalize_and_encode(update.crop_data)) != decode_data(current_clip['crop_data']):
                     data_actually_changed = True
             if update.timing_data is not None:
-                if decode_data(update.timing_data) != decode_data(current_clip['timing_data']):
+                if decode_data(normalize_and_encode(update.timing_data)) != decode_data(current_clip['timing_data']):
                     data_actually_changed = True
             if update.segments_data is not None:
-                if decode_data(update.segments_data) != decode_data(current_clip['segments_data']):
+                if decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
                     data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:

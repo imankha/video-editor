@@ -300,11 +300,11 @@ class TestArchiveRestore:
         assert restored_segments == original_segments, \
             f"segments_data mismatch after restore:\n  original: {original_segments}\n  restored: {restored_segments}"
 
-    def test_archive_json_has_objects_not_byte_reprs(self, project_with_framed_clip):
-        """The archive JSON should contain proper objects, not Python byte string reprs."""
+    def test_archive_row_to_dict_preserves_bytes(self, project_with_framed_clip):
+        """_row_to_dict preserves binary columns as raw bytes for msgpack archival."""
         project_id, clip_id = project_with_framed_clip
 
-        from app.services.project_archive import _row_to_dict, _BINARY_COLUMNS
+        from app.services.project_archive import _row_to_dict
         with get_db_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM working_clips WHERE id = ?", (clip_id,))
@@ -312,22 +312,18 @@ class TestArchiveRestore:
 
         row_dict = _row_to_dict(row)
 
-        # crop_data should be a list (decoded from msgpack), not bytes or a string
-        assert isinstance(row_dict["crop_data"], list), \
-            f"_row_to_dict crop_data should be list, got {type(row_dict['crop_data']).__name__}"
+        assert isinstance(row_dict["crop_data"], bytes), \
+            f"_row_to_dict crop_data should be bytes, got {type(row_dict['crop_data']).__name__}"
+        assert isinstance(row_dict["segments_data"], bytes), \
+            f"_row_to_dict segments_data should be bytes, got {type(row_dict['segments_data']).__name__}"
 
-        # segments_data should be a dict
-        assert isinstance(row_dict["segments_data"], dict), \
-            f"_row_to_dict segments_data should be dict, got {type(row_dict['segments_data']).__name__}"
+        crop = decode_data(row_dict["crop_data"])
+        assert isinstance(crop, list)
+        assert crop[0]["frame"] == 0
 
-        # Verify it JSON-serializes cleanly (no default=str needed for binary)
-        archive_json = json.dumps({"clips": [row_dict]})
-        parsed = json.loads(archive_json)
-
-        clip_data = parsed["clips"][0]
-        assert isinstance(clip_data["crop_data"], list)
-        assert clip_data["crop_data"][0]["frame"] == 0
-        assert clip_data["segments_data"]["trimRange"]["start"] == 1.5
+        segments = decode_data(row_dict["segments_data"])
+        assert isinstance(segments, dict)
+        assert segments["trimRange"]["start"] == 1.5
 
     def test_restore_writes_msgpack_bytes(self, project_with_framed_clip):
         """After restore, DB columns should contain msgpack bytes, not JSON strings."""

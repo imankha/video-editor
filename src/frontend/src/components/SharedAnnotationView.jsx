@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Loader, AlertCircle } from 'lucide-react';
+import { Loader, AlertCircle, Play, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { Logo } from './Logo';
+import { GoogleOneTap } from './GoogleOneTap';
 import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore } from '../stores';
 import { useEditorStore } from '../stores';
@@ -136,34 +137,52 @@ export function SharedAnnotationView({ shareToken, onClose }) {
   }
 
   // Not authenticated: show sign-in prompt with share context
+  const clipCount = data.clip_count || data.clip_names?.length || 0;
   return (
     <Shell>
-      <div className="text-center max-w-sm">
-        <p className="text-gray-400 text-sm mb-1">
-          {data.sharer_email} shared clips with you from
-        </p>
-        <p className="text-white text-xl font-semibold mb-1">{data.game_name}</p>
-        {data.tag_name && (
-          <p className="text-cyan-400 text-sm mb-6">Tagged: {data.tag_name}</p>
-        )}
-        <p className="text-gray-300 text-sm mb-4">
-          Sign in to view the clips in your account
-        </p>
-        <div className="flex gap-3 justify-center">
-          {data.recipient_has_account ? (
-            <Button variant="primary" onClick={() => useAuthStore.getState().requireAuth(() => {})}>
-              Sign In
+      <GoogleOneTap />
+      <div className="w-full max-w-md">
+        {/* Card with gradient border */}
+        <div className="rounded-2xl bg-gradient-to-br from-purple-500/20 via-indigo-500/10 to-cyan-500/20 p-[1px]">
+          <div className="rounded-2xl bg-gray-800/90 backdrop-blur-sm p-8">
+            {/* Clip preview area */}
+            <div className="flex items-center justify-center mb-6">
+              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
+                <Play size={36} className="text-white ml-1" fill="white" fillOpacity={0.9} />
+              </div>
+            </div>
+
+            {/* Game title */}
+            <h1 className="text-white text-2xl font-bold text-center mb-1">
+              {data.game_name}
+            </h1>
+            <p className="text-gray-400 text-sm text-center mb-5">
+              {clipCount} {clipCount === 1 ? 'clip' : 'clips'} from {data.sharer_email}
+            </p>
+
+            {/* Clip list */}
+            {data.clip_names?.length > 0 && (
+              <div className="space-y-2 mb-6">
+                {data.clip_names.map((name, i) => (
+                  <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-700/50">
+                    <Film size={16} className="text-purple-400 shrink-0" />
+                    <span className="text-gray-200 text-sm truncate">{name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* CTA */}
+            <Button
+              variant="primary"
+              size="lg"
+              fullWidth
+              icon={Play}
+              onClick={() => useAuthStore.getState().requireAuth(() => {})}
+            >
+              Sign in to watch
             </Button>
-          ) : (
-            <>
-              <Button variant="primary" onClick={() => useAuthStore.getState().requireAuth(() => {})}>
-                Sign Up
-              </Button>
-              <Button variant="secondary" onClick={() => useAuthStore.getState().requireAuth(() => {})}>
-                Sign In
-              </Button>
-            </>
-          )}
+          </div>
         </div>
       </div>
     </Shell>
@@ -172,7 +191,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-8">
+    <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
       <div className="absolute top-4 left-4 flex items-center gap-2">
         <Logo size={32} />
         <span className="text-white font-semibold">Reel Ballers</span>

@@ -553,15 +553,18 @@ def ensure_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 filename TEXT NOT NULL,
                 rating INTEGER NOT NULL,
-                tags TEXT,
+                tags BLOB,
                 name TEXT,
                 notes TEXT,
                 start_time REAL,
                 end_time REAL,
                 game_id INTEGER,
                 auto_project_id INTEGER,
-                default_highlight_regions TEXT,
+                default_highlight_regions BLOB,
                 video_sequence INTEGER,
+                tagged_teammates BLOB DEFAULT NULL,
+                my_athlete INTEGER DEFAULT 1,
+                shared_by TEXT DEFAULT NULL,
                 boundaries_version INTEGER DEFAULT 1,
                 boundaries_updated_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -620,7 +623,7 @@ def ensure_database():
                 filename TEXT NOT NULL,
                 version INTEGER NOT NULL DEFAULT 1,
                 highlights_data BLOB,
-                text_overlays TEXT,
+                text_overlays BLOB,
                 duration REAL,
                 effect_type TEXT DEFAULT 'original',
                 overlay_version INTEGER DEFAULT 0,
@@ -956,233 +959,15 @@ def ensure_database():
             VALUES (1, '{}')
         """)
 
-        # T900: Add missing FK CASCADE/SET NULL constraints
-        # SQLite doesn't support ALTER TABLE to modify FKs, so we recreate tables.
-        # foreign_keys must be OFF during table replacement to avoid issues.
-        conn.execute("PRAGMA foreign_keys=OFF")
+        # --- All migrations removed from runtime (2026-05-14) ---
+        # Migrations live in scripts/migrations/ and are run manually.
+        # See: scripts/migrations/README.md
 
-        # --- working_clips: add CASCADE on project_id and raw_clip_id ---
-        row = cursor.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_clips'"
-        ).fetchone()
-        if row and 'ON DELETE CASCADE' not in row[0]:
-            logger.info("[Migration T900] Adding FK cascades to working_clips")
-            cursor.execute("""
-                CREATE TABLE _working_clips_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_id INTEGER NOT NULL,
-                    raw_clip_id INTEGER,
-                    uploaded_filename TEXT,
-                    exported_at TEXT DEFAULT NULL,
-                    sort_order INTEGER DEFAULT 0,
-                    version INTEGER NOT NULL DEFAULT 1,
-                    crop_data BLOB,
-                    timing_data BLOB,
-                    segments_data BLOB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    raw_clip_version INTEGER,
-                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-                    FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
-                )
-            """)
-            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_clips)").fetchall()]
-            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_clips_new)").fetchall()}
-            common = [c for c in old_cols if c in new_cols]
-            cols_str = ', '.join(common)
-            cursor.execute(f"INSERT INTO _working_clips_new ({cols_str}) SELECT {cols_str} FROM working_clips")
-            cursor.execute("DROP TABLE working_clips")
-            cursor.execute("ALTER TABLE _working_clips_new RENAME TO working_clips")
-            # Recreate indexes
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_version
-                ON working_clips(project_id, version DESC)
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_raw_clip_version
-                ON working_clips(project_id, raw_clip_id, version DESC)
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_clips_project_upload_version
-                ON working_clips(project_id, uploaded_filename, version DESC)
-            """)
-            logger.info("[Migration T900] working_clips FK cascades added")
-
-        # --- working_videos: add CASCADE on project_id ---
-        row = cursor.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='working_videos'"
-        ).fetchone()
-        if row and 'ON DELETE CASCADE' not in row[0]:
-            logger.info("[Migration T900] Adding FK cascade to working_videos")
-            cursor.execute("""
-                CREATE TABLE _working_videos_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    project_id INTEGER NOT NULL,
-                    filename TEXT NOT NULL,
-                    version INTEGER NOT NULL DEFAULT 1,
-                    highlights_data BLOB,
-                    text_overlays TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    duration REAL,
-                    effect_type TEXT DEFAULT 'original',
-                    overlay_version INTEGER DEFAULT 0,
-                    highlight_color TEXT DEFAULT NULL,
-                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-                )
-            """)
-            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(working_videos)").fetchall()]
-            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_working_videos_new)").fetchall()}
-            common = [c for c in old_cols if c in new_cols]
-            cols_str = ', '.join(common)
-            cursor.execute(f"INSERT INTO _working_videos_new ({cols_str}) SELECT {cols_str} FROM working_videos")
-            cursor.execute("DROP TABLE working_videos")
-            cursor.execute("ALTER TABLE _working_videos_new RENAME TO working_videos")
-            # Recreate index
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_working_videos_project_version
-                ON working_videos(project_id, version DESC)
-            """)
-            logger.info("[Migration T900] working_videos FK cascade added")
-
-        # --- projects: add SET NULL on working_video_id and final_video_id ---
-        row = cursor.execute(
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'"
-        ).fetchone()
-        if row and 'ON DELETE SET NULL' not in row[0]:
-            logger.info("[Migration T900] Adding FK SET NULL to projects")
-            cursor.execute("""
-                CREATE TABLE _projects_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    aspect_ratio TEXT NOT NULL,
-                    working_video_id INTEGER,
-                    final_video_id INTEGER,
-                    is_auto_created INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_opened_at TIMESTAMP,
-                    current_mode TEXT DEFAULT 'framing',
-                    restored_at TIMESTAMP DEFAULT NULL,
-                    FOREIGN KEY (working_video_id) REFERENCES working_videos(id) ON DELETE SET NULL,
-                    FOREIGN KEY (final_video_id) REFERENCES final_videos(id) ON DELETE SET NULL
-                )
-            """)
-            old_cols = [c['name'] for c in cursor.execute("PRAGMA table_info(projects)").fetchall()]
-            new_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(_projects_new)").fetchall()}
-            common = [c for c in old_cols if c in new_cols]
-            cols_str = ', '.join(common)
-            cursor.execute(f"INSERT INTO _projects_new ({cols_str}) SELECT {cols_str} FROM projects")
-            cursor.execute("DROP TABLE projects")
-            cursor.execute("ALTER TABLE _projects_new RENAME TO projects")
-            logger.info("[Migration T900] projects FK SET NULL added")
-
-        conn.execute("PRAGMA foreign_keys=ON")
-
-        # Add published_at column to final_videos (for "Move To My Reels" feature)
-        existing_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(final_videos)").fetchall()}
-        if 'published_at' not in existing_cols:
-            cursor.execute("ALTER TABLE final_videos ADD COLUMN published_at TIMESTAMP")
-            # Back-fill: existing final_videos were auto-published, so mark them as published
-            cursor.execute("UPDATE final_videos SET published_at = created_at WHERE published_at IS NULL")
-            logger.info("[Migration] Added published_at to final_videos, back-filled existing rows")
-
-        # Backfill fv.name for rows that lack it (single source of truth for display name)
-        cursor.execute("""
-            UPDATE final_videos SET name = (
-                SELECT COALESCE(p.name, 'Video ' || final_videos.id)
-                FROM projects p WHERE p.id = final_videos.project_id
-            )
-            WHERE name IS NULL AND project_id IS NOT NULL
-        """)
-        cursor.execute("""
-            UPDATE final_videos SET name = 'Video ' || id
-            WHERE name IS NULL AND project_id IS NULL
-        """)
-
-        # T1583: auto-export pipeline columns
-        game_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(games)").fetchall()}
-        if 'auto_export_status' not in game_cols:
-            cursor.execute("ALTER TABLE games ADD COLUMN auto_export_status TEXT")
-            logger.info("[Migration T1583] Added auto_export_status to games")
-        if 'recap_video_url' not in game_cols:
-            cursor.execute("ALTER TABLE games ADD COLUMN recap_video_url TEXT")
-            logger.info("[Migration T1583] Added recap_video_url to games")
-
-        # T2800: Teammate tagging columns on raw_clips
-        clip_cols = {c['name'] for c in cursor.execute("PRAGMA table_info(raw_clips)").fetchall()}
-        if 'tagged_teammates' not in clip_cols:
-            cursor.execute("ALTER TABLE raw_clips ADD COLUMN tagged_teammates TEXT DEFAULT NULL")
-            logger.info("[Migration T2800] Added tagged_teammates to raw_clips")
-        if 'my_athlete' not in clip_cols:
-            cursor.execute("ALTER TABLE raw_clips ADD COLUMN my_athlete INTEGER DEFAULT 1")
-            logger.info("[Migration T2800] Added my_athlete to raw_clips")
-        if 'shared_by' not in clip_cols:
-            cursor.execute("ALTER TABLE raw_clips ADD COLUMN shared_by TEXT DEFAULT NULL")
-            logger.info("[Migration T2840] Added shared_by to raw_clips")
-
-        # T2870: Migrate JSON TEXT columns to msgpack BLOB
-        # Same pattern as T1180 (crop_data, timing_data, etc.) — detect JSON by
-        # first byte (0x5b='[', 0x7b='{') and re-encode with msgpack in-place.
-        import json as _json
-        from .utils.encoding import encode_data as _encode
-
-        _json_columns = [
-            ("raw_clips", "id", ["tags", "tagged_teammates", "default_highlight_regions"]),
-            ("pending_uploads", "id", ["parts_json"]),
-            ("final_videos", "id", ["rating_counts"]),
-            ("working_videos", "id", ["text_overlays"]),
-        ]
-
-        for _tbl, _pk, _cols in _json_columns:
-            for _col in _cols:
-                _col_exists = any(
-                    c['name'] == _col
-                    for c in cursor.execute(f"PRAGMA table_info({_tbl})").fetchall()
-                )
-                if not _col_exists:
-                    continue
-                _rows = cursor.execute(
-                    f"SELECT {_pk}, {_col} FROM {_tbl} WHERE {_col} IS NOT NULL"
-                ).fetchall()
-                _converted = 0
-                for _row in _rows:
-                    _val = _row[_col]
-                    if isinstance(_val, str) or (isinstance(_val, bytes) and len(_val) > 0 and _val[0:1] in (b'[', b'{')):
-                        try:
-                            _parsed = _json.loads(_val)
-                            if _parsed in ([], {}, None):
-                                cursor.execute(
-                                    f"UPDATE {_tbl} SET {_col} = NULL WHERE {_pk} = ?",
-                                    (_row[_pk],),
-                                )
-                            else:
-                                cursor.execute(
-                                    f"UPDATE {_tbl} SET {_col} = ? WHERE {_pk} = ?",
-                                    (_encode(_parsed), _row[_pk]),
-                                )
-                            _converted += 1
-                        except (_json.JSONDecodeError, TypeError):
-                            pass
-                if _converted > 0:
-                    logger.info(f"[Migration T2870] {_tbl}.{_col}: {_converted} rows converted from JSON to msgpack")
-
-        # T2847: Backfill clip_teammates junction table
-        from .utils.encoding import decode_data as _decode
-        cursor.execute("SELECT COUNT(*) as cnt FROM clip_teammates")
-        if cursor.fetchone()["cnt"] == 0:
-            cursor.execute("SELECT id, tagged_teammates FROM raw_clips WHERE tagged_teammates IS NOT NULL")
-            _backfilled = 0
-            for row in cursor.fetchall():
-                teammates = _decode(row["tagged_teammates"])
-                if teammates:
-                    for tag in teammates:
-                        cursor.execute(
-                            "INSERT OR IGNORE INTO clip_teammates (clip_id, tag_name) VALUES (?, ?)",
-                            (row["id"], tag),
-                        )
-                        _backfilled += 1
-            if _backfilled > 0:
-                logger.info(f"[Migration T2847] Backfilled {_backfilled} clip_teammates rows from raw_clips.tagged_teammates")
+        # (Previously: T900 FK cascades, published_at, fv.name backfill,
+        #  T1583, T2800/T2840, T2870, T2847 -- all removed)
 
         conn.commit()
+
         _initialized_users.add(user_id)
         logger.debug(f"Database verified/initialized for user: {user_id}")
 

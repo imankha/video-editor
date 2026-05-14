@@ -100,7 +100,7 @@ def find_available_test_data() -> Optional[Dict]:
                 conn.close()
 
                 # Parse the data
-                highlights = json.loads(row['default_highlight_regions'])
+                highlights = decode_data(row['default_highlight_regions'])
                 crop_data = decode_data(row['crop_data']) if row['crop_data'] else []
                 segments_data = decode_data(row['segments_data']) if row['segments_data'] else {}
 

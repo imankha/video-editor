@@ -440,7 +440,12 @@ export function AnnotateContainer({
 
       // Set annotate state with the game's video
       setAnnotateVideoFile(null);
-      setAnnotateVideoUrl(videoUrl);
+      // Append #t= media fragment so the browser issues a byte-range seek on load
+      // instead of downloading linearly from byte 0 (which for a 3GB file at 1835s = ~1GB download)
+      const seekHintUrl = pendingClipSeekTime != null
+        ? `${videoUrl}#t=${pendingClipSeekTime}`
+        : videoUrl;
+      setAnnotateVideoUrl(seekHintUrl);
       setAnnotateVideoMetadata(videoMetadata);
       annotateGameIdRef.current = gameId;
       setAnnotateGameId(gameId);

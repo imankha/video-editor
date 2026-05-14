@@ -48,7 +48,7 @@ def test_project_with_clip():
                 project_id, uploaded_filename, version,
                 crop_data, segments_data
             )
-            VALUES (?, 'test_clip.mp4', 1, '[]', '{}')
+            VALUES (?, 'test_clip.mp4', 1, NULL, NULL)
         """, (project_id,))
         clip_id = cursor.lastrowid
 

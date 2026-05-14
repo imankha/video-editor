@@ -1408,7 +1408,6 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
         JOIN raw_clips rc ON wc.raw_clip_id = rc.id
         WHERE wc.project_id = ?
           AND rc.default_highlight_regions IS NOT NULL
-          AND rc.default_highlight_regions != '[]'
     """, (project_id,))
 
     working_clips = cursor.fetchall()

@@ -3,8 +3,10 @@
 
 import sys
 import sqlite3
-import json
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from app.utils.encoding import decode_data
 
 # Map game names/keywords to folder names
 FOLDER_MAP = {
@@ -61,7 +63,7 @@ def export_game_to_tsv(cursor, game_id, game_name, output_path):
         end_time = clip['end_time'] or (start_time + 15)
         duration = end_time - start_time
 
-        tags_list = json.loads(clip['tags']) if clip['tags'] else []
+        tags_list = decode_data(clip['tags']) or []
         tags_str = ','.join(tags_list)
 
         line = "\t".join([

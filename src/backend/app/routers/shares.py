@@ -258,6 +258,7 @@ async def get_shared_teammate(share_token: str, request: Request):
     game_name = "Shared Game"
     game_blake3 = None
     first_clip_start = None
+    clip_names = []
     if sharer_conn:
         try:
             cur = sharer_conn.cursor()
@@ -274,6 +275,7 @@ async def get_shared_teammate(share_token: str, request: Request):
             if clips:
                 clips.sort(key=lambda c: c.get("start_time") or 0)
                 first_clip_start = clips[0].get("start_time")
+                clip_names = [c.get("name") or "Untitled Clip" for c in clips]
         finally:
             sharer_conn.close()
 
@@ -285,6 +287,8 @@ async def get_shared_teammate(share_token: str, request: Request):
             "game_name": game_name,
             "game_blake3": game_blake3,
             "first_clip_start": first_clip_start,
+            "clip_count": len(clip_names),
+            "clip_names": clip_names,
         }
 
     recipient_user = get_user_by_email(share["recipient_email"])
@@ -298,12 +302,13 @@ async def get_shared_teammate(share_token: str, request: Request):
         "share_token": share_token,
         "sharer_email": sharer_email,
         "game_name": game_name,
-        "tag_name": share["tag_name"],
         "game_blake3": game_blake3,
         "first_clip_start": first_clip_start,
         "pending_ids": pending_ids,
         "materialized": False,
         "recipient_has_account": recipient_has_account,
+        "clip_count": len(clip_names),
+        "clip_names": clip_names,
     }
 
 

@@ -19,6 +19,7 @@ sys.path.insert(0, '.')
 from app.database import get_db_connection
 from app.routers.clips import extract_all_pending_clips
 from app.routers.games import generate_clip_name
+from app.utils.encoding import encode_data
 
 def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
     """Create pending raw_clips from annotations."""
@@ -59,7 +60,7 @@ def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
             if name == default_name:
                 name = ''
 
-            tags_json = json.dumps(tags)
+            tags_encoded = encode_data(tags) if tags else None
 
             if end_time in existing:
                 # Update existing
@@ -67,7 +68,7 @@ def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
                     UPDATE raw_clips
                     SET start_time = ?, name = ?, rating = ?, tags = ?, notes = ?
                     WHERE id = ?
-                """, (start_time, name, rating, tags_json, notes, existing[end_time]))
+                """, (start_time, name, rating, tags_encoded, notes, existing[end_time]))
                 results['updated'] += 1
                 print(f"  Updated clip at {end_time:.2f}s (rating={rating})")
             else:
@@ -75,7 +76,7 @@ def sync_annotations_to_db(game_id: int, annotations: list) -> dict:
                 cursor.execute("""
                     INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, ('', rating, tags_json, name, notes, start_time, end_time, game_id))
+                """, ('', rating, tags_encoded, name, notes, start_time, end_time, game_id))
                 results['created'] += 1
                 print(f"  Created pending clip at {end_time:.2f}s (rating={rating})")
 

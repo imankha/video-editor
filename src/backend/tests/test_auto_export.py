@@ -11,6 +11,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, MagicMock, call
 
+from app.utils.encoding import encode_data
+
 # Module path prefix for patching
 M = "app.services.auto_export"
 
@@ -73,7 +75,7 @@ def isolated_profile_db(tmp_path):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             filename TEXT NOT NULL,
             rating INTEGER NOT NULL,
-            tags TEXT,
+            tags BLOB,
             name TEXT,
             notes TEXT,
             start_time REAL,
@@ -482,7 +484,7 @@ class TestGenerateRecap:
     def _make_clips(self, video_hash="abc123"):
         return [
             {"id": 1, "video_hash": video_hash, "start_time": 0.0, "end_time": 5.0,
-             "name": "Goal", "rating": 5, "tags": '["soccer"]', "notes": "Great shot"},
+             "name": "Goal", "rating": 5, "tags": encode_data(["soccer"]), "notes": "Great shot"},
             {"id": 2, "video_hash": video_hash, "start_time": 10.0, "end_time": 15.0,
              "name": "Save", "rating": 4, "tags": None, "notes": None},
         ]
@@ -589,7 +591,7 @@ class TestGenerateRecap:
 
         clips = [
             {"id": 10, "video_hash": "abc", "start_time": 0.0, "end_time": 5.0,
-             "name": "Goal", "rating": 5, "tags": '["header","set-piece"]', "notes": "Corner kick"},
+             "name": "Goal", "rating": 5, "tags": encode_data(["header", "set-piece"]), "notes": "Corner kick"},
         ]
         _generate_recap(USER_ID, PROFILE_ID, 1, clips)
 

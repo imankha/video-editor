@@ -499,7 +499,7 @@ export function AnnotateModeView({
             <div className="space-y-2">
               <div className="flex gap-2">
                 <button
-                  onClick={() => playback?.enterPlaybackMode(annotateSelectedRegionId)}
+                  onClick={() => playback?.enterPlaybackMode()}
                   disabled={!hasAnnotateClips}
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
                     !hasAnnotateClips
