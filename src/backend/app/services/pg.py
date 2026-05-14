@@ -118,7 +118,11 @@ CREATE TABLE IF NOT EXISTS share_games (
     game_id INTEGER NOT NULL,
     tag_name TEXT NOT NULL,
     recipient_profile_id TEXT,
-    materialized_at TIMESTAMPTZ
+    materialized_at TIMESTAMPTZ,
+    game_name TEXT,
+    game_blake3 TEXT,
+    first_clip_start REAL,
+    clip_names JSONB
 );
 CREATE INDEX IF NOT EXISTS idx_share_games_game ON share_games(game_id);
 CREATE INDEX IF NOT EXISTS idx_share_games_recipient_profile ON share_games(recipient_profile_id);
@@ -199,6 +203,21 @@ def init_pg_schema():
         cur = conn.cursor()
         cur.execute(_SCHEMA_DDL)
         cur.execute(_SEED_SQL)
+
+        # Add share metadata columns to share_games (pre-launch, no real data to preserve)
+        for col, col_type in [
+            ("game_name", "TEXT"),
+            ("game_blake3", "TEXT"),
+            ("first_clip_start", "REAL"),
+            ("clip_names", "JSONB"),
+        ]:
+            cur.execute(f"""
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'share_games' AND column_name = '{col}'
+            """)
+            if not cur.fetchone():
+                cur.execute(f"ALTER TABLE share_games ADD COLUMN {col} {col_type}")
+                logger.info(f"[PG] Added share_games.{col} column")
 
         # T2847: Migrate clip_data JSONB → BYTEA (pre-launch, no real data to preserve)
         cur.execute("""

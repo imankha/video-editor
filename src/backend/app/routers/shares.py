@@ -240,8 +240,6 @@ async def list_video_shares(video_id: int):
 
 @shared_router.get("/teammate/{share_token}")
 async def get_shared_teammate(share_token: str, request: Request):
-    from ..services.materialization import _filter_clips_for_tag, _open_profile_db, _collect_video_hashes
-
     share = get_game_share_by_token(share_token)
     if not share:
         raise HTTPException(404, "Share not found")
@@ -253,35 +251,10 @@ async def get_shared_teammate(share_token: str, request: Request):
     sharer = get_user_by_id(share["sharer_user_id"])
     sharer_email = sharer["email"] if sharer else "Unknown"
 
-    # Get game metadata from sharer's SQLite
-    sharer_conn = _open_profile_db(share["sharer_user_id"], share["sharer_profile_id"])
-    game_name = "Shared Game"
-    game_blake3 = None
-    first_clip_start = None
-    clip_names = []
-    if sharer_conn:
-        try:
-            cur = sharer_conn.cursor()
-            cur.execute("SELECT name, blake3_hash FROM games WHERE id = ?", (share["game_id"],))
-            game_row = cur.fetchone()
-            if game_row:
-                game_name = game_row["name"]
-                game_blake3 = game_row["blake3_hash"]
-            if not game_blake3:
-                hashes = _collect_video_hashes(sharer_conn, share["game_id"])
-                if hashes:
-                    game_blake3 = hashes[0]
-            clips = _filter_clips_for_tag(sharer_conn, share["game_id"], share["tag_name"])
-            logger.info(f"[ShareTeammate] tag_name={share['tag_name']} game_id={share['game_id']} clips_found={len(clips)}")
-            if clips:
-                clips.sort(key=lambda c: c.get("start_time") or 0)
-                first_clip_start = clips[0].get("start_time")
-                clip_names = [c.get("name") or "Untitled Clip" for c in clips]
-                logger.info(f"[ShareTeammate] first_clip_start={first_clip_start} clip_names={clip_names}")
-            else:
-                logger.warning(f"[ShareTeammate] No clips found for tag_name={share['tag_name']} in game_id={share['game_id']}")
-        finally:
-            sharer_conn.close()
+    game_name = share["game_name"] or "Shared Game"
+    game_blake3 = share["game_blake3"]
+    first_clip_start = share["first_clip_start"]
+    clip_names = share["clip_names"] or []
 
     if share["materialized_at"]:
         return {

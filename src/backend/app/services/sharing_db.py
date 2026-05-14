@@ -4,6 +4,7 @@ Sharing database -- Fly Postgres for cross-user share token lookups.
 Uses the same Postgres instance as auth_db.py (shared pool from pg.py).
 """
 
+import json
 import logging
 import uuid
 from typing import Optional
@@ -143,6 +144,10 @@ def create_game_share(
     sharer_user_id: str,
     sharer_profile_id: str,
     recipient_email: str,
+    game_name: Optional[str] = None,
+    game_blake3: Optional[str] = None,
+    first_clip_start: Optional[float] = None,
+    clip_names: Optional[list[str]] = None,
 ) -> dict:
     with get_sharing_db() as conn:
         cur = conn.cursor()
@@ -159,9 +164,11 @@ def create_game_share(
         share_id = cur.fetchone()["id"]
         cur.execute(
             """INSERT INTO share_games
-               (share_id, game_id, tag_name)
-               VALUES (%s, %s, %s)""",
-            (share_id, game_id, tag_name),
+               (share_id, game_id, tag_name, game_name, game_blake3,
+                first_clip_start, clip_names)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (share_id, game_id, tag_name, game_name, game_blake3,
+             first_clip_start, json.dumps(clip_names) if clip_names else None),
         )
     return {
         "share_token": token,
@@ -177,7 +184,9 @@ def get_game_share_by_token(token: str) -> Optional[dict]:
                       s.sharer_profile_id, s.recipient_email, s.shared_at,
                       s.revoked_at,
                       sg.game_id, sg.tag_name, sg.recipient_profile_id,
-                      sg.materialized_at
+                      sg.materialized_at,
+                      sg.game_name, sg.game_blake3, sg.first_clip_start,
+                      sg.clip_names
                FROM shares s
                JOIN share_games sg ON sg.share_id = s.id
                WHERE s.share_token = %s""",

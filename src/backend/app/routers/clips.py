@@ -2109,11 +2109,21 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name FROM games WHERE id = ?", (request.game_id,))
+        cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (request.game_id,))
         game = cursor.fetchone()
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         game_name = game["name"] or "Untitled Game"
+
+        game_blake3 = game["blake3_hash"]
+        if not game_blake3:
+            cursor.execute(
+                "SELECT blake3_hash FROM game_videos WHERE game_id = ? ORDER BY sequence LIMIT 1",
+                (request.game_id,),
+            )
+            gv_row = cursor.fetchone()
+            if gv_row:
+                game_blake3 = gv_row["blake3_hash"]
 
         # Count clips per tag — tagged_teammates is msgpack, must decode in Python
         tag_names = {r.tag_name for r in request.recipients}
@@ -2136,6 +2146,11 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
             email_results = []
             all_sent = True
 
+            tag_clips = _filter_clips_for_tag(conn, request.game_id, recipient.tag_name)
+            tag_clips.sort(key=lambda c: c.get("start_time") or 0)
+            first_clip_start = tag_clips[0].get("start_time") if tag_clips else None
+            clip_names = [c.get("name") or "Untitled Clip" for c in tag_clips]
+
             # Create share records first to get tokens for email links
             share_records = []
             for email in recipient.emails:
@@ -2146,6 +2161,10 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                         sharer_user_id=user_id,
                         sharer_profile_id=profile_id,
                         recipient_email=email,
+                        game_name=game_name,
+                        game_blake3=game_blake3,
+                        first_clip_start=first_clip_start,
+                        clip_names=clip_names,
                     )
                     share_records.append(share)
                 except Exception as e:

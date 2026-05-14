@@ -61,26 +61,21 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
     async function resolve() {
       try {
-        console.log('[SharedAnnotationView] Resolving pending shares:', data.pending_ids);
         const profileResp = await fetch(`${API_BASE}/api/profiles`, { credentials: 'include' });
         if (!profileResp.ok) {
-          console.error('[SharedAnnotationView] /api/profiles failed:', profileResp.status);
           setState('error');
           setErrorMessage('Could not load your profile. Please try again.');
           return;
         }
         const profileData = await profileResp.json();
         const profiles = profileData.profiles || [];
-        console.log('[SharedAnnotationView] Profiles:', profiles.length);
         const profileId = profiles.find(p => p.isDefault)?.id || profiles[0]?.id;
         if (!profileId) {
-          console.error('[SharedAnnotationView] No profile found in response');
           setState('error');
           setErrorMessage('No profile found. Please try again.');
           return;
         }
 
-        console.log('[SharedAnnotationView] Resolving with profile:', profileId);
         const resp = await fetch(`${API_BASE}/api/clips/resolve-pending-shares`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -89,26 +84,18 @@ export function SharedAnnotationView({ shareToken, onClose }) {
         });
         if (resp.ok) {
           const result = await resp.json();
-          console.log('[SharedAnnotationView] Resolve result:', result);
           if (result.errors?.length > 0) {
-            console.error('[SharedAnnotationView] Resolve had errors:', result.errors);
             setState('error');
             setErrorMessage('Failed to load shared clips. Please try again.');
             return;
           }
-          console.log('[SharedAnnotationView] Fetching games after materialization');
           await useGamesDataStore.getState().fetchGames();
-          const games = useGamesDataStore.getState().games;
-          console.log('[SharedAnnotationView] Games after fetch:', games.length, 'looking for hash:', data.game_blake3);
           navigateToGame(data.game_blake3, data.sharer_email, data.first_clip_start, onClose);
         } else {
-          const text = await resp.text();
-          console.error('[SharedAnnotationView] Resolve failed:', resp.status, text);
           setState('error');
           setErrorMessage('Failed to load shared clips. Please try again.');
         }
       } catch (err) {
-        console.error('[SharedAnnotationView] Resolve error:', err);
         setState('error');
         setErrorMessage('Something went wrong. Please try again.');
       }
@@ -202,7 +189,6 @@ function Shell({ children }) {
 }
 
 function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
-  console.log('[SharedAnnotationView] navigateToGame called:', { blake3Hash, sharerEmail, firstClipStart });
   const games = useGamesDataStore.getState().games;
   const game = blake3Hash ? games.find(g => g.blake3_hash === blake3Hash) : null;
 
@@ -210,10 +196,7 @@ function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
     sessionStorage.setItem('shareAttribution', sharerEmail);
   }
   if (firstClipStart != null) {
-    console.log('[SharedAnnotationView] Setting pendingClipSeekTime:', firstClipStart);
     sessionStorage.setItem('pendingClipSeekTime', firstClipStart.toString());
-  } else {
-    console.warn('[SharedAnnotationView] firstClipStart is null — no seek will happen');
   }
 
   if (game) {
