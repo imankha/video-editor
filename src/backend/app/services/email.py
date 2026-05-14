@@ -197,7 +197,7 @@ async def send_problem_report_email(
 
 DOMAIN_MAP = {
     "production": "reelballers.com",
-    "staging": "staging.reelballers.com",
+    "staging": "reel-ballers-staging.pages.dev",
     "dev": "localhost:5173",
 }
 
