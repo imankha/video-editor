@@ -226,19 +226,26 @@ def create_pending_share(
     game_id: int,
     tag_name: str,
     clip_data_json: str,
-) -> int:
+) -> int | None:
     with get_sharing_db() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO pending_teammate_shares
-               (share_id, sharer_user_id, sharer_profile_id, recipient_email,
-                game_id, tag_name, clip_data)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
-               RETURNING id""",
-            (share_id, sharer_user_id, sharer_profile_id,
-             recipient_email.lower().strip(), game_id, tag_name, clip_data_json),
-        )
-        return cur.fetchone()["id"]
+        try:
+            cur.execute(
+                """INSERT INTO pending_teammate_shares
+                   (share_id, sharer_user_id, sharer_profile_id, recipient_email,
+                    game_id, tag_name, clip_data)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id""",
+                (share_id, sharer_user_id, sharer_profile_id,
+                 recipient_email.lower().strip(), game_id, tag_name, clip_data_json),
+            )
+            return cur.fetchone()["id"]
+        except Exception as e:
+            if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                conn.rollback()
+                logger.info(f"[share-pending] Duplicate pending share skipped: share_id={share_id} game={game_id} tag={tag_name}")
+                return None
+            raise
 
 
 def get_pending_shares_for_email(email: str) -> list[dict]:
@@ -265,3 +272,62 @@ def resolve_pending_share(pending_id: int, profile_id: str) -> bool:
             (profile_id, pending_id),
         )
         return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Share table retention / cleanup (T2847)
+# ---------------------------------------------------------------------------
+
+def cleanup_resolved_pending_shares(days: int = 90) -> int:
+    """Delete pending_teammate_shares that were resolved more than `days` ago."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """DELETE FROM pending_teammate_shares
+               WHERE resolved_at IS NOT NULL
+               AND resolved_at < now() - interval '%s days'""",
+            (days,),
+        )
+        count = cur.rowcount
+        logger.info(f"[share-cleanup] Deleted {count} resolved pending shares older than {days}d")
+        return count
+
+
+def expire_stale_pending_shares(days: int = 180) -> int:
+    """Mark unresolved pending shares older than `days` as expired."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE pending_teammate_shares
+               SET resolved_at = now(), resolved_profile_id = 'expired'
+               WHERE created_at < now() - interval '%s days'
+               AND resolved_at IS NULL""",
+            (days,),
+        )
+        count = cur.rowcount
+        logger.info(f"[share-cleanup] Expired {count} stale pending shares older than {days}d")
+        return count
+
+
+def cleanup_old_shares(days: int = 365) -> int:
+    """Delete fully-consumed shares older than `days`."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """DELETE FROM shares
+               WHERE id IN (
+                   SELECT s.id FROM shares s
+                   JOIN share_games sg ON sg.share_id = s.id
+                   WHERE s.share_type = 'game'
+                   AND sg.materialized_at IS NOT NULL
+                   AND s.shared_at < now() - interval '%s days'
+               )
+               OR (
+                   share_type = 'video'
+                   AND shared_at < now() - interval '%s days'
+               )""",
+            (days, days),
+        )
+        count = cur.rowcount
+        logger.info(f"[share-cleanup] Deleted {count} old shares older than {days}d")
+        return count

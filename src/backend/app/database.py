@@ -937,6 +937,19 @@ def ensure_database():
             ON teammate_shares(game_id)
         """)
 
+        # T2847: Junction table for indexed teammate tag lookups
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS clip_teammates (
+                clip_id INTEGER NOT NULL REFERENCES raw_clips(id) ON DELETE CASCADE,
+                tag_name TEXT NOT NULL,
+                UNIQUE(clip_id, tag_name)
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_clip_teammates_tag
+            ON clip_teammates(tag_name)
+        """)
+
         # Initialize settings row if not exists
         cursor.execute("""
             INSERT OR IGNORE INTO user_settings (id, settings_json)
@@ -1150,6 +1163,24 @@ def ensure_database():
                             pass
                 if _converted > 0:
                     logger.info(f"[Migration T2870] {_tbl}.{_col}: {_converted} rows converted from JSON to msgpack")
+
+        # T2847: Backfill clip_teammates junction table
+        from .utils.encoding import decode_data as _decode
+        cursor.execute("SELECT COUNT(*) as cnt FROM clip_teammates")
+        if cursor.fetchone()["cnt"] == 0:
+            cursor.execute("SELECT id, tagged_teammates FROM raw_clips WHERE tagged_teammates IS NOT NULL")
+            _backfilled = 0
+            for row in cursor.fetchall():
+                teammates = _decode(row["tagged_teammates"])
+                if teammates:
+                    for tag in teammates:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO clip_teammates (clip_id, tag_name) VALUES (?, ?)",
+                            (row["id"], tag),
+                        )
+                        _backfilled += 1
+            if _backfilled > 0:
+                logger.info(f"[Migration T2847] Backfilled {_backfilled} clip_teammates rows from raw_clips.tagged_teammates")
 
         conn.commit()
         _initialized_users.add(user_id)

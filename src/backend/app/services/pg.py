@@ -138,6 +138,16 @@ CREATE TABLE IF NOT EXISTS pending_teammate_shares (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_shares_email ON pending_teammate_shares(recipient_email);
 CREATE INDEX IF NOT EXISTS idx_pending_shares_share ON pending_teammate_shares(share_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_shares_unique
+ON pending_teammate_shares(share_id, game_id, tag_name)
+WHERE resolved_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_pending_shares_email_unresolved
+ON pending_teammate_shares(recipient_email) WHERE resolved_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
+ON shares(sharer_user_id) WHERE revoked_at IS NULL;
 """
 
 _SEED_SQL = """

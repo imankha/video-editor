@@ -793,6 +793,17 @@ def _refresh_game_aggregates(cursor, game_id: int) -> None:
     """, (clip_count, brilliant, good, interesting, mistake, blunder, score, game_id))
 
 
+def _sync_clip_teammates(cursor, clip_id: int, tagged_teammates: list[str] | None):
+    """Sync clip_teammates junction table after tagged_teammates change."""
+    cursor.execute("DELETE FROM clip_teammates WHERE clip_id = ?", (clip_id,))
+    if tagged_teammates:
+        for tag in tagged_teammates:
+            cursor.execute(
+                "INSERT OR IGNORE INTO clip_teammates (clip_id, tag_name) VALUES (?, ?)",
+                (clip_id, tag),
+            )
+
+
 @router.post("/raw/save", response_model=RawClipSaveResponse)
 async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTasks):
     """
@@ -864,6 +875,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     clip_id
                 ))
 
+            _sync_clip_teammates(cursor, clip_id, clip_data.tagged_teammates)
+
             # Handle explicit project creation toggle
             project_created = False
             project_id = existing['auto_project_id']
@@ -897,6 +910,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
               clip_data.notes, clip_data.start_time, clip_data.end_time, clip_data.game_id,
               clip_data.video_sequence, tagged_teammates_encoded, my_athlete_val))
         raw_clip_id = cursor.lastrowid
+        _sync_clip_teammates(cursor, raw_clip_id, clip_data.tagged_teammates)
 
         # Handle explicit project creation toggle
         project_created = False
@@ -1019,6 +1033,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
             cursor.execute(f"""
                 UPDATE raw_clips SET {', '.join(updates)} WHERE id = ?
             """, params)
+
+        if update.tagged_teammates is not None:
+            _sync_clip_teammates(cursor, clip_id, update.tagged_teammates)
 
         _refresh_game_aggregates(cursor, clip['game_id'])
         conn.commit()
@@ -1969,25 +1986,16 @@ class TeammateEmailMapping(BaseModel):
 
 @router.get("/teammate-tags")
 async def get_teammate_tags():
-    """Return distinct tag names from raw_clips.tagged_teammates, ordered by frequency."""
+    """Return distinct tag names from clip_teammates, ordered by frequency."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT tagged_teammates FROM raw_clips
-            WHERE tagged_teammates IS NOT NULL
+            SELECT tag_name, COUNT(*) as cnt
+            FROM clip_teammates
+            GROUP BY tag_name
+            ORDER BY cnt DESC
         """)
-        rows = cursor.fetchall()
-
-    tag_counts: dict[str, int] = {}
-    for row in rows:
-        names = decode_data(row['tagged_teammates'])
-        if not names:
-            continue
-        for name in names:
-            tag_counts[name] = tag_counts.get(name, 0) + 1
-
-    sorted_tags = sorted(tag_counts.keys(), key=lambda t: tag_counts[t], reverse=True)
-    return sorted_tags
+        return [row["tag_name"] for row in cursor.fetchall()]
 
 
 @router.get("/teammate-emails")
@@ -2189,6 +2197,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                             game_id=request.game_id,
                             tag_name=recipient.tag_name,
                             conn=conn,
+                            sharer_email=sharer_email,
                         )
                     except Exception as e:
                         logger.error(
@@ -2217,6 +2226,7 @@ def _materialize_or_pend(
     game_id: int,
     tag_name: str,
     conn,
+    sharer_email: str | None = None,
 ):
     """Materialize immediately for single-profile users, or create pending share."""
     from app.services.auth_db import get_user_by_email

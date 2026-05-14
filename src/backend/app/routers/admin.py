@@ -677,3 +677,29 @@ async def impersonate(target_user_id: str, request: Request, response: Response)
         "target_email": target.get("email"),
         "ttl_minutes": IMPERSONATION_TTL_MINUTES,
     }
+
+
+# ---------------------------------------------------------------------------
+# Share cleanup (T2847)
+# ---------------------------------------------------------------------------
+
+@router.post("/cleanup-shares")
+async def cleanup_shares():
+    """Run share table retention cleanup. Admin only."""
+    _require_admin()
+
+    from ..services.sharing_db import (
+        cleanup_resolved_pending_shares,
+        expire_stale_pending_shares,
+        cleanup_old_shares,
+    )
+
+    resolved = cleanup_resolved_pending_shares()
+    expired = expire_stale_pending_shares()
+    old = cleanup_old_shares()
+
+    return {
+        "resolved_pending_deleted": resolved,
+        "stale_pending_expired": expired,
+        "old_shares_deleted": old,
+    }

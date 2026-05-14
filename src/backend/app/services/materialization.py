@@ -16,7 +16,7 @@ from app.database import USER_DATA_BASE
 from app.services.auth_db import insert_game_storage_ref, get_game_storage_ref
 from app.services.sharing_db import mark_game_share_materialized
 from app.services.pg import get_pg
-from app.utils.encoding import decode_data, encode_data
+from app.utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -152,20 +152,18 @@ def _copy_game(
 def _filter_clips_for_tag(
     conn: sqlite3.Connection, game_id: int, tag_name: str
 ) -> list[dict]:
-    """Get raw_clips for a game filtered by tag_name in tagged_teammates."""
+    """Get raw_clips for a game filtered by tag_name via clip_teammates join."""
     cur = conn.cursor()
     cur.execute(
-        """SELECT id, rating, tags, name, notes, start_time, end_time,
-                  video_sequence, tagged_teammates
-           FROM raw_clips WHERE game_id = ?""",
-        (game_id,),
+        """SELECT rc.id, rc.rating, rc.tags, rc.name, rc.notes,
+                  rc.start_time, rc.end_time, rc.video_sequence
+           FROM raw_clips rc
+           JOIN clip_teammates ct ON ct.clip_id = rc.id
+           WHERE rc.game_id = ? AND ct.tag_name = ?""",
+        (game_id, tag_name),
     )
-    filtered = []
-    for row in cur.fetchall():
-        teammates = decode_data(row["tagged_teammates"])
-        if not teammates or tag_name not in teammates:
-            continue
-        filtered.append({
+    return [
+        {
             "rating": row["rating"],
             "tags": row["tags"],
             "name": row["name"],
@@ -173,8 +171,9 @@ def _filter_clips_for_tag(
             "start_time": row["start_time"],
             "end_time": row["end_time"],
             "video_sequence": row["video_sequence"],
-        })
-    return filtered
+        }
+        for row in cur.fetchall()
+    ]
 
 
 def clips_overlap(a: dict, b: dict) -> bool:
