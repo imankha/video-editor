@@ -31,12 +31,13 @@ class FlyReplayMiddleware:
         if not pinned or pinned == FLY_MACHINE_ID:
             return await self.app(scope, receive, send)
 
+        from .db_sync import _LIVE_MACHINES
         replay_src = self._get_header(scope, b"fly-replay-src")
-        if replay_src:
-            logger.warning(
-                f"[Replay/WS] Circuit-breaker: {pinned} unavailable, "
-                f"accepting WS on {FLY_MACHINE_ID}"
-            )
+        if replay_src or pinned not in _LIVE_MACHINES:
+            if pinned not in _LIVE_MACHINES:
+                logger.warning(f"[Replay/WS] Stale cookie: machine {pinned} not live, accepting on {FLY_MACHINE_ID}")
+            else:
+                logger.warning(f"[Replay/WS] Circuit-breaker: {pinned} unavailable, accepting WS on {FLY_MACHINE_ID}")
             return await self.app(scope, receive, send)
 
         logger.info(f"[Replay/WS] Replaying WS to {pinned}")

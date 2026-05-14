@@ -63,9 +63,38 @@ from ..user_context import set_current_user_id, set_current_req_id
 logger = logging.getLogger(__name__)
 
 FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
+FLY_APP_NAME = os.getenv("FLY_APP_NAME", "")
 _SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 _SAMESITE = "none" if _SECURE_COOKIES else "lax"
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
+
+# Live machine IDs for stale-cookie detection. Populated on startup via Fly internal API.
+_LIVE_MACHINES: set[str] = set()
+
+
+def _refresh_live_machines():
+    """Query Fly internal API for running machine IDs."""
+    if not FLY_APP_NAME or not FLY_MACHINE_ID:
+        return
+    try:
+        import urllib.request
+        url = f"http://_api.internal:4280/v1/apps/{FLY_APP_NAME}/machines"
+        req = urllib.request.Request(url, headers={"Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            import json
+            machines = json.loads(resp.read())
+            _LIVE_MACHINES.clear()
+            for m in machines:
+                if m.get("state") in ("started", "starting"):
+                    _LIVE_MACHINES.add(m["id"])
+            logger.info(f"[Replay] Live machines: {_LIVE_MACHINES}")
+    except Exception as e:
+        if FLY_MACHINE_ID:
+            _LIVE_MACHINES.add(FLY_MACHINE_ID)
+        logger.warning(f"[Replay] Could not fetch live machines: {e}, using self only")
+
+
+_refresh_live_machines()
 
 # Thresholds for slow request warnings (in seconds)
 SLOW_SYNC_THRESHOLD = 0.5  # 500ms - warn if DB sync takes this long
@@ -371,11 +400,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if FLY_MACHINE_ID:
             pinned = request.cookies.get("fly_machine_id")
             if pinned and pinned != FLY_MACHINE_ID:
-                if request.headers.get("fly-replay-src"):
-                    logger.warning(
-                        f"[Replay] Circuit-breaker: machine {pinned} unavailable, "
-                        f"handling on {FLY_MACHINE_ID}"
-                    )
+                if request.headers.get("fly-replay-src") or pinned not in _LIVE_MACHINES:
+                    if pinned not in _LIVE_MACHINES:
+                        logger.warning(
+                            f"[Replay] Stale cookie: machine {pinned} not in live set "
+                            f"{_LIVE_MACHINES}, handling on {FLY_MACHINE_ID}"
+                        )
+                    else:
+                        logger.warning(
+                            f"[Replay] Circuit-breaker: machine {pinned} unavailable, "
+                            f"handling on {FLY_MACHINE_ID}"
+                        )
                     should_set_machine_cookie = True
                 else:
                     logger.info(f"[Replay] Replaying to {pinned} (current: {FLY_MACHINE_ID})")
