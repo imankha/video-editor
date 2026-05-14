@@ -165,6 +165,7 @@ def _filter_clips_for_tag(
     )
     return [
         {
+            "id": row["id"],
             "rating": row["rating"],
             "tags": row["tags"],
             "name": row["name"],
