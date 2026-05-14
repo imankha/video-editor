@@ -110,13 +110,6 @@ def backfill_clip_teammates(db_path: str, dry_run: bool = False) -> int:
         """)
         conn.commit()
 
-        # Check current count
-        cursor.execute("SELECT COUNT(*) as cnt FROM clip_teammates")
-        existing = cursor.fetchone()["cnt"]
-        if existing > 0:
-            print(f"  clip_teammates already has {existing} rows, skipping backfill")
-            return 0
-
         from app.utils.encoding import decode_data
 
         cursor.execute("SELECT id, tagged_teammates FROM raw_clips WHERE tagged_teammates IS NOT NULL")

@@ -265,6 +265,14 @@ cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
 
 When the system encounters an invalid state, it should log appropriately and fail visibly - not silently "fix" itself. If you find yourself writing code to handle "impossible" states from your own codebase, fix the source of those states instead.
 
+### Correct Data, Not Workarounds
+
+**Data should have one canonical location. Code should work when data is correct. Migrations should make data correct.** Don't add fallback queries, "if exists" guards, or alternative data sources for data that should always be there. If data is missing, fix the source -- don't work around it.
+
+- If a query depends on a table populated by a prior migration, call that migration first -- don't add a fallback that reads from the raw source
+- If a column should always have a value, ensure the code that creates the row sets it -- don't add a default/guard at read time
+- Migrations must be self-sufficient: if they depend on another migration's data, run that migration as a prerequisite
+
 ### Persistence: Gesture-Based, Never Reactive
 
 **The app NEVER writes to the backend as a side effect of state changing.** Only explicit user actions trigger persistence. This is not a preference — reactive persistence creates feedback loops that corrupt data.

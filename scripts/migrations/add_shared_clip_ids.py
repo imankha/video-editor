@@ -17,7 +17,9 @@ import sqlite3
 import argparse
 from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent.parent / "src" / "backend"
+MIGRATIONS_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = MIGRATIONS_DIR.parent.parent / "src" / "backend"
+sys.path.insert(0, str(MIGRATIONS_DIR))
 sys.path.insert(0, str(BACKEND_DIR))
 
 from dotenv import load_dotenv
@@ -26,6 +28,12 @@ load_dotenv(BACKEND_DIR.parent.parent / ".env")
 
 
 def migrate_shared_clip_ids(db_path: str, dry_run: bool = False) -> int:
+    from T2847_backfill_clip_teammates import backfill_clip_teammates
+
+    # Ensure clip_teammates is fully populated first
+    print("  Ensuring clip_teammates is up to date...")
+    backfill_clip_teammates(db_path, dry_run=dry_run)
+
     conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -54,6 +62,7 @@ def migrate_shared_clip_ids(db_path: str, dry_run: bool = False) -> int:
                 (row["game_id"], row["tag_name"]),
             )
             clip_ids = [r["clip_id"] for r in cursor.fetchall()]
+
             if clip_ids:
                 cursor.execute(
                     "UPDATE teammate_shares SET shared_clip_ids = ? WHERE id = ?",
