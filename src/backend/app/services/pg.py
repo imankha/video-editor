@@ -204,21 +204,6 @@ def init_pg_schema():
         cur.execute(_SCHEMA_DDL)
         cur.execute(_SEED_SQL)
 
-        # Add share metadata columns to share_games (pre-launch, no real data to preserve)
-        for col, col_type in [
-            ("game_name", "TEXT"),
-            ("game_blake3", "TEXT"),
-            ("first_clip_start", "REAL"),
-            ("clip_names", "JSONB"),
-        ]:
-            cur.execute(f"""
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'share_games' AND column_name = '{col}'
-            """)
-            if not cur.fetchone():
-                cur.execute(f"ALTER TABLE share_games ADD COLUMN {col} {col_type}")
-                logger.info(f"[PG] Added share_games.{col} column")
-
         # T2847: Migrate clip_data JSONB → BYTEA (pre-launch, no real data to preserve)
         cur.execute("""
             SELECT data_type FROM information_schema.columns
