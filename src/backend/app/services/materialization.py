@@ -6,7 +6,7 @@ into a recipient's profile SQLite. Handles overlap merging when the recipient
 already has annotations on the same game.
 """
 
-import json
+
 import logging
 import sqlite3
 from pathlib import Path
@@ -424,8 +424,8 @@ def materialize_game_share(
             sharer_conn.close()
 
 
-def serialize_clip_data(clips: list[dict]) -> str:
-    """Serialize filtered clip data to JSON for pending_teammate_shares.clip_data."""
+def serialize_clip_data(clips: list[dict]) -> bytes:
+    """Serialize filtered clip data to msgpack for pending_teammate_shares.clip_data."""
     clean = []
     for c in clips:
         clean.append({
@@ -437,4 +437,4 @@ def serialize_clip_data(clips: list[dict]) -> str:
             "end_time": c.get("end_time"),
             "video_sequence": c.get("video_sequence"),
         })
-    return json.dumps(clean)
+    return encode_data(clean)

@@ -2251,7 +2251,7 @@ def _materialize_or_pend(
                 recipient_email=email,
                 game_id=game_id,
                 tag_name=tag_name,
-                clip_data_json=serialize_clip_data(clip_data),
+                clip_data_bytes=serialize_clip_data(clip_data),
             )
             logger.info(f"[share-with-teammates] Created pending share for non-user {email}")
         return
@@ -2288,7 +2288,7 @@ def _materialize_or_pend(
                 recipient_email=email,
                 game_id=game_id,
                 tag_name=tag_name,
-                clip_data_json=serialize_clip_data(clip_data),
+                clip_data_bytes=serialize_clip_data(clip_data),
             )
             logger.info(
                 f"[share-with-teammates] Created pending share for "
@@ -2335,9 +2335,7 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
             continue
 
         try:
-            clip_data = pending["clip_data"]
-            if isinstance(clip_data, str):
-                clip_data = json.loads(clip_data)
+            clip_data = decode_data(pending["clip_data"])
 
             sharer = get_user_by_id(pending["sharer_user_id"])
             pending_sharer_email = sharer["email"] if sharer else None

@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from app.utils.encoding import encode_data
+from app.utils.encoding import encode_data, decode_data
 from app.services.materialization import (
     clips_overlap,
     merge_clips,
@@ -97,8 +97,15 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             tagged_teammates TEXT DEFAULT NULL,
             my_athlete INTEGER DEFAULT 1,
+            shared_by TEXT DEFAULT NULL,
             FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS clip_teammates (
+            clip_id INTEGER NOT NULL REFERENCES raw_clips(id) ON DELETE CASCADE,
+            tag_name TEXT NOT NULL,
+            UNIQUE(clip_id, tag_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_clip_teammates_tag ON clip_teammates(tag_name);
     """)
     conn.commit()
     return conn
@@ -155,8 +162,15 @@ def _insert_clip(conn, game_id, start_time, end_time, tagged_teammates=None,
         (rating, name, notes, start_time, end_time, game_id, video_sequence,
          tt_encoded),
     )
+    clip_id = cur.lastrowid
+    if tagged_teammates:
+        for tag in tagged_teammates:
+            cur.execute(
+                "INSERT OR IGNORE INTO clip_teammates (clip_id, tag_name) VALUES (?, ?)",
+                (clip_id, tag),
+            )
     conn.commit()
-    return cur.lastrowid
+    return clip_id
 
 
 # ===========================================================================
@@ -519,14 +533,15 @@ class TestCollectVideoHashes:
 # ===========================================================================
 
 class TestSerializeClipData:
-    def test_serializes_to_json(self):
+    def test_serializes_to_msgpack(self):
         clips = [
             {"rating": 5, "name": "Goal", "notes": "Great", "start_time": 0,
              "end_time": 5, "video_sequence": 0, "tags": None,
              "extra_field": "should_be_dropped"},
         ]
         result = serialize_clip_data(clips)
-        parsed = json.loads(result)
+        assert isinstance(result, bytes)
+        parsed = decode_data(result)
         assert len(parsed) == 1
         assert parsed[0]["name"] == "Goal"
         assert "extra_field" not in parsed[0]
@@ -745,7 +760,7 @@ class TestPendingShareCRUD:
             recipient_email="recipient@test.com",
             game_id=1,
             tag_name="Jake",
-            clip_data_json='[{"name": "Test clip"}]',
+            clip_data_bytes=encode_data([{"name": "Test clip"}]),
         )
         assert pending_id > 0
 
@@ -788,7 +803,7 @@ class TestPendingShareCRUD:
             recipient_email="new-user@test.com",
             game_id=2,
             tag_name="Player 7",
-            clip_data_json='[]',
+            clip_data_bytes=encode_data([]),
         )
 
         # Deleting the share should cascade to pending_teammate_shares

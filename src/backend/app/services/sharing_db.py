@@ -8,6 +8,8 @@ import logging
 import uuid
 from typing import Optional
 
+import psycopg2
+
 from .pg import get_pg
 
 logger = logging.getLogger(__name__)
@@ -225,7 +227,7 @@ def create_pending_share(
     recipient_email: str,
     game_id: int,
     tag_name: str,
-    clip_data_json: str,
+    clip_data_bytes: bytes,
 ) -> int | None:
     with get_sharing_db() as conn:
         cur = conn.cursor()
@@ -237,7 +239,8 @@ def create_pending_share(
                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                    RETURNING id""",
                 (share_id, sharer_user_id, sharer_profile_id,
-                 recipient_email.lower().strip(), game_id, tag_name, clip_data_json),
+                 recipient_email.lower().strip(), game_id, tag_name,
+                 psycopg2.Binary(clip_data_bytes)),
             )
             return cur.fetchone()["id"]
         except Exception as e:

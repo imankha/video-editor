@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS pending_teammate_shares (
     recipient_email TEXT NOT NULL,
     game_id INTEGER NOT NULL,
     tag_name TEXT NOT NULL,
-    clip_data JSONB NOT NULL,
+    clip_data BYTEA NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     resolved_at TIMESTAMPTZ,
     resolved_profile_id TEXT
@@ -193,4 +193,17 @@ def init_pg_schema():
         cur = conn.cursor()
         cur.execute(_SCHEMA_DDL)
         cur.execute(_SEED_SQL)
+
+        # T2847: Migrate clip_data JSONB → BYTEA (pre-launch, no real data to preserve)
+        cur.execute("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_name = 'pending_teammate_shares' AND column_name = 'clip_data'
+        """)
+        row = cur.fetchone()
+        if row and row["data_type"] == "jsonb":
+            cur.execute("DELETE FROM pending_teammate_shares WHERE resolved_at IS NULL")
+            cur.execute("DELETE FROM pending_teammate_shares")
+            cur.execute("ALTER TABLE pending_teammate_shares ALTER COLUMN clip_data TYPE BYTEA USING ''::bytea")
+            logger.info("[PG] Migrated pending_teammate_shares.clip_data from JSONB to BYTEA")
+
     logger.info("[PG] Schema initialized (all tables + indexes)")
