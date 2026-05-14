@@ -189,6 +189,7 @@ function Shell({ children }) {
 }
 
 function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
+  console.log('[navigateToGame]', { blake3Hash, firstClipStart, sharerEmail });
   const games = useGamesDataStore.getState().games;
   const game = blake3Hash ? games.find(g => g.blake3_hash === blake3Hash) : null;
 
