@@ -2071,18 +2071,31 @@ async def get_teammate_shares(game_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT tag_name, shared_clip_ids, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
+            "SELECT id, tag_name, shared_clip_ids, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
             (game_id,)
         )
         rows = cursor.fetchall()
-    return [
-        {
-            "tag_name": row["tag_name"],
-            "shared_clip_ids": json.loads(row["shared_clip_ids"] or "[]"),
-            "shared_at": row["created_at"],
-        }
-        for row in rows
-    ]
+        result = []
+        for row in rows:
+            clip_ids = json.loads(row["shared_clip_ids"] or "[]")
+            if not clip_ids:
+                cursor.execute(
+                    "SELECT clip_id FROM clip_teammates ct JOIN raw_clips rc ON rc.id = ct.clip_id WHERE rc.game_id = ? AND ct.tag_name = ?",
+                    (game_id, row["tag_name"]),
+                )
+                clip_ids = [r["clip_id"] for r in cursor.fetchall()]
+                if clip_ids:
+                    cursor.execute(
+                        "UPDATE teammate_shares SET shared_clip_ids = ? WHERE id = ?",
+                        (json.dumps(clip_ids), row["id"]),
+                    )
+            result.append({
+                "tag_name": row["tag_name"],
+                "shared_clip_ids": clip_ids,
+                "shared_at": row["created_at"],
+            })
+        conn.commit()
+    return result
 
 
 @router.post("/share-with-teammates")
