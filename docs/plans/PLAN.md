@@ -162,16 +162,10 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
 | T446 | ↳ [Screen Wake Lock](tasks/pwa/T446-screen-wake-lock.md) | 5 | 1 | 5.0 | TODO | [ ] | Prevent screen dimming during Annotate mode. ~20 LOC, no backend. |
-| | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 9 | 7 | 1.3 | | | **Full rebuild: CTA above fold, before/after proof, pricing, 4 features, sample reels, mobile sticky bar** |
+| | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 10 | 4 | 2.5 | | | **Alpha scope: new hero with CTA above fold, sticky nav + mobile CTA bar, visual refresh** |
 | T2300 | ↳ [Visual Foundation & Design System](tasks/landing-page-redesign/T2300-visual-foundation.md) | 7 | 3 | 2.3 | TODO | [ ] | Color palette shift (navy, not purple), accent color, typography (General Sans/Sohne), background treatment |
 | T2310 | ↳ [Sticky Nav & CTA System](tasks/landing-page-redesign/T2310-sticky-nav-cta.md) | 9 | 4 | 2.3 | TODO | [ ] | Sticky nav with condensing, CTA button, mobile hamburger, mobile sticky bottom bar (5-10% conversion lift) |
 | T2320 | ↳ [Hero Section](tasks/landing-page-redesign/T2320-hero-section.md) | 10 | 4 | 2.5 | TODO | [ ] | "From Upload to IG in 5 minutes." + CTA above fold + phone mockup with real looping reel |
-| T2330 | ↳ [Before/After Section](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Side-by-side synced video loops: "Same moment. Different reel." The most important section on the page. |
-| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
-| T2350 | ↳ [Features Redesign](tasks/landing-page-redesign/T2350-features-redesign.md) | 7 | 3 | 2.3 | TODO | [ ] | Cut from 6 to 4 tiles. Each maps to a competitive gap vs Veo/Trace. Custom icons, no "AI" in headings. |
-| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
-| T2370 | ↳ [Positioning & Pricing](tasks/landing-page-redesign/T2370-positioning-pricing.md) | 8 | 4 | 2.0 | TODO | [ ] | "You already have Veo or Trace" positioning + 3-tier credit pricing table |
-| T2380 | ↳ [FAQ, Final CTA & Footer](tasks/landing-page-redesign/T2380-faq-cta-footer.md) | 5 | 2 | 2.5 | TODO | [ ] | 6-question FAQ accordion, "Make the reel" final CTA, footer with voice-as-marketing tagline |
 | T2640 | [Local Processing Subprocess](tasks/T2640-local-processing-subprocess.md) | 5 | 4 | 1.3 | DONE | [ ] | Local fallback processors block FastAPI event loop (7s polling delay during 1.4GB download). Run in separate process so dev server stays responsive. |
 | | **[Athlete Profile Epic](tasks/athlete-profile/EPIC.md)** | 6 | 4 | 1.5 | | | **Profile stores athlete name, team name, sport. Sport drives annotation tags. 6 supported sports + custom.** |
 | T1610 | ↳ [Profile Fields](tasks/athlete-profile/T1610-profile-fields.md) | 6 | 3 | 2.0 | DONE | [x] | DB schema: athlete_name, team_name, sport (free-text, not enum) + combobox UI with 6 supported sports + custom entry. (Absorbs T1073) |
@@ -245,6 +239,12 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T448 | ↳ [Share Target API](tasks/pwa/T448-share-target-api.md) | 7 | 3 | 2.3 | TODO | [ ] | Receive videos FROM camera roll directly into Reel Ballers upload flow. Eliminates file picker friction. |
 | T449 | ↳ [Offline Reel Playback](tasks/pwa/T449-offline-reel-playback.md) | 6 | 3 | 2.0 | TODO | [ ] | Cache exported reels for offline viewing + persistent storage. Show reels without cell signal. |
 | T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
+| | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 | | | **Deferred from alpha: more before/after examples, how-it-works steps, feature tile cut, sample reels grid, FAQ/footer** |
+| T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
+| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
+| T2350 | ↳ [Features Redesign](tasks/landing-page-redesign/T2350-features-redesign.md) | 7 | 3 | 2.3 | TODO | [ ] | Cut from 6 to 4 tiles. Each maps to a competitive gap vs Veo/Trace. Custom icons, no "AI" in headings. |
+| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
+| T2380 | ↳ [FAQ, Final CTA & Footer](tasks/landing-page-redesign/T2380-faq-cta-footer.md) | 5 | 2 | 2.5 | TODO | [ ] | 6-question FAQ accordion, "Make the reel" final CTA, footer with voice-as-marketing tagline |
 | | **[Overlay System v2](tasks/overlay-v2/EPIC.md)** | 9 | 7 | 1.3 | | | **Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits.** |
 | T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
 | T2110 | ↳ [Player Profile Data Model](tasks/overlay-v2/T2110-player-profile-data-model.md) | 8 | 3 | 2.7 | TODO | [x] | Account-level player profiles (name, number, team color, position). Set once, reuse across all reels. |
@@ -275,7 +275,11 @@ Scale, performance, and reliability — must be solid before feature work.
 | T40 | ↳ [Single Active Session Handoff](tasks/session-scaling/T40-single-active-session-handoff.md) | 8 | 5 | 1.6 | TODO | [ ] | Auto-signout old device on new login, sync R2 before 401, retry on failure, "signed in elsewhere" UX. Orchestrates device handoff end-to-end. |
 | T2260 | ↳ [Data Loss Detection & Recovery](tasks/session-scaling/T2260-data-loss-detection-recovery.md) | 7 | 4 | 1.8 | TODO | [ ] | Detect version gaps on reconnect after crash. Auto-grant goodwill credits, notify user with clear explanation. |
 | T2270 | [Session Inactivity TTL](tasks/T2270-session-inactivity-ttl.md) | 5 | 2 | 2.5 | TODO | [ ] | Expire sessions after N days of inactivity using last_seen_at. Absorbs T420 inactivity portion. Depends on T1190. |
-| T1700 | [Consolidate Analytics into OpenPanel](tasks/for-launch/T1700-harden-analytics.md) | 6 | 5 | 1.2 | TODO | [ ] | Replace CF Web Analytics + admin panel stats with self-hosted OpenPanel on Fly (same Postgres, separate tables). Full event inventory, user identification, per-user dashboards linked from admin panel. |
+| | **[Analytics System](tasks/analytics/EPIC.md)** | | | | | | **Replace CF Web Analytics with self-hosted OpenPanel: 41 events, 4-tier dashboards, credit-economy metrics, computed intelligence (churn/LTV/tiers), alerts** |
+| T1700 | ↳ [Foundation](tasks/analytics/T1700-foundation.md) | 6 | 5 | 1.2 | TODO | [ ] | Deploy OpenPanel VPS, SDK integration (frontend + backend), 8 activation events, L1 Daily Pulse dashboard, remove CF Web Analytics |
+| T1701 | ↳ [Core Analytics](tasks/analytics/T1701-core-analytics.md) | 6 | 5 | 1.2 | TODO | [ ] | Full 41-event taxonomy, L2 Weekly Health dashboard (7 sections), session replay, quest funnels, admin panel -> OpenPanel links |
+| T1702 | ↳ [Monetization + Intelligence](tasks/analytics/T1702-monetization-intelligence.md) | 6 | 5 | 1.2 | TODO | [ ] | Credit events, Stripe revenue tracking, nightly analytics engine (churn risk, engagement tiers, credit health, LTV), hourly/weekly alerts, viral attribution |
+| T1703 | ↳ [Optimization](tasks/analytics/T1703-optimization.md) | 5 | 4 | 1.3 | TODO | [ ] | L3 deep-dive template, feature release protocol, aha moment regression, magic number testing (requires 200+ users) |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
 | T2660 | [Remove Dead useGameUpload.upload()](tasks/T2660-remove-dead-useGameUpload-upload.md) | 2 | 1 | 2.0 | DONE | [ ] | Dead upload path in useGameUpload — all uploads go through uploadStore. Remove upload()/cancel() methods, unused state, and dead tests. |
@@ -317,7 +321,7 @@ Scale, performance, and reliability — must be solid before feature work.
 
 Target audience: highly engaged soccer parents with enough technical ability to use the app. Reach them where they already spend attention.
 
-Landing Page Redesign epic moved to For Alpha -- alpha testers refer friends, and the landing page is the conversion funnel.
+Landing Page Redesign core tasks (hero, nav, visual foundation) in For Alpha -- polish tasks (how-it-works, features cut, sample reels, FAQ) deferred to For Launch. Pricing dropped (freemium model).
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |----|------|--------|-------|-----|--------|------|-------------|

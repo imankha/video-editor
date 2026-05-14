@@ -6,7 +6,7 @@
 
 ## Goal
 
-Rebuild reelballers.com from the ground up to fix four critical conversion problems: no CTA above the fold, no visual proof (before/after), no pricing, and redundant feature tiles. The new page puts a CTA above the fold, leads with before/after video proof, shows pricing as a competitive advantage, and cuts features from 6 tiles to 4 (each mapping to a gap vs Veo/Trace).
+Rebuild reelballers.com to fix the biggest conversion problems: no CTA above the fold, weak hero, and no sticky mobile CTA. Alpha scope focuses on the three highest-impact changes (hero, nav, visual refresh). Polish tasks (more before/after examples, how-it-works, feature tile cut, sample reels, FAQ/footer) deferred to For Launch. Pricing section dropped entirely -- freemium model, no need to show pricing on the landing page.
 
 ## Supersedes
 
@@ -30,17 +30,29 @@ Full spec: [reelballers-landing-page-spec.md](../../../../reelballers-landing-pa
 
 ## Tasks
 
+### Alpha (must ship)
+
 | ID | Task | Status |
 |----|------|--------|
 | T2300 | [Visual Foundation & Design System](T2300-visual-foundation.md) | TODO |
 | T2310 | [Sticky Nav & CTA System](T2310-sticky-nav-cta.md) | TODO |
 | T2320 | [Hero Section](T2320-hero-section.md) | TODO |
-| T2330 | [Before/After Section](T2330-before-after-section.md) | TODO |
+
+### For Launch (polish)
+
+| ID | Task | Status |
+|----|------|--------|
+| T2330 | [Before/After Examples](T2330-before-after-section.md) | TODO |
 | T2340 | [How It Works Section](T2340-how-it-works.md) | TODO |
 | T2350 | [Features Section Redesign](T2350-features-redesign.md) | TODO |
 | T2360 | [Sample Reels Grid](T2360-sample-reels-grid.md) | TODO |
-| T2370 | [Positioning & Pricing](T2370-positioning-pricing.md) | TODO |
 | T2380 | [FAQ, Final CTA & Footer](T2380-faq-cta-footer.md) | TODO |
+
+### Dropped
+
+| ID | Task | Reason |
+|----|------|--------|
+| T2370 | [Positioning & Pricing](T2370-positioning-pricing.md) | Freemium model -- no need to show pricing on landing page |
 
 ## Page Architecture
 
@@ -80,12 +92,17 @@ Footer ..................... T2380
 
 ## Completion Criteria
 
-- [ ] All 9 tasks complete
+### Alpha
 - [ ] CTA visible above the fold on both mobile and desktop
-- [ ] Before/after section with real synced video loops
-- [ ] Pricing section with 3 credit packs
+- [ ] New hero with "From Upload to IG in 5 minutes." headline
+- [ ] Mobile sticky bottom CTA bar
+- [ ] Visual refresh (navy palette, new typography)
+- [ ] Deployed to reelballers.com
+
+### For Launch
+- [ ] More before/after examples (diverse positions)
+- [ ] How it works section with real UI screen recordings
 - [ ] Features cut from 6 to 4 with new copy
 - [ ] Sample reels grid with 8+ real reels (including defenders/keepers)
-- [ ] Mobile sticky bottom CTA bar
+- [ ] FAQ accordion + final CTA + footer redesign
 - [ ] Page loads fast on mobile (lazy load videos below fold)
-- [ ] Deployed to reelballers.com
