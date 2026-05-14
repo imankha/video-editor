@@ -22,6 +22,11 @@ Need a concrete list of people to email once the alpha milestone is complete and
 | Aaron's Mom (Shannon) | Team parent | |
 | Everyone on WhatsApp group | Team parents | Multiple contacts |
 | Everyone on current team | Team parents | Full roster |
+| David | Pinos team | |
+| Futsal group | Futsal | Multiple contacts |
+| Coach Alex | Coach | |
+| Jim (Wheply's Dad) | Code / team parent | |
+| Old Mexican soccer team | Former team | Multiple contacts |
 
 ## Execution
 
