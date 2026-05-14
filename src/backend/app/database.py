@@ -930,6 +930,7 @@ def ensure_database():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 game_id INTEGER NOT NULL,
                 tag_name TEXT NOT NULL,
+                shared_clip_ids TEXT DEFAULT '[]',
                 created_at TEXT DEFAULT (datetime('now')),
                 UNIQUE(game_id, tag_name),
                 FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
@@ -965,6 +966,11 @@ def ensure_database():
 
         # (Previously: T900 FK cascades, published_at, fv.name backfill,
         #  T1583, T2800/T2840, T2870, T2847 -- all removed)
+
+        try:
+            cursor.execute("ALTER TABLE teammate_shares ADD COLUMN shared_clip_ids TEXT DEFAULT '[]'")
+        except Exception:
+            pass
 
         conn.commit()
 

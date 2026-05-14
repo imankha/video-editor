@@ -2066,15 +2066,23 @@ class ShareWithTeammatesRequest(BaseModel):
 
 @router.get("/teammate-shares/{game_id}")
 async def get_teammate_shares(game_id: int):
-    """Return tag names that have been shared for a game."""
+    """Return tag names and shared clip IDs for a game."""
+    import json
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT tag_name, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
+            "SELECT tag_name, shared_clip_ids, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
             (game_id,)
         )
         rows = cursor.fetchall()
-    return [{"tag_name": row["tag_name"], "shared_at": row["created_at"]} for row in rows]
+    return [
+        {
+            "tag_name": row["tag_name"],
+            "shared_clip_ids": json.loads(row["shared_clip_ids"] or "[]"),
+            "shared_at": row["created_at"],
+        }
+        for row in rows
+    ]
 
 
 @router.post("/share-with-teammates")
@@ -2090,6 +2098,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     a pending_teammate_share record instead.
     """
     import asyncio
+    import json
     from app.services.email import send_teammate_share_email
     from app.services.auth_db import get_user_by_id, get_user_by_email
     from app.services.sharing_db import (
@@ -2198,10 +2207,11 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                                 pass
 
             if all_sent and email_results:
+                shared_clip_ids = json.dumps([c["id"] for c in tag_clips])
                 cursor.execute("""
-                    INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, created_at)
-                    VALUES (?, ?, datetime('now'))
-                """, (request.game_id, recipient.tag_name))
+                    INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, shared_clip_ids, created_at)
+                    VALUES (?, ?, ?, datetime('now'))
+                """, (request.game_id, recipient.tag_name, shared_clip_ids))
 
                 # T2830: Materialize for each successfully-sent email
                 for email, share in zip(recipient.emails, share_records):

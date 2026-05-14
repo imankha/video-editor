@@ -5,20 +5,28 @@ import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 
-export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onClose, onSharedTagsChange }) {
-  const sharedSet = useMemo(() => new Set(sharedTagNames), [sharedTagNames]);
-
+export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedTagData, onClose, onSharedTagsChange }) {
   const unsentTags = useMemo(() =>
     Object.entries(tagCounts)
-      .filter(([tag]) => !sharedSet.has(tag))
+      .filter(([tag]) => {
+        const sharedIds = sharedTagData[tag];
+        if (!sharedIds) return true;
+        const currentIds = tagClipIds[tag] || [];
+        return currentIds.some(id => !sharedIds.has(id));
+      })
       .sort((a, b) => b[1] - a[1]),
-  [tagCounts, sharedSet]);
+  [tagCounts, tagClipIds, sharedTagData]);
 
   const sentTags = useMemo(() =>
     Object.entries(tagCounts)
-      .filter(([tag]) => sharedSet.has(tag))
+      .filter(([tag]) => {
+        const sharedIds = sharedTagData[tag];
+        if (!sharedIds) return false;
+        const currentIds = tagClipIds[tag] || [];
+        return currentIds.every(id => sharedIds.has(id));
+      })
       .sort((a, b) => b[1] - a[1]),
-  [tagCounts, sharedSet]);
+  [tagCounts, tagClipIds, sharedTagData]);
 
   const [checkedTags, setCheckedTags] = useState(() =>
     new Set(unsentTags.map(([tag]) => tag))
@@ -92,15 +100,21 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
       .map(([tag]) => ({ tag_name: tag, emails: tagEmails[tag] }));
   }, [unsentTags, checkedTags, tagEmails]);
 
+  const newClipCount = useCallback((tag) => {
+    const sharedIds = sharedTagData[tag];
+    if (!sharedIds || sharedIds.size === 0) return tagCounts[tag] || 0;
+    return (tagClipIds[tag] || []).filter(id => !sharedIds.has(id)).length;
+  }, [sharedTagData, tagClipIds, tagCounts]);
+
   const totalClips = useMemo(() => {
     let count = 0;
-    for (const [tag, clipCount] of unsentTags) {
+    for (const [tag] of unsentTags) {
       if (checkedTags.has(tag) && tagEmails[tag]?.length > 0) {
-        count += clipCount;
+        count += newClipCount(tag);
       }
     }
     return count;
-  }, [unsentTags, checkedTags, tagEmails]);
+  }, [unsentTags, checkedTags, tagEmails, newClipCount]);
 
   const canSubmit = shareableRecipients.length > 0 && !isSubmitting;
 
@@ -152,7 +166,12 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
       const data = await shareResp.json();
 
       if (data.sent_tags.length > 0) {
-        onSharedTagsChange?.([...sharedTagNames, ...data.sent_tags]);
+        const updated = { ...sharedTagData };
+        for (const tag of data.sent_tags) {
+          const currentIds = tagClipIds[tag] || [];
+          updated[tag] = new Set([...(updated[tag] || []), ...currentIds]);
+        }
+        onSharedTagsChange?.(updated);
       }
 
       if (data.failed_tags.length === 0) {
@@ -213,6 +232,8 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
                     const isChecked = checkedTags.has(tag);
                     const emails = tagEmails[tag] || [];
                     const storedForTag = (storedMappings[tag] || []).map(m => m.email);
+                    const nNew = newClipCount(tag);
+                    const isResend = nNew < clipCount;
 
                     return (
                       <div
@@ -232,7 +253,10 @@ export function ShareWithTeammatesModal({ tagCounts, gameId, sharedTagNames, onC
                           />
                           <span className="text-white font-medium">{tag}</span>
                           <span className="text-gray-400 text-sm">
-                            ({clipCount} clip{clipCount !== 1 ? 's' : ''})
+                            {isResend
+                              ? `(${nNew} new clip${nNew !== 1 ? 's' : ''} — ${clipCount} total)`
+                              : `(${clipCount} clip${clipCount !== 1 ? 's' : ''})`
+                            }
                           </span>
                         </label>
                         {isChecked && (

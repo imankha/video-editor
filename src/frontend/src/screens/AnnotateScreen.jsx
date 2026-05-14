@@ -229,8 +229,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T2810: Teammate tag suggestions
     teammateSuggestions,
     // T2820: Shared tag tracking
-    sharedTagNames,
-    setSharedTagNames,
+    sharedTagData,
+    setSharedTagData,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -262,7 +262,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     });
   }, [clipRegions, fullTimeline]);
 
-  // T2820: Compute unique tags with clip counts
+  // T2820: Compute unique tags with clip counts and clip IDs per tag
   const tagCounts = useMemo(() => {
     const counts = {};
     clipRegions.forEach(r => {
@@ -274,12 +274,27 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [clipRegions]);
   const hasTaggedClips = Object.keys(tagCounts).length > 0;
 
-  // Derive unsent tags: tags in current game clips that haven't been shared yet
-  const unsentTags = useMemo(() => {
-    const sharedSet = new Set(sharedTagNames);
-    return Object.keys(tagCounts).filter(tag => !sharedSet.has(tag));
-  }, [tagCounts, sharedTagNames]);
-  const hasUnsentShares = unsentTags.length > 0;
+  const tagClipIds = useMemo(() => {
+    const map = {};
+    clipRegions.forEach(r => {
+      if (!r.rawClipId) return;
+      (r.tagged_teammates || []).forEach(tag => {
+        if (!map[tag]) map[tag] = [];
+        map[tag].push(r.rawClipId);
+      });
+    });
+    return map;
+  }, [clipRegions]);
+
+  // Derive unsent tags: tags with clips not yet shared
+  const hasUnsentShares = useMemo(() => {
+    for (const tag of Object.keys(tagClipIds)) {
+      const sharedIds = sharedTagData[tag];
+      if (!sharedIds) return true;
+      if (tagClipIds[tag].some(id => !sharedIds.has(id))) return true;
+    }
+    return false;
+  }, [tagClipIds, sharedTagData]);
 
   const handleRetryVideo = useCallback(async () => {
     if (!annotateGameId) return;
@@ -657,10 +672,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       {showShareModal && hasTaggedClips && (
         <ShareWithTeammatesModal
           tagCounts={tagCounts}
+          tagClipIds={tagClipIds}
           gameId={annotateGameId}
-          sharedTagNames={sharedTagNames}
+          sharedTagData={sharedTagData}
           onClose={() => setShowShareModal(false)}
-          onSharedTagsChange={setSharedTagNames}
+          onSharedTagsChange={setSharedTagData}
         />
       )}
     </>
