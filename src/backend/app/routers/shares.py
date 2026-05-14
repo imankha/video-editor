@@ -272,10 +272,14 @@ async def get_shared_teammate(share_token: str, request: Request):
                 if hashes:
                     game_blake3 = hashes[0]
             clips = _filter_clips_for_tag(sharer_conn, share["game_id"], share["tag_name"])
+            logger.info(f"[ShareTeammate] tag_name={share['tag_name']} game_id={share['game_id']} clips_found={len(clips)}")
             if clips:
                 clips.sort(key=lambda c: c.get("start_time") or 0)
                 first_clip_start = clips[0].get("start_time")
                 clip_names = [c.get("name") or "Untitled Clip" for c in clips]
+                logger.info(f"[ShareTeammate] first_clip_start={first_clip_start} clip_names={clip_names}")
+            else:
+                logger.warning(f"[ShareTeammate] No clips found for tag_name={share['tag_name']} in game_id={share['game_id']}")
         finally:
             sharer_conn.close()
 

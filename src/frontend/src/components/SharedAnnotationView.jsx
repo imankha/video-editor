@@ -202,6 +202,7 @@ function Shell({ children }) {
 }
 
 function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
+  console.log('[SharedAnnotationView] navigateToGame called:', { blake3Hash, sharerEmail, firstClipStart });
   const games = useGamesDataStore.getState().games;
   const game = blake3Hash ? games.find(g => g.blake3_hash === blake3Hash) : null;
 
@@ -209,7 +210,10 @@ function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
     sessionStorage.setItem('shareAttribution', sharerEmail);
   }
   if (firstClipStart != null) {
+    console.log('[SharedAnnotationView] Setting pendingClipSeekTime:', firstClipStart);
     sessionStorage.setItem('pendingClipSeekTime', firstClipStart.toString());
+  } else {
+    console.warn('[SharedAnnotationView] firstClipStart is null — no seek will happen');
   }
 
   if (game) {
