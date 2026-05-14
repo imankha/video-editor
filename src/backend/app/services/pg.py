@@ -179,13 +179,19 @@ def get_pg():
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
     conn = _pool.getconn()
     try:
+        if conn.closed:
+            _pool.putconn(conn, close=True)
+            conn = _pool.getconn()
         yield conn
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            pass
         raise
     finally:
-        _pool.putconn(conn)
+        _pool.putconn(conn, close=conn.closed)
 
 
 def init_pg_schema():
