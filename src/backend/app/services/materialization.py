@@ -22,10 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 def _open_profile_db(user_id: str, profile_id: str) -> Optional[sqlite3.Connection]:
-    """Open a profile SQLite database directly (bypasses ContextVar)."""
+    """Open a profile SQLite database directly (bypasses ContextVar).
+    Downloads from R2 if not cached locally (e.g. opening sharer's DB on recipient's request)."""
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
     if not db_path.exists():
-        return None
+        from app.storage import get_r2_client, APP_ENV, R2_BUCKET
+        client = get_r2_client()
+        if not client:
+            return None
+        r2_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/profile.sqlite"
+        try:
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            client.download_file(R2_BUCKET, r2_key, str(db_path))
+            logger.info(f"[Materialization] Downloaded sharer DB from R2: {r2_key}")
+        except Exception as e:
+            logger.warning(f"[Materialization] Failed to download sharer DB: {r2_key} - {e}")
+            return None
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
