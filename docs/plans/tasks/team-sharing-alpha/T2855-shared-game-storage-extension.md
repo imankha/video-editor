@@ -1,6 +1,6 @@
 # T2855: Shared Game Storage Extension
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2850 (Share Game), T2830 (materialization creates recipient storage refs)
 **Impact:** 6

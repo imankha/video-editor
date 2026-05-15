@@ -937,7 +937,8 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
         game_size = game['video_size'] or 0
         cost = calculate_extension_cost(game_size, request.days)
 
-        result = deduct_credits(user_id, cost, source="storage_extension", reference_id=str(game_id))
+        ext_ref = f"{game_id}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        result = deduct_credits(user_id, cost, source="storage_extension", reference_id=ext_ref)
         if not result["success"]:
             raise HTTPException(
                 status_code=402,
