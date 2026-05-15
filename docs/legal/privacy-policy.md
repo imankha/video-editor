@@ -185,13 +185,28 @@ If you believe a child under 13 has somehow created an account, please contact u
 
 ## 7. Cookies and Tracking Technologies
 
-### Cookies We Use
+### First-Party Cookies
 
-| Cookie | Type | Purpose | Duration |
-|--------|------|---------|----------|
-| `rb_session` | Strictly necessary (functional) | Authentication session | 30 days |
+The following cookies are set on our domain. All are strictly necessary for the Service to function (authentication and payment security). No consent is required for strictly necessary cookies.
 
-We use **one** cookie, which is strictly necessary for the Service to function. It is an httponly, secure session cookie used solely for authentication. No consent is required for strictly necessary cookies.
+| Cookie | Type | Purpose | Set By | Duration |
+|--------|------|---------|--------|----------|
+| `rb_session` | Strictly necessary | Authentication session | Reel Ballers | 30 days |
+| `g_state` | Strictly necessary | Manages Google One Tap sign-in prompt state (e.g., suppressing the prompt after dismissal) | Google Identity Services | Session |
+| `_stripe_mid` | Strictly necessary | Fraud prevention and device identification for payment security | Stripe.js | 1 year |
+
+### Third-Party Cookies
+
+When you interact with our payment features, Stripe's embedded scripts (`js.stripe.com`) may set cookies on Stripe's own domain for fraud prevention and payment security. These cookies are governed by [Stripe's Privacy Policy](https://stripe.com/privacy). Common Stripe cookies include:
+
+| Cookie | Purpose |
+|--------|---------|
+| `__Secure-has_logged_in` | Tracks whether the user has logged into Stripe |
+| `cid`, `machine_identifier`, `private_machine_identifier` | Device identification for fraud prevention |
+| `__stripe_orig_props` | Tracks referral origin for fraud signals |
+| `_ga` | Google Analytics on Stripe's domain (not ours) for Stripe's own analytics |
+
+We do not control these third-party cookies and do not receive personally identifiable information from them. They are used solely by Stripe for payment fraud prevention.
 
 ### Analytics
 
@@ -205,7 +220,7 @@ We use **Cloudflare Web Analytics**, which is a privacy-preserving analytics ser
 
 - No advertising cookies
 - No third-party tracking pixels
-- No Google Analytics
+- No Google Analytics on our site (Stripe may use Google Analytics on its own domain)
 - No social media tracking
 - No cross-site tracking of any kind
 
