@@ -352,14 +352,11 @@ def materialize_game_share(
             )
         clip_data = _filter_clips_for_tag(sharer_conn, game_id, tag_name)
 
-    if not clip_data:
+    game_only = not clip_data
+    if game_only:
         logger.info(
-            f"[Materialize] No clips for tag '{tag_name}' in game {game_id}, skipping"
+            f"[Materialize] Game-only share for game {game_id} (no clips)"
         )
-        if sharer_conn:
-            sharer_conn.close()
-        mark_game_share_materialized(share_id, recipient_profile_id)
-        return {"game_id": None, "inserted": 0, "merged": 0, "skipped": True}
 
     # Collect video hashes from sharer's game
     if sharer_conn:
@@ -383,7 +380,7 @@ def materialize_game_share(
             recipient_game_id = existing_game_id
             logger.info(
                 f"[Materialize] Recipient already has game (id={existing_game_id}), "
-                f"merging clips"
+                f"{'game-only' if game_only else 'merging clips'}"
             )
         elif sharer_conn:
             recipient_game_id = _copy_game(sharer_conn, recipient_conn, game_id)
@@ -396,7 +393,10 @@ def materialize_game_share(
                 "Cannot create game without sharer's DB (pending share with no sharer DB)"
             )
 
-        result = _materialize_clips(recipient_conn, recipient_game_id, clip_data, shared_by=sharer_email)
+        if game_only:
+            result = {"inserted": 0, "merged": 0}
+        else:
+            result = _materialize_clips(recipient_conn, recipient_game_id, clip_data, shared_by=sharer_email)
         recipient_conn.commit()
 
         # Create storage refs in Postgres

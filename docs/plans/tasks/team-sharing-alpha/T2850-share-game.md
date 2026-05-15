@@ -1,6 +1,6 @@
 # T2850: Share Game
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2825 (shares table), T2830 (materialization logic)
 **Based on:** T1850 (Share Game with Team)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers, Share2 } from 'lucide-react';
 import { Logo } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
@@ -26,6 +26,7 @@ import { GAME, REEL } from '../config/themeColors';
 import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
+import { ShareGameModal } from './ShareGameModal';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -81,6 +82,7 @@ export function ProjectManager({
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
+  const [shareGame, setShareGame] = useState(null);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
@@ -726,6 +728,7 @@ export function ProjectManager({
                       onDelete={() => onDeleteGame(game.id)}
                       onExtend={() => setExtensionGame(game)}
                       onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                      onShare={() => setShareGame(game)}
                     />
                   ))}
                 </div>
@@ -966,6 +969,14 @@ export function ProjectManager({
         />
       )}
 
+      {shareGame && (
+        <ShareGameModal
+          gameId={shareGame.id}
+          gameName={shareGame.name}
+          onClose={() => setShareGame(null)}
+        />
+      )}
+
     </div>
   );
 }
@@ -1126,7 +1137,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
+function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isExpired = game.storage_status === 'expired';
 
@@ -1245,6 +1256,15 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
             </Button>
           )}
           <Button
+            variant="ghost"
+            size="sm"
+            icon={Share2}
+            onClick={(e) => { e.stopPropagation(); onShare?.(); }}
+            title="Share game"
+          >
+            Share
+          </Button>
+          <Button
             variant={showDeleteConfirm ? 'danger' : 'ghost'}
             size="sm"
             icon={Trash2}
@@ -1308,16 +1328,27 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap }) {
           </div>
         </div>
 
-        {/* Delete button - shown on hover */}
-        <Button
-          variant={showDeleteConfirm ? 'danger' : 'ghost'}
-          size="sm"
-          icon={Trash2}
-          iconOnly
-          onClick={handleDelete}
-          className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
-          title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
-        />
+        {/* Share + Delete buttons - shown on hover */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Share2}
+            iconOnly
+            onClick={(e) => { e.stopPropagation(); onShare?.(); }}
+            className="opacity-0 group-hover:opacity-100"
+            title="Share game"
+          />
+          <Button
+            variant={showDeleteConfirm ? 'danger' : 'ghost'}
+            size="sm"
+            icon={Trash2}
+            iconOnly
+            onClick={handleDelete}
+            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
+            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+          />
+        </div>
       </div>
 
       {isNearExpiry && (
