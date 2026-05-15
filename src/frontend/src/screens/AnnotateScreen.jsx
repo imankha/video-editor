@@ -352,6 +352,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Wait for loadeddata so the browser can actually seek — seeking before that
   // either fails silently or triggers a full re-download from byte 0.
   useEffect(() => {
+    console.warn('[SHARE_SEEK] seek effect ran:', {
+      pendingSeekTime,
+      hasUrl: !!annotateVideoUrl,
+      hasVideoEl: !!videoRef.current,
+    });
     if (pendingSeekTime == null || !annotateVideoUrl || !videoRef.current) return;
     const video = videoRef.current;
 
