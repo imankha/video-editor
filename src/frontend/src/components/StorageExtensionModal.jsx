@@ -99,7 +99,7 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
 
       <div className="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm mx-4 border border-gray-700">
         {/* Header */}
