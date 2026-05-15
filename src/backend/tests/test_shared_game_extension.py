@@ -8,12 +8,18 @@ recipients, not just uploaders. Tests cover:
 - Extend creates/updates recipient's refs without affecting sharer's
 - Grace period cancellation works when recipient re-extends
 - can_extend flag logic with cross-user refs
+- Expiry base calculation (expired vs active ref)
+- Full endpoint handler with mocked user context
+- Expired -> extend -> active lifecycle
+- Multi-video game extension
+- list_games storage_status derivation
 """
 
 import sqlite3
-from datetime import datetime, timedelta
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -32,8 +38,22 @@ from app.services.storage_credits import calculate_extension_cost, storage_expir
 
 
 # ---------------------------------------------------------------------------
-# Helpers (reuse schema from test_materialization)
+# Helpers
 # ---------------------------------------------------------------------------
+
+def _to_naive_utc(dt):
+    """Normalize a datetime to naive UTC for comparison."""
+    if isinstance(dt, str):
+        dt = datetime.fromisoformat(dt)
+    if dt.tzinfo is not None:
+        return dt.replace(tzinfo=None)
+    return dt
+
+
+def _parse_ref_dt(ref):
+    """Extract storage_expires_at from a Postgres ref as naive UTC datetime."""
+    val = ref["storage_expires_at"]
+    return _to_naive_utc(val)
 
 def _create_profile_db(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -412,3 +432,341 @@ class TestExtensionCostParity:
         current = datetime.utcnow() + timedelta(days=5)
         new = storage_expires_at(from_dt=current, days=30)
         assert new > current + timedelta(days=29)
+
+
+# ===========================================================================
+# Expiry base calculation (replicates endpoint logic lines 954-958)
+# ===========================================================================
+
+class TestExpiryBaseCalculation:
+    """The extend endpoint uses max(current_expiry, now) as the base for new expiry.
+    This ensures extending an expired ref starts from now, not from the past."""
+
+    def test_active_ref_extends_from_current_expiry(self):
+        future_expiry = datetime.utcnow() + timedelta(days=10)
+        exp_dt = future_expiry
+        base = max(exp_dt.replace(tzinfo=None), datetime.utcnow())
+        new_expiry = storage_expires_at(from_dt=base, days=30)
+        assert new_expiry > future_expiry + timedelta(days=29)
+
+    def test_expired_ref_extends_from_now(self):
+        past_expiry = datetime.utcnow() - timedelta(days=5)
+        exp_dt = past_expiry
+        base = max(exp_dt.replace(tzinfo=None), datetime.utcnow())
+        new_expiry = storage_expires_at(from_dt=base, days=30)
+        expected_min = datetime.utcnow() + timedelta(days=29)
+        assert new_expiry > expected_min
+
+    def test_no_ref_extends_from_now(self):
+        base = datetime.utcnow()
+        new_expiry = storage_expires_at(from_dt=base, days=30)
+        assert new_expiry > datetime.utcnow() + timedelta(days=29)
+
+    def test_just_expired_ref_uses_now_not_past(self):
+        just_expired = datetime.utcnow() - timedelta(hours=1)
+        base = max(just_expired.replace(tzinfo=None), datetime.utcnow())
+        new_expiry = storage_expires_at(from_dt=base, days=30)
+        assert new_expiry > datetime.utcnow() + timedelta(days=29)
+        assert new_expiry < datetime.utcnow() + timedelta(days=31)
+
+
+# ===========================================================================
+# list_games storage_status derivation (replicates endpoint logic lines 764-778)
+# ===========================================================================
+
+class TestStorageStatusDerivation:
+    """Verify the inline logic that derives storage_status and can_extend."""
+
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("sharer-user", email="sharer@test.com")
+        create_user("recipient-user", email="recipient@test.com")
+
+    @staticmethod
+    def _derive_status(expires_at_val, auto_export_status=None):
+        if expires_at_val:
+            try:
+                exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
+                is_expired = exp_dt.replace(tzinfo=None) < datetime.utcnow()
+            except (ValueError, TypeError):
+                is_expired = False
+            return 'expired' if is_expired else 'active'
+        elif auto_export_status:
+            return 'expired'
+        else:
+            return 'active'
+
+    def test_active_ref_shows_active(self, pg_conn):
+        future = (datetime.utcnow() + timedelta(days=10)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile", "status_active",
+                                1000, future)
+        refs = get_storage_refs_for_user("recipient-user")
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in refs}
+        status = self._derive_status(expiry_by_hash.get("status_active"))
+        assert status == 'active'
+
+    def test_expired_ref_shows_expired(self, pg_conn):
+        past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile", "status_expired",
+                                1000, past)
+        refs = get_storage_refs_for_user("recipient-user")
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in refs}
+        status = self._derive_status(expiry_by_hash.get("status_expired"))
+        assert status == 'expired'
+
+    def test_no_ref_no_auto_export_shows_active(self):
+        status = self._derive_status(None, auto_export_status=None)
+        assert status == 'active'
+
+    def test_no_ref_with_auto_export_shows_expired(self):
+        status = self._derive_status(None, auto_export_status='completed')
+        assert status == 'expired'
+
+    def test_can_extend_true_recipient_expired_sharer_active(self, pg_conn):
+        """Recipient's ref expired but sharer's is active -> can_extend=True."""
+        sharer_future = (datetime.utcnow() + timedelta(days=20)).isoformat()
+        insert_game_storage_ref("sharer-user", "sharer-profile", "cross_extend",
+                                1000, sharer_future)
+        recipient_past = (datetime.utcnow() - timedelta(days=2)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile", "cross_extend",
+                                1000, recipient_past)
+
+        recipient_refs = get_storage_refs_for_user("recipient-user")
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in recipient_refs}
+        status = self._derive_status(expiry_by_hash.get("cross_extend"))
+        assert status == 'expired'
+
+        all_hashes = get_all_ref_hashes()
+        can_extend = "cross_extend" in all_hashes
+        assert can_extend is True
+
+    def test_expired_then_extend_then_active(self, pg_conn):
+        """Full lifecycle: expired -> extend -> active."""
+        past = (datetime.utcnow() - timedelta(days=2)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile", "lifecycle_hash",
+                                5_000_000_000, past)
+
+        refs = get_storage_refs_for_user("recipient-user")
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in refs}
+        assert self._derive_status(expiry_by_hash.get("lifecycle_hash")) == 'expired'
+
+        new_expiry = (datetime.utcnow() + timedelta(days=30)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile", "lifecycle_hash",
+                                5_000_000_000, new_expiry)
+
+        refs = get_storage_refs_for_user("recipient-user")
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in refs}
+        assert self._derive_status(expiry_by_hash.get("lifecycle_hash")) == 'active'
+
+
+# ===========================================================================
+# Full extend endpoint handler test
+# ===========================================================================
+
+class TestExtendEndpointHandler:
+    """Test the extend_game_storage endpoint with mocked user context."""
+
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("recipient-user", email="recipient@test.com")
+        create_user("sharer-user", email="sharer@test.com")
+
+    @pytest.mark.asyncio
+    async def test_recipient_extends_shared_game(self, pg_conn, tmp_path):
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="endpoint_hash",
+                               video_size=int(5.0 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "endpoint_hash", sequence=0,
+                           video_size=int(5.0 * 1024 ** 3))
+
+        initial_expiry = (datetime.utcnow() + timedelta(days=5)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile",
+                                "endpoint_hash", int(5.0 * 1024 ** 3), initial_expiry)
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 9}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+
+        assert result["success"] is True
+        assert result["cost_credits"] == 2  # 5 GB for 30 days
+        assert result["new_balance"] == 9
+
+        ref = get_game_storage_ref("recipient-user", "recipient-profile", "endpoint_hash")
+        ref_dt = _parse_ref_dt(ref)
+        assert ref_dt > datetime.utcnow() + timedelta(days=34)
+
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_extend_expired_shared_game_starts_from_now(self, pg_conn, tmp_path):
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="expired_ep_hash",
+                               video_size=int(2.5 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "expired_ep_hash", sequence=0,
+                           video_size=int(2.5 * 1024 ** 3))
+
+        past_expiry = (datetime.utcnow() - timedelta(days=10)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile",
+                                "expired_ep_hash", int(2.5 * 1024 ** 3), past_expiry)
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 5}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+
+        assert result["success"] is True
+        ref = get_game_storage_ref("recipient-user", "recipient-profile", "expired_ep_hash")
+        ref_dt = _parse_ref_dt(ref)
+        assert ref_dt > datetime.utcnow() + timedelta(days=29)
+        assert ref_dt < datetime.utcnow() + timedelta(days=31)
+
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_extend_does_not_affect_sharer_ref(self, pg_conn, tmp_path):
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="isolate_hash",
+                               video_size=int(1.0 * 1024 ** 3))
+        _insert_game_video(r_conn, game_id, "isolate_hash", sequence=0,
+                           video_size=int(1.0 * 1024 ** 3))
+
+        sharer_expiry = (datetime.utcnow() + timedelta(days=15)).isoformat()
+        insert_game_storage_ref("sharer-user", "sharer-profile",
+                                "isolate_hash", int(1.0 * 1024 ** 3), sharer_expiry)
+
+        recipient_expiry = (datetime.utcnow() + timedelta(days=3)).isoformat()
+        insert_game_storage_ref("recipient-user", "recipient-profile",
+                                "isolate_hash", int(1.0 * 1024 ** 3), recipient_expiry)
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
+            await extend_game_storage(game_id, ExtendStorageRequest(days=60))
+
+        sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "isolate_hash")
+        sharer_dt = _parse_ref_dt(sharer_ref)
+        assert abs((sharer_dt - _to_naive_utc(sharer_expiry)).total_seconds()) < 2
+
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_extend_insufficient_credits_returns_402(self, pg_conn, tmp_path):
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+        from fastapi import HTTPException
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash="broke_hash",
+                               video_size=int(5.0 * 1024 ** 3))
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": False, "balance": 0}):
+            with pytest.raises(HTTPException) as exc_info:
+                await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+            assert exc_info.value.status_code == 402
+
+        r_conn.close()
+
+
+# ===========================================================================
+# Multi-video game extension
+# ===========================================================================
+
+class TestMultiVideoExtend:
+    """Verify all game_videos refs are updated when extending a multi-video game."""
+
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("recipient-user", email="recipient@test.com")
+
+    @pytest.mark.asyncio
+    async def test_extends_all_video_refs(self, pg_conn, tmp_path):
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash=None, video_size=None)
+        _insert_game_video(r_conn, game_id, "multi_v1", sequence=0, video_size=3_000_000_000)
+        _insert_game_video(r_conn, game_id, "multi_v2", sequence=1, video_size=2_000_000_000)
+        _insert_game_video(r_conn, game_id, "multi_v3", sequence=2, video_size=1_500_000_000)
+
+        initial_expiry = (datetime.utcnow() + timedelta(days=5)).isoformat()
+        for h in ["multi_v1", "multi_v2", "multi_v3"]:
+            insert_game_storage_ref("recipient-user", "recipient-profile", h, 1000, initial_expiry)
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
+            result = await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+
+        assert result["success"] is True
+
+        # Multi-video games have blake3_hash=None on the games table, so the endpoint
+        # can't look up a base ref and extends from now() instead of current_expiry.
+        for h in ["multi_v1", "multi_v2", "multi_v3"]:
+            ref = get_game_storage_ref("recipient-user", "recipient-profile", h)
+            ref_dt = _parse_ref_dt(ref)
+            assert ref_dt > datetime.utcnow() + timedelta(days=29)
+
+        r_conn.close()
+
+    @pytest.mark.asyncio
+    async def test_multi_video_grace_cancellation(self, pg_conn, tmp_path):
+        """Extending a multi-video game cancels grace deletions for ALL hashes."""
+        from app.routers.games import extend_game_storage, ExtendStorageRequest
+
+        r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        game_id = _insert_game(r_conn, blake3_hash=None, video_size=None)
+        _insert_game_video(r_conn, game_id, "grace_mv1", sequence=0, video_size=2_000_000_000)
+        _insert_game_video(r_conn, game_id, "grace_mv2", sequence=1, video_size=2_000_000_000)
+
+        insert_grace_deletion("grace_mv1")
+        insert_grace_deletion("grace_mv2")
+        assert "grace_mv1" in get_grace_deletion_hashes()
+        assert "grace_mv2" in get_grace_deletion_hashes()
+
+        @contextmanager
+        def mock_db_conn():
+            yield r_conn
+
+        with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
+             patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
+             patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
+            await extend_game_storage(game_id, ExtendStorageRequest(days=30))
+
+        assert "grace_mv1" not in get_grace_deletion_hashes()
+        assert "grace_mv2" not in get_grace_deletion_hashes()
+
+        r_conn.close()
