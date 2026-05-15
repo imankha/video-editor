@@ -7,7 +7,7 @@ Postgres instance for all users. It stores:
   - sessions: session_id -> user_id (validates rb_session cookies)
   - otp_codes: temporary email verification codes (T401)
   - admin_users, impersonation_audit, game_storage_refs, r2_grace_deletions
-  - shared_videos (via sharing_db.py, same Postgres)
+  - shares, share_videos, share_games, pending_teammate_shares (via sharing_db.py, same Postgres)
 """
 
 import logging

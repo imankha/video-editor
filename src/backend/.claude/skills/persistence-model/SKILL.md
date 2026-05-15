@@ -82,12 +82,21 @@ Frontend                    Backend                     R2 Storage
 
 ---
 
-## Database Location (Per-User SQLite Only)
+## Storage Locations
 
 ```
-user_data/{user_id}/profiles/{profile_id}/profile.sqlite   # Local
-reel-ballers-users/{user_id}/profile.sqlite                 # R2
+# Per-user SQLite
+user_data/{user_id}/profiles/{profile_id}/profile.sqlite              # Local
+{APP_ENV}/users/{user_id}/profiles/{profile_id}/profile.sqlite        # R2
+
+# Game videos (deduplicated, shared across ALL environments)
+games/{blake3_hash}.mp4                                               # R2 (global, no env prefix)
+{APP_ENV}/games/{blake3_hash}.mp4                                     # R2 (env-prefixed, used by r2_global_key())
 ```
+
+**R2 bucket:** `reel-ballers-users` (all envs share one bucket, separated by `{APP_ENV}/` prefix for user data).
+
+**Game videos are global:** All environments share the same `games/` folder in R2. The game files are deduplicated by blake3 hash — multiple users and environments reference the same physical file.
 
 **Finding user_id:** Always query Postgres `users` table (`SELECT user_id FROM users WHERE email = %s`). Never use `user_data/auth.sqlite` — it is a stale pre-migration artifact.
 
