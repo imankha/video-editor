@@ -159,7 +159,10 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2860 | ↳ [My Athlete Filter in New Reel](tasks/team-sharing-alpha/T2860-my-athlete-reel-filter.md) | 6 | 2 | 3.0 | TODO | [ ] | Filter clips by "My Athlete" in reel creation clip selector |
 | T2870 | [SQLite JSON to MsgPack](tasks/T2870-sqlite-json-to-msgpack.md) | 5 | 3 | 1.7 | DONE | [x] | Migrate all JSON TEXT columns (`tags`, `tagged_teammates`, `default_highlight_regions`, etc.) to msgpack for consistency with binary data columns. |
 | T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | DONE | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
-| T2880 | [Games List Performance + Blink Fix](tasks/for-alpha/T2880-games-endpoint-presigned-url-cache.md) | 8 | 4 | 2.0 | TODO | [ ] | Backend: serial presigned URLs (6-9s for 30 games) -- TTL cache + asyncio.gather(). Frontend: games blink on navigation -- stale-while-revalidate + remove redundant fetchGames() from 6+ call sites. |
+| T2890 | [Cache Warming Efficiency](tasks/T2890-cache-warming-efficiency.md) | 9 | 4 | 2.3 | TODO | [ ] | Warming system upgrade: 4 concurrent workers (from 1), cross-queue URL dedup, foreground abort signal, viewport-aware priority. Cuts warming from 5.3s to <1.5s (8 games) or 17.5s to <6s (50 games). |
+| | **[Games List Performance](tasks/games-list-performance/EPIC.md)** | 8 | 3 | 2.7 | | | **Backend presigned URL cache + frontend blink fix. Depends on T2890 for video warming speed.** |
+| T2880 | ↳ [Backend Presigned URL Cache](tasks/games-list-performance/T2880-backend-presigned-url-cache.md) | 8 | 4 | 2.0 | TODO | [ ] | TTL cache + asyncio.gather() for presigned URLs. Cuts /api/games from 3.2s to <300ms warm, <1s cold. |
+| T2885 | ↳ [Games Blink Fix](tasks/games-list-performance/T2885-games-blink-fix.md) | 7 | 2 | 3.5 | TODO | [ ] | Stale-while-revalidate + remove redundant fetchGames() from 6+ call sites. No more disappearing games on navigation. |
 | | **[Invite & Referral](tasks/invite-referral/EPIC.md)** | 8 | 4 | 2.0 | | | **Invite button + mailto email with landing page link. Referral graph in Postgres tracks who brought whom across invites and shares.** |
 | T2900 | ↳ [Invite Button + Email](tasks/invite-referral/T2900-invite-button-email.md) | 8 | 3 | 2.7 | TODO | [ ] | "Invite a Friend" button on home screen. Opens mailto: with crafted pitch + reelballers.com?ref={code}. Landing page passes ref through to app signup. |
 | T2910 | ↳ [Referral Graph](tasks/invite-referral/T2910-referral-graph.md) | 7 | 4 | 1.8 | TODO | [ ] | Postgres `referrals` adjacency table. Attribution on signup from invite codes + share acceptance. Admin queries for leaderboard and channel effectiveness. |
@@ -403,6 +406,8 @@ IDs use gaps of 10 to allow insertions:
 - `T2680` - Remove Video Link Import (legal)
 - `T2750` - Unified Multi-Video Experience
 - `T2800-T2860` - Team Sharing Alpha epic
+- `T2880-T2885` - Games List Performance epic
+- `T2890` - Cache Warming Efficiency (standalone, warming system upgrade)
 - `T2900-T2910` - Invite & Referral epic
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
