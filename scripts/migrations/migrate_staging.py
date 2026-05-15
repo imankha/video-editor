@@ -546,10 +546,14 @@ def main():
     parser.add_argument("--skip-backfill", action="store_true", help="Skip share_games metadata backfill")
     args = parser.parse_args()
 
-    if args.env == "prod":
-        print("ERROR: This script is not intended for production.")
-        print("Run individual migration scripts for prod with explicit --env prod.")
-        sys.exit(1)
+    if args.env == "prod" and not args.dry_run and not args.verify_only:
+        print("*** PRODUCTION MIGRATION ***")
+        print("This will modify production Postgres and all user SQLite databases in R2.")
+        print("Ensure Fly machines are STOPPED before proceeding.")
+        answer = input("Type 'yes' to continue: ").strip()
+        if answer != "yes":
+            print("Aborted.")
+            sys.exit(0)
 
     config = load_env(args.env)
     load_dotenv(BACKEND_DIR.parent.parent / (".env" if args.env == "dev" else f".env.{args.env}"), override=True)
