@@ -9,7 +9,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/gallery/contacts`, { credentials: 'include' })
@@ -34,7 +33,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
 
   const handleSubmit = async () => {
     if (emails.length === 0) return;
-    setError(null);
     setIsSubmitting(true);
     try {
       const resp = await fetch(`${API_BASE}/api/games/${gameId}/share`, {
@@ -53,10 +51,13 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
         onClose();
       } else {
         const failed = data.results.filter(r => !r.sent).map(r => r.email);
-        setError(`Failed to send to: ${failed.join(', ')}`);
+        const msg = `Failed to send to: ${failed.join(', ')}`;
+        toast.error(msg);
+        console.warn('[ShareGame] Partial failure:', data.results);
       }
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
+      console.warn('[ShareGame] Error:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -86,10 +87,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             placeholder="Enter email addresses..."
           />
         </div>
-
-        {error && (
-          <p className="text-sm text-red-400 mb-4">{error}</p>
-        )}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
