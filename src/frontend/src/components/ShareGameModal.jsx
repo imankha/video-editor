@@ -86,6 +86,9 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
             contacts={contacts}
             placeholder="Enter email addresses..."
           />
+          {emails.length === 0 && (
+            <p className="text-xs text-gray-500 mt-1">Type an email and press Enter to add</p>
+          )}
         </div>
 
         <div className="flex justify-end gap-2">
