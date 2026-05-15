@@ -159,6 +159,9 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2870 | [SQLite JSON to MsgPack](tasks/T2870-sqlite-json-to-msgpack.md) | 5 | 3 | 1.7 | DONE | [x] | Migrate all JSON TEXT columns (`tags`, `tagged_teammates`, `default_highlight_regions`, etc.) to msgpack for consistency with binary data columns. |
 | T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | DONE | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
 | T2880 | [Games List Performance + Blink Fix](tasks/for-alpha/T2880-games-endpoint-presigned-url-cache.md) | 8 | 4 | 2.0 | TODO | [ ] | Backend: serial presigned URLs (6-9s for 30 games) -- TTL cache + asyncio.gather(). Frontend: games blink on navigation -- stale-while-revalidate + remove redundant fetchGames() from 6+ call sites. |
+| | **[Invite & Referral](tasks/invite-referral/EPIC.md)** | 8 | 4 | 2.0 | | | **Invite button + mailto email with landing page link. Referral graph in Postgres tracks who brought whom across invites and shares.** |
+| T2900 | ↳ [Invite Button + Email](tasks/invite-referral/T2900-invite-button-email.md) | 8 | 3 | 2.7 | TODO | [ ] | "Invite a Friend" button on home screen. Opens mailto: with crafted pitch + reelballers.com?ref={code}. Landing page passes ref through to app signup. |
+| T2910 | ↳ [Referral Graph](tasks/invite-referral/T2910-referral-graph.md) | 7 | 4 | 1.8 | TODO | [ ] | Postgres `referrals` adjacency table. Attribution on signup from invite codes + share acceptance. Admin queries for leaderboard and channel effectiveness. |
 | | **[PWA Quick Wins](tasks/pwa/EPIC.md)** | 6 | 2 | 3.0 | | | **Installable app + native share sheet + screen wake lock. Foundation for all PWA features.** |
 | T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
@@ -399,6 +402,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2680` - Remove Video Link Import (legal)
 - `T2750` - Unified Multi-Video Experience
 - `T2800-T2860` - Team Sharing Alpha epic
+- `T2900-T2910` - Invite & Referral epic
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
