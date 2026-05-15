@@ -159,6 +159,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2860 | ↳ [My Athlete Filter in New Reel](tasks/team-sharing-alpha/T2860-my-athlete-reel-filter.md) | 6 | 2 | 3.0 | TODO | [ ] | Filter clips by "My Athlete" in reel creation clip selector |
 | T2870 | [SQLite JSON to MsgPack](tasks/T2870-sqlite-json-to-msgpack.md) | 5 | 3 | 1.7 | DONE | [x] | Migrate all JSON TEXT columns (`tags`, `tagged_teammates`, `default_highlight_regions`, etc.) to msgpack for consistency with binary data columns. |
 | T2750 | [Unified Multi-Video Experience](tasks/for-alpha/T2750-unified-multi-video-experience.md) | 7 | 6 | 1.2 | DONE | [ ] | 2-half uploads simulate a single combined video: one timeline, one clip list, transparent video switching. No more "First Half" / "Second Half" tabs. |
+| T2920 | [Migration System Infrastructure](tasks/T2920-migration-system-infrastructure.md) | 8 | 5 | 1.6 | TODO | [ ] | Versioned migration system: `PRAGMA user_version` (SQLite) + `schema_migrations` (Postgres), polymorphic `BaseMigration` class, `POST /admin/migrate` endpoint, Migration agent for Claude workflow. AI writes migrations, never runs them manually. |
 | T2890 | [Cache Warming Efficiency](tasks/T2890-cache-warming-efficiency.md) | 9 | 4 | 2.3 | TODO | [ ] | Warming system upgrade: 4 concurrent workers (from 1), cross-queue URL dedup, foreground abort signal, viewport-aware priority. Cuts warming from 5.3s to <1.5s (8 games) or 17.5s to <6s (50 games). |
 | | **[Games List Performance](tasks/games-list-performance/EPIC.md)** | 8 | 3 | 2.7 | | | **Backend presigned URL cache + frontend blink fix. Depends on T2890 for video warming speed.** |
 | T2880 | ↳ [Backend Presigned URL Cache](tasks/games-list-performance/T2880-backend-presigned-url-cache.md) | 8 | 4 | 2.0 | TODO | [ ] | TTL cache + asyncio.gather() for presigned URLs. Cuts /api/games from 3.2s to <300ms warm, <1s cold. |
@@ -409,6 +410,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2880-T2885` - Games List Performance epic
 - `T2890` - Cache Warming Efficiency (standalone, warming system upgrade)
 - `T2900-T2910` - Invite & Referral epic
+- `T2920` - Migration System Infrastructure (standalone)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
