@@ -314,13 +314,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useEffect(() => {
     const pendingGameId = sessionStorage.getItem('pendingGameId');
     const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
-    console.log('[AnnotateScreen] Game load effect - pendingGameId:', pendingGameId, 'pendingClipSeekTime:', pendingClipSeekTime, 'videoUrl:', annotateVideoUrl, 'isLoading:', isLoadingRef.current);
     if (pendingGameId && !annotateVideoUrl) {
+      console.warn('[SHARE_SEEK] AnnotateScreen loading game:', pendingGameId, 'seekTime:', pendingClipSeekTime);
       // T1410: AbortController so StrictMode's synthetic unmount short-circuits
       // the first mount's load chain. handleLoadGame is async and touches the
       // store; bailing early on aborted signal prevents duplicate work.
       const controller = new AbortController();
-      console.log('[AnnotateScreen] Loading game from pendingGameId:', pendingGameId);
       isLoadingRef.current = true;
       sessionStorage.removeItem('pendingGameId');
       sessionStorage.removeItem('pendingClipSeekTime');
@@ -357,14 +356,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     const video = videoRef.current;
 
     const doSeek = () => {
-      console.log('[AnnotateScreen] Seeking to pending time:', pendingSeekTime);
       video.currentTime = pendingSeekTime;
+      console.warn('[SHARE_SEEK] Seeked video to', pendingSeekTime, '(readyState was', video.readyState + ')');
       setPendingSeekTime(null);
     };
 
     if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
       doSeek();
     } else {
+      console.warn('[SHARE_SEEK] Waiting for loadeddata before seeking to', pendingSeekTime);
       video.addEventListener('loadeddata', doSeek, { once: true });
       return () => video.removeEventListener('loadeddata', doSeek);
     }

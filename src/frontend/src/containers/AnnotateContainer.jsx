@@ -503,8 +503,6 @@ export function AnnotateContainer({
         // T740: If navigating from Framing, select the clip the user was editing
         // (importAnnotations auto-selects the first clip; override with the intended one)
         if (pendingClipSeekTime != null) {
-          console.log('[AnnotateContainer] Navigated from Framing, will select clip at start_time:', pendingClipSeekTime);
-          // importAnnotations generates new region IDs — clipRegions won't update until next render
           pendingSelectSeekTimeRef.current = pendingClipSeekTime;
         }
       }
@@ -568,10 +566,7 @@ export function AnnotateContainer({
     const seekTime = pendingSelectSeekTimeRef.current;
     const match = clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5);
     if (match) {
-      console.log('[AnnotateContainer] Selecting clip from Framing navigation:', match.id, 'at', match.startTime);
       selectClip(match.id);
-    } else {
-      console.log('[AnnotateContainer] No clip found matching seekTime:', seekTime);
     }
     pendingSelectSeekTimeRef.current = null;
   }, [clipRegions, selectClip]);
