@@ -116,7 +116,7 @@ CREATE INDEX IF NOT EXISTS idx_share_videos_video ON share_videos(video_id);
 CREATE TABLE IF NOT EXISTS share_games (
     share_id INTEGER PRIMARY KEY REFERENCES shares(id) ON DELETE CASCADE,
     game_id INTEGER NOT NULL,
-    tag_name TEXT NOT NULL,
+    tag_name TEXT,
     recipient_profile_id TEXT,
     materialized_at TIMESTAMPTZ,
     game_name TEXT,
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS pending_teammate_shares (
     sharer_profile_id TEXT NOT NULL,
     recipient_email TEXT NOT NULL,
     game_id INTEGER NOT NULL,
-    tag_name TEXT NOT NULL,
+    tag_name TEXT,
     clip_data BYTEA NOT NULL,
     created_at TIMESTAMPTZ DEFAULT now(),
     resolved_at TIMESTAMPTZ,
