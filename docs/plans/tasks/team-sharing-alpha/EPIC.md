@@ -64,6 +64,7 @@ Ordered by dependency.
 | T2840 | [Shared Annotation View](T2840-shared-annotation-view.md) | TODO | Non-user playback with annotations + signup CTA. Materialization on signup. |
 | T2845 | [Scalability Audit](T2845-scalability-audit.md) | TODO | Audit epic PRs for scale: joins vs big tables, ever-growing shares, retention policy, materialization copies. |
 | T2850 | [Share Game](T2850-share-game.md) | TODO | Share button on game cards via UserPicker. Profile picker for recipient. |
+| T2855 | [Shared Game Storage Extension](T2855-shared-game-storage-extension.md) | TESTING | Verify + fix recipients can extend storage on shared games independently. |
 | T2860 | [My Athlete Filter in New Reel](T2860-my-athlete-reel-filter.md) | TODO | Filter clips by "My Athlete" in reel creation clip selector |
 
 ## Completion Criteria
