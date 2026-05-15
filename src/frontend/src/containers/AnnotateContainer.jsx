@@ -561,15 +561,23 @@ export function AnnotateContainer({
   }, [annotateFullscreen, setAnnotateFullscreen, selectionState, editClip, closeOverlay]);
 
   // T740: After clipRegions update from importAnnotations, select the clip matching pendingSelectSeekTime
+  // Used by both Framing→Annotate navigation and share link navigation.
   useEffect(() => {
     if (pendingSelectSeekTimeRef.current == null || clipRegions.length === 0) return;
     const seekTime = pendingSelectSeekTimeRef.current;
     const match = clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5);
     if (match) {
+      console.warn('[SHARE_SEEK] Selecting clip', match.id, 'at', match.startTime);
       selectClip(match.id);
+      let seekTarget = match.startTime;
+      if (fullTimeline && match.videoSequence) {
+        seekTarget += fullTimeline.getVideoOffset(match.videoSequence);
+      }
+      effectiveSeek(seekTarget);
+      setAnnotateSelectedLayer('clips');
     }
     pendingSelectSeekTimeRef.current = null;
-  }, [clipRegions, selectClip]);
+  }, [clipRegions, selectClip, effectiveSeek, fullTimeline]);
 
   // Hide fullscreen button when it wouldn't meaningfully increase video size
   const fullscreenWorthwhile = useFullscreenWorthwhile(videoRef, annotateFullscreen);

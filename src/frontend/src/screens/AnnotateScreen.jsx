@@ -50,8 +50,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
   const isLoadingRef = useRef(false);
-  // Track pending seek time for navigation from Framing mode
-  const [pendingSeekTime, setPendingSeekTime] = useState(null);
   // Mobile sidebar toggle
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T2820: Share with tagged players modal
@@ -324,11 +322,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       sessionStorage.removeItem('pendingGameId');
       sessionStorage.removeItem('pendingClipSeekTime');
 
-      // If there's a pending seek time (from Framing navigation), queue it
-      if (pendingClipSeekTime) {
-        setPendingSeekTime(parseFloat(pendingClipSeekTime));
-      }
-
       handleLoadGame(parseInt(pendingGameId), pendingClipSeekTime ? parseFloat(pendingClipSeekTime) : null);
       return () => controller.abort();
     }
@@ -347,33 +340,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       handleGameVideoSelect(pendingFile, pendingDetails);
     }
   }, [handleGameVideoSelect, annotateVideoUrl]);
-
-  // Handle pending seek time after video loads (from Framing/share navigation)
-  // Wait for loadeddata so the browser can actually seek — seeking before that
-  // either fails silently or triggers a full re-download from byte 0.
-  useEffect(() => {
-    console.warn('[SHARE_SEEK] seek effect ran:', {
-      pendingSeekTime,
-      hasUrl: !!annotateVideoUrl,
-      hasVideoEl: !!videoRef.current,
-    });
-    if (pendingSeekTime == null || !annotateVideoUrl || !videoRef.current) return;
-    const video = videoRef.current;
-
-    const doSeek = () => {
-      video.currentTime = pendingSeekTime;
-      console.warn('[SHARE_SEEK] Seeked video to', pendingSeekTime, '(readyState was', video.readyState + ')');
-      setPendingSeekTime(null);
-    };
-
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      doSeek();
-    } else {
-      console.warn('[SHARE_SEEK] Waiting for loadeddata before seeking to', pendingSeekTime);
-      video.addEventListener('loadeddata', doSeek, { once: true });
-      return () => video.removeEventListener('loadeddata', doSeek);
-    }
-  }, [pendingSeekTime, annotateVideoUrl]);
 
   // Keyboard shortcuts for annotate mode
   // These are handled here (not in App.jsx) to use the same state instance
