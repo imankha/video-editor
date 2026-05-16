@@ -1,6 +1,6 @@
 # T2860: My Athlete Filter in New Reel
 
-**Status:** TODO
+**Status:** TESTING
 **Epic:** [Team Sharing Alpha](EPIC.md)
 **Depends on:** T2800 (data model -- `my_athlete` column)
 **Supersedes:** T1860 (Reel Creation Teammate Filter -- simplified)

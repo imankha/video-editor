@@ -528,8 +528,8 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
 # ============ RAW CLIPS (LIBRARY) ============
 
 @router.get("/raw", response_model=List[RawClipResponse])
-async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int] = None):
-    """List all raw clips in the library, optionally filtered by game and/or rating."""
+async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int] = None, my_athlete: Optional[bool] = None):
+    """List all raw clips in the library, optionally filtered by game, rating, and/or my_athlete."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -548,6 +548,9 @@ async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int
         if min_rating is not None:
             query += " AND rating >= ?"
             params.append(min_rating)
+
+        if my_athlete is True:
+            query += " AND (my_athlete = 1 OR my_athlete IS NULL)"
 
         query += " ORDER BY created_at DESC"
 

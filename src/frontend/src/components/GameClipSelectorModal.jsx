@@ -25,6 +25,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
   const [selectedGameIds, setSelectedGameIds] = useState([]);
   const [minRating, setMinRating] = useState(0); // 0 = All clips
   const [selectedTags, setSelectedTags] = useState([]);
+  const [myAthleteOnly, setMyAthleteOnly] = useState(true);
   const [excludedClipIds, setExcludedClipIds] = useState(new Set()); // Clips excluded from project
 
   // Data state
@@ -48,6 +49,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     setSelectedGameIds([]);
     setMinRating(4); // Default to 4+ stars — show the best clips first
     setSelectedTags([]);
+    setMyAthleteOnly(true);
     setExcludedClipIds(new Set());
 
     const fetchClips = async () => {
@@ -71,6 +73,9 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
   // Compute filtered clips locally for instant preview
   const filteredClips = useMemo(() => {
     return rawClips.filter(clip => {
+      // My Athlete filter (null = pre-migration, treat as true)
+      if (myAthleteOnly && clip.my_athlete === false) return false;
+
       // Rating filter (minRating = 0 means "All" - include everything)
       const clipRating = clip.rating ?? 0;
       if (minRating > 0 && clipRating < minRating) return false;
@@ -89,7 +94,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
 
       return true;
     });
-  }, [rawClips, minRating, selectedGameIds, selectedTags]);
+  }, [rawClips, myAthleteOnly, minRating, selectedGameIds, selectedTags]);
 
   // Compute included clips (filtered minus manually excluded)
   const includedClips = useMemo(() => {
@@ -112,8 +117,9 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
 
   // Get all unique tags from filtered clips (updates based on game/rating filters)
   const availableTags = useMemo(() => {
-    // Get clips that match game and rating filters (but not tag filter)
+    // Get clips that match game, rating, and my_athlete filters (but not tag filter)
     const baseFilteredClips = rawClips.filter(clip => {
+      if (myAthleteOnly && clip.my_athlete === false) return false;
       const clipRating = clip.rating ?? 0;
       if (minRating > 0 && clipRating < minRating) return false;
       if (selectedGameIds.length > 0 && !selectedGameIds.includes(clip.game_id)) {
@@ -127,14 +133,14 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       (clip.tags || []).forEach(tag => tagSet.add(tag));
     });
     return [...tagSet].sort();
-  }, [rawClips, minRating, selectedGameIds]);
+  }, [rawClips, myAthleteOnly, minRating, selectedGameIds]);
 
-  // Get games with their clip counts (based on rating filter)
+  // Get games with their clip counts (based on rating and my_athlete filters)
   const gamesWithCounts = useMemo(() => {
     const countMap = {};
     rawClips.forEach(clip => {
+      if (myAthleteOnly && clip.my_athlete === false) return;
       const clipRating = clip.rating ?? 0;
-      // minRating = 0 means "All", so include all clips
       if (clip.game_id && (minRating === 0 || clipRating >= minRating)) {
         countMap[clip.game_id] = (countMap[clip.game_id] || 0) + 1;
       }
@@ -144,7 +150,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       ...game,
       clipCount: countMap[game.id] || 0
     })).filter(g => g.clipCount > 0);
-  }, [games, rawClips, minRating]);
+  }, [games, rawClips, myAthleteOnly, minRating]);
 
   // Format duration for display
   const formatDuration = (seconds) => {
@@ -566,6 +572,32 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
                           className={`px-4 py-2 rounded-lg border transition-colors ${
                             minRating === option.value
                               ? 'bg-purple-600 border-purple-500 text-white'
+                              : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* My Athlete Filter */}
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-2">
+                      Clips
+                    </label>
+                    <div className="flex gap-2">
+                      {[
+                        { value: true, label: 'My Athlete' },
+                        { value: false, label: 'All Clips' },
+                      ].map(option => (
+                        <button
+                          key={String(option.value)}
+                          type="button"
+                          onClick={() => setMyAthleteOnly(option.value)}
+                          className={`px-4 py-2 rounded-lg border transition-colors ${
+                            myAthleteOnly === option.value
+                              ? 'bg-amber-600 border-amber-500 text-white'
                               : 'bg-gray-700 border-gray-600 text-gray-300 hover:border-gray-500'
                           }`}
                         >
