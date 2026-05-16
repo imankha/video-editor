@@ -1,77 +1,67 @@
 # T2885: Games Blink Fix (Stale-While-Revalidate)
 
-**Status:** TODO
-**Impact:** 7
-**Complexity:** 2
+**Status:** TESTING
+**Impact:** 4
+**Complexity:** 1
 **Created:** 2026-05-15
 **Updated:** 2026-05-15
 
 ## Problem
 
-Every time the user navigates between screens, the game list flashes: games are visible, then disappear, then reload 1-3s later. Two root causes:
+`fetchGames()` sets `isLoading: true` (gamesDataStore.js:66) which blanks the game list even when valid data already exists in the store. With T2880's presigned URL cache the API responds in <500ms, making this imperceptible in practice -- but the code is still wrong: valid data shouldn't be discarded during a background refetch.
 
-### 1. Store clears UI during fetch
-
-`fetchGames()` sets `isLoading: true` (gamesDataStore.js:66) which blanks the list even when valid data already exists in the store.
-
-### 2. Redundant fetches from 6+ call sites
-
-Production log shows 7 `GET /api/games` calls in a single session:
-
-| Trigger | Caller | Why redundant |
-|---------|--------|---------------|
-| Page load | `App.jsx:138` | Needed (first fetch) |
-| Screen mount | `FramingScreen.jsx:124` | Refetches on every mount via useEffect |
-| Screen mount | `ProjectsScreen.jsx:115` | Refetches on every mount via useEffect |
-| After annotation | `gamesDataStore.js:325` | `finishAnnotation()` calls `fetchGames()` unconditionally |
-| Auth login | `App.jsx:264` | Fires on auth transition |
-| Shared view | `SharedAnnotationView.jsx:92,212` | On share resolution |
-| Profile switch | `profileStore.js:229` | On profile change |
-
-The combination means: navigate to annotate -> come back -> `fetchGames()` fires -> `isLoading: true` blanks the list -> 2s later games reappear.
+Secondary issue: 6+ call sites trigger `fetchGames()` on mount/navigation, causing redundant `GET /api/games` calls within seconds of each other.
 
 ## Solution
 
-### 1. Stale-while-revalidate pattern
+### 1. Only show loading state on first load
 
-Only set `isLoading: true` if `games` array is empty (first load). If games already exist, fetch silently in the background and swap on completion.
+Change `fetchGames()` to only set `isLoading: true` when `games` array is empty. If games already exist, fetch silently and swap on completion.
 
-### 2. Guard redundant fetchGames() calls
+### 2. Freshness guard to skip redundant fetches
 
-`FramingScreen` and `ProjectsScreen` mount effects should check if games are already loaded before fetching.
-
-### 3. Targeted update after finishAnnotation()
-
-Replace `finishAnnotation()` -> `fetchGames()` with a targeted store update of the affected game's view progress data. The annotation API response already contains the updated game data -- use it directly instead of refetching the entire list.
+Add a `lastFetchedAt` timestamp to the store. At the top of `fetchGames()`, skip if data is <30s old (unless `force: true`). This eliminates redundant network calls from mount effects (FramingScreen, ProjectsScreen, App.jsx) without needing to touch each call site.
 
 ## Context
 
 See [EPIC.md](EPIC.md) for the full performance analysis.
 
-Depends on T2880's backend improvements to make background refetches fast enough that stale data is only shown briefly.
+T2880 reduced `/api/games` TTFB from 3.2s to <500ms warm, making the blink imperceptible. This task is now a correctness/polish fix rather than a critical UX bug.
 
 ### Relevant Files
 
-- `src/frontend/src/stores/gamesDataStore.js` - `fetchGames()` (line 66 sets isLoading), `finishAnnotation()` (line 325 triggers refetch)
-- `src/frontend/src/App.jsx` - Initial fetch (line 138), auth transition fetch (line 264)
-- `src/frontend/src/screens/FramingScreen.jsx` - Mount effect fetch (line 124)
-- `src/frontend/src/screens/ProjectsScreen.jsx` - Mount effect fetch (line 115)
-- `src/frontend/src/containers/SharedAnnotationView.jsx` - Share resolution fetch (lines 92, 212)
-- `src/frontend/src/stores/profileStore.js` - Profile switch fetch (line 229)
+- `src/frontend/src/stores/gamesDataStore.js` - `fetchGames()` (line 66 sets isLoading)
+
+### Call sites that trigger fetchGames() (no changes needed -- freshness guard handles all)
+
+| Trigger | Caller | Line |
+|---------|--------|------|
+| Page load | `App.jsx` | 138 |
+| Auth login | `App.jsx` | 264 |
+| Screen mount | `FramingScreen.jsx` | 124 |
+| Screen mount | `ProjectsScreen.jsx` | 115 |
+| Share resolution | `SharedAnnotationView.jsx` | 92, 212 |
+| Profile switch | `profileStore.js` | 229 |
+| After annotation | `gamesDataStore.js` | 325 (conditional on viewedDuration > 0) |
+
+Profile switch (`profileStore.js:229`) calls `reset()` first which clears `lastFetchedAt`, so the subsequent `fetchGames()` correctly runs (different profile = different games).
 
 ## Implementation
 
 ### Steps
 
-1. [ ] Change `fetchGames()` to only set `isLoading: true` when `games` array is empty
-2. [ ] Guard `FramingScreen` and `ProjectsScreen` mount fetches -- skip if games already loaded
-3. [ ] Replace `finishAnnotation()` -> `fetchGames()` with targeted store update of the affected game
-4. [ ] Verify: no blink on navigation, games stay visible during background refetch
+1. [ ] Add `lastFetchedAt: null` to gamesDataStore initial state
+2. [ ] At the top of `fetchGames()`, skip if `!force && lastFetchedAt && (Date.now() - lastFetchedAt) < 30000`
+3. [ ] Change `set({ isLoading: true, error: null })` to `set({ isLoading: get().games.length === 0, error: null })`
+4. [ ] After successful fetch, set `lastFetchedAt: Date.now()` alongside the games data
+5. [ ] Ensure `reset()` clears `lastFetchedAt: null` (so profile switch refetches)
+6. [ ] Verify: no blink on navigation, games stay visible during background refetch
 
 ## Acceptance Criteria
 
 - [ ] No visual blink when navigating between screens (games stay visible during background refetch)
-- [ ] No redundant `GET /api/games` calls after finish-annotation
-- [ ] Profile switch still triggers a fresh fetch (needed -- different profile has different games)
+- [ ] Redundant `GET /api/games` calls eliminated (only 1 call per 30s window unless forced)
+- [ ] Profile switch still triggers a fresh fetch (reset clears lastFetchedAt)
 - [ ] First page load still shows loading state when games array is empty
+- [ ] `invalidateGames()` / `force: true` bypasses freshness guard
 - [ ] Frontend tests pass

@@ -28,6 +28,7 @@ export const useGamesDataStore = create((set, get) => ({
   pendingGameIds: new Set(),
   selectedGame: null,
   isLoading: false,
+  lastFetchedAt: null,
   error: null,
 
   // Version counter — incremented when games list should be refreshed.
@@ -59,11 +60,15 @@ export const useGamesDataStore = create((set, get) => ({
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchPromise && !force) return _fetchPromise;
 
+    // T2885: Skip if data is fresh (<30s) unless forced
+    const { lastFetchedAt, games } = get();
+    if (!force && lastFetchedAt && (Date.now() - lastFetchedAt) < 30000) return games;
+
     if (_fetchController) _fetchController.abort();
     _fetchController = new AbortController();
     const { signal } = _fetchController;
 
-    set({ isLoading: true, error: null });
+    set({ isLoading: games.length === 0, error: null });
     _fetchPromise = (async () => {
       if (PROFILING_ENABLED) performance.mark('games:fetch:start');
       try {
@@ -75,7 +80,7 @@ export const useGamesDataStore = create((set, get) => ({
         const gamesList = data.games || [];
         const readyGames = gamesList.filter(g => g.status !== 'pending');
         const pendingGameIds = new Set(gamesList.filter(g => g.status === 'pending').map(g => g.id));
-        set({ games: gamesList, readyGames, pendingGameIds, isLoading: false });
+        set({ games: gamesList, readyGames, pendingGameIds, isLoading: false, lastFetchedAt: Date.now() });
         return gamesList;
       } catch (err) {
         if (err.name === 'AbortError') return get().games;
@@ -344,6 +349,7 @@ export const useGamesDataStore = create((set, get) => ({
       readyGames: [],
       selectedGame: null,
       isLoading: false,
+      lastFetchedAt: null,
       error: null,
       gamesVersion: 0,
     });
