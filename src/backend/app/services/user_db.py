@@ -553,12 +553,13 @@ def get_credit_stats_for_admin() -> dict:
 def _update_credit_summary(user_id: str, balance: int) -> None:
     """Best-effort update of credit_summary in Postgres for admin panel."""
     try:
+        from psycopg2.extras import Json
         from .auth_db import get_auth_db
         with get_auth_db() as conn:
             cur = conn.cursor()
             cur.execute(
                 "UPDATE users SET credit_summary = %s WHERE user_id = %s",
-                (balance, user_id),
+                (Json(balance), user_id),
             )
     except Exception as e:
         logger.warning(f"[UserDB] Failed to update credit_summary for {user_id}: {e}")
