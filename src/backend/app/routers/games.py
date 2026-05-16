@@ -14,6 +14,7 @@ This router handles game storage and management:
 
 from fastapi import APIRouter, Form, HTTPException, Body
 from typing import Optional, List
+import asyncio
 import os
 import logging
 import json
@@ -741,7 +742,17 @@ async def list_games():
         storage_refs = get_storage_refs_for_user(user_id)
         expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_refs}
         grace_hashes = get_grace_deletion_hashes()
-        all_ref_hashes = get_all_ref_hashes()
+        all_ref_hashes = get_all_ref_hashes(user_id)
+
+        # T2880: Pre-generate presigned URLs for all games concurrently.
+        # get_game_video_url -> generate_presigned_url_global hits the TTL cache;
+        # on cache miss, each call is ~200-300ms to R2. Parallelize misses.
+        unique_hashes = {row['blake3_hash'] for row in rows if row['blake3_hash']}
+        if unique_hashes:
+            await asyncio.gather(*[
+                asyncio.to_thread(generate_presigned_url_global, f"games/{h}.mp4", 14400)
+                for h in unique_hashes
+            ])
 
         games = []
         for row in rows:

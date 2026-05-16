@@ -401,10 +401,13 @@ def has_remaining_refs(blake3_hash: str) -> bool:
         return cur.fetchone()["cnt"] > 0
 
 
-def get_all_ref_hashes() -> set[str]:
+def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
     with get_auth_db() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT DISTINCT blake3_hash FROM game_storage_refs")
+        if user_id:
+            cur.execute("SELECT DISTINCT blake3_hash FROM game_storage_refs WHERE user_id = %s", (user_id,))
+        else:
+            cur.execute("SELECT DISTINCT blake3_hash FROM game_storage_refs")
         return {r["blake3_hash"] for r in cur.fetchall()}
 
 

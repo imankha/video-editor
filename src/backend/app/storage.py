@@ -22,10 +22,16 @@ from typing import Optional, BinaryIO, Tuple, Union
 from functools import lru_cache
 import threading
 import time
+from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
+
+# T2880: Module-level presigned URL cache. URLs are valid for hours (expires_in param);
+# 3.5h TTL keeps cache < expiry with margin. Keyed on (r2_key, expires_in).
+_PRESIGNED_URL_CACHE: TTLCache = TTLCache(maxsize=1000, ttl=12600)
+_PRESIGNED_URL_CACHE_LOCK = threading.Lock()
 
 # T1539: Per-user, per-db-type upload locks. Prevents concurrent PutObject on
 # the same R2 key from different code paths (middleware sync vs export worker
@@ -1838,6 +1844,12 @@ def generate_presigned_url_global(
     Returns:
         Presigned URL string, or None if failed
     """
+    cache_key = (key, expires_in)
+    with _PRESIGNED_URL_CACHE_LOCK:
+        cached = _PRESIGNED_URL_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
     client = get_r2_client()
     if not client:
         return None
@@ -1852,6 +1864,9 @@ def generate_presigned_url_global(
             operation=f"presign_global {key}", **TIER_3,
         )
         logger.debug(f"Generated presigned URL for global object: {key}")
+        if url:
+            with _PRESIGNED_URL_CACHE_LOCK:
+                _PRESIGNED_URL_CACHE[cache_key] = url
         return url
     except Exception as e:
         logger.error(f"Failed to generate presigned URL for {key}: {e}")
