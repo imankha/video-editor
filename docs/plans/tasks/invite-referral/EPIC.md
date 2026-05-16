@@ -10,9 +10,10 @@ Let users invite friends to Reel Ballers via email. Track referral attribution (
 ## Flow
 
 1. **Invite**: User clicks "Invite a Friend" button on home screen. Opens their email client (mailto:) with a pre-written personal pitch and a link to `reelballers.com?ref={invite_code}`.
-2. **Landing page**: Recipient lands on reelballers.com with the invite code in the URL. The landing page does the visual selling (before/after, features, CTA). CTA button passes the invite code through to app signup.
-3. **Attribution**: On signup, the app checks for a referral code (from invite link or pending share). Records the referrer-referred relationship in Postgres.
-4. **Share attribution**: When a non-user signs up after receiving a game share, annotation share, or reel share, that share is also recorded as a referral source.
+2. **Share playback**: User shares annotated playback via email link. Recipient sees the annotated highlights + signup CTA. Non-users who sign up get the content materialized into their account.
+3. **Landing page**: Recipient lands on reelballers.com with the invite code in the URL. The landing page does the visual selling (before/after, features, CTA). CTA button passes the invite code through to app signup.
+4. **Attribution**: On signup, the app checks for a referral code (from invite link or pending share). Records the referrer-referred relationship in Postgres.
+5. **Share attribution**: When a non-user signs up after receiving a game share, annotation share, or reel share, that share is also recorded as a referral source.
 
 ## Design Decisions
 
@@ -33,6 +34,7 @@ Four channels tracked: `invite_link`, `game_share`, `annotation_share`, `reel_sh
 | ID | Task | Status |
 |----|------|--------|
 | T2900 | [Invite Button + Email](T2900-invite-button-email.md) | TODO |
+| T2905 | [Share Annotated Playback](T2905-share-annotated-playback.md) | TODO |
 | T2910 | [Referral Graph](T2910-referral-graph.md) | TODO |
 
 ## Dependencies
@@ -46,5 +48,6 @@ Four channels tracked: `invite_link`, `game_share`, `annotation_share`, `reel_sh
 - [ ] Invite button visible on home screen
 - [ ] mailto: opens with compelling message + invite link
 - [ ] Invite code passes through landing page to app signup
+- [ ] Annotated playback shareable via email link with signup CTA
 - [ ] Referral graph tracks all attribution channels
 - [ ] Admin can query referral stats
