@@ -152,6 +152,12 @@ ON pending_teammate_shares(recipient_email) WHERE resolved_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
 ON shares(sharer_user_id) WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 _SEED_SQL = """

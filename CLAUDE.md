@@ -68,6 +68,7 @@ Before starting any task, produce:
 | Architect | Yes/No | {reason} |
 | Tester | Yes/No | {reason} |
 | Reviewer | Yes/No | {reason} |
+| Migration | Yes/No | {reason} |
 ```
 
 See [0-task-classification.md](.claude/workflows/0-task-classification.md) for full classification criteria and agent inclusion rules.
@@ -86,6 +87,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | 2 | Architecture | [2-architecture.md](.claude/workflows/2-architecture.md) | Architect | **Approval Required** |
 | 3 | Test First | [3-test-first.md](.claude/workflows/3-test-first.md) | Tester (Phase 1) | - |
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
+| 4.75 | Migration | - | Migration | - |
 | 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation* |
 | 5 | Automated Testing | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
 | 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
@@ -119,6 +121,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | **Reviewer** | High-scrutiny review: rules-educated, conversation with implementor | [reviewer.md](.claude/agents/reviewer.md) |
 | **Project Manager** | Roadmap, prioritization, development cycles | [project-manager.md](.claude/agents/project-manager.md) |
 | **UI Designer** | Define UI details, maintain style guide; requires approval | [ui-designer.md](.claude/agents/ui-designer.md) |
+| **Migration** | Write versioned migration files for schema changes | [migration.md](.claude/agents/migration.md) |
 | **Merge Reviewer** | Pre-merge audit: sync strategy, state, architecture | [merge-reviewer.md](.claude/agents/merge-reviewer.md) |
 
 **Orchestration**: See [ORCHESTRATION.md](.claude/ORCHESTRATION.md) for agent spawning, handoffs, and skill access.
@@ -320,6 +323,24 @@ NEVER (reactive):
 - Am I sending ALL keyframes/segments when only one changed? → Use a surgical action instead.
 
 See [coding-standards.md](.claude/references/coding-standards.md) for implementation patterns and anti-patterns.
+
+## Migration System
+
+AI never manually migrates accounts. AI writes migration code. Admin hits the endpoint.
+
+| Track | DB Type | Version Mechanism | Schema Location |
+|-------|---------|-------------------|-----------------|
+| `user_db` | `user.sqlite` (per-user) | `PRAGMA user_version` | `src/backend/app/services/user_db.py` (`_USER_DB_SCHEMA`) |
+| `profile_db` | Profile SQLite (per-user-per-profile) | `PRAGMA user_version` | `src/backend/app/database.py` (`ensure_database()`) |
+| `postgres` | Fly Postgres (shared) | `schema_migrations` table | `src/backend/app/services/pg.py` (`_SCHEMA_DDL`) |
+
+**Migration files:** `src/backend/app/migrations/{track}/v{NNN}_{description}.py`
+
+**Admin endpoint:** `POST /api/admin/migrate` -- iterates all users, runs pending migrations, syncs to R2.
+
+**When implementing schema changes:** Include the Migration agent in classification. It creates the versioned migration file after the Implementor changes the schema. See [migration.md](.claude/agents/migration.md).
+
+**Key rule:** `PRAGMA user_version` tracks schema version. `db_version` table / R2 `x-amz-meta-db-version` tracks sync version. They are independent.
 
 ## Log handling
 

@@ -159,12 +159,19 @@ def ensure_user_database(user_id: str) -> None:
                     )
                     set_local_user_db_version(user_id, 0)
 
+    is_fresh_db = not db_path.exists()
+
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=30000")
     conn.execute("PRAGMA foreign_keys=ON")
 
     conn.executescript(_USER_DB_SCHEMA)
+
+    if is_fresh_db:
+        from ..migrations.user_db import RUNNER as USER_DB_RUNNER
+        conn.execute(f"PRAGMA user_version = {USER_DB_RUNNER.latest_version}")
+
     conn.close()
 
     # Initialize credits row for new users

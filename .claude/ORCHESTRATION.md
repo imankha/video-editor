@@ -47,6 +47,10 @@ User: "Implement T{id}"
 │     5c. Cleanup + test updates                              │
 │         │                                                   │
 │         ▼                                                   │
+│  5.5 Migration (if schema changes detected)                 │
+│     Spawn Migration agent ──────► writes migration file     │
+│         │                                                   │
+│         ▼                                                   │
 │  6. Spawn Reviewer (Phase 1) ───► Returns: approval/issues  │
 │     6a. If NEEDS CONVERSATION:                              │
 │         Implementor responds to MAJOR findings              │
@@ -127,6 +131,13 @@ Which skills are relevant to each agent:
 - coding-standards.md - All implementation rules (CRITICAL)
 - code-smells.md - Fowler's refactoring catalog (CRITICAL)
 - design-patterns.md - Expected patterns (HIGH)
+
+### Migration
+| Skill | Relevance | Load When |
+|-------|-----------|-----------|
+| database-schema | CRITICAL | Understanding current schema |
+| persistence-model | HIGH | Understanding R2 sync impact |
+| api-guidelines | MEDIUM | If migration affects API responses |
 
 ### Merge Reviewer
 | Skill | Relevance | Load When |
@@ -321,6 +332,24 @@ Task tool:
     3. Coverage assessment
 
     Loop with Implementor until all tests pass.
+```
+
+### Migration
+```
+Agent tool:
+  subagent_type: general-purpose
+  prompt: |
+    You are the Migration agent for task T{id}: {title}.
+
+    Read .claude/agents/migration.md for your full instructions.
+
+    ## Schema Changes (from Implementor)
+    {git diff of schema changes}
+
+    ## Current Migration State
+    {ls of src/backend/app/migrations/{track}/ showing latest version}
+
+    Create the next versioned migration file.
 ```
 
 ### Merge Reviewer

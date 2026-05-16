@@ -25,6 +25,7 @@ Before starting any task, produce this classification:
 | Architect | Yes/No | {reason} |
 | Tester | Yes/No | {reason} |
 | Reviewer | Yes/No | {reason} |
+| Migration | Yes/No | {reason} |
 
 ### Skipped Stages
 {List any skipped stages with justification, or "None - full workflow"}
@@ -110,6 +111,19 @@ Before starting any task, produce this classification:
 - Pure styling/copy changes
 
 **Note:** When included, the reviewer runs a two-phase process: solo review, then conversation with implementor if MAJOR issues found. See [reviewer.md](../.claude/agents/reviewer.md) for the full protocol.
+
+### Migration
+
+**Include when:**
+- SQLite schema changes (new columns, tables, indexes in user_db or profile_db)
+- Postgres schema changes (new columns, tables, indexes)
+- Data format changes (e.g., BLOB encoding, msgpack changes)
+
+**Skip when:**
+- No database schema changes
+- Frontend-only changes
+- Backend logic changes with no DB impact
+- Read-only query changes
 
 ---
 

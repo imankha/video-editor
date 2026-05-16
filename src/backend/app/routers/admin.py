@@ -703,3 +703,20 @@ async def cleanup_shares():
         "stale_pending_expired": expired,
         "old_shares_deleted": old,
     }
+
+
+# ---------------------------------------------------------------------------
+# Migrations
+# ---------------------------------------------------------------------------
+
+@router.post("/migrate")
+async def run_migrations():
+    """Run all pending migrations for all users on this environment."""
+    _require_admin()
+    result = await asyncio.to_thread(_run_all_migrations)
+    return result
+
+
+def _run_all_migrations() -> dict:
+    from ..migrations import run_all_migrations
+    return run_all_migrations()

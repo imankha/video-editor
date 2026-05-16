@@ -539,6 +539,7 @@ def ensure_database():
         return
 
     # Create/verify tables
+    is_fresh_db = not db_path.exists()
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA busy_timeout=30000")
     conn.row_factory = sqlite3.Row
@@ -966,6 +967,10 @@ def ensure_database():
 
         # (Previously: T900 FK cascades, published_at, fv.name backfill,
         #  T1583, T2800/T2840, T2870, T2847 -- all removed)
+
+        if is_fresh_db:
+            from .migrations.profile_db import RUNNER as PROFILE_DB_RUNNER
+            conn.execute(f"PRAGMA user_version = {PROFILE_DB_RUNNER.latest_version}")
 
         conn.commit()
 
