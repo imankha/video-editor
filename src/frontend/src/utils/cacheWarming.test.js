@@ -227,3 +227,213 @@ describe('cacheWarming — foreground abort', () => {
     expect(P.DRAFT_REELS).not.toBe(P.FOREGROUND_PROXY);
   });
 });
+
+describe('cacheWarming — concurrent workers', () => {
+  let fetchMock;
+  let pending;
+
+  beforeEach(async () => {
+    await loadModule();
+    ({ fetchMock, pending } = makeDeferredFetch());
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('spawns multiple concurrent workers processing items in parallel', async () => {
+    cacheWarming.pushClipRanges([
+      { url: 'https://r2.example.com/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+    ]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // 4 workers × 2 fetches per clip range (head + body) = 8 concurrent pending fetches
+    expect(pending.length).toBe(8);
+    const urls = new Set(pending.map(e => e.url));
+    expect(urls.size).toBe(4);
+  });
+
+  it('FOREGROUND_DIRECT aborts all concurrent in-flight warm fetches', async () => {
+    cacheWarming.pushClipRanges([
+      { url: 'https://r2.example.com/a.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/b.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/c.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+    ]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(pending.length).toBeGreaterThanOrEqual(3);
+    for (const entry of pending) {
+      expect(entry.signal.aborted).toBe(false);
+    }
+
+    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_DIRECT);
+
+    for (const entry of pending) {
+      expect(entry.signal.aborted).toBe(true);
+    }
+  });
+
+  it('adjusts worker count for slow connections', async () => {
+    vi.resetModules();
+    const origConnection = navigator.connection;
+    Object.defineProperty(navigator, 'connection', {
+      value: { effectiveType: '3g' },
+      configurable: true,
+    });
+
+    cacheWarming = await import('./cacheWarming');
+    ({ fetchMock, pending } = makeDeferredFetch());
+    vi.stubGlobal('fetch', fetchMock);
+
+    cacheWarming.pushClipRanges([
+      { url: 'https://r2.example.com/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: 'https://r2.example.com/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+    ]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // 3g: 2 workers × 2 fetches per clip range = 4 (not 8)
+    expect(pending.length).toBe(4);
+
+    Object.defineProperty(navigator, 'connection', {
+      value: origConnection,
+      configurable: true,
+    });
+  });
+});
+
+describe('cacheWarming — cross-queue dedup', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('deduplicates same URL across tier1 and games queues', async () => {
+    vi.resetModules();
+    vi.doMock('../stores/authStore', () => ({
+      useAuthStore: { getState: () => ({ isAuthenticated: true }) },
+    }));
+    cacheWarming = await import('./cacheWarming');
+
+    // Disable warmer so queues stay populated for inspection
+    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_DIRECT);
+
+    let isApiCall = true;
+    vi.stubGlobal('fetch', vi.fn(() => {
+      if (isApiCall) {
+        isApiCall = false;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            r2_enabled: true,
+            project_clips: [{
+              has_working_video: false,
+              clips: [{
+                id: 'clip1',
+                game_url: 'https://r2.example.com/game1.mp4',
+                start_time: 10, end_time: 20,
+                video_duration: 100, video_size: 1_000_000,
+              }],
+            }],
+            game_urls: [
+              'https://r2.example.com/game1.mp4',
+              'https://r2.example.com/game2.mp4',
+            ],
+            gallery_urls: [],
+            working_urls: [],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true });
+    }));
+
+    await cacheWarming.warmAllUserVideos();
+
+    const diag = cacheWarming.getWarmingDiag();
+    // tier1 has clip range for game1, games should only have game2 (game1 deduped)
+    expect(diag.tier1).toBe(1);
+    expect(diag.games).toBe(1);
+
+    vi.doUnmock('../stores/authStore');
+  });
+});
+
+describe('cacheWarming — prioritizeUrls', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('promotes matching URLs to front of games queue', async () => {
+    vi.resetModules();
+    vi.doMock('../stores/authStore', () => ({
+      useAuthStore: { getState: () => ({ isAuthenticated: true }) },
+    }));
+    cacheWarming = await import('./cacheWarming');
+
+    // Disable warmer so queues stay populated
+    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_DIRECT);
+
+    let isApiCall = true;
+    vi.stubGlobal('fetch', vi.fn(() => {
+      if (isApiCall) {
+        isApiCall = false;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            r2_enabled: true,
+            project_clips: [],
+            game_urls: [
+              'https://r2.example.com/a.mp4',
+              'https://r2.example.com/b.mp4',
+              'https://r2.example.com/c.mp4',
+            ],
+            gallery_urls: [],
+            working_urls: [],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true });
+    }));
+
+    await cacheWarming.warmAllUserVideos();
+
+    // Flush microtasks so disabled workers complete and workersRunning resets
+    await new Promise(r => setTimeout(r, 0));
+
+    // Queue has a, b, c. Promote c to front.
+    cacheWarming.prioritizeUrls(['https://r2.example.com/c.mp4']);
+
+    // Resume warmer and capture fetch order
+    const pending = [];
+    vi.stubGlobal('fetch', vi.fn((url, init = {}) => {
+      return new Promise((resolve, reject) => {
+        const signal = init.signal;
+        pending.push({ url, resolve, reject, signal });
+        if (signal) {
+          signal.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          });
+        }
+      });
+    }));
+
+    cacheWarming.clearForegroundActive();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // c.mp4 should be the first URL fetched (promoted to front)
+    expect(pending[0].url).toBe('https://r2.example.com/c.mp4');
+
+    vi.doUnmock('../stores/authStore');
+  });
+});

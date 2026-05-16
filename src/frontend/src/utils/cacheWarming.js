@@ -125,6 +125,25 @@ let warmerPausedLowerTiers = false;
 const inFlightControllers = new Set();
 const inFlightClipRangeControllers = new Set();
 
+// Shared AbortController for all warm fetches. FOREGROUND_DIRECT aborts this
+// immediately — single abort call instead of iterating N controllers.
+let warmingAbortController = new AbortController();
+
+function abortAllWarming() {
+  warmingAbortController.abort();
+  warmingAbortController = new AbortController();
+}
+
+function combinedSignal(fetchController) {
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any([warmingAbortController.signal, fetchController.signal]);
+  }
+  const shared = warmingAbortController.signal;
+  if (shared.aborted) fetchController.abort();
+  else shared.addEventListener('abort', () => fetchController.abort(), { once: true });
+  return fetchController.signal;
+}
+
 // ── Diagnostics ─────────────────────────────────────────────────────────────
 
 /**
@@ -170,6 +189,7 @@ export function setWarmupPriority(priority) {
     if (priority === WARMUP_PRIORITY.FOREGROUND_DIRECT) {
       warmerDisabled = true;
       warmerPausedLowerTiers = false;
+      abortAllWarming();
       const abortedCount = abortInFlightWarms();
       return { abortedCount };
     }
@@ -310,7 +330,7 @@ async function warmUrl(url, options = {}) {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
       ...warmFetchMode(url),
-      signal: controller.signal,
+      signal: combinedSignal(controller),
     });
 
     {
@@ -328,7 +348,7 @@ async function warmUrl(url, options = {}) {
           method: 'GET',
           headers: { 'Range': `bytes=${tailStart}-${tailEnd}` },
           ...warmFetchMode(url),
-          signal: controller.signal,
+          signal: combinedSignal(controller),
         });
         getOrInitState(url).tailWarmed = true;
         console.log(`[CacheWarming] Warmed tail url=${url.substring(0, 60)} size=${Math.round(size / 1024 / 1024)}MB elapsedMs=${Math.round(performance.now() - startMs)}`);
@@ -381,7 +401,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
       method: 'GET',
       headers: { 'Range': 'bytes=0-1048575' },
       ...warmFetchMode(url),
-      signal: controller.signal,
+      signal: combinedSignal(controller),
     }).catch(() => {});
 
     // Warm the clip's byte range (opaque response expected with no-cors).
@@ -389,7 +409,7 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
       method: 'GET',
       headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
       ...warmFetchMode(url),
-      signal: controller.signal,
+      signal: combinedSignal(controller),
     });
     await headPromise;
 
@@ -408,6 +428,13 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
 }
 
 // ── Worker ──────────────────────────────────────────────────────────────────
+
+function getWorkerCount() {
+  const type = typeof navigator !== 'undefined' && navigator.connection?.effectiveType;
+  if (type === '2g' || type === 'slow-2g') return 1;
+  if (type === '3g') return 2;
+  return 4;
+}
 
 async function worker() {
   let warmed = 0;
@@ -430,9 +457,6 @@ async function worker() {
   return warmed;
 }
 
-/**
- * Start the single worker to process all queues in priority order.
- */
 async function runWorkers() {
   if (workersRunning) return;
   workersRunning = true;
@@ -443,9 +467,12 @@ async function runWorkers() {
     return;
   }
 
-  console.log(`[CacheWarming] Starting worker for ${total} videos (priority: ${currentPriority}, tier1=${tier1Queue.length})`);
+  const count = getWorkerCount();
+  console.log(`[CacheWarming] Starting ${count} workers for ${total} videos (priority: ${currentPriority}, tier1=${tier1Queue.length})`);
 
-  const warmed = await worker();
+  const workers = Array.from({ length: count }, () => worker());
+  const results = await Promise.all(workers);
+  const warmed = results.reduce((a, b) => a + b, 0);
 
   console.log(`[CacheWarming] Complete: ${warmed} videos warmed`);
   workersRunning = false;
@@ -454,6 +481,7 @@ async function runWorkers() {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 export function clearWarmingCache() {
+  abortAllWarming();
   warmedUrls.clear();
   warmedState.clear();
   tier1Queue = [];
@@ -515,15 +543,36 @@ export async function warmAllUserVideos() {
       }
     }
 
-    // Populate remaining queues (filter already-warmed URLs)
-    galleryQueue = (data.gallery_urls || []).filter(url => url && !warmedUrls.has(url));
+    // Cross-queue dedup: track all URLs queued so far to avoid warming the same video twice
+    const seenKeys = new Set();
+    for (const item of tier1Queue) {
+      if (item.url) seenKeys.add(stableUrlKey(item.url));
+    }
+
+    galleryQueue = (data.gallery_urls || []).filter(url => {
+      if (!url || warmedUrls.has(url)) return false;
+      const key = stableUrlKey(url);
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
+    });
     gamesQueue = (data.game_urls || []).filter(item => {
       const url = typeof item === 'object' ? item.url : item;
-      return url && !warmedUrls.has(url);
+      if (!url || warmedUrls.has(url)) return false;
+      const key = stableUrlKey(url);
+      if (seenKeys.has(key)) return false;
+      seenKeys.add(key);
+      return true;
     });
     workingQueue = (data.working_urls || [])
       .map(url => resolveApiUrl(url))
-      .filter(url => url && !warmedUrls.has(url));
+      .filter(url => {
+        if (!url || warmedUrls.has(url)) return false;
+        const key = stableUrlKey(url);
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+      });
 
     const total = tier1Queue.length + galleryQueue.length + gamesQueue.length + workingQueue.length;
 
@@ -606,6 +655,30 @@ export function clearForegroundActive() {
     console.log(`[CacheWarming] Foreground clear — resuming worker for ${remaining} queued items (priority: ${currentPriority})`);
     runWorkers();
   }
+}
+
+/**
+ * Move matching URLs to the front of their respective queues.
+ * Used by IntersectionObserver callers to prioritize visible items.
+ */
+export function prioritizeUrls(urls) {
+  if (!urls?.length) return;
+  const keys = new Set(urls.map(stableUrlKey).filter(Boolean));
+
+  function promote(queue) {
+    const front = [];
+    const rest = [];
+    for (const item of queue) {
+      const url = typeof item === 'object' ? item.url : item;
+      if (keys.has(stableUrlKey(url))) front.push(item);
+      else rest.push(item);
+    }
+    return [...front, ...rest];
+  }
+
+  gamesQueue = promote(gamesQueue);
+  galleryQueue = promote(galleryQueue);
+  workingQueue = promote(workingQueue);
 }
 
 /**

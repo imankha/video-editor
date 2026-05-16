@@ -27,6 +27,8 @@ import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
+import { prioritizeUrls } from '../utils/cacheWarming';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -85,6 +87,8 @@ export function ProjectManager({
   const [shareGame, setShareGame] = useState(null);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
+  const gamesContainerRef = useRef(null);
+  const promotedGameIdsRef = useRef(new Set());
   const [resumingUploadFilename, setResumingUploadFilename] = useState(null); // Track which upload we're resuming
 
   // Project filter state - persisted via settings store
@@ -102,6 +106,31 @@ export function ProjectManager({
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Viewport-aware cache warming: promote visible game videos in the warm queue
+  useEffect(() => {
+    const container = gamesContainerRef.current;
+    if (!container || games.length === 0) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      const urls = [];
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const gameId = entry.target.dataset.gameId;
+        if (!gameId || promotedGameIdsRef.current.has(gameId)) continue;
+        promotedGameIdsRef.current.add(gameId);
+        const url = useGamesDataStore.getState().getGameVideoUrl(gameId);
+        if (url) urls.push(url);
+      }
+      if (urls.length > 0) prioritizeUrls(urls);
+    }, { threshold: 0.1 });
+
+    for (const child of container.children) {
+      observer.observe(child);
+    }
+
+    return () => observer.disconnect();
+  }, [games]);
 
   // Filter projects based on selected filters
   const filteredProjects = useMemo(() => {
@@ -719,17 +748,18 @@ export function ProjectManager({
                 <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
                   Your Games
                 </h2>
-                <div className="space-y-2">
+                <div ref={gamesContainerRef} className="space-y-2">
                   {games.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      onLoad={() => onLoadGame(game.id)}
-                      onDelete={() => onDeleteGame(game.id)}
-                      onExtend={() => setExtensionGame(game)}
-                      onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
-                      onShare={() => setShareGame(game)}
-                    />
+                    <div key={game.id} data-game-id={game.id}>
+                      <GameCard
+                        game={game}
+                        onLoad={() => onLoadGame(game.id)}
+                        onDelete={() => onDeleteGame(game.id)}
+                        onExtend={() => setExtensionGame(game)}
+                        onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
+                        onShare={() => setShareGame(game)}
+                      />
+                    </div>
                   ))}
                 </div>
               </>
