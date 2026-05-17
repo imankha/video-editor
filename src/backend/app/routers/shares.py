@@ -243,7 +243,7 @@ async def get_shared_teammate(share_token: str, request: Request):
     share = get_game_share_by_token(share_token)
     if not share:
         raise HTTPException(404, "Share not found")
-    if share["share_type"] != "game":
+    if share["share_type"] not in ("game", "annotation_playback"):
         raise HTTPException(404, "Share not found")
     if share["revoked_at"]:
         raise HTTPException(410, "This share has been revoked")

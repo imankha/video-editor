@@ -1643,3 +1643,175 @@ async def share_game(game_id: int, body: ShareGameRequest):
     return {"results": email_results, "all_sent": all_sent}
 
 
+class SharePlaybackRequest(BaseModel):
+    emails: list[str]
+    tag_name: str
+
+
+@router.post("/{game_id:int}/share-playback")
+async def share_playback(game_id: int, body: SharePlaybackRequest):
+    """Share annotated playback for a specific tag with recipients via email."""
+    import asyncio
+    from app.services.email import send_playback_share_email
+    from app.services.auth_db import get_user_by_id, get_user_by_email
+    from app.services.sharing_db import (
+        create_game_share, revoke_share, get_share_by_token,
+        create_pending_share, list_shares_for_game,
+    )
+    from app.services.user_db import get_profiles
+    from app.services.materialization import (
+        materialize_game_share, serialize_clip_data,
+    )
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    sharer = get_user_by_id(user_id)
+    sharer_email = sharer["email"] if sharer else user_id
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, blake3_hash FROM games WHERE id = ?", (game_id,))
+        game = cursor.fetchone()
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        game_name = game["name"] or "Untitled Game"
+
+        game_blake3 = game["blake3_hash"]
+        if not game_blake3:
+            cursor.execute(
+                "SELECT blake3_hash FROM game_videos WHERE game_id = ? ORDER BY sequence LIMIT 1",
+                (game_id,),
+            )
+            gv_row = cursor.fetchone()
+            if gv_row:
+                game_blake3 = gv_row["blake3_hash"]
+
+        cursor.execute(
+            """SELECT id, rating, tags, name, notes, start_time, end_time, video_sequence
+               FROM raw_clips WHERE game_id = ? AND tags LIKE ?""",
+            (game_id, f'%"{body.tag_name}"%'),
+        )
+        clips = [dict(row) for row in cursor.fetchall()]
+        clip_names = [c["name"] for c in clips if c.get("name")]
+        first_clip_start = clips[0]["start_time"] if clips else None
+
+    existing_shares = list_shares_for_game(game_id, user_id)
+
+    email_results = []
+    all_sent = True
+    share_records = []
+
+    for email in body.emails:
+        duplicate = next(
+            (s for s in existing_shares
+             if s["recipient_email"] == email.lower().strip()
+             and s["tag_name"] == body.tag_name
+             and s["share_type"] == "annotation_playback"
+             and not s.get("revoked_at")),
+            None,
+        )
+        if duplicate:
+            share_records.append({"share_token": duplicate["share_token"], "recipient_email": email})
+            email_results.append({"email": email, "sent": True})
+            continue
+
+        try:
+            share = create_game_share(
+                game_id=game_id,
+                tag_name=body.tag_name,
+                sharer_user_id=user_id,
+                sharer_profile_id=profile_id,
+                recipient_email=email,
+                game_name=game_name,
+                game_blake3=game_blake3,
+                first_clip_start=first_clip_start,
+                clip_names=clip_names,
+                share_type="annotation_playback",
+            )
+            share_records.append(share)
+        except Exception as e:
+            logger.error(f"[share-playback] Failed to create share record: {e}")
+            share_records.append(None)
+
+    tasks = {}
+    for email, share in zip(body.emails, share_records):
+        if email in [r["email"] for r in email_results]:
+            continue
+        tasks[email] = send_playback_share_email(
+            recipient_email=email,
+            sharer_email=sharer_email,
+            athlete_name=body.tag_name,
+            game_name=game_name,
+            share_token=share["share_token"] if share else None,
+        )
+
+    if tasks:
+        send_results = await asyncio.gather(*tasks.values())
+        for (email, share), sent in zip(
+            [(e, s) for e, s in zip(body.emails, share_records) if e not in [r["email"] for r in email_results]],
+            send_results,
+        ):
+            email_results.append({"email": email, "sent": sent})
+            if not sent:
+                all_sent = False
+                if share:
+                    try:
+                        revoke_share(share["share_token"], user_id)
+                    except Exception:
+                        pass
+
+    if all_sent and email_results:
+        clip_data_bytes = serialize_clip_data(clips)
+        for email, share in zip(body.emails, share_records):
+            if not share:
+                continue
+            try:
+                recipient_user = get_user_by_email(email)
+                share_record = get_share_by_token(share["share_token"])
+                if not share_record:
+                    continue
+
+                if not recipient_user:
+                    create_pending_share(
+                        share_id=share_record["id"],
+                        sharer_user_id=user_id,
+                        sharer_profile_id=profile_id,
+                        recipient_email=email,
+                        game_id=game_id,
+                        tag_name=body.tag_name,
+                        clip_data_bytes=clip_data_bytes,
+                    )
+                    logger.info(f"[share-playback] Created pending share for non-user {email}")
+                    continue
+
+                profiles = get_profiles(recipient_user["user_id"])
+                if len(profiles) == 1:
+                    materialize_game_share(
+                        sharer_user_id=user_id,
+                        sharer_profile_id=profile_id,
+                        recipient_user_id=recipient_user["user_id"],
+                        recipient_profile_id=profiles[0]["id"],
+                        game_id=game_id,
+                        tag_name=body.tag_name,
+                        share_id=share_record["id"],
+                        clip_data=clips,
+                        sharer_email=sharer_email,
+                    )
+                    logger.info(f"[share-playback] Materialized for {email}")
+                else:
+                    create_pending_share(
+                        share_id=share_record["id"],
+                        sharer_user_id=user_id,
+                        sharer_profile_id=profile_id,
+                        recipient_email=email,
+                        game_id=game_id,
+                        tag_name=body.tag_name,
+                        clip_data_bytes=clip_data_bytes,
+                    )
+                    logger.info(f"[share-playback] Created pending share for multi-profile user {email}")
+            except Exception as e:
+                logger.error(f"[share-playback] Materialization failed for {email}: {e}")
+
+    return {"results": email_results, "all_sent": all_sent}
+
+

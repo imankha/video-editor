@@ -148,6 +148,7 @@ def create_game_share(
     game_blake3: Optional[str] = None,
     first_clip_start: Optional[float] = None,
     clip_names: Optional[list[str]] = None,
+    share_type: str = "game",
 ) -> dict:
     with get_sharing_db() as conn:
         cur = conn.cursor()
@@ -156,9 +157,9 @@ def create_game_share(
             """INSERT INTO shares
                (share_token, share_type, sharer_user_id, sharer_profile_id,
                 recipient_email)
-               VALUES (%s, 'game', %s, %s, %s)
+               VALUES (%s, %s, %s, %s, %s)
                RETURNING id""",
-            (token, sharer_user_id, sharer_profile_id,
+            (token, share_type, sharer_user_id, sharer_profile_id,
              recipient_email.lower().strip()),
         )
         share_id = cur.fetchone()["id"]

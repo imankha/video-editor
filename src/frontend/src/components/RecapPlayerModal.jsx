@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Play } from 'lucide-react';
+import { X, Play, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useRecapPlayback } from './recap/useRecapPlayback';
 import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
 import { PlaybackControls } from '../modes/annotate/components/PlaybackControls';
+import { SharePlaybackDialog } from './SharePlaybackDialog';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -16,6 +17,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab || 'annotations');
   const [isLoading, setIsLoading] = useState(true);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
   const contentRef = useRef(null);
@@ -162,12 +164,23 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                 <p className="text-xs text-gray-400">Game Recap</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {recapData?.clips?.length > 0 && (
+                <button
+                  onClick={() => setShowShareDialog(true)}
+                  className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+                  title="Share highlights"
+                >
+                  <Share2 size={20} />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -357,6 +370,15 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
           </div>
         )}
       </div>
+
+      {showShareDialog && (
+        <SharePlaybackDialog
+          gameId={game.id}
+          gameName={game.name || 'Untitled Game'}
+          tags={[...new Set(recapData.clips.flatMap(c => c.tags || []))]}
+          onClose={() => setShowShareDialog(false)}
+        />
+      )}
     </div>
   );
 }
