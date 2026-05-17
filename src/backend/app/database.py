@@ -866,6 +866,17 @@ def ensure_database():
             ON game_videos(game_id)
         """)
 
+        # T2930: Per-user storage expiry (moved from Postgres game_storage_refs)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_storage (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                blake3_hash TEXT NOT NULL UNIQUE,
+                game_size_bytes INTEGER NOT NULL,
+                storage_expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+
         # T80: Track in-progress multipart uploads
         # Allows resuming interrupted uploads
         cursor.execute("""

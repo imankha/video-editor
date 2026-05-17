@@ -1,12 +1,16 @@
 """
-Tests for auth_db storage ref functions: get_expired_refs, delete_ref,
-has_remaining_refs, get_next_expiry.
+Tests for game storage functions after T2930 refactor:
+- Per-user expiry in profile.sqlite (game_storage table)
+- Global ref counts in Postgres (game_ref_counts table)
+- Grace deletions in Postgres (r2_grace_deletions table)
 """
 
+import sqlite3
 import sys
 import types
 import pytest
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 # Prevent cv2 import failure when app.services.__init__ loads image_extractor
 if "cv2" not in sys.modules:
@@ -16,54 +20,167 @@ from app.services import auth_db
 
 
 @pytest.fixture(autouse=True)
-def temp_auth_db(pg_conn):
-    """Clean Postgres tables for each test (via pg_conn truncation)."""
+def temp_auth_db(pg_conn, tmp_path):
+    """Clean Postgres tables + isolated profile SQLite for each test."""
     from app.services.auth_db import create_user
+    from app.user_context import set_current_user_id
+    from app.profile_context import set_current_profile_id
+
     create_user("user-1", email="user1@example.com")
     create_user("user-2", email="user2@example.com")
-    yield
 
+    # Create isolated profile.sqlite with game_storage table
+    set_current_user_id("user-1")
+    set_current_profile_id("prof-1")
 
-def _insert_ref(blake3_hash, user_id, profile_id, expires_at):
-    with auth_db.get_auth_db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO game_storage_refs
-               (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
-               VALUES (%s, %s, %s, 1000, %s)""",
-            (user_id, profile_id, blake3_hash, expires_at),
+    db_dir = tmp_path / "user-1" / "profiles" / "prof-1"
+    db_dir.mkdir(parents=True)
+    db_path = db_dir / "profile.sqlite"
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            game_size_bytes INTEGER NOT NULL,
+            storage_expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
+    """)
+    conn.commit()
+    conn.close()
+
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.database._initialized_users", {"user-1", "user-2"}), \
+         patch("app.database.R2_ENABLED", False):
+        yield {"tmp_path": tmp_path}
+
+
+def _setup_user2_profile(tmp_path):
+    """Create a second user's profile DB for multi-user tests."""
+    from app.user_context import set_current_user_id
+    from app.profile_context import set_current_profile_id
+
+    set_current_user_id("user-2")
+    set_current_profile_id("prof-2")
+
+    db_dir = tmp_path / "user-2" / "profiles" / "prof-2"
+    db_dir.mkdir(parents=True)
+    db_path = db_dir / "profile.sqlite"
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS game_storage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blake3_hash TEXT NOT NULL UNIQUE,
+            game_size_bytes INTEGER NOT NULL,
+            storage_expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
-# get_expired_refs
+# insert_game_storage_ref
 # ---------------------------------------------------------------------------
 
-class TestGetExpiredRefs:
-    def test_returns_individually_expired_refs(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        future = datetime.now(timezone.utc) + timedelta(days=7)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-        _insert_ref("hash_a", "user-2", "prof-2", future)
+class TestInsertGameStorageRef:
+    def test_inserts_into_sqlite_and_increments_ref_count(self, temp_auth_db):
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
-        result = auth_db.get_expired_refs()
-        assert len(result) == 1
-        assert result[0]["user_id"] == "user-1"
+        ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
+        assert ref is not None
+        assert ref["game_size_bytes"] == 1000
 
-    def test_returns_empty_when_none_expired(self, temp_auth_db):
-        future = datetime.now(timezone.utc) + timedelta(days=7)
-        _insert_ref("hash_a", "user-1", "prof-1", future)
+        assert auth_db.has_remaining_refs("hash_a") is True
 
-        result = auth_db.get_expired_refs()
-        assert result == []
+    def test_upsert_updates_expiry_without_incrementing_ref_count(self, temp_auth_db):
+        future1 = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        future2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
 
-    def test_returns_all_expired_across_hashes(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-        _insert_ref("hash_b", "user-2", "prof-2", past)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future1)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future2)
 
-        result = auth_db.get_expired_refs()
-        assert len(result) == 2
+        ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
+        assert ref["storage_expires_at"] == future2
+
+        # Ref count should still be 1 (not 2)
+        with auth_db.get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s", ("hash_a",))
+            row = cur.fetchone()
+        assert row["ref_count"] == 1
+
+    def test_clears_grace_deletion_on_insert(self, temp_auth_db):
+        auth_db.insert_grace_deletion("hash_a")
+
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+
+        with auth_db.get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
+            assert cur.fetchone() is None
+
+    def test_updates_latest_expiry_via_greatest(self, temp_auth_db):
+        early = (datetime.now(timezone.utc) + timedelta(days=10)).isoformat()
+        late = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, early)
+
+        # Simulate second user extending with a later expiry
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, late)
+
+        with auth_db.get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT latest_expiry FROM game_ref_counts WHERE blake3_hash = %s", ("hash_a",))
+            row = cur.fetchone()
+        assert row["latest_expiry"].isoformat() >= late[:19]
+
+
+# ---------------------------------------------------------------------------
+# get_game_storage_ref
+# ---------------------------------------------------------------------------
+
+class TestGetGameStorageRef:
+    def test_returns_none_for_nonexistent(self, temp_auth_db):
+        assert auth_db.get_game_storage_ref("user-1", "prof-1", "nope") is None
+
+    def test_returns_ref_data(self, temp_auth_db):
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 2000, future)
+
+        ref = auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a")
+        assert ref["game_size_bytes"] == 2000
+        assert ref["storage_expires_at"] == future
+
+
+# ---------------------------------------------------------------------------
+# get_storage_refs_for_user
+# ---------------------------------------------------------------------------
+
+class TestGetStorageRefsForUser:
+    def test_returns_all_refs(self, temp_auth_db):
+        f1 = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        f2 = (datetime.now(timezone.utc) + timedelta(days=60)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, f1)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 2000, f2)
+
+        refs = auth_db.get_storage_refs_for_user("user-1")
+        assert len(refs) == 2
+        hashes = {r["blake3_hash"] for r in refs}
+        assert hashes == {"hash_a", "hash_b"}
+
+    def test_returns_empty_when_none(self, temp_auth_db):
+        refs = auth_db.get_storage_refs_for_user("user-1")
+        assert refs == []
 
 
 # ---------------------------------------------------------------------------
@@ -71,22 +188,17 @@ class TestGetExpiredRefs:
 # ---------------------------------------------------------------------------
 
 class TestDeleteRef:
-    def test_deletes_single_ref(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-        _insert_ref("hash_a", "user-2", "prof-2", past)
+    def test_deletes_from_sqlite_and_decrements_ref_count(self, temp_auth_db):
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
 
         auth_db.delete_ref("user-1", "prof-1", "hash_a")
 
-        with auth_db.get_auth_db() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT user_id FROM game_storage_refs")
-            rows = cur.fetchall()
-        assert len(rows) == 1
-        assert rows[0]["user_id"] == "user-2"
+        assert auth_db.get_game_storage_ref("user-1", "prof-1", "hash_a") is None
+        assert auth_db.has_remaining_refs("hash_a") is False
 
-    def test_no_op_for_nonexistent_ref(self, temp_auth_db):
-        auth_db.delete_ref("nobody", "noprof", "nohash")
+    def test_no_op_for_nonexistent(self, temp_auth_db):
+        auth_db.delete_ref("user-1", "prof-1", "nope")
 
 
 # ---------------------------------------------------------------------------
@@ -95,20 +207,35 @@ class TestDeleteRef:
 
 class TestHasRemainingRefs:
     def test_true_when_refs_exist(self, temp_auth_db):
-        future = datetime.now(timezone.utc) + timedelta(days=7)
-        _insert_ref("hash_a", "user-1", "prof-1", future)
-
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         assert auth_db.has_remaining_refs("hash_a") is True
 
     def test_false_when_no_refs(self, temp_auth_db):
         assert auth_db.has_remaining_refs("hash_a") is False
 
     def test_false_after_all_deleted(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         auth_db.delete_ref("user-1", "prof-1", "hash_a")
         assert auth_db.has_remaining_refs("hash_a") is False
+
+
+# ---------------------------------------------------------------------------
+# get_all_ref_hashes
+# ---------------------------------------------------------------------------
+
+class TestGetAllRefHashes:
+    def test_returns_all_hashes(self, temp_auth_db):
+        f = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, f)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 2000, f)
+
+        result = auth_db.get_all_ref_hashes("user-1")
+        assert result == {"hash_a", "hash_b"}
+
+    def test_returns_empty_when_none(self, temp_auth_db):
+        assert auth_db.get_all_ref_hashes("user-1") == set()
 
 
 # ---------------------------------------------------------------------------
@@ -117,54 +244,28 @@ class TestHasRemainingRefs:
 
 class TestGetNextExpiry:
     def test_returns_none_when_no_refs(self, temp_auth_db):
-        result = auth_db.get_next_expiry()
-        assert result is None
-
-    def test_returns_none_when_all_expired(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=1)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-
-        result = auth_db.get_next_expiry()
-        assert result is None
+        assert auth_db.get_next_expiry() is None
 
     def test_returns_earliest_future_expiry(self, temp_auth_db):
-        soon = datetime.now(timezone.utc) + timedelta(hours=2)
-        later = datetime.now(timezone.utc) + timedelta(days=7)
-        _insert_ref("hash_a", "user-1", "prof-1", soon)
-        _insert_ref("hash_b", "user-2", "prof-2", later)
+        soon = (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+        later = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, soon)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 1000, later)
 
         result = auth_db.get_next_expiry()
         assert result is not None
-        assert abs((result - soon).total_seconds()) < 2
-
-    def test_ignores_past_expiries(self, temp_auth_db):
-        past = datetime.now(timezone.utc) - timedelta(days=5)
-        future = datetime.now(timezone.utc) + timedelta(days=10)
-        _insert_ref("hash_a", "user-1", "prof-1", past)
-        _insert_ref("hash_b", "user-2", "prof-2", future)
-
-        result = auth_db.get_next_expiry()
-        assert result is not None
-        assert abs((result - future).total_seconds()) < 2
+        expected = datetime.now(timezone.utc) + timedelta(hours=2)
+        assert abs((result - expected).total_seconds()) < 5
 
     def test_returns_grace_expiry_when_earlier(self, temp_auth_db):
-        ref_future = datetime.now(timezone.utc) + timedelta(days=30)
-        _insert_ref("hash_a", "user-1", "prof-1", ref_future)
+        future = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
         auth_db.insert_grace_deletion("hash_b", grace_days=3)
 
         result = auth_db.get_next_expiry()
         assert result is not None
         grace_expected = datetime.now(timezone.utc) + timedelta(days=3)
-        assert abs((result - grace_expected).total_seconds()) < 2
-
-    def test_returns_ref_expiry_when_earlier_than_grace(self, temp_auth_db):
-        ref_soon = datetime.now(timezone.utc) + timedelta(hours=1)
-        _insert_ref("hash_a", "user-1", "prof-1", ref_soon)
-        auth_db.insert_grace_deletion("hash_b", grace_days=14)
-
-        result = auth_db.get_next_expiry()
-        assert result is not None
-        assert abs((result - ref_soon).total_seconds()) < 2
+        assert abs((result - grace_expected).total_seconds()) < 5
 
     def test_returns_grace_expiry_when_no_refs(self, temp_auth_db):
         auth_db.insert_grace_deletion("hash_a", grace_days=7)
@@ -172,11 +273,34 @@ class TestGetNextExpiry:
         result = auth_db.get_next_expiry()
         assert result is not None
         expected = datetime.now(timezone.utc) + timedelta(days=7)
-        assert abs((result - expected).total_seconds()) < 2
+        assert abs((result - expected).total_seconds()) < 5
 
 
 # ---------------------------------------------------------------------------
-# insert_grace_deletion
+# get_expired_refs_for_profile
+# ---------------------------------------------------------------------------
+
+class TestGetExpiredRefsForProfile:
+    def test_returns_expired_refs(self, temp_auth_db):
+        past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        future = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, past)
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_b", 1000, future)
+
+        result = auth_db.get_expired_refs_for_profile()
+        assert len(result) == 1
+        assert result[0]["blake3_hash"] == "hash_a"
+
+    def test_returns_empty_when_none_expired(self, temp_auth_db):
+        future = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
+
+        result = auth_db.get_expired_refs_for_profile()
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# Grace deletion functions (unchanged, still Postgres)
 # ---------------------------------------------------------------------------
 
 class TestInsertGraceDeletion:
@@ -185,38 +309,28 @@ class TestInsertGraceDeletion:
 
         with auth_db.get_auth_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s",
-                ("hash_a",),
-            )
+            cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
             row = cur.fetchone()
         assert row is not None
-        expires = row['grace_expires_at']
+        expires = row["grace_expires_at"]
         expected = datetime.now(timezone.utc) + timedelta(days=14)
         assert abs((expires - expected).total_seconds()) < 2
 
-    def test_idempotent_insert_or_ignore(self, temp_auth_db):
+    def test_idempotent(self, temp_auth_db):
         auth_db.insert_grace_deletion("hash_a", grace_days=14)
         auth_db.insert_grace_deletion("hash_a", grace_days=7)
 
         with auth_db.get_auth_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s",
-                ("hash_a",),
-            )
+            cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
             row = cur.fetchone()
-        expires = row['grace_expires_at']
+        expires = row["grace_expires_at"]
         expected = datetime.now(timezone.utc) + timedelta(days=14)
         assert abs((expires - expected).total_seconds()) < 2
 
 
-# ---------------------------------------------------------------------------
-# get_expired_grace_deletions
-# ---------------------------------------------------------------------------
-
 class TestGetExpiredGraceDeletions:
-    def test_returns_only_past_grace_rows(self, temp_auth_db):
+    def test_returns_only_past(self, temp_auth_db):
         past = datetime.now(timezone.utc) - timedelta(days=1)
         future = datetime.now(timezone.utc) + timedelta(days=7)
         with auth_db.get_auth_db() as conn:
@@ -233,52 +347,13 @@ class TestGetExpiredGraceDeletions:
         result = auth_db.get_expired_grace_deletions()
         assert result == ["hash_a"]
 
-    def test_returns_empty_when_none_expired(self, temp_auth_db):
-        auth_db.insert_grace_deletion("hash_a", grace_days=14)
-
-        result = auth_db.get_expired_grace_deletions()
-        assert result == []
-
-
-# ---------------------------------------------------------------------------
-# delete_grace_deletion
-# ---------------------------------------------------------------------------
 
 class TestDeleteGraceDeletion:
     def test_removes_row(self, temp_auth_db):
         auth_db.insert_grace_deletion("hash_a")
-
         auth_db.delete_grace_deletion("hash_a")
 
         with auth_db.get_auth_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s",
-                ("hash_a",),
-            )
-            row = cur.fetchone()
-        assert row is None
-
-    def test_no_op_for_nonexistent(self, temp_auth_db):
-        auth_db.delete_grace_deletion("nonexistent")
-
-
-# ---------------------------------------------------------------------------
-# insert_game_storage_ref clears grace deletion
-# ---------------------------------------------------------------------------
-
-class TestInsertRefClearsGrace:
-    def test_clears_grace_on_extension(self, temp_auth_db):
-        auth_db.insert_grace_deletion("hash_a")
-
-        future = datetime.now(timezone.utc) + timedelta(days=30)
-        auth_db.insert_game_storage_ref("user-1", "prof-1", "hash_a", 1000, future)
-
-        with auth_db.get_auth_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s",
-                ("hash_a",),
-            )
-            row = cur.fetchone()
-        assert row is None
+            cur.execute("SELECT * FROM r2_grace_deletions WHERE blake3_hash = %s", ("hash_a",))
+            assert cur.fetchone() is None

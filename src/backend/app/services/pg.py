@@ -26,7 +26,6 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_seen_at TIMESTAMPTZ,
     picture_url TEXT,
-    credit_summary JSONB,
     terms_accepted_at TIMESTAMPTZ,
     terms_version TEXT
 );
@@ -82,6 +81,12 @@ CREATE TABLE IF NOT EXISTS game_storage_refs (
 CREATE INDEX IF NOT EXISTS idx_game_refs_hash ON game_storage_refs(blake3_hash);
 CREATE INDEX IF NOT EXISTS idx_game_refs_user ON game_storage_refs(user_id);
 
+CREATE TABLE IF NOT EXISTS game_ref_counts (
+    blake3_hash TEXT PRIMARY KEY,
+    ref_count INTEGER NOT NULL DEFAULT 0,
+    latest_expiry TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS r2_grace_deletions (
     blake3_hash TEXT PRIMARY KEY,
     grace_expires_at TIMESTAMPTZ NOT NULL,
@@ -96,8 +101,7 @@ CREATE TABLE IF NOT EXISTS shares (
     sharer_profile_id TEXT NOT NULL,
     recipient_email TEXT NOT NULL,
     shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at TIMESTAMPTZ,
-    watched_at TIMESTAMPTZ
+    revoked_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_shares_sharer ON shares(sharer_user_id);

@@ -239,7 +239,7 @@ def get_all_users_for_admin() -> list:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT user_id, email, credit_summary as credits, created_at, last_seen_at
+            """SELECT user_id, email, created_at, last_seen_at
                FROM users
                ORDER BY created_at DESC"""
         )
@@ -317,7 +317,7 @@ def log_impersonation(
 
 
 # ---------------------------------------------------------------------------
-# T1580: Game storage references (cross-user R2 cleanup)
+# T2930: Game storage — per-user expiry in SQLite, global ref counts in Postgres
 # ---------------------------------------------------------------------------
 
 def insert_game_storage_ref(
@@ -327,17 +327,44 @@ def insert_game_storage_ref(
     game_size_bytes: int,
     storage_expires_at: str,
 ) -> None:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """INSERT INTO game_storage_refs
-                  (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at)
-               VALUES (%s, %s, %s, %s, %s)
-               ON CONFLICT (user_id, profile_id, blake3_hash)
-               DO UPDATE SET game_size_bytes = EXCLUDED.game_size_bytes,
-                             storage_expires_at = EXCLUDED.storage_expires_at""",
-            (user_id, profile_id, blake3_hash, game_size_bytes, storage_expires_at),
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """INSERT OR IGNORE INTO game_storage
+               (blake3_hash, game_size_bytes, storage_expires_at)
+               VALUES (?, ?, ?)""",
+            (blake3_hash, game_size_bytes, storage_expires_at),
         )
+        is_new = cursor.rowcount == 1
+        if not is_new:
+            cursor.execute(
+                """UPDATE game_storage
+                   SET game_size_bytes = ?, storage_expires_at = ?
+                   WHERE blake3_hash = ?""",
+                (game_size_bytes, storage_expires_at, blake3_hash),
+            )
+        conn.commit()
+
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
+        if is_new:
+            cur.execute(
+                """INSERT INTO game_ref_counts (blake3_hash, ref_count, latest_expiry)
+                   VALUES (%s, 1, %s)
+                   ON CONFLICT (blake3_hash) DO UPDATE
+                       SET ref_count = game_ref_counts.ref_count + 1,
+                           latest_expiry = GREATEST(game_ref_counts.latest_expiry, EXCLUDED.latest_expiry)""",
+                (blake3_hash, storage_expires_at),
+            )
+        else:
+            cur.execute(
+                """UPDATE game_ref_counts
+                   SET latest_expiry = GREATEST(latest_expiry, %s)
+                   WHERE blake3_hash = %s""",
+                (storage_expires_at, blake3_hash),
+            )
         cur.execute(
             "DELETE FROM r2_grace_deletions WHERE blake3_hash = %s",
             (blake3_hash,),
@@ -347,77 +374,88 @@ def insert_game_storage_ref(
 def get_game_storage_ref(
     user_id: str, profile_id: str, blake3_hash: str
 ) -> Optional[dict]:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
-        cur.execute(
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        row = cursor.execute(
             """SELECT storage_expires_at, game_size_bytes, created_at
-               FROM game_storage_refs
-               WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
-            (user_id, profile_id, blake3_hash),
-        )
-        return cur.fetchone()
+               FROM game_storage WHERE blake3_hash = ?""",
+            (blake3_hash,),
+        ).fetchone()
+        if row:
+            return {"storage_expires_at": row["storage_expires_at"],
+                    "game_size_bytes": row["game_size_bytes"],
+                    "created_at": row["created_at"]}
+        return None
 
 
 def get_storage_refs_for_user(user_id: str) -> list[dict]:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """SELECT blake3_hash, storage_expires_at, game_size_bytes
-               FROM game_storage_refs
-               WHERE user_id = %s""",
-            (user_id,),
-        )
-        return [dict(r) for r in cur.fetchall()]
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT blake3_hash, storage_expires_at, game_size_bytes FROM game_storage"
+        ).fetchall()
+        return [{"blake3_hash": r["blake3_hash"],
+                 "storage_expires_at": r["storage_expires_at"],
+                 "game_size_bytes": r["game_size_bytes"]} for r in rows]
 
 
-def get_expired_refs() -> list[dict]:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
-        cur.execute(
-            """SELECT user_id, profile_id, blake3_hash
-               FROM game_storage_refs
-               WHERE storage_expires_at < now()"""
-        )
-        return [dict(r) for r in cur.fetchall()]
+def get_expired_refs_for_profile() -> list[dict]:
+    """Get expired storage refs for the current profile (SQLite)."""
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT blake3_hash FROM game_storage WHERE storage_expires_at < datetime('now')"
+        ).fetchall()
+        return [{"blake3_hash": r["blake3_hash"]} for r in rows]
 
 
 def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM game_storage WHERE blake3_hash = ?", (blake3_hash,))
+        conn.commit()
+
+    with get_pg() as pg_conn:
+        cur = pg_conn.cursor()
         cur.execute(
-            """DELETE FROM game_storage_refs
-               WHERE user_id = %s AND profile_id = %s AND blake3_hash = %s""",
-            (user_id, profile_id, blake3_hash),
+            "UPDATE game_ref_counts SET ref_count = ref_count - 1 WHERE blake3_hash = %s",
+            (blake3_hash,),
         )
 
 
 def has_remaining_refs(blake3_hash: str) -> bool:
-    with get_auth_db() as conn:
+    with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT COUNT(*) as cnt FROM game_storage_refs WHERE blake3_hash = %s",
+            "SELECT ref_count FROM game_ref_counts WHERE blake3_hash = %s",
             (blake3_hash,),
         )
-        return cur.fetchone()["cnt"] > 0
+        row = cur.fetchone()
+        return row is not None and row["ref_count"] > 0
 
 
 def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
-    with get_auth_db() as conn:
-        cur = conn.cursor()
-        if user_id:
-            cur.execute("SELECT DISTINCT blake3_hash FROM game_storage_refs WHERE user_id = %s", (user_id,))
-        else:
-            cur.execute("SELECT DISTINCT blake3_hash FROM game_storage_refs")
-        return {r["blake3_hash"] for r in cur.fetchall()}
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute("SELECT blake3_hash FROM game_storage").fetchall()
+        return {r["blake3_hash"] for r in rows}
 
 
 def get_next_expiry() -> Optional[datetime]:
-    with get_auth_db() as conn:
+    with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT MIN(storage_expires_at) as next_expiry
-               FROM game_storage_refs
-               WHERE storage_expires_at > now()"""
+            "SELECT MIN(latest_expiry) as next_expiry FROM game_ref_counts WHERE ref_count > 0"
         )
         ref_row = cur.fetchone()
         cur.execute("SELECT MIN(grace_expires_at) as next_expiry FROM r2_grace_deletions")

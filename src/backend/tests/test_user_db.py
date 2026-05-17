@@ -28,15 +28,12 @@ def isolated_user_db(pg_conn, tmp_path, monkeypatch):
     user_data_base.mkdir()
     monkeypatch.setattr("app.services.user_db.USER_DATA_BASE", user_data_base)
     monkeypatch.setattr("app.services.user_db._initialized_user_dbs", set())
-    mock_summary = MagicMock()
-    monkeypatch.setattr("app.services.user_db._update_credit_summary", mock_summary)
     from app.services.auth_db import create_user
     create_user("user-a", email="a@example.com")
     create_user("user-b", email="b@example.com")
     yield {
         "tmp_path": tmp_path,
         "user_data_base": user_data_base,
-        "mock_summary": mock_summary,
     }
 
 
@@ -360,29 +357,6 @@ class TestUserIsolation:
 # -----------------------------------------------------------------------
 # 9. Credit summary sync
 # -----------------------------------------------------------------------
-
-class TestCreditSummarySync:
-    def test_grant_calls_update_credit_summary(self, isolated_user_db):
-        from app.services.user_db import grant_credits
-        mock_summary = isolated_user_db["mock_summary"]
-        grant_credits("user-a", 50, "admin_grant")
-        mock_summary.assert_called_with("user-a", 50)
-
-    def test_refund_calls_update_credit_summary(self, isolated_user_db):
-        from app.services.user_db import grant_credits, deduct_credits, refund_credits
-        mock_summary = isolated_user_db["mock_summary"]
-        grant_credits("user-a", 50, "admin_grant")
-        deduct_credits("user-a", 20, "framing_usage", "job1")
-        mock_summary.reset_mock()
-        refund_credits("user-a", 20, "job1")
-        mock_summary.assert_called_with("user-a", 50)
-
-    def test_set_credits_calls_update_credit_summary(self, isolated_user_db):
-        from app.services.user_db import set_credits
-        mock_summary = isolated_user_db["mock_summary"]
-        set_credits("user-a", 75)
-        mock_summary.assert_called_with("user-a", 75)
-
 
 # -----------------------------------------------------------------------
 # 10. Migration from auth.sqlite

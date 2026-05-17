@@ -12,10 +12,24 @@ version: 2.0.0
 
 | System | What it stores | Technology | Access pattern |
 |--------|---------------|------------|----------------|
-| **Fly Postgres** | Users, sessions, shares, admin, storage refs | `psycopg2` via `get_pg()` context manager | `%s` params, `RealDictCursor`, `row["col"]` |
-| **Per-user SQLite** | Clips, projects, credits, transactions | `sqlite3` via `get_user_db_connection()` | `?` params, `sqlite3.Row`, `row["col"]` |
+| **Fly Postgres** | Users, sessions, shares, admin, game_ref_counts, r2_grace_deletions | `psycopg2` via `get_pg()` context manager | `%s` params, `RealDictCursor`, `row["col"]` |
+| **Per-user SQLite** | Clips, projects, credits, game_storage, transactions | `sqlite3` via `get_user_db_connection()` | `?` params, `sqlite3.Row`, `row["col"]` |
 
 **This skill covers the per-user SQLite + R2 sync system only.** For Postgres auth/sharing, see `app/services/pg.py`, `app/services/auth_db.py`, `app/services/sharing_db.py`.
+
+## Data Locality Boundary (T2930)
+
+**Rule: All per-user data belongs in profile.sqlite. Postgres is only for global or cross-user data.**
+
+| Data | Location | Rationale |
+|------|----------|-----------|
+| Per-user game expiry | `profile.sqlite` → `game_storage` table | Per-user, syncs to R2 automatically |
+| Global ref counts | Postgres → `game_ref_counts` (blake3_hash, ref_count, latest_expiry) | Cross-user dedup for R2 cleanup |
+| Grace deletions | Postgres → `r2_grace_deletions` | Global R2 lifecycle |
+| Auth, sessions | Postgres | Must be accessible pre-sync from any device |
+| Shares | Postgres | Recipients query by token/email without knowing sharer |
+
+**When adding new per-user data:** Put it in profile.sqlite. If a global view is needed (e.g., for a sweep), store a lightweight index in Postgres (like `game_ref_counts`) while keeping the full data in SQLite.
 
 ## Per-User SQLite Architecture
 

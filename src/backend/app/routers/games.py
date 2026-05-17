@@ -38,11 +38,9 @@ from app.profile_context import get_current_profile_id
 from app.services.storage_credits import calculate_upload_cost, calculate_extension_cost, storage_expires_at
 from app.services.user_db import deduct_credits
 from app.services.auth_db import (
-    get_all_ref_hashes,
     insert_game_storage_ref,
     get_game_storage_ref,
     get_grace_deletion_hashes,
-    get_storage_refs_for_user,
 )
 
 
@@ -737,12 +735,14 @@ async def list_games():
         """)
         rows = cursor.fetchall()
 
-        # Derive storage expiry from auth_db (single source of truth)
+        # Storage expiry from profile SQLite (per-user, single source of truth)
         user_id = get_current_user_id()
-        storage_refs = get_storage_refs_for_user(user_id)
-        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_refs}
+        storage_rows = cursor.execute(
+            "SELECT blake3_hash, storage_expires_at FROM game_storage"
+        ).fetchall()
+        expiry_by_hash = {r['blake3_hash']: r['storage_expires_at'] for r in storage_rows}
         grace_hashes = get_grace_deletion_hashes()
-        all_ref_hashes = get_all_ref_hashes(user_id)
+        all_ref_hashes = {r['blake3_hash'] for r in storage_rows}
 
         # T2880: Pre-generate presigned URLs for all games concurrently.
         # get_game_video_url -> generate_presigned_url_global hits the TTL cache;
@@ -960,7 +960,7 @@ async def extend_game_storage(game_id: int, request: ExtendStorageRequest):
                 },
             )
 
-        # Get current expiry from auth_db (single source of truth)
+        # Get current expiry from profile SQLite (per-user source of truth)
         ref = get_game_storage_ref(user_id, profile_id, game['blake3_hash']) if game['blake3_hash'] else None
         current_expiry = ref['storage_expires_at'] if ref else None
         if current_expiry:

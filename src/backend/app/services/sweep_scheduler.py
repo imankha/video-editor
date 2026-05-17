@@ -15,7 +15,7 @@ from .auth_db import (
     delete_grace_deletion,
     delete_ref,
     get_expired_grace_deletions,
-    get_expired_refs,
+    get_expired_refs_for_profile,
     get_next_expiry,
     has_remaining_refs,
     insert_grace_deletion,
@@ -100,50 +100,51 @@ async def _run_sweep_loop():
 
 
 def do_sweep():
-    """Phase 1: process expired refs. Phase 2: delete grace-expired R2 objects."""
+    """Phase 1: iterate users, export expired games. Phase 2: grace-delete R2 objects."""
     t0 = time.perf_counter()
+    total_expired = 0
 
-    # Phase 1: auto-export and delete expired storage refs
-    expired_refs = get_expired_refs()
-    if not expired_refs:
+    # Phase 1: iterate all users' profiles for expired storage refs
+    from .auth_db import get_all_users_for_admin
+    from ..migrations import _get_profile_ids
+
+    users = get_all_users_for_admin()
+    for user in users:
+        user_id = user["user_id"]
+        for profile_id in _get_profile_ids(user_id):
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+            ensure_database()
+
+            expired_refs = get_expired_refs_for_profile()
+            if not expired_refs:
+                continue
+
+            expired_hashes = {r["blake3_hash"] for r in expired_refs}
+            total_expired += len(expired_refs)
+            logger.info(f"[Sweep] user={user_id[:8]} profile={profile_id[:8]} has {len(expired_refs)} expired refs")
+
+            for ref in expired_refs:
+                blake3_hash = ref["blake3_hash"]
+                game_ids = _find_games_for_hash(
+                    user_id, profile_id, blake3_hash, expired_hashes
+                )
+
+                for game_id in game_ids:
+                    try:
+                        status = auto_export_game(user_id, profile_id, game_id)
+                        logger.info(f"[Sweep] game={game_id} user={user_id[:8]} status={status}")
+                    except Exception as e:
+                        logger.error(f"[Sweep] Auto-export failed: user={user_id} game={game_id}: {e}")
+
+                delete_ref(user_id, profile_id, blake3_hash)
+
+                if not has_remaining_refs(blake3_hash):
+                    insert_grace_deletion(blake3_hash, GRACE_PERIOD_DAYS)
+                    logger.info(f"[Sweep] Grace period started hash={blake3_hash[:12]} ({GRACE_PERIOD_DAYS}d)")
+
+    if not total_expired:
         logger.info("[Sweep] No expired refs")
-    else:
-        logger.info(f"[Sweep] Processing {len(expired_refs)} expired refs")
-
-    expired_hashes = {r['blake3_hash'] for r in expired_refs}
-
-    for ref in expired_refs:
-        user_id = ref['user_id']
-        profile_id = ref['profile_id']
-        blake3_hash = ref['blake3_hash']
-
-        set_current_user_id(user_id)
-        set_current_profile_id(profile_id)
-        ensure_database()
-
-        game_ids = _find_games_for_hash(
-            user_id, profile_id, blake3_hash, expired_hashes
-        )
-        logger.info(f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} found {len(game_ids)} games to export")
-
-        for game_id in game_ids:
-            try:
-                status = auto_export_game(user_id, profile_id, game_id)
-                logger.info(
-                    f"[Sweep] game={game_id} user={user_id[:8]} status={status}"
-                )
-            except Exception as e:
-                logger.error(
-                    f"[Sweep] Auto-export failed: user={user_id} "
-                    f"game={game_id}: {e}"
-                )
-
-        delete_ref(user_id, profile_id, blake3_hash)
-        logger.info(f"[Sweep] Deleted ref user={user_id[:8]} hash={blake3_hash[:12]}")
-
-        if not has_remaining_refs(blake3_hash):
-            insert_grace_deletion(blake3_hash, GRACE_PERIOD_DAYS)
-            logger.info(f"[Sweep] Grace period started hash={blake3_hash[:12]} ({GRACE_PERIOD_DAYS}d)")
 
     # Phase 2: delete R2 objects whose grace period has elapsed
     grace_expired = get_expired_grace_deletions()
@@ -155,7 +156,7 @@ def do_sweep():
         logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
 
     elapsed = time.perf_counter() - t0
-    logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={len(expired_refs)}, grace_deleted={len(grace_expired)})")
+    logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
 
 
 def _find_games_for_hash(
