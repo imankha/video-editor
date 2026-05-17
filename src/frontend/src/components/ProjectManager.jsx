@@ -28,6 +28,8 @@ import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
+import { buildInviteMailtoUrl } from '../utils/inviteEmail';
+import { useCurrentProfile } from '../stores/profileStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 
 /**
@@ -415,6 +417,22 @@ export function ProjectManager({
   // Auth gate — force login before creating persistent data
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userEmail = useAuthStore((s) => s.email);
+  const currentProfile = useCurrentProfile();
+
+  const handleInviteClick = useCallback(async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
+      if (!resp.ok) return;
+      const { invite_code } = await resp.json();
+      const url = buildInviteMailtoUrl({
+        athleteName: currentProfile?.name,
+        userEmail,
+        inviteCode: invite_code,
+      });
+      window.open(url, '_blank');
+    } catch { /* network error — user can retry */ }
+  }, [currentProfile?.name, userEmail]);
 
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {
@@ -507,6 +525,16 @@ export function ProjectManager({
                 {downloadsCount > 9 ? '9+' : downloadsCount}
               </span>
             )}
+          </Button>
+        )}
+        {isAuthenticated && (
+          <Button
+            variant="reelOutline"
+            icon={Share2}
+            onClick={handleInviteClick}
+            title="Invite a Friend"
+          >
+            <span className="hidden sm:inline">Invite</span>
           </Button>
         )}
         <SignInButton />

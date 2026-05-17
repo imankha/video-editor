@@ -31,5 +31,6 @@ from .quests import router as quests_router
 from .admin import router as admin_router
 from .payments import router as payments_router
 from .shares import gallery_shares_router, shared_router
+from .users import router as users_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router', 'quests_router', 'admin_router', 'payments_router', 'gallery_shares_router', 'shared_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router', 'quests_router', 'admin_router', 'payments_router', 'gallery_shares_router', 'shared_router', 'users_router']

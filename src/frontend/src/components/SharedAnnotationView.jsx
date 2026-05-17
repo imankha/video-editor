@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
-import { Loader, AlertCircle, Play, Film } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Loader, AlertCircle, Play, Film, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
 import { Logo } from './Logo';
 import { GoogleOneTap } from './GoogleOneTap';
 import { useAuthStore } from '../stores/authStore';
+import { useCurrentProfile } from '../stores/profileStore';
 import { useGamesDataStore } from '../stores';
 import { useEditorStore } from '../stores';
 import { API_BASE } from '../config';
+import { buildInviteMailtoUrl } from '../utils/inviteEmail';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -14,6 +16,22 @@ export function SharedAnnotationView({ shareToken, onClose }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const userEmail = useAuthStore(s => s.email);
+  const currentProfile = useCurrentProfile();
+
+  const handleInviteClick = useCallback(async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
+      if (!resp.ok) return;
+      const { invite_code } = await resp.json();
+      const url = buildInviteMailtoUrl({
+        athleteName: currentProfile?.name,
+        userEmail,
+        inviteCode: invite_code,
+      });
+      window.open(url, '_blank');
+    } catch { /* network error */ }
+  }, [currentProfile?.name, userEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,6 +137,15 @@ export function SharedAnnotationView({ shareToken, onClose }) {
       <Shell>
         <Loader size={32} className="text-cyan-400 animate-spin" />
         <p className="text-gray-400">Loading shared clips...</p>
+        {isAuthenticated && (
+          <button
+            onClick={handleInviteClick}
+            className="flex items-center gap-2 mt-4 px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            <Share2 size={16} />
+            Invite a Friend to Reel Ballers
+          </button>
+        )}
       </Shell>
     );
   }

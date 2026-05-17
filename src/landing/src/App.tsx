@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useMemo } from 'react'
 import { LogoWithText } from './components/Logo'
 import { TbFocusCentered } from 'react-icons/tb'
 import { HiSparkles } from 'react-icons/hi2'
@@ -9,6 +9,14 @@ import { HiTag, HiStar } from 'react-icons/hi2'
 
 function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  const ctaHref = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ref = params.get('ref')
+    return ref
+      ? `https://app.reelballers.com?ref=${encodeURIComponent(ref)}`
+      : 'https://app.reelballers.com'
+  }, [])
 
   const handleFullscreen = () => {
     const video = videoRef.current
@@ -33,9 +41,18 @@ function App() {
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-6">
             Share Your Player's Brilliance
           </h2>
-          <p className="text-xl text-gray-300 mb-12 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
             Higher quality highlights in minutes.
           </p>
+
+          <div className="flex justify-center mb-12">
+            <a
+              href={ctaHref}
+              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+            >
+              Get Started Free
+            </a>
+          </div>
 
           {/* Before/After Demo Video */}
           <div className="flex justify-center mb-16">

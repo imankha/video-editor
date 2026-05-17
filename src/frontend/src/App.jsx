@@ -96,6 +96,15 @@ function App() {
   const clearSelection = useProjectsStore(state => state.clearSelection);
   const discardUncommittedChanges = useProjectsStore(state => state.discardUncommittedChanges);
 
+  // T2900: Capture referral code from URL before any navigation clears it
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref && !sessionStorage.getItem('referralCode')) {
+      sessionStorage.setItem('referralCode', ref);
+    }
+  }, []);
+
   // T85a: Initialize session (profile ID header) then warm video cache.
   // T85b: Also fetch profiles for the profile switcher.
   // The backend auto-resolves profile if header is missing, so no render gate needed.

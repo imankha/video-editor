@@ -52,11 +52,14 @@ async function handleCredential(response) {
     return;
   }
   try {
+    const authBody = { token: response.credential };
+    const ref = sessionStorage.getItem('referralCode');
+    if (ref) authBody.ref = ref;
     const res = await fetch(`${API_BASE}/api/auth/google`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: response.credential }),
+      body: JSON.stringify(authBody),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

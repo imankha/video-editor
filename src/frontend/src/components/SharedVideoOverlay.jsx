@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, Loader, Lock, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, AlertCircle, Loader, Lock, Download, Share2 } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useAuthStore } from '../stores/authStore';
+import { useCurrentProfile } from '../stores/profileStore';
+import { buildInviteMailtoUrl } from '../utils/inviteEmail';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -11,6 +13,22 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
+  const userEmail = useAuthStore(s => s.email);
+  const currentProfile = useCurrentProfile();
+
+  const handleInviteClick = useCallback(async () => {
+    try {
+      const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
+      if (!resp.ok) return;
+      const { invite_code } = await resp.json();
+      const url = buildInviteMailtoUrl({
+        athleteName: currentProfile?.name,
+        userEmail,
+        inviteCode: invite_code,
+      });
+      window.open(url, '_blank');
+    } catch { /* network error */ }
+  }, [currentProfile?.name, userEmail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +105,17 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           autoPlay
           onClose={onClose}
         />
+        {isAuthenticated && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+            <button
+              onClick={handleInviteClick}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
+            >
+              <Share2 size={16} />
+              Invite a Friend to Reel Ballers
+            </button>
+          </div>
+        )}
       </Overlay>
     );
   }

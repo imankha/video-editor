@@ -15,6 +15,8 @@ has a non-null email. Unauthenticated visitors have no user_id; mutating
 actions must go through the auth modal first.
 """
 
+from typing import Optional
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -200,6 +202,7 @@ async def delete_user():
 
 class GoogleAuthRequest(BaseModel):
     token: str
+    ref: Optional[str] = None
 
 
 class AuthResponse(BaseModel):
@@ -241,7 +244,7 @@ async def _verify_google_token(token: str) -> dict:
     return token_data
 
 
-def _find_or_create_user(email: str, *, google_id: str | None = None) -> str:
+def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> str:
     """Find a user row by email, or create a fresh one with a new UUID.
 
     T1330: no guest-linking. Unauthenticated visitors have no pre-existing
@@ -268,7 +271,10 @@ def _find_or_create_user(email: str, *, google_id: str | None = None) -> str:
         google_id=google_id,
         verified_at=datetime.utcnow().isoformat(),
     )
-    logger.info(f"[Auth] login — created user: {user_id} ({email})")
+    if ref:
+        logger.info(f"[Auth] login — created user: {user_id} ({email}) referred_by={ref}")
+    else:
+        logger.info(f"[Auth] login — created user: {user_id} ({email})")
     return user_id
 
 
@@ -316,7 +322,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     google_id = token_data.get("sub")
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
-    user_id = _find_or_create_user(email, google_id=google_id)
+    user_id = _find_or_create_user(email, google_id=google_id, ref=body.ref)
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -425,6 +431,7 @@ class SendOtpRequest(BaseModel):
 class VerifyOtpRequest(BaseModel):
     email: str
     code: str
+    ref: Optional[str] = None
 
 
 @router.post("/send-otp")
@@ -530,7 +537,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             (row["id"],),
         )
 
-    user_id = _find_or_create_user(email)
+    user_id = _find_or_create_user(email, ref=body.ref)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     return _issue_session_cookie(

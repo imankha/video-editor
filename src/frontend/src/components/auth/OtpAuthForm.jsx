@@ -148,11 +148,14 @@ export function OtpAuthForm({ resetKey = null }) {
     setLoading(true);
     setError(null);
     try {
+      const verifyBody = { email: email.trim(), code: joined };
+      const ref = sessionStorage.getItem('referralCode');
+      if (ref) verifyBody.ref = ref;
       const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), code: joined }),
+        body: JSON.stringify(verifyBody),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
