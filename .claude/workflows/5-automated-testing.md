@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run automated tests to verify the implementation. The Tester agent runs relevant tests and iterates with the main AI until all tests pass.
+Run automated tests to verify the implementation, then expand test coverage to be comprehensive. The Tester agent runs relevant tests and iterates with the main AI until all tests pass.
 
 ## Checklist
 
@@ -39,9 +39,45 @@ For each failing test:
 
 3. **Re-run Tester** until all tests pass
 
-### 3. All Tests Pass
+### 3. Expand Test Coverage
 
-Once Tester confirms all tests pass:
+**After all initial tests pass, add comprehensive unit tests for full coverage.**
+
+Write tests covering:
+
+**Backend (for each new endpoint/service function):**
+- Happy path with valid inputs
+- Error cases (404, validation errors, auth failures)
+- Edge cases (duplicates, empty inputs, null fields)
+- Integration between layers (endpoint -> service -> DB)
+- Side effects (emails sent, records created in related tables)
+- Deduplication / idempotency behavior
+
+**Frontend (for each new component):**
+- Renders correctly with default props
+- Renders correctly with edge-case props (empty arrays, null values, single items)
+- User interactions trigger correct behavior (clicks, input, keyboard)
+- API calls made with correct parameters
+- Success/error/loading states
+- Dismiss/close behavior (Escape, backdrop click, X button, Cancel)
+- Callbacks invoked with correct arguments
+
+**Target:** Every new function, endpoint, and component should have tests for its primary behaviors AND its failure modes. Aim for the test plan items in the kickoff prompt plus any additional cases discovered during implementation.
+
+**Run all tests after expansion:**
+```bash
+# Frontend
+cd src/frontend && npm test
+
+# Backend
+cd src/backend && .venv/Scripts/python.exe -m pytest tests/test_{feature}.py -v
+```
+
+Fix any failures, then commit the test expansion.
+
+### 4. All Tests Pass
+
+Once all tests pass (including expanded coverage):
 
 ```markdown
 ## Automated Testing Results
@@ -51,10 +87,10 @@ Once Tester confirms all tests pass:
 - E2E: Y passed
 - Backend: Z passed
 
-**All tests passing.** Ready for manual testing.
+**All tests passing.** Ready for testing handoff.
 ```
 
-### 4. Commit Final State
+### 5. Commit Final State
 
 Ensure all fixes are committed:
 
@@ -91,4 +127,4 @@ cd src/backend && pytest tests/test_foo.py -v
 
 ## After All Tests Pass
 
-Proceed to [6-manual-testing.md](6-manual-testing.md) to prepare for user testing.
+Proceed to [6-manual-testing.md](6-manual-testing.md) to generate the testing handoff prompt.

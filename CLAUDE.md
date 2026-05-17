@@ -89,8 +89,8 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | 4 | Implementation | [4-implementation.md](.claude/workflows/4-implementation.md) | Implementor | - |
 | 4.75 | Migration | - | Migration | - |
 | 4.5 | Review | [reviewer.md](.claude/agents/reviewer.md) | Reviewer | Conversation* |
-| 5 | Automated Testing | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
-| 6 | Manual Testing | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **Approval Required** |
+| 5 | Automated Testing + Coverage | [5-automated-testing.md](.claude/workflows/5-automated-testing.md) | Tester (Phase 2) | - |
+| 6 | Test & Fix Agent Handoff | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **New Conversation** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
 **Note**: Classification determines which agents to include based on scope (stack layers, files, LOC). Default to full workflow; skip stages only with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
@@ -104,8 +104,8 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | "Implement T{id}..." / assigns task | → Stage 1 (task start) → Stage 2 (architecture) |
 | Reviews design doc | → Wait for "approved" or feedback |
 | "Approved" / "looks good" (design) | → Stage 3 (test-first) → Stage 4 (implement) |
-| "I think this works" / code complete | → Stage 5 (automated testing) |
-| All tests pass | → Stage 6 (manual testing instructions) |
+| "I think this works" / code complete | → Stage 5 (automated testing + coverage) |
+| All tests pass | → Stage 6 (generate Test & Fix Agent handoff) |
 | "Approved" / "that worked" (testing) | → Stage 7 (task complete) |
 | "Ready to merge?" / "can I push?" / "ready for PR?" | → Spawn Merge Reviewer agent |
 
