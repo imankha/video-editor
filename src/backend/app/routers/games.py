@@ -41,6 +41,7 @@ from app.services.auth_db import (
     insert_game_storage_ref,
     get_game_storage_ref,
     get_grace_deletion_hashes,
+    delete_ref,
 )
 
 
@@ -1154,6 +1155,12 @@ async def delete_game(game_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
 
+        # Collect video hashes before cascade delete removes game_videos rows
+        video_hashes = [
+            row['blake3_hash'] for row in
+            cursor.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,)).fetchall()
+        ]
+
         # Find all projects linked to this game's clips (auto-created or manual)
         cursor.execute("""
             SELECT DISTINCT p.id FROM projects p
@@ -1179,8 +1186,13 @@ async def delete_game(game_id: int):
 
         conn.commit()
 
-        logger.info(f"Deleted game {game_id} ({orphaned} orphaned projects cleaned up)")
-        return {'success': True}
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    for h in video_hashes:
+        delete_ref(user_id, profile_id, h)
+
+    logger.info(f"Deleted game {game_id} ({orphaned} orphaned projects cleaned up, {len(video_hashes)} storage refs removed)")
+    return {'success': True}
 
 
 @router.get("/{game_id:int}/video")
