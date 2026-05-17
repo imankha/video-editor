@@ -63,7 +63,7 @@ export const useGamesDataStore = create((set, get) => ({
     _fetchController = new AbortController();
     const { signal } = _fetchController;
 
-    set({ isLoading: games.length === 0, error: null });
+    set({ isLoading: get().games.length === 0, error: null });
     _fetchPromise = (async () => {
       if (PROFILING_ENABLED) performance.mark('games:fetch:start');
       try {
