@@ -108,7 +108,7 @@ def pg_conn(monkeypatch):
     cur.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM sessions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM users WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares")
+    cur.execute("TRUNCATE otp_codes, r2_grace_deletions, impersonation_audit, pending_teammate_shares, game_ref_counts")
     cur.execute(_SEED_SQL)
     setup.close()
 

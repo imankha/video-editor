@@ -44,7 +44,7 @@ def find_user(email: str) -> dict | None:
     conn = get_pg_conn()
     cur = conn.cursor()
     cur.execute(
-        "SELECT user_id, email, google_id, credit_summary, created_at FROM users WHERE email = %s",
+        "SELECT user_id, email, google_id, created_at FROM users WHERE email = %s",
         (email,),
     )
     row = cur.fetchone()
@@ -131,7 +131,6 @@ def main():
     print(f"User found:")
     print(f"  user_id:    {user_id}")
     print(f"  email:      {user['email']}")
-    print(f"  credits:    {user['credit_summary']}")
     print(f"  created_at: {user['created_at']}")
     print()
 

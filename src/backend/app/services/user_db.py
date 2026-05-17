@@ -243,7 +243,6 @@ def grant_credits(user_id: str, amount: int, source: str, reference_id: Optional
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
         new_balance = row["balance"]
 
-    _update_credit_summary(user_id, new_balance)
     logger.info(f"[UserDB] Granted {amount} credits to {user_id} (source={source}), balance={new_balance}")
     return new_balance
 
@@ -308,7 +307,6 @@ def refund_credits(
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
         new_balance = row["balance"]
 
-    _update_credit_summary(user_id, new_balance)
     logger.info(f"[UserDB] Refunded {amount} credits to {user_id} (job={reference_id}), balance={new_balance}")
     return new_balance
 
@@ -335,7 +333,6 @@ def set_credits(user_id: str, amount: int) -> int:
         )
         conn.commit()
 
-    _update_credit_summary(user_id, amount)
     logger.info(f"[UserDB] Set credits for {user_id} to {amount} (was {old_balance})")
     return amount
 
@@ -544,25 +541,6 @@ def get_credit_stats_for_admin() -> dict:
             continue
 
     return stats
-
-
-# ---------------------------------------------------------------------------
-# Credit summary sync to Postgres (best-effort)
-# ---------------------------------------------------------------------------
-
-def _update_credit_summary(user_id: str, balance: int) -> None:
-    """Best-effort update of credit_summary in Postgres for admin panel."""
-    try:
-        from psycopg2.extras import Json
-        from .auth_db import get_auth_db
-        with get_auth_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE users SET credit_summary = %s WHERE user_id = %s",
-                (Json(balance), user_id),
-            )
-    except Exception as e:
-        logger.warning(f"[UserDB] Failed to update credit_summary for {user_id}: {e}")
 
 
 # ---------------------------------------------------------------------------
