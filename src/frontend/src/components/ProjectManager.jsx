@@ -28,8 +28,8 @@ import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
-import { buildInviteMailtoUrl } from '../utils/inviteEmail';
-import { useCurrentProfile } from '../stores/profileStore';
+import { buildInviteMessage } from '../utils/inviteEmail';
+import { toast } from './shared/Toast';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 
 /**
@@ -417,22 +417,17 @@ export function ProjectManager({
   // Auth gate — force login before creating persistent data
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const userEmail = useAuthStore((s) => s.email);
-  const currentProfile = useCurrentProfile();
 
   const handleInviteClick = useCallback(async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
       if (!resp.ok) return;
       const { invite_code } = await resp.json();
-      const url = buildInviteMailtoUrl({
-        athleteName: currentProfile?.name,
-        userEmail,
-        inviteCode: invite_code,
-      });
-      window.open(url, '_blank');
+      const message = buildInviteMessage(invite_code);
+      await navigator.clipboard.writeText(message);
+      toast.success('Invite link copied!', { message: 'Share it with a friend via text, email, or social media.' });
     } catch { /* network error — user can retry */ }
-  }, [currentProfile?.name, userEmail]);
+  }, []);
 
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {

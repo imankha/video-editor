@@ -25,3 +25,12 @@ export function buildInviteMailtoUrl({ athleteName, userEmail, inviteCode }) {
 
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
+
+export function buildInviteUrl(inviteCode) {
+  return `https://www.reelballers.com?ref=${inviteCode}`;
+}
+
+export function buildInviteMessage(inviteCode) {
+  const url = buildInviteUrl(inviteCode);
+  return `Hey,\nJust wanted to share a link to Reel Ballers -- really cool app that lets you annotate your player's clips and use AI to create great looking highlights.\n\n${url}`;
+}

@@ -4,8 +4,8 @@ import { MediaPlayer } from './MediaPlayer';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useAuthStore } from '../stores/authStore';
-import { useCurrentProfile } from '../stores/profileStore';
-import { buildInviteMailtoUrl } from '../utils/inviteEmail';
+import { buildInviteMessage } from '../utils/inviteEmail';
+import { toast } from './shared/Toast';
 
 export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -13,22 +13,17 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   const [errorMessage, setErrorMessage] = useState(null);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
-  const userEmail = useAuthStore(s => s.email);
-  const currentProfile = useCurrentProfile();
 
   const handleInviteClick = useCallback(async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
       if (!resp.ok) return;
       const { invite_code } = await resp.json();
-      const url = buildInviteMailtoUrl({
-        athleteName: currentProfile?.name,
-        userEmail,
-        inviteCode: invite_code,
-      });
-      window.open(url, '_blank');
+      const message = buildInviteMessage(invite_code);
+      await navigator.clipboard.writeText(message);
+      toast.success('Invite link copied!', { message: 'Share it with a friend via text, email, or social media.' });
     } catch { /* network error */ }
-  }, [currentProfile?.name, userEmail]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
