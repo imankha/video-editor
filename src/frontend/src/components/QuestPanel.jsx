@@ -173,15 +173,7 @@ export function QuestPanel({ inline = false }) {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const [isSharedAnnotationFlow, setIsSharedAnnotationFlow] = useState(
-    () => sessionStorage.getItem('shared_annotation_flow') === 'true'
-  );
-  useEffect(() => {
-    if (isSharedAnnotationFlow && editorMode !== 'annotate') {
-      sessionStorage.removeItem('shared_annotation_flow');
-      setIsSharedAnnotationFlow(false);
-    }
-  }, [editorMode, isSharedAnnotationFlow]);
+  const isSharedAnnotationFlow = sessionStorage.getItem('shared_annotation_flow') === 'true';
 
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);

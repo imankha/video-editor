@@ -298,7 +298,7 @@ def _materialize_clips(
                 cur.execute(
                     """UPDATE raw_clips
                        SET start_time = ?, end_time = ?, name = ?, notes = ?,
-                           tagged_teammates = ?
+                           tagged_teammates = ?, my_athlete = 0
                        WHERE id = ?""",
                     (
                         merged_data["start_time"],
