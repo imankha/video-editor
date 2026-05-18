@@ -17,6 +17,10 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
+  useEffect(() => {
+    sessionStorage.setItem('shared_annotation_flow', 'true');
+  }, []);
+
   const handleInviteClick = useCallback(async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
@@ -196,10 +200,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
               size="lg"
               fullWidth
               icon={Play}
-              onClick={() => {
-                sessionStorage.setItem('shared_annotation_flow', 'true');
-                useAuthStore.getState().requireAuth(() => {});
-              }}
+              onClick={() => useAuthStore.getState().requireAuth(() => {})}
             >
               Sign in to watch
             </Button>
