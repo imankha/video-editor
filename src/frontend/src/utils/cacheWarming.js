@@ -78,7 +78,7 @@ function getOrInitState(url) {
   const key = stableUrlKey(url);
   let s = warmedState.get(key);
   if (!s) {
-    s = { urlWarmed: false, tailWarmed: false, clipRanges: [], warmedAt: 0 };
+    s = { urlWarmed: false, tailWarmed: false, clipRanges: [], warmedAt: 0, presignedUrl: null };
     warmedState.set(key, s);
   }
   return s;
@@ -98,6 +98,19 @@ export function getWarmedState(url) {
     clipRanges: s.clipRanges.slice(),
     warmedAt: s.warmedAt,
   };
+}
+
+/**
+ * Returns the presigned URL that was used to warm a given R2 object,
+ * or null if the object hasn't been warmed.
+ * Matches by stable key (host+path, ignoring query params) so a
+ * freshly-generated presigned URL for the same object resolves to the
+ * warmed one — enabling browser HTTP cache reuse.
+ */
+export function getWarmedPresignedUrl(url) {
+  if (!url) return null;
+  const s = warmedState.get(stableUrlKey(url));
+  return s?.presignedUrl ?? null;
 }
 
 // ── Queues ───────────────────────────────────────────────────────────────────
@@ -337,6 +350,7 @@ async function warmUrl(url, options = {}) {
       const s = getOrInitState(url);
       s.urlWarmed = true;
       s.warmedAt = Date.now();
+      s.presignedUrl = url;
     }
 
     // For large videos, also warm the tail where moov atom often lives

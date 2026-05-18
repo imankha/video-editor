@@ -29,13 +29,14 @@ export function SharedAnnotationView({ shareToken, onClose }) {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
     async function fetchShare() {
       try {
         const resp = await fetch(`${API_BASE}/api/shared/teammate/${shareToken}`, {
           credentials: 'include',
+          signal: controller.signal,
         });
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         if (resp.ok) {
           const json = await resp.json();
           setData(json);
@@ -47,15 +48,15 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           setState('error');
           setErrorMessage('Share link not found.');
         }
-      } catch {
-        if (!cancelled) {
+      } catch (err) {
+        if (!controller.signal.aborted) {
           setState('error');
           setErrorMessage('Could not load shared content. Please try again.');
         }
       }
     }
     fetchShare();
-    return () => { cancelled = true; };
+    return () => controller.abort();
   }, [shareToken]);
 
   // Materialized: find the game and navigate to annotate

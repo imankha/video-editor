@@ -201,7 +201,7 @@ async def check_file_exists(file_type: str, filename: str) -> dict:
 
 @router.get("/warmup")
 async def get_warmup_urls(
-    expires_in: int = Query(default=3600, ge=60, le=86400)
+    expires_in: int = Query(default=14400, ge=60, le=86400)
 ) -> dict:
     """
     Get all video URLs for the current user to pre-warm CDN cache.

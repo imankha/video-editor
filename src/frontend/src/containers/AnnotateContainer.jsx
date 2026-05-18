@@ -13,6 +13,7 @@ import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
 import { VideoMode, GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
+import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -387,6 +388,7 @@ export function AnnotateContainer({
    */
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
+    setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     try {
       const gameData = await getGame(gameId);
 
@@ -426,6 +428,11 @@ export function AnnotateContainer({
         }
       }
 
+      // Prefer the presigned URL the cache warmer already fetched — same URL
+      // means the browser can serve from HTTP cache instead of re-downloading.
+      const warmedUrl = getWarmedPresignedUrl(videoUrl);
+      if (warmedUrl) videoUrl = warmedUrl;
+
       // Clean up any existing annotate video URL
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
         URL.revokeObjectURL(annotateVideoUrl);
@@ -453,14 +460,17 @@ export function AnnotateContainer({
 
       // Set multi-video state
       if (isMultiVideo) {
-        setGameVideos(gameData.videos.map(v => ({
-          sequence: v.sequence,
-          url: v.video_url,
-          serverUrl: v.video_url,
-          duration: v.duration,
-          width: v.video_width,
-          height: v.video_height,
-        })));
+        setGameVideos(gameData.videos.map(v => {
+          const url = getWarmedPresignedUrl(v.video_url) || v.video_url;
+          return {
+            sequence: v.sequence,
+            url,
+            serverUrl: v.video_url,
+            duration: v.duration,
+            width: v.video_width,
+            height: v.video_height,
+          };
+        }));
         setActiveVideoIndex(0);
       } else {
         setGameVideos(null);
