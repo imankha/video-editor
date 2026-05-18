@@ -61,7 +61,11 @@ vi.mock('./recap/RecapClipsSidebar', () => ({
 }));
 
 vi.mock('../modes/annotate/components/PlaybackControls', () => ({
-  PlaybackControls: () => <div data-testid="playback-controls" />,
+  PlaybackControls: ({ onShare }) => (
+    <div data-testid="playback-controls">
+      {onShare && <button onClick={onShare} title="Share highlights">Share</button>}
+    </div>
+  ),
 }));
 
 vi.mock('./SharePlaybackDialog', () => ({

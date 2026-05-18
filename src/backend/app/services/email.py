@@ -421,7 +421,6 @@ async def send_game_share_email(
 async def send_playback_share_email(
     recipient_email: str,
     sharer_email: str,
-    athlete_name: str,
     game_name: str,
     share_token: str | None = None,
 ) -> bool:
@@ -431,7 +430,7 @@ async def send_playback_share_email(
     if not api_key:
         logger.warning(
             f"[Email] DEV MODE -- playback share email to {recipient_email} "
-            f"for '{athlete_name}' on '{game_name}'. Share URL: {share_url or '(no token)'}"
+            f"for '{game_name}'. Share URL: {share_url or '(no token)'}"
         )
         return True
 
@@ -440,15 +439,14 @@ async def send_playback_share_email(
         cta_html = f"""
       <a href="{_html_escape(share_url)}"
          style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-        Watch Highlights
+        Watch Annotations
       </a>
 """
 
     html_body = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
       <p style="color: #e5e7eb; font-size: 16px; margin: 0 0 8px 0;">
-        {_html_escape(sharer_email)} shared annotated highlights of
-        <strong style="color: #ffffff;">{_html_escape(athlete_name)}</strong> from:
+        {_html_escape(sharer_email)} shared game annotations from:
       </p>
       <p style="color: #ffffff; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
         {_html_escape(game_name or "Untitled Game")}
@@ -459,7 +457,7 @@ async def send_playback_share_email(
         Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
       </p>
       <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
-        You received this because {_html_escape(sharer_email)} shared game highlights with you on Reel Ballers.
+        You received this because {_html_escape(sharer_email)} shared game annotations with you on Reel Ballers.
       </p>
       {_CAN_SPAM_FOOTER}
     </div>
@@ -474,7 +472,7 @@ async def send_playback_share_email(
                     json={
                         "from": FROM_ADDRESS,
                         "to": [recipient_email],
-                        "subject": f"{sharer_email} shared {athlete_name}'s highlights with you",
+                        "subject": f"{sharer_email} shared game annotations with you",
                         "html": html_body,
                     },
                 )
@@ -483,7 +481,7 @@ async def send_playback_share_email(
         if resp.status_code not in (200, 201):
             logger.error(f"[Email] Playback share email failed: {resp.status_code} {resp.text}")
             return False
-        logger.info(f"[Email] Playback share email sent to {recipient_email} for '{athlete_name}'")
+        logger.info(f"[Email] Playback share email sent to {recipient_email} for '{game_name}'")
         return True
     except Exception as e:
         logger.error(f"[Email] Playback share email to {recipient_email} failed: {e}")

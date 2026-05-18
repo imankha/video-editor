@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { List, X } from 'lucide-react';
 import { ShareWithTeammatesModal } from '../components/ShareWithTeammatesModal';
+import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
@@ -54,6 +55,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   // T2820: Share with tagged players modal
   const [showShareModal, setShowShareModal] = useState(false);
+  // T2905: Share annotated playback via email link
+  const [showPlaybackShareDialog, setShowPlaybackShareDialog] = useState(false);
   // T2840: Share attribution banner
   const [shareAttribution, setShareAttribution] = useState(() => {
     const attr = sessionStorage.getItem('shareAttribution');
@@ -636,6 +639,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         onShare={() => setShowShareModal(true)}
         hasUnsentShares={hasUnsentShares}
         teammateSuggestions={teammateSuggestions}
+        // T2905: Share annotated playback
+        onSharePlayback={() => setShowPlaybackShareDialog(true)}
           />
         </div>
       </div>
@@ -648,6 +653,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           sharedTagData={sharedTagData}
           onClose={() => setShowShareModal(false)}
           onSharedTagsChange={setSharedTagData}
+        />
+      )}
+      {showPlaybackShareDialog && (
+        <SharePlaybackDialog
+          gameId={annotateGameId}
+          gameName={annotateGameName || 'Untitled Game'}
+          onClose={() => setShowPlaybackShareDialog(false)}
         />
       )}
     </>

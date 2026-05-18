@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Play, Share2 } from 'lucide-react';
+import { X, Play } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useRecapPlayback } from './recap/useRecapPlayback';
@@ -165,15 +165,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {recapData?.clips?.length > 0 && (
-                <button
-                  onClick={() => setShowShareDialog(true)}
-                  className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
-                  title="Share highlights"
-                >
-                  <Share2 size={20} />
-                </button>
-              )}
               <button
                 onClick={onClose}
                 className="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
@@ -294,6 +285,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     onPlaybackRateChange={recap.changePlaybackRate}
                     isFullscreen={isFullscreen}
                     onToggleFullscreen={toggleFullscreen}
+                    onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                     videoARef={recapVideoRef}
                     videoBRef={recapVideoRef}
                   />
@@ -362,6 +354,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   onPlaybackRateChange={highlights.changePlaybackRate}
                   isFullscreen={isFullscreen}
                   onToggleFullscreen={toggleFullscreen}
+                  onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                   videoARef={highlightsVideoRef}
                   videoBRef={highlightsVideoRef}
                 />
@@ -375,7 +368,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         <SharePlaybackDialog
           gameId={game.id}
           gameName={game.name || 'Untitled Game'}
-          tags={[...new Set(recapData.clips.flatMap(c => c.tags || []))]}
           onClose={() => setShowShareDialog(false)}
         />
       )}

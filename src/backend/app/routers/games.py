@@ -1645,12 +1645,11 @@ async def share_game(game_id: int, body: ShareGameRequest):
 
 class SharePlaybackRequest(BaseModel):
     emails: list[str]
-    tag_name: str
 
 
 @router.post("/{game_id:int}/share-playback")
 async def share_playback(game_id: int, body: SharePlaybackRequest):
-    """Share annotated playback for a specific tag with recipients via email."""
+    """Share all annotated clips for a game with recipients via email."""
     import asyncio
     from app.services.email import send_playback_share_email
     from app.services.auth_db import get_user_by_id, get_user_by_email
@@ -1688,8 +1687,8 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
 
         cursor.execute(
             """SELECT id, rating, tags, name, notes, start_time, end_time, video_sequence
-               FROM raw_clips WHERE game_id = ? AND tags LIKE ?""",
-            (game_id, f'%"{body.tag_name}"%'),
+               FROM raw_clips WHERE game_id = ?""",
+            (game_id,),
         )
         clips = [dict(row) for row in cursor.fetchall()]
         clip_names = [c["name"] for c in clips if c.get("name")]
@@ -1705,7 +1704,6 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         duplicate = next(
             (s for s in existing_shares
              if s["recipient_email"] == email.lower().strip()
-             and s["tag_name"] == body.tag_name
              and s["share_type"] == "annotation_playback"
              and not s.get("revoked_at")),
             None,
@@ -1718,7 +1716,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         try:
             share = create_game_share(
                 game_id=game_id,
-                tag_name=body.tag_name,
+                tag_name="",
                 sharer_user_id=user_id,
                 sharer_profile_id=profile_id,
                 recipient_email=email,
@@ -1740,7 +1738,6 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         tasks[email] = send_playback_share_email(
             recipient_email=email,
             sharer_email=sharer_email,
-            athlete_name=body.tag_name,
             game_name=game_name,
             share_token=share["share_token"] if share else None,
         )
@@ -1778,7 +1775,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                         sharer_profile_id=profile_id,
                         recipient_email=email,
                         game_id=game_id,
-                        tag_name=body.tag_name,
+                        tag_name="",
                         clip_data_bytes=clip_data_bytes,
                     )
                     logger.info(f"[share-playback] Created pending share for non-user {email}")
@@ -1792,7 +1789,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                         recipient_user_id=recipient_user["user_id"],
                         recipient_profile_id=profiles[0]["id"],
                         game_id=game_id,
-                        tag_name=body.tag_name,
+                        tag_name="",
                         share_id=share_record["id"],
                         clip_data=clips,
                         sharer_email=sharer_email,
@@ -1805,7 +1802,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
                         sharer_profile_id=profile_id,
                         recipient_email=email,
                         game_id=game_id,
-                        tag_name=body.tag_name,
+                        tag_name="",
                         clip_data_bytes=clip_data_bytes,
                     )
                     logger.info(f"[share-playback] Created pending share for multi-profile user {email}")

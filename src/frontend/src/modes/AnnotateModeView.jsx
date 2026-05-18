@@ -93,6 +93,8 @@ export function AnnotateModeView({
   onShare,
   hasUnsentShares,
   teammateSuggestions = [],
+  // T2905: Share annotated playback
+  onSharePlayback,
 }) {
   // Derive existingClip from state machine's selectedRegionId.
   // EDITING(clipId) keeps the ID stable during scrub, so no frozen ref needed.
@@ -247,6 +249,7 @@ export function AnnotateModeView({
             onPlaybackRateChange={playback.changePlaybackRate}
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
+            onShare={onSharePlayback}
             videoARef={playback.videoARef}
             videoBRef={playback.videoBRef}
           />

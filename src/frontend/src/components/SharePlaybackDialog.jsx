@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Loader } from 'lucide-react';
 import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
 
-export function SharePlaybackDialog({ gameId, gameName, tags, onClose }) {
+export function SharePlaybackDialog({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedTag, setSelectedTag] = useState(tags.length === 1 ? tags[0] : '');
 
   useEffect(() => {
     fetch(`${API_BASE}/api/gallery/contacts`, { credentials: 'include' })
@@ -26,11 +25,7 @@ export function SharePlaybackDialog({ gameId, gameName, tags, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
-
-  const canSubmit = emails.length > 0 && selectedTag && !isSubmitting;
+  const canSubmit = emails.length > 0 && !isSubmitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -40,7 +35,7 @@ export function SharePlaybackDialog({ gameId, gameName, tags, onClose }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails, tag_name: selectedTag }),
+        body: JSON.stringify({ emails }),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => null);
@@ -48,7 +43,7 @@ export function SharePlaybackDialog({ gameId, gameName, tags, onClose }) {
       }
       const data = await resp.json();
       if (data.all_sent) {
-        toast.success(`Highlights shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
+        toast.success(`Annotations shared with ${emails.length} recipient${emails.length !== 1 ? 's' : ''}`);
         onClose();
       } else {
         const failed = data.results.filter(r => !r.sent).map(r => r.email);
@@ -62,35 +57,16 @@ export function SharePlaybackDialog({ gameId, gameName, tags, onClose }) {
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdropClick}
-    >
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white truncate pr-4">
-            Share Highlights: {gameName}
+            Share Annotations: {gameName}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X size={20} />
           </button>
         </div>
-
-        {tags.length > 1 && (
-          <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-1.5">Select athlete</label>
-            <select
-              value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Choose an athlete...</option>
-              {tags.map((tag) => (
-                <option key={tag} value={tag}>{tag}</option>
-              ))}
-            </select>
-          </div>
-        )}
 
         <div className="mb-4">
           <label className="block text-sm text-gray-400 mb-1.5">Add people</label>

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Maximize, Minimize, Volume2, VolumeX, ArrowLeft } from 'lucide-react';
+import { Play, Pause, RotateCcw, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Share2 } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 
 // Speed options for annotation playback
@@ -85,6 +85,7 @@ export function PlaybackControls({
   onPlaybackRateChange,
   isFullscreen = false,
   onToggleFullscreen,
+  onShare,
   videoARef,
   videoBRef,
 }) {
@@ -306,6 +307,18 @@ export function PlaybackControls({
 
           {/* Speed control */}
           <SpeedControl speed={playbackRate} onSpeedChange={onPlaybackRateChange} />
+
+          {/* Share */}
+          {onShare && (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Share2}
+              iconOnly
+              onClick={onShare}
+              title="Share highlights"
+            />
+          )}
 
           {/* Fullscreen */}
           {onToggleFullscreen && (
