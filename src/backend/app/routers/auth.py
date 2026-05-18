@@ -273,6 +273,13 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
     )
     if ref:
         logger.info(f"[Auth] login — created user: {user_id} ({email}) referred_by={ref}")
+        try:
+            from app.services.sharing_db import resolve_invite_code, record_referral
+            referrer_id = resolve_invite_code(ref)
+            if referrer_id:
+                record_referral(referrer_id, user_id, "invite_link", ref)
+        except Exception:
+            logger.warning(f"[Auth] referral attribution failed for ref={ref}", exc_info=True)
     else:
         logger.info(f"[Auth] login — created user: {user_id} ({email})")
     return user_id

@@ -102,7 +102,12 @@ def pg_conn(monkeypatch):
     setup.autocommit = True
     cur = setup.cursor()
     cur.execute(_SCHEMA_DDL)
+
+    from app.migrations.postgres import RUNNER
+    RUNNER.run(setup, "postgres")
+
     placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
+    cur.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     cur.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
@@ -133,6 +138,7 @@ def pg_conn(monkeypatch):
     teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     teardown.autocommit = True
     tc = teardown.cursor()
+    tc.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     tc.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM game_storage_refs WHERE user_id IN ({placeholders})", _TEST_USER_IDS)

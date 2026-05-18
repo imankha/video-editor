@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
     last_seen_at TIMESTAMPTZ,
     picture_url TEXT,
     terms_accepted_at TIMESTAMPTZ,
-    terms_version TEXT
+    terms_version TEXT,
+    invite_code VARCHAR(8)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -156,6 +157,17 @@ ON pending_teammate_shares(recipient_email) WHERE resolved_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_shares_sharer_active
 ON shares(sharer_user_id) WHERE revoked_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    referrer_id TEXT NOT NULL REFERENCES users(user_id),
+    referred_id TEXT NOT NULL REFERENCES users(user_id) UNIQUE,
+    channel VARCHAR(20) NOT NULL,
+    source_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_channel ON referrals(channel);
 
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,

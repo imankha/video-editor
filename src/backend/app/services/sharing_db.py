@@ -344,3 +344,53 @@ def cleanup_old_shares(days: int = 365) -> int:
         count = cur.rowcount
         logger.info(f"[share-cleanup] Deleted {count} old shares older than {days}d")
         return count
+
+
+# ---------------------------------------------------------------------------
+# Referral attribution (T2910)
+# ---------------------------------------------------------------------------
+
+SHARE_TYPE_TO_CHANNEL = {
+    "video": "reel_share",
+    "game": "game_share",
+    "annotation_playback": "annotation_share",
+}
+
+
+def record_referral(
+    referrer_id: str, referred_id: str, channel: str, source_id: str | None = None,
+) -> bool:
+    """Insert a referral row. Returns True if inserted, False if already attributed."""
+    if referrer_id == referred_id:
+        return False
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """INSERT INTO referrals (referrer_id, referred_id, channel, source_id)
+               VALUES (%s, %s, %s, %s)
+               ON CONFLICT (referred_id) DO NOTHING""",
+            (referrer_id, referred_id, channel, source_id),
+        )
+        inserted = cur.rowcount > 0
+        if inserted:
+            logger.info(f"[referral] {referrer_id} -> {referred_id} via {channel}")
+        return inserted
+
+
+def resolve_invite_code(invite_code: str) -> str | None:
+    """Look up user_id by invite_code. Returns user_id or None."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT user_id FROM users WHERE invite_code = %s", (invite_code,))
+        row = cur.fetchone()
+        return row["user_id"] if row else None
+
+
+def persist_invite_code(user_id: str, invite_code: str) -> None:
+    """Store invite_code on the users row (no-op if already set)."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET invite_code = %s WHERE user_id = %s AND invite_code IS NULL",
+            (invite_code, user_id),
+        )
