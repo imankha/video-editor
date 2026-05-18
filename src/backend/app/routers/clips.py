@@ -2386,14 +2386,16 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
 
             try:
                 from app.services.sharing_db import record_referral, SHARE_TYPE_TO_CHANNEL
-                with get_pg() as ref_conn:
-                    ref_cur = ref_conn.cursor()
-                    ref_cur.execute("SELECT share_type FROM shares WHERE id = %s", (pending["share_id"],))
-                    share_row = ref_cur.fetchone()
-                if share_row:
-                    channel = SHARE_TYPE_TO_CHANNEL.get(share_row["share_type"])
-                    if channel:
-                        record_referral(pending["sharer_user_id"], user_id, channel, str(pending["share_id"]))
+                if pending["tag_name"]:
+                    channel = "teammate_share"
+                else:
+                    with get_pg() as ref_conn:
+                        ref_cur = ref_conn.cursor()
+                        ref_cur.execute("SELECT share_type FROM shares WHERE id = %s", (pending["share_id"],))
+                        share_row = ref_cur.fetchone()
+                    channel = SHARE_TYPE_TO_CHANNEL.get(share_row["share_type"]) if share_row else None
+                if channel:
+                    record_referral(pending["sharer_user_id"], user_id, channel, str(pending["share_id"]))
             except Exception:
                 logger.warning(f"[resolve-pending-shares] Referral attribution failed for pending_id={pending_id}", exc_info=True)
 
