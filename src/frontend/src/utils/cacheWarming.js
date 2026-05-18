@@ -22,13 +22,15 @@ import { API_BASE, resolveApiUrl } from '../config';
 
 // ── Fetch mode ──────────────────────────────────────────────────────────────
 
+function isSameOrigin(url) {
+  return url.startsWith('/') ||
+    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
+}
+
 // R2 presigned URLs don't serve CORS headers — no-cors + credentials:omit.
 // Same-origin proxy /stream URLs need the session cookie.
 function warmFetchMode(url) {
-  const isSameOrigin =
-    url.startsWith('/') ||
-    (typeof window !== 'undefined' && url.startsWith(window.location.origin));
-  return isSameOrigin
+  return isSameOrigin(url)
     ? { credentials: 'include' }
     : { mode: 'no-cors', credentials: 'omit' };
 }
@@ -329,6 +331,14 @@ async function warmUrl(url, options = {}) {
     return false;
   }
 
+  // no-cors (cross-origin R2) strips Range headers, so the browser downloads
+  // the ENTIRE file instead of 1KB — then produces an opaque response the
+  // <video> element can't reuse. Skip these; the video player handles its own
+  // Range requests directly.
+  if (!isSameOrigin(url)) {
+    return false;
+  }
+
   const { size, warmTail } = options;
   const startMs = performance.now();
   const controller = new AbortController();
@@ -336,9 +346,6 @@ async function warmUrl(url, options = {}) {
   inFlightControllers.add(controller);
 
   try {
-    // no-cors: R2 presigned URLs don't serve CORS headers. Opaque response
-    // (status 0, ok false) is expected — any response without throwing means
-    // the edge cache was warmed.
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': 'bytes=0-1023' },
@@ -380,10 +387,6 @@ async function warmUrl(url, options = {}) {
     return false;
   } finally {
     clearTimeout(timeout);
-    // Close the underlying connection. no-cors opaque responses resolve the
-    // fetch promise on headers, but the browser continues downloading the body
-    // for caching — holding the HTTP/1.1 connection slot. Aborting here frees
-    // the slot so foreground video loads aren't blocked.
     try { controller.abort(); } catch { /* ignore */ }
     inFlightControllers.delete(controller);
   }
@@ -395,6 +398,7 @@ async function warmUrl(url, options = {}) {
  */
 async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, clipId = null) {
   if (!url || !videoDuration || !videoSize) return false;
+  if (!isSameOrigin(url)) return false;
   const startMs = performance.now();
 
   const startByte = Math.floor((startTime / videoDuration) * videoSize);
@@ -418,7 +422,6 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
       signal: combinedSignal(controller),
     }).catch(() => {});
 
-    // Warm the clip's byte range (opaque response expected with no-cors).
     await fetch(url, {
       method: 'GET',
       headers: { 'Range': `bytes=${warmStart}-${warmEnd}` },
