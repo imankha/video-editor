@@ -196,7 +196,10 @@ export function SharedAnnotationView({ shareToken, onClose }) {
               size="lg"
               fullWidth
               icon={Play}
-              onClick={() => useAuthStore.getState().requireAuth(() => {})}
+              onClick={() => {
+                sessionStorage.setItem('shared_annotation_flow', 'true');
+                useAuthStore.getState().requireAuth(() => {});
+              }}
             >
               Sign in to watch
             </Button>

@@ -173,9 +173,19 @@ export function QuestPanel({ inline = false }) {
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
+  const [isSharedAnnotationFlow, setIsSharedAnnotationFlow] = useState(
+    () => sessionStorage.getItem('shared_annotation_flow') === 'true'
+  );
+  useEffect(() => {
+    if (isSharedAnnotationFlow && editorMode !== 'annotate') {
+      sessionStorage.removeItem('shared_annotation_flow');
+      setIsSharedAnnotationFlow(false);
+    }
+  }, [editorMode, isSharedAnnotationFlow]);
+
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || !definitions || !questDef || addClipFormOpen || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
+  if ((hidden || !loaded || !definitions || !questDef || addClipFormOpen || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
