@@ -3,7 +3,7 @@ Tests for T2905: Share Annotated Playback via Link.
 
 Covers:
 - POST /api/games/{id}/share-playback (create annotation_playback shares)
-- Deduplication (same email + game + tag reuses token)
+- Deduplication (same email + game + share_type reuses token)
 - Email dispatch via send_playback_share_email
 - Pending share creation for non-users
 - GET /api/shared/teammate/{token} accepts annotation_playback shares
@@ -71,8 +71,8 @@ def _auth_headers(user_id: str) -> dict:
     return {"X-User-ID": user_id}
 
 
-def _seed_game_with_clips(user_id: str = SHARER_ID, tag_name: str = "Jake") -> int:
-    """Insert a game with tagged clips and return the game_id."""
+def _seed_game_with_clips(user_id: str = SHARER_ID) -> int:
+    """Insert a game with clips and return the game_id."""
     from app.database import get_db_connection
     from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
@@ -96,7 +96,7 @@ def _seed_game_with_clips(user_id: str = SHARER_ID, tag_name: str = "Jake") -> i
             cursor.execute(
                 """INSERT INTO raw_clips (game_id, filename, name, tags, rating, start_time, end_time, video_sequence)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (game_id, f"clip_{i+1}.mp4", f"Clip {i+1}", json.dumps([tag_name]), 3, i * 10.0, i * 10.0 + 5.0, 1),
+                (game_id, f"clip_{i+1}.mp4", f"Clip {i+1}", json.dumps(["Jake"]), 3, i * 10.0, i * 10.0 + 5.0, 1),
             )
         conn.commit()
         return game_id
@@ -112,7 +112,7 @@ class TestCreateGameShareWithType:
 
         share = create_game_share(
             game_id=1,
-            tag_name="Jake",
+            tag_name="",
             sharer_user_id=SHARER_ID,
             sharer_profile_id="testdefault",
             recipient_email=RECIPIENT_EMAIL,
@@ -125,7 +125,6 @@ class TestCreateGameShareWithType:
         record = get_game_share_by_token(share["share_token"])
         assert record is not None
         assert record["share_type"] == "annotation_playback"
-        assert record["tag_name"] == "Jake"
 
     def test_defaults_to_game_share_type(self, isolated_auth_db):
         from app.services.sharing_db import create_game_share, get_game_share_by_token
@@ -146,7 +145,7 @@ class TestCreateGameShareWithType:
 
         share = create_game_share(
             game_id=1,
-            tag_name="Player 7",
+            tag_name="",
             sharer_user_id=SHARER_ID,
             sharer_profile_id="testdefault",
             recipient_email=UNKNOWN_EMAIL,
@@ -171,7 +170,7 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         resp = client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200
@@ -183,35 +182,33 @@ class TestSharePlaybackEndpoint:
 
         client._mock_email.assert_called_once()
         call_kwargs = client._mock_email.call_args
-        assert call_kwargs.kwargs["athlete_name"] == "Jake"
         assert call_kwargs.kwargs["recipient_email"] == UNKNOWN_EMAIL
+        assert call_kwargs.kwargs["game_name"] == "Test Game"
 
     def test_creates_shares_row_with_annotation_playback_type(self, client):
         from app.services.sharing_db import list_shares_for_game
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         shares = list_shares_for_game(game_id, SHARER_ID)
         assert len(shares) == 1
         assert shares[0]["share_type"] == "annotation_playback"
-        assert shares[0]["tag_name"] == "Jake"
 
-    def test_creates_share_games_row_with_game_id_and_tag(self, client):
+    def test_creates_share_games_row_with_game_id(self, client):
         from app.services.sharing_db import get_game_share_by_token, list_shares_for_game
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         shares = list_shares_for_game(game_id, SHARER_ID)
         token = shares[0]["share_token"]
         record = get_game_share_by_token(token)
         assert record["game_id"] == game_id
-        assert record["tag_name"] == "Jake"
         assert record["game_name"] == "Test Game"
 
     def test_creates_pending_share_for_non_user(self, client):
@@ -219,13 +216,12 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         pending = get_pending_shares_for_email(UNKNOWN_EMAIL)
         assert len(pending) == 1
         assert pending[0]["game_id"] == game_id
-        assert pending[0]["tag_name"] == "Jake"
 
     def test_pending_share_contains_clip_data(self, client):
         from app.services.sharing_db import get_pending_shares_for_email
@@ -233,15 +229,13 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         pending = get_pending_shares_for_email(UNKNOWN_EMAIL)
         clip_data = decode_data(bytes(pending[0]["clip_data"]))
         assert len(clip_data) == 3
         assert clip_data[0]["name"] == "Clip 1"
-        # tags is stored as JSON string in SQLite, serialized as-is
-        assert json.loads(clip_data[0]["tags"]) == ["Jake"]
 
     def test_duplicate_share_reuses_token(self, client):
         from app.services.sharing_db import list_shares_for_game
@@ -249,14 +243,14 @@ class TestSharePlaybackEndpoint:
 
         resp1 = client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp1.status_code == 200
 
         resp2 = client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp2.status_code == 200
@@ -269,57 +263,22 @@ class TestSharePlaybackEndpoint:
 
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         client._mock_email.reset_mock()
 
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         client._mock_email.assert_not_called()
 
-    def test_different_tag_creates_separate_share(self, client):
-        from app.services.sharing_db import list_shares_for_game
-        game_id = _seed_game_with_clips(tag_name="Jake")
-
-        # Add clips for second tag
-        from app.database import get_db_connection
-        from app.user_context import set_current_user_id
-        from app.profile_context import set_current_profile_id
-        set_current_user_id(SHARER_ID)
-        set_current_profile_id("testdefault")
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """INSERT INTO raw_clips (game_id, filename, name, tags, rating, start_time, end_time, video_sequence)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (game_id, "other_clip.mp4", "Other Clip", json.dumps(["Player 7"]), 3, 50.0, 55.0, 1),
-            )
-            conn.commit()
-
-        client.post(
-            f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
-            headers=_auth_headers(SHARER_ID),
-        )
-        client.post(
-            f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Player 7"},
-            headers=_auth_headers(SHARER_ID),
-        )
-
-        shares = list_shares_for_game(game_id, SHARER_ID)
-        assert len(shares) == 2
-        tag_names = {s["tag_name"] for s in shares}
-        assert tag_names == {"Jake", "Player 7"}
-
     def test_returns_404_for_nonexistent_game(self, client):
         resp = client.post(
             "/api/games/99999/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 404
@@ -329,7 +288,7 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         resp = client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL, "other@example.com"], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL, "other@example.com"]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200
@@ -347,7 +306,7 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         resp = client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 200
@@ -364,12 +323,11 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         shares = list_shares_for_game(game_id, SHARER_ID)
         record = get_game_share_by_token(shares[0]["share_token"])
-        # clip_names is stored as JSONB in Postgres, returned as list directly
         clip_names = record["clip_names"]
         if isinstance(clip_names, str):
             clip_names = json.loads(clip_names)
@@ -380,7 +338,7 @@ class TestSharePlaybackEndpoint:
         game_id = _seed_game_with_clips()
         client.post(
             f"/api/games/{game_id}/share-playback",
-            json={"emails": [UNKNOWN_EMAIL], "tag_name": "Jake"},
+            json={"emails": [UNKNOWN_EMAIL]},
             headers=_auth_headers(SHARER_ID),
         )
         shares = list_shares_for_game(game_id, SHARER_ID)
@@ -394,7 +352,7 @@ class TestSharePlaybackEndpoint:
              patch("app.services.materialization.materialize_game_share", mock_materialize):
             resp = client.post(
                 f"/api/games/{game_id}/share-playback",
-                json={"emails": [RECIPIENT_EMAIL], "tag_name": "Jake"},
+                json={"emails": [RECIPIENT_EMAIL]},
                 headers=_auth_headers(SHARER_ID),
             )
         assert resp.status_code == 200
@@ -403,7 +361,7 @@ class TestSharePlaybackEndpoint:
         assert call_kwargs["sharer_user_id"] == SHARER_ID
         assert call_kwargs["recipient_user_id"] == RECIPIENT_ID
         assert call_kwargs["game_id"] == game_id
-        assert call_kwargs["tag_name"] == "Jake"
+        assert call_kwargs["tag_name"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -415,7 +373,7 @@ class TestGetSharedTeammateAnnotationPlayback:
         from app.services.sharing_db import create_game_share
         share = create_game_share(
             game_id=1,
-            tag_name="Jake",
+            tag_name="",
             sharer_user_id=SHARER_ID,
             sharer_profile_id="testdefault",
             recipient_email=UNKNOWN_EMAIL,
@@ -432,11 +390,11 @@ class TestGetSharedTeammateAnnotationPlayback:
         assert data["clip_count"] == 2
         assert data["clip_names"] == ["Clip 1", "Clip 2"]
 
-    def test_returns_tag_name_in_response(self, client):
+    def test_returns_valid_data_for_annotation_playback(self, client):
         from app.services.sharing_db import create_game_share
         share = create_game_share(
             game_id=1,
-            tag_name="Player 7",
+            tag_name="",
             sharer_user_id=SHARER_ID,
             sharer_profile_id="testdefault",
             recipient_email=UNKNOWN_EMAIL,
@@ -445,9 +403,6 @@ class TestGetSharedTeammateAnnotationPlayback:
         )
         resp = client.get(f"/api/shared/teammate/{share['share_token']}")
         assert resp.status_code == 200
-        # The tag_name is not directly in the top-level response for this endpoint
-        # but the share record has it. The endpoint returns pending_ids for resolution.
-        # Verify the share is accepted and returns valid data.
         data = resp.json()
         assert data["materialized"] is False
         assert data["recipient_has_account"] is False
@@ -468,7 +423,6 @@ class TestGetSharedTeammateAnnotationPlayback:
 
     def test_rejects_video_share_type(self, client):
         from app.services.sharing_db import create_game_share
-        # Video shares shouldn't be accessible via /shared/teammate/
         share = create_game_share(
             game_id=1,
             tag_name=None,
@@ -484,7 +438,7 @@ class TestGetSharedTeammateAnnotationPlayback:
         from app.services.sharing_db import create_game_share, revoke_share
         share = create_game_share(
             game_id=1,
-            tag_name="Jake",
+            tag_name="",
             sharer_user_id=SHARER_ID,
             sharer_profile_id="testdefault",
             recipient_email=UNKNOWN_EMAIL,
@@ -512,7 +466,6 @@ class TestPlaybackShareEmail:
             result = await send_playback_share_email(
                 recipient_email="test@example.com",
                 sharer_email="sharer@example.com",
-                athlete_name="Jake",
                 game_name="Big Game",
                 share_token="test-token-123",
             )
@@ -521,7 +474,6 @@ class TestPlaybackShareEmail:
     @pytest.mark.asyncio
     async def test_send_playback_share_email_with_api_key(self, isolated_auth_db):
         import os
-        import httpx
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -532,7 +484,6 @@ class TestPlaybackShareEmail:
             result = await send_playback_share_email(
                 recipient_email="test@example.com",
                 sharer_email="sharer@example.com",
-                athlete_name="Jake",
                 game_name="Big Game",
                 share_token="test-token-123",
             )
@@ -555,7 +506,6 @@ class TestPlaybackShareEmail:
             result = await send_playback_share_email(
                 recipient_email="test@example.com",
                 sharer_email="sharer@example.com",
-                athlete_name="Jake",
                 game_name="Big Game",
                 share_token="test-token-123",
             )
@@ -570,8 +520,6 @@ class TestV003Migration:
     def test_migration_adds_annotation_playback_to_constraint(self, pg_conn):
         from app.services.pg import get_pg
 
-        # The constraint should already allow 'annotation_playback' after schema DDL
-        # runs in conftest. Verify by inserting a row with the new type.
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(

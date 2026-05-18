@@ -81,7 +81,6 @@ describe('SharePlaybackDialog', () => {
   const defaultProps = {
     gameId: 42,
     gameName: 'Big Game',
-    tags: ['Jake', 'Player 7'],
     onClose: vi.fn(),
   };
 
@@ -93,13 +92,7 @@ describe('SharePlaybackDialog', () => {
   describe('Rendering', () => {
     it('renders dialog with game name in title', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      expect(screen.getByText('Share Highlights: Big Game')).toBeTruthy();
-    });
-
-    it('renders tag selector when multiple tags', () => {
-      render(<SharePlaybackDialog {...defaultProps} />);
-      expect(screen.getByText('Select athlete')).toBeTruthy();
-      expect(screen.getByText('Choose an athlete...')).toBeTruthy();
+      expect(screen.getByText('Share Annotations: Big Game')).toBeTruthy();
     });
 
     it('renders email input', () => {
@@ -107,39 +100,10 @@ describe('SharePlaybackDialog', () => {
       expect(screen.getByTestId('user-picker')).toBeTruthy();
     });
 
-    it('shows tag options in dropdown', () => {
+    it('does not render a tag selector', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
-      const options = screen.getAllByRole('option');
-      expect(options).toHaveLength(3); // placeholder + 2 tags
-      expect(options[1].textContent).toBe('Jake');
-      expect(options[2].textContent).toBe('Player 7');
-    });
-  });
-
-  describe('Single tag behavior', () => {
-    it('auto-selects single tag and hides selector', () => {
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} />);
-      expect(screen.queryByText('Select athlete')).toBeNull();
       expect(screen.queryByRole('combobox')).toBeNull();
-    });
-
-    it('can submit with single tag without selecting', async () => {
-      globalThis.fetch = mockFetchSuccess();
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} />);
-
-      const input = screen.getByTestId('email-input');
-      fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
-
-      const shareBtn = screen.getByText('Share');
-      fireEvent.click(shareBtn);
-
-      await waitFor(() => {
-        const calls = globalThis.fetch.mock.calls;
-        const shareCall = calls.find(c => c[0].includes('/share-playback'));
-        expect(shareCall).toBeTruthy();
-        const body = JSON.parse(shareCall[1].body);
-        expect(body.tag_name).toBe('Jake');
-      });
+      expect(screen.queryByText('Select athlete')).toBeNull();
     });
   });
 
@@ -150,34 +114,20 @@ describe('SharePlaybackDialog', () => {
       expect(shareBtn.disabled).toBe(true);
     });
 
-    it('share button disabled when no tag selected (multi-tag)', () => {
+    it('share button enabled when email is entered', () => {
       render(<SharePlaybackDialog {...defaultProps} />);
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
-      const shareBtn = screen.getByText('Share');
-      expect(shareBtn.disabled).toBe(true);
-    });
-
-    it('share button enabled when email and tag are set', () => {
-      render(<SharePlaybackDialog {...defaultProps} />);
-      const input = screen.getByTestId('email-input');
-      fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
-
-      const select = screen.getByRole('combobox');
-      fireEvent.change(select, { target: { value: 'Jake' } });
 
       const shareBtn = screen.getByText('Share');
       expect(shareBtn.disabled).toBe(false);
     });
 
-    it('calls POST /api/games/{id}/share-playback with correct body', async () => {
+    it('calls POST /api/games/{id}/share-playback with emails only', async () => {
       render(<SharePlaybackDialog {...defaultProps} />);
 
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
-
-      const select = screen.getByRole('combobox');
-      fireEvent.change(select, { target: { value: 'Player 7' } });
 
       fireEvent.click(screen.getByText('Share'));
 
@@ -190,21 +140,21 @@ describe('SharePlaybackDialog', () => {
         expect(shareCall[1].credentials).toBe('include');
         const body = JSON.parse(shareCall[1].body);
         expect(body.emails).toEqual(['test@test.com']);
-        expect(body.tag_name).toBe('Player 7');
+        expect(body.tag_name).toBeUndefined();
       });
     });
 
     it('shows success toast and closes on successful share', async () => {
       const { toast } = await import('./shared/Toast');
       const onClose = vi.fn();
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} onClose={onClose} />);
+      render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
 
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
       fireEvent.click(screen.getByText('Share'));
 
       await waitFor(() => {
-        expect(toast.success).toHaveBeenCalledWith('Highlights shared with 1 recipient');
+        expect(toast.success).toHaveBeenCalledWith('Annotations shared with 1 recipient');
         expect(onClose).toHaveBeenCalled();
       });
     });
@@ -212,7 +162,7 @@ describe('SharePlaybackDialog', () => {
     it('shows error toast on HTTP failure', async () => {
       globalThis.fetch = mockFetchFailure();
       const { toast } = await import('./shared/Toast');
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} />);
+      render(<SharePlaybackDialog {...defaultProps} />);
 
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
@@ -226,7 +176,7 @@ describe('SharePlaybackDialog', () => {
     it('shows error toast with failed emails on partial failure', async () => {
       globalThis.fetch = mockFetchPartialFailure();
       const { toast } = await import('./shared/Toast');
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} />);
+      render(<SharePlaybackDialog {...defaultProps} />);
 
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'good@test.com' } });
@@ -239,7 +189,7 @@ describe('SharePlaybackDialog', () => {
 
     it('shows loading state during submission', async () => {
       globalThis.fetch = vi.fn(() => new Promise(() => {})); // Never resolves
-      render(<SharePlaybackDialog {...defaultProps} tags={['Jake']} />);
+      render(<SharePlaybackDialog {...defaultProps} />);
 
       const input = screen.getByTestId('email-input');
       fireEvent.keyDown(input, { key: 'Enter', target: { value: 'test@test.com' } });
@@ -259,18 +209,18 @@ describe('SharePlaybackDialog', () => {
       expect(onClose).toHaveBeenCalled();
     });
 
-    it('closes on backdrop click', () => {
+    it('does not close on backdrop click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const backdrop = screen.getByText('Share Highlights: Big Game').closest('.fixed');
+      const backdrop = screen.getByText('Share Annotations: Big Game').closest('.fixed');
       fireEvent.click(backdrop);
-      expect(onClose).toHaveBeenCalled();
+      expect(onClose).not.toHaveBeenCalled();
     });
 
     it('does not close on inner dialog click', () => {
       const onClose = vi.fn();
       render(<SharePlaybackDialog {...defaultProps} onClose={onClose} />);
-      const dialog = screen.getByText('Share Highlights: Big Game').closest('.bg-gray-800');
+      const dialog = screen.getByText('Share Annotations: Big Game').closest('.bg-gray-800');
       fireEvent.click(dialog);
       expect(onClose).not.toHaveBeenCalled();
     });

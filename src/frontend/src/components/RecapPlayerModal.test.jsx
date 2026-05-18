@@ -69,11 +69,10 @@ vi.mock('../modes/annotate/components/PlaybackControls', () => ({
 }));
 
 vi.mock('./SharePlaybackDialog', () => ({
-  SharePlaybackDialog: ({ onClose, gameId, gameName, tags }) => (
+  SharePlaybackDialog: ({ onClose, gameId, gameName }) => (
     <div data-testid="share-playback-dialog">
       <span data-testid="dialog-game-id">{gameId}</span>
       <span data-testid="dialog-game-name">{gameName}</span>
-      <span data-testid="dialog-tags">{tags.join(',')}</span>
       <button onClick={onClose} data-testid="dialog-close">Close</button>
     </div>
   ),
@@ -164,19 +163,6 @@ describe('RecapPlayerModal - Share Button', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('dialog-game-name').textContent).toBe('Big Game');
-    });
-  });
-
-  it('passes deduplicated tags to SharePlaybackDialog', async () => {
-    render(<RecapPlayerModal {...defaultProps} />);
-    await waitFor(() => screen.getByTitle('Share highlights'));
-    fireEvent.click(screen.getByTitle('Share highlights'));
-
-    await waitFor(() => {
-      const tags = screen.getByTestId('dialog-tags').textContent.split(',');
-      expect(tags).toContain('Jake');
-      expect(tags).toContain('Player 7');
-      expect(tags).toHaveLength(2);
     });
   });
 
