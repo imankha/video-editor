@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, Loader, Lock, Download, Share2 } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
+import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import { useAuthStore } from '../stores/authStore';
@@ -100,6 +101,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
           autoPlay
           onClose={onClose}
         />
+        <SharePageInstallBanner />
         {isAuthenticated && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
             <button

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader, AlertCircle, Play, Film, Share2 } from 'lucide-react';
 import { Button } from './shared/Button';
+import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Logo } from './Logo';
 import { GoogleOneTap } from './GoogleOneTap';
 import { useAuthStore } from '../stores/authStore';
@@ -206,6 +207,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
             </Button>
           </div>
         </div>
+        <SharePageInstallBanner />
       </div>
     </Shell>
   );

@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { ModeSwitcher } from './ModeSwitcher';
 import { CreditBalance } from '../CreditBalance';
 import { SignInButton } from '../SignInButton';
+import { InstallButton } from '../InstallButton';
 
 /**
  * UnifiedHeader - Shared header across all editor modes
@@ -60,6 +61,7 @@ export function UnifiedHeader({
       </div>
       <div className="flex items-center gap-1 sm:gap-2">
         {extraControls}
+        <InstallButton />
         <CreditBalance />
         <SignInButton />
         <ModeSwitcher

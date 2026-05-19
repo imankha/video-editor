@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
 
 // API port configuration
@@ -11,7 +12,41 @@ const API_PORT = process.env.VITE_API_PORT || '8000';
 const commitHash = execSync('git rev-parse --short HEAD').toString().trim();
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      manifest: {
+        name: 'Reel Ballers',
+        short_name: 'ReelBallers',
+        description: 'AI-Powered Sports Video Editor',
+        start_url: '/',
+        display: 'standalone',
+        background_color: '#111827',
+        theme_color: '#7c3aed',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/api/, /^\/storage/],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/lh3\.googleusercontent\.com/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-avatars',
+              expiration: { maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 },
+            },
+          },
+        ],
+      },
+    }),
+  ],
   define: {
     __COMMIT_HASH__: JSON.stringify(commitHash),
   },

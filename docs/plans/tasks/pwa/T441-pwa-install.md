@@ -1,6 +1,6 @@
 # T441: PWA Install
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-04-28
@@ -15,7 +15,7 @@ Users arrive at the web app via the landing page or a share link. They use it in
 The landing page (reelballers.com) links to the web app (app.reelballers.com). The web app itself contains the PWA install prompt. The landing page sells the product; the app sells the install.
 
 This means:
-- Landing page CTAs ("Make my first reel -- free") -> app.reelballers.com (web app)
+- Landing page CTAs -> app.reelballers.com (web app)
 - Web app shows an install icon + benefit text for non-installed users
 - Shared reel pages (/shared/:token) also show the install prompt
 - Every share link becomes a distribution channel for app installs

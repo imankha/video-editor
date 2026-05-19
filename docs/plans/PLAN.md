@@ -170,7 +170,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2905 | ↳ [Share Annotated Playback](tasks/invite-referral/T2905-share-annotated-playback.md) | 7 | 4 | 1.8 | DONE | [ ] | Share annotated playback via email link. Reuses shares table + SharedAnnotationView. Non-users see playback + signup CTA. Feeds `annotation_share` referral channel. |
 | T2910 | ↳ [Referral Graph](tasks/invite-referral/T2910-referral-graph.md) | 7 | 4 | 1.8 | DONE | [ ] | Postgres `referrals` adjacency table. Attribution on signup from invite codes + share acceptance. Admin queries for leaderboard and channel effectiveness. |
 | | **[PWA Quick Wins](tasks/pwa/EPIC.md)** | 6 | 2 | 3.0 | | | **Installable app + native share sheet + screen wake lock. Foundation for all PWA features.** |
-| T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TODO | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
+| T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | TESTING | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | TODO | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
 | T446 | ↳ [Screen Wake Lock](tasks/pwa/T446-screen-wake-lock.md) | 5 | 1 | 5.0 | TODO | [ ] | Prevent screen dimming during Annotate mode. ~20 LOC, no backend. |
 | | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 10 | 4 | 2.5 | | | **Alpha scope: new hero with CTA above fold, sticky nav + mobile CTA bar, visual refresh** |
