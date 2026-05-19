@@ -5,16 +5,18 @@ This module generates side-by-side comparison videos showing:
 - "Before" segments from source raw clips
 - "After" final exported video
 
-Output format is 9x16 (1080x1920) with text overlays.
+Output format is 9x16 (1080x1920) with optional text overlays.
+Supports merged (single file) or separate (zip with before.mp4 + after.mp4) output.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from pathlib import Path
 import subprocess
 import tempfile
 import logging
 import os
+import zipfile
 
 from ...database import get_db_connection, get_final_videos_path
 from ...services.ffmpeg_service import get_encoding_command_parts
@@ -63,34 +65,31 @@ def get_video_info(video_path: str) -> dict:
 
 
 def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
-                         output_path: str, fps: float = 30.0) -> bool:
+                         output_path: str, fps: float = 30.0,
+                         overlays: bool = True) -> bool:
     """
     Generate a "Before" clip from source video.
 
-    Extracts the frame range, scales to fit 9x16 with letterboxing,
-    and adds "Before" text overlay.
+    Extracts the frame range, scales to fit 9x16 with letterboxing.
+    Adds "Before" text overlay when overlays=True.
     """
     start_time = start_frame / fps
     duration = (end_frame - start_frame) / fps
 
     if duration <= 0:
-        # If no valid duration, use first 3 seconds
         start_time = 0
         duration = 3.0
 
-    # FFmpeg filter to:
-    # 1. Scale to fit inside 1080x1920 while maintaining aspect ratio
-    # 2. Pad to exactly 1080x1920 (letterbox/pillarbox)
-    # 3. Normalize SAR to 1:1 for concat compatibility
-    # 4. Force 30fps for QSV encoder compatibility (QSV doesn't support 29.97)
-    # 5. Add "Before" text at top center
     filter_complex = (
         f"scale={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,"
         f"pad={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black,"
-        f"setsar=1,fps=30,"
-        f"drawtext=text='Before':fontsize=72:fontcolor=white:"
-        f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+        f"setsar=1,fps=30"
     )
+    if overlays:
+        filter_complex += (
+            f",drawtext=text='Before':fontsize=72:fontcolor=white:"
+            f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+        )
 
     # Use GPU encoding if available
     encoding_params = get_encoding_command_parts(prefer_quality=False)  # Speed over quality for previews
@@ -116,21 +115,23 @@ def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
         return False
 
 
-def generate_after_clip(final_video_path: str, output_path: str) -> bool:
+def generate_after_clip(final_video_path: str, output_path: str,
+                        overlays: bool = True) -> bool:
     """
     Generate an "After" clip from the final video.
 
-    Adds "After" text overlay. Video should already be 9x16.
+    Adds "After" text overlay when overlays=True. Video should already be 9x16.
     """
-    # FFmpeg filter to add "After" text at top center
-    # Include setsar=1 and fps=30 for concat and QSV compatibility
     filter_complex = (
         f"scale={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:force_original_aspect_ratio=decrease,"
         f"pad={OUTPUT_WIDTH}:{OUTPUT_HEIGHT}:(ow-iw)/2:(oh-ih)/2:black,"
-        f"setsar=1,fps=30,"
-        f"drawtext=text='After':fontsize=72:fontcolor=white:"
-        f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+        f"setsar=1,fps=30"
     )
+    if overlays:
+        filter_complex += (
+            f",drawtext=text='After':fontsize=72:fontcolor=white:"
+            f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+        )
 
     # Use GPU encoding if available
     encoding_params = get_encoding_command_parts(prefer_quality=False)  # Speed over quality for previews
@@ -239,20 +240,25 @@ async def get_before_after_status(final_video_id: int):
 
 
 @router.post("/before-after/{final_video_id}")
-async def generate_before_after(final_video_id: int):
+async def generate_before_after(
+    final_video_id: int,
+    output: str = Query("merged", pattern="^(merged|separate)$"),
+    overlays: bool = Query(True),
+):
     """
-    Generate a before/after comparison video.
+    Generate before/after comparison video(s).
 
-    Creates a video showing:
-    1. Each source clip (trimmed portion) with "Before" overlay
-    2. The final video with "After" overlay
+    Query params:
+    - output: "merged" (single file, default) or "separate" (zip with before.mp4 + after.mp4)
+    - overlays: true (default) adds "Before"/"After" text, false omits them
 
-    Returns the generated video file.
+    merged: returns a single MP4 with before clips then after clip concatenated.
+    separate: returns a zip containing before.mp4 (all before clips concatenated)
+              and after.mp4 (the final video processed to match).
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get final video info
         cursor.execute("""
             SELECT filename FROM final_videos WHERE id = ?
         """, (final_video_id,))
@@ -265,7 +271,6 @@ async def generate_before_after(final_video_id: int):
         if not final_path.exists():
             raise HTTPException(status_code=404, detail="Final video file not found")
 
-        # Get tracked source clips
         cursor.execute("""
             SELECT source_path, start_frame, end_frame, clip_index
             FROM before_after_tracks
@@ -280,14 +285,12 @@ async def generate_before_after(final_video_id: int):
                 detail="No source clips tracked for this video. Export was created before tracking was enabled."
             )
 
-    # Generate clips in temp directory
     temp_dir = tempfile.mkdtemp(prefix='before_after_')
-    clip_paths = []
+    before_clip_paths = []
 
     try:
-        logger.info(f"[Before/After] Generating comparison for final_video {final_video_id}")
+        logger.info(f"[Before/After] Generating comparison for final_video {final_video_id} (output={output}, overlays={overlays})")
 
-        # Generate "Before" clips for each source
         for i, track in enumerate(tracks):
             source_path = track['source_path']
             if not Path(source_path).exists():
@@ -299,29 +302,25 @@ async def generate_before_after(final_video_id: int):
                 source_path=source_path,
                 start_frame=track['start_frame'],
                 end_frame=track['end_frame'],
-                output_path=before_path
+                output_path=before_path,
+                overlays=overlays,
             )
 
             if success and os.path.exists(before_path):
-                clip_paths.append(before_path)
+                before_clip_paths.append(before_path)
                 logger.info(f"[Before/After] Generated before clip {i}")
 
-        if not clip_paths:
+        if not before_clip_paths:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to generate any before clips"
             )
 
-        # Log before clips info
-        for i, path in enumerate(clip_paths):
-            size = os.path.getsize(path) if os.path.exists(path) else 0
-            logger.info(f"[Before/After] Before clip {i}: {path} ({size} bytes)")
-
-        # Generate "After" clip from final video
-        after_path = os.path.join(temp_dir, "after.mp4")
+        after_path = os.path.join(temp_dir, "after_raw.mp4")
         success = generate_after_clip(
             final_video_path=str(final_path),
-            output_path=after_path
+            output_path=after_path,
+            overlays=overlays,
         )
 
         if not success or not os.path.exists(after_path):
@@ -330,15 +329,36 @@ async def generate_before_after(final_video_id: int):
                 detail="Failed to generate after clip"
             )
 
-        after_size = os.path.getsize(after_path) if os.path.exists(after_path) else 0
-        logger.info(f"[Before/After] After clip: {after_path} ({after_size} bytes)")
+        if output == "separate":
+            # Concatenate all before clips into one before.mp4
+            if len(before_clip_paths) == 1:
+                before_final = before_clip_paths[0]
+            else:
+                before_final = os.path.join(temp_dir, "before.mp4")
+                success = concatenate_clips(before_clip_paths, before_final)
+                if not success or not os.path.exists(before_final):
+                    raise HTTPException(status_code=500, detail="Failed to concatenate before clips")
 
-        clip_paths.append(after_path)
+            after_final = after_path
 
-        # Concatenate all clips
+            zip_path = os.path.join(temp_dir, "before_after.zip")
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
+                zf.write(before_final, "before.mp4")
+                zf.write(after_final, "after.mp4")
+
+            logger.info(f"[Before/After] Generated separate zip: {os.path.getsize(zip_path)} bytes")
+
+            return FileResponse(
+                path=zip_path,
+                media_type="application/zip",
+                filename=f"before_after_{final_video_id}.zip",
+            )
+
+        # merged output (default): concatenate all clips into one video
+        all_clip_paths = before_clip_paths + [after_path]
         output_path = os.path.join(temp_dir, "comparison.mp4")
-        logger.info(f"[Before/After] Concatenating {len(clip_paths)} clips...")
-        success = concatenate_clips(clip_paths, output_path)
+        logger.info(f"[Before/After] Concatenating {len(all_clip_paths)} clips...")
+        success = concatenate_clips(all_clip_paths, output_path)
 
         if not success or not os.path.exists(output_path):
             raise HTTPException(
@@ -346,18 +366,12 @@ async def generate_before_after(final_video_id: int):
                 detail="Failed to concatenate clips"
             )
 
-        output_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
-        logger.info(f"[Before/After] Final comparison: {output_path} ({output_size} bytes)")
+        logger.info(f"[Before/After] Generated merged comparison: {os.path.getsize(output_path)} bytes")
 
-        logger.info(f"[Before/After] Generated comparison video")
-
-        # Return the file
         return FileResponse(
             path=output_path,
             media_type="video/mp4",
             filename=f"before_after_{final_video_id}.mp4",
-            # Don't delete temp files immediately - FileResponse needs them
-            # They'll be cleaned up by OS temp file cleanup
         )
 
     except HTTPException:

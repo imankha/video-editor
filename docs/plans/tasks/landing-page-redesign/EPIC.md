@@ -35,7 +35,8 @@ Full spec: [reelballers-landing-page-spec.md](../../../../reelballers-landing-pa
 | ID | Task | Status |
 |----|------|--------|
 | T2300 | [Visual Foundation & Design System](T2300-visual-foundation.md) | TODO |
-| T2310 | [Nav, Hero & CTA Improvements](T2310-nav-hero-cta.md) | TODO |
+| T2310 | [Nav, Hero & CTA Improvements](T2310-nav-hero-cta.md) | TESTING |
+| T2315 | [Before/After Asset Pipeline](T2315-before-after-asset-pipeline.md) | TESTING |
 
 ### For Launch (polish)
 

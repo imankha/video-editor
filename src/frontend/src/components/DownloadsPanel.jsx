@@ -193,8 +193,8 @@ export function DownloadsPanel({
         return;
       }
 
-      // Generate the comparison video
-      const response = await fetch(`${API_BASE}/api/export/before-after/${download.id}`, {
+      // Generate separate before/after videos (no text overlays) as a zip
+      const response = await fetch(`${API_BASE}/api/export/before-after/${download.id}?output=separate&overlays=false`, {
         method: 'POST'
       });
 
@@ -203,12 +203,11 @@ export function DownloadsPanel({
         throw new Error(error.detail || 'Failed to generate comparison video');
       }
 
-      // Download the generated video
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `before_after_${download.project_name || download.id}.mp4`;
+      a.download = `before_after_${download.project_name || download.id}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
