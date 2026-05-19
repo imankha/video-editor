@@ -8,6 +8,7 @@ import { useUploadStore } from '../stores/uploadStore';
 import { API_BASE } from '../config';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
+import { useWakeLock } from '../hooks/useWakeLock';
 import { useAnnotationPlayback } from '../modes/annotate/hooks/useAnnotationPlayback';
 import { useMultiVideoScrub } from '../modes/annotate/hooks/useMultiVideoScrub';
 import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeline';
@@ -81,6 +82,8 @@ export function AnnotateContainer({
     annotateContainerRef,
     annotateFileInputRef,
   } = useAnnotateState();
+
+  useWakeLock();
 
   // T82: Multi-video state (null = single video, array = multi-video)
   const [gameVideos, setGameVideos] = useState(null);
