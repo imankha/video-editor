@@ -3,6 +3,8 @@ import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucid
 import { useExportStore } from '../stores/exportStore';
 import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
+import { useWebShare, ShareCapability } from '../hooks/useWebShare';
+import { track } from '../utils/analytics';
 
 /**
  * Get display label for an export.
@@ -73,6 +75,7 @@ const toastedExports = new Set();
 
 export function GlobalExportIndicator() {
   const [isExpanded, setIsExpanded] = useState(false);
+  const { capability: shareCapability, share } = useWebShare();
 
   // Get export state from store (updated via WebSocket)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -98,9 +101,31 @@ export function GlobalExportIndicator() {
 
       const projectLabel = getExportLabel(exp);
       if (exp.status === ExportStatus.COMPLETE) {
+        const shareAction = exp.outputVideoId ? {
+          label: shareCapability === ShareCapability.NONE ? 'Copy Link' : 'Share',
+          onClick: async () => {
+            try {
+              const filename = `${exp.projectName || projectLabel}-highlight.mp4`;
+              const method = await share({
+                downloadId: exp.outputVideoId,
+                title: projectLabel,
+                text: `Check out my ${projectLabel} highlight reel!`,
+                filename,
+              });
+              track('share_initiated', { method, source: 'toast' });
+              if (method === 'clipboard') {
+                toast.success('Link copied to clipboard');
+              }
+            } catch (err) {
+              if (err.name === 'AbortError') return;
+              toast.error('Share failed', { message: err.message });
+            }
+          },
+        } : undefined;
         toast.success('Export Complete', {
           message: `${projectLabel} - ${exp.type} export finished successfully`,
-          duration: 5000,
+          action: shareAction,
+          duration: 8000,
         });
       } else if (exp.status === ExportStatus.ERROR) {
         toast.error('Export Failed', {

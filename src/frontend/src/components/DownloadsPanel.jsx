@@ -5,10 +5,13 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
+import { useWebShare, ShareCapability } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { toast } from './shared/Toast';
+import { track } from '../utils/analytics';
 import { API_BASE } from '../config';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
@@ -87,6 +90,9 @@ export function DownloadsPanel({
 
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
+
+  // Native share support
+  const { capability: shareCapability, share } = useWebShare();
 
   if (!isOpen && !playingVideo) return null;
 
@@ -341,7 +347,29 @@ export function DownloadsPanel({
                   )}
                 </button>
                 <button
-                  onClick={(e) => { e.stopPropagation(); setSharingDownload(download); }}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (shareCapability === ShareCapability.NONE) {
+                      setSharingDownload(download);
+                      return;
+                    }
+                    try {
+                      const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
+                      const method = await share({
+                        downloadId: download.id,
+                        title: download.project_name || 'Highlight Reel',
+                        text: `Check out ${download.project_name || 'this highlight reel'}!`,
+                        filename,
+                      });
+                      track('share_initiated', { method, source: 'gallery' });
+                      if (method === 'clipboard') {
+                        toast.success('Link copied to clipboard');
+                      }
+                    } catch (err) {
+                      if (err.name === 'AbortError') return;
+                      setSharingDownload(download);
+                    }
+                  }}
                   className="p-1 hover:bg-gray-600 rounded transition-colors"
                   title="Share video"
                 >
