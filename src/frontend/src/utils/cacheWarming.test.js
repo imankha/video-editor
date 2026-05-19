@@ -44,7 +44,7 @@ describe('cacheWarming — foreground abort', () => {
   });
 
   it('aborts in-flight warm fetches when priority flips to FOREGROUND_ACTIVE', async () => {
-    const warmPromise = cacheWarming.warmVideoCache('https://example.com/video.mp4');
+    const warmPromise = cacheWarming.warmVideoCache('/stream/video.mp4');
 
     await Promise.resolve();
     await Promise.resolve();
@@ -63,12 +63,18 @@ describe('cacheWarming — foreground abort', () => {
     expect(result).toBe(false);
   });
 
+  it('skips cross-origin R2 URLs (no-cors strips Range headers)', async () => {
+    const result = await cacheWarming.warmVideoCache('https://r2.example.com/game.mp4');
+    expect(result).toBe(false);
+    expect(fetchMock.mock.calls.length).toBe(0);
+  });
+
   it('FOREGROUND_DIRECT stops ALL warming including tier-1 clip ranges', async () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_DIRECT);
 
     cacheWarming.pushClipRanges([
       {
-        url: 'https://example.com/a.mp4',
+        url: '/stream/a.mp4',
         startTime: 0, endTime: 10,
         videoDuration: 100, videoSize: 1_000_000,
       },
@@ -90,7 +96,7 @@ describe('cacheWarming — foreground abort', () => {
     // Use warmAllUserVideos approach: populate queues then set priority
     cacheWarming.pushClipRanges([
       {
-        url: 'https://example.com/game.mp4',
+        url: '/stream/game.mp4',
         startTime: 10, endTime: 20,
         videoDuration: 100, videoSize: 1_000_000,
       },
@@ -105,14 +111,14 @@ describe('cacheWarming — foreground abort', () => {
 
     // The clip range warm fires two fetches (head + body).
     const clipRangeFetches = fetchMock.mock.calls.filter(c =>
-      c[0] === 'https://example.com/game.mp4'
+      c[0] === '/stream/game.mp4'
     );
     expect(clipRangeFetches.length).toBeGreaterThanOrEqual(1);
   });
 
   it('FOREGROUND_PROXY aborts inFlightControllers but not inFlightClipRangeControllers', async () => {
     // Start a regular warm fetch
-    const warmPromise = cacheWarming.warmVideoCache('https://example.com/regular.mp4');
+    const warmPromise = cacheWarming.warmVideoCache('/stream/regular.mp4');
     await Promise.resolve();
     await Promise.resolve();
 
@@ -122,7 +128,7 @@ describe('cacheWarming — foreground abort', () => {
     // Start a clip range warm
     cacheWarming.pushClipRanges([
       {
-        url: 'https://example.com/game.mp4',
+        url: '/stream/game.mp4',
         startTime: 0, endTime: 10,
         videoDuration: 100, videoSize: 1_000_000,
       },
@@ -139,7 +145,7 @@ describe('cacheWarming — foreground abort', () => {
 
     // Clip range fetches should NOT be aborted — check that their signals are still alive
     const clipRangeEntries = pending.filter(e =>
-      e.url === 'https://example.com/game.mp4'
+      e.url === '/stream/game.mp4'
     );
     for (const entry of clipRangeEntries) {
       expect(entry.signal.aborted).toBe(false);
@@ -163,15 +169,15 @@ describe('cacheWarming — foreground abort', () => {
   it('clearForegroundActive resumes the warmer', async () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
 
-    const result1 = await cacheWarming.warmVideoCache('https://example.com/gated.mp4');
+    const result1 = await cacheWarming.warmVideoCache('/stream/gated.mp4');
     expect(result1).toBe(false);
 
     cacheWarming.clearForegroundActive();
 
-    const warmPromise = cacheWarming.warmVideoCache('https://example.com/resumed.mp4');
+    const warmPromise = cacheWarming.warmVideoCache('/stream/resumed.mp4');
     await Promise.resolve();
     await Promise.resolve();
-    expect(fetchMock.mock.calls.some(c => c[0] === 'https://example.com/resumed.mp4')).toBe(true);
+    expect(fetchMock.mock.calls.some(c => c[0] === '/stream/resumed.mp4')).toBe(true);
   });
 
   it('clearForegroundActive restores priority after FOREGROUND_PROXY too', async () => {
@@ -208,14 +214,14 @@ describe('cacheWarming — foreground abort', () => {
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
     cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_ACTIVE);
 
-    const result1 = await cacheWarming.warmVideoCache('https://example.com/before-clear.mp4');
+    const result1 = await cacheWarming.warmVideoCache('/stream/before-clear.mp4');
     expect(result1).toBe(false);
 
     cacheWarming.clearForegroundActive();
-    const warmPromise = cacheWarming.warmVideoCache('https://example.com/after-clear.mp4');
+    const warmPromise = cacheWarming.warmVideoCache('/stream/after-clear.mp4');
     await Promise.resolve();
     await Promise.resolve();
-    expect(fetchMock.mock.calls.some(c => c[0] === 'https://example.com/after-clear.mp4')).toBe(true);
+    expect(fetchMock.mock.calls.some(c => c[0] === '/stream/after-clear.mp4')).toBe(true);
   });
 
   it('DRAFT_REELS priority exists and is distinct from other priorities', () => {
@@ -244,10 +250,10 @@ describe('cacheWarming — concurrent workers', () => {
 
   it('spawns multiple concurrent workers processing items in parallel', async () => {
     cacheWarming.pushClipRanges([
-      { url: 'https://r2.example.com/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
     ]);
 
     await Promise.resolve();
@@ -261,9 +267,9 @@ describe('cacheWarming — concurrent workers', () => {
 
   it('FOREGROUND_DIRECT aborts all concurrent in-flight warm fetches', async () => {
     cacheWarming.pushClipRanges([
-      { url: 'https://r2.example.com/a.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/b.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/c.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/a.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/b.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/c.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
     ]);
 
     await Promise.resolve();
@@ -294,10 +300,10 @@ describe('cacheWarming — concurrent workers', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     cacheWarming.pushClipRanges([
-      { url: 'https://r2.example.com/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
-      { url: 'https://r2.example.com/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g3.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
+      { url: '/stream/g4.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
     ]);
 
     await Promise.resolve();
@@ -340,14 +346,14 @@ describe('cacheWarming — cross-queue dedup', () => {
               has_working_video: false,
               clips: [{
                 id: 'clip1',
-                game_url: 'https://r2.example.com/game1.mp4',
+                game_url: '/stream/game1.mp4',
                 start_time: 10, end_time: 20,
                 video_duration: 100, video_size: 1_000_000,
               }],
             }],
             game_urls: [
-              'https://r2.example.com/game1.mp4',
-              'https://r2.example.com/game2.mp4',
+              '/stream/game1.mp4',
+              '/stream/game2.mp4',
             ],
             gallery_urls: [],
             working_urls: [],
@@ -393,9 +399,9 @@ describe('cacheWarming — prioritizeUrls', () => {
             r2_enabled: true,
             project_clips: [],
             game_urls: [
-              'https://r2.example.com/a.mp4',
-              'https://r2.example.com/b.mp4',
-              'https://r2.example.com/c.mp4',
+              '/stream/a.mp4',
+              '/stream/b.mp4',
+              '/stream/c.mp4',
             ],
             gallery_urls: [],
             working_urls: [],
@@ -411,7 +417,7 @@ describe('cacheWarming — prioritizeUrls', () => {
     await new Promise(r => setTimeout(r, 0));
 
     // Queue has a, b, c. Promote c to front.
-    cacheWarming.prioritizeUrls(['https://r2.example.com/c.mp4']);
+    cacheWarming.prioritizeUrls(['/stream/c.mp4']);
 
     // Resume warmer and capture fetch order
     const pending = [];
@@ -432,7 +438,7 @@ describe('cacheWarming — prioritizeUrls', () => {
     await Promise.resolve();
 
     // c.mp4 should be the first URL fetched (promoted to front)
-    expect(pending[0].url).toBe('https://r2.example.com/c.mp4');
+    expect(pending[0].url).toBe('/stream/c.mp4');
 
     vi.doUnmock('../stores/authStore');
   });

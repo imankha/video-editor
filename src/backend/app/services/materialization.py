@@ -16,7 +16,7 @@ from app.database import USER_DATA_BASE
 from app.services.auth_db import insert_game_storage_ref, get_game_storage_ref
 from app.services.sharing_db import mark_game_share_materialized
 from app.services.pg import get_pg
-from app.utils.encoding import encode_data
+from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,8 @@ def _filter_clips_for_tag(
     cur = conn.cursor()
     cur.execute(
         """SELECT rc.id, rc.rating, rc.tags, rc.name, rc.notes,
-                  rc.start_time, rc.end_time, rc.video_sequence
+                  rc.start_time, rc.end_time, rc.video_sequence,
+                  rc.tagged_teammates
            FROM raw_clips rc
            JOIN clip_teammates ct ON ct.clip_id = rc.id
            WHERE rc.game_id = ? AND ct.tag_name = ?""",
@@ -173,6 +174,7 @@ def _filter_clips_for_tag(
             "start_time": row["start_time"],
             "end_time": row["end_time"],
             "video_sequence": row["video_sequence"],
+            "tagged_teammates": decode_data(row["tagged_teammates"]),
         }
         for row in cur.fetchall()
     ]
@@ -216,7 +218,8 @@ def _get_existing_clips(conn: sqlite3.Connection, game_id: int) -> list[dict]:
     """Get existing raw_clips for a game in recipient's DB."""
     cur = conn.cursor()
     cur.execute(
-        """SELECT id, rating, name, notes, start_time, end_time, video_sequence
+        """SELECT id, rating, name, notes, start_time, end_time, video_sequence,
+                  tagged_teammates
            FROM raw_clips WHERE game_id = ?""",
         (game_id,),
     )
@@ -226,6 +229,7 @@ def _get_existing_clips(conn: sqlite3.Connection, game_id: int) -> list[dict]:
 def _insert_clip(
     conn: sqlite3.Connection, game_id: int, clip: dict,
     shared_by: str | None = None,
+    tagged_teammates_blob: bytes | None = None,
 ) -> int:
     """Insert a raw_clip into recipient's DB. Returns new clip id."""
     tags = clip.get("tags")
@@ -236,7 +240,7 @@ def _insert_clip(
         """INSERT INTO raw_clips
            (filename, rating, tags, name, notes, start_time, end_time,
             game_id, video_sequence, tagged_teammates, my_athlete, shared_by)
-           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)""",
+           VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
         (
             clip.get("rating", 3),
             tags,
@@ -246,10 +250,27 @@ def _insert_clip(
             clip.get("end_time"),
             game_id,
             clip.get("video_sequence"),
+            tagged_teammates_blob,
             shared_by,
         ),
     )
     return cur.lastrowid
+
+
+def _build_athlete_set(clip: dict, sharer_profile_name: str | None = None) -> set[str]:
+    """Build the set of athlete names for a clip."""
+    athletes = set()
+    if sharer_profile_name:
+        athletes.add(sharer_profile_name)
+    clip_teammates = clip.get("tagged_teammates")
+    if clip_teammates:
+        if isinstance(clip_teammates, list):
+            athletes.update(clip_teammates)
+        else:
+            decoded = decode_data(clip_teammates)
+            if decoded:
+                athletes.update(decoded)
+    return athletes
 
 
 def _materialize_clips(
@@ -257,6 +278,7 @@ def _materialize_clips(
     recipient_game_id: int,
     incoming_clips: list[dict],
     shared_by: str | None = None,
+    sharer_profile_name: str | None = None,
 ) -> dict:
     """Insert clips into recipient's DB, merging overlaps with existing clips."""
     existing = _get_existing_clips(recipient_conn, recipient_game_id)
@@ -264,20 +286,26 @@ def _materialize_clips(
     merged = 0
 
     for clip in incoming_clips:
+        incoming_athletes = _build_athlete_set(clip, sharer_profile_name)
         overlap_found = False
         for ex in existing:
             if clips_overlap(ex, clip):
                 merged_data = merge_clips(ex, clip)
+                existing_athletes = set(decode_data(ex.get("tagged_teammates")) or [])
+                all_athletes = existing_athletes | incoming_athletes
+                merged_teammates = encode_data(sorted(all_athletes)) if all_athletes else None
                 cur = recipient_conn.cursor()
                 cur.execute(
                     """UPDATE raw_clips
-                       SET start_time = ?, end_time = ?, name = ?, notes = ?
+                       SET start_time = ?, end_time = ?, name = ?, notes = ?,
+                           tagged_teammates = ?, my_athlete = 0
                        WHERE id = ?""",
                     (
                         merged_data["start_time"],
                         merged_data["end_time"],
                         merged_data["name"],
                         merged_data["notes"],
+                        merged_teammates,
                         ex["id"],
                     ),
                 )
@@ -285,12 +313,17 @@ def _materialize_clips(
                 ex["end_time"] = merged_data["end_time"]
                 ex["name"] = merged_data["name"]
                 ex["notes"] = merged_data["notes"]
+                ex["tagged_teammates"] = merged_teammates
                 overlap_found = True
                 merged += 1
                 break
 
         if not overlap_found:
-            new_id = _insert_clip(recipient_conn, recipient_game_id, clip, shared_by=shared_by)
+            teammates_blob = encode_data(sorted(incoming_athletes)) if incoming_athletes else None
+            new_id = _insert_clip(
+                recipient_conn, recipient_game_id, clip,
+                shared_by=shared_by, tagged_teammates_blob=teammates_blob,
+            )
             existing.append({
                 "id": new_id,
                 "start_time": clip.get("start_time"),
@@ -299,6 +332,7 @@ def _materialize_clips(
                 "name": clip.get("name"),
                 "notes": clip.get("notes"),
                 "rating": clip.get("rating"),
+                "tagged_teammates": teammates_blob,
             })
             inserted += 1
 
@@ -344,6 +378,18 @@ def materialize_game_share(
     Returns dict with keys: game_id, inserted, merged, skipped.
     """
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
+
+    # Query sharer's profile name for athlete attribution
+    sharer_profile_name = None
+    try:
+        from app.services.user_db import get_profiles
+        sharer_profiles = get_profiles(sharer_user_id)
+        for p in sharer_profiles:
+            if p["id"] == sharer_profile_id and p["name"]:
+                sharer_profile_name = p["name"]
+                break
+    except Exception:
+        pass
 
     if clip_data is None:
         if sharer_conn is None:
@@ -396,7 +442,10 @@ def materialize_game_share(
         if game_only:
             result = {"inserted": 0, "merged": 0}
         else:
-            result = _materialize_clips(recipient_conn, recipient_game_id, clip_data, shared_by=sharer_email)
+            result = _materialize_clips(
+                recipient_conn, recipient_game_id, clip_data,
+                shared_by=sharer_email, sharer_profile_name=sharer_profile_name,
+            )
         recipient_conn.commit()
 
         # Create storage refs in Postgres
@@ -408,6 +457,24 @@ def materialize_game_share(
             )
 
         mark_game_share_materialized(share_id, recipient_profile_id)
+
+        try:
+            from app.services.sharing_db import record_referral, SHARE_TYPE_TO_CHANNEL
+            if tag_name:
+                channel = "teammate_share"
+            else:
+                with get_pg() as pg_conn:
+                    pg_cur = pg_conn.cursor()
+                    pg_cur.execute("SELECT share_type FROM shares WHERE id = %s", (share_id,))
+                    share_row = pg_cur.fetchone()
+                channel = SHARE_TYPE_TO_CHANNEL.get(share_row["share_type"]) if share_row else None
+            if channel:
+                record_referral(sharer_user_id, recipient_user_id, channel, str(share_id))
+        except Exception:
+            logger.warning(
+                f"[Materialize] Referral attribution failed for share_id={share_id}",
+                exc_info=True,
+            )
 
         logger.info(
             f"[Materialize] Done: game_id={recipient_game_id}, "
@@ -438,5 +505,6 @@ def serialize_clip_data(clips: list[dict]) -> bytes:
             "start_time": c.get("start_time"),
             "end_time": c.get("end_time"),
             "video_sequence": c.get("video_sequence"),
+            "tagged_teammates": c.get("tagged_teammates"),
         })
     return encode_data(clean)

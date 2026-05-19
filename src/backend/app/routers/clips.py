@@ -2383,6 +2383,7 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
                 sharer_email=pending_sharer_email,
             )
             resolve_pending_share(pending_id, request.profile_id)
+
             materialized.append({
                 "id": pending_id,
                 "game_id": result.get("game_id"),

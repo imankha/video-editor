@@ -17,6 +17,10 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
+  useEffect(() => {
+    sessionStorage.setItem('shared_annotation_flow', 'true');
+  }, []);
+
   const handleInviteClick = useCallback(async () => {
     try {
       const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
@@ -40,6 +44,14 @@ export function SharedAnnotationView({ shareToken, onClose }) {
         if (resp.ok) {
           const json = await resp.json();
           setData(json);
+          if (json.video_warm_url) {
+            fetch(json.video_warm_url, {
+              method: 'GET',
+              headers: { Range: 'bytes=0-1023' },
+              mode: 'cors',
+              credentials: 'omit',
+            }).catch(() => {});
+          }
           setState(json.materialized ? 'materialized' : 'ready');
         } else if (resp.status === 410) {
           setState('error');

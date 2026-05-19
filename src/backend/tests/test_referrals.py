@@ -1,0 +1,123 @@
+"""Tests for T2910 referral graph: record_referral, resolve_invite_code, channel mapping."""
+
+import hashlib
+
+import pytest
+from app.services.auth_db import create_user
+from app.services.sharing_db import (
+    SHARE_TYPE_TO_CHANNEL,
+    persist_invite_code,
+    record_referral,
+    resolve_invite_code,
+)
+
+
+class TestRecordReferral:
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+        create_user("user-b", email="b@test.com")
+        create_user("user-1", email="u1@test.com")
+        create_user("user-2", email="u2@test.com")
+
+    def test_creates_row(self, pg_conn):
+        result = record_referral("user-a", "user-b", "invite_link", "abc123")
+        assert result is True
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM referrals WHERE referred_id = %s", ("user-b",))
+            row = cur.fetchone()
+        assert row is not None
+        assert row["referrer_id"] == "user-a"
+        assert row["channel"] == "invite_link"
+        assert row["source_id"] == "abc123"
+
+    def test_self_referral_returns_false(self, pg_conn):
+        result = record_referral("user-a", "user-a", "invite_link")
+        assert result is False
+
+    def test_duplicate_referred_id_returns_false(self, pg_conn):
+        record_referral("user-a", "user-b", "invite_link", "abc")
+        result = record_referral("user-1", "user-b", "game_share", "xyz")
+        assert result is False
+
+    def test_same_referrer_multiple_referred(self, pg_conn):
+        assert record_referral("user-a", "user-b", "invite_link") is True
+        assert record_referral("user-a", "user-1", "game_share") is True
+
+
+class TestResolveInviteCode:
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+
+    def test_returns_user_id_for_known_code(self, pg_conn):
+        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        persist_invite_code("user-a", code)
+        result = resolve_invite_code(code)
+        assert result == "user-a"
+
+    def test_returns_none_for_unknown_code(self, pg_conn):
+        result = resolve_invite_code("xxxxxxxx")
+        assert result is None
+
+
+class TestPersistInviteCode:
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+
+    def test_stores_code_on_first_call(self, pg_conn):
+        persist_invite_code("user-a", "testcode")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT invite_code FROM users WHERE user_id = %s", ("user-a",))
+            row = cur.fetchone()
+        assert row["invite_code"] == "testcode"
+
+    def test_does_not_overwrite_existing_code(self, pg_conn):
+        persist_invite_code("user-a", "first")
+        persist_invite_code("user-a", "second")
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT invite_code FROM users WHERE user_id = %s", ("user-a",))
+            row = cur.fetchone()
+        assert row["invite_code"] == "first"
+
+
+class TestChannelMapping:
+    def test_all_share_types_map(self):
+        assert SHARE_TYPE_TO_CHANNEL["video"] == "reel_share"
+        assert SHARE_TYPE_TO_CHANNEL["game"] == "game_share"
+        assert SHARE_TYPE_TO_CHANNEL["annotation_playback"] == "annotation_share"
+
+    def test_no_extra_keys(self):
+        assert set(SHARE_TYPE_TO_CHANNEL.keys()) == {"video", "game", "annotation_playback"}
+
+
+class TestInviteLinkAttribution:
+    """Integration: signup with ref param creates referral via invite_link channel."""
+
+    @pytest.fixture(autouse=True)
+    def _create_referrer(self, pg_conn):
+        create_user("user-a", email="referrer@test.com")
+        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        persist_invite_code("user-a", code)
+
+    def test_signup_with_ref_creates_referral(self, pg_conn):
+        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        create_user("user-b", email="referred@test.com")
+        referrer_id = resolve_invite_code(code)
+        assert referrer_id == "user-a"
+        result = record_referral(referrer_id, "user-b", "invite_link", code)
+        assert result is True
+
+    def test_signup_with_ref_then_share_only_first_wins(self, pg_conn):
+        code = hashlib.sha256("user-a".encode()).hexdigest()[:8]
+        create_user("user-b", email="referred@test.com")
+        record_referral("user-a", "user-b", "invite_link", code)
+        result = record_referral("user-a", "user-b", "game_share", "share-99")
+        assert result is False

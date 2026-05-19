@@ -256,6 +256,10 @@ async def get_shared_teammate(share_token: str, request: Request):
     first_clip_start = share["first_clip_start"]
     clip_names = share["clip_names"] or []
 
+    video_warm_url = None
+    if game_blake3:
+        video_warm_url = generate_presigned_url_global(f"games/{game_blake3}.mp4", expires_in=14400)
+
     if share["materialized_at"]:
         return {
             "materialized": True,
@@ -266,6 +270,7 @@ async def get_shared_teammate(share_token: str, request: Request):
             "first_clip_start": first_clip_start,
             "clip_count": len(clip_names),
             "clip_names": clip_names,
+            "video_warm_url": video_warm_url,
         }
 
     recipient_user = get_user_by_email(share["recipient_email"])
@@ -286,6 +291,7 @@ async def get_shared_teammate(share_token: str, request: Request):
         "recipient_has_account": recipient_has_account,
         "clip_count": len(clip_names),
         "clip_names": clip_names,
+        "video_warm_url": video_warm_url,
     }
 
 

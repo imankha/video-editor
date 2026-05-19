@@ -218,11 +218,14 @@ async def send_share_email(
     video_name: str,
 ) -> None:
     api_key = os.getenv("RESEND_API_KEY")
-    if not api_key:
-        logger.warning("[Email] RESEND_API_KEY not configured, skipping share email")
-        return False
-
     share_url = _get_share_url(share_token)
+
+    if not api_key:
+        logger.warning(
+            f"[Email] DEV MODE -- share email to {recipient_email} "
+            f"for '{video_name}'. Share URL: {share_url}"
+        )
+        return True
 
     html_body = f"""
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">

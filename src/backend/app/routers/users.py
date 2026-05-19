@@ -10,6 +10,7 @@ import logging
 
 from fastapi import APIRouter
 
+from app.services.sharing_db import persist_invite_code
 from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def get_invite_code():
     """Return a deterministic invite code derived from the user's ID."""
     user_id = get_current_user_id()
     code = hashlib.sha256(user_id.encode()).hexdigest()[:8]
+    persist_invite_code(user_id, code)
     return {
         "invite_code": code,
         "invite_url": f"https://www.reelballers.com?ref={code}",

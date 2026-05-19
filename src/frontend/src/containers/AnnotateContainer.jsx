@@ -428,11 +428,6 @@ export function AnnotateContainer({
         }
       }
 
-      // Prefer the presigned URL the cache warmer already fetched — same URL
-      // means the browser can serve from HTTP cache instead of re-downloading.
-      const warmedUrl = getWarmedPresignedUrl(videoUrl);
-      if (warmedUrl) videoUrl = warmedUrl;
-
       // Clean up any existing annotate video URL
       if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
         URL.revokeObjectURL(annotateVideoUrl);
@@ -447,12 +442,12 @@ export function AnnotateContainer({
 
       // Set annotate state with the game's video
       setAnnotateVideoFile(null);
-      // Append #t= media fragment so the browser issues a byte-range seek on load
-      // instead of downloading linearly from byte 0 (which for a 3GB file at 1835s = ~1GB download)
-      const seekHintUrl = pendingClipSeekTime != null
-        ? `${videoUrl}#t=${pendingClipSeekTime}`
-        : videoUrl;
-      setAnnotateVideoUrl(seekHintUrl);
+      // Use bounded streaming proxy -- only downloads moov + clip byte ranges
+      const proxyBase = `${API_BASE}/api/games/${gameId}/stream`;
+      const proxyUrl = pendingClipSeekTime != null
+        ? `${proxyBase}?t=${pendingClipSeekTime}#t=${pendingClipSeekTime}`
+        : proxyBase;
+      setAnnotateVideoUrl(proxyUrl);
       setAnnotateVideoMetadata(videoMetadata);
       annotateGameIdRef.current = gameId;
       setAnnotateGameId(gameId);

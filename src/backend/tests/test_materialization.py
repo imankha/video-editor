@@ -218,8 +218,7 @@ class TestFilterClipsForTag:
         assert c["rating"] == 5
         assert c["notes"] == "Great shot"
         assert c["video_sequence"] == 0
-        # Should NOT include tagged_teammates (filtered out in copy)
-        assert "tagged_teammates" not in c or c.get("tagged_teammates") is None
+        assert c["tagged_teammates"] == ["Jake"]
         conn.close()
 
 
@@ -427,9 +426,8 @@ class TestMaterializeClips:
         ).fetchall()
         assert len(clips) == 2
         assert clips[0]["name"] == "Goal"
-        assert clips[0]["my_athlete"] == 1
+        assert clips[0]["my_athlete"] == 0
         assert clips[0]["filename"] == ""
-        assert clips[0]["tagged_teammates"] is None
 
         conn.close()
 
@@ -496,6 +494,105 @@ class TestMaterializeClips:
 
 
 # ===========================================================================
+# Unit tests: athlete attribution on materialized clips
+# ===========================================================================
+
+class TestAthleteAttribution:
+    def test_inserts_with_sharer_profile_name(self, tmp_path):
+        db_path = tmp_path / "recipient" / "profile.sqlite"
+        conn = _create_profile_db(db_path)
+        game_id = _insert_game(conn)
+
+        incoming = [
+            {"rating": 5, "name": "Goal", "notes": None, "start_time": 0,
+             "end_time": 5, "video_sequence": 0, "tags": None,
+             "tagged_teammates": ["Sam"]},
+        ]
+
+        result = _materialize_clips(conn, game_id, incoming, sharer_profile_name="Jake Johnson")
+        conn.commit()
+
+        assert result["inserted"] == 1
+        clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
+        athletes = decode_data(clips[0]["tagged_teammates"])
+        assert sorted(athletes) == ["Jake Johnson", "Sam"]
+        assert clips[0]["my_athlete"] == 0
+        conn.close()
+
+    def test_inserts_with_no_sharer_name(self, tmp_path):
+        db_path = tmp_path / "recipient" / "profile.sqlite"
+        conn = _create_profile_db(db_path)
+        game_id = _insert_game(conn)
+
+        incoming = [
+            {"rating": 3, "name": "Play", "notes": None, "start_time": 0,
+             "end_time": 5, "video_sequence": 0, "tags": None,
+             "tagged_teammates": ["Sam"]},
+        ]
+
+        result = _materialize_clips(conn, game_id, incoming, sharer_profile_name=None)
+        conn.commit()
+
+        clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
+        athletes = decode_data(clips[0]["tagged_teammates"])
+        assert athletes == ["Sam"]
+        conn.close()
+
+    def test_merge_unions_athlete_lists(self, tmp_path):
+        db_path = tmp_path / "recipient" / "profile.sqlite"
+        conn = _create_profile_db(db_path)
+        game_id = _insert_game(conn)
+
+        # Existing clip from a prior share (has athletes from Player A's parent)
+        conn.execute(
+            """INSERT INTO raw_clips
+               (filename, rating, name, start_time, end_time, game_id, video_sequence,
+                tagged_teammates, my_athlete, shared_by)
+               VALUES ('', 3, 'Existing', 0, 5, ?, 0, ?, 0, 'a@test.com')""",
+            (game_id, encode_data(["Player A"])),
+        )
+        conn.commit()
+
+        # Incoming overlapping clip from Player B's parent
+        incoming = [
+            {"rating": 4, "name": "Overlap", "notes": None, "start_time": 3,
+             "end_time": 8, "video_sequence": 0, "tags": None,
+             "tagged_teammates": ["Player C"]},
+        ]
+
+        result = _materialize_clips(
+            conn, game_id, incoming,
+            shared_by="b@test.com", sharer_profile_name="Player B",
+        )
+        conn.commit()
+
+        assert result["merged"] == 1
+        clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
+        assert len(clips) == 1
+        athletes = decode_data(clips[0]["tagged_teammates"])
+        assert sorted(athletes) == ["Player A", "Player B", "Player C"]
+        conn.close()
+
+    def test_no_tagged_teammates_gets_sharer_name_only(self, tmp_path):
+        db_path = tmp_path / "recipient" / "profile.sqlite"
+        conn = _create_profile_db(db_path)
+        game_id = _insert_game(conn)
+
+        incoming = [
+            {"rating": 3, "name": "Solo", "notes": None, "start_time": 0,
+             "end_time": 5, "video_sequence": 0, "tags": None},
+        ]
+
+        result = _materialize_clips(conn, game_id, incoming, sharer_profile_name="Jake")
+        conn.commit()
+
+        clips = conn.execute("SELECT * FROM raw_clips WHERE game_id = ?", (game_id,)).fetchall()
+        athletes = decode_data(clips[0]["tagged_teammates"])
+        assert athletes == ["Jake"]
+        conn.close()
+
+
+# ===========================================================================
 # Unit tests: video hash collection
 # ===========================================================================
 
@@ -537,6 +634,7 @@ class TestSerializeClipData:
         clips = [
             {"rating": 5, "name": "Goal", "notes": "Great", "start_time": 0,
              "end_time": 5, "video_sequence": 0, "tags": None,
+             "tagged_teammates": ["Jake", "Sam"],
              "extra_field": "should_be_dropped"},
         ]
         result = serialize_clip_data(clips)
@@ -544,6 +642,7 @@ class TestSerializeClipData:
         parsed = decode_data(result)
         assert len(parsed) == 1
         assert parsed[0]["name"] == "Goal"
+        assert parsed[0]["tagged_teammates"] == ["Jake", "Sam"]
         assert "extra_field" not in parsed[0]
 
 
@@ -609,8 +708,7 @@ class TestMaterializeGameShare:
         clips = r_conn2.execute("SELECT * FROM raw_clips").fetchall()
         assert len(clips) == 1
         assert clips[0]["name"] == "Jake Goal"
-        assert clips[0]["tagged_teammates"] is None
-        assert clips[0]["my_athlete"] == 1
+        assert clips[0]["my_athlete"] == 0
 
         mock_mark.assert_called_once_with(1, "recipient-profile")
         mock_insert_ref.assert_called_once()
@@ -665,12 +763,18 @@ class TestMaterializeGameShare:
     @patch("app.services.materialization.mark_game_share_materialized")
     @patch("app.services.materialization.insert_game_storage_ref")
     @patch("app.services.materialization.get_game_storage_ref")
-    def test_skips_when_no_clips_for_tag(
+    def test_game_only_share_when_no_clips_for_tag(
         self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
     ):
+        """No clips match tag -> game-only share (game copied, zero clips)."""
         s_conn, r_conn = self._setup_dbs(tmp_path)
         s_game_id = _insert_game(s_conn, name="Match")
         _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Other"])
+
+        mock_get_ref.return_value = {
+            "game_size_bytes": 50000,
+            "storage_expires_at": "2027-01-01T00:00:00+00:00",
+        }
 
         with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
             result = materialize_game_share(
@@ -683,8 +787,10 @@ class TestMaterializeGameShare:
                 share_id=3,
             )
 
-        assert result["skipped"] is True
-        assert result["game_id"] is None
+        assert result["skipped"] is False
+        assert result["game_id"] is not None
+        assert result["inserted"] == 0
+        assert result["merged"] == 0
         mock_mark.assert_called_once()
 
         s_conn.close()

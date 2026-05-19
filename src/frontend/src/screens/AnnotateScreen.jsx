@@ -264,9 +264,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [clipRegions, fullTimeline]);
 
   // T2820: Compute unique tags with clip counts and clip IDs per tag
+  // Only count tags from clips the user owns (not received shares)
   const tagCounts = useMemo(() => {
     const counts = {};
     clipRegions.forEach(r => {
+      if (r.shared_by) return;
       (r.tagged_teammates || []).forEach(tag => {
         counts[tag] = (counts[tag] || 0) + 1;
       });
@@ -278,7 +280,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const tagClipIds = useMemo(() => {
     const map = {};
     clipRegions.forEach(r => {
-      if (!r.rawClipId) return;
+      if (!r.rawClipId || r.shared_by) return;
       (r.tagged_teammates || []).forEach(tag => {
         if (!map[tag]) map[tag] = [];
         map[tag].push(r.rawClipId);

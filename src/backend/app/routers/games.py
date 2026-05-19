@@ -12,7 +12,7 @@ This router handles game storage and management:
 - PUT /api/games/{id}/annotations - Update annotations
 """
 
-from fastapi import APIRouter, Form, HTTPException, Body
+from fastapi import APIRouter, Form, HTTPException, Body, Request
 from typing import Optional, List
 import asyncio
 import os
@@ -1710,7 +1710,6 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         )
         if duplicate:
             share_records.append({"share_token": duplicate["share_token"], "recipient_email": email})
-            email_results.append({"email": email, "sent": True})
             continue
 
         try:
@@ -1730,6 +1729,13 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         except Exception as e:
             logger.error(f"[share-playback] Failed to create share record: {e}")
             share_records.append(None)
+
+    if not os.getenv("RESEND_API_KEY"):
+        from app.services.email import _get_share_url
+        for email, share in zip(body.emails, share_records):
+            if share:
+                url = _get_share_url(share["share_token"], "game")
+                logger.warning(f"[share-playback] DEV MODE -- {email}: {url}")
 
     tasks = {}
     for email, share in zip(body.emails, share_records):
@@ -1812,3 +1818,211 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     return {"results": email_results, "all_sent": all_sent}
 
 
+@router.get("/{game_id:int}/stream")
+async def stream_game_bounded(
+    game_id: int,
+    request: Request,
+    t: Optional[float] = None,
+):
+    """
+    Bounded streaming proxy for annotation playback. Serves byte ranges
+    covering the moov atom + annotated clip regions instead of the full
+    game video. Same three-window strategy as T1430's clip proxy.
+
+    If no clips exist for this game, all ranges are allowed (full video).
+    """
+    MOOV_WINDOW_END = 10 * 1024 * 1024 - 1
+    MOOV_TAIL_SIZE = 10 * 1024 * 1024
+    PRE_PAD_SECONDS = 2.0
+    POST_PAD_SECONDS = 5.0
+    MIN_PAD_BYTES = 5 * 1024 * 1024
+    GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
+    from fastapi.responses import StreamingResponse
+    import httpx
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                g.video_filename,
+                COALESCE(gv.duration, g.video_duration) AS video_duration,
+                COALESCE(gv.video_size, g.video_size) AS video_size
+            FROM games g
+            LEFT JOIN game_videos gv
+                ON gv.game_id = g.id AND gv.sequence = 1
+            WHERE g.id = ?
+        """, (game_id,))
+        game_row = cursor.fetchone()
+
+        if not game_row:
+            raise HTTPException(404, "Game not found")
+        if not game_row['video_duration'] or not game_row['video_size']:
+            raise HTTPException(422, "Game video missing duration/size metadata")
+        if not game_row['blake3_hash']:
+            raise HTTPException(422, "Game video missing blake3 hash")
+
+        blake3_hash = game_row['blake3_hash']
+        video_filename = game_row['video_filename']
+        duration = game_row['video_duration']
+        size = game_row['video_size']
+
+        cursor.execute(
+            "SELECT start_time, end_time FROM raw_clips WHERE game_id = ? ORDER BY start_time",
+            (game_id,),
+        )
+        clips = cursor.fetchall()
+
+    moov_end = min(size - 1, MOOV_WINDOW_END)
+    moov_tail_start = max(0, size - MOOV_TAIL_SIZE)
+
+    if not clips:
+        clip_windows = [(0, size - 1)]
+    else:
+        raw_windows = []
+        for clip in clips:
+            start_byte_raw = int((clip['start_time'] / duration) * size)
+            end_byte_raw = int((clip['end_time'] / duration) * size)
+            pre_pad = max(int((PRE_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
+            post_pad = max(int((POST_PAD_SECONDS / duration) * size), MIN_PAD_BYTES)
+            raw_windows.append((
+                max(0, start_byte_raw - pre_pad),
+                min(size - 1, end_byte_raw + post_pad),
+            ))
+        raw_windows.sort()
+        clip_windows = [raw_windows[0]]
+        for start, end in raw_windows[1:]:
+            prev_start, prev_end = clip_windows[-1]
+            if start <= prev_end + 1:
+                clip_windows[-1] = (prev_start, max(prev_end, end))
+            else:
+                clip_windows.append((start, end))
+
+    presigned_url = get_game_video_url(blake3_hash, video_filename)
+    if not presigned_url:
+        raise HTTPException(404, "Failed to generate R2 URL")
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
+        probe_resp = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
+    if probe_resp.status_code not in (200, 206):
+        error_body = probe_resp.text[:500] if probe_resp.text else "(empty)"
+        logger.error(
+            f"[game-stream] R2 probe error game_id={game_id} "
+            f"r2_status={probe_resp.status_code} blake3={blake3_hash} "
+            f"body_snippet={error_body!r}"
+        )
+        raise HTTPException(
+            status_code=502 if probe_resp.status_code >= 500 else probe_resp.status_code,
+            detail=f"R2 returned {probe_resp.status_code} for game video",
+        )
+
+    range_hdr = request.headers.get("range") or request.headers.get("Range")
+    req_start = 0
+    req_end = size - 1
+    if range_hdr and range_hdr.startswith("bytes="):
+        spec = range_hdr[len("bytes="):].strip()
+        if "-" in spec:
+            lo_s, hi_s = spec.split("-", 1)
+            try:
+                if lo_s:
+                    req_start = int(lo_s)
+                if hi_s:
+                    req_end = int(hi_s)
+            except ValueError:
+                raise HTTPException(416, "Malformed Range header")
+
+    window_kind = None
+    window_end = None
+
+    if req_start <= moov_end:
+        window_end = moov_end
+        window_kind = "moov"
+    else:
+        for win_start, win_end_val in clip_windows:
+            if win_start <= req_start <= win_end_val:
+                window_end = win_end_val
+                window_kind = "clip"
+                break
+
+        if window_kind is None and req_start >= moov_tail_start:
+            window_end = size - 1
+            window_kind = "moov_tail"
+
+        if window_kind is None:
+            for _, win_end_val in clip_windows:
+                if win_end_val < req_start <= win_end_val + GAP_OVERRUN_EXTRA:
+                    window_end = min(
+                        win_end_val + GAP_OVERRUN_EXTRA,
+                        moov_tail_start - 1 if moov_tail_start > 0 else size - 1,
+                    )
+                    window_kind = "clip_overrun"
+                    logger.info(
+                        f"[game-stream] overrun game_id={game_id} req={req_start}-{req_end} "
+                        f"clip_win_end={win_end_val} overrun_end={window_end}"
+                    )
+                    break
+
+    if window_kind is None:
+        logger.info(
+            f"[game-stream] 416 gap game_id={game_id} req={req_start}-{req_end} "
+            f"moov=0-{moov_end} clips={clip_windows} moov_tail={moov_tail_start}-{size - 1}"
+        )
+        raise HTTPException(
+            status_code=416,
+            detail="Requested range outside clip/moov windows",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    req_end = min(req_end, window_end)
+    if req_start > req_end:
+        raise HTTPException(
+            status_code=416,
+            detail="Invalid range",
+            headers={"Content-Range": f"bytes */{size}"},
+        )
+
+    segment_len = req_end - req_start + 1
+    logger.info(
+        f"[game-stream] game_id={game_id} window={window_kind} "
+        f"range={req_start}-{req_end} segment_len={segment_len}"
+    )
+
+    async def stream_from_r2():
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
+            async with client.stream(
+                "GET",
+                presigned_url,
+                headers={"Range": f"bytes={req_start}-{req_end}"},
+            ) as response:
+                if response.status_code not in (200, 206):
+                    error_body = ""
+                    try:
+                        raw = await response.aread()
+                        error_body = raw[:500].decode("utf-8", errors="replace")
+                    except Exception:
+                        error_body = "(unreadable)"
+                    logger.error(
+                        f"[game-stream] R2 error game_id={game_id} "
+                        f"r2_status={response.status_code} blake3={blake3_hash} "
+                        f"range={req_start}-{req_end} window={window_kind} "
+                        f"body_snippet={error_body!r}"
+                    )
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"R2 returned {response.status_code}",
+                    )
+                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                    yield chunk
+
+    return StreamingResponse(
+        stream_from_r2(),
+        status_code=206,
+        media_type="video/mp4",
+        headers={
+            "Content-Range": f"bytes {req_start}-{req_end}/{size}",
+            "Content-Length": str(segment_len),
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "no-store",
+        },
+    )
