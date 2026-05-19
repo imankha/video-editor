@@ -32,7 +32,7 @@ export function InstallButton() {
       </button>
 
       {open && (
-        <div className="fixed inset-x-4 top-14 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 p-4">
+        <div className="fixed left-1/2 -translate-x-1/2 top-14 w-[calc(100vw-2rem)] max-w-72 sm:absolute sm:left-auto sm:translate-x-0 sm:right-0 sm:top-full sm:mt-2 sm:w-72 bg-gray-800 border border-gray-700 rounded-xl shadow-xl z-50 p-4">
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center">
