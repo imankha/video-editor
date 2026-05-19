@@ -19,6 +19,8 @@ import json
 import re
 import os
 import sys
+import shutil
+import subprocess
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -389,16 +391,18 @@ HTML = r"""<!DOCTYPE html>
     padding: 12px 16px; font-size: 13px; white-space: pre-wrap; max-height: 400px;
     overflow-y: auto; margin-top: 8px; line-height: 1.6; color: var(--text-dim);
   }
-  .task-detail .load-btn, .task-detail .copy-details-btn, .task-detail .gen-prompt-btn {
+  .task-detail .load-btn, .task-detail .copy-details-btn, .task-detail .gen-prompt-btn, .task-detail .open-editor-btn {
     background: none; border: 1px solid var(--border); color: var(--accent);
     padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
     margin-top: 4px;
   }
-  .task-detail .load-btn:hover, .task-detail .copy-details-btn:hover, .task-detail .gen-prompt-btn:hover {
+  .task-detail .load-btn:hover, .task-detail .copy-details-btn:hover, .task-detail .gen-prompt-btn:hover, .task-detail .open-editor-btn:hover {
     border-color: var(--accent); background: rgba(88,166,255,0.05);
   }
   .task-detail .gen-prompt-btn { color: var(--green); border-color: var(--green); }
   .task-detail .gen-prompt-btn:hover { background: rgba(63,185,80,0.1); }
+  .task-detail .open-editor-btn { color: #f0883e; border-color: #f0883e; }
+  .task-detail .open-editor-btn:hover { background: rgba(240,136,62,0.1); }
   .detail-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 
   .badge {
@@ -536,6 +540,7 @@ function buildTaskCard(t, ms) {
       </div>
       ${t.link ? '<div class="detail-content">Click "Load details" to view task file</div>' : ''}
       <div class="detail-actions">
+        ${t.link ? '<button class="open-editor-btn" title="Open in Notepad++">&#9998; Edit</button>' : ''}
         ${t.link ? '<button class="load-btn">Load details</button>' : ''}
         ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
         ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
@@ -558,7 +563,7 @@ function buildTaskCard(t, ms) {
   };
 
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn')) return;
+    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.open-editor-btn')) return;
     card.classList.toggle('expanded');
   });
 
@@ -605,6 +610,26 @@ function buildTaskCard(t, ms) {
       } else {
         genPromptBtn.textContent = 'Failed to load';
         setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
+      }
+    };
+  }
+
+  const openEditorBtn = card.querySelector('.open-editor-btn');
+  if (openEditorBtn) {
+    openEditorBtn.onclick = async (e) => {
+      e.stopPropagation();
+      try {
+        const resp = await fetch('/api/open-file', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({path: t.link})
+        });
+        if (!resp.ok) {
+          const d = await resp.json();
+          showToast(d.error || 'Failed to open file');
+        }
+      } catch(e) {
+        showToast('Error: ' + e.message);
       }
     };
   }
@@ -1071,6 +1096,35 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {'ok': True})
             except Exception as e:
                 self._json(500, {'error': str(e)})
+        elif self.path == '/api/open-file':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            rel_path = body.get('path', '')
+            if not rel_path:
+                self._json(400, {'error': 'Missing path'})
+                return
+            plan_dir = os.path.dirname(PLAN_PATH)
+            file_path = os.path.normpath(os.path.join(plan_dir, rel_path))
+            project_root = os.path.dirname(plan_dir)
+            if not file_path.startswith(project_root):
+                self._json(403, {'error': 'Access denied'})
+                return
+            if not os.path.isfile(file_path):
+                self._json(404, {'error': 'File not found'})
+                return
+            editor = shutil.which('notepad++') or shutil.which('notepad')
+            if not editor:
+                for candidate in [
+                    r'C:\Program Files\Notepad++\notepad++.exe',
+                    r'C:\Program Files (x86)\Notepad++\notepad++.exe',
+                ]:
+                    if os.path.isfile(candidate):
+                        editor = candidate
+                        break
+            if not editor:
+                editor = 'notepad'
+            subprocess.Popen([editor, file_path])
+            self._json(200, {'ok': True})
         else:
             self.send_error(404)
 

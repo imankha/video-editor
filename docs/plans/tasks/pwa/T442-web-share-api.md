@@ -29,6 +29,9 @@ Gallery card → "Share" button → navigator.share({ files: [videoBlob], title,
                     User picks: Instagram / WhatsApp / iMessage / TikTok / etc.
 ```
 
+Current Share functionality (email sent through reelballers) becomes just another item on the list.
+
+
 ### API Surface
 
 ```javascript

@@ -336,9 +336,11 @@ AI never manually migrates accounts. AI writes migration code. Admin hits the en
 
 **Migration files:** `src/backend/app/migrations/{track}/v{NNN}_{description}.py`
 
-**Admin endpoint:** `POST /api/admin/migrate` -- iterates all users, runs pending migrations, syncs to R2.
+**Migrations do NOT auto-run on deploy or startup.** `init_pg_schema()` only runs `_SCHEMA_DDL` (`CREATE TABLE IF NOT EXISTS`) for fresh DBs. Versioned migrations (`ALTER TABLE`, new tables on existing schemas) must be explicitly triggered after deploy:
+- **Admin endpoint:** `POST /api/admin/migrate` (requires admin session)
+- **SSH fallback:** `fly ssh console -a <app> -C "python -c 'from app.migrations import run_all_migrations; from app.services.pg import init_pg_pool; init_pg_pool(); print(run_all_migrations())'"`
 
-**When implementing schema changes:** Include the Migration agent in classification. It creates the versioned migration file after the Implementor changes the schema. See [migration.md](.claude/agents/migration.md).
+**When implementing schema changes:** Include the Migration agent in classification. It creates the versioned migration file after the Implementor changes the schema. See [migration.md](.claude/agents/migration.md). Update `_SCHEMA_DDL` in `pg.py` too (for fresh deployments).
 
 **Key rule:** `PRAGMA user_version` tracks schema version. `db_version` table / R2 `x-amz-meta-db-version` tracks sync version. They are independent.
 
