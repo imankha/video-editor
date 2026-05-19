@@ -31,6 +31,7 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { buildInviteMessage } from '../utils/inviteEmail';
 import { toast } from './shared/Toast';
 import { useGamesDataStore } from '../stores/gamesDataStore';
+import { InstallButton } from './InstallButton';
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -506,6 +507,7 @@ export function ProjectManager({
 
       {/* Top right controls - Credits + Gallery (auth only) + Sign-in/Profile */}
       <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
+        <InstallButton />
         {isAuthenticated && <CreditBalance />}
         {isAuthenticated && onOpenDownloads && (
           <Button
