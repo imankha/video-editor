@@ -33,7 +33,7 @@ export function useInstallPrompt() {
     };
   }, []);
 
-  const canInstall = (!!deferredPrompt || isIOS) && !isInstalled && !dismissed;
+  const canInstall = !isInstalled && !dismissed;
 
   const promptInstall = useCallback(async () => {
     if (!deferredPrompt) return;
@@ -49,5 +49,7 @@ export function useInstallPrompt() {
     setDismissed(true);
   }, []);
 
-  return { canInstall, isIOS, isInstalled, promptInstall, dismiss };
+  const canPrompt = !!deferredPrompt;
+
+  return { canInstall, canPrompt, isIOS, isInstalled, promptInstall, dismiss };
 }

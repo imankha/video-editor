@@ -6,6 +6,7 @@ vi.mock('../../hooks/useInstallPrompt');
 
 const defaultHook = {
   canInstall: false,
+  canPrompt: false,
   isIOS: false,
   isInstalled: false,
   promptInstall: vi.fn(),
@@ -45,12 +46,20 @@ describe('InstallButton', () => {
 
   it('calls promptInstall on Install button in panel', () => {
     const promptInstall = vi.fn();
-    mockHook({ canInstall: true, promptInstall });
+    mockHook({ canInstall: true, canPrompt: true, promptInstall });
     render(<InstallButton />);
     fireEvent.click(screen.getByText('Install'));
     const installButtons = screen.getAllByText('Install');
     fireEvent.click(installButtons[installButtons.length - 1]);
     expect(promptInstall).toHaveBeenCalled();
+  });
+
+  it('shows Android manual instructions when no deferred prompt', () => {
+    mockHook({ canInstall: true, canPrompt: false });
+    render(<InstallButton />);
+    fireEvent.click(screen.getByText('Install'));
+    expect(screen.getByText('Add to Home Screen')).toBeTruthy();
+    expect(screen.getByText(/Install App/)).toBeTruthy();
   });
 
   it('shows iOS instructions when isIOS', () => {

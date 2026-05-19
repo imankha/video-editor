@@ -2,7 +2,7 @@ import { Download, Share } from 'lucide-react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export function SharePageInstallBanner() {
-  const { canInstall, isIOS, promptInstall, dismiss } = useInstallPrompt();
+  const { canInstall, canPrompt, isIOS, promptInstall, dismiss } = useInstallPrompt();
 
   if (!canInstall) return null;
 
@@ -18,7 +18,7 @@ export function SharePageInstallBanner() {
         <p className="text-xs text-gray-400 shrink-0">
           Tap <Share size={12} className="inline text-blue-400" /> then &quot;Add to Home Screen&quot;
         </p>
-      ) : (
+      ) : canPrompt ? (
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={promptInstall}
@@ -33,6 +33,10 @@ export function SharePageInstallBanner() {
             Dismiss
           </button>
         </div>
+      ) : (
+        <p className="text-xs text-gray-400 shrink-0">
+          Tap <strong className="text-white">&#x22EE;</strong> then &quot;Install App&quot;
+        </p>
       )}
     </div>
   );

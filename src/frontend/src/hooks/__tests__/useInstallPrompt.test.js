@@ -24,21 +24,13 @@ describe('useInstallPrompt', () => {
     expect(result.current.canInstall).toBe(false);
   });
 
-  it('returns canInstall true after beforeinstallprompt fires', () => {
+  it('returns canInstall true even without beforeinstallprompt', () => {
     const { result } = renderHook(() => useInstallPrompt());
-    expect(result.current.canInstall).toBe(false);
-
-    const mockEvent = { preventDefault: vi.fn(), prompt: vi.fn(), userChoice: Promise.resolve({ outcome: 'accepted' }) };
-    act(() => {
-      window.dispatchEvent(new CustomEvent('beforeinstallprompt', { detail: mockEvent }));
-    });
-
-    // beforeinstallprompt is a window event, but our handler uses e.preventDefault/e.prompt
-    // We need to dispatch an event that the handler can call preventDefault on
-    // Since CustomEvent doesn't carry the mock methods, let's simulate differently
+    expect(result.current.canInstall).toBe(true);
+    expect(result.current.canPrompt).toBe(false);
   });
 
-  it('returns canInstall true when beforeinstallprompt event is stored', () => {
+  it('returns canPrompt true after beforeinstallprompt fires', () => {
     const { result } = renderHook(() => useInstallPrompt());
 
     const mockEvent = new Event('beforeinstallprompt');
@@ -50,6 +42,7 @@ describe('useInstallPrompt', () => {
     });
 
     expect(result.current.canInstall).toBe(true);
+    expect(result.current.canPrompt).toBe(true);
   });
 
   it('promptInstall calls event.prompt()', async () => {

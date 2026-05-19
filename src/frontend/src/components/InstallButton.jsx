@@ -4,7 +4,7 @@ import { useInstallPrompt } from '../hooks/useInstallPrompt';
 import { Button } from './shared/Button';
 
 export function InstallButton() {
-  const { canInstall, isIOS, promptInstall, dismiss } = useInstallPrompt();
+  const { canInstall, canPrompt, isIOS, promptInstall, dismiss } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
 
@@ -70,7 +70,7 @@ export function InstallButton() {
                 <li>Scroll down and tap &quot;Add to Home Screen&quot;</li>
               </ol>
             </div>
-          ) : (
+          ) : canPrompt ? (
             <div className="flex gap-2">
               <Button variant="primary" size="sm" className="flex-1" onClick={() => { promptInstall(); setOpen(false); }}>
                 Install
@@ -78,6 +78,14 @@ export function InstallButton() {
               <Button variant="ghost" size="sm" onClick={() => { dismiss(); setOpen(false); }}>
                 Not now
               </Button>
+            </div>
+          ) : (
+            <div className="bg-gray-700/50 rounded-lg p-3 text-sm text-gray-300 space-y-2">
+              <p className="font-medium text-white">Add to Home Screen</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Tap the browser menu <strong className="text-white">&#x22EE;</strong></li>
+                <li>Tap &quot;Add to Home Screen&quot; or &quot;Install App&quot;</li>
+              </ol>
             </div>
           )}
         </div>
