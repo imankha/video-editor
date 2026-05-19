@@ -379,8 +379,8 @@ def materialize_game_share(
     """
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
 
-    # Query sharer's profile name for athlete attribution
-    sharer_profile_name = None
+    # Query sharer's profile name for athlete attribution (fall back to email)
+    sharer_profile_name = sharer_email
     try:
         from app.services.user_db import get_profiles
         sharer_profiles = get_profiles(sharer_user_id)
