@@ -6,6 +6,7 @@ import pytest
 from app.services.auth_db import create_user
 from app.services.sharing_db import (
     SHARE_TYPE_TO_CHANNEL,
+    attribute_from_existing_shares,
     persist_invite_code,
     record_referral,
     resolve_invite_code,
@@ -121,3 +122,70 @@ class TestInviteLinkAttribution:
         record_referral("user-a", "user-b", "invite_link", code)
         result = record_referral("user-a", "user-b", "game_share", "share-99")
         assert result is False
+
+
+class TestAttributeFromExistingShares:
+    """Share-based attribution at signup for gallery/reel shares."""
+
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("sharer-user", email="sharer@test.com")
+        create_user("recipient-user", email="recipient@test.com")
+
+    def _insert_share(self, sharer_id, recipient_email, share_type="video"):
+        from app.services.pg import get_pg
+        import uuid
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT INTO shares (share_token, share_type, sharer_user_id,
+                   sharer_profile_id, recipient_email)
+                   VALUES (%s, %s, %s, 'profile-1', %s) RETURNING id""",
+                (str(uuid.uuid4()), share_type, sharer_id, recipient_email),
+            )
+            return cur.fetchone()["id"]
+
+    def test_attributes_from_video_share(self, pg_conn):
+        self._insert_share("sharer-user", "recipient@test.com", "video")
+        result = attribute_from_existing_shares("recipient-user", "recipient@test.com")
+        assert result is True
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM referrals WHERE referred_id = 'recipient-user'")
+            row = cur.fetchone()
+        assert row["referrer_id"] == "sharer-user"
+        assert row["channel"] == "reel_share"
+
+    def test_attributes_from_game_share(self, pg_conn):
+        self._insert_share("sharer-user", "recipient@test.com", "game")
+        result = attribute_from_existing_shares("recipient-user", "recipient@test.com")
+        assert result is True
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM referrals WHERE referred_id = 'recipient-user'")
+            row = cur.fetchone()
+        assert row["channel"] == "game_share"
+
+    def test_no_shares_returns_false(self, pg_conn):
+        result = attribute_from_existing_shares("recipient-user", "nobody@test.com")
+        assert result is False
+
+    def test_self_share_not_attributed(self, pg_conn):
+        self._insert_share("recipient-user", "recipient@test.com", "video")
+        result = attribute_from_existing_shares("recipient-user", "recipient@test.com")
+        assert result is False
+
+    def test_invite_link_wins_over_share(self, pg_conn):
+        """If invite_link already attributed, share attribution is a no-op."""
+        self._insert_share("sharer-user", "recipient@test.com", "video")
+        record_referral("sharer-user", "recipient-user", "invite_link", "code123")
+        result = attribute_from_existing_shares("recipient-user", "recipient@test.com")
+        assert result is False
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT channel FROM referrals WHERE referred_id = 'recipient-user'")
+            row = cur.fetchone()
+        assert row["channel"] == "invite_link"

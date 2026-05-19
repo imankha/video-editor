@@ -394,3 +394,28 @@ def persist_invite_code(user_id: str, invite_code: str) -> None:
             "UPDATE users SET invite_code = %s WHERE user_id = %s AND invite_code IS NULL",
             (invite_code, user_id),
         )
+
+
+def attribute_from_existing_shares(user_id: str, email: str) -> bool:
+    """Attribute a new user to their earliest sharer, if any shares exist for their email.
+
+    Covers gallery/reel shares and any other share types that don't go through
+    pending_teammate_shares. Uses the earliest share as the attribution source.
+    """
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT sharer_user_id, share_type, id
+               FROM shares
+               WHERE recipient_email = %s
+               ORDER BY shared_at ASC
+               LIMIT 1""",
+            (email,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return False
+    channel = SHARE_TYPE_TO_CHANNEL.get(row["share_type"])
+    if not channel:
+        return False
+    return record_referral(row["sharer_user_id"], user_id, channel, str(row["id"]))

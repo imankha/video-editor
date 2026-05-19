@@ -283,17 +283,26 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
         google_id=google_id,
         verified_at=datetime.utcnow().isoformat(),
     )
+    attributed = False
     if ref:
         logger.info(f"[Auth] login — created user: {user_id} ({email}) referred_by={ref}")
         try:
             from app.services.sharing_db import resolve_invite_code, record_referral
             referrer_id = resolve_invite_code(ref)
             if referrer_id:
-                record_referral(referrer_id, user_id, "invite_link", ref)
+                attributed = record_referral(referrer_id, user_id, "invite_link", ref)
         except Exception:
             logger.warning(f"[Auth] referral attribution failed for ref={ref}", exc_info=True)
     else:
         logger.info(f"[Auth] login — created user: {user_id} ({email})")
+
+    if not attributed:
+        try:
+            from app.services.sharing_db import attribute_from_existing_shares
+            attribute_from_existing_shares(user_id, email)
+        except Exception:
+            logger.warning(f"[Auth] share-based attribution failed for {email}", exc_info=True)
+
     return user_id
 
 
