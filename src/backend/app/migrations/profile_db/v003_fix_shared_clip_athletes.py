@@ -13,8 +13,20 @@ class V003FixSharedClipAthletes(BaseMigration):
         from app.services.pg import get_pg
         from app.utils.encoding import encode_data
 
-        # Fix 1: Set my_athlete=0 for all materialized (shared) clips
         cur = conn.cursor()
+
+        # Ensure columns exist (older DBs predate the base schema additions)
+        for col, col_def in [
+            ("my_athlete", "INTEGER DEFAULT 1"),
+            ("shared_by", "TEXT DEFAULT NULL"),
+            ("tagged_teammates", "BLOB DEFAULT NULL"),
+        ]:
+            existing = {r[1] for r in cur.execute("PRAGMA table_info(raw_clips)").fetchall()}
+            if col not in existing:
+                cur.execute(f"ALTER TABLE raw_clips ADD COLUMN {col} {col_def}")
+                logger.info(f"[Migration v003] Added missing column raw_clips.{col}")
+
+        # Fix 1: Set my_athlete=0 for all materialized (shared) clips
         cur.execute(
             "UPDATE raw_clips SET my_athlete = 0 WHERE shared_by IS NOT NULL AND my_athlete = 1"
         )
