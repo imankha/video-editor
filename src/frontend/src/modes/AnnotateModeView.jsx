@@ -311,18 +311,15 @@ export function AnnotateModeView({
           className={`${annotateFullscreen ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col' : ''}`}
         >
           {/* Video Player with annotate overlays */}
-          <div className={`relative bg-gray-900 ${annotateFullscreen ? '' : 'rounded-lg'}`}>
-            {/* In fullscreen: aspect-ratio wrapper constrains video height */}
+          <div className={`relative bg-gray-900 ${annotateFullscreen ? 'flex-1 min-h-0 flex flex-col' : 'rounded-lg'}`}>
+            {/* In fullscreen: flex-1 fills remaining space after controls/timeline */}
             <div
-              className={annotateFullscreen ? 'relative w-full' : 'contents'}
-              style={annotateFullscreen ? {
-                maxHeight: 'calc(100vh - 180px)',
-                aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`
-              } : undefined}
+              className={annotateFullscreen ? 'flex-1 min-h-0 relative' : 'contents'}
             >
               {multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
-                <div className="relative" style={{ aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
+                <div className={`relative ${annotateFullscreen ? 'w-full h-full' : ''}`}
+                     style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
                   <video
                     ref={multiVideo.videoARef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
