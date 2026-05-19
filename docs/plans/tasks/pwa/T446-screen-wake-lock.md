@@ -1,6 +1,6 @@
 # T446: Screen Wake Lock
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-05-13

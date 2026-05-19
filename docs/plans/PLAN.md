@@ -172,7 +172,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | | **[PWA Quick Wins](tasks/pwa/EPIC.md)** | 6 | 2 | 3.0 | | | **Installable app + native share sheet + screen wake lock. Foundation for all PWA features.** |
 | T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | DONE | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | DONE | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
-| T446 | ↳ [Screen Wake Lock](tasks/pwa/T446-screen-wake-lock.md) | 5 | 1 | 5.0 | TODO | [ ] | Prevent screen dimming during Annotate mode. ~20 LOC, no backend. |
+| T446 | ↳ [Screen Wake Lock](tasks/pwa/T446-screen-wake-lock.md) | 5 | 1 | 5.0 | TESTING | [ ] | Prevent screen dimming during Annotate mode. ~20 LOC, no backend. |
 | | **[Landing Page Redesign](tasks/landing-page-redesign/EPIC.md)** | 10 | 4 | 2.5 | | | **Alpha scope: new hero with CTA above fold, sticky nav + mobile CTA bar, visual refresh** |
 | T2300 | ↳ [Visual Foundation & Design System](tasks/landing-page-redesign/T2300-visual-foundation.md) | 7 | 3 | 2.3 | TODO | [ ] | Color palette shift (navy, not purple), accent color, typography (General Sans/Sohne), background treatment |
 | T2310 | ↳ [Nav, Hero & CTA Improvements](tasks/landing-page-redesign/T2310-nav-hero-cta.md) | 10 | 4 | 2.5 | TODO | [ ] | Sticky nav + mobile bottom CTA bar + hero copy ("From Upload to IG in 5 minutes.") + specific CTA text. Clear wins only, no visual redesign. |
