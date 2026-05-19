@@ -35,8 +35,7 @@ Full spec: [reelballers-landing-page-spec.md](../../../../reelballers-landing-pa
 | ID | Task | Status |
 |----|------|--------|
 | T2300 | [Visual Foundation & Design System](T2300-visual-foundation.md) | TODO |
-| T2310 | [Sticky Nav & CTA System](T2310-sticky-nav-cta.md) | TODO |
-| T2320 | [Hero Section](T2320-hero-section.md) | TODO |
+| T2310 | [Nav, Hero & CTA Improvements](T2310-nav-hero-cta.md) | TODO |
 
 ### For Launch (polish)
 
@@ -57,8 +56,7 @@ Full spec: [reelballers-landing-page-spec.md](../../../../reelballers-landing-pa
 ## Page Architecture
 
 ```
-Nav (sticky) ............... T2310
-Hero ....................... T2320
+Nav + Hero ................. T2310
 Before/After ............... T2330
 How It Works (3 steps) ..... T2340
 Features (4 tiles) ......... T2350
@@ -74,8 +72,8 @@ Footer ..................... T2380
 
 | Location | Copy | Task |
 |----------|------|------|
-| Nav (sticky) | **Try it free** | T2310 |
-| Hero | **Make my first reel -- free** | T2320 |
+| Nav (sticky) | **Make Your Reel** | T2310 |
+| Hero | **Make my first reel -- free** | T2310 |
 | After before/after | Try it on your own clip | T2330 |
 | End of "Why it's different" | See pricing (text link) | T2370 |
 | Pricing packs | Buy [pack name] | T2370 |

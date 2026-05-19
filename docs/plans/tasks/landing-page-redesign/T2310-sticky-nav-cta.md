@@ -8,21 +8,21 @@
 
 ## Problem
 
-The current nav has no CTA button. The user has to scroll past six feature tiles before they can take action. On mobile, there's no persistent way to convert. The mobile sticky bottom CTA bar is "probably the single highest-leverage element you don't currently have" -- 5-10% conversion lift on most consumer products.
+There's no persistent way to convert. The CTO and Nav should stick and not scroll.
+Hard to compare "before" and "after" when they are not side by side.
 
 ## Solution
 
 ### Desktop Nav (Sticky)
 
 ```
-[Reel Ballers logo]              How it works   Pricing   Sign in   [ Try it free ]
+[Reel Ballers logo]      Make Your Reel 
 ```
 
 - Sticky on scroll
 - Condenses height ~20% after first scroll
 - Background: transparent -> slightly darker shade with 1px bottom border
-- "Try it free" is the primary accent-color button (routes to sign-up / editor)
-- "Sign in" is a text link (routes to login)
+
 
 ### Mobile Nav
 
@@ -38,7 +38,7 @@ The current nav has no CTA button. The user has to scroll past six feature tiles
 
 ### CTA Voice Rules
 
-- Hero: names what happens ("Make my first reel -- free")
+- Hero: names what happens ("Make my first reel")
 - Mid-page: softer, exploratory ("Try it on your own clip")
 - Final: directive ("Make the reel")
 - Never use: "Get started," "Learn more," "Click here," "Sign up free"
@@ -56,10 +56,11 @@ The current nav has no CTA button. The user has to scroll past six feature tiles
 ## Implementation
 
 1. [ ] Create NavBar component with sticky behavior
+2. [ ] Divide Before and After into 2 side by side images of mobiles that play so user can compare and contrast.
 2. [ ] Add scroll listener for height condensing + background change
-3. [ ] Add "How it works" and "Pricing" anchor links
+3. [ ] Add "How it works" anchor links
 4. [ ] Add "Sign in" text link (routes to app login)
-5. [ ] Add "Try it free" primary button (routes to app sign-up)
+5. [ ] Add "Make Your Real" primary button (routes to app sign-up)
 6. [ ] Create mobile hamburger menu with sheet overlay
 7. [ ] Create MobileStickyBar component (full-width "Try it free" button, fixed bottom)
 8. [ ] Ensure mobile bar doesn't overlap footer or other fixed elements
