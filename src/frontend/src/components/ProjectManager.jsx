@@ -28,8 +28,7 @@ import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
-import { buildInviteMessage } from '../utils/inviteEmail';
-import { toast } from './shared/Toast';
+import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
 
@@ -419,16 +418,7 @@ export function ProjectManager({
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
-  const handleInviteClick = useCallback(async () => {
-    try {
-      const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
-      if (!resp.ok) return;
-      const { invite_code } = await resp.json();
-      const message = buildInviteMessage(invite_code);
-      await navigator.clipboard.writeText(message);
-      toast.success('Invite link copied!', { message: 'Share it with a friend via text, email, or social media.' });
-    } catch { /* network error — user can retry */ }
-  }, []);
+  const handleInviteClick = useCallback(() => shareInvite(), []);
 
   // Open game details modal (requires auth)
   const handleAddGameClick = useCallback(() => {

@@ -8,8 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore } from '../stores';
 import { useEditorStore } from '../stores';
 import { API_BASE } from '../config';
-import { buildInviteMessage } from '../utils/inviteEmail';
-import { toast } from './shared/Toast';
+import { shareInvite } from '../utils/inviteEmail';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -22,16 +21,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
     sessionStorage.setItem('shared_annotation_flow', 'true');
   }, []);
 
-  const handleInviteClick = useCallback(async () => {
-    try {
-      const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
-      if (!resp.ok) return;
-      const { invite_code } = await resp.json();
-      const message = buildInviteMessage(invite_code);
-      await navigator.clipboard.writeText(message);
-      toast.success('Invite link copied!', { message: 'Share it with a friend via text, email, or social media.' });
-    } catch { /* network error */ }
-  }, []);
+  const handleInviteClick = useCallback(() => shareInvite(), []);
 
   useEffect(() => {
     const controller = new AbortController();
