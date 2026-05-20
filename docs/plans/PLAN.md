@@ -199,7 +199,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T1532 | [Working Clips Deleted After Restart](tasks/T1532-working-clips-deleted-after-restart.md) | 4 | 3 | 1.3 | DONE | [ ] | Fixed: added project_id to PARTITION BY in latest_working_clips_subquery + regression test covering cross-project shared raw_clip. |
 | T1534 | [Overlay Render Broken Pipe at Frame 299](tasks/T1534-overlay-render-broken-pipe.md) | 6 | 2 | 3.0 | DONE | [ ] | Fixed: removed `-shortest` from overlay ffmpeg cmd. Mixed-audio concat caused audio (~8s) to truncate output below video length (24s), ffmpeg exited mid-stdin -> BrokenPipe. |
 |  | **[Analytics 1](tasks/analytics-1/EPIC.md)** | 7 | 3 | 2.3 |  |  | Fix CF Web Analytics + Postgres event log + migrate admin panel off R2 downloads. Replaces OpenPanel epic. |
-| T3000 | ↳ [Fix Cloudflare Web Analytics](tasks/analytics-1/T3000-fix-cloudflare-web-analytics.md) | 6 | 1 | 6.0 | TODO | [ ] | Set VITE_CF_ANALYTICS_TOKEN in CF Pages env, verify beacon on app + landing page |
+| T3000 | ↳ [Fix Cloudflare Web Analytics](tasks/analytics-1/T3000-fix-cloudflare-web-analytics.md) | 6 | 1 | 6.0 | TESTING | [ ] | Set VITE_CF_ANALYTICS_TOKEN in CF Pages env, verify beacon on app + landing page |
 | T3010 | ↳ [Postgres Event Log + Instrumentation](tasks/analytics-1/T3010-postgres-event-log.md) | 8 | 4 | 2.0 | TODO | [x] | Create analytics_events table, log_event() helper, instrument 8 backend handlers |
 | T3020 | ↳ [Admin Panel Event Migration](tasks/analytics-1/T3020-admin-panel-event-migration.md) | 7 | 5 | 1.4 | TODO | [x] | Replace R2 profile downloads with Postgres event queries, backfill historical data |
 | T2940 | [Overlay Tuning](tasks/overlay-v2/T2940-overlay-tuning.md) | 8 | 3 | 2.7 | TODO | [ ] | Fix invisible/occluding overlay: bold stroke (3-4px) with dark outline, separate stroke/fill opacity, better default colors, dim slider. No architecture changes. |
@@ -247,6 +247,15 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 |------|------|------|------|------|------|------|------|
 | T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | DONE | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
 | T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
+|  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Deferred from alpha: more before/after examples, how-it-works steps, feature tile cut, sample reels grid, FAQ/footer |
+| T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
+| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
+| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
+|  | **[Overlay 2](tasks/overlay-2/EPIC.md)** |  |  |  |  |  |  |
+| T2160 | ↳ [Tracker Gap Bridging](tasks/overlay-v2/T2160-tracker-reacquisition.md) | 9 | 6 | 1.5 | TODO | [ ] | Spline interpolation through <0.5s tracking drops + appearance embedding for re-acquisition auto-suggest. |
+| T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
+| T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
+| T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
 |  | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 |  |  | Background export + push notifications + background uploads + share target + offline playback |
 | T443 | ↳ [Background Export Tracking](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close -- service worker tracks Modal job, notifies on completion. |
 | T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
@@ -258,15 +267,6 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
 | T2120 | ↳ [Pulse Ring Primitive](tasks/overlay-v2/T2120-pulse-ring-primitive.md) | 7 | 3 | 2.3 | TODO | [ ] | Animated scale + opacity loop for dramatic moments (goals, big saves). 1-2s duration. |
 | T2150 | ↳ [Overlay Presets System](tasks/overlay-v2/T2150-overlay-presets-system.md) | 8 | 4 | 2.0 | TODO | [ ] | One-click templates: "Spotlight", "Goal", "Custom". Wire up multiple primitives at once. |
-| T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
-|  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Deferred from alpha: more before/after examples, how-it-works steps, feature tile cut, sample reels grid, FAQ/footer |
-| T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
-| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
-| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
-|  | **[Overlay 2](tasks/overlay-2/EPIC.md)** |  |  |  |  |  |  |
-| T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
-| T2160 | ↳ [Tracker Gap Bridging](tasks/overlay-v2/T2160-tracker-reacquisition.md) | 9 | 6 | 1.5 | TODO | [ ] | Spline interpolation through <0.5s tracking drops + appearance embedding for re-acquisition auto-suggest. |
-| T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
 
 #### Infrastructure
 
@@ -328,14 +328,12 @@ Improvements after real user traffic.
 
 | ID | Task | Status | Pri | Migr | Description |
 |------|------|------|------|------|------|
-|  | ~~**[Teammate Sharing](tasks/sharing/EPIC.md)**~~ |  |  |  | SUPERSEDED |
 | T710 | [Share with Coach](tasks/post-launch/T710-share-with-coach.md) | TODO | 1.2 | [x] | Coach account type + sharing: roster uploads, assign annotations to players, clip ratings, notes, send-back flow. Absorbs T1060 (Coaches View) |
 | T720 | [Art Frames](tasks/T720-art-frames.md) | TODO | 1.1 | [x] | Draw on frozen clip frames (like a telestrator); shown during Play Annotations with a pause |
 | T2170 | [Glow & Arrow Primitives](tasks/overlay-v2/T2170-glow-arrow-primitives.md) | TODO | 1.5 | [ ] | Soft radial glow aura + floating arrow pointer for wide shots. |
 | T2190 | [Extended Presets](tasks/overlay-v2/T2190-extended-presets.md) | TODO | 2.5 | [ ] | "Recruiting" (minimal + persistent label) and "Social" (pulse + glow + broadcast name) presets. |
 | T2200 | [Outline Trace Primitive](tasks/overlay-v2/T2200-outline-trace-primitive.md) | TODO | 0.7 | [ ] | Edge-detect player silhouette outline. Expensive to compute, premium-feel. |
 | T2210 | [Spotlight Cone Primitive](tasks/overlay-v2/T2210-spotlight-cone-primitive.md) | TODO | 1.2 | [ ] | Darken/desaturate everything outside player region. High-drama cinematic effect. |
-| T2220 | [Multi-Player Tracking](tasks/overlay-v2/T2220-multi-player-tracking.md) | TODO | 0.9 | [ ] | Highlight 2+ players simultaneously (e.g., assist + goal scorer) with independent overlays. |
 
 ---
 
