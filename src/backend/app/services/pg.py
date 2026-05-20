@@ -169,6 +169,42 @@ CREATE TABLE IF NOT EXISTS referrals (
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_channel ON referrals(channel);
 
+CREATE TABLE IF NOT EXISTS user_milestones (
+    user_id TEXT PRIMARY KEY REFERENCES users(user_id),
+
+    -- Cohort dimensions (set at signup, immutable)
+    install_day DATE NOT NULL DEFAULT CURRENT_DATE,
+    origin_type TEXT NOT NULL DEFAULT 'organic'
+        CHECK (origin_type IN ('organic', 'viral', 'ad_campaign')),
+    origin_channel TEXT,
+    signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
+
+    -- Journey milestones (NULL = not reached yet)
+    signup_completed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    first_game_created_at TIMESTAMPTZ,
+    first_clip_created_at TIMESTAMPTZ,
+    first_export_completed_at TIMESTAMPTZ,
+    first_share_completed_at TIMESTAMPTZ,
+    first_credit_purchase_at TIMESTAMPTZ,
+
+    -- Lifetime counts
+    game_created_count INTEGER NOT NULL DEFAULT 0,
+    clip_created_count INTEGER NOT NULL DEFAULT 0,
+    export_completed_count INTEGER NOT NULL DEFAULT 0,
+    export_failed_count INTEGER NOT NULL DEFAULT 0,
+    share_completed_count INTEGER NOT NULL DEFAULT 0,
+    credit_purchase_count INTEGER NOT NULL DEFAULT 0,
+    credits_consumed_count INTEGER NOT NULL DEFAULT 0,
+
+    -- Activity
+    session_count INTEGER NOT NULL DEFAULT 0,
+    last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_export_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_milestones_install_day ON user_milestones(install_day);
+CREATE INDEX IF NOT EXISTS idx_milestones_origin ON user_milestones(origin_type);
+CREATE INDEX IF NOT EXISTS idx_milestones_cohort ON user_milestones(install_day, origin_type);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     description TEXT NOT NULL,

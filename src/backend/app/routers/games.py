@@ -19,6 +19,7 @@ import os
 import logging
 import json
 
+from app.analytics import record_milestone
 from app.utils.encoding import encode_data, decode_data
 
 from datetime import datetime
@@ -431,6 +432,7 @@ async def create_game(request: CreateGameRequest):
 
         conn.commit()
 
+    record_milestone(get_current_user_id(), "game_created")
     logger.info(f"Created game {game_id}: {display_name} with {len(request.videos)} video(s) status={game_status.value}")
 
     # Build response with video URLs

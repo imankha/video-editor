@@ -31,6 +31,7 @@ from pathlib import Path
 
 import sqlite3
 
+from app.analytics import create_user_milestones, update_session
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
@@ -256,12 +257,10 @@ async def _verify_google_token(token: str) -> dict:
     return token_data
 
 
-def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> str:
+def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> tuple[str, bool]:
     """Find a user row by email, or create a fresh one with a new UUID.
 
-    T1330: no guest-linking. Unauthenticated visitors have no pre-existing
-    user_id to fold into the account — every login path either recovers an
-    existing account by email or mints a new one.
+    Returns (user_id, is_new) where is_new indicates a freshly created account.
     """
     # Auto-reset NUF test accounts: wipe all data so login is always fresh.
     if email.lower() in NUF_RESET_EMAILS:
@@ -274,7 +273,7 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
         user_id = existing['user_id']
         logger.info(f"[Auth] login — existing user: {user_id} ({email})")
         update_last_seen(user_id)
-        return user_id
+        return user_id, False
 
     user_id = generate_user_id()
     create_user(
@@ -303,7 +302,18 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
         except Exception:
             logger.warning(f"[Auth] share-based attribution failed for {email}", exc_info=True)
 
-    return user_id
+    return user_id, True
+
+
+def _get_origin_for_user(user_id: str) -> tuple[str, str | None]:
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT channel FROM referrals WHERE referred_id = %s", (user_id,))
+        row = cur.fetchone()
+    if row:
+        return "viral", row["channel"]
+    return "organic", None
 
 
 def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
@@ -350,7 +360,11 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     google_id = token_data.get("sub")
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
-    user_id = _find_or_create_user(email, google_id=google_id, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref)
+
+    if is_new:
+        origin_type, origin_channel = _get_origin_for_user(user_id)
+        create_user_milestones(user_id, origin_type, origin_channel, signup_method="google")
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -411,6 +425,8 @@ async def auth_me(request: Request):
         update_last_seen(user_id)
     except Exception:
         logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
+
+    update_session(user_id)
 
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
@@ -565,8 +581,12 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             (row["id"],),
         )
 
-    user_id = _find_or_create_user(email, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, ref=body.ref)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
+
+    if is_new:
+        origin_type, origin_channel = _get_origin_for_user(user_id)
+        create_user_milestones(user_id, origin_type, origin_channel, signup_method="otp")
 
     return _issue_session_cookie(
         user_id,

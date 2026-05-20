@@ -1,93 +1,132 @@
-# T3020: Admin Panel Event Migration
+# T3020: Admin Panel Migration to Milestones
 
 **Status:** TODO
 **Impact:** 7
-**Complexity:** 5
+**Complexity:** 4
 **Created:** 2026-05-20
+**Updated:** 2026-05-20
+**Epic:** [Analytics 1](EPIC.md)
+**Depends on:** T3010 (User Milestones)
 
 ## Problem
 
-The admin panel downloads profile SQLite files from R2 on every page load to compute activity counts (games, clips, framed, completed, GPU seconds). This is:
+The admin panel downloads profile SQLite files from R2 on every page load to compute activity counts (games, clips, framed, completed, GPU seconds, quest progress). This is:
 - **Slow:** Multi-second page loads as N profile DBs are downloaded from R2
-- **Snapshot-only:** No time dimension -- can't see trends, can't filter by date range
-- **Fragile:** Depends on R2 availability and local disk cache for admin functionality
+- **Doesn't scale:** More users = more downloads = slower pages
+- **Fragile:** Depends on R2 availability and local disk for admin functionality
+- **Redundant:** T3010's `user_milestones` table already has the same data in Postgres
 
 ## Solution
 
-Replace the R2 profile download pattern with Postgres queries against the `analytics_events` table (created in T3010). Same per-user/per-profile resolution, millisecond response times, and time-series capability for free.
+Replace ALL R2 profile SQLite access in the admin panel with a simple JOIN against `user_milestones`. Delete the R2 download functions, SQLite counting functions, quest progress display, GPU drilldown panel, and summary stat cards. These are all superseded by T3030's dashboards.
 
-Include a one-time backfill script that scans existing profile DBs and creates historical events so the admin panel doesn't show zeros for pre-migration activity.
+### What's Removed and Why
 
-## Context
+| Removed Feature | Replacement |
+|----------------|-------------|
+| Per-profile activity counts (games, clips, framed, completed) | `user_milestones` per-user counts (JOIN in admin query) |
+| Summary stat cards (aggregated across page) | T3030 Daily Pulse (global daily totals) |
+| Quest progress Q1-Q4 badges | T3030 Activation Funnel (aggregate drop-off) + User Journey Inspector (per-user milestones) |
+| Quest funnel chart | T3030 Activation Funnel (better: shows all milestone stages, not just quest steps) |
+| GPU drilldown (by_function, recent_jobs) | Export count in milestones + Modal dashboard for cost-per-function |
+| GPU seconds total | `export_completed_count` in milestones (cost analysis moves to Modal's native dashboard) |
+| Per-profile expandable rows | Dropped. Most users have 1-2 profiles; user-level totals are sufficient for admin |
+| R2 download + SQLite counting (~300 lines) | Deleted entirely. Zero profile SQLite access in admin after this task. |
 
-### Relevant Files
-- `src/backend/app/routers/admin.py` -- Admin stats endpoints (lines 287-544)
-  - `_compute_activity_counts_single()` -- R2 download + SQLite COUNT queries (REPLACE)
-  - `_compute_gpu_total_single()` -- R2 download + SQLite SUM query (REPLACE)
-  - `_compute_quest_progress_single()` -- R2 download + quest step checks (KEEP)
-  - `_admin_ensure_profile_db()` -- R2 download helper (KEEP for quest progress only)
-  - `GET /api/admin/users` -- Main admin endpoint (MODIFY)
-  - `GET /api/admin/users/{user_id}/gpu-usage` -- GPU drilldown (MODIFY)
-- `src/frontend/src/components/admin/UserTable.jsx` -- Admin table (MINOR changes if response shape changes)
+### Admin Table After Migration
 
-### Related Tasks
-- Depends on: T3010 (Postgres Event Log must exist and be populated)
-- See [EPIC.md](EPIC.md) for shared context and schema
+| Column | Source | Notes |
+|--------|--------|-------|
+| Email | `users.email` | Unchanged |
+| Origin | `user_milestones.origin_type` | **NEW** -- organic/viral badge |
+| Channel | `user_milestones.origin_channel` | **NEW** -- invite_link/reel_share/game_share |
+| Games | `user_milestones.game_created_count` | Was from R2 SQLite |
+| Clips | `user_milestones.clip_created_count` | Was from R2 SQLite |
+| Exports | `user_milestones.export_completed_count` | Replaces framed + completed (combined) |
+| Shares | `user_milestones.share_completed_count` | **NEW** |
+| Credits | Credit balance from Postgres | Unchanged |
+| Purchased | `user_milestones.credit_purchase_count` | Was from credit_transactions |
+| Money Spent | Derived from purchases | Unchanged |
+| Install Date | `user_milestones.install_day` | **NEW** -- was created_at |
+| Last Active | `user_milestones.last_active_at` | Was last_seen_at |
 
-### Technical Notes
+**Single query replaces entire admin endpoint:**
 
-**What changes in the admin endpoint:**
+```sql
+SELECT
+    u.user_id, u.email,
+    m.origin_type, m.origin_channel, m.install_day,
+    m.game_created_count, m.clip_created_count,
+    m.export_completed_count, m.export_failed_count,
+    m.share_completed_count, m.credit_purchase_count,
+    m.last_active_at,
+    -- credit balance from existing credit query (unchanged)
+FROM users u
+JOIN user_milestones m ON u.user_id = m.user_id
+ORDER BY m.last_active_at DESC NULLS LAST
+LIMIT %s OFFSET %s;
+```
 
-| Metric | Before (R2) | After (Postgres) |
-|--------|-------------|------------------|
-| games_annotated | `COUNT(*) FROM games` on profile.sqlite | `COUNT(*) FROM analytics_events WHERE event='game_created' AND profile_id=X` |
-| clips_annotated | `COUNT(*) FROM raw_clips` on profile.sqlite | `COUNT(*) FROM analytics_events WHERE event='clip_created' AND profile_id=X` |
-| projects_framed | `COUNT(DISTINCT p.id) ... WHERE type='framing'` on profile.sqlite | `COUNT(*) FROM analytics_events WHERE event='export_completed' AND profile_id=X AND metadata->>'type'='framing'` |
-| projects_completed | `COUNT(DISTINCT p.id) ... WHERE type='overlay'` on profile.sqlite | `COUNT(*) FROM analytics_events WHERE event='export_completed' AND profile_id=X AND metadata->>'type'='overlay'` |
-| gpu_seconds_total | `SUM(gpu_seconds) FROM export_jobs` on profile.sqlite | `SUM((metadata->>'gpu_seconds')::float) FROM analytics_events WHERE event='export_completed' AND profile_id=X` |
+Millisecond response. No R2. No SQLite. Paginated by user count (not profile count).
 
-**What stays the same:**
-- **Quest progress:** Remains computed from profile SQLite DBs. Quest step checking runs 20+ conditional SQL queries that don't map cleanly to events. Not the bottleneck (quest progress is only computed for displayed users, not all users).
-- **Credit balance/spent/purchased:** Already comes from Postgres (credit_transactions in user.sqlite was moved to Postgres with T1960). No change needed.
-- **Money spent calculation:** Derived from credit purchase amounts. No change.
+## Code Removal
 
-**GPU drilldown endpoint changes:**
-- `by_function` breakdown: `GROUP BY metadata->>'modal_function'` on analytics_events
-- `recent_jobs`: `ORDER BY created_at DESC LIMIT 20` on analytics_events WHERE event IN ('export_completed', 'export_failed')
-- Requires T3010 to log `modal_function` in export event metadata
+### Backend: `src/backend/app/routers/admin.py`
 
-**Backfill strategy:**
-- One-time admin script/endpoint that iterates all users + profiles
-- Downloads each profile.sqlite from R2 (reuses existing `_admin_download_profile_db`)
-- Runs the same COUNT/SUM queries that the admin panel currently uses
-- Inserts synthetic `game_created`, `clip_created`, `export_completed` events with `created_at` set to the earliest reasonable date (game/clip/export creation timestamps from the profile DB where available)
-- Idempotent: checks for existing backfill events before inserting (metadata includes `{backfill: true}`)
+**Delete these functions entirely:**
+- `_admin_discover_profiles()` -- R2 prefix scan to find profile IDs
+- `_admin_download_profile_db()` -- Downloads profile.sqlite from R2
+- `_admin_ensure_profile_db()` -- Async wrapper for download
+- `_compute_activity_counts_single()` -- SQLite COUNT queries
+- `_compute_gpu_total_single()` -- SQLite SUM query
+- `_compute_quest_progress_single()` -- 20+ SQLite quest step queries
+- `_check_steps_on_conn()` -- Quest step checking helper
+- `_get_profile_stats()` -- Orchestrates all SQLite counting
 
-**Pagination change:**
-- Current: paginated by profile count (10 profiles/page) because R2 downloads are expensive
-- After: can paginate by user count since Postgres queries are cheap. But keep existing pagination to avoid frontend changes.
+**Rewrite these endpoints:**
+- `GET /api/admin/users` -- Replace with user_milestones JOIN query (above)
+- `GET /api/admin/users/{user_id}/gpu-usage` -- Delete entirely (Modal dashboard)
+
+**Estimated removal:** ~300 lines of R2 download + SQLite counting code
+
+### Frontend: `src/frontend/src/components/admin/`
+
+**Delete these components:**
+- `QuestFunnelChart.jsx` -- Quest completion bar chart (superseded by T3030 Activation Funnel)
+- `GpuUsagePanel.jsx` -- GPU drilldown modal (superseded by Modal dashboard)
+
+**Simplify `UserTable.jsx`:**
+- Remove summary stat cards section (superseded by T3030 Daily Pulse)
+- Remove quest progress columns (Q1-Q4 badges)
+- Remove GPU column + click handler
+- Remove profile expandable rows
+- Add origin_type badge column (organic/viral with channel tooltip)
+- Add install_day column
+- Add shares column
+- Simplify pagination (user count, not profile count)
 
 ## Implementation
 
 ### Steps
-1. [ ] Create new admin stats helper: `_compute_activity_from_events(user_id, profile_id)` that queries analytics_events
-2. [ ] Create new GPU stats helper: `_compute_gpu_from_events(user_id, profile_id)` that queries analytics_events
-3. [ ] Replace `_compute_activity_counts_single()` calls in `GET /api/admin/users` with new helper
-4. [ ] Replace `_compute_gpu_total_single()` calls in `GET /api/admin/users` with new helper
-5. [ ] Update `GET /api/admin/users/{user_id}/gpu-usage` to query analytics_events
-6. [ ] Remove R2 profile download calls that were only used for activity/GPU stats (keep for quest progress)
-7. [ ] Write backfill script: `src/backend/app/migrations/postgres/v005_backfill_analytics_events.py`
-8. [ ] Test backfill on staging: run script, compare admin panel counts before vs after
-9. [ ] Update frontend if response shape changed (likely minimal -- same field names)
-10. [ ] Backend tests: verify admin endpoint returns correct counts from event log
-11. [ ] Performance test: admin page load < 500ms on staging
+
+1. [ ] Rewrite `GET /api/admin/users` to use user_milestones JOIN (single SQL query)
+2. [ ] Delete `GET /api/admin/users/{user_id}/gpu-usage` endpoint
+3. [ ] Delete all R2 download functions from admin.py
+4. [ ] Delete all SQLite counting functions from admin.py
+5. [ ] Delete `QuestFunnelChart.jsx` and `GpuUsagePanel.jsx`
+6. [ ] Simplify `UserTable.jsx`: remove quest/GPU/summary cards, add origin/install/shares columns
+7. [ ] Remove `CreditGrantModal.jsx` import of any deleted admin helpers (if applicable)
+8. [ ] Update pagination: paginate by user count instead of profile count
+9. [ ] Backend tests: verify admin endpoint returns correct data from milestones
+10. [ ] Verify admin page loads in < 200ms on staging (was multi-second)
 
 ## Acceptance Criteria
 
-- [ ] Admin panel activity counts (games, clips, framed, completed) come from analytics_events table
-- [ ] Admin panel GPU usage (total + by_function + recent_jobs) comes from analytics_events table
-- [ ] Quest progress still works (computed from profile SQLite DBs)
-- [ ] Backfill script creates historical events for all existing users
-- [ ] Admin page load time < 500ms (verify via backend timing logs)
-- [ ] No data loss: counts match pre-migration values (verified on staging before prod deploy)
-- [ ] Backfill is idempotent (safe to run twice)
+- [ ] Admin panel loads in < 200ms (down from multi-second R2 downloads)
+- [ ] User table shows origin_type, channel, install_day, and share count (new columns)
+- [ ] Zero R2 profile SQLite downloads in admin.py (all download/counting functions deleted)
+- [ ] QuestFunnelChart.jsx and GpuUsagePanel.jsx deleted
+- [ ] No remaining imports of deleted components or functions
+- [ ] Pagination by user count (simpler, no profile-count constraint)
+- [ ] Credit grant functionality unchanged (CreditGrantModal still works)
+- [ ] No regressions in non-admin endpoints

@@ -19,6 +19,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from ..analytics import record_milestone
 from ..user_context import get_current_user_id
 from ..services.user_db import (
     get_stripe_customer_id,
@@ -296,6 +297,7 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
             return {"status": "already_processed"}
 
+        record_milestone(user_id, "credit_purchased")
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -327,6 +329,7 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
             return {"status": "already_processed"}
 
+        record_milestone(user_id, "credit_purchased")
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
