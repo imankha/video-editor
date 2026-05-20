@@ -1,86 +1,81 @@
-# T2330: Before/After Section
+# T2330: Curate Before/After Content
 
 **Status:** TODO
 **Impact:** 10
-**Complexity:** 5
+**Complexity:** 3
 **Created:** 2026-04-30
-**Updated:** 2026-04-30
+**Updated:** 2026-05-20
 
 ## Problem
 
-The most persuasive thing about Reel Ballers is the output. The current page has no visual proof -- no before/after comparison. A parent who sees this section and gets it has converted. A parent who misses it hasn't.
+The landing page already has a working before/after slider (`BeforeAfterSlider` component) pulling videos from R2. But the current clips were grabbed quickly as a proof of concept — they aren't the strongest representation of what the product does. The slider is the single most persuasive element on the page, so the content needs to be deliberately chosen.
 
-This is "the most important section on the page."
+What makes a great before/after pair:
+- **Clear transformation** — the "before" must look obviously raw/wide/hard-to-watch, and the "after" must look obviously better
+- **Recognizable action** — the play should be easy to follow (goal, save, dribble) so the viewer understands what happened even without context
+- **Diverse positions** — not just forwards scoring; show keepers, defenders, build-up play to signal "this is for every parent"
+- **Clean loop** — the clip should loop smoothly for the autoplay slider
 
 ## Solution
 
-### Section Header
+### Content Curation Process
 
-```
-## Same moment. Different reel.
-```
+1. **Audit existing exported reels** for the strongest before/after candidates
+2. **Process multiple pairs** using the existing before/after asset pipeline (T2315's admin "Create Before and After" flow)
+3. **Select the best pair** for the primary slider position
+4. **Optionally add 2-3 more pairs** that rotate or that users can swipe through
 
-### Layout
-- Desktop: side-by-side tiles
-- Mobile: stacked with clear visual divider
+### Selection Criteria
 
-### Left Tile
-- Raw Veo/Trace panoramic frame -- wide, player tiny
-- Caption: *"What you have."*
-- Autoplay, looped, silent
+Each candidate pair should be evaluated on:
 
-### Right Tile
-- Reel Ballers vertical output of the **same moment**
-- Player followed, frame upscaled
-- Caption: *"What you get."*
-- Autoplay, looped, silent
+| Criterion | Weight | Notes |
+|-----------|--------|-------|
+| Transformation clarity | High | Wide panoramic → tight follow should be dramatic |
+| Play readability | High | Viewer should understand what happened in 3 seconds |
+| Visual quality | Medium | After clip should look sharp, smooth tracking |
+| Position diversity | Medium | Ideal: 1 goal/dribble, 1 defensive play or save |
+| Loop cleanliness | Medium | No jarring cut when the clip restarts |
 
-### Sync
-- Both clips autoplay in sync, showing the same moment
-- A "Same moment." caption sits centered between them
+### Target: 3-4 pairs processed, best 1-2 deployed
 
-### CTA Below
+- **Primary:** The single strongest transformation (likely an action play — goal or brilliant dribble)
+- **Secondary (optional):** A defensive play or keeper save to show breadth
+- Multiple pairs could rotate on refresh or be swipeable
 
-```
-[ Try it on your own clip -> ]
-```
+### Asset Pipeline
 
-Secondary button style, centered.
+Use the existing T2315 pipeline:
+1. Pick a source clip from an exported reel
+2. Run admin "Create Before and After" to generate separate before/after files
+3. Upload both to the public R2 bucket (`pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev`)
+4. Update `beforeSrc`/`afterSrc` URLs in `App.tsx` (or add multiple pairs)
 
 ## Context
 
 ### Relevant Files
-- `src/landing/src/App.tsx` -- will add new section
-- `src/landing/public/before_after_demo.mp4` -- existing demo asset (may need replacement with separate before/after clips)
+- `src/landing/src/App.tsx` — `BeforeAfterSlider` with `beforeSrc`/`afterSrc` props (line ~46)
+- `src/landing/src/components/BeforeAfterSlider.tsx` — the slider component (already built)
+- `before_after/` — T2315 asset pipeline output directory
 
 ### Related Tasks
-- Depends on: T2300 (Visual Foundation), T2320 (Hero -- comes right after)
-- Supersedes: T445 (Landing Page Before/After Clips)
-
-### Content Requirements
-- Need one strong before/after pair from real game footage
-- Before clip: raw panoramic Veo/Trace frame
-- After clip: same moment, vertically framed, player tracked, upscaled
-- Both clips must loop cleanly and be short (5-10s)
-- Compress for web (lazy load since below fold)
+- T2315 (Before/After Asset Pipeline) — DONE, provides the tooling to generate pairs
+- T2360 (Annotation Showcase) — companion section showing the process; this shows the output
 
 ## Implementation
 
-1. [ ] Source before/after clip pair from real exported reels
-2. [ ] Prepare clips for web (compressed, short loops, silent)
-3. [ ] Create BeforeAfter component with side-by-side layout
-4. [ ] Add synced autoplay with IntersectionObserver (play when visible)
-5. [ ] Add captions: "What you have." / "What you get."
-6. [ ] Add "Same moment." centered divider text
-7. [ ] Add secondary CTA button: "Try it on your own clip"
-8. [ ] Responsive: stack vertically on mobile with visual divider
-9. [ ] Lazy load videos (below fold)
+1. [ ] Review all exported reels across test accounts for strong before/after candidates
+2. [ ] Shortlist 3-4 clips that meet selection criteria
+3. [ ] Process each through the before/after asset pipeline
+4. [ ] Compare pairs side-by-side, pick the strongest 1-2
+5. [ ] Upload winning pairs to public R2 bucket
+6. [ ] Update App.tsx with new URLs (swap current pair or add rotation)
+7. [ ] Test on landing page — verify loop, load time, visual impact
 
 ## Acceptance Criteria
 
-- [ ] Before/after clips show the same moment from real footage
-- [ ] Both clips autoplay silently and loop when section is visible
-- [ ] Desktop: side-by-side layout
-- [ ] Mobile: stacked with clear divider
-- [ ] CTA "Try it on your own clip" visible below comparison
-- [ ] Videos lazy-loaded (don't block page load)
+- [ ] Primary before/after pair is deliberately chosen (not the first available clip)
+- [ ] Transformation is immediately obvious to someone who has never seen the app
+- [ ] Play is readable without context (viewer knows what happened)
+- [ ] Clips loop cleanly in the slider
+- [ ] At least one candidate from a non-forward position was evaluated
