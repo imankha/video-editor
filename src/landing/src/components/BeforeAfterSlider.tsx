@@ -10,6 +10,9 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
   const [isDragging, setIsDragging] = useState(false)
   const [hasInteracted, setHasInteracted] = useState(false)
   const [hasPeeked, setHasPeeked] = useState(false)
+  const [beforeReady, setBeforeReady] = useState(false)
+  const [afterReady, setAfterReady] = useState(false)
+  const videosReady = beforeReady && afterReady
   const containerRef = useRef<HTMLDivElement>(null)
   const beforeVideoRef = useRef<HTMLVideoElement>(null)
   const afterVideoRef = useRef<HTMLVideoElement>(null)
@@ -102,12 +105,13 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
               loop
               muted
               playsInline
-              className="absolute inset-0 w-full h-full object-cover"
+              onCanPlay={() => setAfterReady(true)}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
             />
 
             {/* Before video (clipped) */}
             <div
-              className="absolute inset-0 overflow-hidden"
+              className={`absolute inset-0 overflow-hidden transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
               style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
             >
               <video
@@ -117,6 +121,7 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
                 loop
                 muted
                 playsInline
+                onCanPlay={() => setBeforeReady(true)}
                 className="w-full h-full object-cover"
               />
             </div>
@@ -124,20 +129,20 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
             {/* Labels */}
             <div
               className="absolute top-4 left-4 px-3 py-1 bg-black/60 rounded-full text-white text-xs font-semibold uppercase tracking-wider transition-opacity duration-300"
-              style={{ opacity: sliderPos > 15 ? 1 : 0 }}
+              style={{ opacity: videosReady && sliderPos > 15 ? 1 : 0 }}
             >
               Before
             </div>
             <div
               className="absolute top-4 right-4 px-3 py-1 bg-black/60 rounded-full text-white text-xs font-semibold uppercase tracking-wider transition-opacity duration-300"
-              style={{ opacity: sliderPos < 85 ? 1 : 0 }}
+              style={{ opacity: videosReady && sliderPos < 85 ? 1 : 0 }}
             >
               After
             </div>
 
             {/* Slider line + handle */}
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-white/80 pointer-events-none"
+              className={`absolute top-0 bottom-0 w-0.5 bg-white/80 pointer-events-none transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
               style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
             >
               <div
