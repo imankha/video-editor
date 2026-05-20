@@ -81,7 +81,15 @@ export function ProjectManager({
   const downloadsCount = downloadsCountProp ?? contextDownloadsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
-  const [activeTab, setActiveTab] = useState(projects.length === 0 ? 'games' : 'projects');
+  const initialTab = projects.length === 0 ? 'games' : 'projects';
+  const [activeTab, setActiveTabRaw] = useState(initialTab);
+  const setActiveTab = useCallback((tab) => {
+    setActiveTabRaw(tab);
+    const path = tab === 'games' ? '/home/games' : '/home/reels';
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, '', path);
+    }
+  }, []);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showGameDetailsModal, setShowGameDetailsModal] = useState(false);
   const [extensionGame, setExtensionGame] = useState(null);

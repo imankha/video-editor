@@ -15,6 +15,21 @@ export const EDITOR_MODES = {
   ADMIN: 'admin',
 };
 
+const MODE_PATHS = {
+  [EDITOR_MODES.PROJECT_MANAGER]: '/home',
+  [EDITOR_MODES.ANNOTATE]: '/annotate',
+  [EDITOR_MODES.FRAMING]: '/framing',
+  [EDITOR_MODES.OVERLAY]: '/overlay',
+  [EDITOR_MODES.ADMIN]: '/admin',
+};
+
+function updatePath(mode) {
+  const path = MODE_PATHS[mode];
+  if (path && window.location.pathname !== path) {
+    window.history.replaceState(null, '', path);
+  }
+}
+
 /**
  * Screen Types - Typed screen definitions for navigation
  *
@@ -84,19 +99,25 @@ export const useEditorStore = create((set, get) => ({
    * Navigate to a screen (new typed approach)
    * @param {Object} screen - Screen object from SCREENS
    */
-  navigateTo: (screen) => set({
-    screen,
-    editorMode: screen.type, // Keep editorMode in sync for backward compat
-  }),
+  navigateTo: (screen) => {
+    updatePath(screen.type);
+    set({
+      screen,
+      editorMode: screen.type,
+    });
+  },
 
   /**
    * Set the editor mode directly (use when no confirmation needed)
    * DEPRECATED: Use navigateTo(SCREENS.X) instead for type safety
    */
-  setEditorMode: (mode) => set({
-    editorMode: mode,
-    screen: getScreenByType(mode), // Keep screen in sync
-  }),
+  setEditorMode: (mode) => {
+    updatePath(mode);
+    set({
+      editorMode: mode,
+      screen: getScreenByType(mode),
+    });
+  },
 
   /**
    * Open the mode switch confirmation dialog
@@ -120,9 +141,10 @@ export const useEditorStore = create((set, get) => ({
   confirmModeSwitch: () => {
     const { modeSwitchDialog } = get();
     if (modeSwitchDialog.pendingMode) {
+      updatePath(modeSwitchDialog.pendingMode);
       set({
         editorMode: modeSwitchDialog.pendingMode,
-        screen: getScreenByType(modeSwitchDialog.pendingMode), // Keep screen in sync
+        screen: getScreenByType(modeSwitchDialog.pendingMode),
         modeSwitchDialog: { isOpen: false, pendingMode: null }
       });
     }
