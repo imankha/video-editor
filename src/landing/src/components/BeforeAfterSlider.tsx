@@ -66,7 +66,7 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     setIsDragging(true)
     updateSlider(e.clientX)
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+    containerRef.current?.setPointerCapture(e.pointerId)
   }, [updateSlider])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -99,7 +99,7 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
               muted
               playsInline
               onCanPlay={() => setAfterReady(true)}
-              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
+              className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
             />
 
             {/* Before video (clipped) */}
@@ -115,7 +115,7 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
                 muted
                 playsInline
                 onCanPlay={() => setBeforeReady(true)}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover pointer-events-none"
               />
             </div>
 
