@@ -6,10 +6,10 @@ interface BeforeAfterSliderProps {
 }
 
 export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProps) {
-  const [sliderPos, setSliderPos] = useState(50)
+  const [sliderPos, setSliderPos] = useState(100)
   const [isDragging, setIsDragging] = useState(false)
   const [hasInteracted, setHasInteracted] = useState(false)
-  const [hasPeeked, setHasPeeked] = useState(false)
+  const [hasRevealed, setHasRevealed] = useState(false)
   const [beforeReady, setBeforeReady] = useState(false)
   const [afterReady, setAfterReady] = useState(false)
   const videosReady = beforeReady && afterReady
@@ -34,31 +34,24 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
   }, [syncVideos])
 
   useEffect(() => {
-    if (hasPeeked) return
+    if (hasRevealed || !videosReady) return
+    const from = 100
+    const to = 30
+    const durationMs = 1000
+    let start: number | null = null
     const timer = setTimeout(() => {
-      setHasPeeked(true)
-      let frame = 0
-      const totalFrames = 60
-      const peekTo = 15
-      const animate = () => {
-        frame++
-        if (frame <= totalFrames / 2) {
-          const t = frame / (totalFrames / 2)
-          const eased = t * t * (3 - 2 * t)
-          setSliderPos(50 - (50 - peekTo) * eased)
-        } else {
-          const t = (frame - totalFrames / 2) / (totalFrames / 2)
-          const eased = t * t * (3 - 2 * t)
-          setSliderPos(peekTo + (50 - peekTo) * eased)
-        }
-        if (frame < totalFrames) {
-          requestAnimationFrame(animate)
-        }
+      setHasRevealed(true)
+      const animate = (ts: number) => {
+        if (!start) start = ts
+        const t = Math.min((ts - start) / durationMs, 1)
+        const eased = t * t * (3 - 2 * t)
+        setSliderPos(from + (to - from) * eased)
+        if (t < 1) requestAnimationFrame(animate)
       }
       requestAnimationFrame(animate)
-    }, 2000)
+    }, 1000)
     return () => clearTimeout(timer)
-  }, [hasPeeked])
+  }, [hasRevealed, videosReady])
 
   const updateSlider = useCallback((clientX: number) => {
     const container = containerRef.current
