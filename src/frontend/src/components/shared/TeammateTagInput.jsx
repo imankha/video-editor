@@ -4,9 +4,7 @@ import { X } from 'lucide-react';
 let _uncommittedText = '';
 
 export function hasUncommittedTeammateText() {
-  const has = _uncommittedText.trim().length > 0;
-  console.log('[TAG_DEBUG] hasUncommittedTeammateText:', has, 'raw:', JSON.stringify(_uncommittedText));
-  return has;
+  return _uncommittedText.trim().length > 0;
 }
 
 export function TeammateTagInput({ teammates, onChange, suggestions, placeholder }) {
@@ -17,12 +15,8 @@ export function TeammateTagInput({ teammates, onChange, suggestions, placeholder
   const containerRef = useRef(null);
 
   useEffect(() => {
-    console.log('[TAG_DEBUG] useEffect setting _uncommittedText =', JSON.stringify(inputValue));
     _uncommittedText = inputValue;
-    return () => {
-      console.log('[TAG_DEBUG] useEffect CLEANUP clearing _uncommittedText (was:', JSON.stringify(_uncommittedText), ')');
-      _uncommittedText = '';
-    };
+    return () => { _uncommittedText = ''; };
   }, [inputValue]);
 
   const filteredSuggestions = (suggestions || []).filter(
