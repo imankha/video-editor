@@ -278,7 +278,9 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
   }, [onRefreshUrls]);
 
   const handleVideoWaiting = useCallback(() => {
-    setIsLoading(true);
+    if (pendingSwapRef.current) {
+      setIsLoading(true);
+    }
   }, []);
 
   const handleVideoCanPlay = useCallback(() => {
