@@ -181,7 +181,11 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
           // Start playing the preloaded video
           inactive.currentTime = nextSeg.startTime;
           inactive.playbackRate = rate;
-          inactive.play().catch(() => {});
+          inactive.play().catch(() => {
+            // play() failed on new segment — stop playback to prevent desync
+            isPlayingRef.current = false;
+            setIsPlaying(false);
+          });
         }
 
         // Pause the old active
@@ -341,8 +345,13 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     const { active } = getVideos();
     if (!active) return;
 
-    if (isPlayingRef.current) {
-      active.pause();
+    // Use video element's paused state as source of truth to handle desync
+    const actuallyPlaying = !active.paused || isPlayingRef.current;
+
+    if (actuallyPlaying) {
+      // Pause both videos to prevent audio leaking from the inactive element
+      if (videoARef.current) videoARef.current.pause();
+      if (videoBRef.current) videoBRef.current.pause();
       isPlayingRef.current = false;
       setIsPlaying(false);
       stopTimeUpdateLoop();
@@ -350,6 +359,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       const rate = playbackRateRef.current;
       // If at the end, restart from beginning
       const timeline = timelineRef.current;
+      let playTarget = active;
       if (timeline && virtualTime >= timeline.totalVirtualDuration - 0.1) {
         currentSegmentIndexRef.current = 0;
         activeVideoRef.current = 'A';
@@ -364,7 +374,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
           }
           videoA.currentTime = firstSeg.startTime;
           videoA.playbackRate = rate;
-          await videoA.play().catch(() => {});
+          playTarget = videoA;
         }
         setActiveClipId(firstSeg.clipId);
         setVirtualTime(0);
@@ -373,11 +383,17 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
         }
       } else {
         active.playbackRate = rate;
-        await active.play().catch(() => {});
       }
-      isPlayingRef.current = true;
-      setIsPlaying(true);
-      startTimeUpdateLoop();
+      try {
+        await playTarget.play();
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        startTimeUpdateLoop();
+      } catch {
+        // play() rejected (autoplay policy, not ready) — stay paused
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      }
     }
   }, [getVideos, stopTimeUpdateLoop, startTimeUpdateLoop, virtualTime, getSegmentVideoUrl, preloadNextSegment]);
 
@@ -517,13 +533,14 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
     isScrrubbingRef.current = true;
     wasPlayingBeforeScrubRef.current = isPlayingRef.current;
     if (isPlayingRef.current) {
-      const { active } = getVideos();
-      if (active) active.pause();
+      // Pause both videos to prevent audio leaking from the inactive element
+      if (videoARef.current) videoARef.current.pause();
+      if (videoBRef.current) videoBRef.current.pause();
       isPlayingRef.current = false;
       setIsPlaying(false);
       stopTimeUpdateLoop();
     }
-  }, [getVideos, stopTimeUpdateLoop]);
+  }, [stopTimeUpdateLoop]);
 
   /**
    * End scrubbing — resumes playback if it was playing before the scrub.
@@ -549,11 +566,17 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       const { active } = getVideos();
       if (active) {
         active.playbackRate = playbackRateRef.current;
-        await active.play().catch(() => {});
+        try {
+          await active.play();
+          isPlayingRef.current = true;
+          setIsPlaying(true);
+          startTimeUpdateLoop();
+        } catch {
+          // play() rejected — stay paused rather than desyncing state
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        }
       }
-      isPlayingRef.current = true;
-      setIsPlaying(true);
-      startTimeUpdateLoop();
     }
   }, [getVideos, preloadNextSegment, startTimeUpdateLoop]);
 

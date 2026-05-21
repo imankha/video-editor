@@ -235,14 +235,18 @@ export function ClipScrubRegion({
     previewRafRef.current = requestAnimationFrame(tick);
   }, [videoRef, startTime, isPreviewing, stopPreview]);
 
-  // Cleanup preview on unmount
+  // Cleanup preview on unmount — only pause if a preview was actively running
   useEffect(() => {
     return () => {
       if (previewRafRef.current) {
         cancelAnimationFrame(previewRafRef.current);
+        // Preview was running when we unmounted — pause the video
+        if (videoRef?.current && !videoRef.current.paused) {
+          videoRef.current.pause();
+        }
       }
     };
-  }, []);
+  }, [videoRef]);
 
   const startPercent = timeToPercent(startTime);
   const endPercent = timeToPercent(endTime);

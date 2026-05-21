@@ -45,6 +45,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Detection seek timing: tracks when seek was initiated for latency measurement
   const seekTimingRef = useRef(null);
 
+  // Seek watchdog: recovers from stuck seeks (browser gave up fetching)
+  const seekWatchdogRef = useRef(null);
+
   // T1400: monotonic load id + watchdog timer handle so range-fallback
   // warnings can be correlated across concurrent/serial loads and cleared
   // on loadeddata/error/unmount.
@@ -394,6 +397,20 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsSeeking(true);
       setCurrentTime(validTime);
       videoRef.current.currentTime = target;
+
+      if (seekWatchdogRef.current) clearTimeout(seekWatchdogRef.current);
+      seekWatchdogRef.current = setTimeout(() => {
+        const v = videoRef.current;
+        if (!v) return;
+        if (v.readyState <= HTMLMediaElement.HAVE_METADATA && v.networkState <= HTMLMediaElement.NETWORK_IDLE) {
+          const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
+          console.warn(`[VIDEO] Seek watchdog: stuck (readyState=${v.readyState} networkState=${v.networkState} bufferedEnd=${bufferedEnd.toFixed(1)}), reloading`);
+          const resumeTime = v.currentTime;
+          v.load();
+          v.addEventListener('loadedmetadata', () => { v.currentTime = resumeTime; }, { once: true });
+        }
+        seekWatchdogRef.current = null;
+      }, 8000);
     }
   };
 
@@ -590,6 +607,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handleSeeked = () => {
+    if (seekWatchdogRef.current) {
+      clearTimeout(seekWatchdogRef.current);
+      seekWatchdogRef.current = null;
+    }
     setIsSeeking(false);
     if (videoRef.current) {
       const actualVideoTime = videoRef.current.currentTime;
@@ -1002,6 +1023,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (watchdogTimerRef.current) {
         clearTimeout(watchdogTimerRef.current);
         watchdogTimerRef.current = null;
+      }
+      if (seekWatchdogRef.current) {
+        clearTimeout(seekWatchdogRef.current);
+        seekWatchdogRef.current = null;
       }
     };
   }, []);

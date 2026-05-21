@@ -88,6 +88,9 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     if (!active) return;
 
     if (result.videoIndex !== currentVideoIndexRef.current) {
+      // Pause active video immediately to prevent audio leaking during swap
+      active.pause();
+
       const targetUrl = getVideoUrl(result.videoIndex);
       if (inactive && inactive.src !== targetUrl) {
         inactive.src = targetUrl;
@@ -104,6 +107,7 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
 
         inactive.currentTime = result.actualTime;
         setIsLoading(true);
+        const wasPlaying = isPlayingRef.current;
         const onReady = () => {
           inactive.removeEventListener('seeked', onReady);
           inactive.removeEventListener('canplay', onReady);
@@ -112,7 +116,16 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
           currentVideoIndexRef.current = result.videoIndex;
           setIsLoading(false);
 
-          const { inactive: newInactive } = getVideos();
+          // Ensure old active (now inactive) is paused
+          const { active: newActive, inactive: newInactive } = getVideos();
+          if (newInactive && !newInactive.paused) newInactive.pause();
+
+          // Resume playback on new active if was playing before seek
+          if (wasPlaying && newActive) {
+            newActive.playbackRate = playbackRateRef.current;
+            newActive.play().catch(() => {});
+          }
+
           const adjacentIndex = result.videoIndex === 0 ? 1 : result.videoIndex - 1;
           if (newInactive && gameVideos && adjacentIndex >= 0 && adjacentIndex < gameVideos.length) {
             const adjUrl = getVideoUrl(adjacentIndex);
@@ -158,7 +171,11 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
           if (inactive) {
             inactive.currentTime = 0;
             inactive.playbackRate = playbackRateRef.current;
-            inactive.play().catch(() => {});
+            inactive.play().catch(() => {
+              // play() failed on new segment — stop playback to prevent desync
+              isPlayingRef.current = false;
+              setIsPlaying(false);
+            });
           }
           active.pause();
           swapVideos();
@@ -191,22 +208,31 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     const { active } = getVideos();
     if (!active) return;
     active.playbackRate = playbackRateRef.current;
-    await active.play().catch(() => {});
-    isPlayingRef.current = true;
-    setIsPlaying(true);
-    startTimeUpdateLoop();
+    try {
+      await active.play();
+      isPlayingRef.current = true;
+      setIsPlaying(true);
+      startTimeUpdateLoop();
+    } catch {
+      // play() rejected — stay paused rather than desyncing state
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+    }
   }, [getVideos, startTimeUpdateLoop]);
 
   const pause = useCallback(() => {
-    const { active } = getVideos();
-    if (active) active.pause();
+    // Pause both videos to prevent audio leaking from the inactive element
+    if (videoARef.current) videoARef.current.pause();
+    if (videoBRef.current) videoBRef.current.pause();
     isPlayingRef.current = false;
     setIsPlaying(false);
     stopTimeUpdateLoop();
-  }, [getVideos, stopTimeUpdateLoop]);
+  }, [stopTimeUpdateLoop]);
 
   const togglePlay = useCallback(async () => {
-    if (isPlayingRef.current) {
+    // Use video element's paused state as source of truth to handle desync
+    const { active } = getVideos();
+    if ((active && !active.paused) || isPlayingRef.current) {
       pause();
     } else {
       if (fullTimeline && virtualTime >= fullTimeline.totalDuration - 0.1) {
@@ -308,10 +334,12 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     }
   }, [gameVideos]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — pause both videos to prevent audio leaking
   useEffect(() => {
     return () => {
       stopTimeUpdateLoop();
+      if (videoARef.current) videoARef.current.pause();
+      if (videoBRef.current) videoBRef.current.pause();
     };
   }, [stopTimeUpdateLoop]);
 

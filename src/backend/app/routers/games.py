@@ -1964,14 +1964,12 @@ async def stream_game_bounded(
                     break
 
     if window_kind is None:
+        SEEK_WINDOW_SIZE = 20 * 1024 * 1024  # 20MB
+        window_end = min(req_start + SEEK_WINDOW_SIZE, size - 1)
+        window_kind = "seek"
         logger.info(
-            f"[game-stream] 416 gap game_id={game_id} req={req_start}-{req_end} "
-            f"moov=0-{moov_end} clips={clip_windows} moov_tail={moov_tail_start}-{size - 1}"
-        )
-        raise HTTPException(
-            status_code=416,
-            detail="Requested range outside clip/moov windows",
-            headers={"Content-Range": f"bytes */{size}"},
+            f"[game-stream] seek window game_id={game_id} req={req_start}-{req_end} "
+            f"window_end={window_end}"
         )
 
     req_end = min(req_end, window_end)
