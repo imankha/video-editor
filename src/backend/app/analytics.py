@@ -63,9 +63,8 @@ def update_session(user_id: str, is_pwa: bool = False):
     try:
         with get_pg() as conn:
             cur = conn.cursor()
-            pwa_clause = ", pwa_session_count = pwa_session_count + 1" if is_pwa else ""
             cur.execute(
-                f"""UPDATE user_milestones
+                """UPDATE user_milestones
                    SET session_count = CASE
                            WHEN last_active_at < now() - INTERVAL '30 minutes' THEN session_count + 1
                            ELSE session_count
