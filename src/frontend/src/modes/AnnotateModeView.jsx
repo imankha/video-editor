@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { Play, Share2 } from 'lucide-react';
+import { Play, Share2, ArrowLeft } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -152,6 +152,7 @@ export function AnnotateModeView({
     const isFS = playbackFullscreen;
 
     return (
+      <>
       <div className={isFS
         ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
         : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'
@@ -245,17 +246,41 @@ export function AnnotateModeView({
             onSeekWithinSegment={playback.seekWithinSegment}
             onStartScrub={playback.startScrub}
             onEndScrub={playback.endScrub}
-            onExitPlayback={handleExitPlayback}
             playbackRate={playback.playbackRate}
             onPlaybackRateChange={playback.changePlaybackRate}
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
-            onShare={onSharePlayback}
             videoARef={playback.videoARef}
             videoBRef={playback.videoBRef}
           />
         </div>
       </div>
+
+      {/* Back + Share buttons — prominent, below player (not in fullscreen) */}
+      {!isFS && (
+        <div className="mt-3 sm:mt-6">
+          <div className="flex gap-2">
+            <button
+              onClick={handleExitPlayback}
+              className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+            >
+              <ArrowLeft size={18} />
+              <span>Back to Annotate</span>
+            </button>
+            {onSharePlayback && (
+              <button
+                onClick={onSharePlayback}
+                className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
+              >
+                <Share2 size={18} />
+                <span className="hidden sm:inline">Share Highlights</span>
+                <span className="sm:hidden">Share</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      </>
     );
   }
 

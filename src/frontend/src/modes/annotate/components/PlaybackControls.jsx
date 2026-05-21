@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Play, Pause, RotateCcw, Maximize, Minimize, Volume2, VolumeX, ArrowLeft, Share2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { Button } from '../../../components/shared/Button';
 
 // Speed options for annotation playback
@@ -80,12 +80,10 @@ export function PlaybackControls({
   onSeekWithinSegment,
   onStartScrub,
   onEndScrub,
-  onExitPlayback,
   playbackRate,
   onPlaybackRateChange,
   isFullscreen = false,
   onToggleFullscreen,
-  onShare,
   videoARef,
   videoBRef,
 }) {
@@ -230,29 +228,8 @@ export function PlaybackControls({
       <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
         isFullscreen ? 'bg-gray-900/90' : `bg-gray-800 ${currentSegment ? '' : 'rounded-b-lg'}`
       }`}>
-        {/* Left: Back + Playback transport */}
+        {/* Left: Playback transport */}
         <div className="flex items-center gap-1">
-          {/* Back to Annotating */}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={ArrowLeft}
-            iconOnly
-            onClick={onExitPlayback}
-            title="Back to Annotating"
-            className="sm:hidden"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={ArrowLeft}
-            onClick={onExitPlayback}
-            title="Back to Annotating"
-            className="hidden sm:flex text-gray-300 hover:text-white"
-          >
-            Back
-          </Button>
-
           {/* Play/Pause */}
           <Button
             variant="success"
@@ -307,18 +284,6 @@ export function PlaybackControls({
 
           {/* Speed control */}
           <SpeedControl speed={playbackRate} onSpeedChange={onPlaybackRateChange} />
-
-          {/* Share */}
-          {onShare && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Share2}
-              iconOnly
-              onClick={onShare}
-              title="Share highlights"
-            />
-          )}
 
           {/* Fullscreen */}
           {onToggleFullscreen && (
