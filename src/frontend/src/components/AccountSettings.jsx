@@ -3,6 +3,7 @@ import { X, Mail, LogOut, Link2, Coins, Download, Trash2, ShieldCheck } from 'lu
 import { useAuthStore } from '../stores/authStore';
 import { useCreditStore } from '../stores/creditStore';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 /**
  * AccountSettings - Modal panel showing account info, Google link status,
@@ -31,9 +32,8 @@ export function AccountSettings() {
   const handleDownloadData = async () => {
     setExporting(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/privacy/export-data`, {
+      const resp = await apiFetch(`${API_BASE}/api/privacy/export-data`, {
         method: 'POST',
-        credentials: 'include',
       });
       if (!resp.ok) throw new Error('Export failed');
       const blob = await resp.blob();
@@ -54,9 +54,8 @@ export function AccountSettings() {
     if (deleteInput !== 'DELETE') return;
     setDeleting(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/privacy/delete-account`, {
+      const resp = await apiFetch(`${API_BASE}/api/privacy/delete-account`, {
         method: 'DELETE',
-        credentials: 'include',
       });
       if (resp.ok) {
         window.location.reload();

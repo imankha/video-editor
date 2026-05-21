@@ -4,6 +4,7 @@ import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElement
 import { X, Coins, Star, Gem, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useEditorStore, useProjectsStore } from '../stores';
 
 /**
@@ -31,7 +32,7 @@ async function getStripePromise() {
     return stripePromiseCache;
   }
 
-  const res = await fetch(`${API_BASE}/api/payments/config`, { credentials: 'include' });
+  const res = await apiFetch(`${API_BASE}/api/payments/config`);
   if (!res.ok) return null;
   const { publishable_key } = await res.json();
   if (!publishable_key) return null;
@@ -122,10 +123,9 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
 
     // Payment succeeded — verify with backend and grant credits
     try {
-      const res = await fetch(`${API_BASE}/api/payments/confirm-intent`, {
+      const res = await apiFetch(`${API_BASE}/api/payments/confirm-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ payment_intent_id: paymentIntent.id }),
       });
 
@@ -161,10 +161,9 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
     }
 
     try {
-      const res = await fetch(`${API_BASE}/api/payments/confirm-intent`, {
+      const res = await apiFetch(`${API_BASE}/api/payments/confirm-intent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ payment_intent_id: paymentIntent.id }),
       });
       if (!res.ok) throw new Error('Verification failed');
@@ -264,10 +263,9 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
       // Fetch Stripe publishable key (cached after first call) + create PaymentIntent in parallel
       const [resolvedStripe, intentRes] = await Promise.all([
         getStripePromise(),
-        fetch(`${API_BASE}/api/payments/create-intent`, {
+        apiFetch(`${API_BASE}/api/payments/create-intent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ pack: packKey }),
         }),
       ]);
@@ -300,10 +298,9 @@ export function BuyCreditsModal({ onClose, onPaymentSuccess, insufficientCredits
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE}/api/payments/checkout`, {
+      const res = await apiFetch(`${API_BASE}/api/payments/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ pack: packKey }),
       });
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useQuestStore } from './questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -134,7 +135,7 @@ export const useProjectDataStore = create((set, get) => ({
     if (existing && existing.projectId === projectId) return existing.promise;
 
     set({ clipsFetching: true, clipsError: null });
-    const promise = fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`)
+    const promise = apiFetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`)
       .then(response => {
         if (!response.ok) throw new Error('Failed to fetch clips');
         return response.json();
@@ -171,7 +172,7 @@ export const useProjectDataStore = create((set, get) => ({
         return { success: true };
       }
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
         {
           method: 'PUT',
@@ -220,7 +221,7 @@ export const useProjectDataStore = create((set, get) => ({
       const formData = new FormData();
       formData.append('raw_clip_id', rawClipId.toString());
 
-      const response = await fetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`, {
+      const response = await apiFetch(`${API_BASE_URL}/clips/projects/${projectId}/clips`, {
         method: 'POST',
         body: formData
       });
@@ -250,7 +251,7 @@ export const useProjectDataStore = create((set, get) => ({
       formData.append('tags', JSON.stringify(tags || []));
       formData.append('notes', notes || '');
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/upload-with-metadata`,
         { method: 'POST', body: formData }
       );
@@ -272,7 +273,7 @@ export const useProjectDataStore = create((set, get) => ({
     get().deleteClip(clipId);
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/${clipId}`,
         { method: 'DELETE' }
       );
@@ -294,7 +295,7 @@ export const useProjectDataStore = create((set, get) => ({
     if (!projectId) return false;
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/clips/projects/${projectId}/clips/reorder`,
         {
           method: 'PUT',

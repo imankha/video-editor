@@ -1,6 +1,7 @@
 import { API_BASE } from '../config';
 import { toast } from '../components/shared/Toast';
 import { track } from './analytics';
+import apiFetch from './apiFetch';
 
 /**
  * Builds a mailto: URL for the invite-a-friend flow.
@@ -40,7 +41,7 @@ export function buildInviteMessage(inviteCode) {
 }
 
 export async function shareInvite() {
-  const resp = await fetch(`${API_BASE}/api/me/invite-code`, { credentials: 'include' });
+  const resp = await apiFetch(`${API_BASE}/api/me/invite-code`);
   if (!resp.ok) return;
   const { invite_code } = await resp.json();
   const message = buildInviteMessage(invite_code);

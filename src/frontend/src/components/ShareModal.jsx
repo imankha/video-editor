@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 export function ShareModal({ videoId, videoName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -20,9 +21,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
 
   const fetchExistingShares = useCallback(async () => {
     try {
-      const resp = await fetch(`${API_BASE}/api/gallery/${videoId}/shares`, {
-        credentials: 'include',
-      });
+      const resp = await apiFetch(`${API_BASE}/api/gallery/${videoId}/shares`);
       if (resp.ok) {
         setExistingShares(await resp.json());
       }
@@ -35,7 +34,7 @@ export function ShareModal({ videoId, videoName, onClose }) {
 
   useEffect(() => {
     fetchExistingShares();
-    fetch(`${API_BASE}/api/gallery/contacts`, { credentials: 'include' })
+    apiFetch(`${API_BASE}/api/gallery/contacts`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setContacts(data.contacts); })
       .catch(() => {});
@@ -76,9 +75,8 @@ export function ShareModal({ videoId, videoName, onClose }) {
     if (publicLink) return;
     setCreatingPublicLink(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/gallery/${videoId}/share`, {
+      const resp = await apiFetch(`${API_BASE}/api/gallery/${videoId}/share`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipient_emails: [], is_public: true }),
       });
@@ -103,9 +101,8 @@ export function ShareModal({ videoId, videoName, onClose }) {
     setError(null);
     setIsSubmitting(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/gallery/${videoId}/share`, {
+      const resp = await apiFetch(`${API_BASE}/api/gallery/${videoId}/share`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipient_emails: emails, is_public: isPublic }),
       });
@@ -141,9 +138,8 @@ export function ShareModal({ videoId, videoName, onClose }) {
 
   const handleRevoke = async (shareToken) => {
     try {
-      const resp = await fetch(`${API_BASE}/api/shared/${shareToken}`, {
+      const resp = await apiFetch(`${API_BASE}/api/shared/${shareToken}`, {
         method: 'DELETE',
-        credentials: 'include',
       });
       if (resp.ok) {
         fetchExistingShares();

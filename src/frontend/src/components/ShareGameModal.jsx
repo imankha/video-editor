@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 export function ShareGameModal({ gameId, gameName, onClose }) {
   const [emails, setEmails] = useState([]);
@@ -11,7 +12,7 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/gallery/contacts`, { credentials: 'include' })
+    apiFetch(`${API_BASE}/api/gallery/contacts`)
       .then((r) => r.ok ? r.json() : null)
       .then((data) => { if (data) setContacts(data.contacts); })
       .catch(() => {});
@@ -35,9 +36,8 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
     if (emails.length === 0) return;
     setIsSubmitting(true);
     try {
-      const resp = await fetch(`${API_BASE}/api/games/${gameId}/share`, {
+      const resp = await apiFetch(`${API_BASE}/api/games/${gameId}/share`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emails }),
       });

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useProjectsStore } from '../stores/projectsStore';
 
 const ProjectContext = createContext(null);
@@ -24,7 +25,7 @@ export function ProjectProvider({ children }) {
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE}/api/projects/${projectId}`);
+        const response = await apiFetch(`${API_BASE}/api/projects/${projectId}`);
         if (!response.ok) throw new Error('Failed to load project');
         const data = await response.json();
 
@@ -53,7 +54,7 @@ export function ProjectProvider({ children }) {
     if (!projectId) return null;
 
     try {
-      const response = await fetch(`${API_BASE}/api/projects/${projectId}`);
+      const response = await apiFetch(`${API_BASE}/api/projects/${projectId}`);
       if (response.ok) {
         const data = await response.json();
         setProject(data);

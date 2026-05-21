@@ -4,6 +4,7 @@ import { MediaPlayer } from './MediaPlayer';
 import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { shareInvite } from '../utils/inviteEmail';
 
@@ -20,9 +21,7 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
     let cancelled = false;
     async function fetchShare() {
       try {
-        const resp = await fetch(`${API_BASE}/api/shared/${shareToken}`, {
-          credentials: 'include',
-        });
+        const resp = await apiFetch(`${API_BASE}/api/shared/${shareToken}`);
         if (cancelled) return;
         if (resp.ok) {
           const data = await resp.json();

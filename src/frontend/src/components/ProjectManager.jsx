@@ -21,6 +21,7 @@ import { useQuestStore } from '../stores/questStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { GAME, REEL } from '../config/themeColors';
 import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
@@ -1639,9 +1640,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     e.stopPropagation();
     setIsPublishing(true);
     try {
-      const response = await fetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
+      const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
         method: 'POST',
-        credentials: 'include',
       });
       if (!response.ok) {
         const error = await response.json();

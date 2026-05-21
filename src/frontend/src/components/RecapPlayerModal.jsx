@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Play } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useRecapPlayback } from './recap/useRecapPlayback';
 import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
@@ -25,7 +26,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   useEffect(() => {
     let cancelled = false;
 
-    const recapPromise = fetch(`${API_BASE}/api/games/${game.id}/recap-data`, { credentials: 'include' })
+    const recapPromise = apiFetch(`${API_BASE}/api/games/${game.id}/recap-data`)
       .then(r => {
         if (!r.ok) throw new Error('Failed to load recap');
         return r.json();
@@ -38,7 +39,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         if (!cancelled) setRecapError(err.message);
       });
 
-    const clipsPromise = fetch(`${API_BASE}/api/games/${game.id}/brilliant-clips`, { credentials: 'include' })
+    const clipsPromise = apiFetch(`${API_BASE}/api/games/${game.id}/brilliant-clips`)
       .then(r => {
         if (!r.ok) throw new Error('Failed to load highlights');
         return r.json();

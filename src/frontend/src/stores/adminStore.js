@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 
 /**
@@ -32,9 +33,8 @@ export const useAdminStore = create((set, get) => ({
 
     set({ usersLoading: true, usersError: null });
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API_BASE}/api/admin/users?page=${p}&page_size=${ps}`,
-        { credentials: 'include' },
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -67,7 +67,7 @@ export const useAdminStore = create((set, get) => ({
     }));
     try {
       const params = profileId ? `?profile_id=${profileId}` : '';
-      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/gpu-usage${params}`, { credentials: 'include' });
+      const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/gpu-usage${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set(state => ({
@@ -85,9 +85,8 @@ export const useAdminStore = create((set, get) => ({
       grantState: { ...state.grantState, [userId]: { loading: true, error: null } },
     }));
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/grant-credits`, {
+      const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/grant-credits`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount }),
       });
@@ -119,9 +118,8 @@ export const useAdminStore = create((set, get) => ({
       grantState: { ...state.grantState, [userId]: { loading: true, error: null } },
     }));
     try {
-      const res = await fetch(`${API_BASE}/api/admin/users/${userId}/set-credits`, {
+      const res = await apiFetch(`${API_BASE}/api/admin/users/${userId}/set-credits`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount }),
       });

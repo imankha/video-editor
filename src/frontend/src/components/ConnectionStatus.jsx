@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 // Grace period: stay in friendly "Connecting..." state for this many failed attempts
 // before escalating to the red error banner
@@ -42,7 +43,7 @@ export function ConnectionStatus() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(`${API_BASE}/api/health`, {
+      const response = await apiFetch(`${API_BASE}/api/health`, {
         signal: controller.signal,
         headers: { 'Cache-Control': 'no-cache' }
       });

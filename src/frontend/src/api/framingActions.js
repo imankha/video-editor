@@ -10,6 +10,7 @@
  */
 
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 /**
  * Send a framing action to the backend
@@ -26,7 +27,7 @@ async function sendAction(projectId, clipId, action, target = null, data = null)
     if (target) payload.target = target;
     if (data) payload.data = data;
 
-    const response = await fetch(`${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/actions`, {
+    const response = await apiFetch(`${API_BASE}/api/clips/projects/${projectId}/clips/${clipId}/actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

@@ -4,6 +4,7 @@ import { Button } from './shared/Button';
 import { UserPicker } from './shared/UserPicker';
 import { toast } from './shared/Toast';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedTagData, onClose, onSharedTagsChange }) {
   const unsentTags = useMemo(() =>
@@ -41,9 +42,7 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
     let cancelled = false;
     async function fetchMappings() {
       try {
-        const resp = await fetch(`${API_BASE}/api/clips/teammate-emails`, {
-          credentials: 'include',
-        });
+        const resp = await apiFetch(`${API_BASE}/api/clips/teammate-emails`);
         if (!resp.ok) throw new Error('Failed to load email mappings');
         const data = await resp.json();
         if (cancelled) return;
@@ -137,9 +136,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
       }
 
       if (newMappings.length > 0) {
-        const saveResp = await fetch(`${API_BASE}/api/clips/teammate-emails`, {
+        const saveResp = await apiFetch(`${API_BASE}/api/clips/teammate-emails`, {
           method: 'PUT',
-          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newMappings),
         });
@@ -148,9 +146,8 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
         }
       }
 
-      const shareResp = await fetch(`${API_BASE}/api/clips/share-with-teammates`, {
+      const shareResp = await apiFetch(`${API_BASE}/api/clips/share-with-teammates`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           game_id: gameId,

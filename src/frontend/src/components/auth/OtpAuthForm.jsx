@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { Button } from '../shared';
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';
+import apiFetch from '../../utils/apiFetch';
 
 /**
  * OtpCodeInput — 6-digit code entry with auto-advance and paste support.
@@ -119,9 +120,8 @@ export function OtpAuthForm({ resetKey = null }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/send-otp`, {
+      const res = await apiFetch(`${API_BASE}/api/auth/send-otp`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: target }),
       });
@@ -151,9 +151,8 @@ export function OtpAuthForm({ resetKey = null }) {
       const verifyBody = { email: email.trim(), code: joined };
       const ref = sessionStorage.getItem('referralCode');
       if (ref) verifyBody.ref = ref;
-      const res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
+      const res = await apiFetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(verifyBody),
       });

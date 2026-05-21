@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { reinstallProfileHeader } from '../utils/sessionInit';
 
 /**
@@ -28,7 +29,7 @@ export const useProfileStore = create((set, get) => ({
 
     _fetchPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/profiles`);
+        const response = await apiFetch(`${API_BASE}/api/profiles`);
         if (!response.ok) {
           throw new Error(`Failed to fetch profiles: ${response.status}`);
         }
@@ -59,7 +60,7 @@ export const useProfileStore = create((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch(`${API_BASE}/api/profiles/current`, {
+      const response = await apiFetch(`${API_BASE}/api/profiles/current`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ profileId }),
@@ -102,7 +103,7 @@ export const useProfileStore = create((set, get) => ({
     try {
       const body = { name, color };
       if (sport) body.sport = sport;
-      const response = await fetch(`${API_BASE}/api/profiles`, {
+      const response = await apiFetch(`${API_BASE}/api/profiles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -134,7 +135,7 @@ export const useProfileStore = create((set, get) => ({
     set({ error: null });
 
     try {
-      const response = await fetch(`${API_BASE}/api/profiles/${profileId}`, {
+      const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
@@ -157,7 +158,7 @@ export const useProfileStore = create((set, get) => ({
     set({ error: null });
 
     try {
-      const response = await fetch(`${API_BASE}/api/profiles/${profileId}`, {
+      const response = await apiFetch(`${API_BASE}/api/profiles/${profileId}`, {
         method: 'DELETE',
       });
 

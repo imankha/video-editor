@@ -11,6 +11,7 @@
  */
 
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 /**
  * Send an overlay action to the backend
@@ -28,7 +29,7 @@ async function sendAction(projectId, action, target = null, data = null, expecte
     if (data) payload.data = data;
     if (expectedVersion !== null) payload.expected_version = expectedVersion;
 
-    const response = await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay/actions`, {
+    const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay/actions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

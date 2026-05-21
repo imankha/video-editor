@@ -12,6 +12,7 @@
  */
 
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { GameCreateStatus } from '../constants/gameConstants';
 import { useQuestStore } from '../stores/questStore';
 import { analyzeMp4Faststart, getReorderedSlice } from '../utils/mp4Faststart';
@@ -179,7 +180,7 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
  */
 async function saveCompletedParts(sessionId, parts) {
   try {
-    await fetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
+    await apiFetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ parts }),
@@ -411,7 +412,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   if (options.label) {
     prepareBody.label = options.label;
   }
-  const prepareRes = await fetch(`${API_BASE}/api/games/prepare-upload`, {
+  const prepareRes = await apiFetch(`${API_BASE}/api/games/prepare-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(prepareBody),
@@ -488,7 +489,7 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   // Phase 4: Finalize R2 multipart
   notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
-  const finalizeRes = await fetch(`${API_BASE}/api/games/finalize-upload`, {
+  const finalizeRes = await apiFetch(`${API_BASE}/api/games/finalize-upload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -537,7 +538,7 @@ async function createGame(options, videos, status) {
   if (status) {
     body.status = status;
   }
-  const res = await fetch(`${API_BASE}/api/games`, {
+  const res = await apiFetch(`${API_BASE}/api/games`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -555,7 +556,7 @@ async function createGame(options, videos, status) {
  * Attach video(s) to an existing game via POST /api/games/{id}/videos
  */
 async function addVideosToGame(gameId, videos) {
-  const res = await fetch(`${API_BASE}/api/games/${gameId}/videos`, {
+  const res = await apiFetch(`${API_BASE}/api/games/${gameId}/videos`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ videos }),
@@ -575,7 +576,7 @@ async function addVideosToGame(gameId, videos) {
  * @returns {Promise<Object>} - { game_id, status }
  */
 async function activateGame(gameId) {
-  const res = await fetch(`${API_BASE}/api/games/${gameId}/activate`, {
+  const res = await apiFetch(`${API_BASE}/api/games/${gameId}/activate`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -697,7 +698,7 @@ export async function uploadGame(file, onProgress, options = {}) {
     // If game was created as pending but upload/activation failed, clean up.
     if (gameResult?.game_id) {
       try {
-        await fetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
       } catch (cleanupErr) {
         // Best-effort cleanup — log but don't mask the original error.
         console.warn('[uploadGame] Failed to clean up pending game:', cleanupErr);
@@ -805,7 +806,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
     // If game was created as pending but upload/activation failed, clean up.
     if (gameResult?.game_id) {
       try {
-        await fetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
+        await apiFetch(`${API_BASE}/api/games/${gameResult.game_id}`, { method: 'DELETE' });
       } catch (cleanupErr) {
         console.warn('[uploadMultiVideoGame] Failed to clean up pending game:', cleanupErr);
       }
@@ -820,7 +821,7 @@ export async function uploadMultiVideoGame(files, onProgress, options = {}) {
  * @param {string} sessionId - Upload session ID from prepare-upload
  */
 export async function cancelUpload(sessionId) {
-  const response = await fetch(`${API_BASE}/api/games/upload/${sessionId}`, {
+  const response = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}`, {
     method: 'DELETE',
   });
 
@@ -838,7 +839,7 @@ export async function cancelUpload(sessionId) {
  * @returns {Promise<string>} - Presigned URL
  */
 export async function getDedupeGameUrl(gameId) {
-  const response = await fetch(`${API_BASE}/api/games/dedupe/${gameId}/url`);
+  const response = await apiFetch(`${API_BASE}/api/games/dedupe/${gameId}/url`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -854,7 +855,7 @@ export async function getDedupeGameUrl(gameId) {
  * @param {number} gameId - Game ID from user_games table
  */
 export async function deleteDedupeGame(gameId) {
-  const response = await fetch(`${API_BASE}/api/games/dedupe/${gameId}`, {
+  const response = await apiFetch(`${API_BASE}/api/games/dedupe/${gameId}`, {
     method: 'DELETE',
   });
 
@@ -871,7 +872,7 @@ export async function deleteDedupeGame(gameId) {
  * @returns {Promise<Array>} - Array of game objects
  */
 export async function listDedupeGames() {
-  const response = await fetch(`${API_BASE}/api/games/dedupe`);
+  const response = await apiFetch(`${API_BASE}/api/games/dedupe`);
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
@@ -896,7 +897,7 @@ export async function listPendingUploads() {
 
   _pendingUploadsPromise = (async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/games/pending-uploads`);
+      const response = await apiFetch(`${API_BASE}/api/games/pending-uploads`);
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));

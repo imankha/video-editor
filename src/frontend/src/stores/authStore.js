@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { getUserId, setUserId, resetSession } from '../utils/sessionInit';
 import { useCreditStore } from './creditStore';
 import { useEditorStore } from './editorStore';
@@ -31,7 +32,7 @@ export const useAuthStore = create((set, get) => ({
     if (_checkAdminPromise) return _checkAdminPromise;
     _checkAdminPromise = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/admin/me`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/api/admin/me`);
         if (!res.ok) return;
         const data = await res.json();
         set({ isAdmin: data.is_admin, adminEnvironment: data.environment || null });
@@ -142,9 +143,8 @@ export const useAuthStore = create((set, get) => ({
   // T405: Logout — invalidate session and clear cookie
   logout: async () => {
     try {
-      await fetch(`${API_BASE}/api/auth/logout`, {
+      await apiFetch(`${API_BASE}/api/auth/logout`, {
         method: 'POST',
-        credentials: 'include',
       });
     } catch {
       // Best-effort — clear local state regardless
@@ -168,9 +168,8 @@ export const useAuthStore = create((set, get) => ({
   // Full page reload follows so all Zustand data stores reset naturally —
   // the stop flow does the same in reverse.
   startImpersonation: async (targetUserId) => {
-    const res = await fetch(`${API_BASE}/api/admin/impersonate/${targetUserId}`, {
+    const res = await apiFetch(`${API_BASE}/api/admin/impersonate/${targetUserId}`, {
       method: 'POST',
-      credentials: 'include',
     });
     if (!res.ok) {
       const body = await res.text();
@@ -183,9 +182,8 @@ export const useAuthStore = create((set, get) => ({
   // then we hard reload to wipe in-memory state from the impersonated user.
   stopImpersonation: async () => {
     try {
-      await fetch(`${API_BASE}/api/admin/impersonate/stop`, {
+      await apiFetch(`${API_BASE}/api/admin/impersonate/stop`, {
         method: 'POST',
-        credentials: 'include',
       });
     } catch {
       // Best-effort — reload regardless so the admin isn't stuck.

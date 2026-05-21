@@ -28,6 +28,7 @@ import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
 import { toast } from './components/shared';
 import { API_BASE } from './config';
+import apiFetch from './utils/apiFetch';
 
 /**
  * App.jsx - Main application shell
@@ -229,10 +230,9 @@ function App() {
         }
 
         if (payment === 'success' && paymentSessionId) {
-          fetch(`${API_BASE}/api/payments/verify`, {
+          apiFetch(`${API_BASE}/api/payments/verify`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
             body: JSON.stringify({ session_id: paymentSessionId }),
           })
             .then((res) => res.json())

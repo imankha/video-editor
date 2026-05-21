@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 
@@ -56,7 +57,7 @@ export function useDownloads(isOpen = false) {
         url += `?source_type=${encodeURIComponent(sourceType)}`;
       }
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         signal: currentController.signal
       });
 
@@ -90,7 +91,7 @@ export function useDownloads(isOpen = false) {
    */
   const fetchCount = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/downloads/count`);
+      const response = await apiFetch(`${API_BASE_URL}/downloads/count`);
       if (!response.ok) throw new Error('Failed to fetch count');
       const data = await response.json();
       setCount(data.count || 0);
@@ -106,7 +107,7 @@ export function useDownloads(isOpen = false) {
    */
   const deleteDownload = useCallback(async (downloadId, removeFile = false) => {
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/downloads/${downloadId}?remove_file=${removeFile}`,
         { method: 'DELETE' }
       );
@@ -159,7 +160,7 @@ export function useDownloads(isOpen = false) {
     setDownloadingId(downloadId);
 
     try {
-      const response = await fetch(url);
+      const response = await apiFetch(url);
 
       if (!response.ok) {
         throw new Error(`Download failed: ${response.status} ${response.statusText}`);
@@ -333,7 +334,7 @@ export function useDownloads(isOpen = false) {
       d.id === downloadId ? { ...d, project_name: name } : d
     ));
     try {
-      const response = await fetch(`${API_BASE_URL}/downloads/${downloadId}/name`, {
+      const response = await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/name`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -350,7 +351,7 @@ export function useDownloads(isOpen = false) {
       d.id === downloadId ? { ...d, watched_at: new Date().toISOString() } : d
     ));
     try {
-      await fetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
+      await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
       const { useGalleryStore } = await import('../stores/galleryStore');
       useGalleryStore.getState().setUnwatchedCount(
         Math.max(0, useGalleryStore.getState().unwatchedCount - 1)

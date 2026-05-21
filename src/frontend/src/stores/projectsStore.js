@@ -12,6 +12,7 @@
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useQuestStore } from './questStore';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
@@ -54,7 +55,7 @@ export const useProjectsStore = create((set, get) => ({
     set({ loading: true, error: null });
     _fetchPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/projects`, { signal });
+        const response = await apiFetch(`${API_BASE_URL}/projects`, { signal });
         if (!response.ok) throw new Error('Failed to fetch projects');
         const data = await response.json();
         set({ projects: data, loading: false });
@@ -78,7 +79,7 @@ export const useProjectsStore = create((set, get) => ({
     if (PROFILING_ENABLED) performance.mark('project:load:start');
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       set({ loading: false });
@@ -124,7 +125,7 @@ export const useProjectsStore = create((set, get) => ({
   createProject: async (name, aspectRatio) => {
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`, {
+      const response = await apiFetch(`${API_BASE_URL}/projects`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, aspect_ratio: aspectRatio }),
@@ -149,7 +150,7 @@ export const useProjectsStore = create((set, get) => ({
   deleteProject: async (projectId) => {
     set({ loading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}`, {
         method: 'DELETE',
       });
       if (!response.ok) throw new Error('Failed to delete project');
@@ -194,7 +195,7 @@ export const useProjectsStore = create((set, get) => ({
     const project = get().projects.find(p => p.id === projectId);
     if (!project) return;
 
-    const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
+    const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newName, aspect_ratio: project.aspect_ratio }),
@@ -215,7 +216,7 @@ export const useProjectsStore = create((set, get) => ({
    */
   discardUncommittedChanges: async (projectId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/discard-uncommitted`, {
+      const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}/discard-uncommitted`, {
         method: 'POST',
       });
       if (!response.ok) throw new Error('Failed to discard uncommitted changes');

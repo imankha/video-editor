@@ -19,6 +19,7 @@
  */
 
 import { API_BASE, resolveApiUrl } from '../config';
+import apiFetch from './apiFetch';
 
 // ── Fetch mode ──────────────────────────────────────────────────────────────
 
@@ -527,7 +528,7 @@ export async function warmAllUserVideos() {
   try {
     console.log('[CacheWarming] Fetching video URLs...');
 
-    const response = await fetch(`${API_BASE}/storage/warmup`);
+    const response = await apiFetch(`${API_BASE}/storage/warmup`);
     if (!response.ok) {
       console.warn(`[CacheWarming] Failed to fetch warmup URLs: ${response.status}`);
       return { warmed: 0, total: 0 };

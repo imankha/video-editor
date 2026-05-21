@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 import { track } from '../utils/analytics';
 
@@ -36,7 +37,7 @@ export const useQuestStore = create((set, get) => ({
     if (_fetchDefinitionsPromise) return _fetchDefinitionsPromise;
     _fetchDefinitionsPromise = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/quests/definitions`);
+        const res = await apiFetch(`${API_BASE}/api/quests/definitions`);
         if (!res.ok) return;
         const data = await res.json();
         const totalSteps = data.reduce((sum, q) => sum + q.step_ids.length, 0);
@@ -61,7 +62,7 @@ export const useQuestStore = create((set, get) => ({
 
     _fetchProgressPromise = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/quests/progress`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/api/quests/progress`);
         if (!res.ok) {
           // T1330: unauthenticated — render the quest panel with zero progress
           // so new visitors see the onboarding checklist pre-login.
@@ -109,9 +110,8 @@ export const useQuestStore = create((set, get) => ({
   },
 
   claimReward: async (questId) => {
-    const res = await fetch(`${API_BASE}/api/quests/${questId}/claim-reward`, {
+    const res = await apiFetch(`${API_BASE}/api/quests/${questId}/claim-reward`, {
       method: 'POST',
-      credentials: 'include',
     });
     if (!res.ok) {
       const err = await res.json();
@@ -133,9 +133,8 @@ export const useQuestStore = create((set, get) => ({
     // result does not gate the UI — never block the caller (e.g. opening the
     // framing editor) on this POST. `keepalive: true` lets the request survive
     // a navigation/unload, so dedup is safe even if the user routes away.
-    fetch(`${API_BASE}/api/quests/achievements/${key}`, {
+    apiFetch(`${API_BASE}/api/quests/achievements/${key}`, {
       method: 'POST',
-      credentials: 'include',
       keepalive: true,
     })
       .then((res) => {

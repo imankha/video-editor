@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 let _fetchPromise = null;
 
@@ -24,7 +25,7 @@ export const useCreditStore = create((set, get) => ({
     if (_fetchPromise) return _fetchPromise;
     _fetchPromise = (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/credits`, { credentials: 'include' });
+        const res = await apiFetch(`${API_BASE}/api/credits`);
         if (!res.ok) return;
         const data = await res.json();
         set({

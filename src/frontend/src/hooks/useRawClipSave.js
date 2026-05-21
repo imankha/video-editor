@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useQuestStore } from '../stores/questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -60,7 +61,7 @@ export function useRawClipSave() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/clips/raw/save`, {
+      const response = await apiFetch(`${API_BASE_URL}/clips/raw/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +119,7 @@ export function useRawClipSave() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
@@ -162,7 +163,7 @@ export function useRawClipSave() {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
+      const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
         method: 'DELETE'
       });
 

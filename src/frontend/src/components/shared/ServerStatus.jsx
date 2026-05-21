@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { API_BASE } from '../../config';
+import apiFetch from '../../utils/apiFetch';
 
 /**
  * ServerStatus - Shows an error banner when the backend server is unreachable.
@@ -19,7 +20,7 @@ export function ServerStatus() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      const response = await fetch(`${API_BASE}/api/health`, {
+      const response = await apiFetch(`${API_BASE}/api/health`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);

@@ -11,6 +11,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { frameToTime } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE, resolveApiUrl } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
@@ -104,7 +105,7 @@ export function OverlayScreen({
     if (!projectId || !workingVideo?.url) return;
     const checkOutdated = async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
+        const response = await apiFetch(`${API_BASE}/api/projects/${projectId}/outdated-clips`);
         if (!response.ok) return;
         const data = await response.json();
         setFramingOutdated(data.has_outdated_clips);
@@ -427,7 +428,7 @@ export function OverlayScreen({
       // Fetch overlay data from backend (includes detection data from export)
       (async () => {
         try {
-          const response = await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
+          const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
           // Use video_duration from backend, fall back to video metadata or region end times
@@ -507,7 +508,7 @@ export function OverlayScreen({
       (async () => {
         try {
           console.log('[OverlayScreen] Loading overlay data for project:', projectId);
-          const response = await fetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
+          const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
           if (data.has_data && data.highlights_data?.length > 0) {

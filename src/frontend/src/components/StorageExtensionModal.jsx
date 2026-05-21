@@ -6,6 +6,7 @@ import { toast } from './shared';
 import { useCreditStore } from '../stores/creditStore';
 import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 function formatDate(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -60,10 +61,9 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
   const extendStorage = useCallback(async () => {
     setIsExtending(true);
     try {
-      const res = await fetch(`${API_BASE}/api/games/${game.id}/extend-storage`, {
+      const res = await apiFetch(`${API_BASE}/api/games/${game.id}/extend-storage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ days: extensionDays }),
       });
       if (!res.ok) {

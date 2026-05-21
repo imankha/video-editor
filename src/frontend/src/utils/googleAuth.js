@@ -1,4 +1,5 @@
 import { API_BASE } from '../config';
+import apiFetch from './apiFetch';
 
 /**
  * Shared Google Identity Services (GIS) initialization.
@@ -55,9 +56,8 @@ async function handleCredential(response) {
     const authBody = { token: response.credential };
     const ref = sessionStorage.getItem('referralCode');
     if (ref) authBody.ref = ref;
-    const res = await fetch(`${API_BASE}/api/auth/google`, {
+    const res = await apiFetch(`${API_BASE}/api/auth/google`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(authBody),
     });

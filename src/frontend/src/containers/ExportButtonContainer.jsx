@@ -6,6 +6,7 @@ import { useExportStore, useAuthStore, useSyncStore, EDITOR_MODES } from '../sto
 import { useCreditStore } from '../stores/creditStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
@@ -551,7 +552,7 @@ export function ExportButtonContainer({
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const resp = await fetch(`${API_BASE}/api/health`, { signal: controller.signal });
+        const resp = await apiFetch(`${API_BASE}/api/health`, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (!resp.ok) throw new Error(`Server returned ${resp.status}: ${resp.statusText}`);
       } catch (err) {

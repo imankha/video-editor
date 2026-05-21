@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 // Module-level ref for fetch dedup
 let _fetchCountPromise = null;
@@ -39,7 +40,7 @@ export const useGalleryStore = create((set) => ({
 
     _fetchCountPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/downloads/count`, { credentials: 'include' });
+        const response = await apiFetch(`${API_BASE}/api/downloads/count`);
         if (!response.ok) return 0;
         const data = await response.json();
         const count = data.count || 0;

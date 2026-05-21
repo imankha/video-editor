@@ -1,5 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 export const ShareCapability = {
   FULL: 'full',
@@ -23,9 +24,7 @@ export function useWebShare() {
 
   const share = useCallback(async ({ downloadId, title, text, filename }) => {
     if (capability === ShareCapability.FULL) {
-      const resp = await fetch(`${API_BASE}/api/downloads/${downloadId}/file`, {
-        credentials: 'include',
-      });
+      const resp = await apiFetch(`${API_BASE}/api/downloads/${downloadId}/file`);
       if (!resp.ok) throw new Error('Failed to fetch video for sharing');
       const blob = await resp.blob();
       const file = new File([blob], filename, { type: 'video/mp4' });
@@ -33,9 +32,8 @@ export function useWebShare() {
       return 'native';
     }
 
-    const resp = await fetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
+    const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipient_emails: [], is_public: true }),
     });

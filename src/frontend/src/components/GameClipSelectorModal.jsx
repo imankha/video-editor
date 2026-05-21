@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { X, Filter, Clock, Film, Settings, Sliders, Check, Star, List, Play, Pause } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { ensureUniqueName } from '../utils/uniqueName';
 import { getClipDisplayName } from '../utils/clipDisplayName';
 
@@ -55,7 +56,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
     const fetchClips = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/clips/raw`);
+        const response = await apiFetch(`${API_BASE_URL}/clips/raw`);
         if (response.ok) {
           const clips = await response.json();
           setRawClips(clips);
@@ -459,7 +460,7 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
       // Pass specific clip IDs to preserve user's selection
       const clipIds = includedClips.map(c => c.id);
 
-      const response = await fetch(`${API_BASE_URL}/projects/from-clips`, {
+      const response = await apiFetch(`${API_BASE_URL}/projects/from-clips`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -13,6 +13,7 @@ import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
 import { track } from '../utils/analytics';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 
@@ -148,7 +149,7 @@ export function DownloadsPanel({
       // T66: Restore project from archive if needed
       setRestoringProjectId(download.id);
       try {
-        const response = await fetch(`${API_BASE}/api/downloads/${download.id}/restore-project`, {
+        const response = await apiFetch(`${API_BASE}/api/downloads/${download.id}/restore-project`, {
           method: 'POST',
         });
         if (!response.ok) {
@@ -185,7 +186,7 @@ export function DownloadsPanel({
 
     try {
       // First check if before/after is available
-      const statusRes = await fetch(`${API_BASE}/api/export/before-after/${download.id}/status`);
+      const statusRes = await apiFetch(`${API_BASE}/api/export/before-after/${download.id}/status`);
       const status = await statusRes.json();
 
       if (!status.available) {
@@ -194,7 +195,7 @@ export function DownloadsPanel({
       }
 
       // Generate separate before/after videos (no text overlays) as a zip
-      const response = await fetch(`${API_BASE}/api/export/before-after/${download.id}?output=separate&overlays=false`, {
+      const response = await apiFetch(`${API_BASE}/api/export/before-after/${download.id}?output=separate&overlays=false`, {
         method: 'POST'
       });
 

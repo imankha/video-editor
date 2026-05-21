@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useGamesDataStore } from '../stores';
 import { useEditorStore } from '../stores';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { shareInvite } from '../utils/inviteEmail';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
@@ -27,8 +28,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
     const controller = new AbortController();
     async function fetchShare() {
       try {
-        const resp = await fetch(`${API_BASE}/api/shared/teammate/${shareToken}`, {
-          credentials: 'include',
+        const resp = await apiFetch(`${API_BASE}/api/shared/teammate/${shareToken}`, {
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
@@ -78,7 +78,7 @@ export function SharedAnnotationView({ shareToken, onClose }) {
 
     async function resolve() {
       try {
-        const profileResp = await fetch(`${API_BASE}/api/profiles`, { credentials: 'include' });
+        const profileResp = await apiFetch(`${API_BASE}/api/profiles`);
         if (!profileResp.ok) {
           setState('error');
           setErrorMessage('Could not load your profile. Please try again.');
@@ -93,10 +93,9 @@ export function SharedAnnotationView({ shareToken, onClose }) {
           return;
         }
 
-        const resp = await fetch(`${API_BASE}/api/clips/resolve-pending-shares`, {
+        const resp = await apiFetch(`${API_BASE}/api/clips/resolve-pending-shares`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ pending_ids: data.pending_ids, profile_id: profileId }),
         });
         if (resp.ok) {

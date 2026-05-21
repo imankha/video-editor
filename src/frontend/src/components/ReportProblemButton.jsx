@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { API_BASE, ENABLE_PROBLEM_REPORT } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
@@ -108,9 +109,8 @@ export function ReportProblemButton({ className = '' }) {
         build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
       };
       console.warn(`[ReportProblem] POST ${url} logCount=${logs.length} hasScreenshot=${!!screenshotRef.current} email=${email || 'anon'}`);
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,

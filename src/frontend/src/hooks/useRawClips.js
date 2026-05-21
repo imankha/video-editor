@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -21,7 +22,7 @@ export function useRawClips() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/clips/raw`);
+      const response = await apiFetch(`${API_BASE_URL}/clips/raw`);
       if (!response.ok) throw new Error('Failed to fetch raw clips');
       const data = await response.json();
       setRawClips(data);

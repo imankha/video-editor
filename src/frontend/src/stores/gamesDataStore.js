@@ -15,6 +15,7 @@
 
 import { create } from 'zustand';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { uploadGame as uploadGameService } from '../services/uploadManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
 
@@ -67,7 +68,7 @@ export const useGamesDataStore = create((set, get) => ({
     _fetchPromise = (async () => {
       if (PROFILING_ENABLED) performance.mark('games:fetch:start');
       try {
-        const response = await fetch(`${API_BASE}/api/games`, { signal });
+        const response = await apiFetch(`${API_BASE}/api/games`, { signal });
         if (!response.ok) {
           throw new Error(`Failed to fetch games: ${response.status}`);
         }
@@ -124,7 +125,7 @@ export const useGamesDataStore = create((set, get) => ({
         if (gameDetails.tournamentName) formData.append('tournament_name', gameDetails.tournamentName);
       }
 
-      const response = await fetch(`${API_BASE}/api/games`, {
+      const response = await apiFetch(`${API_BASE}/api/games`, {
         method: 'POST',
         body: formData,
       });
@@ -185,7 +186,7 @@ export const useGamesDataStore = create((set, get) => ({
   getGame: async (gameId) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE}/api/games/${gameId}`);
+      const response = await apiFetch(`${API_BASE}/api/games/${gameId}`);
       if (!response.ok) {
         const msg = response.status === 404
           ? `Game ${gameId} not found — it may have been deleted or belongs to another account`
@@ -214,7 +215,7 @@ export const useGamesDataStore = create((set, get) => ({
         formData.append('name', updates.name);
       }
 
-      const response = await fetch(`${API_BASE}/api/games/${gameId}`, {
+      const response = await apiFetch(`${API_BASE}/api/games/${gameId}`, {
         method: 'PUT',
         body: formData,
       });
@@ -244,7 +245,7 @@ export const useGamesDataStore = create((set, get) => ({
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/games/${gameId}/annotations`, {
+      const response = await apiFetch(`${API_BASE}/api/games/${gameId}/annotations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(annotations),
@@ -269,7 +270,7 @@ export const useGamesDataStore = create((set, get) => ({
   deleteGame: async (gameId) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await fetch(`${API_BASE}/api/games/${gameId}`, {
+      const response = await apiFetch(`${API_BASE}/api/games/${gameId}`, {
         method: 'DELETE',
       });
 
@@ -307,7 +308,7 @@ export const useGamesDataStore = create((set, get) => ({
   finishAnnotation: async (gameId, viewedDuration = 0) => {
     if (!gameId) return;
     try {
-      const response = await fetch(`${API_BASE}/api/games/${gameId}/finish-annotation`, {
+      const response = await apiFetch(`${API_BASE}/api/games/${gameId}/finish-annotation`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ viewed_duration: viewedDuration }),

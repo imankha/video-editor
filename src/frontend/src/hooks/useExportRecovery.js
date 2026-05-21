@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useExportStore } from '../stores/exportStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { ExportStatus } from '../constants/exportStatus';
 import { initSession } from '../utils/sessionInit';
 
@@ -43,8 +44,8 @@ export function useExportRecovery() {
       console.log('[ExportRecovery] Fetching active exports from backend...');
 
       const [activeResult, unacknowledgedResult] = await Promise.allSettled([
-        fetch(`${API_BASE}/api/exports/active`),
-        fetch(`${API_BASE}/api/exports/unacknowledged`),
+        apiFetch(`${API_BASE}/api/exports/active`),
+        apiFetch(`${API_BASE}/api/exports/unacknowledged`),
       ]);
 
       // Process active exports
@@ -120,7 +121,7 @@ export function useExportRecovery() {
 
             if (jobIdsToAcknowledge.length > 0) {
               try {
-                await fetch(`${API_BASE}/api/exports/acknowledge`, {
+                await apiFetch(`${API_BASE}/api/exports/acknowledge`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(jobIdsToAcknowledge),
@@ -181,7 +182,7 @@ export function useExportRecovery() {
      */
     async function checkModalStatusOnce(exp) {
       try {
-        const response = await fetch(`${API_BASE}/api/exports/${exp.job_id}/modal-status`);
+        const response = await apiFetch(`${API_BASE}/api/exports/${exp.job_id}/modal-status`);
         if (!response.ok) {
           console.warn(`[ExportRecovery] Failed to check Modal status for ${exp.job_id}`);
           return true; // Assume running if we can't check
@@ -202,7 +203,7 @@ export function useExportRecovery() {
 
           // Start progress simulation on backend
           try {
-            await fetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, { method: 'POST' });
+            await apiFetch(`${API_BASE}/api/exports/${exp.job_id}/resume-progress`, { method: 'POST' });
             console.log(`[ExportRecovery] Started progress loop for ${exp.job_id}`);
           } catch (err) {
             console.warn(`[ExportRecovery] Failed to start progress loop for ${exp.job_id}:`, err);

@@ -9,6 +9,7 @@
 
 import axios from 'axios';
 import { API_BASE } from '../config';
+import apiFetch from './apiFetch';
 import { PROFILING_ENABLED } from './profiling';
 
 let _profileId = null;
@@ -30,7 +31,7 @@ function updatePreloader(percent, message) {
 async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = {}) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(url, options);
+      const response = await apiFetch(url, options);
       if (response.ok || response.status < 500) return response;
       if (attempt < retries) {
         const delay = baseDelay * Math.pow(2, attempt);
@@ -196,9 +197,7 @@ export async function initSession() {
     let impersonator = null;
 
     try {
-      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, {
-        credentials: 'include',
-      });
+      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`);
       if (meResponse.ok) {
         const meData = await meResponse.json();
         userId = meData.user_id;
@@ -251,9 +250,8 @@ export async function initSession() {
     updatePreloader(40, 'Getting things ready...');
 
     if (useAuthStore.getState().needsTermsAcceptance) {
-      fetch(`${API_BASE}/api/auth/accept-terms`, {
+      apiFetch(`${API_BASE}/api/auth/accept-terms`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ terms_version: '2026-05-07' }),
       }).then(() => {

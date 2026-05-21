@@ -7,6 +7,7 @@ import { GameType, VideoMode } from '../constants/gameConstants';
 import { useCreditStore } from '../stores/creditStore';
 import { calculateUploadCost } from '../utils/storageCost';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 
 export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [opponentName, setOpponentName] = useState('');
@@ -32,7 +33,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   // Fetch existing tournaments when modal opens
   useEffect(() => {
     if (isOpen) {
-      fetch(`${API_BASE}/api/games/tournaments`, { credentials: 'include' })
+      apiFetch(`${API_BASE}/api/games/tournaments`)
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();

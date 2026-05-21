@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { API_BASE, resolveApiUrl } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useOverlayStore } from '../stores/overlayStore';
@@ -118,7 +119,7 @@ export function useProjectLoader() {
       const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
 
       // Update last_opened_at (non-blocking)
-      fetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {
+      apiFetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {
         method: 'PATCH'
       }).catch(e => console.error('[useProjectLoader] Failed to update last_opened_at:', e));
 

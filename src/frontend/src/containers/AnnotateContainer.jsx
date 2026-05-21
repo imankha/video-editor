@@ -6,6 +6,7 @@ import { useExportStore, useAuthStore } from '../stores';
 import { useEditorStore } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { useWakeLock } from '../hooks/useWakeLock';
@@ -173,7 +174,7 @@ export function AnnotateContainer({
   // T2810: Teammate tag suggestions (server baseline + locally-used tags)
   const [serverTeammateTags, setServerTeammateTags] = useState([]);
   useEffect(() => {
-    fetch(`${API_BASE}/api/clips/teammate-tags`)
+    apiFetch(`${API_BASE}/api/clips/teammate-tags`)
       .then(res => res.ok ? res.json() : [])
       .then(data => setServerTeammateTags(data))
       .catch(() => {});
@@ -516,7 +517,7 @@ export function AnnotateContainer({
       }
 
       // T2820: Fetch shared tags for this game
-      fetch(`${API_BASE}/api/clips/teammate-shares/${gameId}`, { credentials: 'include' })
+      apiFetch(`${API_BASE}/api/clips/teammate-shares/${gameId}`)
         .then(res => res.ok ? res.json() : [])
         .then(data => {
           const tagData = {};
