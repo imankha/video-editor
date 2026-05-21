@@ -1,6 +1,6 @@
 # T3030: Cross-Origin Fetch Missing Credentials
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 2
 **Priority:** 4.0
