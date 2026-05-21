@@ -39,7 +39,7 @@ export const useGalleryStore = create((set) => ({
 
     _fetchCountPromise = (async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/downloads/count`);
+        const response = await fetch(`${API_BASE}/api/downloads/count`, { credentials: 'include' });
         if (!response.ok) return 0;
         const data = await response.json();
         const count = data.count || 0;

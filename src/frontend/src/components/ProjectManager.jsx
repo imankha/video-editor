@@ -1641,6 +1641,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     try {
       const response = await fetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
         method: 'POST',
+        credentials: 'include',
       });
       if (!response.ok) {
         const error = await response.json();

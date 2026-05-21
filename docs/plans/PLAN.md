@@ -202,6 +202,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T3000 | ↳ [Fix Cloudflare Web Analytics](tasks/analytics-1/T3000-fix-cloudflare-web-analytics.md) | 6 | 1 | 6.0 | DONE | [ ] | Set VITE_CF_ANALYTICS_TOKEN in CF Pages env, verify beacon on app + landing page |
 | T3010 | ↳ [Postgres Event Log + Instrumentation](tasks/analytics-1/T3010-postgres-event-log.md) | 8 | 4 | 2.0 | TODO | [x] | Create analytics_events table, log_event() helper, instrument 8 backend handlers |
 | T3020 | ↳ [Admin Panel Event Migration](tasks/analytics-1/T3020-admin-panel-event-migration.md) | 7 | 5 | 1.4 | TODO | [x] | Replace R2 profile downloads with Postgres event queries, backfill historical data |
+| T3030 | [Cross-Origin Fetch Credentials](tasks/T3030-cross-origin-fetch-credentials.md) | 8 | 2 | 4.0 | TODO | [ ] | ~40 fetch calls missing `credentials: 'include'`. Work in dev (Vite proxy) but fail cross-origin on staging/prod. Caused "Failed to move to My Reels" bug. Create apiFetch wrapper to prevent recurrence. |
 | T2940 | [Overlay Tuning](tasks/overlay-v2/T2940-overlay-tuning.md) | 8 | 3 | 2.7 | TODO | [ ] | Fix invisible/occluding overlay: bold stroke (3-4px) with dark outline, separate stroke/fill opacity, better default colors, dim slider. No architecture changes. |
 
 ### Milestone: Alpha Marketing
