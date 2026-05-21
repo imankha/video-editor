@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Play, Share2 } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import PlaybackControls from './annotate/components/PlaybackControls';
@@ -328,6 +329,9 @@ export function AnnotateModeView({
                       transition: 'opacity 80ms ease-in-out',
                       zIndex: multiVideo.activeVideoLabel === 'A' ? 2 : 1,
                     }}
+                    onError={multiVideo.videoHandlers.onError}
+                    onWaiting={multiVideo.videoHandlers.onWaiting}
+                    onCanPlay={multiVideo.videoHandlers.onCanPlay}
                     playsInline
                     preload="auto"
                   />
@@ -339,9 +343,32 @@ export function AnnotateModeView({
                       transition: 'opacity 80ms ease-in-out',
                       zIndex: multiVideo.activeVideoLabel === 'B' ? 2 : 1,
                     }}
+                    onError={multiVideo.videoHandlers.onError}
+                    onWaiting={multiVideo.videoHandlers.onWaiting}
+                    onCanPlay={multiVideo.videoHandlers.onCanPlay}
                     playsInline
                     preload="auto"
                   />
+                  {/* T3050: Loading overlay during cross-boundary seeks */}
+                  {multiVideo.isLoading && !multiVideo.error && (
+                    <VideoLoadingOverlay simple />
+                  )}
+                  {/* T3050: Error overlay with retry */}
+                  {multiVideo.error && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+                      <div className="text-center max-w-md px-4">
+                        <div className="text-red-500 text-4xl mb-4">{'⚠️'}</div>
+                        <p className="text-red-400 font-semibold mb-2">Video failed to load</p>
+                        <p className="text-gray-400 text-sm mb-4">{multiVideo.error}</p>
+                        <button
+                          onClick={multiVideo.retry}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg transition-colors"
+                        >
+                          Retry Loading Video
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* Click to toggle play */}
                   <div
                     className="absolute inset-0 z-10 cursor-pointer"

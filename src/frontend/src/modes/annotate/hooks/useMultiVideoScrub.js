@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { buildFullVideoTimeline } from './useVirtualTimeline';
+import { classifyVideoError, VideoErrorKind } from '../../../utils/videoErrorClassifier';
 
 /**
  * useMultiVideoScrub -- Dual-video scrub for unified multi-video annotate mode.
@@ -11,7 +12,7 @@ import { buildFullVideoTimeline } from './useVirtualTimeline';
  *
  * Returns null when gameVideos is null/single-video (after all hooks are called).
  */
-export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
+export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls = null }) {
   const isMulti = !!gameVideos && gameVideos.length > 1;
 
   const videoARef = useRef(null);
@@ -21,10 +22,15 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
   const rafIdRef = useRef(null);
   const isPlayingRef = useRef(false);
   const playbackRateRef = useRef(playbackRate);
+  const retryCountRef = useRef(0);
+  const pendingSwapRef = useRef(null);
+  const MAX_RETRY_ATTEMPTS = 2;
 
   const [virtualTime, setVirtualTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeVideoLabel, setActiveVideoLabel] = useState('A');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const fullTimeline = useMemo(
     () => isMulti ? buildFullVideoTimeline(gameVideos) : null,
@@ -88,22 +94,40 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
         inactive.load();
       }
       if (inactive) {
-        inactive.currentTime = result.actualTime;
-      }
-      swapVideos();
-      currentVideoIndexRef.current = result.videoIndex;
-
-      // Preload adjacent video in the now-inactive element
-      const { inactive: newInactive } = getVideos();
-      const adjacentIndex = result.videoIndex === 0
-        ? 1
-        : result.videoIndex - 1;
-      if (newInactive && gameVideos && adjacentIndex >= 0 && adjacentIndex < gameVideos.length) {
-        const adjUrl = getVideoUrl(adjacentIndex);
-        if (newInactive.src !== adjUrl) {
-          newInactive.src = adjUrl;
-          newInactive.load();
+        // Cancel any pending swap from a previous rapid seek
+        if (pendingSwapRef.current) {
+          const prev = pendingSwapRef.current;
+          prev.el.removeEventListener('seeked', prev.handler);
+          prev.el.removeEventListener('canplay', prev.handler);
+          pendingSwapRef.current = null;
         }
+
+        inactive.currentTime = result.actualTime;
+        setIsLoading(true);
+        const onReady = () => {
+          inactive.removeEventListener('seeked', onReady);
+          inactive.removeEventListener('canplay', onReady);
+          pendingSwapRef.current = null;
+          swapVideos();
+          currentVideoIndexRef.current = result.videoIndex;
+          setIsLoading(false);
+
+          const { inactive: newInactive } = getVideos();
+          const adjacentIndex = result.videoIndex === 0 ? 1 : result.videoIndex - 1;
+          if (newInactive && gameVideos && adjacentIndex >= 0 && adjacentIndex < gameVideos.length) {
+            const adjUrl = getVideoUrl(adjacentIndex);
+            if (newInactive.src !== adjUrl) {
+              newInactive.src = adjUrl;
+              newInactive.load();
+            }
+          }
+        };
+        pendingSwapRef.current = { el: inactive, handler: onReady };
+        inactive.addEventListener('seeked', onReady, { once: true });
+        inactive.addEventListener('canplay', onReady, { once: true });
+      } else {
+        swapVideos();
+        currentVideoIndexRef.current = result.videoIndex;
       }
     } else {
       active.currentTime = result.actualTime;
@@ -230,6 +254,58 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
     seek(0);
   }, [pause, seek]);
 
+  const handleVideoError = useCallback((e) => {
+    const video = e.target;
+    const code = video?.error?.code;
+    const kind = classifyVideoError({ code, videoSrc: video?.src });
+
+    if (kind === VideoErrorKind.ABORTED) return;
+
+    if ((kind === VideoErrorKind.NETWORK_ERROR || kind === VideoErrorKind.FORMAT_ERROR) &&
+        retryCountRef.current < MAX_RETRY_ATTEMPTS && onRefreshUrls) {
+      retryCountRef.current += 1;
+      onRefreshUrls();
+      return;
+    }
+
+    const messages = {
+      [VideoErrorKind.NETWORK_ERROR]: 'Network error — video URL may have expired',
+      [VideoErrorKind.DECODE_ERROR]: 'Video decode error — file may be corrupt',
+      [VideoErrorKind.FORMAT_ERROR]: 'Video format not supported',
+      [VideoErrorKind.STALE_BLOB]: 'Video source expired',
+    };
+    setError(messages[kind] || 'Video failed to load');
+  }, [onRefreshUrls]);
+
+  const handleVideoWaiting = useCallback(() => {
+    setIsLoading(true);
+  }, []);
+
+  const handleVideoCanPlay = useCallback(() => {
+    setIsLoading(false);
+    setError(null);
+  }, []);
+
+  const clearError = useCallback(() => {
+    setError(null);
+    retryCountRef.current = 0;
+  }, []);
+
+  const retry = useCallback(() => {
+    clearError();
+    if (onRefreshUrls) {
+      onRefreshUrls();
+    }
+  }, [clearError, onRefreshUrls]);
+
+  // Reset error/retry state when URLs change (refresh succeeded)
+  useEffect(() => {
+    if (gameVideos) {
+      setError(null);
+      retryCountRef.current = 0;
+    }
+  }, [gameVideos]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -260,6 +336,15 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
     currentVideoIndex: currentVideoIndexRef.current,
     fullTimeline,
     boundaryOffsets: fullTimeline?.getVideoBoundaries() ?? [],
+    isLoading,
+    error,
+    clearError,
+    retry,
+    videoHandlers: {
+      onError: handleVideoError,
+      onWaiting: handleVideoWaiting,
+      onCanPlay: handleVideoCanPlay,
+    },
   };
 }
 
