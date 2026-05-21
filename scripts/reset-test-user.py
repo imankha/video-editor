@@ -255,6 +255,7 @@ def main():
            WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
         (args.email,),
     )
+    cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
     cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
     cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))

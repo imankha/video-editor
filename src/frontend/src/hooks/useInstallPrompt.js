@@ -23,6 +23,7 @@ export function useInstallPrompt() {
     const onAppInstalled = () => {
       setIsInstalled(true);
       setDeferredPrompt(null);
+      fetch('/api/auth/pwa-installed', { method: 'POST', credentials: 'include' }).catch(() => {});
     };
 
     window.addEventListener('beforeinstallprompt', onBeforeInstall);

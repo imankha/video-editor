@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS user_milestones (
     first_export_completed_at TIMESTAMPTZ,
     first_share_completed_at TIMESTAMPTZ,
     first_credit_purchase_at TIMESTAMPTZ,
+    pwa_installed_at TIMESTAMPTZ,
 
     -- Lifetime counts
     game_created_count INTEGER NOT NULL DEFAULT 0,
@@ -198,6 +199,7 @@ CREATE TABLE IF NOT EXISTS user_milestones (
 
     -- Activity
     session_count INTEGER NOT NULL DEFAULT 0,
+    pwa_session_count INTEGER NOT NULL DEFAULT 0,
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_export_at TIMESTAMPTZ
 );

@@ -31,7 +31,7 @@ from pathlib import Path
 
 import sqlite3
 
-from app.analytics import create_user_milestones, update_session
+from app.analytics import create_user_milestones, record_milestone, update_session
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
@@ -115,6 +115,7 @@ def _reset_test_account(user_id: str, email: str) -> None:
                WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
             (email,),
         )
+        cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")
@@ -426,7 +427,8 @@ async def auth_me(request: Request):
     except Exception:
         logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
 
-    update_session(user_id)
+    is_pwa = request.headers.get("X-PWA") == "1"
+    update_session(user_id, is_pwa=is_pwa)
 
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
@@ -457,6 +459,14 @@ async def auth_me(request: Request):
         "impersonator": impersonator,
         "needs_terms_acceptance": needs_terms_acceptance,
     }
+
+
+@router.post("/pwa-installed")
+async def pwa_installed():
+    """Record that the user installed the PWA."""
+    user_id = get_current_user_id()
+    record_milestone(user_id, "pwa_installed")
+    return {"recorded": True}
 
 
 # --- T401: Email OTP Auth ---

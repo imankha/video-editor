@@ -100,6 +100,9 @@ def _finalize_overlay_export(
 
         conn.commit()
 
+    from app.analytics import record_milestone
+    record_milestone(user_id, "export_completed")
+
     return final_video_id
 
 

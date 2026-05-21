@@ -184,8 +184,9 @@ class TestFindOrCreateUserRef:
         mock_get.return_value = {"user_id": "existing-123", "email": "exists@test.com"}
         from app.routers.auth import _find_or_create_user
 
-        result = _find_or_create_user("exists@test.com", ref="ref456")
-        assert result == "existing-123"
+        user_id, is_new = _find_or_create_user("exists@test.com", ref="ref456")
+        assert user_id == "existing-123"
+        assert is_new is False
 
     @patch("app.routers.auth.get_user_by_email")
     @patch("app.routers.auth.create_user")
@@ -194,8 +195,9 @@ class TestFindOrCreateUserRef:
         mock_get.return_value = None
         from app.routers.auth import _find_or_create_user
 
-        result = _find_or_create_user("brand@new.com", ref="refXYZ")
-        assert result == "brand-new-id"
+        user_id, is_new = _find_or_create_user("brand@new.com", ref="refXYZ")
+        assert user_id == "brand-new-id"
+        assert is_new is True
 
 
 # ---------------------------------------------------------------------------
