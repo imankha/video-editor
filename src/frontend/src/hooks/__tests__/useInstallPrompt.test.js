@@ -14,6 +14,7 @@ beforeEach(() => {
   mockMatchMedia(false);
   Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 Chrome', configurable: true });
   window.MSStream = undefined;
+  window.__deferredInstallPrompt = null;
 });
 
 describe('useInstallPrompt', () => {
@@ -24,10 +25,19 @@ describe('useInstallPrompt', () => {
     expect(result.current.canInstall).toBe(false);
   });
 
-  it('returns canInstall true even without beforeinstallprompt', () => {
+  it('returns canInstall false on desktop without beforeinstallprompt', () => {
+    const { result } = renderHook(() => useInstallPrompt());
+    expect(result.current.canInstall).toBe(false);
+    expect(result.current.canPrompt).toBe(false);
+    expect(result.current.platform).toBe('desktop');
+  });
+
+  it('returns canInstall true on Android without beforeinstallprompt', () => {
+    Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (Linux; Android 13) Chrome', configurable: true });
     const { result } = renderHook(() => useInstallPrompt());
     expect(result.current.canInstall).toBe(true);
     expect(result.current.canPrompt).toBe(false);
+    expect(result.current.platform).toBe('android');
   });
 
   it('returns canPrompt true after beforeinstallprompt fires', () => {
@@ -43,6 +53,16 @@ describe('useInstallPrompt', () => {
 
     expect(result.current.canInstall).toBe(true);
     expect(result.current.canPrompt).toBe(true);
+  });
+
+  it('picks up deferred prompt captured before React mounted', () => {
+    const mockEvent = { prompt: vi.fn(), userChoice: Promise.resolve({ outcome: 'dismissed' }) };
+    window.__deferredInstallPrompt = mockEvent;
+
+    const { result } = renderHook(() => useInstallPrompt());
+    expect(result.current.canPrompt).toBe(true);
+    expect(result.current.canInstall).toBe(true);
+    expect(window.__deferredInstallPrompt).toBeNull();
   });
 
   it('promptInstall calls event.prompt()', async () => {
@@ -84,11 +104,11 @@ describe('useInstallPrompt', () => {
     expect(sessionStorage.getItem('pwa-install-dismissed')).toBe('1');
   });
 
-  it('returns isIOS true on iOS user agent', () => {
+  it('returns platform ios on iOS user agent', () => {
     Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0)', configurable: true });
 
     const { result } = renderHook(() => useInstallPrompt());
-    expect(result.current.isIOS).toBe(true);
+    expect(result.current.platform).toBe('ios');
     expect(result.current.canInstall).toBe(true);
   });
 

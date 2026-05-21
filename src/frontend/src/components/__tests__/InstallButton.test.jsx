@@ -7,7 +7,7 @@ vi.mock('../../hooks/useInstallPrompt');
 const defaultHook = {
   canInstall: false,
   canPrompt: false,
-  isIOS: false,
+  platform: 'desktop',
   isInstalled: false,
   promptInstall: vi.fn(),
   dismiss: vi.fn(),
@@ -36,34 +36,25 @@ describe('InstallButton', () => {
     expect(screen.getByText('Install')).toBeTruthy();
   });
 
-  it('opens benefit panel on click', () => {
-    mockHook({ canInstall: true });
-    render(<InstallButton />);
-    fireEvent.click(screen.getByText('Install'));
-    expect(screen.getByText('Install Reel Ballers')).toBeTruthy();
-    expect(screen.getByText(/Home screen icon/)).toBeTruthy();
-  });
-
-  it('calls promptInstall on Install button in panel', () => {
+  it('calls promptInstall directly when canPrompt is true', () => {
     const promptInstall = vi.fn();
     mockHook({ canInstall: true, canPrompt: true, promptInstall });
     render(<InstallButton />);
     fireEvent.click(screen.getByText('Install'));
-    const installButtons = screen.getAllByText('Install');
-    fireEvent.click(installButtons[installButtons.length - 1]);
     expect(promptInstall).toHaveBeenCalled();
+    expect(screen.queryByText('Install Reel Ballers')).toBeNull();
   });
 
-  it('shows Android manual instructions when no deferred prompt', () => {
-    mockHook({ canInstall: true, canPrompt: false });
+  it('opens panel with Android instructions on Android without prompt', () => {
+    mockHook({ canInstall: true, canPrompt: false, platform: 'android' });
     render(<InstallButton />);
     fireEvent.click(screen.getByText('Install'));
-    expect(screen.getByText('Add to Home Screen')).toBeTruthy();
-    expect(screen.getByText(/Install App/)).toBeTruthy();
+    expect(screen.getByText('Install the App')).toBeTruthy();
+    expect(screen.getByText(/Install app/)).toBeTruthy();
   });
 
-  it('shows iOS instructions when isIOS', () => {
-    mockHook({ canInstall: true, isIOS: true });
+  it('opens panel with iOS instructions on iOS', () => {
+    mockHook({ canInstall: true, platform: 'ios' });
     render(<InstallButton />);
     fireEvent.click(screen.getByText('Install'));
     expect(screen.getByText('Add to Home Screen')).toBeTruthy();

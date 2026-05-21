@@ -89,6 +89,13 @@
         if (status) status.textContent = message;
       };
 
+      // Capture PWA install prompt before React mounts (prevents race condition)
+      window.__deferredInstallPrompt = null;
+      window.addEventListener('beforeinstallprompt', function(e) {
+        e.preventDefault();
+        window.__deferredInstallPrompt = e;
+      });
+
       // Unsupported browser detection — runs before React loads.
       // IE lacks ES module support so <script type="module"> won't even execute.
       // This catches IE and other legacy browsers early with a helpful message.
