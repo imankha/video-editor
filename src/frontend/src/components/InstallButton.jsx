@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Download, Smartphone, X, Share } from 'lucide-react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
-import { Button } from './shared/Button';
 
 export function InstallButton() {
-  const { canInstall, canPrompt, isIOS, promptInstall, dismiss } = useInstallPrompt();
+  const { canInstall, canPrompt, platform, promptInstall, dismiss } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
 
@@ -21,10 +20,18 @@ export function InstallButton() {
 
   if (!canInstall) return null;
 
+  const handleClick = () => {
+    if (canPrompt) {
+      promptInstall();
+    } else {
+      setOpen(!open);
+    }
+  };
+
   return (
     <div className="relative" ref={panelRef}>
       <button
-        onClick={() => setOpen(!open)}
+        onClick={handleClick}
         className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-purple-300 hover:text-white hover:bg-purple-600/20 rounded-lg transition-colors"
       >
         <Download size={16} />
@@ -60,7 +67,7 @@ export function InstallButton() {
             </li>
           </ul>
 
-          {isIOS ? (
+          {platform === 'ios' ? (
             <div className="bg-gray-700/50 rounded-lg p-3 text-sm text-gray-300 space-y-2">
               <p className="font-medium text-white">Add to Home Screen</p>
               <ol className="list-decimal list-inside space-y-1">
@@ -70,24 +77,15 @@ export function InstallButton() {
                 <li>Scroll down and tap &quot;Add to Home Screen&quot;</li>
               </ol>
             </div>
-          ) : canPrompt ? (
-            <div className="flex gap-2">
-              <Button variant="primary" size="sm" className="flex-1" onClick={() => { promptInstall(); setOpen(false); }}>
-                Install
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => { dismiss(); setOpen(false); }}>
-                Not now
-              </Button>
-            </div>
-          ) : (
+          ) : platform === 'android' ? (
             <div className="bg-gray-700/50 rounded-lg p-3 text-sm text-gray-300 space-y-2">
-              <p className="font-medium text-white">Add to Home Screen</p>
+              <p className="font-medium text-white">Install the App</p>
               <ol className="list-decimal list-inside space-y-1">
                 <li>Tap the browser menu <strong className="text-white">&#x22EE;</strong></li>
-                <li>Tap &quot;Add to Home Screen&quot; or &quot;Install App&quot;</li>
+                <li>Tap &quot;Install app&quot; or &quot;Add to Home Screen&quot;</li>
               </ol>
             </div>
-          )}
+          ) : null}
         </div>
       )}
     </div>
