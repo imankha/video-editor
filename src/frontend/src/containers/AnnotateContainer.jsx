@@ -18,6 +18,8 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 
+console.log('[TAG_DEBUG] AnnotateContainer module loaded - v2026.05.21.1');
+
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
  *
@@ -835,10 +837,13 @@ export function AnnotateContainer({
    * scrub handle drags (which use seek() directly and should NOT close the overlay).
    */
   const handleTimelineSeek = useCallback((time) => {
+    console.log('[TAG_DEBUG] handleTimelineSeek called, time:', time);
     if (hasUncommittedTeammateText()) {
+      console.log('[TAG_DEBUG] BLOCKING seek - showing tag warning');
       setShowTagWarning(true);
       return;
     }
+    console.log('[TAG_DEBUG] seek proceeding (no uncommitted text)');
     effectiveSeek(time);
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
       if (!getRegionAtTimeUnified(time)) {
@@ -848,7 +853,9 @@ export function AnnotateContainer({
   }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
+    console.log('[TAG_DEBUG] handleSelectRegion called, regionId:', regionId);
     if (hasUncommittedTeammateText()) {
+      console.log('[TAG_DEBUG] BLOCKING region select - showing tag warning');
       setShowTagWarning(true);
       return;
     }
