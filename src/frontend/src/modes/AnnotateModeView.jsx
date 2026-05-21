@@ -318,7 +318,7 @@ export function AnnotateModeView({
             >
               {multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
-                <div className={`relative ${annotateFullscreen ? 'w-full h-full' : ''}`}
+                <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
                      style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
                   <video
                     ref={multiVideo.videoARef}
@@ -369,46 +369,48 @@ export function AnnotateModeView({
                   })()}
                 </div>
               ) : (
-                <VideoPlayer
-                  videoRef={videoRef}
-                  videoUrl={annotateVideoUrl}
-                  handlers={handlers}
-                  onVideoClick={togglePlay}
-                  isLoading={isLoading}
-                  isVideoElementLoading={isVideoElementLoading}
-                  loadingProgress={loadingProgress}
-                  loadingElapsedSeconds={loadingElapsedSeconds}
-                  error={error}
-                  isUrlExpiredError={isUrlExpiredError}
-                  onRetryVideo={onRetryVideo}
-                  loadingMessage="Loading video..."
-                  overlays={[
-                    !showAnnotateOverlay && (() => {
-                      const selectedRegion = annotateSelectedRegionId
-                        && clipRegions.find(r => r.id === annotateSelectedRegionId);
-                      const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
-                      if (!region) return null;
-                      const displayName = region.name ||
-                        generateClipName(region.rating, region.tags, region.notes);
-                      return (displayName || region.notes) ? (
-                        <NotesOverlay
-                          key="annotate-notes"
-                          name={displayName}
-                          notes={region.notes}
-                          rating={region.rating}
-                          isVisible={true}
-                          isFullscreen={annotateFullscreen}
-                        />
-                      ) : null;
-                    })(),
-                  ].filter(Boolean)}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                  onZoomChange={onZoomChange}
-                  onPanChange={onPanChange}
-                  isFullscreen={annotateFullscreen}
-                  clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
-                />
+                <div className={annotateFullscreen ? 'absolute inset-0' : 'contents'}>
+                  <VideoPlayer
+                    videoRef={videoRef}
+                    videoUrl={annotateVideoUrl}
+                    handlers={handlers}
+                    onVideoClick={togglePlay}
+                    isLoading={isLoading}
+                    isVideoElementLoading={isVideoElementLoading}
+                    loadingProgress={loadingProgress}
+                    loadingElapsedSeconds={loadingElapsedSeconds}
+                    error={error}
+                    isUrlExpiredError={isUrlExpiredError}
+                    onRetryVideo={onRetryVideo}
+                    loadingMessage="Loading video..."
+                    overlays={[
+                      !showAnnotateOverlay && (() => {
+                        const selectedRegion = annotateSelectedRegionId
+                          && clipRegions.find(r => r.id === annotateSelectedRegionId);
+                        const region = selectedRegion || getAnnotateRegionAtTime(currentTime);
+                        if (!region) return null;
+                        const displayName = region.name ||
+                          generateClipName(region.rating, region.tags, region.notes);
+                        return (displayName || region.notes) ? (
+                          <NotesOverlay
+                            key="annotate-notes"
+                            name={displayName}
+                            notes={region.notes}
+                            rating={region.rating}
+                            isVisible={true}
+                            isFullscreen={annotateFullscreen}
+                          />
+                        ) : null;
+                      })(),
+                    ].filter(Boolean)}
+                    zoom={zoom}
+                    panOffset={panOffset}
+                    onZoomChange={onZoomChange}
+                    onPanChange={onPanChange}
+                    isFullscreen={annotateFullscreen}
+                    clipRating={showAnnotateOverlay ? null : (getAnnotateRegionAtTime(currentTime)?.rating ?? null)}
+                  />
+                </div>
               )}
             </div>
 
