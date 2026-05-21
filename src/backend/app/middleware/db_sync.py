@@ -429,7 +429,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         session_id = request.cookies.get("rb_session")
         if session_id:
             auth_start = time.perf_counter()
-            session = validate_session(session_id)
+            try:
+                session = validate_session(session_id)
+            except Exception:
+                logger.exception(f"[REQ] validate_session raised for {request.url.path} — treating as no session")
+                session = None
             meta["auth_ms"] = (time.perf_counter() - auth_start) * 1000
             if session:
                 user_id = session["user_id"]
