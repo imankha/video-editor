@@ -6,6 +6,7 @@ import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
 import { UnifiedHeader } from '../components/shared';
+import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import { useEditorStore } from '../stores/editorStore';
@@ -232,6 +233,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T2820: Shared tag tracking
     sharedTagData,
     setSharedTagData,
+    // Uncommitted teammate text warning
+    showTagWarning,
+    dismissTagWarning,
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
@@ -318,7 +322,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     const pendingGameId = sessionStorage.getItem('pendingGameId');
     const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
     if (pendingGameId && !annotateVideoUrl) {
-      console.warn('[SHARE_SEEK] AnnotateScreen loading game:', pendingGameId, 'seekTime:', pendingClipSeekTime);
       // T1410: AbortController so StrictMode's synthetic unmount short-circuits
       // the first mount's load chain. handleLoadGame is async and touches the
       // store; bailing early on aborted signal prevents duplicate work.
@@ -664,6 +667,13 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onClose={() => setShowPlaybackShareDialog(false)}
         />
       )}
+      <ConfirmationDialog
+        isOpen={showTagWarning}
+        title="Tag not submitted"
+        message="You typed a teammate name but didn't submit it. Press Enter in the teammate field to add the tag."
+        buttons={[{ label: 'OK', variant: 'primary', onClick: dismissTagWarning }]}
+        onClose={dismissTagWarning}
+      />
     </>
   );
 }

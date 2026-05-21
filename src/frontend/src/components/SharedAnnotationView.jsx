@@ -215,7 +215,6 @@ function Shell({ children }) {
 }
 
 function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
-  console.warn('[SHARE_SEEK] navigateToGame called:', { blake3Hash, firstClipStart, sharerEmail });
   const games = useGamesDataStore.getState().games;
   const game = blake3Hash ? games.find(g => g.blake3_hash === blake3Hash) : null;
 
@@ -224,26 +223,19 @@ function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
   }
   if (firstClipStart != null) {
     sessionStorage.setItem('pendingClipSeekTime', firstClipStart.toString());
-  } else {
-    console.warn('[SHARE_SEEK] firstClipStart is null — no seek will happen');
   }
 
   if (game) {
-    console.warn('[SHARE_SEEK] Game found in store, pendingGameId:', game.id);
     sessionStorage.setItem('pendingGameId', game.id.toString());
     useEditorStore.getState().setEditorMode('annotate');
     onClose();
   } else {
-    console.warn('[SHARE_SEEK] Game not in store, fetching games...');
     useGamesDataStore.getState().fetchGames().then(() => {
       const refreshed = useGamesDataStore.getState().games;
       const found = blake3Hash ? refreshed.find(g => g.blake3_hash === blake3Hash) : null;
       if (found) {
-        console.warn('[SHARE_SEEK] Game found after fetch, pendingGameId:', found.id);
         sessionStorage.setItem('pendingGameId', found.id.toString());
         useEditorStore.getState().setEditorMode('annotate');
-      } else {
-        console.warn('[SHARE_SEEK] Game NOT found after fetch — blake3:', blake3Hash, 'available:', refreshed.map(g => g.blake3_hash));
       }
       onClose();
     });

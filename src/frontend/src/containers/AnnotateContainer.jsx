@@ -16,6 +16,7 @@ import { buildFullVideoTimeline } from '../modes/annotate/hooks/useVirtualTimeli
 import { VideoMode, GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
+import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -216,6 +217,7 @@ export function AnnotateContainer({
 
   // T2820: Shared tag data — map of tag_name → Set of shared clip IDs
   const [sharedTagData, setSharedTagData] = useState({});
+  const [showTagWarning, setShowTagWarning] = useState(false);
 
   // Upload state from Zustand store (persists across page navigation)
   const uploadStore = useUploadStore();
@@ -597,7 +599,6 @@ export function AnnotateContainer({
     const seekTime = pendingSelectSeekTimeRef.current;
     const match = clipRegions.find(r => Math.abs(r.startTime - seekTime) < 0.5);
     if (match) {
-      console.warn('[SHARE_SEEK] Selecting clip', match.id, 'at', match.startTime);
       selectClip(match.id);
       let seekTarget = match.startTime;
       if (fullTimeline && match.videoSequence) {
@@ -834,6 +835,10 @@ export function AnnotateContainer({
    * scrub handle drags (which use seek() directly and should NOT close the overlay).
    */
   const handleTimelineSeek = useCallback((time) => {
+    if (hasUncommittedTeammateText()) {
+      setShowTagWarning(true);
+      return;
+    }
     effectiveSeek(time);
     if (selectionState.type === 'EDITING' || selectionState.type === 'CREATING') {
       if (!getRegionAtTimeUnified(time)) {
@@ -843,6 +848,10 @@ export function AnnotateContainer({
   }, [effectiveSeek, selectionState, getRegionAtTimeUnified, closeOverlay]);
 
   const handleSelectRegion = useCallback((regionId) => {
+    if (hasUncommittedTeammateText()) {
+      setShowTagWarning(true);
+      return;
+    }
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
       // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED
@@ -874,6 +883,7 @@ export function AnnotateContainer({
 
     if (type === 'EDITING' || type === 'CREATING') return;
     if (scrubLockedRef.current) return; // Sidebar scrub in progress — don't deselect
+    if (hasUncommittedTeammateText()) return;
 
     const FRAME_TOLERANCE = 0.15; // ~4 frames at 30fps — handles seek snapping
     const regionAtPlayhead = getRegionAtTimeUnified(effectiveCurrentTime);
@@ -1136,6 +1146,10 @@ export function AnnotateContainer({
     // T2820: Shared tag tracking
     sharedTagData,
     setSharedTagData,
+
+    // Uncommitted teammate text warning
+    showTagWarning,
+    dismissTagWarning: useCallback(() => setShowTagWarning(false), []),
 
     // T251: View progress tracking
     getViewedDuration,

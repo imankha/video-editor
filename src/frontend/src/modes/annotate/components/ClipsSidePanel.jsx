@@ -288,6 +288,7 @@ export function ClipsSidePanel({
           )}
         </>
       )}
+
     </div>
   );
 }

@@ -3,10 +3,11 @@ import { Star, X, Plus } from 'lucide-react';
 import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
-import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
+import { TeammateTagInput, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
+import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
 
 // Persists across mounts within the same page session
 let savedDockPosition = 'left';
@@ -141,6 +142,7 @@ export function AnnotateFullscreenOverlay({
   const [myAthlete, setMyAthlete] = useState(true);
   const [createProject, setCreateProject] = useState(false);
   const [createProjectManuallySet, setCreateProjectManuallySet] = useState(false);
+  const [showTagWarning, setShowTagWarning] = useState(false);
   const notesRef = useRef(null);
   const handleSaveRef = useRef(null);
   const handleRatingChangeRef = useRef(null);
@@ -243,6 +245,10 @@ export function AnnotateFullscreenOverlay({
   };
 
   const handleSave = () => {
+    if (hasUncommittedTeammateText()) {
+      setShowTagWarning(true);
+      return;
+    }
     const clipDuration = scrubEndTime - scrubStartTime;
     if (isEditMode) {
       onUpdateClip(existingClip.id, {
@@ -445,6 +451,14 @@ export function AnnotateFullscreenOverlay({
             Cancel
           </button>
         </div>
+
+        <ConfirmationDialog
+          isOpen={showTagWarning}
+          title="Tag not submitted"
+          message="You typed a teammate name but didn't submit it. Press Enter in the teammate field to add the tag."
+          buttons={[{ label: 'OK', variant: 'primary', onClick: () => setShowTagWarning(false) }]}
+          onClose={() => setShowTagWarning(false)}
+        />
     </>
   );
 

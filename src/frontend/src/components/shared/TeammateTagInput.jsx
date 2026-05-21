@@ -1,12 +1,23 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { X } from 'lucide-react';
 
+let _uncommittedText = '';
+
+export function hasUncommittedTeammateText() {
+  return _uncommittedText.trim().length > 0;
+}
+
 export function TeammateTagInput({ teammates, onChange, suggestions, placeholder }) {
   const [inputValue, setInputValue] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const inputRef = useRef(null);
   const containerRef = useRef(null);
+
+  useEffect(() => {
+    _uncommittedText = inputValue;
+    return () => { _uncommittedText = ''; };
+  }, [inputValue]);
 
   const filteredSuggestions = (suggestions || []).filter(
     (s) => !teammates.some((t) => t.toLowerCase() === s.toLowerCase()) &&
