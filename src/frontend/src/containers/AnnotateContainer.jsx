@@ -91,7 +91,7 @@ export function AnnotateContainer({
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
   // T2750: Dual-video scrub for unified multi-video experience
-  const multiVideo = useMultiVideoScrub({ gameVideos });
+  const multiVideo = useMultiVideoScrub({ gameVideos, playbackRate: annotatePlaybackSpeed });
   const fullTimeline = useMemo(
     () => gameVideos && gameVideos.length > 1 ? buildFullVideoTimeline(gameVideos) : null,
     [gameVideos],
@@ -876,12 +876,12 @@ export function AnnotateContainer({
     }
   }, [annotateVideoUrl, effectiveCurrentTime, selectionState, getRegionAtTimeUnified, clipRegions, selectClip, deselectClip, fullTimeline]);
 
-  // Effect: Sync playback speed with video element
+  // Effect: Sync playback speed with video element (single-video only; multiVideo handles its own)
   useEffect(() => {
-    if (videoRef.current) {
+    if (!multiVideo && videoRef.current) {
       videoRef.current.playbackRate = annotatePlaybackSpeed;
     }
-  }, [annotatePlaybackSpeed, videoRef]);
+  }, [annotatePlaybackSpeed, videoRef, multiVideo]);
 
   // Track if initial annotations have loaded (to avoid dismissing toast on initial load)
   const annotationsLoadedRef = useRef(false);

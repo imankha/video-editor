@@ -11,7 +11,7 @@ import { buildFullVideoTimeline } from './useVirtualTimeline';
  *
  * Returns null when gameVideos is null/single-video (after all hooks are called).
  */
-export function useMultiVideoScrub({ gameVideos }) {
+export function useMultiVideoScrub({ gameVideos, playbackRate = 1 }) {
   const isMulti = !!gameVideos && gameVideos.length > 1;
 
   const videoARef = useRef(null);
@@ -20,6 +20,7 @@ export function useMultiVideoScrub({ gameVideos }) {
   const currentVideoIndexRef = useRef(0);
   const rafIdRef = useRef(null);
   const isPlayingRef = useRef(false);
+  const playbackRateRef = useRef(playbackRate);
 
   const [virtualTime, setVirtualTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,6 +49,12 @@ export function useMultiVideoScrub({ gameVideos }) {
     const v = gameVideos[index];
     return v?.url || v?.serverUrl;
   }, [gameVideos]);
+
+  useEffect(() => {
+    playbackRateRef.current = playbackRate;
+    const { active } = getVideos();
+    if (active) active.playbackRate = playbackRate;
+  }, [playbackRate, getVideos]);
 
   // Initialize: load video A with first video, video B with second
   useEffect(() => {
@@ -126,6 +133,7 @@ export function useMultiVideoScrub({ gameVideos }) {
           const { inactive } = getVideos();
           if (inactive) {
             inactive.currentTime = 0;
+            inactive.playbackRate = playbackRateRef.current;
             inactive.play().catch(() => {});
           }
           active.pause();
@@ -158,6 +166,7 @@ export function useMultiVideoScrub({ gameVideos }) {
   const play = useCallback(async () => {
     const { active } = getVideos();
     if (!active) return;
+    active.playbackRate = playbackRateRef.current;
     await active.play().catch(() => {});
     isPlayingRef.current = true;
     setIsPlaying(true);
