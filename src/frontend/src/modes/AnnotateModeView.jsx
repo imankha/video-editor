@@ -273,7 +273,7 @@ export function AnnotateModeView({
                 className="flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white"
               >
                 <Share2 size={18} />
-                <span className="hidden sm:inline">Share Highlights</span>
+                <span className="hidden sm:inline">Share Annotations</span>
                 <span className="sm:hidden">Share</span>
               </button>
             )}
