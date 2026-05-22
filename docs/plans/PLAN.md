@@ -205,6 +205,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T3030 | [Cross-Origin Fetch Credentials](tasks/T3030-cross-origin-fetch-credentials.md) | 8 | 2 | 4.0 | DONE | [ ] | ~40 fetch calls missing `credentials: 'include'`. Work in dev (Vite proxy) but fail cross-origin on staging/prod. Caused "Failed to move to My Reels" bug. Create apiFetch wrapper to prevent recurrence. |
 | T3050 | [Multi-Video Blank Video](tasks/T3050-multi-video-blank-video.md) | 8 | 4 | 2.0 | DONE | [ ] | Multi-video `<video>` elements have zero event handlers. Expired presigned URLs (1h) or any load error silently blanks video -- no error overlay, no retry, no loading indicator. Single-video unaffected (uses streaming proxy). |
 | T2940 | [Overlay Tuning](tasks/overlay-v2/T2940-overlay-tuning.md) | 8 | 3 | 2.7 | TODO | [ ] | Fix invisible/occluding overlay: bold stroke (3-4px) with dark outline, separate stroke/fill opacity, better default colors, dim slider. No architecture changes. |
+| T3060 | [Make It Load Fast](tasks/for-alpha/T3060-make-it-load-fast.md) | 8 | 5 | 1.6 | TODO | [ ] | Playwright perf tests against prod: measure Core Web Vitals on every page (account with games/reels/drafts), find and fix all bottlenecks, re-measure. |
 
 ### Milestone: Alpha Marketing
 
@@ -405,6 +406,7 @@ IDs use gaps of 10 to allow insertions:
 - `T3000-T3020` - Analytics 1 epic (CF Web Analytics + Postgres event log + admin migration)
 - `T3030` - Cross-Origin Fetch Credentials (bug fix)
 - `T3050` - Multi-Video Blank Video (bug fix, no error handling on dual video elements)
+- `T3060` - Make It Load Fast (Playwright perf benchmarks against prod)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
