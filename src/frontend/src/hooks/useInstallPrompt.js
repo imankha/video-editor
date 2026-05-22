@@ -13,6 +13,7 @@ function detectPlatform() {
 export function useInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [pwaDetected, setPwaDetected] = useState(false);
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem(DISMISS_KEY) === '1');
 
   const platform = detectPlatform();
@@ -21,6 +22,14 @@ export function useInstallPrompt() {
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);
       return;
+    }
+
+    // Real-time check via getInstalledRelatedApps (Chrome 80+)
+    // Requires related_applications in manifest — handles uninstalls correctly
+    if ('getInstalledRelatedApps' in navigator) {
+      navigator.getInstalledRelatedApps().then(apps => {
+        if (apps.length > 0) setPwaDetected(true);
+      }).catch(() => {});
     }
 
     // Pick up event if it fired before React mounted
@@ -49,9 +58,11 @@ export function useInstallPrompt() {
   }, []);
 
   const canPrompt = !!deferredPrompt;
+  // Installed but user opened the URL in a regular browser tab
+  const installedInBrowser = !isInstalled && pwaDetected && !canPrompt;
   // Desktop: only show when native prompt is available (no valid manual instructions)
   // Mobile: show always (manual instructions are correct for iOS/Android)
-  const canInstall = !isInstalled && !dismissed && (canPrompt || platform !== 'desktop');
+  const canInstall = !isInstalled && !pwaDetected && !dismissed && (canPrompt || platform !== 'desktop');
 
   const promptInstall = useCallback(async () => {
     if (!deferredPrompt) return;
@@ -67,5 +78,5 @@ export function useInstallPrompt() {
     setDismissed(true);
   }, []);
 
-  return { canInstall, canPrompt, platform, isInstalled, promptInstall, dismiss };
+  return { canInstall, canPrompt, platform, isInstalled, installedInBrowser, promptInstall, dismiss };
 }
