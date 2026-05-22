@@ -32,3 +32,4 @@ yarn-error.log*
 *.swo
 playwright-report/
 test-results/
+dev-dist/
