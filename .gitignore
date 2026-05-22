@@ -93,3 +93,4 @@ deploy_output.txt
 client_secret_*.json
 src/user_data/
 .claude/worktrees/
+src/frontend/dev-dist/registerSW.js
