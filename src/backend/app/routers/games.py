@@ -14,6 +14,7 @@ This router handles game storage and management:
 
 from fastapi import APIRouter, Form, HTTPException, Body, Request
 from typing import Optional, List
+from math import isfinite
 import asyncio
 import os
 import logging
@@ -1110,6 +1111,33 @@ async def update_game(
 
         logger.info(f"Updated game {game_id} name to: {name}")
         return {'success': True}
+
+
+@router.patch("/{game_id:int}/duration")
+async def correct_game_duration(game_id: int, duration: float = Body(..., embed=True)):
+    """Correct video_duration when the browser detects a longer actual duration than stored."""
+    if not isfinite(duration) or duration <= 0:
+        raise HTTPException(status_code=422, detail="Invalid duration")
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT video_duration FROM games WHERE id = ?", (game_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        stored = row['video_duration'] or 0
+        if duration <= stored + 1:
+            return {'success': True, 'updated': False}
+
+        cursor.execute("UPDATE games SET video_duration = ? WHERE id = ?", (duration, game_id))
+        cursor.execute(
+            "UPDATE game_videos SET duration = ? WHERE game_id = ? AND sequence = 1",
+            (duration, game_id),
+        )
+        conn.commit()
+        logger.warning(f"Corrected game {game_id} duration: {stored:.1f}s -> {duration:.1f}s")
+        return {'success': True, 'updated': True}
 
 
 @router.put("/{game_id:int}/annotations")

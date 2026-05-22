@@ -941,9 +941,15 @@ export function AnnotateContainer({
     const video = videoRef.current;
 
     const handleLoadedMetadata = () => {
-      if (!annotateVideoMetadata || !annotateVideoMetadata.duration) {
+      const videoDur = video.duration;
+      if (!isFinite(videoDur) || videoDur <= 0) return;
+
+      const storedDur = annotateVideoMetadata?.duration;
+      // Update if missing OR if video element reports a longer duration than what the DB stored
+      // (DB duration can be truncated if ffprobe ran on an incomplete upload)
+      if (!storedDur || videoDur > storedDur + 1) {
         setAnnotateVideoMetadata({
-          duration: video.duration,
+          duration: videoDur,
           width: video.videoWidth,
           height: video.videoHeight,
           aspectRatio: video.videoWidth / video.videoHeight,
@@ -952,6 +958,15 @@ export function AnnotateContainer({
           size: annotateVideoMetadata?.size,
           resolution: `${video.videoWidth}x${video.videoHeight}`,
         });
+        // Correct the stored duration in the backend so the streaming proxy uses the right value
+        const gameId = annotateGameIdRef.current;
+        if (gameId && storedDur) {
+          apiFetch(`${API_BASE}/api/games/${gameId}/duration`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duration: videoDur }),
+          }).catch(() => {});
+        }
       }
     };
 
