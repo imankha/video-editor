@@ -182,6 +182,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
       <video
         ref={videoRef}
         src={src}
+        crossOrigin="anonymous"
         autoPlay={autoPlay}
         className="w-full h-full object-contain"
         style={{ maxHeight: '100%', maxWidth: '100%', pointerEvents: 'none' }}
