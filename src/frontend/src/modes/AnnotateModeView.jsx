@@ -176,7 +176,6 @@ export function AnnotateModeView({
               <video
                 ref={playback.videoARef}
                 className="absolute inset-0 w-full h-full object-contain"
-                crossOrigin="use-credentials"
                 style={{
                   opacity: activeLabel === 'A' ? 1 : 0,
                   transition: 'opacity 80ms ease-in-out',
@@ -190,7 +189,6 @@ export function AnnotateModeView({
               <video
                 ref={playback.videoBRef}
                 className="absolute inset-0 w-full h-full object-contain"
-                crossOrigin="use-credentials"
                 style={{
                   opacity: activeLabel === 'B' ? 1 : 0,
                   transition: 'opacity 80ms ease-in-out',
@@ -351,7 +349,6 @@ export function AnnotateModeView({
                   <video
                     ref={multiVideo.videoARef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
-                    crossOrigin="use-credentials"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'A' ? 1 : 0,
                       transition: 'opacity 80ms ease-in-out',
@@ -366,7 +363,6 @@ export function AnnotateModeView({
                   <video
                     ref={multiVideo.videoBRef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
-                    crossOrigin="use-credentials"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'B' ? 1 : 0,
                       transition: 'opacity 80ms ease-in-out',

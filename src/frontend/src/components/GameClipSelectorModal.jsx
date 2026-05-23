@@ -893,7 +893,6 @@ export function GameClipSelectorModal({ isOpen, onClose, onCreate, games = [], e
               <video
                 ref={previewVideoRef}
                 src={getGameVideoUrl(previewingClip.game_id)}
-                crossOrigin="use-credentials"
                 onLoadedMetadata={handlePreviewVideoLoaded}
                 onTimeUpdate={handlePreviewTimeUpdate}
                 onPlay={() => setPreviewIsPlaying(true)}

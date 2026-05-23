@@ -256,7 +256,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   <video
                     ref={recapVideoRef}
                     src={recapData.url}
-                    crossOrigin="use-credentials"
                     autoPlay
                     className={isFullscreen
                       ? 'absolute inset-0 w-full h-full object-contain'
@@ -327,7 +326,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     key={highlights.activeClipId}
                     ref={highlightsVideoRef}
                     src={highlights.streamUrl}
-                    crossOrigin="use-credentials"
                     autoPlay
                     className={isFullscreen
                       ? 'absolute inset-0 w-full h-full object-contain'

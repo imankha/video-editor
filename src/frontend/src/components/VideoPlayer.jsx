@@ -206,7 +206,6 @@ export function VideoPlayer({
             <video
               ref={videoRef}
               src={clipRange ? `${videoUrl}#t=${clipRange.clipOffset},${clipRange.clipOffset + clipRange.clipDuration}` : videoUrl}
-              crossOrigin="use-credentials"
               muted={muted}
               className={`object-contain ${
                 isFullscreen ? 'w-full h-full' : 'max-w-full max-h-full'
