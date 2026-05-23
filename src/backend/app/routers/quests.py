@@ -27,6 +27,11 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 # Known achievement keys — only these can be recorded
 KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s", "watched_gallery_video_after_2_overlays"}
 
+ACHIEVEMENT_TO_MILESTONE = {
+    "opened_framing_editor": "framing_opened",
+    "viewed_gallery_video": "gallery_viewed",
+}
+
 # Map step_id -> quest_id for skip lookups
 _STEP_TO_QUEST = {}
 for _q in QUEST_DEFINITIONS:
@@ -421,5 +426,10 @@ async def record_achievement(key: str):
             f"[SLOW ACHIEVEMENT] key={key} total_ms={total_ms:.0f} "
             f"conn_ms={conn_ms:.0f} write_ms={write_ms:.0f} read_ms={read_ms:.0f}"
         )
+    milestone_event = ACHIEVEMENT_TO_MILESTONE.get(key)
+    if milestone_event:
+        from ..analytics import record_milestone
+        record_milestone(get_current_user_id(), milestone_event)
+
     logger.info(f"[Quests] Achievement recorded: {key} ({total_ms:.0f}ms)")
     return {"key": row["key"], "achieved_at": row["achieved_at"]}

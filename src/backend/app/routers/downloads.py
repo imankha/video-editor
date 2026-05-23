@@ -549,6 +549,9 @@ async def download_file(download_id: int):
 
         logger.info(f"[Download] Found: stored_filename={row['filename']}, project_name={row['project_name']}")
 
+        from app.analytics import record_milestone
+        record_milestone(get_current_user_id(), "video_downloaded")
+
         # If R2 enabled, stream through backend to avoid CORS issues with fetch API
         if R2_ENABLED:
             import httpx

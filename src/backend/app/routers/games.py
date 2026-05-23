@@ -1497,6 +1497,9 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
             )
             conn.commit()
             logger.info(f"[FinishAnnotation] Updated viewed_duration={body.viewed_duration:.1f}s for game {game_id}")
+
+        from ..analytics import record_milestone
+        record_milestone(get_current_user_id(), "annotation_completed")
     else:
         logger.info(f"[FinishAnnotation] User left annotation mode for game {game_id} (no progress update)")
 

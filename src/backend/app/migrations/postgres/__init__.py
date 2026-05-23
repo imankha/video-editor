@@ -4,6 +4,8 @@ from .v002_game_ref_counts import V002GameRefCounts
 from .v003_annotation_playback_share_type import V003AnnotationPlaybackShareType
 from .v004_referral_graph import V004ReferralGraph
 from .v005_user_milestones import V005UserMilestones
+from .v006_daily_counters import V006DailyCounters
+from .v007_user_flow_events import V007UserFlowEvents
 
 MIGRATIONS = [
     V001Baseline(),
@@ -11,6 +13,8 @@ MIGRATIONS = [
     V003AnnotationPlaybackShareType(),
     V004ReferralGraph(),
     V005UserMilestones(),
+    V006DailyCounters(),
+    V007UserFlowEvents(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

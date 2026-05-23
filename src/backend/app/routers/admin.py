@@ -12,6 +12,8 @@ import asyncio
 import logging
 import math
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
@@ -70,6 +72,14 @@ def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
     return total
 
 
+def _compute_last_step(events: set[str]) -> str:
+    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+    for step in reversed(FUNNEL_STEPS):
+        if step in events:
+            return FLOW_EVENTS[step]["label"]
+    return "Signed Up"
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -103,11 +113,7 @@ async def list_users(
             SELECT
                 u.user_id, u.email,
                 m.origin_type, m.origin_channel, m.install_day,
-                m.game_created_count, m.clip_created_count,
-                m.export_completed_count, m.export_failed_count,
-                m.share_completed_count, m.credit_purchase_count,
-                m.credits_consumed_count, m.session_count,
-                m.last_active_at
+                m.session_count, m.last_active_at
             FROM users u
             LEFT JOIN user_milestones m ON u.user_id = m.user_id
             ORDER BY m.last_active_at DESC NULLS LAST
@@ -115,8 +121,41 @@ async def list_users(
         """, (page_size, offset))
 
         rows = cur.fetchall()
+        page_user_ids = [row["user_id"] for row in rows]
 
-    credit_stats = get_credit_stats_for_admin()
+        # Fetch flow events for page users (counts + last_step)
+        if page_user_ids:
+            cur.execute("""
+                SELECT user_id, event, count
+                FROM user_flow_events
+                WHERE user_id = ANY(%s)
+            """, (page_user_ids,))
+            event_rows = cur.fetchall()
+        else:
+            event_rows = []
+
+        events_by_user: dict[str, dict[str, int]] = {}
+        for er in event_rows:
+            events_by_user.setdefault(er["user_id"], {})[er["event"]] = er["count"]
+
+        # Funnel totals from user_flow_events
+        from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+        cur.execute("""
+            SELECT e.event, COUNT(DISTINCT e.user_id) AS users
+            FROM user_flow_events e
+            GROUP BY e.event
+        """)
+        event_totals = {r["event"]: r["users"] for r in cur.fetchall()}
+        cur.execute("SELECT COUNT(*) AS cnt FROM user_milestones")
+        signed_up_count = cur.fetchone()["cnt"]
+
+        funnel_totals = {"signed_up": signed_up_count}
+        for step in FUNNEL_STEPS:
+            label = FLOW_EVENTS[step]["label"]
+            key = label.lower().replace(" ", "_")
+            funnel_totals[key] = event_totals.get(step, 0)
+
+    credit_stats = get_credit_stats_for_admin(page_user_ids)
 
     users = []
     for row in rows:
@@ -125,24 +164,29 @@ async def list_users(
             "credits_spent": 0, "credits_purchased": 0,
             "credits_balance": 0, "purchase_credit_amounts": [],
         })
+
+        user_events = events_by_user.get(user_id, {})
+        last_step = _compute_last_step(set(user_events.keys()))
+
         users.append({
             "user_id": user_id,
             "email": row["email"],
             "origin_type": row["origin_type"],
             "origin_channel": row["origin_channel"],
             "install_day": str(row["install_day"]) if row["install_day"] else None,
-            "game_created_count": row["game_created_count"] or 0,
-            "clip_created_count": row["clip_created_count"] or 0,
-            "export_completed_count": row["export_completed_count"] or 0,
-            "export_failed_count": row["export_failed_count"] or 0,
-            "share_completed_count": row["share_completed_count"] or 0,
-            "credit_purchase_count": row["credit_purchase_count"] or 0,
+            "game_created_count": user_events.get("game_created", 0),
+            "clip_created_count": user_events.get("clip_created", 0),
+            "export_completed_count": user_events.get("export_completed", 0),
+            "export_failed_count": user_events.get("export_failed", 0),
+            "share_completed_count": user_events.get("share_completed", 0),
+            "credit_purchase_count": user_events.get("credit_purchased", 0),
             "credits": user_credit["credits_balance"],
             "credits_spent": user_credit["credits_spent"],
             "credits_purchased": user_credit["credits_purchased"],
             "money_spent_cents": _compute_money_spent_cents(user_credit["purchase_credit_amounts"]),
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
             "session_count": row["session_count"] or 0,
+            "last_step": last_step,
         })
 
     return {
@@ -151,6 +195,7 @@ async def list_users(
         "page_size": page_size,
         "total_users": total_users,
         "total_pages": total_pages,
+        "funnel_totals": funnel_totals,
     }
 
 
@@ -329,6 +374,313 @@ async def run_migrations():
 def _run_all_migrations() -> dict:
     from ..migrations import run_all_migrations
     return run_all_migrations()
+
+
+# ---------------------------------------------------------------------------
+# Analytics dashboards (T3030)
+# ---------------------------------------------------------------------------
+
+@router.get("/analytics/funnel")
+async def analytics_funnel(
+    request: Request,
+    origin: str = Query("all"),
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
+):
+    _require_admin()
+    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else date.today()
+
+    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        origin_filter = ""
+        params: list = [d_from, d_to]
+        if origin != "all":
+            origin_filter = "AND m.origin_type = %s"
+            params.append(origin)
+
+        cur.execute(f"""
+            SELECT m.origin_type,
+                   COUNT(DISTINCT m.user_id) AS signed_up
+            FROM user_milestones m
+            WHERE m.install_day BETWEEN %s AND %s {origin_filter}
+            GROUP BY m.origin_type
+        """, params)
+        signup_rows = {r["origin_type"]: r["signed_up"] for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT m.origin_type, e.event,
+                   COUNT(DISTINCT e.user_id) AS users
+            FROM user_flow_events e
+            JOIN user_milestones m ON e.user_id = m.user_id
+            WHERE m.install_day BETWEEN %s AND %s {origin_filter}
+            GROUP BY m.origin_type, e.event
+        """, params)
+        event_rows = cur.fetchall()
+
+        by_origin: dict[str, dict] = {}
+        for ot, signup_count in signup_rows.items():
+            row_data = {"origin_type": ot, "signed_up": signup_count}
+            for step in FUNNEL_STEPS:
+                label = FLOW_EVENTS[step]["label"]
+                row_data[label.lower().replace(" ", "_")] = 0
+            by_origin[ot] = row_data
+
+        for er in event_rows:
+            ot = er["origin_type"]
+            if ot not in by_origin:
+                continue
+            cfg = FLOW_EVENTS.get(er["event"])
+            if cfg and cfg["label"]:
+                key = cfg["label"].lower().replace(" ", "_")
+                by_origin[ot][key] = er["users"]
+
+        rows = list(by_origin.values())
+
+        if origin == "all" and rows:
+            totals = {"origin_type": "all", "signed_up": sum(r["signed_up"] for r in rows)}
+            for step in FUNNEL_STEPS:
+                label = FLOW_EVENTS[step]["label"]
+                key = label.lower().replace(" ", "_")
+                totals[key] = sum(r.get(key, 0) for r in rows)
+            rows = [totals] + rows
+
+    return {"funnel": rows, "from": str(d_from), "to": str(d_to)}
+
+
+@router.get("/analytics/channels")
+async def analytics_channels(
+    date_from: str = Query(None, alias="from"),
+    date_to: str = Query(None, alias="to"),
+):
+    _require_admin()
+    d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
+    d_to = date.fromisoformat(date_to) if date_to else date.today()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                m.origin_type, m.origin_channel,
+                COUNT(DISTINCT m.user_id) AS signups,
+                COUNT(DISTINCT CASE WHEN e_exp.event = 'export_completed' THEN m.user_id END) AS exported,
+                COUNT(DISTINCT CASE WHEN e_pur.event = 'credit_purchased' THEN m.user_id END) AS purchased,
+                COALESCE(SUM(e_exp.count), 0) AS total_exports
+            FROM user_milestones m
+            LEFT JOIN user_flow_events e_exp ON m.user_id = e_exp.user_id AND e_exp.event = 'export_completed'
+            LEFT JOIN user_flow_events e_pur ON m.user_id = e_pur.user_id AND e_pur.event = 'credit_purchased'
+            WHERE m.install_day BETWEEN %s AND %s
+            GROUP BY m.origin_type, m.origin_channel
+            ORDER BY signups DESC
+        """, (d_from, d_to))
+        rows = cur.fetchall()
+
+    channels = []
+    for r in rows:
+        signups = r["signups"]
+        channels.append({
+            "origin_type": r["origin_type"],
+            "origin_channel": r["origin_channel"],
+            "signups": signups,
+            "exported": r["exported"],
+            "export_pct": round(r["exported"] / signups * 100, 1) if signups else 0,
+            "purchased": r["purchased"],
+            "purchase_pct": round(r["purchased"] / signups * 100, 1) if signups else 0,
+            "avg_exports": round(r["total_exports"] / signups, 1) if signups else 0,
+        })
+
+    return {"channels": channels}
+
+
+@router.get("/analytics/cohorts")
+async def analytics_cohorts(
+    granularity: str = Query("week"),
+    origin: str = Query("all"),
+):
+    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+
+    _require_admin()
+    trunc = "week" if granularity == "week" else "month"
+    params: list = []
+
+    origin_filter = ""
+    if origin != "all":
+        origin_filter = "WHERE m.origin_type = %s"
+        params.append(origin)
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        cur.execute(f"""
+            SELECT
+                date_trunc(%s, m.install_day)::date AS cohort_period,
+                COUNT(*) AS signups
+            FROM user_milestones m
+            {origin_filter}
+            GROUP BY cohort_period
+            ORDER BY cohort_period DESC
+        """, [trunc] + params)
+        signup_rows = {str(r["cohort_period"]): r["signups"] for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT
+                date_trunc(%s, m.install_day)::date AS cohort_period,
+                e.event,
+                COUNT(DISTINCT e.user_id) AS users
+            FROM user_flow_events e
+            JOIN user_milestones m ON e.user_id = m.user_id
+            {origin_filter}
+            GROUP BY cohort_period, e.event
+            ORDER BY cohort_period DESC
+        """, [trunc] + params)
+        event_rows = cur.fetchall()
+
+    by_cohort: dict[str, dict] = {}
+    for cp, signups in signup_rows.items():
+        by_cohort[cp] = {"cohort_period": cp, "signups": signups}
+
+    for er in event_rows:
+        cp = str(er["cohort_period"])
+        if cp not in by_cohort:
+            continue
+        cfg = FLOW_EVENTS.get(er["event"])
+        if cfg and cfg["label"]:
+            key = cfg["label"].lower().replace(" ", "_") + "_pct"
+            s = by_cohort[cp]["signups"]
+            by_cohort[cp][key] = round(er["users"] / s * 100) if s else 0
+
+    cohorts = []
+    for cp in sorted(by_cohort.keys(), reverse=True):
+        row = by_cohort[cp]
+        for step in FUNNEL_STEPS:
+            label = FLOW_EVENTS[step]["label"]
+            key = label.lower().replace(" ", "_") + "_pct"
+            row.setdefault(key, 0)
+        cohorts.append(row)
+
+    return {"cohorts": cohorts, "granularity": granularity}
+
+
+@router.get("/analytics/journey/{user_id}")
+async def analytics_journey(user_id: str):
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT email FROM users WHERE user_id = %s", (user_id,))
+        user_row = cur.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cur.execute("""
+            SELECT origin_type, origin_channel, install_day, signup_completed_at,
+                   session_count, last_active_at
+            FROM user_milestones WHERE user_id = %s
+        """, (user_id,))
+        m = cur.fetchone()
+
+        if not m:
+            raise HTTPException(status_code=404, detail="No milestones for user")
+
+        cur.execute("""
+            SELECT event, first_at, count
+            FROM user_flow_events
+            WHERE user_id = %s
+            ORDER BY first_at NULLS LAST
+        """, (user_id,))
+        event_rows = cur.fetchall()
+
+    completed = []
+    pending_events: set[str] = set()
+
+    # Signup is always completed (from user_milestones)
+    completed.append({
+        "event": "signup_completed",
+        "at": m["signup_completed_at"].isoformat() if m["signup_completed_at"] else None,
+    })
+
+    from ..analytics import FLOW_EVENTS
+    seen_events = set()
+    for er in event_rows:
+        seen_events.add(er["event"])
+        entry: dict = {"event": er["event"], "at": er["first_at"].isoformat() if er["first_at"] else None}
+        if er["count"] is not None:
+            entry["count"] = er["count"]
+        completed.append(entry)
+
+    pending = [{"event": ev, "at": None} for ev in FLOW_EVENTS if ev not in seen_events]
+
+    completed.sort(key=lambda x: x["at"] or "")
+    milestones = completed + pending
+
+    return {
+        "user_id": user_id,
+        "email": user_row["email"],
+        "origin_type": m["origin_type"],
+        "origin_channel": m["origin_channel"],
+        "install_day": str(m["install_day"]) if m["install_day"] else None,
+        "milestones": milestones,
+        "session_count": m["session_count"] or 0,
+        "last_active_at": m["last_active_at"].isoformat() if m["last_active_at"] else None,
+    }
+
+
+@router.get("/analytics/pulse")
+async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
+    _require_admin()
+    today = date.today()
+    start = today - timedelta(days=days - 1)
+    week_ago = today - timedelta(days=7)
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT counter_date, signups, exports_completed, credit_purchases
+            FROM daily_counters
+            WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
+            ORDER BY counter_date
+        """, (start, today))
+        counter_rows = cur.fetchall()
+
+        cur.execute("""
+            SELECT last_active_at::date AS d, COUNT(*) AS cnt
+            FROM user_milestones
+            WHERE last_active_at::date BETWEEN %s AND %s
+            GROUP BY d ORDER BY d
+        """, (start, today))
+        active_rows = cur.fetchall()
+
+    date_range = [(start + timedelta(days=i)) for i in range(days)]
+    counter_by_date = {r["counter_date"]: r for r in counter_rows}
+    active_by_date = {r["d"]: r["cnt"] for r in active_rows}
+
+    def build_sparkline(getter):
+        return [getter(d) for d in date_range]
+
+    signups_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("signups", 0) if isinstance(counter_by_date.get(d), dict) else 0)
+    exports_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("exports_completed", 0) if isinstance(counter_by_date.get(d), dict) else 0)
+    purchases_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("credit_purchases", 0) if isinstance(counter_by_date.get(d), dict) else 0)
+    active_spark = build_sparkline(lambda d: active_by_date.get(d, 0))
+
+    def make_card(sparkline, today_val=None, week_ago_val=None):
+        t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
+        w = week_ago_val if week_ago_val is not None else (sparkline[-8] if len(sparkline) >= 8 else 0)
+        change = round((t - w) / w * 100, 1) if w else (100.0 if t else 0.0)
+        return {"today": t, "last_week_same_day": w, "change_pct": change, "sparkline": sparkline}
+
+    return {
+        "cards": {
+            "signups": make_card(signups_spark),
+            "exports": make_card(exports_spark),
+            "active_users": make_card(active_spark),
+            "purchases": make_card(purchases_spark),
+        },
+        "days": days,
+    }
 
 
 # ---------------------------------------------------------------------------

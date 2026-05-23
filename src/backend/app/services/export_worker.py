@@ -187,6 +187,7 @@ async def process_export_job(job_id: str):
         credit_user_id = config.get("credit_user_id")
         if credit_user_id:
             record_milestone(credit_user_id, "export_completed")
+            record_milestone(credit_user_id, "framing_exported")
         await send_progress(job_id, 100, "Export complete!", "complete")
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")

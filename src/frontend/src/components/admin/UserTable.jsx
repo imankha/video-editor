@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity } from 'lucide-react';
 import { CreditGrantModal } from './CreditGrantModal';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
@@ -33,6 +33,7 @@ function OriginBadge({ type, channel }) {
 const COLUMNS = [
   { key: 'email', label: 'Email', align: 'left' },
   { key: 'origin_type', label: 'Origin', align: 'center' },
+  { key: 'last_step', label: 'Last Step', align: 'center' },
   { key: 'install_day', label: 'Joined', align: 'right' },
   { key: 'game_created_count', label: 'Games', align: 'right' },
   { key: 'clip_created_count', label: 'Clips', align: 'right' },
@@ -43,6 +44,31 @@ const COLUMNS = [
   { key: 'session_count', label: 'Sessions', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
+
+const STEP_STYLES = {
+  'Signed Up': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  'Uploaded': 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'Clipped': 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  'Annotation Done': 'bg-cyan-600/20 text-cyan-300 border-cyan-600/30',
+  'Framing Opened': 'bg-teal-500/20 text-teal-400 border-teal-500/30',
+  'Framing Exported': 'bg-teal-600/20 text-teal-300 border-teal-600/30',
+  'Overlay Exported': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  'Gallery Viewed': 'bg-green-400/20 text-green-300 border-green-400/30',
+  'Downloaded': 'bg-green-500/20 text-green-400 border-green-500/30',
+  'Exported': 'bg-green-500/20 text-green-400 border-green-500/30',
+  'Shared': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  'Purchased': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+};
+
+function StepBadge({ step }) {
+  if (!step) return <span className="text-gray-600">{'--'}</span>;
+  const style = STEP_STYLES[step] || STEP_STYLES['Signed Up'];
+  return (
+    <span className={`inline-block px-1.5 py-0.5 text-[10px] rounded border ${style}`}>
+      {step}
+    </span>
+  );
+}
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -73,7 +99,46 @@ function getSortValue(user, key) {
   return v;
 }
 
-export function UserTable({ users }) {
+const FUNNEL_STEPS = [
+  { key: 'signed_up', label: 'Signed Up' },
+  { key: 'uploaded', label: 'Uploaded' },
+  { key: 'clipped', label: 'Clipped' },
+  { key: 'exported', label: 'Exported' },
+  { key: 'shared', label: 'Shared' },
+  { key: 'purchased', label: 'Purchased' },
+];
+
+function FunnelSummary({ totals }) {
+  if (!totals) return null;
+  const max = totals.signed_up || 1;
+  return (
+    <div className="flex items-end gap-2 mb-4 px-1">
+      {FUNNEL_STEPS.map((step, i) => {
+        const val = totals[step.key] || 0;
+        const pct = Math.round((val / max) * 100);
+        const prevVal = i > 0 ? (totals[FUNNEL_STEPS[i - 1].key] || 1) : val;
+        const convPct = i > 0 ? Math.round((val / prevVal) * 100) : 100;
+        return (
+          <div key={step.key} className="flex-1 text-center">
+            <div className="text-white text-sm font-semibold">{val}</div>
+            <div className="text-gray-500 text-[10px]">
+              {step.label}
+              {i > 0 && <span className="text-gray-600 ml-0.5">({convPct}%)</span>}
+            </div>
+            <div className="mt-1 mx-auto rounded-full h-1.5 bg-white/5">
+              <div
+                className="h-full rounded-full bg-purple-500/60"
+                style={{ width: `${Math.max(pct, 3)}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function UserTable({ users, onUserClick, funnelTotals }) {
   const currentPage = useAdminStore(s => s.currentPage);
   const totalPages = useAdminStore(s => s.totalPages);
   const totalUsers = useAdminStore(s => s.totalUsers);
@@ -121,6 +186,8 @@ export function UserTable({ users }) {
 
   return (
     <>
+      <FunnelSummary totals={funnelTotals} />
+
       {/* Controls row */}
       <div className="flex items-center justify-between mb-3 gap-4">
         <div className="flex items-center gap-3">
@@ -214,6 +281,10 @@ export function UserTable({ users }) {
                   <OriginBadge type={user.origin_type} channel={user.origin_channel} />
                 </td>
 
+                <td className="px-3 py-2.5 text-center">
+                  <StepBadge step={user.last_step} />
+                </td>
+
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
                   {user.install_day || '—'}
                 </td>
@@ -243,7 +314,18 @@ export function UserTable({ users }) {
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
-                  {user.last_active_at ? user.last_active_at.slice(0, 10) : '—'}
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>{user.last_active_at ? user.last_active_at.slice(0, 10) : '—'}</span>
+                    {onUserClick && (
+                      <button
+                        onClick={() => onUserClick(user.user_id)}
+                        className="text-gray-600 hover:text-purple-400 transition-colors"
+                        title="View journey"
+                      >
+                        <Activity size={12} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
