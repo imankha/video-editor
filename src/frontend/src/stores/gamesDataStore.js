@@ -23,6 +23,9 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 let _fetchController = null;
 let _fetchPromise = null;
 
+// In-flight dedup for getGame() — keyed by gameId
+const _getGameInflight = new Map();
+
 export const useGamesDataStore = create((set, get) => ({
   games: [],
   readyGames: [],  // Derived: games with status != 'pending' (cached to avoid infinite re-renders)
@@ -184,24 +187,33 @@ export const useGamesDataStore = create((set, get) => ({
    * Get full game details including annotations
    */
   getGame: async (gameId) => {
+    const inflight = _getGameInflight.get(gameId);
+    if (inflight) return inflight;
+
     set({ isLoading: true, error: null });
-    try {
-      const response = await apiFetch(`${API_BASE}/api/games/${gameId}`);
-      if (!response.ok) {
-        const msg = response.status === 404
-          ? `Game ${gameId} not found — it may have been deleted or belongs to another account`
-          : `Failed to fetch game: ${response.status}`;
-        throw new Error(msg);
+    const promise = (async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/games/${gameId}`);
+        if (!response.ok) {
+          const msg = response.status === 404
+            ? `Game ${gameId} not found — it may have been deleted or belongs to another account`
+            : `Failed to fetch game: ${response.status}`;
+          throw new Error(msg);
+        }
+        const data = await response.json();
+        set({ selectedGame: data, isLoading: false });
+        return data;
+      } catch (err) {
+        const is404 = err.message?.includes('not found');
+        (is404 ? console.warn : console.error).call(console, '[gamesDataStore] Failed to fetch game:', err.message);
+        set({ error: err.message, isLoading: false });
+        throw err;
+      } finally {
+        _getGameInflight.delete(gameId);
       }
-      const data = await response.json();
-      set({ selectedGame: data, isLoading: false });
-      return data;
-    } catch (err) {
-      const is404 = err.message?.includes('not found');
-      (is404 ? console.warn : console.error).call(console, '[gamesDataStore] Failed to fetch game:', err.message);
-      set({ error: err.message, isLoading: false });
-      throw err;
-    }
+    })();
+    _getGameInflight.set(gameId, promise);
+    return promise;
   },
 
   /**
@@ -340,6 +352,7 @@ export const useGamesDataStore = create((set, get) => ({
   reset: () => {
     if (_fetchController) { _fetchController.abort(); _fetchController = null; }
     _fetchPromise = null;
+    _getGameInflight.clear();
     set({
       games: [],
       readyGames: [],

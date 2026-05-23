@@ -326,11 +326,12 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     }
   }, [clearError, onRefreshUrls]);
 
-  // Reset error/retry state when URLs change (refresh succeeded)
+  // Clear error display when URLs change (refresh succeeded).
+  // Retry counter is NOT reset here — only on user-initiated retry or game change.
+  // Resetting it here created an infinite retry loop: error → refresh → reset counter → error → ...
   useEffect(() => {
     if (gameVideos) {
       setError(null);
-      retryCountRef.current = 0;
     }
   }, [gameVideos]);
 
