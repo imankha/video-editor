@@ -93,32 +93,26 @@ export function AnnotateContainer({
   const [activeVideoIndex, setActiveVideoIndex] = useState(0);
 
   // T3050: Refresh multi-video presigned URLs when they expire.
-  // Debounced: multiple video elements may fire errors simultaneously.
-  const refreshTimerRef = useRef(null);
-  const refreshMultiVideoUrls = useCallback(() => {
-    if (refreshTimerRef.current) return;
-    refreshTimerRef.current = setTimeout(async () => {
-      refreshTimerRef.current = null;
-      const gameId = annotateGameIdRef.current;
-      if (!gameId) return;
-      try {
-        const gameData = await getGame(gameId);
-        if (gameData.videos && gameData.videos.length > 1) {
-          setGameVideos(gameData.videos.map(v => ({
-            sequence: v.sequence,
-            url: v.video_url,
-            serverUrl: v.video_url,
-            duration: v.duration,
-            width: v.video_width,
-            height: v.video_height,
-          })));
-        }
-      } catch (err) {
-        console.warn('[AnnotateContainer] Failed to refresh multi-video URLs:', err.message);
+  // Concurrent calls are safe — getGame() deduplicates in-flight requests.
+  const refreshMultiVideoUrls = useCallback(async () => {
+    const gameId = annotateGameIdRef.current;
+    if (!gameId) return;
+    try {
+      const gameData = await getGame(gameId);
+      if (gameData.videos && gameData.videos.length > 1) {
+        setGameVideos(gameData.videos.map(v => ({
+          sequence: v.sequence,
+          url: v.video_url,
+          serverUrl: v.video_url,
+          duration: v.duration,
+          width: v.video_width,
+          height: v.video_height,
+        })));
       }
-    }, 2000);
+    } catch (err) {
+      console.warn('[AnnotateContainer] Failed to refresh multi-video URLs:', err.message);
+    }
   }, [getGame]);
-  useEffect(() => () => clearTimeout(refreshTimerRef.current), []);
 
   // T2750: Dual-video scrub for unified multi-video experience
   const multiVideo = useMultiVideoScrub({ gameVideos, playbackRate: annotatePlaybackSpeed, onRefreshUrls: refreshMultiVideoUrls });
