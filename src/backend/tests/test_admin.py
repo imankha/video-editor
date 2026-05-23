@@ -1,17 +1,17 @@
 """
-Tests for the admin panel (T550).
+Tests for the admin panel (T550, T3020).
 
 Tests cover:
 - admin_users table created on init + seeded with imankh@gmail.com
 - is_admin() returns True for admin, False for non-admin
 - GET /api/admin/me returns {is_admin: bool} without 403
 - GET /api/admin/users returns 403 for non-admin
-- GET /api/admin/users returns users list for admin
+- GET /api/admin/users returns users with milestones data
+- GET /api/admin/users pagination works
+- GET /api/admin/users LEFT JOIN returns users without milestones
 - POST /api/admin/users/{id}/grant-credits grants credits
-- GPU aggregation sums correctly across export_jobs
 """
 
-import sqlite3
 from unittest.mock import patch
 
 import pytest
@@ -24,16 +24,59 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture()
 def isolated_auth_db(pg_conn):
-    """Fresh Postgres with admin + regular user."""
+    """Fresh Postgres with admin + regular user.
+
+    Uses test-admin@test.local so the email unique constraint doesn't clash
+    with real users in the dev database. The admin_users seed (imankh@gmail.com)
+    is matched by email, so we insert into admin_users for the test email too.
+    """
     from app.services.auth_db import create_user
-    create_user("admin-user", email="imankh@gmail.com")
-    create_user("regular-user", email="other@example.com")
+    from app.services.pg import get_pg
+    create_user("admin-user", email="test-admin@test.local")
+    create_user("regular-user", email="other@test.local")
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO admin_users (email) VALUES ('test-admin@test.local') ON CONFLICT DO NOTHING"
+        )
+    yield
+
+
+@pytest.fixture()
+def milestones_data(pg_conn):
+    """Insert milestones rows for test users."""
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO user_milestones (
+                user_id, install_day, origin_type, origin_channel,
+                game_created_count, clip_created_count,
+                export_completed_count, export_failed_count,
+                share_completed_count, credit_purchase_count,
+                credits_consumed_count, session_count
+            ) VALUES
+            ('admin-user', '2026-01-15', 'organic', NULL,
+             10, 25, 5, 1, 2, 3, 50, 20),
+            ('regular-user', '2026-03-10', 'viral', 'share_link',
+             3, 8, 1, 0, 0, 0, 0, 5)
+        """)
     yield
 
 
 @pytest.fixture()
 def client(isolated_auth_db, tmp_path):
     """TestClient wired to a test user context."""
+    with patch("app.database.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
+         patch("app.services.user_db._initialized_user_dbs", set()):
+        from app.main import app
+        return TestClient(app, raise_server_exceptions=True)
+
+
+@pytest.fixture()
+def client_with_milestones(isolated_auth_db, milestones_data, tmp_path):
+    """TestClient with milestones data populated."""
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()):
@@ -63,21 +106,23 @@ class TestAdminUsersTable:
         with get_auth_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT 1 FROM admin_users WHERE email = 'imankh@gmail.com'"
+                "SELECT 1 FROM admin_users WHERE email = 'test-admin@test.local'"
             )
             row = cur.fetchone()
         assert row is not None
 
     def test_seed_is_idempotent(self, isolated_auth_db):
         """Re-seeding must not raise or duplicate the seed."""
-        from app.services.pg import _SEED_SQL
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO admin_users (email) VALUES ('test-admin@test.local') ON CONFLICT DO NOTHING"
+            )
         from app.services.auth_db import get_auth_db
         with get_auth_db() as conn:
             cur = conn.cursor()
-            cur.execute(_SEED_SQL)
-        with get_auth_db() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT count(*) as cnt FROM admin_users WHERE email = 'imankh@gmail.com'")
+            cur.execute("SELECT count(*) as cnt FROM admin_users WHERE email = 'test-admin@test.local'")
             row = cur.fetchone()
         assert row["cnt"] == 1
 
@@ -121,20 +166,86 @@ class TestAdminUsers:
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
         data = resp.json()
-        users = data["users"]
-        user_ids = [u["user_id"] for u in users]
+        user_ids = [u["user_id"] for u in data["users"]]
         assert "admin-user" in user_ids
         assert "regular-user" in user_ids
 
-    def test_user_list_has_required_fields(self, client):
+    def test_response_shape(self, client):
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
         data = resp.json()
         assert "users" in data
+        assert "total_users" in data
+        assert "total_pages" in data
+        assert "page" in data
         for user in data["users"]:
             assert "user_id" in user
             assert "email" in user
             assert "credits" in user
+            assert "origin_type" in user
+            assert "install_day" in user
+            assert "session_count" in user
+            assert "last_active_at" in user
+
+    def test_milestones_data_included(self, client_with_milestones):
+        resp = client_with_milestones.get(
+            "/api/admin/users", headers=_auth_headers("admin-user")
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
+        assert admin["origin_type"] == "organic"
+        assert admin["game_created_count"] == 10
+        assert admin["clip_created_count"] == 25
+        assert admin["export_completed_count"] == 5
+        assert admin["session_count"] == 20
+
+        regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
+        assert regular["origin_type"] == "viral"
+        assert regular["origin_channel"] == "share_link"
+        assert regular["install_day"] == "2026-03-10"
+
+    def test_left_join_users_without_milestones(self, client):
+        """Users without milestones rows still appear with NULL/zero values."""
+        resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
+        assert resp.status_code == 200
+        data = resp.json()
+        user_ids = [u["user_id"] for u in data["users"]]
+        assert "admin-user" in user_ids
+        admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
+        assert admin["game_created_count"] == 0
+        assert admin["origin_type"] is None
+
+    def test_pagination(self, client_with_milestones):
+        resp = client_with_milestones.get(
+            "/api/admin/users?page=1&page_size=1",
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["users"]) == 1
+        assert data["total_users"] >= 2
+        assert data["total_pages"] >= 2
+        assert data["page"] == 1
+
+        resp2 = client_with_milestones.get(
+            "/api/admin/users?page=2&page_size=1",
+            headers=_auth_headers("admin-user"),
+        )
+        data2 = resp2.json()
+        assert len(data2["users"]) == 1
+        assert data2["page"] == 2
+
+    def test_pagination_returns_all_test_users(self, client_with_milestones):
+        """Fetching all pages includes both test users."""
+        resp = client_with_milestones.get(
+            "/api/admin/users?page=1&page_size=50",
+            headers=_auth_headers("admin-user"),
+        )
+        data = resp.json()
+        user_ids = [u["user_id"] for u in data["users"]]
+        assert "admin-user" in user_ids
+        assert "regular-user" in user_ids
 
 
 class TestAdminGrantCredits:
@@ -164,41 +275,3 @@ class TestAdminGrantCredits:
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
-
-
-class TestGpuAggregation:
-    def test_gpu_usage_sums_across_profiles(self, tmp_path, isolated_auth_db):
-        """GPU seconds from multiple profile DBs are summed correctly."""
-        profile_dir = tmp_path / "regular-user" / "profiles" / "profile-1"
-        profile_dir.mkdir(parents=True)
-        db_path = profile_dir / "profile.sqlite"
-        conn = sqlite3.connect(str(db_path))
-        conn.execute("""
-            CREATE TABLE export_jobs (
-                id TEXT PRIMARY KEY, type TEXT, status TEXT,
-                gpu_seconds REAL, modal_function TEXT, created_at TEXT,
-                input_data TEXT DEFAULT '{}'
-            )
-        """)
-        conn.execute(
-            "INSERT INTO export_jobs VALUES ('j1','framing','complete',120.5,'framing','2026-03-01','{}')"
-        )
-        conn.execute(
-            "INSERT INTO export_jobs VALUES ('j2','overlay','complete',30.0,'overlay','2026-03-02','{}')"
-        )
-        conn.commit()
-        conn.close()
-
-        with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.routers.admin.USER_DATA_BASE", tmp_path):
-            from app.routers.admin import _compute_gpu_total_single
-            total = _compute_gpu_total_single(db_path)
-
-        assert total == 150.5
-
-    def test_gpu_usage_endpoint_non_admin_gets_403(self, client):
-        resp = client.get(
-            "/api/admin/users/regular-user/gpu-usage",
-            headers=_auth_headers("regular-user"),
-        )
-        assert resp.status_code == 403

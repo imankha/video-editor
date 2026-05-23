@@ -134,6 +134,7 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.auth_db.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.sharing_db.get_pg", mock_get_pg)
     monkeypatch.setattr("app.analytics.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.routers.admin.get_pg", mock_get_pg)
 
     yield dsn
 

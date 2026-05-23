@@ -10,12 +10,6 @@ const ENV_STYLES = {
   production: 'bg-red-500/20 text-red-400 border-red-500/40',
 };
 
-/**
- * AdminScreen — Full-page admin panel.
- *
- * Props:
- * - onBack: navigate back to project manager
- */
 export function AdminScreen({ onBack }) {
   const fetchUsers = useAdminStore(state => state.fetchUsers);
   const users = useAdminStore(state => state.users);
@@ -27,13 +21,11 @@ export function AdminScreen({ onBack }) {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Guests (no email) are hidden from the table but included in the funnel chart
   const knownUsers = users.filter(u => u.email);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       <div className="mx-auto px-6 py-8 max-w-[1600px]">
-        {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <button
             onClick={onBack}
@@ -53,12 +45,11 @@ export function AdminScreen({ onBack }) {
           </div>
         </div>
 
-        {/* Users section */}
         <div className="bg-white/5 rounded-xl p-6 border border-white/10">
           <h2 className="text-gray-300 font-medium mb-4">Users</h2>
 
           {loading && (
-            <p className="text-gray-500 text-sm">Loading users{'\u2026'}</p>
+            <p className="text-gray-500 text-sm">Loading users{'…'}</p>
           )}
 
           {error && (
@@ -70,7 +61,7 @@ export function AdminScreen({ onBack }) {
           )}
 
           {!loading && !error && knownUsers.length > 0 && (
-            <UserTable users={knownUsers} allUsers={knownUsers} />
+            <UserTable users={knownUsers} />
           )}
         </div>
       </div>
