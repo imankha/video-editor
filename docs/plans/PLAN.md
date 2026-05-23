@@ -216,6 +216,7 @@ Outreach to our network once alpha milestone is complete. Ordered: create source
 | T1970 | [Annotate Mehdi Source Files](tasks/alpha-marketing/T1970-annotate-mehdi-source-files.md) | 8 | 2 | 4.0 | TODO | [ ] | Annotate, frame, and export Mehdi's game footage end-to-end to produce demo clips for outreach email |
 | T1980 | [Alpha Outreach Email](tasks/alpha-marketing/T1980-alpha-outreach-email.md) | 9 | 3 | 3.0 | TODO | [ ] | "Save your best moments before you lose the videos" — email with demo clip link, feature screenshots, CTA to app |
 | T1990 | [Alpha List](tasks/alpha-marketing/T1990-alpha-list.md) | 9 | 1 | 9.0 | TODO | [ ] | Contact list for alpha outreach: Zack, Arshia, Chris Choie, WhatsApp group, John Gleaves, Jack's dad, Jett's dad, current team, Shannon |
+| T3070 | [Brand Messaging Audit](tasks/T3070-brand-messaging-audit.md) | 8 | 3 | 2.7 | TODO | [ ] | Audit + improve brand communication at all initial touchpoints: emails explain what Reel Ballers is, preloading communicates value, landing page uses "Learn From, Preserve and Share Your Athlete's Moments" instead of limited tagline |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)
@@ -407,6 +408,7 @@ IDs use gaps of 10 to allow insertions:
 - `T3030` - Cross-Origin Fetch Credentials (bug fix)
 - `T3050` - Multi-Video Blank Video (bug fix, no error handling on dual video elements)
 - `T3060` - Make It Load Fast (Playwright perf benchmarks against prod)
+- `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
