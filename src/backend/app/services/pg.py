@@ -207,6 +207,33 @@ CREATE INDEX IF NOT EXISTS idx_milestones_install_day ON user_milestones(install
 CREATE INDEX IF NOT EXISTS idx_milestones_origin ON user_milestones(origin_type);
 CREATE INDEX IF NOT EXISTS idx_milestones_cohort ON user_milestones(install_day, origin_type);
 
+CREATE TABLE IF NOT EXISTS user_flow_events (
+    user_id TEXT NOT NULL REFERENCES users(user_id),
+    event TEXT NOT NULL,
+    first_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    count INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (user_id, event)
+);
+CREATE INDEX IF NOT EXISTS idx_flow_events_event ON user_flow_events(event);
+
+CREATE TABLE IF NOT EXISTS daily_counters (
+    counter_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    origin_type TEXT NOT NULL DEFAULT 'all',
+    signups INTEGER NOT NULL DEFAULT 0,
+    games_created INTEGER NOT NULL DEFAULT 0,
+    clips_created INTEGER NOT NULL DEFAULT 0,
+    exports_completed INTEGER NOT NULL DEFAULT 0,
+    exports_failed INTEGER NOT NULL DEFAULT 0,
+    shares_completed INTEGER NOT NULL DEFAULT 0,
+    credit_purchases INTEGER NOT NULL DEFAULT 0,
+    credits_consumed INTEGER NOT NULL DEFAULT 0,
+    annotations_completed INTEGER NOT NULL DEFAULT 0,
+    framing_exports INTEGER NOT NULL DEFAULT 0,
+    overlay_exports INTEGER NOT NULL DEFAULT 0,
+    video_downloads INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (counter_date, origin_type)
+);
+
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version INTEGER PRIMARY KEY,
     description TEXT NOT NULL,

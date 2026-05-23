@@ -4,16 +4,49 @@ from app.services.pg import get_pg
 
 logger = logging.getLogger(__name__)
 
-MILESTONE_EVENTS = {
-    "game_created":     ("first_game_created_at",     "game_created_count"),
-    "clip_created":     ("first_clip_created_at",     "clip_created_count"),
-    "export_completed": ("first_export_completed_at", "export_completed_count"),
-    "export_failed":    (None,                        "export_failed_count"),
-    "share_completed":  ("first_share_completed_at",  "share_completed_count"),
-    "credit_purchased": ("first_credit_purchase_at",  "credit_purchase_count"),
-    "credits_consumed": (None,                        "credits_consumed_count"),
-    "pwa_installed":    ("pwa_installed_at",           None),
+FLOW_EVENTS = {
+    # Original events (T3010)
+    "game_created":         {"label": "Uploaded",           "daily_col": "games_created"},
+    "clip_created":         {"label": "Clipped",            "daily_col": "clips_created"},
+    "export_completed":     {"label": "Exported",           "daily_col": "exports_completed"},
+    "export_failed":        {"label": None,                 "daily_col": "exports_failed"},
+    "share_completed":      {"label": "Shared",             "daily_col": "shares_completed"},
+    "credit_purchased":     {"label": "Purchased",          "daily_col": "credit_purchases"},
+    "credits_consumed":     {"label": None,                 "daily_col": "credits_consumed"},
+    "pwa_installed":        {"label": "PWA Installed",      "daily_col": None},
+    # New flow events (T3040)
+    "annotation_completed": {"label": "Annotation Done",    "daily_col": "annotations_completed"},
+    "framing_opened":       {"label": "Framing Opened",     "daily_col": None},
+    "framing_exported":     {"label": "Framing Exported",   "daily_col": "framing_exports"},
+    "overlay_exported":     {"label": "Overlay Exported",   "daily_col": "overlay_exports"},
+    "gallery_viewed":       {"label": "Gallery Viewed",     "daily_col": None},
+    "video_downloaded":     {"label": "Downloaded",         "daily_col": "video_downloads"},
 }
+
+FUNNEL_STEPS = [
+    "game_created",
+    "clip_created",
+    "annotation_completed",
+    "framing_opened",
+    "framing_exported",
+    "overlay_exported",
+    "gallery_viewed",
+    "video_downloaded",
+    "share_completed",
+    "credit_purchased",
+]
+
+_EXPORT_EVENTS = {"export_completed", "framing_exported", "overlay_exported"}
+
+
+def _upsert_daily_counter(cur, origin_type: str, column: str):
+    sql = f"""
+        INSERT INTO daily_counters (counter_date, origin_type, {column})
+        VALUES (CURRENT_DATE, %s, 1)
+        ON CONFLICT (counter_date, origin_type)
+        DO UPDATE SET {column} = daily_counters.{column} + 1
+    """
+    cur.execute(sql, (origin_type,))
 
 
 def create_user_milestones(user_id: str, origin_type: str, origin_channel: str | None, signup_method: str):
@@ -26,6 +59,8 @@ def create_user_milestones(user_id: str, origin_type: str, origin_channel: str |
                    ON CONFLICT (user_id) DO NOTHING""",
                 (user_id, origin_type, origin_channel, signup_method),
             )
+            _upsert_daily_counter(cur, origin_type, "signups")
+            _upsert_daily_counter(cur, "all", "signups")
         logger.info("[Analytics] Created milestones: user=%s origin=%s channel=%s method=%s", user_id, origin_type, origin_channel, signup_method)
     except Exception:
         logger.exception("[Analytics] Failed to create milestones for %s", user_id)
@@ -33,27 +68,36 @@ def create_user_milestones(user_id: str, origin_type: str, origin_channel: str |
 
 def record_milestone(user_id: str, event: str):
     try:
-        entry = MILESTONE_EVENTS.get(event)
-        if not entry:
+        cfg = FLOW_EVENTS.get(event)
+        if not cfg:
             logger.warning("[Analytics] Unknown event: %s", event)
             return
 
-        first_col, count_col = entry
-
-        set_clauses = []
-        if first_col:
-            set_clauses.append(f"{first_col} = COALESCE({first_col}, now())")
-        if count_col:
-            set_clauses.append(f"{count_col} = {count_col} + 1")
-        set_clauses.append("last_active_at = now()")
-        if event == "export_completed":
-            set_clauses.append("last_export_at = now()")
-
-        sql = f"UPDATE user_milestones SET {', '.join(set_clauses)} WHERE user_id = %s"
-
         with get_pg() as conn:
             cur = conn.cursor()
-            cur.execute(sql, (user_id,))
+
+            cur.execute("""
+                INSERT INTO user_flow_events (user_id, event)
+                VALUES (%s, %s)
+                ON CONFLICT (user_id, event)
+                DO UPDATE SET count = user_flow_events.count + 1
+            """, (user_id, event))
+
+            set_clauses = ["last_active_at = now()"]
+            if event in _EXPORT_EVENTS:
+                set_clauses.append("last_export_at = now()")
+            cur.execute(
+                f"UPDATE user_milestones SET {', '.join(set_clauses)} WHERE user_id = %s RETURNING origin_type",
+                (user_id,),
+            )
+            row = cur.fetchone()
+
+            daily_col = cfg["daily_col"]
+            if daily_col and row:
+                origin = row["origin_type"]
+                _upsert_daily_counter(cur, origin, daily_col)
+                _upsert_daily_counter(cur, "all", daily_col)
+
         logger.info("[Analytics] Recorded: event=%s user=%s", event, user_id)
     except Exception:
         logger.exception("[Analytics] Failed to record %s for %s", event, user_id)
