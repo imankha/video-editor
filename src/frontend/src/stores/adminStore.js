@@ -13,6 +13,13 @@ export const useAdminStore = create((set, get) => ({
   pageSize: 10,
 
   grantState: {},
+  funnelTotals: null,
+
+  funnelData: null, funnelLoading: false,
+  channelsData: null, channelsLoading: false,
+  cohortsData: null, cohortsLoading: false,
+  pulseData: null, pulseLoading: false,
+  journeyData: null, journeyLoading: false, journeyUserId: null,
 
   fetchUsers: async (page, pageSize) => {
     const state = get();
@@ -33,6 +40,7 @@ export const useAdminStore = create((set, get) => ({
         totalPages: data.total_pages,
         totalUsers: data.total_users,
         pageSize: data.page_size,
+        funnelTotals: data.funnel_totals || null,
         usersLoading: false,
       });
     } catch (err) {
@@ -81,6 +89,61 @@ export const useAdminStore = create((set, get) => ({
       throw err;
     }
   },
+
+  fetchFunnel: async (from, to, origin = 'all') => {
+    set({ funnelLoading: true });
+    try {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      if (origin) params.set('origin', origin);
+      const res = await fetch(`${API_BASE}/api/admin/analytics/funnel?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ funnelData: await res.json(), funnelLoading: false });
+    } catch { set({ funnelLoading: false }); }
+  },
+
+  fetchChannels: async (from, to) => {
+    set({ channelsLoading: true });
+    try {
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      const res = await fetch(`${API_BASE}/api/admin/analytics/channels?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ channelsData: await res.json(), channelsLoading: false });
+    } catch { set({ channelsLoading: false }); }
+  },
+
+  fetchCohorts: async (granularity = 'week', origin = 'all') => {
+    set({ cohortsLoading: true });
+    try {
+      const params = new URLSearchParams({ granularity, origin });
+      const res = await fetch(`${API_BASE}/api/admin/analytics/cohorts?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ cohortsData: await res.json(), cohortsLoading: false });
+    } catch { set({ cohortsLoading: false }); }
+  },
+
+  fetchPulse: async (days = 30) => {
+    set({ pulseLoading: true });
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/analytics/pulse?days=${days}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ pulseData: await res.json(), pulseLoading: false });
+    } catch { set({ pulseLoading: false }); }
+  },
+
+  fetchJourney: async (userId) => {
+    set({ journeyLoading: true, journeyUserId: userId });
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/analytics/journey/${userId}`, { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ journeyData: await res.json(), journeyLoading: false });
+    } catch { set({ journeyLoading: false }); }
+  },
+
+  clearJourney: () => set({ journeyData: null, journeyUserId: null }),
 
   setCredits: async (userId, amount) => {
     set(state => ({

@@ -477,8 +477,12 @@ def recover_orphaned_reservations(user_id: str) -> int:
 # Admin helpers
 # ---------------------------------------------------------------------------
 
-def get_credit_stats_for_admin() -> dict:
-    """Scan all user.sqlite files to aggregate credit stats for admin panel.
+def get_credit_stats_for_admin(user_ids: list[str] | None = None) -> dict:
+    """Read user.sqlite files to aggregate credit stats for admin panel.
+
+    Args:
+        user_ids: If provided, only read these users' SQLite files.
+                  If None, scans all user directories (slow).
 
     Returns dict keyed by user_id with:
       credits_spent: total credits consumed (abs of negative non-refund amounts)
@@ -490,7 +494,12 @@ def get_credit_stats_for_admin() -> dict:
     if not USER_DATA_BASE.exists():
         return stats
 
-    for user_dir in USER_DATA_BASE.iterdir():
+    if user_ids is not None:
+        dirs = [(USER_DATA_BASE / uid) for uid in user_ids]
+    else:
+        dirs = list(USER_DATA_BASE.iterdir())
+
+    for user_dir in dirs:
         if not user_dir.is_dir():
             continue
         user_id = user_dir.name
