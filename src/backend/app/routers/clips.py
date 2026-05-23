@@ -29,6 +29,7 @@ from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
 from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 from app.services.pg import get_pg
+from app.analytics import record_milestone
 from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
@@ -925,6 +926,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
+        record_milestone(get_current_user_id(), "clip_created")
         logger.info(f"Saved clip {raw_clip_id} for game {clip_data.game_id}")
 
         return RawClipSaveResponse(

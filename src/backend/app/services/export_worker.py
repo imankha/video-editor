@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional, Callable
 
 from ..database import get_db_connection, get_working_videos_path
+from ..analytics import record_milestone
 from ..utils.encoding import decode_data
 from ..websocket import manager, export_progress
 from .ffmpeg_service import get_video_duration
@@ -183,6 +184,9 @@ async def process_export_job(job_id: str):
 
         # Mark as complete (DB write #2)
         update_job_complete(job_id, output_video_id, output_filename)
+        credit_user_id = config.get("credit_user_id")
+        if credit_user_id:
+            record_milestone(credit_user_id, "export_completed")
         await send_progress(job_id, 100, "Export complete!", "complete")
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")
@@ -193,6 +197,9 @@ async def process_export_job(job_id: str):
     except Exception as e:
         logger.error(f"[ExportWorker] Job {job_id} failed ({type(e).__name__}): {e}", exc_info=True)
         update_job_error(job_id, str(e))
+        fail_user_id = config.get("credit_user_id")
+        if fail_user_id:
+            record_milestone(fail_user_id, "export_failed")
         await send_progress(job_id, 0, f"Export failed: {e}", "error")
 
         # T530: Refund credits on framing failure

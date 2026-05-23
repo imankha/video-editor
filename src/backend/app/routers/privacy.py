@@ -174,6 +174,7 @@ async def delete_account(request: Request):
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
+            cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         logger.info(f"[Privacy] Cleared auth DB records for user={user_id}")
     except Exception as e:

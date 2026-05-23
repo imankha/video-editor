@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, Smartphone, X, Share, CheckCircle } from 'lucide-react';
+import { Download, Smartphone, X, Share } from 'lucide-react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export function InstallButton() {
-  const { canInstall, canPrompt, platform, installedInBrowser, promptInstall, dismiss } = useInstallPrompt();
+  const { canInstall, canPrompt, platform, promptInstall, dismiss } = useInstallPrompt();
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
 
@@ -17,15 +17,6 @@ export function InstallButton() {
     document.addEventListener('mousedown', onClick);
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
-
-  if (installedInBrowser) {
-    return (
-      <span className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-green-400">
-        <CheckCircle size={16} />
-        <span className="hidden sm:inline">Installed</span>
-      </span>
-    );
-  }
 
   if (!canInstall) return null;
 

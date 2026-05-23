@@ -429,6 +429,8 @@ def confirm_reservation(user_id: str, job_id: str) -> bool:
             (user_id, -row["amount"], job_id, row["video_seconds"]),
         )
         conn.commit()
+        from app.analytics import record_milestone
+        record_milestone(user_id, "credits_consumed")
         return True
 
 

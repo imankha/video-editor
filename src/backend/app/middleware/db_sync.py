@@ -33,6 +33,9 @@ import threading
 import time
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+
+import psycopg2
+import psycopg2.pool
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -431,8 +434,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             auth_start = time.perf_counter()
             try:
                 session = validate_session(session_id)
-            except Exception:
-                logger.exception(f"[REQ] validate_session raised for {request.url.path} — treating as no session")
+            except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError) as e:
+                logger.warning(f"[AUTH] Postgres unavailable during session validation: {e}")
                 session = None
             meta["auth_ms"] = (time.perf_counter() - auth_start) * 1000
             if session:

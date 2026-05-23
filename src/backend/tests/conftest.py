@@ -107,6 +107,7 @@ def pg_conn(monkeypatch):
     RUNNER.run(setup, "postgres")
 
     placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
+    cur.execute(f"DELETE FROM user_milestones WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     cur.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
@@ -132,12 +133,14 @@ def pg_conn(monkeypatch):
     monkeypatch.setattr("app.services.pg.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.auth_db.get_pg", mock_get_pg)
     monkeypatch.setattr("app.services.sharing_db.get_pg", mock_get_pg)
+    monkeypatch.setattr("app.analytics.get_pg", mock_get_pg)
 
     yield dsn
 
     teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     teardown.autocommit = True
     tc = teardown.cursor()
+    tc.execute(f"DELETE FROM user_milestones WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     tc.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)

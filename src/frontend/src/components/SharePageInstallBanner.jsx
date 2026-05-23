@@ -2,18 +2,7 @@ import { Download, Share, CheckCircle } from 'lucide-react';
 import { useInstallPrompt } from '../hooks/useInstallPrompt';
 
 export function SharePageInstallBanner() {
-  const { canInstall, canPrompt, platform, installedInBrowser, promptInstall, dismiss } = useInstallPrompt();
-
-  if (installedInBrowser) {
-    return (
-      <div className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-800/90 backdrop-blur border-t border-gray-700">
-        <CheckCircle size={16} className="text-green-400 shrink-0" />
-        <p className="text-sm text-green-400">
-          Reel Ballers is installed
-        </p>
-      </div>
-    );
-  }
+  const { canInstall, canPrompt, platform, promptInstall, dismiss } = useInstallPrompt();
 
   if (!canInstall) return null;
 

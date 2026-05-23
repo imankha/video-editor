@@ -25,6 +25,7 @@ import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 
+from ..analytics import record_milestone
 from ..database import get_db_connection, get_user_data_path
 from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
@@ -268,6 +269,7 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
 
             conn.commit()
 
+        record_milestone(user_id, "export_completed")
         logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
 
         return {

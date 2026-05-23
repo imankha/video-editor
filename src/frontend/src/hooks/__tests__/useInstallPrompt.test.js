@@ -19,7 +19,6 @@ beforeEach(() => {
   Object.defineProperty(navigator, 'userAgent', { value: 'Mozilla/5.0 Chrome', configurable: true });
   window.MSStream = undefined;
   window.__deferredInstallPrompt = null;
-  delete navigator.getInstalledRelatedApps;
 });
 
 describe('useInstallPrompt', () => {

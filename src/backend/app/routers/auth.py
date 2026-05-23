@@ -31,6 +31,7 @@ from pathlib import Path
 
 import sqlite3
 
+from app.analytics import create_user_milestones, record_milestone, update_session
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
@@ -114,6 +115,7 @@ def _reset_test_account(user_id: str, email: str) -> None:
                WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
             (email,),
         )
+        cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")
@@ -256,12 +258,10 @@ async def _verify_google_token(token: str) -> dict:
     return token_data
 
 
-def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> str:
+def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> tuple[str, bool]:
     """Find a user row by email, or create a fresh one with a new UUID.
 
-    T1330: no guest-linking. Unauthenticated visitors have no pre-existing
-    user_id to fold into the account — every login path either recovers an
-    existing account by email or mints a new one.
+    Returns (user_id, is_new) where is_new indicates a freshly created account.
     """
     # Auto-reset NUF test accounts: wipe all data so login is always fresh.
     if email.lower() in NUF_RESET_EMAILS:
@@ -274,7 +274,7 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
         user_id = existing['user_id']
         logger.info(f"[Auth] login — existing user: {user_id} ({email})")
         update_last_seen(user_id)
-        return user_id
+        return user_id, False
 
     user_id = generate_user_id()
     create_user(
@@ -303,7 +303,18 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
         except Exception:
             logger.warning(f"[Auth] share-based attribution failed for {email}", exc_info=True)
 
-    return user_id
+    return user_id, True
+
+
+def _get_origin_for_user(user_id: str) -> tuple[str, str | None]:
+    from app.services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT channel FROM referrals WHERE referred_id = %s", (user_id,))
+        row = cur.fetchone()
+    if row:
+        return "viral", row["channel"]
+    return "organic", None
 
 
 def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
@@ -350,7 +361,11 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     google_id = token_data.get("sub")
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
-    user_id = _find_or_create_user(email, google_id=google_id, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref)
+
+    if is_new:
+        origin_type, origin_channel = _get_origin_for_user(user_id)
+        create_user_milestones(user_id, origin_type, origin_channel, signup_method="google")
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -412,6 +427,9 @@ async def auth_me(request: Request):
     except Exception:
         logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
 
+    is_pwa = request.headers.get("X-PWA") == "1"
+    update_session(user_id, is_pwa=is_pwa)
+
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
     picture_url = None
@@ -441,6 +459,14 @@ async def auth_me(request: Request):
         "impersonator": impersonator,
         "needs_terms_acceptance": needs_terms_acceptance,
     }
+
+
+@router.post("/pwa-installed")
+async def pwa_installed():
+    """Record that the user installed the PWA."""
+    user_id = get_current_user_id()
+    record_milestone(user_id, "pwa_installed")
+    return {"recorded": True}
 
 
 # --- T401: Email OTP Auth ---
@@ -565,8 +591,12 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             (row["id"],),
         )
 
-    user_id = _find_or_create_user(email, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, ref=body.ref)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
+
+    if is_new:
+        origin_type, origin_channel = _get_origin_for_user(user_id)
+        create_user_milestones(user_id, origin_type, origin_channel, signup_method="otp")
 
     return _issue_session_cookie(
         user_id,

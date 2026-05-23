@@ -20,6 +20,7 @@ from typing import Optional, Union
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from ..analytics import record_milestone
 from ..user_context import get_current_user_id
 from ..profile_context import get_current_profile_id
 from ..database import get_db_connection
@@ -182,6 +183,7 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         recipient_emails=recipient_emails,
         is_public=body.is_public,
     )
+    record_milestone(user_id, "share_completed")
 
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
