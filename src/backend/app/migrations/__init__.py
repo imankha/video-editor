@@ -20,7 +20,7 @@ def run_all_migrations() -> dict:
     from ..services.auth_db import get_all_users_for_admin
 
     results = {
-        "postgres": {"applied": [], "error": None},
+        "postgres": {"applied": [], "current_version": None, "latest_version": PG_RUNNER.latest_version, "error": None},
         "users": {"total": 0, "migrated": 0, "skipped": 0, "errors": []},
     }
 
@@ -58,6 +58,7 @@ def _migrate_postgres(results: dict) -> None:
                 {"version": m.version, "description": m.description}
                 for m in applied
             ]
+            results["postgres"]["current_version"] = PG_RUNNER.get_current_version(conn, "postgres")
     except Exception as e:
         logger.error(f"[Migration] Postgres migration error: {e}")
         results["postgres"]["error"] = str(e)
