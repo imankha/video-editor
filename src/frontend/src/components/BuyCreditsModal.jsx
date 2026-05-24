@@ -219,7 +219,7 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
           onReady={() => setPaymentReady(true)}
           onLoadError={(e) => {
             console.error('[Stripe] PaymentElement loaderror:', e.error);
-            setError(`Payment form failed to load: ${e.error?.message || 'unknown error'}`);
+            setError('Payment failed, please send bug report.');
           }}
         />
       </div>
