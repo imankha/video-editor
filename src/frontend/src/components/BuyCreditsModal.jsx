@@ -206,12 +206,22 @@ function PaymentForm({ selectedPack, onBack, onClose, onPaymentSuccess = () => {
       {/* Express Checkout (Apple Pay / Google Pay) */}
       <ExpressCheckoutElement
         onConfirm={handleExpressCheckout}
+        onLoadError={(e) => {
+          console.error('[Stripe] ExpressCheckout loaderror:', e.error);
+          // Express checkout failing is non-fatal — card form is primary
+        }}
         options={{ buttonType: { applePay: 'buy', googlePay: 'buy' } }}
       />
 
       {/* Card form */}
       <div className="mt-4">
-        <PaymentElement onReady={() => setPaymentReady(true)} />
+        <PaymentElement
+          onReady={() => setPaymentReady(true)}
+          onLoadError={(e) => {
+            console.error('[Stripe] PaymentElement loaderror:', e.error);
+            setError(`Payment form failed to load: ${e.error?.message || 'unknown error'}`);
+          }}
+        />
       </div>
 
       {error && (
