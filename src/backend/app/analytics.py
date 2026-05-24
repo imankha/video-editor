@@ -65,6 +65,18 @@ def create_user_milestones(user_id: str, origin_type: str, origin_channel: str |
     except Exception:
         logger.exception("[Analytics] Failed to create milestones for %s", user_id)
 
+    try:
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO user_activity (user_id)
+                   VALUES (?)""",
+                (user_id,),
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("[Analytics] SQLite sync failed for create_user_milestones user=%s", user_id)
+
 
 def record_milestone(user_id: str, event: str):
     try:
@@ -101,6 +113,31 @@ def record_milestone(user_id: str, event: str):
         logger.info("[Analytics] Recorded: event=%s user=%s", event, user_id)
     except Exception:
         logger.exception("[Analytics] Failed to record %s for %s", event, user_id)
+        return
+
+    try:
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            conn.execute(
+                """INSERT INTO user_activity_events (event, count, first_at)
+                   VALUES (?, 1, datetime('now'))
+                   ON CONFLICT(event) DO UPDATE SET
+                       count = count + 1,
+                       updated_at = datetime('now')""",
+                (event,),
+            )
+            set_parts = ["last_active_at = datetime('now')", "updated_at = datetime('now')"]
+            if event in _EXPORT_EVENTS:
+                set_parts.append("last_export_at = datetime('now')")
+            conn.execute(
+                f"""INSERT INTO user_activity (user_id, last_active_at, updated_at)
+                    VALUES (?, datetime('now'), datetime('now'))
+                    ON CONFLICT(user_id) DO UPDATE SET {', '.join(set_parts)}""",
+                (user_id,),
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s event=%s", user_id, event)
 
 
 def update_session(user_id: str, is_pwa: bool = False):
@@ -128,3 +165,23 @@ def update_session(user_id: str, is_pwa: bool = False):
                 logger.info("[Analytics] Session update: user=%s session_count=%s%s", user_id, row["session_count"], pwa_info)
     except Exception:
         logger.exception("[Analytics] Failed to update session for %s", user_id)
+        return
+
+    if row:
+        try:
+            from app.services.user_db import get_user_db_connection
+            with get_user_db_connection(user_id) as conn:
+                conn.execute(
+                    """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, updated_at)
+                       VALUES (?, ?, ?, datetime('now'), datetime('now'))
+                       ON CONFLICT(user_id) DO UPDATE SET
+                           session_count = ?,
+                           pwa_session_count = ?,
+                           last_active_at = datetime('now'),
+                           updated_at = datetime('now')""",
+                    (user_id, row["session_count"], row["pwa_session_count"],
+                     row["session_count"], row["pwa_session_count"]),
+                )
+                conn.commit()
+        except Exception:
+            logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)

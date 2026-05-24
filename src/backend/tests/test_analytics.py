@@ -3,7 +3,7 @@
 from datetime import datetime, timezone, timedelta
 
 import pytest
-from app.analytics import create_user_milestones, record_milestone, update_session, MILESTONE_EVENTS
+from app.analytics import create_user_milestones, record_milestone, update_session, FLOW_EVENTS
 from app.services.auth_db import create_user
 from app.services.sharing_db import record_referral
 
@@ -107,7 +107,7 @@ class TestRecordMilestone:
         assert row["credits_consumed_count"] == 1
 
     def test_all_event_types(self, pg_conn):
-        for event in MILESTONE_EVENTS:
+        for event in FLOW_EVENTS:
             record_milestone("user-a", event)
         row = _get_milestones("user-a")
         assert row["game_created_count"] == 1

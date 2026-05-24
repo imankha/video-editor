@@ -88,6 +88,22 @@ _USER_DB_SCHEMA = """
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS user_activity (
+        user_id TEXT PRIMARY KEY,
+        session_count INTEGER NOT NULL DEFAULT 0,
+        pwa_session_count INTEGER NOT NULL DEFAULT 0,
+        last_active_at TEXT,
+        last_export_at TEXT,
+        updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_activity_events (
+        event TEXT PRIMARY KEY,
+        count INTEGER NOT NULL DEFAULT 0,
+        first_at TEXT,
+        updated_at TEXT DEFAULT (datetime('now'))
+    );
 """
 
 
@@ -783,5 +799,83 @@ def set_default_profile(user_id: str, profile_id: str) -> None:
         conn.execute("UPDATE profiles SET is_default = 0")
         conn.execute("UPDATE profiles SET is_default = 1 WHERE id = ?", (profile_id,))
         conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# User activity (T3080: dual-write from Postgres to user.sqlite)
+# ---------------------------------------------------------------------------
+
+def backfill_user_activity(user_id: str) -> bool:
+    """Backfill user_activity + user_activity_events from Postgres.
+
+    Idempotent — skips if user_activity row already exists.
+    Returns True if backfill occurred, False if skipped.
+    """
+    with get_user_db_connection(user_id) as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM user_activity WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if existing:
+            return False
+
+        try:
+            from app.services.pg import get_pg
+            with get_pg() as pg:
+                cur = pg.cursor()
+                cur.execute(
+                    """SELECT session_count, pwa_session_count, last_active_at, last_export_at
+                       FROM user_milestones WHERE user_id = %s""",
+                    (user_id,),
+                )
+                milestone_row = cur.fetchone()
+
+                cur.execute(
+                    "SELECT event, count, first_at FROM user_flow_events WHERE user_id = %s",
+                    (user_id,),
+                )
+                event_rows = cur.fetchall()
+        except Exception:
+            logger.warning("[UserDB] Postgres unavailable for activity backfill user=%s", user_id)
+            return False
+
+        if milestone_row:
+            conn.execute(
+                """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, last_export_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    user_id,
+                    milestone_row["session_count"],
+                    milestone_row["pwa_session_count"],
+                    str(milestone_row["last_active_at"]) if milestone_row["last_active_at"] else None,
+                    str(milestone_row["last_export_at"]) if milestone_row["last_export_at"] else None,
+                ),
+            )
+
+        for row in event_rows:
+            conn.execute(
+                """INSERT OR IGNORE INTO user_activity_events (event, count, first_at)
+                   VALUES (?, ?, ?)""",
+                (row["event"], row["count"], str(row["first_at"]) if row["first_at"] else None),
+            )
+
+        if not milestone_row and not event_rows:
+            return False
+
+        conn.commit()
+        logger.info("[UserDB] Backfilled user activity for user=%s (%d events)", user_id, len(event_rows))
+        return True
+
+
+def get_user_activity(user_id: str) -> dict:
+    """Read user activity summary from user.sqlite."""
+    with get_user_db_connection(user_id) as conn:
+        row = conn.execute(
+            """SELECT session_count, pwa_session_count, last_active_at, last_export_at
+               FROM user_activity WHERE user_id = ?""",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return {}
+        return dict(row)
 
 

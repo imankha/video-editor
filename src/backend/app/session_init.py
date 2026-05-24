@@ -123,7 +123,14 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T985: Failed to backfill preferences: {e}")
 
-    # 8. Cleanup tasks (moved from ensure_database lines 922-938)
+    # 8. T3080: Backfill user activity from Postgres to user.sqlite
+    try:
+        from .services.user_db import backfill_user_activity
+        backfill_user_activity(user_id)
+    except Exception as e:
+        logger.error(f"T3080: Failed to backfill user activity: {e}")
+
+    # 9. Cleanup tasks (moved from ensure_database lines 922-938)
     try:
         from .services.project_archive import archive_completed_projects
         archived_count = archive_completed_projects(user_id)
@@ -138,7 +145,7 @@ def user_session_init(user_id: str) -> dict:
     except Exception as e:
         logger.error(f"T243: Failed to cleanup database bloat: {e}")
 
-    # 9. Cache the result BEFORE scheduling recovery so concurrent first
+    # 10. Cache the result BEFORE scheduling recovery so concurrent first
     # requests (e.g. two tabs) don't both schedule the same work.
     result = {
         "profile_id": profile_id,
@@ -146,7 +153,7 @@ def user_session_init(user_id: str) -> dict:
     }
     _init_cache[user_id] = result
 
-    # 10. T1380 + T1390: per-user orphaned-job recovery and modal queue drain.
+    # 11. T1380 + T1390: per-user orphaned-job recovery and modal queue drain.
     # Runs once per user per server process (gated by _init_cache above).
     # Both routines need user+profile context, which is set above. When an
     # event loop is running we schedule as a background task so the user's
