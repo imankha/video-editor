@@ -1,6 +1,8 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { formatTimeSimple } from '../../../utils/timeFormat';
 import { getAllSupportedTagNames } from '../constants/tagRegistry';
+import { track } from '../../../utils/analytics';
+import { setAnnotateSnapshot } from '../../../utils/editorContext';
 
 /**
  * useAnnotate - Manages clip regions for extracting clips from full game footage
@@ -422,6 +424,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     setClipRegions(prev => [...prev, newRegion]);
     setColorIndex(prev => prev + 1);
     onSelect?.(newRegion.id);
+    track('clip_add', { startTime: Math.round(clampedStart), endTime: Math.round(Math.min(actualEndTime, duration)), rating }, { debugOnly: true });
 
     return newRegion;
   }, [duration, colorIndex, onSelect]);
@@ -553,6 +556,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       }
     }
     setClipRegions(prev => prev.filter(r => r.id !== regionId));
+    track('clip_delete', { regionId }, { debugOnly: true });
   }, [selectedRegionId, clipRegions, onSelect]);
 
   /**
@@ -715,6 +719,28 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
    * Get clip count
    */
   const clipCount = clipRegions.length;
+
+  // Keep annotate snapshot up to date for bug reports
+  const prevSnapshotRef = useRef(null);
+  useEffect(() => {
+    const snapshot = {
+      clipCount: clipRegions.length,
+      selectedRegionId,
+      clips: clipRegions.map((r, i) => ({
+        i,
+        start: Math.round(r.startTime * 10) / 10,
+        end: Math.round(r.endTime * 10) / 10,
+        rating: r.rating,
+        seq: r.videoSequence,
+      })),
+    };
+    const key = JSON.stringify(snapshot);
+    if (key !== prevSnapshotRef.current) {
+      prevSnapshotRef.current = key;
+      setAnnotateSnapshot(snapshot);
+    }
+    return () => setAnnotateSnapshot(null);
+  }, [clipRegions, selectedRegionId]);
 
   return {
     // State

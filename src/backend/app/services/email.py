@@ -72,6 +72,59 @@ async def send_otp_email(to_email: str, code: str) -> None:
     logger.info(f"[Email] OTP sent to {to_email}")
 
 
+def _format_editor_context_html(ctx: dict) -> str:
+    """Format editor context snapshot as an HTML section for the problem report email."""
+    rows = []
+    mode = ctx.get("mode", "unknown")
+    rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Mode:</td><td style='color:#60a5fa;font-weight:bold'>{_html_escape(mode)}</td></tr>")
+
+    if ctx.get("game"):
+        g = ctx["game"]
+        rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Game:</td><td style='color:#e5e7eb'>#{g.get('id')} {_html_escape(str(g.get('name', '')))}</td></tr>")
+
+    if ctx.get("project"):
+        p = ctx["project"]
+        rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Project:</td><td style='color:#e5e7eb'>#{p.get('id')} ({p.get('clipCount', 0)} clips, selected={p.get('selectedClipId')})</td></tr>")
+
+    v = ctx.get("video", {})
+    if v.get("duration"):
+        rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Video:</td><td style='color:#e5e7eb'>time={v.get('currentTime')}s / {v.get('duration')}s playing={v.get('isPlaying')}</td></tr>")
+
+    if ctx.get("framing"):
+        f = ctx["framing"]
+        rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Framing:</td><td style='color:#e5e7eb'>clipId={f.get('currentClipId')} changed={f.get('changedSinceExport')}</td></tr>")
+
+    if ctx.get("overlay"):
+        o = ctx["overlay"]
+        rows.append(f"<tr><td style='color:#9ca3af;padding-right:12px'>Overlay:</td><td style='color:#e5e7eb'>effect={o.get('effectType')} changed={o.get('changedSinceExport')}</td></tr>")
+
+    table_rows = "\n".join(rows)
+
+    # Annotate clips table — the most valuable debugging data
+    annotate_html = ""
+    if ctx.get("annotate"):
+        a = ctx["annotate"]
+        clip_rows = ""
+        for c in a.get("clips", []):
+            selected = " style='background:#1e3a5f'" if c.get("i") is not None and a.get("selectedRegionId") else ""
+            clip_rows += f"<tr{selected}><td style='padding:2px 8px'>{c.get('i', 0) + 1}</td><td style='padding:2px 8px'>{c.get('start')}s</td><td style='padding:2px 8px'>{c.get('end')}s</td><td style='padding:2px 8px'>{c.get('rating')}</td><td style='padding:2px 8px'>{c.get('seq')}</td></tr>"
+        annotate_html = f"""
+      <div style="margin-top:8px">
+        <div style="color:#9ca3af;font-size:11px;margin-bottom:4px">Annotate: {a.get('clipCount', 0)} clips, selected={a.get('selectedRegionId')}</div>
+        <table style="font-size:11px;font-family:monospace;border-collapse:collapse;color:#e5e7eb">
+          <tr style="color:#9ca3af"><th style="padding:2px 8px;text-align:left">#</th><th style="padding:2px 8px;text-align:left">Start</th><th style="padding:2px 8px;text-align:left">End</th><th style="padding:2px 8px;text-align:left">Rating</th><th style="padding:2px 8px;text-align:left">Seq</th></tr>
+          {clip_rows}
+        </table>
+      </div>"""
+
+    return f"""
+      <div style="margin-bottom:16px;padding:12px;background:#111827;border-radius:6px;border-left:3px solid #a855f7">
+        <div style="color:#a855f7;font-size:11px;font-weight:bold;margin-bottom:8px">EDITOR CONTEXT</div>
+        <table style="font-size:13px">{table_rows}</table>
+        {annotate_html}
+      </div>"""
+
+
 async def send_problem_report_email(
     to_emails: list[str],
     reporter_email: str | None,
@@ -81,6 +134,8 @@ async def send_problem_report_email(
     description: str | None = None,
     screenshot: str | None = None,
     build: str | None = None,
+    actions: list[dict] | None = None,
+    editor_context: dict | None = None,
 ) -> None:
     """Send a problem report (client console logs) to admin emails via Resend.
 
@@ -124,6 +179,27 @@ async def send_problem_report_email(
     log_text = "\n".join(log_lines) if log_lines else "(no logs captured)"
     log_attachment_b64 = base64.b64encode(log_text.encode("utf-8")).decode("ascii")
 
+    # Editor context section — inline in the email for quick debugging
+    context_html = ""
+    if editor_context:
+        context_html = _format_editor_context_html(editor_context)
+
+    # Action breadcrumbs attachment
+    actions_attachment = None
+    if actions:
+        action_lines = []
+        for entry in actions[-50:]:
+            ts = entry.get("ts", "")
+            action = entry.get("action", "?")
+            detail = entry.get("detail", {})
+            detail_str = ", ".join(f"{k}={v}" for k, v in detail.items()) if detail else ""
+            action_lines.append(f"{ts}  {action}  {detail_str}")
+        actions_text = "\n".join(action_lines) if action_lines else "(no actions captured)"
+        actions_attachment = {
+            "filename": "action-breadcrumbs.txt",
+            "content": base64.b64encode(actions_text.encode("utf-8")).decode("ascii"),
+        }
+
     # User description section
     description_html = ""
     if description:
@@ -166,10 +242,13 @@ async def send_problem_report_email(
         <tr><td style="color:#9ca3af;padding-right:12px">Build:</td><td style="color:#e5e7eb;font-family:monospace;font-size:12px">{_html_escape(build or 'unknown')}</td></tr>
       </table>
       {description_html}
+      {context_html}
     </div>
     """
 
     attachments = [{"filename": "console-logs.txt", "content": log_attachment_b64}]
+    if actions_attachment:
+        attachments.append(actions_attachment)
     if screenshot_attachment:
         attachments.append(screenshot_attachment)
 

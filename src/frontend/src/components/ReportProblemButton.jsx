@@ -5,6 +5,8 @@ import apiFetch from '../utils/apiFetch';
 import { useAuthStore } from '../stores/authStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { getClientLogs, clearClientLogs } from '../utils/clientLogger';
+import { getActionLog } from '../utils/analytics';
+import { getEditorContext } from '../utils/editorContext';
 
 /**
  * Capture a full-page screenshot as a base64 JPEG via html2canvas.
@@ -98,6 +100,8 @@ export function ReportProblemButton({ className = '' }) {
     setState('sending');
     try {
       const logs = getClientLogs();
+      const actions = getActionLog();
+      const editorContext = getEditorContext();
       const url = `${API_BASE}/api/auth/report-problem`;
       const payload = {
         logs,
@@ -107,6 +111,8 @@ export function ReportProblemButton({ className = '' }) {
         description: description.trim() || null,
         screenshot: screenshotRef.current ? '(base64 image)' : null,
         build: typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : null,
+        actions,
+        editor_context: editorContext,
       };
       console.warn(`[ReportProblem] POST ${url} logCount=${logs.length} hasScreenshot=${!!screenshotRef.current} email=${email || 'anon'}`);
       const res = await apiFetch(url, {

@@ -1,19 +1,20 @@
 /**
- * Cloudflare Analytics wrapper
+ * Unified event tracking — Cloudflare Analytics + local breadcrumb buffer.
  *
- * Behavior:
- * - Dev (no VITE_CF_ANALYTICS_TOKEN): all calls are no-ops
- * - Prod (token set): injects CF Web Analytics beacon on first import,
- *   and sends custom events via zaraz.track() or __cfBeacon.send()
+ * Every track() call appends to a local ring buffer for "Report a problem"
+ * debugging context. By default, events also send to Cloudflare Analytics.
+ * Pass { debugOnly: true } to skip CF and only buffer locally.
  *
  * Usage:
  *   import { track } from '../utils/analytics';
- *   track('export_started', { type: 'framing' });
- *
- * To enable: set VITE_CF_ANALYTICS_TOKEN in your environment.
- * Use a separate CF site token per environment (dev/staging/prod)
- * so traffic is segmented in the Cloudflare dashboard.
+ *   track('export_started', { type: 'framing' });              // analytics + breadcrumb
+ *   track('clip_select', { id: 42 }, { debugOnly: true });     // breadcrumb only
  */
+
+import { useEditorStore } from '../stores/editorStore.js';
+import { useProjectsStore } from '../stores/projectsStore.js';
+import { useGamesDataStore } from '../stores/gamesDataStore.js';
+import { useProjectDataStore } from '../stores/projectDataStore.js';
 
 const TOKEN = import.meta.env.VITE_CF_ANALYTICS_TOKEN;
 
@@ -26,24 +27,87 @@ if (TOKEN && !document.querySelector('[data-cf-beacon]')) {
   document.head.appendChild(script);
 }
 
+// --- Breadcrumb ring buffer ---
+const MAX_ENTRIES = 50;
+const _buffer = [];
+
 /**
- * Send a named custom event to Cloudflare Analytics.
- * No-op when TOKEN is not set (dev / CI).
+ * Send a named event. Always buffered locally for bug reports.
+ * Sent to Cloudflare Analytics unless debugOnly is true.
  *
  * @param {string} event - Event name (snake_case)
  * @param {Object} [props] - Optional key/value metadata
+ * @param {Object} [options]
+ * @param {boolean} [options.debugOnly] - If true, buffer only (skip CF analytics)
  */
-export function track(event, props = {}) {
-  if (!TOKEN) return;
+export function track(event, props = {}, { debugOnly = false } = {}) {
+  _buffer.push({
+    action: event,
+    detail: props,
+    ts: new Date().toISOString(),
+  });
+  while (_buffer.length > MAX_ENTRIES) _buffer.shift();
 
-  // Prefer Zaraz if the zone has it enabled
+  if (debugOnly || !TOKEN) return;
+
   if (window.zaraz?.track) {
     window.zaraz.track(event, props);
     return;
   }
 
-  // CF Web Analytics custom event fallback
   if (typeof window.__cfBeacon?.send === 'function') {
     window.__cfBeacon.send({ type: 'event', name: event, ...props });
   }
+}
+
+/**
+ * Get a snapshot of the breadcrumb buffer (newest last).
+ */
+export function getActionLog() {
+  return [..._buffer];
+}
+
+// --- Store subscriptions for automatic breadcrumbs ---
+let _trackingInstalled = false;
+
+/**
+ * Subscribe to key Zustand store changes for automatic breadcrumbs.
+ * Call once after app boot.
+ */
+export function setupActionTracking() {
+  if (_trackingInstalled) return;
+  _trackingInstalled = true;
+
+  let prevMode = useEditorStore.getState().editorMode;
+  useEditorStore.subscribe((state) => {
+    if (state.editorMode !== prevMode) {
+      track('mode_change', { from: prevMode, to: state.editorMode }, { debugOnly: true });
+      prevMode = state.editorMode;
+    }
+  });
+
+  let prevProjectId = useProjectsStore.getState().selectedProjectId;
+  useProjectsStore.subscribe((state) => {
+    if (state.selectedProjectId !== prevProjectId) {
+      track('project_select', { id: state.selectedProjectId }, { debugOnly: true });
+      prevProjectId = state.selectedProjectId;
+    }
+  });
+
+  let prevGameId = useGamesDataStore.getState().selectedGame?.id ?? null;
+  useGamesDataStore.subscribe((state) => {
+    const gameId = state.selectedGame?.id ?? null;
+    if (gameId !== prevGameId) {
+      track('game_select', { id: gameId, name: state.selectedGame?.name }, { debugOnly: true });
+      prevGameId = gameId;
+    }
+  });
+
+  let prevClipId = useProjectDataStore.getState().selectedClipId;
+  useProjectDataStore.subscribe((state) => {
+    if (state.selectedClipId !== prevClipId) {
+      track('clip_select', { id: state.selectedClipId }, { debugOnly: true });
+      prevClipId = state.selectedClipId;
+    }
+  });
 }

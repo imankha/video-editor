@@ -696,6 +696,8 @@ class ProblemReportRequest(BaseModel):
     description: str | None = None
     screenshot: str | None = None  # base64 data URL (image/jpeg)
     build: str | None = None       # frontend commit hash
+    actions: list[dict] | None = None  # [{action, detail, ts}, ...]
+    editor_context: dict | None = None  # snapshot of editor state at report time
 
 
 @router.post("/report-problem")
@@ -729,6 +731,8 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             description=body.description,
             screenshot=body.screenshot,
             build=body.build,
+            actions=body.actions,
+            editor_context=body.editor_context,
         )
     except ValueError:
         raise HTTPException(status_code=500, detail="Email service not configured")
