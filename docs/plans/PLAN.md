@@ -207,6 +207,11 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T3080 | [Sync User Activity to SQLite](tasks/T3080-sqlite-user-activity.md) | 6 | 3 | 2.0 | DONE | [x] | Dual-write user activity (session counts, event counts, last_active_at) to per-user SQLite alongside Postgres for fast per-user reads |
 | T2940 | [Overlay Tuning](tasks/overlay-v2/T2940-overlay-tuning.md) | 8 | 3 | 2.7 | TODO | [ ] | Fix invisible/occluding overlay: bold stroke (3-4px) with dark outline, separate stroke/fill opacity, better default colors, dim slider. No architecture changes. |
 | T3060 | [Make It Load Fast](tasks/for-alpha/T3060-make-it-load-fast.md) | 8 | 5 | 1.6 | TODO | [ ] | Playwright perf tests against prod: measure Core Web Vitals on every page (account with games/reels/drafts), find and fix all bottlenecks, re-measure. |
+|  | **[Bug Tracking System](tasks/bug-tracking/EPIC.md)** | 8 | 4 | 2.0 |  |  | Replace email bug reports with DB-backed system: Postgres storage, R2 screenshots, `/bug` skill for AI triage, task board integration, bug-to-task promotion |
+| T3100 | ↳ [Bug Storage Backend](tasks/bug-tracking/T3100-bug-storage-backend.md) | 9 | 4 | 2.3 | TODO | [ ] | Postgres `bug_reports` table, R2 screenshot upload, admin API endpoints, notification-only email |
+| T3110 | ↳ [Bug Triage Skill](tasks/bug-tracking/T3110-bug-triage-skill.md) | 10 | 5 | 2.0 | TODO | [ ] | `/bug {id}` loads full context for AI investigation. `/bugs` lists open bugs with consolidation analysis for duplicates. |
+| T3120 | ↳ [Task Board Bug View](tasks/bug-tracking/T3120-task-board-bug-view.md) | 6 | 4 | 1.5 | TODO | [ ] | Bugs section in task board: cards with status/mode/description, expandable detail, status updates, promote button |
+| T3130 | ↳ [Bug Lifecycle](tasks/bug-tracking/T3130-bug-lifecycle.md) | 7 | 3 | 2.3 | TODO | [ ] | Promote confirmed bugs to task files with pre-filled context. Resolve with status. Notify reporter via email. |
 
 ### Milestone: Alpha Marketing
 
