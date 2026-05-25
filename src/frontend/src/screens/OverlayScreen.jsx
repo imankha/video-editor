@@ -468,7 +468,7 @@ export function OverlayScreen({
           if (data.effect_type) {
             setHighlightEffectType(data.effect_type);
           }
-          if (data.highlight_color !== undefined) {
+          if (data.highlight_color) {
             setHighlightColor(data.highlight_color);
           }
           if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
@@ -532,7 +532,7 @@ export function OverlayScreen({
           if (data.effect_type) {
             setHighlightEffectType(data.effect_type);
           }
-          if (data.highlight_color !== undefined) {
+          if (data.highlight_color) {
             setHighlightColor(data.highlight_color);
           }
           if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
