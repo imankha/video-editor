@@ -147,13 +147,6 @@ class KeyframeInterpolator:
             return None
         sorted_kf = sorted(valid_keyframes, key=lambda k: k['time'])
 
-        # Normalize: ensure strokeOpacity/fillOpacity exist (handles pre-migration data with 'opacity')
-        for kf in sorted_kf:
-            if 'strokeOpacity' not in kf:
-                kf['strokeOpacity'] = 0.85
-            if 'fillOpacity' not in kf:
-                kf['fillOpacity'] = kf.get('opacity', 0.05)
-
         if time > sorted_kf[-1]['time']:
             return None
 
@@ -312,10 +305,10 @@ class KeyframeInterpolator:
                            angle=0, startAngle=0, endAngle=360, color=color_bgr, thickness=-1)
                 result = cv2.addWeighted(overlay, fill_opacity, result, 1 - fill_opacity, 0)
 
-        # Dark outline behind main stroke for contrast
+        outline_bgr = tuple(int(c * 0.3) for c in color_bgr)
         outline_overlay = result.copy()
         cv2.ellipse(outline_overlay, center=(center_x, center_y), axes=(radius_x, radius_y),
-                   angle=0, startAngle=0, endAngle=360, color=(0, 0, 0), thickness=outline_w)
+                   angle=0, startAngle=0, endAngle=360, color=outline_bgr, thickness=outline_w)
         result = cv2.addWeighted(outline_overlay, 0.5, result, 0.5, 0)
 
         # Main colored stroke

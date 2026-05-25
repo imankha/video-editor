@@ -1075,6 +1075,7 @@ async def call_modal_overlay(
                     output_key=output_key,
                     highlight_regions=highlight_regions,
                     effect_type=effect_type,
+                    overlay_settings=overlay_settings or {},
                 )
 
             # Get the generator in executor (Modal API is sync)

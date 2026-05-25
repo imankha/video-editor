@@ -179,8 +179,8 @@ class HighlightKeyframe(BaseModel):
         description="Opacity of the highlight effect (0.0-1.0)"
     )
     color: str = Field(
-        default='#FFFF00',
-        description="Highlight color as hex string (e.g., '#FFFF00' for yellow)"
+        default='#FFFFFF',
+        description="Highlight color as hex string (e.g., '#FFFFFF' for white)"
     )
 
     # Origin tracking

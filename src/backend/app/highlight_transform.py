@@ -618,7 +618,7 @@ def transform_keyframe_to_raw(
         'raw_radiusX': raw_coords['radiusX'],
         'raw_radiusY': raw_coords['radiusY'],
         'opacity': keyframe.get('opacity', 0.15),
-        'color': keyframe.get('color', '#FFFF00'),
+        'color': keyframe.get('color', '#FFFFFF'),
         'player_image_path': None  # Will be filled in by image extraction
     }
 

@@ -285,9 +285,16 @@ export default function HighlightOverlay({
     currentHighlight.radiusY
   );
 
-  // Parse color for fill and stroke
-  const fillColor = currentHighlight.color || '#FFFF00';
+  const fillColor = currentHighlight.color || '#FFFFFF';
   const strokeColor = fillColor;
+  const outlineColor = (() => {
+    const hex = (fillColor || '#FFFFFF').replace('#', '');
+    if (hex.length !== 6) return '#000000';
+    const r = Math.round(parseInt(hex.slice(0, 2), 16) * 0.3);
+    const g = Math.round(parseInt(hex.slice(2, 4), 16) * 0.3);
+    const b = Math.round(parseInt(hex.slice(4, 6), 16) * 0.3);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  })();
 
   // Calculate container dimensions for dark_overlay effect
   const containerWidth = videoDisplayRect.offsetX * 2 + videoDisplayRect.width;
@@ -357,7 +364,7 @@ export default function HighlightOverlay({
           rx={screenHighlight.radiusX}
           ry={screenHighlight.radiusY}
           fill="transparent"
-          stroke="black"
+          stroke={outlineColor}
           strokeWidth={strokeWidth + 2}
           strokeOpacity={0.5}
           className="pointer-events-none"

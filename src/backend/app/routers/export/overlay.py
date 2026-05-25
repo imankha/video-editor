@@ -727,7 +727,7 @@ async def export_overlay_only(
             "start_time": 0,
             "end_time": 3,
             "keyframes": [
-                {"time": 0, "x": 100, "y": 200, "radiusX": 50, "radiusY": 80, "opacity": 0.15, "color": "#FFFF00"},
+                {"time": 0, "x": 100, "y": 200, "radiusX": 50, "radiusY": 80, "strokeOpacity": 0.85, "fillOpacity": 0.05, "color": "#FFFFFF"},
                 ...
             ]
         },
@@ -795,8 +795,8 @@ async def export_overlay_only(
                             'y': kf['y'],
                             'radiusX': kf['radiusX'],
                             'radiusY': kf['radiusY'],
-                            'strokeOpacity': kf.get('strokeOpacity', kf.get('opacity', 0.85)),
-                            'fillOpacity': kf.get('fillOpacity', kf.get('opacity', 0.05)),
+                            'strokeOpacity': kf['strokeOpacity'],
+                            'fillOpacity': kf['fillOpacity'],
                             'color': kf['color']
                         }
                         for kf in region.get('keyframes', [])

@@ -199,6 +199,7 @@ def render_overlay(
     output_key: str,
     highlight_regions: list,
     effect_type: str = "dark_overlay",
+    overlay_settings: dict = None,
 ):
     """
     Apply highlight overlays to video on GPU.
@@ -244,6 +245,7 @@ def render_overlay(
             for frame_progress in _process_overlay_gen(job_id, input_path, output_path, {
                 "highlight_regions": highlight_regions,
                 "effect_type": effect_type,
+                "overlay_settings": overlay_settings or {},
             }):
                 # Map frame processing 0-100% to overall 25-80%
                 overall = 25 + int(frame_progress * 0.55)
@@ -294,6 +296,7 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
 
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
+    overlay_settings = params.get("overlay_settings", {})
 
     if not highlight_regions:
         logger.info(f"[{job_id}] No highlights - copying video")
@@ -360,9 +363,9 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
                         'x': kf['x'] * scale_x, 'y': kf['y'] * scale_y,
                         'radiusX': kf['radiusX'] * scale_x, 'radiusY': kf['radiusY'] * scale_y,
                     } for kf in active_region.get('keyframes', [])]
-                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type)
+                    frame = _render_highlight(frame, {**active_region, 'keyframes': scaled_keyframes}, current_time, effect_type, overlay_settings)
                 else:
-                    frame = _render_highlight(frame, active_region, current_time, effect_type)
+                    frame = _render_highlight(frame, active_region, current_time, effect_type, overlay_settings)
 
             try:
                 if ffmpeg_proc.stdin and not ffmpeg_proc.stdin.closed:
@@ -424,6 +427,7 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
 
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
+    overlay_settings = params.get("overlay_settings", {})
 
     # If no highlights, just copy the video
     if not highlight_regions:
@@ -522,11 +526,11 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
                         })
                     scaled_region = {**active_region, 'keyframes': scaled_keyframes}
                     frame = _render_highlight(
-                        frame, scaled_region, current_time, effect_type
+                        frame, scaled_region, current_time, effect_type, overlay_settings
                     )
                 else:
                     frame = _render_highlight(
-                        frame, active_region, current_time, effect_type
+                        frame, active_region, current_time, effect_type, overlay_settings
                     )
 
             # Write frame to FFmpeg - check if pipe is still open
@@ -661,17 +665,19 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
     return {
         'x': sp('x'), 'y': sp('y'),
         'radiusX': sp('radiusX'), 'radiusY': sp('radiusY'),
-        'opacity': max(0.0, min(1.0, sp('opacity'))),
+        'strokeOpacity': max(0.0, min(1.0, sp('strokeOpacity'))),
+        'fillOpacity': max(0.0, min(1.0, sp('fillOpacity'))),
         'color': sorted_kf[p1_idx].get('color'),
         'time': current_time,
     }
 
 
-def _render_highlight(frame, region: dict, current_time: float, effect_type: str):
+def _render_highlight(frame, region: dict, current_time: float, effect_type: str, overlay_settings: dict = None):
     """
     Render highlight overlay on a single frame.
 
     Uses Catmull-Rom cubic spline interpolation matching frontend.
+    Supports bold stroke with dark outline, optional fill, configurable dim.
     """
     import cv2
     import numpy as np
@@ -696,58 +702,61 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     x = result['x']
     y = result['y']
-    radiusX = result['radiusX']
-    radiusY = result['radiusY']
-    opacity = result['opacity']
-    color = result.get('color')
+    radius_x = int(result['radiusX'])
+    radius_y = int(result['radiusY'])
 
-    height, width = frame.shape[:2]
+    frame_h, frame_w = frame.shape[:2]
     center = (int(x), int(y))
-    axes = (int(radiusX), int(radiusY))
 
-    # Apply effect
+    if (center[0] + radius_x < 0 or center[0] - radius_x > frame_w or
+        center[1] + radius_y < 0 or center[1] - radius_y > frame_h):
+        return frame
+
+    color_hex = (result.get('color') or '#FFFFFF').lstrip('#')
+    if len(color_hex) == 6:
+        r = int(color_hex[0:2], 16)
+        g = int(color_hex[2:4], 16)
+        b = int(color_hex[4:6], 16)
+        color_bgr = (b, g, r)
+    else:
+        color_bgr = (255, 255, 255)
+
+    settings = overlay_settings or {}
+    stroke_width_setting = settings.get('stroke_width', 3)
+    fill_enabled = settings.get('fill_enabled', False)
+    fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.05))
+    stroke_opacity = result.get('strokeOpacity', 0.85)
+    dim_strength = settings.get('dim_strength', 0.15)
+
+    stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
+    outline_w = stroke_w + 2
+
+    out = frame
+
     if effect_type == "dark_overlay":
-        # Dim everything outside the highlight
-        mask = np.zeros((height, width), dtype=np.uint8)
-        cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
-        darkened = (frame * (1 - opacity)).astype(np.uint8)
-        frame = np.where(mask[:, :, np.newaxis] > 0, frame, darkened)
-    elif effect_type == "brightness_boost":
-        # Check if color is set (not None and not 'none')
-        has_color = color is not None and color != 'none'
+        mask = np.zeros((frame_h, frame_w), dtype=np.uint8)
+        cv2.ellipse(mask, center, (radius_x, radius_y), 0, 0, 360, 255, -1)
+        mask_inv = cv2.bitwise_not(mask)
+        mask_inv_3ch = cv2.cvtColor(mask_inv, cv2.COLOR_GRAY2BGR).astype(np.float32) / 255.0
+        out = out.astype(np.float32)
+        out = out * (1.0 - mask_inv_3ch * dim_strength)
+        out = np.clip(out, 0, 255).astype(np.uint8)
 
-        if has_color:
-            # Colored overlay effect (like old "original")
-            # Parse hex color
-            color_hex = color.lstrip('#')
-            if len(color_hex) == 6:
-                r = int(color_hex[0:2], 16)
-                g = int(color_hex[2:4], 16)
-                b = int(color_hex[4:6], 16)
-                color_bgr = (b, g, r)  # OpenCV uses BGR
-            else:
-                color_bgr = (0, 255, 255)  # Default yellow
+    if fill_enabled and fill_opacity > 0:
+        overlay = out.copy()
+        cv2.ellipse(overlay, center, (radius_x, radius_y), 0, 0, 360, color_bgr, -1)
+        out = cv2.addWeighted(overlay, fill_opacity, out, 1 - fill_opacity, 0)
 
-            # Create colored overlay
-            overlay = frame.copy()
-            cv2.ellipse(overlay, center, axes, 0, 0, 360, color_bgr, -1)
+    outline_bgr = tuple(int(c * 0.3) for c in color_bgr)
+    outline_overlay = out.copy()
+    cv2.ellipse(outline_overlay, center, (radius_x, radius_y), 0, 0, 360, outline_bgr, outline_w)
+    out = cv2.addWeighted(outline_overlay, 0.5, out, 0.5, 0)
 
-            # Blend with original
-            frame = cv2.addWeighted(overlay, opacity, frame, 1 - opacity, 0)
+    stroke_overlay = out.copy()
+    cv2.ellipse(stroke_overlay, center, (radius_x, radius_y), 0, 0, 360, color_bgr, stroke_w)
+    out = cv2.addWeighted(stroke_overlay, stroke_opacity, out, 1 - stroke_opacity, 0)
 
-            # Add thin stroke
-            stroke_overlay = frame.copy()
-            cv2.ellipse(stroke_overlay, center, axes, 0, 0, 360, color_bgr, 1)
-            frame = cv2.addWeighted(stroke_overlay, 0.5, frame, 0.5, 0)
-        else:
-            # No color - pure brightness boost
-            mask = np.zeros((height, width), dtype=np.uint8)
-            cv2.ellipse(mask, center, axes, 0, 0, 360, 255, -1)
-            brightened = np.clip(frame.astype(np.float32) * (1 + opacity * 3), 0, 255).astype(np.uint8)
-            frame = np.where(mask[:, :, np.newaxis] > 0, brightened, frame)
-    # effect_type == "original" - no modification
-
-    return frame
+    return out
 
 
 # ============================================================================

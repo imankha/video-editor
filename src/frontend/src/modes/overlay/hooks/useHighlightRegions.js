@@ -94,8 +94,7 @@ export default function useHighlightRegions(videoMetadata) {
    * Uses the currently selected highlight color from the store
    */
   const calculateDefaultHighlight = useCallback((videoWidth, videoHeight) => {
-    // Use selected color, fallback to yellow if "None" is selected
-    const color = highlightColor || HighlightColor.YELLOW;
+    const color = highlightColor || HighlightColor.WHITE;
 
     if (!videoWidth || !videoHeight) {
       return { x: 0, y: 0, radiusX: 30, radiusY: 50, strokeOpacity: 0.85, fillOpacity: 0.05, color };
