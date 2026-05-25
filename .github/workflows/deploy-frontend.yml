@@ -26,7 +26,7 @@ jobs:
         env:
           VITE_API_BASE: https://reel-ballers-api-staging.fly.dev
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_STRIPE_PUBLIC_KEY: pk_test_51TCpeqILeQ5OmmAGlvMpVzDVAQroOgXo6dqCOT5JQK6vsz38K1ttQjuodGqWaPXVcSZQ3gsCh1Mf8UvLDa74uQld00UUm9epg8
+          VITE_STRIPE_PUBLIC_KEY: pk_test_51TCpejIxob3dHqK0cc9lcMJFnC4CzfmkRNYmxak1xtasVZ3173uhDp12g8XXN1aiJ9sAbJnwX48Ca0zQpqHWCrrH00xfT5YAbq
 
       - run: npx wrangler pages deploy dist --project-name=reel-ballers-staging --branch=master
         working-directory: src/frontend
