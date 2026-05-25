@@ -238,7 +238,7 @@ class KeyframeInterpolator:
 
         settings = overlay_settings or {}
         if settings.get('highlight_shape') == 'ground':
-            highlight_y_orig = highlight_y_orig + radius_y_orig
+            highlight_y_orig = highlight_y_orig + radius_y_orig / 1.3
             radius_x_orig = radius_x_orig * (2.0 / 1.3)
             radius_y_orig = radius_y_orig * 0.3
 

@@ -707,7 +707,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     settings = overlay_settings or {}
     if settings.get('highlight_shape') == 'ground':
-        y = y + radius_y
+        y = y + radius_y / 1.3
         radius_x = radius_x * (2.0 / 1.3)
         radius_y = radius_y * 0.3
 

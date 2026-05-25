@@ -285,7 +285,7 @@ export default function HighlightOverlay({
   let displayRadiusY = currentHighlight.radiusY;
 
   if (highlightShape === 'ground') {
-    displayY = currentHighlight.y + currentHighlight.radiusY;
+    displayY = currentHighlight.y + currentHighlight.radiusY / 1.3;
     displayRadiusX = currentHighlight.radiusX * (2.0 / 1.3);
     displayRadiusY = currentHighlight.radiusY * 0.3;
   }
