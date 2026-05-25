@@ -103,9 +103,8 @@ export default function PlayerDetectionOverlay({
       const bbox = detection.bbox || detection;
       const confidence = detection.confidence;
 
-      // Convert to ellipse radii (use half of width/height)
-      const radiusX = bbox.width / 2;
-      const radiusY = bbox.height / 2;
+      const radiusX = bbox.width / 2 * 1.3;
+      const radiusY = bbox.height / 2 * 1.3;
 
       onPlayerSelect({
         x: bbox.x,
