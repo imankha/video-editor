@@ -21,6 +21,7 @@ export const useOverlayStore = create((set) => ({
   highlightColor: '#FFFFFF',
 
   // Overlay tuning settings
+  highlightShape: 'body',
   strokeWidth: 2,
   fillEnabled: false,
   fillOpacity: 0.10,
@@ -34,6 +35,7 @@ export const useOverlayStore = create((set) => ({
 
   setHighlightColor: (color) => set({ highlightColor: color }),
 
+  setHighlightShape: (s) => set({ highlightShape: s }),
   setStrokeWidth: (w) => set({ strokeWidth: w }),
   setFillEnabled: (e) => set({ fillEnabled: e }),
   setFillOpacity: (o) => set({ fillOpacity: o }),
@@ -46,6 +48,7 @@ export const useOverlayStore = create((set) => ({
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
     highlightColor: '#FFFFFF',
+    highlightShape: 'body',
     strokeWidth: 2,
     fillEnabled: false,
     fillOpacity: 0.10,
@@ -62,4 +65,5 @@ export const useOverlayChangedSinceExport = () => useOverlayStore(state => state
 export const useOverlayStrokeWidth = () => useOverlayStore(state => state.strokeWidth);
 export const useOverlayFillEnabled = () => useOverlayStore(state => state.fillEnabled);
 export const useOverlayFillOpacity = () => useOverlayStore(state => state.fillOpacity);
+export const useOverlayHighlightShape = () => useOverlayStore(state => state.highlightShape);
 export const useOverlayDimStrength = () => useOverlayStore(state => state.dimStrength);

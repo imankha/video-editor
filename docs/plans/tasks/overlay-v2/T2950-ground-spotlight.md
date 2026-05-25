@@ -1,6 +1,6 @@
 # T2950: Ground Spotlight Overlay
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-05-25

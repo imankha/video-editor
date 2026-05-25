@@ -69,10 +69,12 @@ export function OverlayScreen({
     setHighlightColor,
     setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
+    highlightShape,
     strokeWidth,
     fillEnabled,
     fillOpacity,
     dimStrength,
+    setHighlightShape,
     setStrokeWidth,
     setFillEnabled,
     setFillOpacity,
@@ -471,6 +473,7 @@ export function OverlayScreen({
           if (data.highlight_color) {
             setHighlightColor(data.highlight_color);
           }
+          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
           if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
@@ -487,7 +490,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -535,6 +538,7 @@ export function OverlayScreen({
           if (data.highlight_color) {
             setHighlightColor(data.highlight_color);
           }
+          if (data.highlight_shape) setHighlightShape(data.highlight_shape);
           if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
@@ -551,7 +555,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -699,6 +703,15 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setDimStrength, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetHighlightShape = useCallback((val) => {
+    setHighlightShape(val);
+    if (canSyncActions) {
+      overlayActions.setHighlightShape(projectId, val)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightShape:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -1011,10 +1024,12 @@ export function OverlayScreen({
       highlightColor={highlightColor}
       onHighlightColorChange={wrappedSetHighlightColor}
       // Overlay tuning settings
+      highlightShape={highlightShape}
       strokeWidth={strokeWidth}
       fillEnabled={fillEnabled}
       fillOpacity={fillOpacity}
       dimStrength={dimStrength}
+      onHighlightShapeChange={wrappedSetHighlightShape}
       onStrokeWidthChange={wrappedSetStrokeWidth}
       onFillEnabledChange={wrappedSetFillEnabled}
       onFillOpacityChange={wrappedSetFillOpacity}

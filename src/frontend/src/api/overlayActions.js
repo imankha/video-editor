@@ -169,6 +169,10 @@ export async function setDimStrength(projectId, dimStrength) {
   return sendAction(projectId, 'set_dim_strength', null, { dim_strength: dimStrength });
 }
 
+export async function setHighlightShape(projectId, highlightShape) {
+  return sendAction(projectId, 'set_highlight_shape', null, { highlight_shape: highlightShape });
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -183,4 +187,5 @@ export default {
   setFillEnabled,
   setFillOpacity,
   setDimStrength,
+  setHighlightShape,
 };

@@ -236,6 +236,12 @@ class KeyframeInterpolator:
         radius_x_orig = highlight['radiusX']
         radius_y_orig = highlight['radiusY']
 
+        settings = overlay_settings or {}
+        if settings.get('highlight_shape') == 'ground':
+            highlight_y_orig = highlight_y_orig + radius_y_orig
+            radius_x_orig = radius_x_orig * (2.0 / 1.3)
+            radius_y_orig = radius_y_orig * 0.3
+
         if crop:
             crop_x = crop['x']
             crop_y = crop['y']
@@ -274,7 +280,6 @@ class KeyframeInterpolator:
         else:
             color_bgr = (255, 255, 255)
 
-        settings = overlay_settings or {}
         stroke_width_setting = settings.get('stroke_width', 2)
         fill_enabled = settings.get('fill_enabled', False)
         fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.05))

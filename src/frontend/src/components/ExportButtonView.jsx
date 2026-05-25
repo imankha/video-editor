@@ -53,6 +53,8 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onHighlightColorChange,
 
   // Overlay tuning
+  highlightShape,
+  onHighlightShapeChange,
   strokeWidth,
   fillEnabled,
   fillOpacity,
@@ -162,6 +164,44 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         {/* Overlay Tuning Controls - Overlay mode only */}
         {!isFramingMode && isHighlightEnabled && (
           <>
+            {/* Highlight Shape */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-200">Shape</span>
+                <span className="text-xs text-gray-400">
+                  {highlightShape === 'ground' ? 'Ground spotlight' : 'Body ellipse'}
+                </span>
+              </div>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => onHighlightShapeChange?.('body')}
+                  disabled={isCurrentlyExporting}
+                  className={`
+                    px-2.5 py-1 rounded text-xs font-medium transition-all
+                    ${highlightShape === 'body'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}
+                    ${isCurrentlyExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  `}
+                >
+                  Body
+                </button>
+                <button
+                  onClick={() => onHighlightShapeChange?.('ground')}
+                  disabled={isCurrentlyExporting}
+                  className={`
+                    px-2.5 py-1 rounded text-xs font-medium transition-all
+                    ${highlightShape === 'ground'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}
+                    ${isCurrentlyExporting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  `}
+                >
+                  Ground
+                </button>
+              </div>
+            </div>
+
             {/* Stroke Width */}
             <div className="flex items-center justify-between">
               <div className="flex flex-col">

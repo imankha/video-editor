@@ -148,6 +148,7 @@ class OverlayActionData(BaseModel):
     highlight_color: Optional[str] = None
 
     # Overlay tuning settings
+    highlight_shape: Optional[str] = None
     stroke_width: Optional[float] = None
     fill_enabled: Optional[bool] = None
     fill_opacity: Optional[float] = None
@@ -499,6 +500,13 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 val = max(0.0, min(0.4, action.data.dim_strength))
                 cursor.execute("UPDATE working_videos SET dim_strength = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set dim_strength to {val}")
+
+            elif action.action == "set_highlight_shape":
+                if not action.data or action.data.highlight_shape is None:
+                    raise ValueError("set_highlight_shape requires data.highlight_shape")
+                val = action.data.highlight_shape if action.data.highlight_shape in ('body', 'ground') else 'body'
+                cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
+                logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
             else:
                 raise ValueError(f"Unknown action: {action.action}")
@@ -1554,7 +1562,7 @@ async def get_overlay_data(project_id: int):
 
         cursor.execute("""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
-                   stroke_width, fill_enabled, fill_opacity, dim_strength
+                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1568,6 +1576,7 @@ async def get_overlay_data(project_id: int):
         highlight_color = None
         video_duration = None
         from_raw_clip = False
+        highlight_shape = 'body'
         stroke_width = 2
         fill_enabled = False
         fill_opacity = 0.10
@@ -1586,6 +1595,7 @@ async def get_overlay_data(project_id: int):
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
             video_duration = result['duration']
+            highlight_shape = result['highlight_shape'] or 'body'
             stroke_width = result['stroke_width']
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
@@ -1613,6 +1623,7 @@ async def get_overlay_data(project_id: int):
             'has_data': len(highlights) > 0 or len(text_overlays) > 0,
             'from_raw_clip': from_raw_clip,
             'video_duration': video_duration,
+            'highlight_shape': highlight_shape,
             'stroke_width': stroke_width,
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
@@ -1828,7 +1839,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
                    wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
-                   wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
+                   wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -1846,6 +1857,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         video_duration = project['duration'] if project['duration'] else None
 
         overlay_settings = {
+            'highlight_shape': project['highlight_shape'] or 'body',
             'stroke_width': project['stroke_width'],
             'fill_enabled': bool(project['fill_enabled']),
             'fill_opacity': project['fill_opacity'],

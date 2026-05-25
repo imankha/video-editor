@@ -702,8 +702,17 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     x = result['x']
     y = result['y']
-    radius_x = int(result['radiusX'])
-    radius_y = int(result['radiusY'])
+    radius_x = result['radiusX']
+    radius_y = result['radiusY']
+
+    settings = overlay_settings or {}
+    if settings.get('highlight_shape') == 'ground':
+        y = y + radius_y
+        radius_x = radius_x * (2.0 / 1.3)
+        radius_y = radius_y * 0.3
+
+    radius_x = int(radius_x)
+    radius_y = int(radius_y)
 
     frame_h, frame_w = frame.shape[:2]
     center = (int(x), int(y))
@@ -721,7 +730,6 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     else:
         color_bgr = (255, 255, 255)
 
-    settings = overlay_settings or {}
     stroke_width_setting = settings.get('stroke_width', 2)
     fill_enabled = settings.get('fill_enabled', False)
     fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.05))

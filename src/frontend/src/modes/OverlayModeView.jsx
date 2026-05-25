@@ -22,6 +22,8 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   onHighlightEffectTypeChange,
   highlightColor,
   onHighlightColorChange,
+  highlightShape,
+  onHighlightShapeChange,
   strokeWidth,
   fillEnabled,
   fillOpacity,
@@ -84,6 +86,8 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         onAudioToggle={container.handleAudioToggle}
         onHighlightEffectTypeChange={onHighlightEffectTypeChange}
         onHighlightColorChange={onHighlightColorChange}
+        highlightShape={highlightShape}
+        onHighlightShapeChange={onHighlightShapeChange}
         strokeWidth={strokeWidth}
         fillEnabled={fillEnabled}
         fillOpacity={fillOpacity}
@@ -169,10 +173,12 @@ export function OverlayModeView({
   onHighlightColorChange,
 
   // Overlay tuning settings
+  highlightShape = 'body',
   strokeWidth = 3,
   fillEnabled = false,
   fillOpacity = 0.10,
   dimStrength = 0.15,
+  onHighlightShapeChange,
   onStrokeWidthChange,
   onFillEnabledChange,
   onFillOpacityChange,
@@ -335,6 +341,7 @@ export function OverlayModeView({
                   onHighlightComplete={onHighlightComplete}
                   isEnabled={isTimeInEnabledRegion(currentTime)}
                   effectType={highlightEffectType}
+                  highlightShape={highlightShape}
                   strokeWidth={strokeWidth}
                   fillEnabled={fillEnabled}
                   fillOpacity={fillOpacity}
@@ -491,6 +498,8 @@ export function OverlayModeView({
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
             highlightColor={highlightColor}
             onHighlightColorChange={onHighlightColorChange}
+            highlightShape={highlightShape}
+            onHighlightShapeChange={onHighlightShapeChange}
             strokeWidth={strokeWidth}
             fillEnabled={fillEnabled}
             fillOpacity={fillOpacity}

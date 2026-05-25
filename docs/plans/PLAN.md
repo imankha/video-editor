@@ -262,7 +262,7 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
 | T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
 |  | **[Overlay 2](tasks/overlay-2/EPIC.md)** |  |  |  |  |  |  |
-| T2950 | ↳ [Ground Spotlight](tasks/overlay-v2/T2950-ground-spotlight.md) | 8 | 4 | 2.0 | TODO | [ ] | Flat ellipse at player's feet instead of body halo. Bbox bottom-edge projection, wide aspect ratio, fill-forward spotlight pool. Shape selector (Body/Ground) in settings. |
+| T2950 | ↳ [Ground Spotlight](tasks/overlay-v2/T2950-ground-spotlight.md) | 8 | 4 | 2.0 | TESTING | [ ] | Flat ellipse at player's feet instead of body halo. Bbox bottom-edge projection, wide aspect ratio, fill-forward spotlight pool. Shape selector (Body/Ground) in settings. |
 | T2160 | ↳ [Tracker Gap Bridging](tasks/overlay-v2/T2160-tracker-reacquisition.md) | 9 | 6 | 1.5 | TODO | [ ] | Spline interpolation through <0.5s tracking drops + appearance embedding for re-acquisition auto-suggest. |
 | T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
 | T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |

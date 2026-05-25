@@ -14,6 +14,7 @@ export default function HighlightOverlay({
   onHighlightComplete,
   isEnabled = false,
   effectType = HighlightEffect.DARK_OVERLAY,
+  highlightShape = 'body',
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   isFullscreen = false,
@@ -277,12 +278,24 @@ export default function HighlightOverlay({
     return null;
   }
 
+  // Apply ground spotlight transform: shift center to feet, flatten ellipse
+  let displayX = currentHighlight.x;
+  let displayY = currentHighlight.y;
+  let displayRadiusX = currentHighlight.radiusX;
+  let displayRadiusY = currentHighlight.radiusY;
+
+  if (highlightShape === 'ground') {
+    displayY = currentHighlight.y + currentHighlight.radiusY;
+    displayRadiusX = currentHighlight.radiusX * (2.0 / 1.3);
+    displayRadiusY = currentHighlight.radiusY * 0.3;
+  }
+
   // Convert highlight to screen coordinates
   const screenHighlight = videoToScreen(
-    currentHighlight.x,
-    currentHighlight.y,
-    currentHighlight.radiusX,
-    currentHighlight.radiusY
+    displayX,
+    displayY,
+    displayRadiusX,
+    displayRadiusY
   );
 
   const fillColor = currentHighlight.color || '#FFFFFF';
