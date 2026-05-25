@@ -27,19 +27,14 @@ async function getStripePromise() {
 
   // Try VITE env var first (allows override), then fetch from backend
   const envKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
-  console.error('[Stripe DEBUG] envKey:', JSON.stringify(envKey), 'API_BASE:', JSON.stringify(API_BASE));
   if (envKey) {
-    console.error('[Stripe DEBUG] Using env key:', envKey);
     stripePromiseCache = loadStripe(envKey);
     return stripePromiseCache;
   }
 
-  console.error('[Stripe DEBUG] No env key, fetching from backend...');
   const res = await apiFetch(`${API_BASE}/api/payments/config`);
-  console.error('[Stripe DEBUG] config response:', res.status, res.ok);
   if (!res.ok) return null;
   const data = await res.json();
-  console.error('[Stripe DEBUG] config data:', JSON.stringify(data));
   if (!data.publishable_key) return null;
 
   stripePromiseCache = loadStripe(data.publishable_key);
