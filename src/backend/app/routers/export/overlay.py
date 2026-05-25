@@ -1568,7 +1568,7 @@ async def get_overlay_data(project_id: int):
         highlight_color = None
         video_duration = None
         from_raw_clip = False
-        stroke_width = 3
+        stroke_width = 2
         fill_enabled = False
         fill_opacity = 0.10
         dim_strength = 0.15

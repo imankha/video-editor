@@ -14,7 +14,7 @@ class V004OverlayTuning(BaseMigration):
             return
 
         for col, default in [
-            ("stroke_width REAL", "3"),
+            ("stroke_width REAL", "2"),
             ("fill_enabled INTEGER", "0"),
             ("fill_opacity REAL", "0.10"),
             ("dim_strength REAL", "0.15"),

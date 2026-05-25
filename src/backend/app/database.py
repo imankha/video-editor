@@ -629,7 +629,7 @@ def ensure_database():
                 effect_type TEXT DEFAULT 'original',
                 overlay_version INTEGER DEFAULT 0,
                 highlight_color TEXT DEFAULT NULL,
-                stroke_width REAL DEFAULT 3,
+                stroke_width REAL DEFAULT 2,
                 fill_enabled INTEGER DEFAULT 0,
                 fill_opacity REAL DEFAULT 0.10,
                 dim_strength REAL DEFAULT 0.15,

@@ -275,7 +275,7 @@ class KeyframeInterpolator:
             color_bgr = (255, 255, 255)
 
         settings = overlay_settings or {}
-        stroke_width_setting = settings.get('stroke_width', 3)
+        stroke_width_setting = settings.get('stroke_width', 2)
         fill_enabled = settings.get('fill_enabled', False)
         fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.05))
         stroke_opacity = highlight.get('strokeOpacity', 0.85)

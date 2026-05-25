@@ -722,7 +722,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
         color_bgr = (255, 255, 255)
 
     settings = overlay_settings or {}
-    stroke_width_setting = settings.get('stroke_width', 3)
+    stroke_width_setting = settings.get('stroke_width', 2)
     fill_enabled = settings.get('fill_enabled', False)
     fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.05))
     stroke_opacity = result.get('strokeOpacity', 0.85)

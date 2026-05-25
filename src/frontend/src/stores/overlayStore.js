@@ -18,10 +18,10 @@ import { HighlightEffect } from '../constants/highlightEffects';
 export const useOverlayStore = create((set) => ({
   effectType: HighlightEffect.DARK_OVERLAY,
 
-  highlightColor: 'none',
+  highlightColor: '#FFFFFF',
 
   // Overlay tuning settings
-  strokeWidth: 3,
+  strokeWidth: 2,
   fillEnabled: false,
   fillOpacity: 0.10,
   dimStrength: 0.15,
@@ -45,8 +45,8 @@ export const useOverlayStore = create((set) => ({
 
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
-    highlightColor: 'none',
-    strokeWidth: 3,
+    highlightColor: '#FFFFFF',
+    strokeWidth: 2,
     fillEnabled: false,
     fillOpacity: 0.10,
     dimStrength: 0.15,

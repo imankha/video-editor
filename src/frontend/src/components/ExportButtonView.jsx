@@ -119,7 +119,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
             <div className="flex flex-col">
               <span className="text-sm font-medium text-gray-200">Highlight Color</span>
               <span className="text-xs text-gray-400">
-                {HIGHLIGHT_COLOR_LABELS[highlightColor] || 'Yellow'}
+                {HIGHLIGHT_COLOR_LABELS[highlightColor] || 'White'}
               </span>
             </div>
 
