@@ -16,7 +16,11 @@ export default function HighlightOverlay({
   effectType = HighlightEffect.DARK_OVERLAY,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
-  isFullscreen = false
+  isFullscreen = false,
+  strokeWidth = 3,
+  fillEnabled = false,
+  fillOpacity = 0.10,
+  dimStrength = 0.15,
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -147,7 +151,8 @@ export default function HighlightOverlay({
       y: round3(constrained.y),
       radiusX: round3(constrained.radiusX),
       radiusY: round3(constrained.radiusY),
-      opacity: constrained.opacity,
+      strokeOpacity: constrained.strokeOpacity,
+      fillOpacity: constrained.fillOpacity,
       color: constrained.color
     };
   }, [videoMetadata]);
@@ -242,7 +247,8 @@ export default function HighlightOverlay({
         y: round3(finalHighlight.y),
         radiusX: round3(finalHighlight.radiusX),
         radiusY: round3(finalHighlight.radiusY),
-        opacity: finalHighlight.opacity,
+        strokeOpacity: finalHighlight.strokeOpacity,
+        fillOpacity: finalHighlight.fillOpacity,
         color: finalHighlight.color
       });
     }
@@ -304,9 +310,7 @@ export default function HighlightOverlay({
         className="absolute inset-0 w-full h-full pointer-events-none"
         style={{ position: 'absolute', top: 0, left: 0 }}
       >
-        {/* Define masks and filters for different effects */}
         <defs>
-          {/* Mask for dark_overlay effect - ellipse is transparent, rest is dark */}
           <mask id="highlight-mask">
             <rect width="100%" height="100%" fill="white" />
             <ellipse
@@ -319,7 +323,7 @@ export default function HighlightOverlay({
           </mask>
         </defs>
 
-        {/* Dark overlay effect - darken everything outside the ellipse */}
+        {/* Dark overlay effect - dim everything outside the ellipse */}
         {effectType === HighlightEffect.DARK_OVERLAY && (
           <rect
             x="0"
@@ -327,39 +331,39 @@ export default function HighlightOverlay({
             width="100%"
             height="100%"
             fill="black"
-            fillOpacity="0.4"
+            fillOpacity={dimStrength}
             mask="url(#highlight-mask)"
             className="pointer-events-none"
           />
         )}
 
-        {/* Brightness boost effect - colored fill or brightness boost */}
-        {effectType === HighlightEffect.BRIGHTNESS_BOOST && currentHighlight.color && currentHighlight.color !== 'none' && (
-          /* Color selected: show colored overlay (like old "original") */
+        {/* Optional fill (when fillEnabled) */}
+        {fillEnabled && currentHighlight.color && currentHighlight.color !== 'none' && (
           <ellipse
             cx={screenHighlight.x}
             cy={screenHighlight.y}
             rx={screenHighlight.radiusX}
             ry={screenHighlight.radiusY}
             fill={fillColor}
-            fillOpacity={currentHighlight.opacity || 0.15}
-            className="pointer-events-none"
-          />
-        )}
-        {effectType === HighlightEffect.BRIGHTNESS_BOOST && (!currentHighlight.color || currentHighlight.color === 'none') && (
-          /* No color (None): pure brightness boost */
-          <ellipse
-            cx={screenHighlight.x}
-            cy={screenHighlight.y}
-            rx={screenHighlight.radiusX}
-            ry={screenHighlight.radiusY}
-            fill="white"
-            fillOpacity="0.3"
+            fillOpacity={fillOpacity ?? currentHighlight.fillOpacity ?? 0.05}
             className="pointer-events-none"
           />
         )}
 
-        {/* Interactive ellipse for dragging (always visible as dashed outline) */}
+        {/* Dark outline stroke (renders behind main stroke for contrast) */}
+        <ellipse
+          cx={screenHighlight.x}
+          cy={screenHighlight.y}
+          rx={screenHighlight.radiusX}
+          ry={screenHighlight.radiusY}
+          fill="transparent"
+          stroke="black"
+          strokeWidth={strokeWidth + 2}
+          strokeOpacity={0.5}
+          className="pointer-events-none"
+        />
+
+        {/* Main colored stroke (bold, solid) */}
         <ellipse
           cx={screenHighlight.x}
           cy={screenHighlight.y}
@@ -367,9 +371,8 @@ export default function HighlightOverlay({
           ry={screenHighlight.radiusY}
           fill="transparent"
           stroke={strokeColor}
-          strokeWidth="2"
-          strokeOpacity="0.6"
-          strokeDasharray="5,5"
+          strokeWidth={strokeWidth}
+          strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
           className="pointer-events-auto cursor-move"
           onMouseDown={handleEllipseMouseDown}
         />

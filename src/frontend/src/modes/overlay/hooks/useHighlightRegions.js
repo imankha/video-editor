@@ -98,7 +98,7 @@ export default function useHighlightRegions(videoMetadata) {
     const color = highlightColor || HighlightColor.YELLOW;
 
     if (!videoWidth || !videoHeight) {
-      return { x: 0, y: 0, radiusX: 30, radiusY: 50, opacity: 0.15, color };
+      return { x: 0, y: 0, radiusX: 30, radiusY: 50, strokeOpacity: 0.85, fillOpacity: 0.05, color };
     }
 
     const radiusX = Math.round(videoHeight * 0.06);
@@ -111,7 +111,8 @@ export default function useHighlightRegions(videoMetadata) {
       y,
       radiusX,
       radiusY,
-      opacity: 0.15,
+      strokeOpacity: 0.85,
+      fillOpacity: 0.05,
       color
     };
   }, [highlightColor]);
@@ -182,7 +183,8 @@ export default function useHighlightRegions(videoMetadata) {
           y: kf.y,
           radiusX: kf.radiusX,
           radiusY: kf.radiusY,
-          opacity: kf.opacity,
+          strokeOpacity: kf.strokeOpacity,
+          fillOpacity: kf.fillOpacity,
           color: kf.color
         };
       });
@@ -678,9 +680,9 @@ export default function useHighlightRegions(videoMetadata) {
               y: kf.y,
               radiusX: kf.radiusX,
               radiusY: kf.radiusY,
-              opacity: kf.opacity,
+              strokeOpacity: kf.strokeOpacity,
+              fillOpacity: kf.fillOpacity,
               color: kf.color
-              // Note: origin is computed dynamically based on position, not stored
             };
           })
           // Filter out keyframes with invalid time or outside region bounds

@@ -482,6 +482,7 @@ def _overlay_sync(
     effect_type: str = "dark_overlay",
     video_duration: float = None,
     progress_callback=None,
+    overlay_settings: dict = None,
 ) -> dict:
     from app.storage import download_from_r2, upload_to_r2
     from app.routers.export.overlay import _process_frames_to_ffmpeg
@@ -521,6 +522,7 @@ def _overlay_sync(
                     highlight_regions,
                     effect_type,
                     frame_progress,
+                    overlay_settings=overlay_settings,
                 )
 
             process_time = time.time() - start_time - download_time

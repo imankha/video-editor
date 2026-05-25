@@ -22,6 +22,14 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   onHighlightEffectTypeChange,
   highlightColor,
   onHighlightColorChange,
+  strokeWidth,
+  fillEnabled,
+  fillOpacity,
+  dimStrength,
+  onStrokeWidthChange,
+  onFillEnabledChange,
+  onFillOpacityChange,
+  onDimStrengthChange,
   includeAudio,
   onIncludeAudioChange,
   onExportComplete,
@@ -76,6 +84,14 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         onAudioToggle={container.handleAudioToggle}
         onHighlightEffectTypeChange={onHighlightEffectTypeChange}
         onHighlightColorChange={onHighlightColorChange}
+        strokeWidth={strokeWidth}
+        fillEnabled={fillEnabled}
+        fillOpacity={fillOpacity}
+        dimStrength={dimStrength}
+        onStrokeWidthChange={onStrokeWidthChange}
+        onFillEnabledChange={onFillEnabledChange}
+        onFillOpacityChange={onFillOpacityChange}
+        onDimStrengthChange={onDimStrengthChange}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={null}
@@ -151,6 +167,16 @@ export function OverlayModeView({
   onHighlightEffectTypeChange,
   highlightColor,
   onHighlightColorChange,
+
+  // Overlay tuning settings
+  strokeWidth = 3,
+  fillEnabled = false,
+  fillOpacity = 0.10,
+  dimStrength = 0.15,
+  onStrokeWidthChange,
+  onFillEnabledChange,
+  onFillOpacityChange,
+  onDimStrengthChange,
 
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
@@ -309,6 +335,10 @@ export function OverlayModeView({
                   onHighlightComplete={onHighlightComplete}
                   isEnabled={isTimeInEnabledRegion(currentTime)}
                   effectType={highlightEffectType}
+                  strokeWidth={strokeWidth}
+                  fillEnabled={fillEnabled}
+                  fillOpacity={fillOpacity}
+                  dimStrength={dimStrength}
                   zoom={zoom}
                   panOffset={panOffset}
                   isFullscreen={isFullscreen}
@@ -461,6 +491,14 @@ export function OverlayModeView({
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
             highlightColor={highlightColor}
             onHighlightColorChange={onHighlightColorChange}
+            strokeWidth={strokeWidth}
+            fillEnabled={fillEnabled}
+            fillOpacity={fillOpacity}
+            dimStrength={dimStrength}
+            onStrokeWidthChange={onStrokeWidthChange}
+            onFillEnabledChange={onFillEnabledChange}
+            onFillOpacityChange={onFillOpacityChange}
+            onDimStrengthChange={onDimStrengthChange}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onExportComplete={onExportComplete}

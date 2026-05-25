@@ -69,6 +69,14 @@ export function OverlayScreen({
     setHighlightColor,
     setIsLoadingWorkingVideo,
     setOverlayChangedSinceExport,
+    strokeWidth,
+    fillEnabled,
+    fillOpacity,
+    dimStrength,
+    setStrokeWidth,
+    setFillEnabled,
+    setFillOpacity,
+    setDimStrength,
   } = useOverlayStore();
   const hasClips = clips && clips.length > 0;
 
@@ -463,21 +471,23 @@ export function OverlayScreen({
           if (data.highlight_color !== undefined) {
             setHighlightColor(data.highlight_color);
           }
+          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
+          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
+          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
+          if (data.dim_strength != null) setDimStrength(data.dim_strength);
 
-          // Transition to ready state - actions will now sync to backend
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data after export:', err);
-          // On error, create default region but still mark as ready
           addHighlightRegion(0);
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -525,14 +535,16 @@ export function OverlayScreen({
           if (data.highlight_color !== undefined) {
             setHighlightColor(data.highlight_color);
           }
+          if (data.stroke_width != null) setStrokeWidth(data.stroke_width);
+          if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
+          if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
+          if (data.dim_strength != null) setDimStrength(data.dim_strength);
 
-          // Transition to ready state - actions will now sync to backend
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
           setOverlayChangedSinceExport(false);
         } catch (err) {
           console.error('[OverlayScreen] Failed to load overlay data:', err);
-          // On error, still create default region so user isn't stuck
           addHighlightRegion(0);
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -643,7 +655,6 @@ export function OverlayScreen({
     setOverlayChangedSinceExport(true);
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
-  // Wrapped handler: Set highlight color
   const wrappedSetHighlightColor = useCallback((color) => {
     setHighlightColor(color);
     if (canSyncActions) {
@@ -652,6 +663,42 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightColor, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetStrokeWidth = useCallback((val) => {
+    setStrokeWidth(val);
+    if (canSyncActions) {
+      overlayActions.setStrokeWidth(projectId, val)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setStrokeWidth:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setStrokeWidth, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetFillEnabled = useCallback((val) => {
+    setFillEnabled(val);
+    if (canSyncActions) {
+      overlayActions.setFillEnabled(projectId, val)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setFillEnabled:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setFillEnabled, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetFillOpacity = useCallback((val) => {
+    setFillOpacity(val);
+    if (canSyncActions) {
+      overlayActions.setFillOpacity(projectId, val)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setFillOpacity:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setFillOpacity, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetDimStrength = useCallback((val) => {
+    setDimStrength(val);
+    if (canSyncActions) {
+      overlayActions.setDimStrength(projectId, val)
+        .catch(err => console.error('[OverlayScreen] Failed to sync setDimStrength:', err));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setDimStrength, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -963,6 +1010,15 @@ export function OverlayScreen({
       onHighlightEffectTypeChange={wrappedSetHighlightEffectType}
       highlightColor={highlightColor}
       onHighlightColorChange={wrappedSetHighlightColor}
+      // Overlay tuning settings
+      strokeWidth={strokeWidth}
+      fillEnabled={fillEnabled}
+      fillOpacity={fillOpacity}
+      dimStrength={dimStrength}
+      onStrokeWidthChange={wrappedSetStrokeWidth}
+      onFillEnabledChange={wrappedSetFillEnabled}
+      onFillOpacityChange={wrappedSetFillOpacity}
+      onDimStrengthChange={wrappedSetDimStrength}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}

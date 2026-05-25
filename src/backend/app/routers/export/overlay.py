@@ -123,7 +123,7 @@ class OverlayActionTarget(BaseModel):
 class OverlayActionData(BaseModel):
     """Data payload for overlay actions. Fields used depend on action type."""
     # Region fields
-    region_id: Optional[str] = None  # Client-generated ID for optimistic updates
+    region_id: Optional[str] = None
     start_time: Optional[float] = None
     end_time: Optional[float] = None
     enabled: Optional[bool] = None
@@ -134,7 +134,8 @@ class OverlayActionData(BaseModel):
     y: Optional[float] = None
     radiusX: Optional[float] = None
     radiusY: Optional[float] = None
-    opacity: Optional[float] = None
+    strokeOpacity: Optional[float] = None
+    fillOpacity: Optional[float] = None
     color: Optional[str] = None
 
     # Detection data (for auto-created keyframes)
@@ -145,6 +146,12 @@ class OverlayActionData(BaseModel):
 
     # Highlight color
     highlight_color: Optional[str] = None
+
+    # Overlay tuning settings
+    stroke_width: Optional[float] = None
+    fill_enabled: Optional[bool] = None
+    fill_opacity: Optional[float] = None
+    dim_strength: Optional[float] = None
 
 
 class OverlayAction(BaseModel):
@@ -360,7 +367,6 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 # Check if keyframe already exists at this time
                 kf_idx = _find_keyframe_index(keyframes, action.data.time)
                 if kf_idx != -1:
-                    # Update existing keyframe
                     kf = keyframes[kf_idx]
                     if action.data.x is not None:
                         kf['x'] = action.data.x
@@ -370,21 +376,23 @@ async def overlay_action(project_id: int, action: OverlayAction):
                         kf['radiusX'] = action.data.radiusX
                     if action.data.radiusY is not None:
                         kf['radiusY'] = action.data.radiusY
-                    if action.data.opacity is not None:
-                        kf['opacity'] = action.data.opacity
+                    if action.data.strokeOpacity is not None:
+                        kf['strokeOpacity'] = action.data.strokeOpacity
+                    if action.data.fillOpacity is not None:
+                        kf['fillOpacity'] = action.data.fillOpacity
                     if action.data.color is not None:
                         kf['color'] = action.data.color
                     logger.info(f"[Overlay Action] Updated keyframe at {action.data.time}s")
                 else:
-                    # Create new keyframe
                     new_kf = {
                         'time': action.data.time,
                         'x': action.data.x or 0.5,
                         'y': action.data.y or 0.5,
                         'radiusX': action.data.radiusX or 0.1,
                         'radiusY': action.data.radiusY or 0.15,
-                        'opacity': action.data.opacity or 0.3,
-                        'color': action.data.color or '#FFFF00',
+                        'strokeOpacity': action.data.strokeOpacity or 0.85,
+                        'fillOpacity': action.data.fillOpacity or 0.05,
+                        'color': action.data.color or '#FFFFFF',
                     }
                     if action.data.fromDetection:
                         new_kf['fromDetection'] = True
@@ -421,8 +429,10 @@ async def overlay_action(project_id: int, action: OverlayAction):
                         kf['radiusX'] = action.data.radiusX
                     if action.data.radiusY is not None:
                         kf['radiusY'] = action.data.radiusY
-                    if action.data.opacity is not None:
-                        kf['opacity'] = action.data.opacity
+                    if action.data.strokeOpacity is not None:
+                        kf['strokeOpacity'] = action.data.strokeOpacity
+                    if action.data.fillOpacity is not None:
+                        kf['fillOpacity'] = action.data.fillOpacity
                     if action.data.color is not None:
                         kf['color'] = action.data.color
 
@@ -457,18 +467,42 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 logger.info(f"[Overlay Action] Set effect type to {effect_type}")
 
             elif action.action == "set_highlight_color":
-                # Change highlight color for new highlights
                 if not action.data:
                     raise ValueError("set_highlight_color requires data")
 
-                # Allow null to clear the color (defaults to None/"no preference")
                 highlight_color = action.data.highlight_color
                 logger.info(f"[Overlay Action] Set highlight color to {highlight_color}")
+
+            elif action.action == "set_stroke_width":
+                if not action.data or action.data.stroke_width is None:
+                    raise ValueError("set_stroke_width requires data.stroke_width")
+                val = max(1, min(6, action.data.stroke_width))
+                cursor.execute("UPDATE working_videos SET stroke_width = ? WHERE id = ?", (val, working_video_id))
+                logger.info(f"[Overlay Action] Set stroke_width to {val}")
+
+            elif action.action == "set_fill_enabled":
+                if not action.data or action.data.fill_enabled is None:
+                    raise ValueError("set_fill_enabled requires data.fill_enabled")
+                cursor.execute("UPDATE working_videos SET fill_enabled = ? WHERE id = ?", (int(action.data.fill_enabled), working_video_id))
+                logger.info(f"[Overlay Action] Set fill_enabled to {action.data.fill_enabled}")
+
+            elif action.action == "set_fill_opacity":
+                if not action.data or action.data.fill_opacity is None:
+                    raise ValueError("set_fill_opacity requires data.fill_opacity")
+                val = max(0.0, min(0.4, action.data.fill_opacity))
+                cursor.execute("UPDATE working_videos SET fill_opacity = ? WHERE id = ?", (val, working_video_id))
+                logger.info(f"[Overlay Action] Set fill_opacity to {val}")
+
+            elif action.action == "set_dim_strength":
+                if not action.data or action.data.dim_strength is None:
+                    raise ValueError("set_dim_strength requires data.dim_strength")
+                val = max(0.0, min(0.4, action.data.dim_strength))
+                cursor.execute("UPDATE working_videos SET dim_strength = ? WHERE id = ?", (val, working_video_id))
+                logger.info(f"[Overlay Action] Set dim_strength to {val}")
 
             else:
                 raise ValueError(f"Unknown action: {action.action}")
 
-            # Save changes
             _save_overlay_data(cursor, working_video_id, highlights, effect_type, highlight_color, new_version)
             conn.commit()
 
@@ -501,7 +535,8 @@ def _process_frames_to_ffmpeg(
     output_path: str,
     highlight_regions: list,
     highlight_effect_type: str,
-    progress_callback
+    progress_callback,
+    overlay_settings: dict = None,
 ) -> int:
     """
     Process video frames with highlight overlays, piping directly to FFmpeg.
@@ -636,7 +671,8 @@ def _process_frames_to_ffmpeg(
                         highlight,
                         (width, height),
                         crop=None,
-                        effect_type=highlight_effect_type
+                        effect_type=highlight_effect_type,
+                        overlay_settings=overlay_settings,
                     )
 
             # Write frame directly to FFmpeg's stdin (no disk I/O!)
@@ -759,7 +795,8 @@ async def export_overlay_only(
                             'y': kf['y'],
                             'radiusX': kf['radiusX'],
                             'radiusY': kf['radiusY'],
-                            'opacity': kf['opacity'],
+                            'strokeOpacity': kf.get('strokeOpacity', kf.get('opacity', 0.85)),
+                            'fillOpacity': kf.get('fillOpacity', kf.get('opacity', 0.05)),
                             'color': kf['color']
                         }
                         for kf in region.get('keyframes', [])
@@ -781,7 +818,8 @@ async def export_overlay_only(
                     'y': kf['y'],
                     'radiusX': kf['radiusX'],
                     'radiusY': kf['radiusY'],
-                    'opacity': kf['opacity'],
+                    'strokeOpacity': kf.get('strokeOpacity', kf.get('opacity', 0.85)),
+                    'fillOpacity': kf.get('fillOpacity', kf.get('opacity', 0.05)),
                     'color': kf['color']
                 }
                 for kf in highlight_data
@@ -1514,9 +1552,9 @@ async def get_overlay_data(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Get latest working video's overlay data for this project
         cursor.execute("""
-            SELECT highlights_data, text_overlays, effect_type, highlight_color, duration
+            SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
+                   stroke_width, fill_enabled, fill_opacity, dim_strength
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1524,13 +1562,16 @@ async def get_overlay_data(project_id: int):
         """, (project_id,))
         result = cursor.fetchone()
 
-        # Parse project-specific overlay data
         highlights = []
         text_overlays = []
         effect_type = DEFAULT_HIGHLIGHT_EFFECT.value
-        highlight_color = None  # Default to None (user hasn't selected a color yet)
+        highlight_color = None
         video_duration = None
         from_raw_clip = False
+        stroke_width = 3
+        fill_enabled = False
+        fill_opacity = 0.10
+        dim_strength = 0.15
 
         if result:
             if result['highlights_data']:
@@ -1543,8 +1584,12 @@ async def get_overlay_data(project_id: int):
                 text_overlays = decode_data(result['text_overlays']) or []
 
             effect_type = normalize_effect_type(result['effect_type'])
-            highlight_color = result['highlight_color']  # Can be None
-            video_duration = result['duration']  # Working video duration (seconds)
+            highlight_color = result['highlight_color']
+            video_duration = result['duration']
+            stroke_width = result['stroke_width']
+            fill_enabled = bool(result['fill_enabled'])
+            fill_opacity = result['fill_opacity']
+            dim_strength = result['dim_strength']
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1568,6 +1613,10 @@ async def get_overlay_data(project_id: int):
             'has_data': len(highlights) > 0 or len(text_overlays) > 0,
             'from_raw_clip': from_raw_clip,
             'video_duration': video_duration,
+            'stroke_width': stroke_width,
+            'fill_enabled': fill_enabled,
+            'fill_opacity': fill_opacity,
+            'dim_strength': dim_strength,
         })
 
 
@@ -1635,6 +1684,7 @@ async def _run_local_overlay_export(
     highlight_regions: list,
     effect_type: str,
     video_duration: float,
+    overlay_settings: dict = None,
 ):
     """
     T760: Run overlay export in background when Modal is disabled.
@@ -1668,6 +1718,7 @@ async def _run_local_overlay_export(
             video_duration=video_duration,
             progress_callback=progress_callback,
             call_id_callback=modal_call_id_callback,
+            overlay_settings=overlay_settings,
         )
 
         if result.get("status") != "success":
@@ -1776,7 +1827,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         cursor.execute("""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
-                   wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration
+                   wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
+                   wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -1786,15 +1838,19 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         if not project:
             raise HTTPException(status_code=404, detail="Project not found or has no working video")
 
-        # Use shared helper to derive a better name if needed
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
 
         working_filename = project['working_filename']
 
-        # Get video duration from working_videos table for cost-optimized GPU selection
-        # If duration is not available, defaults to None (triggers sequential 1 GPU processing)
         video_duration = project['duration'] if project['duration'] else None
+
+        overlay_settings = {
+            'stroke_width': project['stroke_width'],
+            'fill_enabled': bool(project['fill_enabled']),
+            'fill_opacity': project['fill_opacity'],
+            'dim_strength': project['dim_strength'],
+        }
 
         # Create export_jobs record
         try:
@@ -1981,6 +2037,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
                 highlight_regions=highlight_regions,
                 effect_type=effect_type,
                 video_duration=video_duration,
+                overlay_settings=overlay_settings,
             )
         )
         return JSONResponse(
@@ -2020,7 +2077,6 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         def modal_call_id_callback(modal_call_id: str):
             store_call_id(export_id, modal_call_id)
 
-        # Call unified interface - routes to Modal or local_overlay automatically
         result = await call_modal_overlay_auto(
             job_id=export_id,
             user_id=user_id,
@@ -2031,6 +2087,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             video_duration=video_duration,
             progress_callback=progress_callback,
             call_id_callback=modal_call_id_callback,
+            overlay_settings=overlay_settings,
         )
 
         if result.get("status") != "success":

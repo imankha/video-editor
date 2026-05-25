@@ -153,6 +153,22 @@ export async function setHighlightColor(projectId, highlightColor) {
   return sendAction(projectId, 'set_highlight_color', null, { highlight_color: highlightColor });
 }
 
+export async function setStrokeWidth(projectId, strokeWidth) {
+  return sendAction(projectId, 'set_stroke_width', null, { stroke_width: strokeWidth });
+}
+
+export async function setFillEnabled(projectId, fillEnabled) {
+  return sendAction(projectId, 'set_fill_enabled', null, { fill_enabled: fillEnabled });
+}
+
+export async function setFillOpacity(projectId, fillOpacity) {
+  return sendAction(projectId, 'set_fill_opacity', null, { fill_opacity: fillOpacity });
+}
+
+export async function setDimStrength(projectId, dimStrength) {
+  return sendAction(projectId, 'set_dim_strength', null, { dim_strength: dimStrength });
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -163,4 +179,8 @@ export default {
   deleteKeyframe,
   setEffectType,
   setHighlightColor,
+  setStrokeWidth,
+  setFillEnabled,
+  setFillOpacity,
+  setDimStrength,
 };

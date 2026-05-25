@@ -23,7 +23,7 @@ export default function useHighlight(videoMetadata, trimRange = null) {
   const [highlightDuration, setHighlightDuration] = useState(5); // Default 5 seconds
 
   // Highlight data keys for copy/paste operations
-  const highlightDataKeys = ['x', 'y', 'radiusX', 'radiusY', 'opacity', 'color'];
+  const highlightDataKeys = ['x', 'y', 'radiusX', 'radiusY', 'strokeOpacity', 'fillOpacity', 'color'];
 
   // Initialize shared keyframe management
   const keyframeManager = useKeyframeController({
@@ -42,13 +42,11 @@ export default function useHighlight(videoMetadata, trimRange = null) {
    */
   const calculateDefaultHighlight = useCallback((videoWidth, videoHeight) => {
     if (!videoWidth || !videoHeight) {
-      return { x: 0, y: 0, radiusX: 30, radiusY: 50, opacity: 0.15, color: '#FFFF00' };
+      return { x: 0, y: 0, radiusX: 30, radiusY: 50, strokeOpacity: 0.85, fillOpacity: 0.05, color: '#FFFFFF' };
     }
 
-    // Default: vertical ellipse centered in the video
-    // radiusY is 1.5x radiusX for upright players
-    const radiusX = Math.round(videoHeight * 0.06); // Smaller horizontal radius
-    const radiusY = Math.round(videoHeight * 0.12); // Larger vertical radius (1.5-2x)
+    const radiusX = Math.round(videoHeight * 0.06);
+    const radiusY = Math.round(videoHeight * 0.12);
     const x = Math.round(videoWidth / 2);
     const y = Math.round(videoHeight / 2);
 
@@ -57,8 +55,9 @@ export default function useHighlight(videoMetadata, trimRange = null) {
       y,
       radiusX,
       radiusY,
-      opacity: 0.15, // More transparent
-      color: '#FFFF00' // Yellow highlight
+      strokeOpacity: 0.85,
+      fillOpacity: 0.05,
+      color: '#FFFFFF'
     };
   }, []);
 

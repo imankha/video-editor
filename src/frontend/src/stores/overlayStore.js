@@ -16,22 +16,28 @@ import { HighlightEffect } from '../constants/highlightEffects';
  */
 
 export const useOverlayStore = create((set) => ({
-  // Effect settings (default to dark_overlay, backend loads actual value)
   effectType: HighlightEffect.DARK_OVERLAY,
 
-  // Highlight color for new highlights ('none' = brightness boost, color = colored overlay)
   highlightColor: 'none',
 
-  // Loading states
+  // Overlay tuning settings
+  strokeWidth: 3,
+  fillEnabled: false,
+  fillOpacity: 0.10,
+  dimStrength: 0.15,
+
   isLoadingWorkingVideo: false,
 
-  // Track if overlay has changed since last export (similar to framing)
   overlayChangedSinceExport: false,
 
-  // Actions
   setEffectType: (type) => set({ effectType: type }),
 
   setHighlightColor: (color) => set({ highlightColor: color }),
+
+  setStrokeWidth: (w) => set({ strokeWidth: w }),
+  setFillEnabled: (e) => set({ fillEnabled: e }),
+  setFillOpacity: (o) => set({ fillOpacity: o }),
+  setDimStrength: (d) => set({ dimStrength: d }),
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
@@ -39,15 +45,21 @@ export const useOverlayStore = create((set) => ({
 
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
-    highlightColor: 'none',  // Reset to brightness boost
+    highlightColor: 'none',
+    strokeWidth: 3,
+    fillEnabled: false,
+    fillOpacity: 0.10,
+    dimStrength: 0.15,
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),
 }));
 
-// Selector hooks
-// NOTE: useOverlayWorkingVideo and useOverlayClipMetadata removed - use projectDataStore
 export const useOverlayEffectType = () => useOverlayStore(state => state.effectType);
 export const useOverlayHighlightColor = () => useOverlayStore(state => state.highlightColor);
 export const useOverlayIsLoading = () => useOverlayStore(state => state.isLoadingWorkingVideo);
 export const useOverlayChangedSinceExport = () => useOverlayStore(state => state.overlayChangedSinceExport);
+export const useOverlayStrokeWidth = () => useOverlayStore(state => state.strokeWidth);
+export const useOverlayFillEnabled = () => useOverlayStore(state => state.fillEnabled);
+export const useOverlayFillOpacity = () => useOverlayStore(state => state.fillOpacity);
+export const useOverlayDimStrength = () => useOverlayStore(state => state.dimStrength);

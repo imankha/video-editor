@@ -53,6 +53,16 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   onHighlightEffectTypeChange,
   onHighlightColorChange,
 
+  // Overlay tuning
+  strokeWidth,
+  fillEnabled,
+  fillOpacity,
+  dimStrength,
+  onStrokeWidthChange,
+  onFillEnabledChange,
+  onFillOpacityChange,
+  onDimStrengthChange,
+
   // Config/labels
   HIGHLIGHT_EFFECT_LABELS,
   EXPORT_CONFIG,
@@ -170,6 +180,78 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               })}
             </div>
           </div>
+        )}
+
+        {/* Overlay Tuning Controls - Overlay mode only */}
+        {!isFramingMode && isHighlightEnabled && (
+          <>
+            {/* Stroke Width */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-200">Stroke Width</span>
+                <span className="text-xs text-gray-400">{strokeWidth}px</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="6"
+                step="1"
+                value={strokeWidth ?? 3}
+                onChange={(e) => onStrokeWidthChange?.(Number(e.target.value))}
+                disabled={isCurrentlyExporting}
+                className="w-24 accent-blue-500"
+              />
+            </div>
+
+            {/* Fill Toggle + Opacity */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-gray-200">Fill</span>
+                <span className="text-xs text-gray-400">
+                  {fillEnabled ? `${Math.round((fillOpacity ?? 0.10) * 100)}% opacity` : 'Off'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {fillEnabled && (
+                  <input
+                    type="range"
+                    min="0"
+                    max="40"
+                    step="5"
+                    value={Math.round((fillOpacity ?? 0.10) * 100)}
+                    onChange={(e) => onFillOpacityChange?.(Number(e.target.value) / 100)}
+                    disabled={isCurrentlyExporting}
+                    className="w-16 accent-blue-500"
+                  />
+                )}
+                <Toggle
+                  checked={fillEnabled ?? false}
+                  onChange={(checked) => onFillEnabledChange?.(checked)}
+                  disabled={isCurrentlyExporting}
+                />
+              </div>
+            </div>
+
+            {/* Dim Strength - Dark Overlay mode only */}
+            {isDarkOverlay && (
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-gray-200">Dim Strength</span>
+                  <span className="text-xs text-gray-400">{Math.round((dimStrength ?? 0.15) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="5"
+                  value={Math.round((dimStrength ?? 0.15) * 100)}
+                  onChange={(e) => onDimStrengthChange?.(Number(e.target.value) / 100)}
+                  disabled={isCurrentlyExporting}
+                  className="w-24 accent-blue-500"
+                />
+              </div>
+            )}
+          </>
         )}
 
         {/* Export Info */}
