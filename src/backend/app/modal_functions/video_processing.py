@@ -730,14 +730,19 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     else:
         color_bgr = (255, 255, 255)
 
+    is_ground = settings.get('highlight_shape') == 'ground'
+
     stroke_width_setting = settings.get('stroke_width', 2)
-    fill_enabled = settings.get('fill_enabled', False)
-    fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.05))
+    fill_enabled = is_ground or settings.get('fill_enabled', False)
+    fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05))
     stroke_opacity = result.get('strokeOpacity', 0.85)
     dim_strength = settings.get('dim_strength', 0.15)
 
     stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
     outline_w = stroke_w + 2
+
+    arc_start = 300 if is_ground else 0
+    arc_end = 240 if is_ground else 360
 
     out = frame
 
@@ -757,11 +762,11 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     outline_bgr = tuple(int(c * 0.3) for c in color_bgr)
     outline_overlay = out.copy()
-    cv2.ellipse(outline_overlay, center, (radius_x, radius_y), 0, 0, 360, outline_bgr, outline_w)
+    cv2.ellipse(outline_overlay, center, (radius_x, radius_y), 0, arc_start, arc_end, outline_bgr, outline_w)
     out = cv2.addWeighted(outline_overlay, 0.5, out, 0.5, 0)
 
     stroke_overlay = out.copy()
-    cv2.ellipse(stroke_overlay, center, (radius_x, radius_y), 0, 0, 360, color_bgr, stroke_w)
+    cv2.ellipse(stroke_overlay, center, (radius_x, radius_y), 0, arc_start, arc_end, color_bgr, stroke_w)
     out = cv2.addWeighted(stroke_overlay, stroke_opacity, out, 1 - stroke_opacity, 0)
 
     return out

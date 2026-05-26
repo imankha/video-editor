@@ -280,14 +280,20 @@ class KeyframeInterpolator:
         else:
             color_bgr = (255, 255, 255)
 
+        is_ground = settings.get('highlight_shape') == 'ground'
+
         stroke_width_setting = settings.get('stroke_width', 2)
-        fill_enabled = settings.get('fill_enabled', False)
-        fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.05))
+        fill_enabled = is_ground or settings.get('fill_enabled', False)
+        fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05))
         stroke_opacity = highlight.get('strokeOpacity', 0.85)
         dim_strength = settings.get('dim_strength', 0.15)
 
         stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
         outline_w = stroke_w + 2
+
+        # Ground spotlight: bottom 240° arc (skip top 120° where player is)
+        arc_start = 300 if is_ground else 0
+        arc_end = 240 if is_ground else 360
 
         result = frame
 
@@ -313,13 +319,12 @@ class KeyframeInterpolator:
         outline_bgr = tuple(int(c * 0.3) for c in color_bgr)
         outline_overlay = result.copy()
         cv2.ellipse(outline_overlay, center=(center_x, center_y), axes=(radius_x, radius_y),
-                   angle=0, startAngle=0, endAngle=360, color=outline_bgr, thickness=outline_w)
+                   angle=0, startAngle=arc_start, endAngle=arc_end, color=outline_bgr, thickness=outline_w)
         result = cv2.addWeighted(outline_overlay, 0.5, result, 0.5, 0)
 
-        # Main colored stroke
         stroke_overlay = result.copy()
         cv2.ellipse(stroke_overlay, center=(center_x, center_y), axes=(radius_x, radius_y),
-                   angle=0, startAngle=0, endAngle=360, color=color_bgr, thickness=stroke_w)
+                   angle=0, startAngle=arc_start, endAngle=arc_end, color=color_bgr, thickness=stroke_w)
         result = cv2.addWeighted(stroke_overlay, stroke_opacity, result, 1 - stroke_opacity, 0)
 
         return result

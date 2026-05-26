@@ -313,6 +313,24 @@ export default function HighlightOverlay({
   const containerWidth = videoDisplayRect.offsetX * 2 + videoDisplayRect.width;
   const containerHeight = videoDisplayRect.offsetY * 2 + videoDisplayRect.height;
 
+  // Ground spotlight: bottom arc path (240°, skipping top 120° where player body is)
+  const isGround = highlightShape === 'ground';
+  const arcPath = isGround ? (() => {
+    const cx = screenHighlight.x;
+    const cy = screenHighlight.y;
+    const rx = screenHighlight.radiusX;
+    const ry = screenHighlight.radiusY;
+    const startDeg = -60;
+    const endDeg = 240;
+    const startRad = (startDeg * Math.PI) / 180;
+    const endRad = (endDeg * Math.PI) / 180;
+    const x1 = cx + rx * Math.cos(startRad);
+    const y1 = cy + ry * Math.sin(startRad);
+    const x2 = cx + rx * Math.cos(endRad);
+    const y2 = cy + ry * Math.sin(endRad);
+    return `M ${x1} ${y1} A ${rx} ${ry} 0 1 1 ${x2} ${y2}`;
+  })() : null;
+
   return (
     <div
       ref={overlayRef}
@@ -357,45 +375,70 @@ export default function HighlightOverlay({
           />
         )}
 
-        {/* Optional fill (when fillEnabled) */}
-        {fillEnabled && currentHighlight.color && currentHighlight.color !== 'none' && (
+        {/* Fill - full ellipse for ground (subtle glow pool), normal for body */}
+        {(isGround || (fillEnabled && currentHighlight.color && currentHighlight.color !== 'none')) && (
           <ellipse
             cx={screenHighlight.x}
             cy={screenHighlight.y}
             rx={screenHighlight.radiusX}
             ry={screenHighlight.radiusY}
             fill={fillColor}
-            fillOpacity={fillOpacity ?? currentHighlight.fillOpacity ?? 0.05}
+            fillOpacity={isGround ? (fillOpacity || 0.15) : (fillOpacity ?? currentHighlight.fillOpacity ?? 0.05)}
             className="pointer-events-none"
           />
         )}
 
         {/* Dark outline stroke (renders behind main stroke for contrast) */}
-        <ellipse
-          cx={screenHighlight.x}
-          cy={screenHighlight.y}
-          rx={screenHighlight.radiusX}
-          ry={screenHighlight.radiusY}
-          fill="transparent"
-          stroke={outlineColor}
-          strokeWidth={strokeWidth + 2}
-          strokeOpacity={0.5}
-          className="pointer-events-none"
-        />
+        {isGround ? (
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={outlineColor}
+            strokeWidth={strokeWidth + 2}
+            strokeOpacity={0.5}
+            strokeLinecap="round"
+            className="pointer-events-none"
+          />
+        ) : (
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill="transparent"
+            stroke={outlineColor}
+            strokeWidth={strokeWidth + 2}
+            strokeOpacity={0.5}
+            className="pointer-events-none"
+          />
+        )}
 
-        {/* Main colored stroke (bold, solid) */}
-        <ellipse
-          cx={screenHighlight.x}
-          cy={screenHighlight.y}
-          rx={screenHighlight.radiusX}
-          ry={screenHighlight.radiusY}
-          fill="transparent"
-          stroke={strokeColor}
-          strokeWidth={strokeWidth}
-          strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
-          className="pointer-events-auto cursor-move"
-          onMouseDown={handleEllipseMouseDown}
-        />
+        {/* Main colored stroke - arc for ground, full ellipse for body */}
+        {isGround ? (
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
+            strokeLinecap="round"
+            className="pointer-events-auto cursor-move"
+            onMouseDown={handleEllipseMouseDown}
+          />
+        ) : (
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill="transparent"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
+            className="pointer-events-auto cursor-move"
+            onMouseDown={handleEllipseMouseDown}
+          />
+        )}
 
         {/* Horizontal resize handle (right edge) */}
         <circle
