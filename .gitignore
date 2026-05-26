@@ -72,6 +72,9 @@ nul
 # User annotation exports
 formal annotations/
 
+# Task manager config (session cookies)
+scripts/.task-manager-config.json
+
 # Local Claude settings
 .claude/settings.json
 .claude/settings.local.json

@@ -24,6 +24,12 @@ import subprocess
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import urllib.request
+import urllib.error
+import ssl
+import tempfile
+from difflib import SequenceMatcher
+from datetime import datetime, timezone, timedelta
 
 # --- Config ---
 
@@ -47,6 +53,228 @@ if not PLAN_PATH or not os.path.isfile(PLAN_PATH):
     print(f"Error: Cannot find PLAN.md. Pass the path as an argument.")
     sys.exit(1)
 PLAN_PATH = os.path.abspath(PLAN_PATH)
+
+# --- Bug Tracking Config & Functions ---
+
+CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.task-manager-config.json')
+DEFAULT_CONFIG = {
+    "prod_session": "",
+    "staging_session": "",
+    "prod_url": "https://reel-ballers-api.fly.dev",
+    "staging_url": "https://reel-ballers-api-staging.fly.dev",
+}
+
+def load_config():
+    if os.path.isfile(CONFIG_PATH):
+        with open(CONFIG_PATH, 'r') as f:
+            try:
+                return {**DEFAULT_CONFIG, **json.load(f)}
+            except json.JSONDecodeError:
+                pass
+    return dict(DEFAULT_CONFIG)
+
+def save_bug_config(config):
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump(config, f, indent=2)
+
+def _make_request(url, method='GET', data=None, session_cookie='', timeout=10):
+    """Make an HTTP request with session cookie auth. Returns (parsed_json, error_string)."""
+    req = urllib.request.Request(url, method=method)
+    if session_cookie:
+        req.add_header('Cookie', f'rb_session={session_cookie}')
+    if data is not None:
+        payload = json.dumps(data).encode()
+        req.data = payload
+        req.add_header('Content-Type', 'application/json')
+    ctx = ssl.create_default_context()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return json.loads(resp.read().decode()), None
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return None, "Auth required"
+        return None, f"HTTP {e.code}"
+    except urllib.error.URLError as e:
+        return None, f"Connection failed: {e.reason}"
+    except Exception as e:
+        return None, str(e)
+
+def fetch_remote_bugs(env):
+    """Fetch bugs from a remote backend. Returns (bugs_list, error_string_or_None)."""
+    config = load_config()
+    base_url = config.get(f"{env}_url", '')
+    session = config.get(f"{env}_session", '')
+    if not base_url or not session:
+        return [], f"No {env} session configured"
+    api_url = f"{base_url}/api/admin/bugs?status=new,investigating,confirmed&page=1&page_size=50"
+    result, err = _make_request(api_url, session_cookie=session)
+    if err:
+        return [], err
+    return result.get('bugs', []), None
+
+def fetch_bug_detail(env, bug_id):
+    """Fetch full bug detail from remote backend."""
+    config = load_config()
+    base_url = config.get(f"{env}_url", '')
+    session = config.get(f"{env}_session", '')
+    if not base_url or not session:
+        return None, f"No {env} session configured"
+    api_url = f"{base_url}/api/admin/bugs/{bug_id}"
+    return _make_request(api_url, session_cookie=session, timeout=15)
+
+def update_remote_bug(env, bug_id, updates):
+    """PATCH a bug on the remote backend."""
+    config = load_config()
+    base_url = config.get(f"{env}_url", '')
+    session = config.get(f"{env}_session", '')
+    if not base_url or not session:
+        return None, f"No {env} session configured"
+    api_url = f"{base_url}/api/admin/bugs/{bug_id}"
+    return _make_request(api_url, method='PATCH', data=updates, session_cookie=session)
+
+def download_to_temp(url, filename):
+    """Download a URL to a temp file and return the path."""
+    ctx = ssl.create_default_context()
+    try:
+        req = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
+            path = os.path.join(tempfile.gettempdir(), filename)
+            with open(path, 'wb') as f:
+                f.write(resp.read())
+            return path
+    except Exception:
+        return None
+
+def consolidate_bugs(bugs):
+    """Group bugs by likely root cause using deterministic heuristics.
+
+    Works with list-endpoint data (description, editor_mode, page_url, build, created_at).
+    Returns list of groups: [{primary: bug, related: [{bug, label, reason}, ...]}, ...]
+    """
+    if not bugs:
+        return []
+
+    n = len(bugs)
+    if n == 1:
+        return [{"primary": bugs[0], "related": []}]
+
+    # Union-Find
+    parent = list(range(n))
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    # Pairwise comparison
+    for i in range(n):
+        for j in range(i + 1, n):
+            bi, bj = bugs[i], bugs[j]
+
+            # Strong signal: description similarity (>80% overlap)
+            desc_i = (bi.get('description') or '')[:200]
+            desc_j = (bj.get('description') or '')[:200]
+            strong_match = False
+            if desc_i and desc_j and len(desc_i) > 20 and len(desc_j) > 20:
+                ratio = SequenceMatcher(None, desc_i, desc_j).ratio()
+                if ratio > 0.8:
+                    strong_match = True
+
+            # Weak/confirming signals
+            weak_count = 0
+            mode_i = bi.get('editor_mode')
+            mode_j = bj.get('editor_mode')
+            if mode_i and mode_j and mode_i == mode_j:
+                weak_count += 1
+
+            url_i = (bi.get('page_url') or '').split('?')[0]
+            url_j = (bj.get('page_url') or '').split('?')[0]
+            if url_i and url_j and url_i == url_j:
+                weak_count += 1
+
+            if bi.get('build') and bj.get('build') and bi['build'] == bj['build']:
+                weak_count += 1
+
+            if strong_match and weak_count >= 1:
+                union(i, j)
+
+    # Time clustering: 3+ bugs within 1 hour sharing a weak signal
+    timestamps = []
+    for bug in bugs:
+        ts = bug.get('created_at')
+        if ts and isinstance(ts, str):
+            try:
+                timestamps.append(datetime.fromisoformat(ts.replace('Z', '+00:00')))
+            except Exception:
+                timestamps.append(None)
+        else:
+            timestamps.append(None)
+
+    for i in range(n):
+        if timestamps[i] is None:
+            continue
+        cluster = [i]
+        for j in range(n):
+            if i == j or timestamps[j] is None:
+                continue
+            if abs((timestamps[i] - timestamps[j]).total_seconds()) <= 3600:
+                cluster.append(j)
+        if len(cluster) >= 3:
+            for ci in range(len(cluster)):
+                for cj in range(ci + 1, len(cluster)):
+                    bi, bj = bugs[cluster[ci]], bugs[cluster[cj]]
+                    mi = bi.get('editor_mode')
+                    mj = bj.get('editor_mode')
+                    ui = (bi.get('page_url') or '').split('?')[0]
+                    uj = (bj.get('page_url') or '').split('?')[0]
+                    if (mi and mj and mi == mj) or \
+                       (ui and uj and ui == uj) or \
+                       (bi.get('build') and bj.get('build') and bi['build'] == bj['build']):
+                        union(cluster[ci], cluster[cj])
+
+    # Build groups from union-find
+    group_map = {}
+    for i in range(n):
+        root = find(i)
+        group_map.setdefault(root, []).append(i)
+
+    result = []
+    for indices in group_map.values():
+        group_bugs = [bugs[i] for i in indices]
+
+        def _score(bug):
+            s = len(bug.get('description') or '')
+            if bug.get('screenshot_r2_key') or bug.get('screenshot_url'):
+                s += 100
+            return s
+
+        group_bugs.sort(key=_score, reverse=True)
+        primary = group_bugs[0]
+        related = []
+        for bug in group_bugs[1:]:
+            has_variance = False
+            reason_parts = []
+            if primary.get('editor_mode') != bug.get('editor_mode') and bug.get('editor_mode'):
+                has_variance = True
+                reason_parts.append(f"different mode ({bug['editor_mode']})")
+            if primary.get('page_url') != bug.get('page_url') and bug.get('page_url'):
+                has_variance = True
+                reason_parts.append("different page")
+            if has_variance:
+                label = "ADDS_VARIANCE"
+                reason = ", ".join(reason_parts)
+            else:
+                label = "LIKELY_DUPLICATE"
+                reason = "identical error + mode + build"
+            related.append({"bug": bug, "label": label, "reason": reason})
+        result.append({"primary": primary, "related": related})
+
+    return result
+
 
 # --- Parser ---
 
@@ -516,6 +744,165 @@ HTML = r"""<!DOCTYPE html>
     font-style: italic;
   }
 
+  /* Bug tracking config panel */
+  .config-panel {
+    display: none; background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 24px; max-width: 960px; margin: 0 auto;
+  }
+  .config-panel.open { display: block; }
+  .config-panel h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-dim); }
+  .config-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+  }
+  .config-row label { font-size: 13px; color: var(--text-dim); min-width: 140px; }
+  .config-row input {
+    flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 10px; border-radius: 4px; font-size: 13px; font-family: monospace;
+  }
+  .config-row input:focus { border-color: var(--accent); outline: none; }
+  .config-status {
+    font-size: 16px; min-width: 20px; text-align: center;
+  }
+  .config-status.ok { color: var(--green); }
+  .config-status.err { color: var(--red); }
+  .config-status.unknown { color: var(--gray); }
+  .config-actions { display: flex; gap: 8px; margin-top: 12px; }
+
+  /* Bug milestone styles */
+  .bug-milestone { border-left: 3px solid var(--red); }
+  .bug-milestone.staging { border-left-color: var(--yellow); }
+  .bug-milestone .milestone-header { gap: 10px; }
+  .bug-env-icon { font-size: 10px; }
+  .bug-offline {
+    font-size: 12px; color: var(--red); background: rgba(248,81,73,0.1);
+    padding: 2px 8px; border-radius: 4px;
+  }
+
+  /* Bug group container */
+  .bug-group {
+    border: 1px solid var(--border); border-radius: 6px; margin: 8px 12px;
+    background: rgba(255,255,255,0.01); overflow: hidden;
+  }
+  .bug-group-header {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);
+    cursor: pointer; user-select: none; font-size: 13px; color: var(--text-dim);
+  }
+  .bug-group-header:hover { background: rgba(255,255,255,0.04); }
+  .bug-group-header .group-title { flex: 1; font-weight: 600; color: var(--text); }
+  .bug-group-header .group-count {
+    font-size: 11px; background: var(--border); padding: 1px 7px;
+    border-radius: 8px; color: var(--text-dim);
+  }
+
+  /* Bug card */
+  .bug-card {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    cursor: pointer; transition: background 0.1s;
+  }
+  .bug-card:last-child { border-bottom: none; }
+  .bug-card:hover { background: rgba(255,255,255,0.02); }
+  .bug-card-top {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .bug-id { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .bug-reporter { font-size: 12px; color: var(--text-dim); }
+  .bug-time { font-size: 12px; color: var(--text-dim); margin-left: auto; white-space: nowrap; }
+  .bug-meta {
+    display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap;
+  }
+  .bug-desc {
+    font-size: 13px; color: var(--text-dim); margin-top: 6px;
+    overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .bug-actions {
+    display: flex; gap: 8px; margin-top: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .bug-btn {
+    padding: 4px 12px; border-radius: 4px; border: 1px solid var(--border);
+    background: none; color: var(--accent); cursor: pointer; font-size: 12px;
+    transition: all 0.15s;
+  }
+  .bug-btn:hover { border-color: var(--accent); background: rgba(88,166,255,0.05); }
+  .bug-btn.primary {
+    background: rgba(63,185,80,0.15); color: var(--green); border-color: var(--green);
+  }
+  .bug-btn.primary:hover { background: rgba(63,185,80,0.25); }
+  .bug-btn.danger { color: var(--red); border-color: var(--red); }
+  .bug-btn.danger:hover { background: rgba(248,81,73,0.1); }
+
+  /* Bug status badges */
+  .badge-new { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .badge-investigating { background: rgba(210,153,34,0.15); color: var(--yellow); }
+  .badge-confirmed { background: rgba(248,81,73,0.15); color: var(--red); }
+  .badge-resolved { background: rgba(63,185,80,0.15); color: var(--green); }
+  .badge-duplicate { background: rgba(72,79,88,0.25); color: var(--gray); }
+  .badge-wontfix { background: rgba(72,79,88,0.25); color: var(--gray); }
+
+  .bug-mode-badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+    background: rgba(188,140,255,0.15); color: var(--purple); text-transform: uppercase;
+  }
+  .bug-screenshot-icon { font-size: 14px; color: var(--text-dim); title: "Has screenshot"; }
+
+  /* Bug related (secondary) rows */
+  .bug-related {
+    padding: 6px 16px 6px 32px; font-size: 12px; color: var(--text-dim);
+    border-bottom: 1px solid rgba(48,54,61,0.5);
+  }
+  .bug-related:last-child { border-bottom: none; }
+  .bug-related-label {
+    font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+    letter-spacing: 0.5px; margin-right: 6px;
+  }
+  .bug-related-label.variance {
+    background: rgba(210,153,34,0.18); color: var(--yellow);
+  }
+  .bug-related-label.duplicate {
+    background: rgba(72,79,88,0.25); color: var(--gray);
+  }
+
+  /* Bug detail (expandable) */
+  .bug-group-body.collapsed { display: none; }
+  .bug-detail {
+    display: none; padding: 12px 16px; border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+  }
+  .bug-card.expanded .bug-detail { display: block; }
+  .bug-detail-section { margin-bottom: 12px; }
+  .bug-detail-section h4 {
+    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .bug-detail-table {
+    font-size: 12px; width: 100%;
+  }
+  .bug-detail-table td {
+    padding: 3px 8px; border-bottom: 1px solid rgba(48,54,61,0.3);
+  }
+  .bug-detail-table td:first-child { color: var(--text-dim); white-space: nowrap; width: 120px; }
+  .bug-breadcrumbs {
+    font-size: 12px; font-family: monospace; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 4px; padding: 8px 12px;
+    max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+  }
+  .bug-log-summary { font-size: 12px; color: var(--text-dim); }
+  .bug-screenshot-preview {
+    max-width: 400px; max-height: 300px; border-radius: 4px;
+    border: 1px solid var(--border); margin-top: 4px;
+  }
+  .bug-notes-textarea {
+    width: 100%; min-height: 60px; background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); padding: 8px; border-radius: 4px; font-size: 13px;
+    font-family: inherit; resize: vertical;
+  }
+  .bug-notes-textarea:focus { border-color: var(--accent); outline: none; }
+  .bug-status-select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;
+  }
+
   @media (max-width: 768px) {
     .task-card { grid-template-columns: 20px 50px 1fr auto auto 28px; font-size: 13px; }
     .meta-extra { display: none; }
@@ -533,7 +920,25 @@ HTML = r"""<!DOCTYPE html>
   </div>
   <span class="status saved" id="status">Saved</span>
   <button class="btn" id="reload-btn">Reload</button>
+  <button class="btn" id="config-btn" title="Bug tracking config">Bug Config</button>
 </header>
+
+<div class="config-panel" id="config-panel">
+  <h3>Bug Tracking -- Session Cookies</h3>
+  <div class="config-row">
+    <label>Production:</label>
+    <input type="text" id="prod-session" placeholder="Paste rb_session cookie from prod">
+    <span class="config-status unknown" id="prod-status" title="Unknown">&#9679;</span>
+  </div>
+  <div class="config-row">
+    <label>Staging:</label>
+    <input type="text" id="staging-session" placeholder="Paste rb_session cookie from staging">
+    <span class="config-status unknown" id="staging-status" title="Unknown">&#9679;</span>
+  </div>
+  <div class="config-actions">
+    <button class="btn" id="save-config-btn">Save &amp; Reload Bugs</button>
+  </div>
+</div>
 
 <main id="app"></main>
 
@@ -544,6 +949,441 @@ let data = [];
 let saving = false;
 let pendingSave = false;
 let collapseState = {}; // {msId: bool, epicId: bool} — persists across renders
+let bugData = null; // {prod: {groups, error}, staging: {groups, error}}
+
+function relativeTime(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+  if (diff < 172800) return 'yesterday';
+  return Math.floor(diff / 86400) + 'd ago';
+}
+
+function bugStatusClass(s) {
+  const l = (s || '').toLowerCase();
+  if (l === 'new') return 'badge-new';
+  if (l === 'investigating') return 'badge-investigating';
+  if (l === 'confirmed') return 'badge-confirmed';
+  if (l === 'resolved') return 'badge-resolved';
+  if (l === 'duplicate') return 'badge-duplicate';
+  if (l === 'wontfix') return 'badge-wontfix';
+  return 'badge-new';
+}
+
+function buildBugCard(bug, env, group, isPrimary) {
+  const card = document.createElement('div');
+  card.className = 'bug-card';
+  card.dataset.bugId = bug.id;
+  card.dataset.env = env;
+
+  const hasScreenshot = bug.screenshot_r2_key || bug.screenshot_url;
+  const mode = bug.editor_mode || '';
+  const desc = bug.description || '';
+
+  let topHtml = '<div class="bug-card-top">';
+  topHtml += '<span class="bug-id">#' + bug.id + '</span>';
+  topHtml += '<span class="bug-reporter">' + esc(bug.reporter_email || '') + '</span>';
+  topHtml += '<span class="badge ' + bugStatusClass(bug.status) + '">' + esc(bug.status || 'new') + '</span>';
+  topHtml += '<span class="bug-time">' + esc(relativeTime(bug.created_at)) + '</span>';
+  topHtml += '</div>';
+
+  let metaHtml = '<div class="bug-meta">';
+  if (mode) metaHtml += '<span class="bug-mode-badge">' + esc(mode) + '</span>';
+  if (bug.build) metaHtml += '<span class="badge" style="font-size:10px;background:rgba(72,79,88,0.25);color:var(--gray)">' + esc(bug.build.substring(0, 8)) + '</span>';
+  if (hasScreenshot) metaHtml += '<span class="bug-screenshot-icon" title="Has screenshot">&#128247;</span>';
+  metaHtml += '</div>';
+
+  let descHtml = '<div class="bug-desc">"' + esc(desc.substring(0, 100)) + (desc.length > 100 ? '...' : '') + '"</div>';
+
+  let actionsHtml = '<div class="bug-actions">';
+  actionsHtml += '<button class="bug-btn primary bug-kickoff-btn">Copy Kickoff Prompt</button>';
+  if (isPrimary && group && group.related && group.related.length > 0) {
+    actionsHtml += '<button class="bug-btn danger bug-resolve-group-btn">Resolve Group</button>';
+  } else {
+    actionsHtml += '<button class="bug-btn bug-resolve-btn">Resolve</button>';
+  }
+  actionsHtml += '<select class="bug-status-select">';
+  ['new','investigating','confirmed','resolved','duplicate','wontfix'].forEach(st => {
+    actionsHtml += '<option value="' + st + '"' + (st === bug.status ? ' selected' : '') + '>' + st + '</option>';
+  });
+  actionsHtml += '</select>';
+  actionsHtml += '</div>';
+
+  // Detail view (expandable)
+  let detailHtml = '<div class="bug-detail">';
+  // Editor context
+  detailHtml += '<div class="bug-detail-section"><h4>Editor Context</h4>';
+  detailHtml += '<table class="bug-detail-table"><tbody>';
+  if (bug.editor_context && typeof bug.editor_context === 'object') {
+    Object.entries(bug.editor_context).forEach(([k, v]) => {
+      detailHtml += '<tr><td>' + esc(k) + '</td><td>' + esc(typeof v === 'object' ? JSON.stringify(v) : String(v)) + '</td></tr>';
+    });
+  } else {
+    detailHtml += '<tr><td colspan="2">Mode: ' + esc(mode || 'N/A') + '</td></tr>';
+  }
+  detailHtml += '</tbody></table></div>';
+
+  // Actions breadcrumbs
+  if (bug.actions && Array.isArray(bug.actions) && bug.actions.length > 0) {
+    detailHtml += '<div class="bug-detail-section"><h4>Action Breadcrumbs (last 15)</h4>';
+    detailHtml += '<div class="bug-breadcrumbs">';
+    bug.actions.slice(-15).forEach(a => {
+      const ts = a.timestamp || a.time || '';
+      const type = a.action_type || a.type || a.action || '';
+      const details = a.details || a.data || '';
+      detailHtml += esc(ts) + '  ' + esc(type) + '  ' + esc(typeof details === 'object' ? JSON.stringify(details) : String(details)) + '\n';
+    });
+    detailHtml += '</div></div>';
+  }
+
+  // Console logs summary
+  if (bug.console_logs && Array.isArray(bug.console_logs) && bug.console_logs.length > 0) {
+    const errors = bug.console_logs.filter(l => l.level === 'error');
+    const warnings = bug.console_logs.filter(l => l.level === 'warning' || l.level === 'warn');
+    detailHtml += '<div class="bug-detail-section"><h4>Console Logs</h4>';
+    detailHtml += '<div class="bug-log-summary">';
+    detailHtml += bug.console_logs.length + ' entries (' + errors.length + ' errors, ' + warnings.length + ' warnings)';
+    if (errors.length > 0) {
+      detailHtml += '<br><br><strong>First errors:</strong><br>';
+      errors.slice(0, 3).forEach(e => {
+        detailHtml += '<span style="color:var(--red)">' + esc((e.message || '').substring(0, 150)) + '</span><br>';
+      });
+    }
+    detailHtml += '</div></div>';
+  }
+
+  // Screenshot thumbnail
+  if (bug.screenshot_url) {
+    detailHtml += '<div class="bug-detail-section"><h4>Screenshot</h4>';
+    detailHtml += '<img class="bug-screenshot-preview" src="' + esc(bug.screenshot_url) + '" alt="Bug screenshot" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'"><span style="display:none;font-size:12px;color:var(--text-dim)">Could not load screenshot (CORS). Use kickoff prompt to download locally.</span>';
+    detailHtml += '</div>';
+  }
+
+  // Admin notes
+  detailHtml += '<div class="bug-detail-section"><h4>Admin Notes</h4>';
+  detailHtml += '<textarea class="bug-notes-textarea" placeholder="Add notes...">' + esc(bug.admin_notes || '') + '</textarea>';
+  detailHtml += '<button class="bug-btn bug-save-notes-btn" style="margin-top:4px">Save Notes</button>';
+  detailHtml += '</div>';
+
+  detailHtml += '</div>';
+
+  card.innerHTML = topHtml + metaHtml + descHtml + actionsHtml + detailHtml;
+
+  // Event handlers
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('button') || e.target.closest('select') || e.target.closest('textarea')) return;
+    card.classList.toggle('expanded');
+  });
+
+  card.querySelector('.bug-kickoff-btn').onclick = async (e) => {
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    btn.textContent = 'Loading...';
+    btn.disabled = true;
+    try {
+      const relatedBugs = (group && group.related) ? group.related.map(r => ({
+        id: r.bug.id, label: r.label, reason: r.reason
+      })) : [];
+      const resp = await fetch('/api/bug-kickoff', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({bug_id: bug.id, env: env, related_bugs: relatedBugs})
+      });
+      const result = await resp.json();
+      if (!resp.ok) { showToast(result.error || 'Failed', true); return; }
+      const b = result.bug;
+      const envLabel = env === 'prod' ? 'production' : 'staging';
+      let prompt = 'Investigate and fix this ' + envLabel + ' bug. Read CLAUDE.md for project context.\n\n';
+      prompt += '## Bug #' + b.id + ': ' + (b.description || '').substring(0, 80) + '\n\n';
+      prompt += '**Reporter:** ' + (b.reporter_email || 'unknown') + '\n';
+      prompt += '**Reported:** ' + (b.created_at || '') + '\n';
+      prompt += '**Build:** ' + (b.build || 'unknown') + '\n';
+      prompt += '**Status:** ' + (b.status || 'new') + '\n';
+      const bMode = b.editor_context ? (b.editor_context.mode || '') : '';
+      prompt += '**Mode:** ' + bMode + '\n';
+      prompt += '**Page:** ' + (b.page_url || '') + '\n\n';
+      prompt += '### Description\n' + (b.description || 'No description') + '\n\n';
+      prompt += '### Editor Context\n';
+      if (b.editor_context && typeof b.editor_context === 'object') {
+        Object.entries(b.editor_context).forEach(([k, v]) => {
+          prompt += '- **' + k + ':** ' + (typeof v === 'object' ? JSON.stringify(v) : String(v)) + '\n';
+        });
+      }
+      prompt += '\n### Action Breadcrumbs\n';
+      if (b.actions && Array.isArray(b.actions) && b.actions.length > 0) {
+        b.actions.slice(-15).forEach(a => {
+          const ts = a.timestamp || a.time || '';
+          const type = a.action_type || a.type || a.action || '';
+          const details = a.details || a.data || '';
+          prompt += ts + '  ' + type + '  ' + (typeof details === 'object' ? JSON.stringify(details) : String(details)) + '\n';
+        });
+      } else {
+        prompt += 'No actions recorded.\n';
+      }
+      prompt += '\n### Console Logs\n';
+      if (result.logs_path) {
+        prompt += 'Local file: ' + result.logs_path + '\n';
+        prompt += 'Use reduce_log to analyze: reduce_log({ file: "' + result.logs_path.replace(/\\/g, '/') + '", tail: 500, level: "error" })\n';
+      } else {
+        prompt += 'No console logs available.\n';
+      }
+      prompt += '\n### Screenshot\n';
+      if (result.screenshot_path) {
+        prompt += 'Local file: ' + result.screenshot_path + '\n';
+      } else {
+        prompt += 'No screenshot available.\n';
+      }
+      if (relatedBugs.length > 0) {
+        prompt += '\n### Related Bugs (same root cause group)\n';
+        relatedBugs.forEach(r => {
+          prompt += '- Bug #' + r.id + ': ' + r.label.replace('_', ' ') + '. ' + r.reason + '\n';
+        });
+      }
+      if (b.admin_notes) {
+        prompt += '\n### Admin Notes\n' + b.admin_notes + '\n';
+      }
+      copyToClipboard(prompt, btn);
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy Kickoff Prompt'; btn.disabled = false; }, 2000);
+    } catch(err) {
+      showToast('Error: ' + err.message, true);
+      btn.textContent = 'Copy Kickoff Prompt';
+      btn.disabled = false;
+    }
+  };
+
+  const resolveBtn = card.querySelector('.bug-resolve-btn');
+  if (resolveBtn) {
+    resolveBtn.onclick = async (e) => {
+      e.stopPropagation();
+      if (!confirm('Resolve bug #' + bug.id + '?')) return;
+      await updateBugStatus(bug.id, env, 'resolved');
+    };
+  }
+
+  const resolveGroupBtn = card.querySelector('.bug-resolve-group-btn');
+  if (resolveGroupBtn) {
+    resolveGroupBtn.onclick = async (e) => {
+      e.stopPropagation();
+      const total = 1 + (group.related ? group.related.length : 0);
+      if (!confirm('Resolve all ' + total + ' bugs in this group?')) return;
+      await updateBugStatus(bug.id, env, 'resolved');
+      if (group.related) {
+        for (const r of group.related) {
+          if (r.label === 'LIKELY_DUPLICATE') {
+            await updateBugStatusRaw(r.bug.id, env, {status: 'duplicate', duplicate_of: bug.id});
+          } else {
+            await updateBugStatus(r.bug.id, env, 'resolved');
+          }
+        }
+      }
+      showToast('Group resolved');
+      loadBugs();
+    };
+  }
+
+  const statusSelect = card.querySelector('.bug-status-select');
+  statusSelect.onclick = (e) => e.stopPropagation();
+  statusSelect.onchange = async (e) => {
+    e.stopPropagation();
+    await updateBugStatus(bug.id, env, e.target.value);
+  };
+
+  const saveNotesBtn = card.querySelector('.bug-save-notes-btn');
+  saveNotesBtn.onclick = async (e) => {
+    e.stopPropagation();
+    const notes = card.querySelector('.bug-notes-textarea').value;
+    await updateBugStatusRaw(bug.id, env, {admin_notes: notes});
+    showToast('Notes saved');
+  };
+
+  return card;
+}
+
+async function updateBugStatus(bugId, env, status) {
+  return updateBugStatusRaw(bugId, env, {status: status});
+}
+
+async function updateBugStatusRaw(bugId, env, updates) {
+  try {
+    const resp = await fetch('/api/bug-status', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({bug_id: bugId, env: env, ...updates})
+    });
+    if (!resp.ok) {
+      const d = await resp.json();
+      showToast(d.error || 'Failed to update', true);
+      return false;
+    }
+    showToast('Bug #' + bugId + ' updated');
+    loadBugs();
+    return true;
+  } catch(e) {
+    showToast('Error: ' + e.message, true);
+    return false;
+  }
+}
+
+function renderBugMilestones(app) {
+  if (!bugData) return;
+
+  ['prod', 'staging'].forEach(env => {
+    const envData = bugData[env];
+    if (!envData) return;
+
+    const envLabel = env === 'prod' ? 'Production' : 'Staging';
+    const accentVar = env === 'prod' ? 'var(--red)' : 'var(--yellow)';
+
+    const div = document.createElement('div');
+    div.className = 'milestone bug-milestone' + (env === 'staging' ? ' staging' : '');
+
+    const msKey = 'ms-bugs-' + env;
+    const msCollapsed = collapseState[msKey];
+
+    const hdr = document.createElement('div');
+    hdr.className = 'milestone-header';
+
+    if (envData.error) {
+      const groups = envData.groups || [];
+      const bugCount = groups.reduce((s, g) => s + 1 + (g.related ? g.related.length : 0), 0);
+      hdr.innerHTML =
+        '<span class="arrow' + (msCollapsed ? ' collapsed' : '') + '">&#9660;</span>' +
+        '<span class="bug-env-icon" style="color:' + accentVar + '">&#9679;</span>' +
+        '<h2>' + envLabel + ' Reported Bugs</h2>' +
+        '<span class="bug-offline">' + esc(envData.error) + '</span>';
+      hdr.onclick = () => {
+        const list = div.querySelector('.task-list');
+        if (list) {
+          list.classList.toggle('collapsed');
+          hdr.querySelector('.arrow').classList.toggle('collapsed');
+          collapseState[msKey] = list.classList.contains('collapsed');
+        }
+      };
+      div.appendChild(hdr);
+      app.appendChild(div);
+      return;
+    }
+
+    const groups = envData.groups || [];
+    const bugCount = groups.reduce((s, g) => s + 1 + (g.related ? g.related.length : 0), 0);
+
+    if (bugCount === 0) {
+      hdr.innerHTML =
+        '<span class="arrow collapsed">&#9660;</span>' +
+        '<span class="bug-env-icon" style="color:' + accentVar + '">&#9679;</span>' +
+        '<h2>' + envLabel + ' Reported Bugs</h2>' +
+        '<span class="count">0</span>';
+      div.appendChild(hdr);
+      app.appendChild(div);
+      return;
+    }
+
+    hdr.innerHTML =
+      '<span class="arrow' + (msCollapsed ? ' collapsed' : '') + '">&#9660;</span>' +
+      '<span class="bug-env-icon" style="color:' + accentVar + '">&#9679;</span>' +
+      '<h2>' + envLabel + ' Reported Bugs</h2>' +
+      '<span class="count">' + bugCount + '</span>';
+
+    const list = document.createElement('div');
+    list.className = 'task-list' + (msCollapsed ? ' collapsed' : '');
+
+    hdr.onclick = () => {
+      list.classList.toggle('collapsed');
+      hdr.querySelector('.arrow').classList.toggle('collapsed');
+      collapseState[msKey] = list.classList.contains('collapsed');
+    };
+    div.appendChild(hdr);
+
+    groups.forEach(group => {
+      const hasRelated = group.related && group.related.length > 0;
+
+      if (hasRelated) {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'bug-group';
+        const groupKey = 'bug-group-' + env + '-' + group.primary.id;
+        const groupCollapsed = collapseState[groupKey];
+
+        const groupHdr = document.createElement('div');
+        groupHdr.className = 'bug-group-header';
+        const errPreview = (group.primary.description || 'Unknown issue').substring(0, 60);
+        const totalInGroup = 1 + group.related.length;
+        groupHdr.innerHTML =
+          '<span class="arrow' + (groupCollapsed ? ' collapsed' : '') + '">&#9660;</span>' +
+          '<span class="group-title">' + esc(errPreview) + '</span>' +
+          '<span class="group-count">' + totalInGroup + ' bugs</span>';
+        groupHdr.onclick = () => {
+          const body = groupDiv.querySelector('.bug-group-body');
+          body.classList.toggle('collapsed');
+          groupHdr.querySelector('.arrow').classList.toggle('collapsed');
+          collapseState[groupKey] = body.classList.contains('collapsed');
+        };
+        groupDiv.appendChild(groupHdr);
+
+        const body = document.createElement('div');
+        body.className = 'bug-group-body' + (groupCollapsed ? ' collapsed' : '');
+
+        body.appendChild(buildBugCard(group.primary, env, group, true));
+
+        group.related.forEach(r => {
+          const relDiv = document.createElement('div');
+          relDiv.className = 'bug-related';
+          const labelClass = r.label === 'ADDS_VARIANCE' ? 'variance' : 'duplicate';
+          const labelText = r.label === 'ADDS_VARIANCE' ? 'ADDS VARIANCE' : 'LIKELY DUPLICATE';
+          relDiv.innerHTML =
+            '<span class="bug-id">#' + r.bug.id + '</span> ' +
+            '<span class="bug-related-label ' + labelClass + '">' + labelText + '</span> ' +
+            '<span>' + esc(r.reason) + '</span>' +
+            ' <span class="bug-reporter">' + esc(r.bug.reporter_email || '') + '</span>' +
+            ' <span class="bug-time">' + esc(relativeTime(r.bug.created_at)) + '</span>';
+          body.appendChild(relDiv);
+        });
+
+        groupDiv.appendChild(body);
+        list.appendChild(groupDiv);
+      } else {
+        list.appendChild(buildBugCard(group.primary, env, null, false));
+      }
+    });
+
+    div.appendChild(list);
+    app.appendChild(div);
+  });
+}
+
+async function loadBugs() {
+  try {
+    const resp = await fetch('/api/bugs');
+    if (resp.ok) {
+      bugData = await resp.json();
+      updateConfigStatus();
+      render();
+    }
+  } catch(e) {}
+}
+
+function updateConfigStatus() {
+  if (!bugData) return;
+  ['prod', 'staging'].forEach(env => {
+    const el = document.getElementById(env + '-status');
+    if (!el) return;
+    const envData = bugData[env];
+    if (!envData) {
+      el.className = 'config-status unknown';
+      el.title = 'Unknown';
+    } else if (envData.error) {
+      el.className = 'config-status err';
+      el.title = envData.error;
+    } else {
+      el.className = 'config-status ok';
+      el.title = 'Connected';
+    }
+  });
+}
 
 function slugify(text) {
   return text.toLowerCase().trim()
@@ -1143,6 +1983,8 @@ function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
 
+  renderBugMilestones(app);
+
   data.forEach((ms, msIdx) => {
     const div = document.createElement('div');
     div.className = 'milestone';
@@ -1412,6 +2254,19 @@ async function load() {
   data = await resp.json();
   updateStatus('saved');
   render();
+  loadBugs();
+  loadConfig();
+}
+
+async function loadConfig() {
+  try {
+    const resp = await fetch('/api/bug-config');
+    if (resp.ok) {
+      const cfg = await resp.json();
+      document.getElementById('prod-session').value = cfg.prod_session || '';
+      document.getElementById('staging-session').value = cfg.staging_session || '';
+    }
+  } catch(e) {}
 }
 
 document.getElementById('reload-btn').onclick = () => { load(); };
@@ -1449,6 +2304,32 @@ function sortByPri() {
 }
 
 document.getElementById('sort-btn').onclick = sortByPri;
+
+document.getElementById('config-btn').onclick = () => {
+  document.getElementById('config-panel').classList.toggle('open');
+};
+
+document.getElementById('save-config-btn').onclick = async () => {
+  const cfg = {
+    prod_session: document.getElementById('prod-session').value.trim(),
+    staging_session: document.getElementById('staging-session').value.trim(),
+  };
+  try {
+    const resp = await fetch('/api/bug-config', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(cfg)
+    });
+    if (resp.ok) {
+      showToast('Config saved');
+      loadBugs();
+    } else {
+      showToast('Failed to save config', true);
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message, true);
+  }
+};
 
 load();
 </script>
@@ -1501,6 +2382,31 @@ class Handler(BaseHTTPRequestHandler):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             self._json(200, {'content': content})
+        elif self.path == '/api/bugs':
+            result = {}
+            for env in ('prod', 'staging'):
+                bugs, err = fetch_remote_bugs(env)
+                if err:
+                    result[env] = {'groups': [], 'error': err}
+                else:
+                    groups = consolidate_bugs(bugs)
+                    serializable = []
+                    for g in groups:
+                        serializable.append({
+                            'primary': g['primary'],
+                            'related': [{'bug': r['bug'], 'label': r['label'], 'reason': r['reason']} for r in g['related']],
+                        })
+                    result[env] = {'groups': serializable, 'error': None}
+            self._json(200, result)
+        elif self.path == '/api/bug-config':
+            config = load_config()
+            safe = {
+                'prod_session': config.get('prod_session', ''),
+                'staging_session': config.get('staging_session', ''),
+                'prod_url': config.get('prod_url', ''),
+                'staging_url': config.get('staging_url', ''),
+            }
+            self._json(200, safe)
         elif self.path == '/api/tasks':
             with open(PLAN_PATH, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -1553,6 +2459,76 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {'ok': True})
             except Exception as e:
                 self._json(500, {'error': str(e)})
+        elif self.path == '/api/bug-kickoff':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            bug_id = body.get('bug_id')
+            env = body.get('env', 'prod')
+            if not bug_id:
+                self._json(400, {'error': 'Missing bug_id'})
+                return
+            bug_detail, err = fetch_bug_detail(env, bug_id)
+            if err:
+                self._json(502, {'error': f'Failed to fetch bug: {err}'})
+                return
+            screenshot_path = None
+            if bug_detail.get('screenshot_url'):
+                screenshot_path = download_to_temp(
+                    bug_detail['screenshot_url'],
+                    f'bug-{bug_id}-screenshot.jpg'
+                )
+            logs_path = None
+            console_logs = bug_detail.get('console_logs')
+            if console_logs and isinstance(console_logs, list) and len(console_logs) > 0:
+                logs_file = os.path.join(tempfile.gettempdir(), f'bug-{bug_id}-logs.txt')
+                with open(logs_file, 'w', encoding='utf-8') as lf:
+                    for entry in console_logs:
+                        if isinstance(entry, dict):
+                            level = entry.get('level', 'info').upper()
+                            ts = entry.get('timestamp', '')
+                            msg = entry.get('message', '')
+                            lf.write(f'[{level}] {ts} {msg}\n')
+                        else:
+                            lf.write(str(entry) + '\n')
+                logs_path = logs_file
+            self._json(200, {
+                'bug': bug_detail,
+                'screenshot_path': screenshot_path,
+                'logs_path': logs_path,
+            })
+        elif self.path == '/api/bug-status':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            bug_id = body.get('bug_id')
+            env = body.get('env', 'prod')
+            if not bug_id:
+                self._json(400, {'error': 'Missing bug_id'})
+                return
+            updates = {}
+            if 'status' in body:
+                updates['status'] = body['status']
+            if 'admin_notes' in body:
+                updates['admin_notes'] = body['admin_notes']
+            if 'duplicate_of' in body:
+                updates['duplicate_of'] = body['duplicate_of']
+            if not updates:
+                self._json(400, {'error': 'No updates provided'})
+                return
+            result, err = update_remote_bug(env, bug_id, updates)
+            if err:
+                self._json(502, {'error': f'Failed to update: {err}'})
+                return
+            self._json(200, result)
+        elif self.path == '/api/bug-config':
+            length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(length))
+            config = load_config()
+            if 'prod_session' in body:
+                config['prod_session'] = body['prod_session']
+            if 'staging_session' in body:
+                config['staging_session'] = body['staging_session']
+            save_bug_config(config)
+            self._json(200, {'ok': True})
         elif self.path == '/api/open-file':
             length = int(self.headers.get('Content-Length', 0))
             body = json.loads(self.rfile.read(length))
