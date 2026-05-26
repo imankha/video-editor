@@ -642,12 +642,14 @@ export function AnnotateContainer({
     let startTime = clipData.startTime;
     let clipDuration = clipData.duration;
     let videoSeq = currentVideoSequence;
+    let segmentDuration = null;
 
     if (fullTimeline) {
       const result = fullTimeline.virtualToActual(clipData.startTime);
       startTime = result.actualTime;
       videoSeq = fullTimeline.segments[result.videoIndex].videoSequence;
-      const maxDur = fullTimeline.segments[result.videoIndex].duration - result.actualTime;
+      segmentDuration = fullTimeline.segments[result.videoIndex].duration;
+      const maxDur = segmentDuration - result.actualTime;
       clipDuration = Math.min(clipDuration, maxDur);
     }
 
@@ -660,7 +662,7 @@ export function AnnotateContainer({
       clipData.tags,
       clipData.name,
       videoSeq,
-      { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete },
+      { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete, videoDuration: segmentDuration },
     );
     if (newRegion) {
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek

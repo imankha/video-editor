@@ -382,17 +382,20 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
    * @param {Array} tags - Optional array of tag names
    * @param {string} name - Optional clip name (auto-generated if not provided)
    */
-  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null, { tagged_teammates = null, my_athlete = true } = {}) => {
+  const addClipRegion = useCallback((startTime, customDuration = DEFAULT_CLIP_DURATION, notes = '', rating = DEFAULT_RATING, position = '', tags = [], name = '', videoSequence = null, { tagged_teammates = null, my_athlete = true, videoDuration = null } = {}) => {
     if (!duration) {
       console.warn('[useAnnotate] Cannot add clip region - no duration set');
       return null;
     }
 
+    // In multi-video mode, clamp to the specific video's duration (not the first half's)
+    const clampDuration = videoDuration || duration;
+
     // Clamp start time to valid range
-    const clampedStart = Math.max(0, Math.min(startTime, duration - MIN_CLIP_DURATION));
+    const clampedStart = Math.max(0, Math.min(startTime, clampDuration - MIN_CLIP_DURATION));
 
     // Calculate end time, clamping to video duration
-    const endTime = Math.min(clampedStart + customDuration, duration);
+    const endTime = Math.min(clampedStart + customDuration, clampDuration);
 
     // Ensure minimum duration
     const actualEndTime = Math.max(endTime, clampedStart + MIN_CLIP_DURATION);
@@ -408,7 +411,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       rawClipId: null,
       autoProjectId: null,
       startTime: clampedStart,
-      endTime: Math.min(actualEndTime, duration),
+      endTime: Math.min(actualEndTime, clampDuration),
       name: name || '',
       position: position || '',
       tags: tags || [],
@@ -424,7 +427,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     setClipRegions(prev => [...prev, newRegion]);
     setColorIndex(prev => prev + 1);
     onSelect?.(newRegion.id);
-    track('clip_add', { startTime: Math.round(clampedStart), endTime: Math.round(Math.min(actualEndTime, duration)), rating }, { debugOnly: true });
+    track('clip_add', { startTime: Math.round(clampedStart), endTime: Math.round(Math.min(actualEndTime, clampDuration)), rating }, { debugOnly: true });
 
     return newRegion;
   }, [duration, colorIndex, onSelect]);
