@@ -541,7 +541,7 @@ export function ProjectManager({
       <div className="text-center pt-10 sm:pt-0 mb-6">
         <Logo size={48} className="mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
-        <p className="text-gray-400">{`Manage your games and ${SECTION_NAMES.DRAFTS_LOWER}`}</p>
+        <p className="text-gray-400">Learn from, preserve, and celebrate your athlete's moments</p>
       </div>
 
       {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
