@@ -777,25 +777,6 @@ async def report_problem(body: ProblemReportRequest, request: Request):
                 (screenshot_r2_key, logs_r2_key, bug_id),
             )
 
-    # 5. Send notification email (no attachments)
-    from app.services.auth_db import get_admin_emails
-    admin_emails = get_admin_emails()
-    if admin_emails:
-        from app.services.email import send_bug_notification_email
-        try:
-            mode = None
-            if body.editor_context and isinstance(body.editor_context, dict):
-                mode = body.editor_context.get("mode")
-            await send_bug_notification_email(
-                to_emails=admin_emails,
-                bug_id=bug_id,
-                reporter_email=body.email,
-                description=body.description,
-                mode=mode,
-            )
-        except Exception as e:
-            logger.warning(f"[Auth] Bug notification email failed (bug saved): {e}, bug_id={bug_id}")
-
     logger.info(f"[Auth] Bug #{bug_id} reported: from={body.email or 'anonymous'}, "
                 f"log_count={len(body.logs)}, req_id={req_id}")
     return {"sent": True, "bug_id": bug_id}

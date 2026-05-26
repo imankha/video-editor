@@ -767,7 +767,7 @@ async def referral_tree(user_id: str):
 # Bug reports (T3100)
 # ---------------------------------------------------------------------------
 
-BUG_STATUSES = {"new", "investigating", "confirmed", "not_a_bug", "duplicate", "resolved"}
+BUG_STATUSES = {"new", "testing", "done", "duplicate"}
 
 
 @router.get("/bugs")
@@ -885,7 +885,7 @@ async def update_bug(bug_id: int, body: BugUpdateRequest):
                 raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
             updates.append("status = %s")
             params.append(body.status)
-            if body.status == "resolved":
+            if body.status == "done":
                 updates.append("resolved_at = NOW()")
 
         if body.admin_notes is not None:

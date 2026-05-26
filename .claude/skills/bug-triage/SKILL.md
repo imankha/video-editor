@@ -3,7 +3,7 @@ name: bug
 description: "Load a bug report's full context for investigation. Usage: /bug {id}"
 license: MIT
 author: video-editor
-version: 1.0.0
+version: 1.1.0
 user_invocable: true
 ---
 
@@ -11,10 +11,26 @@ user_invocable: true
 
 Load a bug report from Postgres and investigate it in the current session. Usage: `/bug {id}` or `/bug {id} status {new_status}`.
 
+## Bug Lifecycle
+
+Bugs follow the same lifecycle as tasks:
+
+| Bug Status | Display | Meaning |
+|------------|---------|---------|
+| `new` | TODO | Reported, not yet investigated |
+| `testing` | TESTING | AI has investigated and applied a fix; awaiting deploy verification |
+| `done` | DONE | Fix deployed to prod and confirmed working by user |
+| `duplicate` | DUPLICATE | Duplicate of another bug |
+
+**Rules:**
+- AI sets bugs to `testing` after implementing a fix (same as tasks)
+- Only the user sets bugs to `done` after the fix is deployed to production
+- AI must never set a bug to `done`
+
 ## When to Apply
 
 - User types `/bug 42` to load and investigate bug #42
-- User types `/bug 42 status investigating` to update a bug's status
+- User types `/bug 42 status testing` to update a bug's status
 
 ## Procedure
 
@@ -22,7 +38,7 @@ Load a bug report from Postgres and investigate it in the current session. Usage
 
 Extract the bug ID (required) and optional subcommand from the user's input:
 - `/bug 42` -- load and investigate
-- `/bug 42 status investigating` -- update status (valid: `new`, `investigating`, `resolved`, `duplicate`, `wontfix`)
+- `/bug 42 status testing` -- update status (valid: `new`, `testing`, `done`, `duplicate`)
 
 ### 2. Fetch Bug from Postgres (Primary Method)
 
@@ -68,16 +84,16 @@ with get_pg() as conn:
 
 Report the result and stop (don't do a full investigation for status-only updates).
 
-### 4. Auto-Set Status to Investigating
+### 4. Auto-Set Status to Testing
 
-If the bug's current status is `new`, automatically update it to `investigating`:
+If the bug's current status is `new`, automatically update it to `testing` when an AI agent begins investigating:
 
 ```bash
 cd src/backend && .venv/Scripts/python.exe -c "
 from app.services.pg import get_pg
 with get_pg() as conn:
     cur = conn.cursor()
-    cur.execute('UPDATE bug_reports SET status = %s, updated_at = NOW() WHERE id = %s AND status = %s', ('investigating', {id}, 'new'))
+    cur.execute('UPDATE bug_reports SET status = %s, updated_at = NOW() WHERE id = %s AND status = %s', ('testing', {id}, 'new'))
 "
 ```
 
@@ -87,7 +103,7 @@ Format the bug data as:
 
 ```
 ## Bug #{id}: {description (first 80 chars)}
-**Status:** {old_status} -> investigating  (or just {status} if not changed)
+**Status:** {old_status} -> testing  (or just {status} if not changed)
 **Reporter:** {reporter_email}
 **Reported:** {created_at formatted as YYYY-MM-DD HH:MM UTC}
 **Build:** {build}
@@ -224,7 +240,7 @@ If the bug has `duplicate_of` set, note which bug it duplicates.
 
 ```
 ## Bug #42: Clip icon placed in wrong part of timeline
-**Status:** new -> investigating
+**Status:** new -> testing
 **Reporter:** user@example.com
 **Reported:** 2026-05-24 01:35 UTC
 **Build:** abc123

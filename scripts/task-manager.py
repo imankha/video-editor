@@ -113,7 +113,7 @@ def fetch_remote_bugs(env):
     session = config.get(f"{env}_session", '')
     if not base_url or not session:
         return [], f"No {env} session configured"
-    api_url = f"{base_url}/api/admin/bugs?status=new,investigating,confirmed&page=1&page_size=50"
+    api_url = f"{base_url}/api/admin/bugs?status=new,testing&page=1&page_size=50"
     result, err = _make_request(api_url, session_cookie=session)
     if err:
         return [], err
@@ -836,9 +836,6 @@ HTML = r"""<!DOCTYPE html>
     background: rgba(63,185,80,0.15); color: var(--green); border-color: var(--green);
   }
   .bug-btn.primary:hover { background: rgba(63,185,80,0.25); }
-  /* Bug status badges */
-  .badge-new { background: rgba(88,166,255,0.15); color: var(--blue); }
-  .badge-resolved { background: rgba(63,185,80,0.15); color: var(--green); }
 
   .bug-mode-badge {
     font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
@@ -959,7 +956,17 @@ function relativeTime(isoStr) {
 }
 
 function bugStatusClass(s) {
-  return (s || '').toLowerCase() === 'resolved' ? 'badge-resolved' : 'badge-new';
+  const l = (s || '').toLowerCase();
+  if (l === 'done') return 'badge-done';
+  if (l === 'testing') return 'badge-testing';
+  return 'badge-todo';
+}
+
+function bugStatusLabel(s) {
+  const l = (s || '').toLowerCase();
+  if (l === 'done') return 'DONE';
+  if (l === 'testing') return 'TESTING';
+  return 'TODO';
 }
 
 function buildBugCard(bug, env, group, isPrimary) {
@@ -975,7 +982,7 @@ function buildBugCard(bug, env, group, isPrimary) {
   let topHtml = '<div class="bug-card-top">';
   topHtml += '<span class="bug-id">#' + bug.id + '</span>';
   topHtml += '<span class="bug-reporter">' + esc(bug.reporter_email || '') + '</span>';
-  topHtml += '<span class="badge ' + bugStatusClass(bug.status) + '">' + esc(bug.status || 'new') + '</span>';
+  topHtml += '<span class="badge ' + bugStatusClass(bug.status) + '">' + bugStatusLabel(bug.status) + '</span>';
   topHtml += '<span class="bug-time">' + esc(relativeTime(bug.created_at)) + '</span>';
   topHtml += '</div>';
 
@@ -1140,13 +1147,13 @@ function buildBugCard(bug, env, group, isPrimary) {
     const hasGroup = isPrimary && group && group.related && group.related.length > 0;
     const total = hasGroup ? 1 + group.related.length : 1;
     if (!confirm('Resolve' + (total > 1 ? ' all ' + total + ' bugs in this group' : ' bug #' + bug.id) + '?')) return;
-    await updateBugStatus(bug.id, env, 'resolved');
+    await updateBugStatus(bug.id, env, 'testing');
     if (hasGroup) {
       for (const r of group.related) {
         if (r.label === 'LIKELY_DUPLICATE') {
           await updateBugStatusRaw(r.bug.id, env, {status: 'duplicate', duplicate_of: bug.id});
         } else {
-          await updateBugStatus(r.bug.id, env, 'resolved');
+          await updateBugStatus(r.bug.id, env, 'testing');
         }
       }
     }
