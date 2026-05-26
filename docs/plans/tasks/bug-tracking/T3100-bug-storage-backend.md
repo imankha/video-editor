@@ -4,7 +4,7 @@
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-05-24
-**Updated:** 2026-05-24
+**Updated:** 2026-05-25
 
 ## Problem
 
@@ -13,6 +13,8 @@ Bug reports go to email. The data (editor context, action breadcrumbs, console l
 ## Solution
 
 Store bug reports in Postgres with screenshots in R2. The report-problem endpoint writes to DB instead of (only) sending email. New API endpoints for listing, reading, and updating bugs. Email becomes a lightweight notification with a link.
+
+**Environment is implicit:** prod Postgres stores prod bugs, staging Postgres stores staging bugs. No `environment` column needed.
 
 ## Context
 
@@ -25,7 +27,7 @@ Store bug reports in Postgres with screenshots in R2. The report-problem endpoin
 - `src/frontend/src/components/ReportProblemButton.jsx` - Frontend report sender
 
 ### Related Tasks
-- Blocks: T3110 (Bug Triage Skill), T3120 (Task Board Bug View), T3130 (Bug Lifecycle)
+- Blocks: T3110 (Bug Triage Skill), T3120 (Task Board Bug View), T3130 (Bug Resolution & Dedup Lifecycle)
 - Extends: T1650 (Report a Problem Button) - current email-based system
 
 ### Technical Notes
@@ -43,8 +45,7 @@ CREATE TABLE IF NOT EXISTS bug_reports (
   actions JSONB,
   console_logs JSONB,
   screenshot_r2_key TEXT,       -- R2 key for screenshot, null if none
-  status TEXT NOT NULL DEFAULT 'new',  -- new, investigating, confirmed, not_a_bug, duplicate, promoted, resolved
-  task_id TEXT,                  -- link to task if promoted (e.g., 'T3200')
+  status TEXT NOT NULL DEFAULT 'new',  -- new, investigating, confirmed, not_a_bug, duplicate, resolved
   duplicate_of INTEGER REFERENCES bug_reports(id),
   admin_notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -54,7 +55,13 @@ CREATE TABLE IF NOT EXISTS bug_reports (
 
 CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
 CREATE INDEX IF NOT EXISTS idx_bug_reports_created ON bug_reports(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_duplicate ON bug_reports(duplicate_of);
 ```
+
+**Key schema changes from original design:**
+- Removed `task_id` column -- bugs are not promoted to task files (see EPIC.md)
+- Removed `promoted` from status enum -- no promotion flow
+- Added index on `duplicate_of` for auto-resolve queries
 
 **R2 screenshot key:** `bugs/{id}/screenshot.jpg`
 - Upload after DB insert (need the ID for the key)
@@ -87,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_bug_reports_created ON bug_reports(created_at DES
 5. [ ] Create admin bug detail endpoint (`GET /api/admin/bugs/{id}`)
 6. [ ] Create admin bug update endpoint (`PATCH /api/admin/bugs/{id}`)
 7. [ ] Refactor `send_problem_report_email` to send notification-only email (no attachments)
-8. [ ] Tests: verify DB insert, R2 upload, email notification, admin endpoints
+9. [ ] Tests: verify DB insert, R2 upload, email notification, admin endpoints
 
 ## Acceptance Criteria
 

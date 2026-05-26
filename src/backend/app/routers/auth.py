@@ -702,47 +702,103 @@ class ProblemReportRequest(BaseModel):
 
 @router.post("/report-problem")
 async def report_problem(body: ProblemReportRequest, request: Request):
-    """Accept a client-side problem report and email it to all admins.
+    """Accept a client-side problem report: store in Postgres, upload assets to R2, send notification email.
 
     Gated by ENABLE_PROBLEM_REPORT env var (default: enabled).
-    TODO: Re-enable rate limiting (20/hour) once feature is approved.
     """
     if not _ENABLE_PROBLEM_REPORT:
         raise HTTPException(status_code=404, detail="Not found")
 
     req_id = request.headers.get("x-request-id", "?")
 
-    # Get admin recipients
+    # 1. Insert bug into Postgres
+    import base64 as _b64
+    from psycopg2.extras import Json
+    from app.services.pg import get_pg
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO bug_reports
+                (reporter_email, description, page_url, user_agent, build,
+                 editor_context, actions, console_logs)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+        """, (
+            body.email,
+            body.description,
+            body.page_url,
+            body.user_agent,
+            body.build,
+            Json(body.editor_context) if body.editor_context else None,
+            Json(body.actions) if body.actions else None,
+            Json(body.logs) if body.logs else None,
+        ))
+        bug_id = cur.fetchone()["id"]
+
+        # 2. Upload screenshot to R2 if present
+        screenshot_r2_key = None
+        if body.screenshot and body.screenshot.startswith("data:image/"):
+            try:
+                from app.storage import get_r2_client, r2_global_key, R2_BUCKET
+                _header, screenshot_b64 = body.screenshot.split(",", 1)
+                screenshot_bytes = _b64.b64decode(screenshot_b64)
+                client = get_r2_client()
+                if client:
+                    screenshot_r2_key = r2_global_key(f"bugs/{bug_id}/screenshot.jpg")
+                    client.put_object(
+                        Bucket=R2_BUCKET, Key=screenshot_r2_key,
+                        Body=screenshot_bytes, ContentType="image/jpeg",
+                    )
+            except Exception as e:
+                logger.warning(f"[Auth] Failed to upload bug screenshot to R2: {e}, bug_id={bug_id}")
+
+        # 3. Upload formatted console logs to R2
+        logs_r2_key = None
+        if body.logs:
+            try:
+                from app.storage import get_r2_client, r2_global_key, R2_BUCKET
+                from app.services.email import format_log_text
+                log_text = format_log_text(body.logs)
+                client = get_r2_client()
+                if client:
+                    logs_r2_key = r2_global_key(f"bugs/{bug_id}/console-logs.txt")
+                    client.put_object(
+                        Bucket=R2_BUCKET, Key=logs_r2_key,
+                        Body=log_text.encode("utf-8"), ContentType="text/plain",
+                    )
+            except Exception as e:
+                logger.warning(f"[Auth] Failed to upload bug logs to R2: {e}, bug_id={bug_id}")
+
+        # 4. Update row with R2 keys
+        if screenshot_r2_key or logs_r2_key:
+            cur.execute(
+                "UPDATE bug_reports SET screenshot_r2_key = %s, logs_r2_key = %s WHERE id = %s",
+                (screenshot_r2_key, logs_r2_key, bug_id),
+            )
+
+    # 5. Send notification email (no attachments)
     from app.services.auth_db import get_admin_emails
     admin_emails = get_admin_emails()
-    if not admin_emails:
-        logger.error(f"[Auth] Problem report has no admin recipients! req_id={req_id}")
-        raise HTTPException(status_code=500, detail="No admin recipients configured")
+    if admin_emails:
+        from app.services.email import send_bug_notification_email
+        try:
+            mode = None
+            if body.editor_context and isinstance(body.editor_context, dict):
+                mode = body.editor_context.get("mode")
+            await send_bug_notification_email(
+                to_emails=admin_emails,
+                bug_id=bug_id,
+                reporter_email=body.email,
+                description=body.description,
+                mode=mode,
+            )
+        except Exception as e:
+            logger.warning(f"[Auth] Bug notification email failed (bug saved): {e}, bug_id={bug_id}")
 
-    # Send the report
-    from app.services.email import send_problem_report_email
-    try:
-        await send_problem_report_email(
-            to_emails=admin_emails,
-            reporter_email=body.email,
-            user_agent=body.user_agent,
-            page_url=body.page_url,
-            logs=body.logs,
-            description=body.description,
-            screenshot=body.screenshot,
-            build=body.build,
-            actions=body.actions,
-            editor_context=body.editor_context,
-        )
-    except ValueError:
-        raise HTTPException(status_code=500, detail="Email service not configured")
-    except Exception as e:
-        logger.error(f"[Auth] Failed to send problem report: {e}, req_id={req_id}")
-        raise HTTPException(status_code=503, detail="Failed to send report. Please try again.")
-
-    logger.info(f"[Auth] Problem report sent: from={body.email or 'anonymous'}, "
-                f"log_count={len(body.logs)}, admins={admin_emails}, req_id={req_id}")
-    return {"sent": True}
+    logger.info(f"[Auth] Bug #{bug_id} reported: from={body.email or 'anonymous'}, "
+                f"log_count={len(body.logs)}, req_id={req_id}")
+    return {"sent": True, "bug_id": bug_id}
 
 
 @router.post("/invalidate-sessions/{user_id}")

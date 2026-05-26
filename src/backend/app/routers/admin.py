@@ -11,10 +11,12 @@ against user_milestones. No more R2 profile downloads or SQLite counting.
 import asyncio
 import logging
 import math
+from typing import Optional
 
 from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..storage import APP_ENV
@@ -759,3 +761,179 @@ async def referral_tree(user_id: str):
         rows = cur.fetchall()
         total = sum(r["count"] for r in rows)
         return {"user_id": user_id, "total": total, "by_depth": rows}
+
+
+# ---------------------------------------------------------------------------
+# Bug reports (T3100)
+# ---------------------------------------------------------------------------
+
+BUG_STATUSES = {"new", "investigating", "confirmed", "not_a_bug", "duplicate", "resolved"}
+
+
+@router.get("/bugs")
+async def list_bugs(
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+):
+    """List bug reports, optionally filtered by status. Paginated. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        where_clause = ""
+        params: list = []
+        if status:
+            statuses = [s.strip() for s in status.split(",") if s.strip() in BUG_STATUSES]
+            if statuses:
+                where_clause = "WHERE status = ANY(%s)"
+                params.append(statuses)
+
+        cur.execute(f"SELECT COUNT(*) AS cnt FROM bug_reports {where_clause}", params)
+        total = cur.fetchone()["cnt"]
+        total_pages = max(1, math.ceil(total / page_size))
+        page = min(page, total_pages)
+
+        offset = (page - 1) * page_size
+        cur.execute(f"""
+            SELECT id, reporter_email, description, page_url, build, status,
+                   editor_context, duplicate_of, created_at
+            FROM bug_reports {where_clause}
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+        """, params + [page_size, offset])
+        rows = cur.fetchall()
+
+    bugs = []
+    for row in rows:
+        desc = row["description"]
+        mode = None
+        if row["editor_context"] and isinstance(row["editor_context"], dict):
+            mode = row["editor_context"].get("mode")
+        bugs.append({
+            "id": row["id"],
+            "reporter_email": row["reporter_email"],
+            "description": desc[:200] if desc else None,
+            "page_url": row["page_url"],
+            "build": row["build"],
+            "status": row["status"],
+            "editor_mode": mode,
+            "duplicate_of": row["duplicate_of"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        })
+
+    return {"bugs": bugs, "total": total, "page": page, "total_pages": total_pages}
+
+
+@router.get("/bugs/{bug_id}")
+async def get_bug(bug_id: int):
+    """Get full bug detail including all JSONB fields and presigned screenshot URL. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM bug_reports WHERE id = %s", (bug_id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Bug not found")
+
+    from ..storage import generate_presigned_url_global
+
+    screenshot_url = None
+    if row["screenshot_r2_key"]:
+        screenshot_url = generate_presigned_url_global(row["screenshot_r2_key"])
+
+    logs_url = None
+    if row.get("logs_r2_key"):
+        logs_url = generate_presigned_url_global(row["logs_r2_key"])
+
+    result = dict(row)
+    for field in ("created_at", "updated_at", "resolved_at"):
+        if result[field]:
+            result[field] = result[field].isoformat()
+    result["screenshot_url"] = screenshot_url
+    result["logs_url"] = logs_url
+
+    return result
+
+
+class BugUpdateRequest(BaseModel):
+    status: Optional[str] = None
+    admin_notes: Optional[str] = None
+    duplicate_of: Optional[int] = None
+
+
+@router.patch("/bugs/{bug_id}")
+async def update_bug(bug_id: int, body: BugUpdateRequest):
+    """Update bug status, notes, or duplicate_of. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, status FROM bug_reports WHERE id = %s", (bug_id,))
+        existing = cur.fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Bug not found")
+
+        updates = ["updated_at = NOW()"]
+        params: list = []
+
+        if body.status is not None:
+            if body.status not in BUG_STATUSES:
+                raise HTTPException(status_code=400, detail=f"Invalid status: {body.status}")
+            updates.append("status = %s")
+            params.append(body.status)
+            if body.status == "resolved":
+                updates.append("resolved_at = NOW()")
+
+        if body.admin_notes is not None:
+            updates.append("admin_notes = %s")
+            params.append(body.admin_notes)
+
+        if body.duplicate_of is not None:
+            if body.duplicate_of == bug_id:
+                raise HTTPException(status_code=400, detail="Cannot mark as duplicate of itself")
+            cur.execute("SELECT id FROM bug_reports WHERE id = %s", (body.duplicate_of,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=400, detail="Duplicate target bug not found")
+            updates.append("duplicate_of = %s")
+            params.append(body.duplicate_of)
+            updates.append("status = 'duplicate'")
+
+        params.append(bug_id)
+        cur.execute(
+            f"UPDATE bug_reports SET {', '.join(updates)} WHERE id = %s RETURNING *",
+            params,
+        )
+        updated = cur.fetchone()
+
+    result = dict(updated)
+    for field in ("created_at", "updated_at", "resolved_at"):
+        if result[field]:
+            result[field] = result[field].isoformat()
+    return result
+
+
+@router.get("/bugs/{bug_id}/screenshot")
+async def get_bug_screenshot(bug_id: int):
+    """Redirect to presigned R2 URL for the bug's screenshot. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT screenshot_r2_key FROM bug_reports WHERE id = %s", (bug_id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Bug not found")
+    if not row["screenshot_r2_key"]:
+        raise HTTPException(status_code=404, detail="No screenshot for this bug")
+
+    from ..storage import generate_presigned_url_global
+    url = generate_presigned_url_global(row["screenshot_r2_key"])
+    if not url:
+        raise HTTPException(status_code=500, detail="Failed to generate screenshot URL")
+
+    return RedirectResponse(url=url, status_code=307)

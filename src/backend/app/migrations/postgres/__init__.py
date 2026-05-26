@@ -6,6 +6,7 @@ from .v004_referral_graph import V004ReferralGraph
 from .v005_user_milestones import V005UserMilestones
 from .v006_daily_counters import V006DailyCounters
 from .v007_user_flow_events import V007UserFlowEvents
+from .v008_bug_reports_table import V008BugReportsTable
 
 MIGRATIONS = [
     V001Baseline(),
@@ -15,6 +16,7 @@ MIGRATIONS = [
     V005UserMilestones(),
     V006DailyCounters(),
     V007UserFlowEvents(),
+    V008BugReportsTable(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

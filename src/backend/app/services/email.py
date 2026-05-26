@@ -125,28 +125,11 @@ def _format_editor_context_html(ctx: dict) -> str:
       </div>"""
 
 
-async def send_problem_report_email(
-    to_emails: list[str],
-    reporter_email: str | None,
-    user_agent: str,
-    page_url: str,
-    logs: list[dict],
-    description: str | None = None,
-    screenshot: str | None = None,
-    build: str | None = None,
-    actions: list[dict] | None = None,
-    editor_context: dict | None = None,
-) -> None:
-    """Send a problem report (client console logs) to admin emails via Resend.
+def format_log_text(logs: list[dict]) -> str:
+    """Format console log entries into deduplicated plain text.
 
-    T1650: "Report a problem" button. Each log entry is {level, message, ts}.
+    Used by report_problem to upload to R2, and by the legacy email path.
     """
-    api_key = os.getenv("RESEND_API_KEY")
-    if not api_key:
-        raise ValueError("RESEND_API_KEY not configured")
-
-    # Build plain-text log content for .txt attachment
-    # 1. Collapse consecutive identical messages (e.g. error loops)
     deduped = []
     prev_key = None
     repeat_count = 0
@@ -162,10 +145,8 @@ async def send_problem_report_email(
         deduped.append(entry)
     if repeat_count > 0:
         deduped.append({"_repeat": repeat_count})
-    # 2. If still over 50 unique lines, drop info-level
     if len([e for e in deduped if "level" in e]) > 50:
         deduped = [e for e in deduped if e.get("level") != "info"]
-    # 3. Format
     log_lines = []
     for entry in deduped:
         if "_repeat" in entry:
@@ -176,7 +157,31 @@ async def send_problem_report_email(
             ts = entry.get("ts", "")
             msg = entry.get("message", "")
             log_lines.append(f"[{level}] {ts}  {msg}")
-    log_text = "\n".join(log_lines) if log_lines else "(no logs captured)"
+    return "\n".join(log_lines) if log_lines else "(no logs captured)"
+
+
+async def send_problem_report_email(
+    to_emails: list[str],
+    reporter_email: str | None,
+    user_agent: str,
+    page_url: str,
+    logs: list[dict],
+    description: str | None = None,
+    screenshot: str | None = None,
+    build: str | None = None,
+    actions: list[dict] | None = None,
+    editor_context: dict | None = None,
+) -> None:
+    """Send a problem report (client console logs) to admin emails via Resend.
+
+    T1650: "Report a problem" button. Each log entry is {level, message, ts}.
+    Legacy path -- report_problem now uses send_bug_notification_email instead.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        raise ValueError("RESEND_API_KEY not configured")
+
+    log_text = format_log_text(logs)
     log_attachment_b64 = base64.b64encode(log_text.encode("utf-8")).decode("ascii")
 
     # Editor context section — inline in the email for quick debugging
@@ -272,6 +277,67 @@ async def send_problem_report_email(
         raise RuntimeError(f"Failed to send problem report: {resp.status_code}")
 
     logger.info(f"[Email] Problem report sent to {to_emails} from {reporter_email or 'anonymous'}")
+
+
+async def send_bug_notification_email(
+    to_emails: list[str],
+    bug_id: int,
+    reporter_email: str | None,
+    description: str | None = None,
+    mode: str | None = None,
+) -> None:
+    """Send a lightweight bug notification email (no attachments). All data is in Postgres + R2."""
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        raise ValueError("RESEND_API_KEY not configured")
+
+    desc_preview = ""
+    if description:
+        preview = description[:80].replace("\n", " ")
+        if len(description) > 80:
+            preview += "..."
+        desc_preview = f" - {preview}"
+
+    subject = f"Bug #{bug_id}{desc_preview}"
+
+    description_html = ""
+    if description:
+        description_html = f"""
+      <div style="margin-bottom:16px;padding:12px;background:#111827;border-radius:6px;border-left:3px solid #3b82f6">
+        <div style="color:#e5e7eb;font-size:14px;white-space:pre-wrap">{_html_escape(description[:2000])}</div>
+      </div>"""
+
+    html_body = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #1f2937; color: #e5e7eb;">
+      <h2 style="color: #f87171; margin-bottom: 16px;">Bug #{bug_id}</h2>
+      <table style="margin-bottom: 16px; font-size: 13px;">
+        <tr><td style="color:#9ca3af;padding-right:12px">Reporter:</td><td style="color:#e5e7eb">{_html_escape(reporter_email or '(anonymous)')}</td></tr>
+        <tr><td style="color:#9ca3af;padding-right:12px">Mode:</td><td style="color:#e5e7eb">{_html_escape(mode or 'unknown')}</td></tr>
+      </table>
+      {description_html}
+      <p style="color:#6b7280;font-size:12px;margin-top:16px">Full details available in the admin task board.</p>
+    </div>
+    """
+
+    async def _send():
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            return await client.post(
+                RESEND_API_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "from": FROM_ADDRESS,
+                    "to": to_emails,
+                    "subject": subject,
+                    "html": html_body,
+                },
+            )
+
+    resp = await retry_async_call(_send, operation="resend_bug_notification", **TIER_1)
+    if resp.status_code not in (200, 201):
+        logger.error(f"[Email] Bug notification send failed: {resp.status_code} {resp.text}")
+        raise RuntimeError(f"Failed to send bug notification: {resp.status_code}")
+
+    logger.info(f"[Email] Bug #{bug_id} notification sent to {to_emails}")
 
 
 DOMAIN_MAP = {
