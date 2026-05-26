@@ -1759,6 +1759,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
 
   return (
     <div
+      data-testid="project-card"
       onClick={isReadyToPublish ? undefined : handleCardClick}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
         isReadyToPublish
