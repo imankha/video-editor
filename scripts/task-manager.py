@@ -78,10 +78,17 @@ def save_bug_config(config):
         json.dump(config, f, indent=2)
 
 def _make_request(url, method='GET', data=None, session_cookie='', timeout=10):
-    """Make an HTTP request with session cookie auth. Returns (parsed_json, error_string)."""
+    """Make an HTTP request with session cookie auth. Returns (parsed_json, error_string).
+
+    If session_cookie looks like a UUID (user_id), sends X-User-ID header instead
+    of a cookie -- this works for local dev/staging where the header fallback is enabled.
+    """
     req = urllib.request.Request(url, method=method)
     if session_cookie:
-        req.add_header('Cookie', f'rb_session={session_cookie}')
+        if len(session_cookie) == 36 and session_cookie.count('-') == 4:
+            req.add_header('X-User-ID', session_cookie)
+        else:
+            req.add_header('Cookie', f'rb_session={session_cookie}')
     if data is not None:
         payload = json.dumps(data).encode()
         req.data = payload
@@ -829,16 +836,9 @@ HTML = r"""<!DOCTYPE html>
     background: rgba(63,185,80,0.15); color: var(--green); border-color: var(--green);
   }
   .bug-btn.primary:hover { background: rgba(63,185,80,0.25); }
-  .bug-btn.danger { color: var(--red); border-color: var(--red); }
-  .bug-btn.danger:hover { background: rgba(248,81,73,0.1); }
-
   /* Bug status badges */
   .badge-new { background: rgba(88,166,255,0.15); color: var(--blue); }
-  .badge-investigating { background: rgba(210,153,34,0.15); color: var(--yellow); }
-  .badge-confirmed { background: rgba(248,81,73,0.15); color: var(--red); }
   .badge-resolved { background: rgba(63,185,80,0.15); color: var(--green); }
-  .badge-duplicate { background: rgba(72,79,88,0.25); color: var(--gray); }
-  .badge-wontfix { background: rgba(72,79,88,0.25); color: var(--gray); }
 
   .bug-mode-badge {
     font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 4px;
@@ -898,11 +898,6 @@ HTML = r"""<!DOCTYPE html>
     font-family: inherit; resize: vertical;
   }
   .bug-notes-textarea:focus { border-color: var(--accent); outline: none; }
-  .bug-status-select {
-    background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 3px 8px; border-radius: 4px; font-size: 12px; cursor: pointer;
-  }
-
   @media (max-width: 768px) {
     .task-card { grid-template-columns: 20px 50px 1fr auto auto 28px; font-size: 13px; }
     .meta-extra { display: none; }
@@ -964,14 +959,7 @@ function relativeTime(isoStr) {
 }
 
 function bugStatusClass(s) {
-  const l = (s || '').toLowerCase();
-  if (l === 'new') return 'badge-new';
-  if (l === 'investigating') return 'badge-investigating';
-  if (l === 'confirmed') return 'badge-confirmed';
-  if (l === 'resolved') return 'badge-resolved';
-  if (l === 'duplicate') return 'badge-duplicate';
-  if (l === 'wontfix') return 'badge-wontfix';
-  return 'badge-new';
+  return (s || '').toLowerCase() === 'resolved' ? 'badge-resolved' : 'badge-new';
 }
 
 function buildBugCard(bug, env, group, isPrimary) {
@@ -1001,16 +989,7 @@ function buildBugCard(bug, env, group, isPrimary) {
 
   let actionsHtml = '<div class="bug-actions">';
   actionsHtml += '<button class="bug-btn primary bug-kickoff-btn">Copy Kickoff Prompt</button>';
-  if (isPrimary && group && group.related && group.related.length > 0) {
-    actionsHtml += '<button class="bug-btn danger bug-resolve-group-btn">Resolve Group</button>';
-  } else {
-    actionsHtml += '<button class="bug-btn bug-resolve-btn">Resolve</button>';
-  }
-  actionsHtml += '<select class="bug-status-select">';
-  ['new','investigating','confirmed','resolved','duplicate','wontfix'].forEach(st => {
-    actionsHtml += '<option value="' + st + '"' + (st === bug.status ? ' selected' : '') + '>' + st + '</option>';
-  });
-  actionsHtml += '</select>';
+  actionsHtml += '<button class="bug-btn bug-resolve-btn">Resolve</button>';
   actionsHtml += '</div>';
 
   // Detail view (expandable)
@@ -1156,41 +1135,22 @@ function buildBugCard(bug, env, group, isPrimary) {
     }
   };
 
-  const resolveBtn = card.querySelector('.bug-resolve-btn');
-  if (resolveBtn) {
-    resolveBtn.onclick = async (e) => {
-      e.stopPropagation();
-      if (!confirm('Resolve bug #' + bug.id + '?')) return;
-      await updateBugStatus(bug.id, env, 'resolved');
-    };
-  }
-
-  const resolveGroupBtn = card.querySelector('.bug-resolve-group-btn');
-  if (resolveGroupBtn) {
-    resolveGroupBtn.onclick = async (e) => {
-      e.stopPropagation();
-      const total = 1 + (group.related ? group.related.length : 0);
-      if (!confirm('Resolve all ' + total + ' bugs in this group?')) return;
-      await updateBugStatus(bug.id, env, 'resolved');
-      if (group.related) {
-        for (const r of group.related) {
-          if (r.label === 'LIKELY_DUPLICATE') {
-            await updateBugStatusRaw(r.bug.id, env, {status: 'duplicate', duplicate_of: bug.id});
-          } else {
-            await updateBugStatus(r.bug.id, env, 'resolved');
-          }
+  card.querySelector('.bug-resolve-btn').onclick = async (e) => {
+    e.stopPropagation();
+    const hasGroup = isPrimary && group && group.related && group.related.length > 0;
+    const total = hasGroup ? 1 + group.related.length : 1;
+    if (!confirm('Resolve' + (total > 1 ? ' all ' + total + ' bugs in this group' : ' bug #' + bug.id) + '?')) return;
+    await updateBugStatus(bug.id, env, 'resolved');
+    if (hasGroup) {
+      for (const r of group.related) {
+        if (r.label === 'LIKELY_DUPLICATE') {
+          await updateBugStatusRaw(r.bug.id, env, {status: 'duplicate', duplicate_of: bug.id});
+        } else {
+          await updateBugStatus(r.bug.id, env, 'resolved');
         }
       }
-      showToast('Group resolved');
-      loadBugs();
-    };
-  }
-
-  const statusSelect = card.querySelector('.bug-status-select');
-  statusSelect.onclick = (e) => e.stopPropagation();
-  statusSelect.onchange = async (e) => {
-    e.stopPropagation();
-    await updateBugStatus(bug.id, env, e.target.value);
+    }
+    loadBugs();
   };
 
   const saveNotesBtn = card.querySelector('.bug-save-notes-btn');
