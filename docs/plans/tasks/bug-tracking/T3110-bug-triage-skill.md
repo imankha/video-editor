@@ -1,6 +1,6 @@
 # T3110: Bug Investigation Skill
 
-**Status:** TODO
+**Status:** TESTING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-05-24
