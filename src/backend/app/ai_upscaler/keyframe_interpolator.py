@@ -292,8 +292,8 @@ class KeyframeInterpolator:
         outline_w = stroke_w + 2
 
         # Ground spotlight: bottom 240° arc (skip top 120° where player is)
-        arc_start = 300 if is_ground else 0
-        arc_end = 240 if is_ground else 360
+        arc_start = -30 if is_ground else 0
+        arc_end = 210 if is_ground else 360
 
         result = frame
 

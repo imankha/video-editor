@@ -320,8 +320,8 @@ export default function HighlightOverlay({
     const cy = screenHighlight.y;
     const rx = screenHighlight.radiusX;
     const ry = screenHighlight.radiusY;
-    const startDeg = -60;
-    const endDeg = 240;
+    const startDeg = -30;
+    const endDeg = 210;
     const startRad = (startDeg * Math.PI) / 180;
     const endRad = (endDeg * Math.PI) / 180;
     const x1 = cx + rx * Math.cos(startRad);

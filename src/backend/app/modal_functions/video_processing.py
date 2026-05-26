@@ -741,8 +741,8 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
     outline_w = stroke_w + 2
 
-    arc_start = 300 if is_ground else 0
-    arc_end = 240 if is_ground else 360
+    arc_start = -30 if is_ground else 0
+    arc_end = 210 if is_ground else 360
 
     out = frame
 
