@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
@@ -15,7 +15,13 @@ import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { SECTION_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
-import { FramingScreen, OverlayScreen, AnnotateScreen, ProjectsScreen, AdminScreen } from './screens';
+// ProjectsScreen is static — it's the home/landing screen loaded on every visit
+import { ProjectsScreen } from './screens';
+// Editor screens are lazy-loaded — only fetched when the user navigates to them
+const AnnotateScreen = lazy(() => import('./screens/AnnotateScreen').then(m => ({ default: m.AnnotateScreen })));
+const FramingScreen = lazy(() => import('./screens/FramingScreen').then(m => ({ default: m.FramingScreen })));
+const OverlayScreen = lazy(() => import('./screens/OverlayScreen').then(m => ({ default: m.OverlayScreen })));
+const AdminScreen = lazy(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
@@ -538,7 +544,9 @@ function App() {
     return (
       <>
         <ImpersonationBanner />
-        <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
+        <Suspense fallback={null}>
+          <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
+        </Suspense>
         <ToastContainer />
       </>
     );
@@ -591,10 +599,12 @@ function App() {
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
       {editorMode === EDITOR_MODES.ANNOTATE && (
-        <AnnotateScreen
-          onClearSelection={clearSelection}
-          onModeChange={handleModeChange}
-        />
+        <Suspense fallback={null}>
+          <AnnotateScreen
+            onClearSelection={clearSelection}
+            onModeChange={handleModeChange}
+          />
+        </Suspense>
       )}
 
       {/* Main Content - For framing/overlay modes */}
@@ -618,17 +628,21 @@ function App() {
 
           {/* Mode-specific views */}
           {editorMode === EDITOR_MODES.FRAMING && (
-            <FramingScreen
-              onExportComplete={handleExportComplete}
-              exportButtonRef={exportButtonRef}
-            />
+            <Suspense fallback={null}>
+              <FramingScreen
+                onExportComplete={handleExportComplete}
+                exportButtonRef={exportButtonRef}
+              />
+            </Suspense>
           )}
 
           {editorMode === EDITOR_MODES.OVERLAY && (
-            <OverlayScreen
-              onExportComplete={handleExportComplete}
-              exportButtonRef={exportButtonRef}
-            />
+            <Suspense fallback={null}>
+              <OverlayScreen
+                onExportComplete={handleExportComplete}
+                exportButtonRef={exportButtonRef}
+              />
+            </Suspense>
           )}
 
         </div>

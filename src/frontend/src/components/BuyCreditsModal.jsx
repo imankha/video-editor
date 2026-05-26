@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, ExpressCheckoutElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { X, Coins, Star, Gem, Loader2, ArrowLeft } from 'lucide-react';
 import { Button } from './shared/Button';
@@ -24,6 +23,8 @@ let stripePromiseCache = null;
 
 async function getStripePromise() {
   if (stripePromiseCache) return stripePromiseCache;
+
+  const { loadStripe } = await import('@stripe/stripe-js');
 
   // Try VITE env var first (allows override), then fetch from backend
   const envKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;

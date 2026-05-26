@@ -5,7 +5,7 @@ import { SharePlaybackDialog } from '../components/SharePlaybackDialog';
 import { AnnotateModeView } from '../modes';
 import { ClipsSidePanel } from '../modes/annotate';
 import { AnnotateContainer } from '../containers';
-import { UnifiedHeader } from '../components/shared';
+import { UnifiedHeader } from '../components/shared/UnifiedHeader';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';

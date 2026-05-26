@@ -51,6 +51,15 @@ export default defineConfig({
   define: {
     __COMMIT_HASH__: JSON.stringify(commitHash),
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-stripe': ['@stripe/stripe-js', '@stripe/react-stripe-js'],
+        },
+      },
+    },
+  },
   // Strip console.log in production builds (keep console.error and console.warn for debugging)
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
