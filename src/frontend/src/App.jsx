@@ -443,7 +443,13 @@ function App() {
     useVideoStore.getState().reset();
 
     setEditorMode(newMode);
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects, handleEditInAnnotate]);
+
+    if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(newMode)) {
+      apiFetch(`${API_BASE}/api/projects/${selectedProjectId}/state?current_mode=${encodeURIComponent(newMode)}`, {
+        method: 'PATCH'
+      }).catch(e => console.error('[App] Failed to persist mode:', e));
+    }
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {
@@ -492,7 +498,14 @@ function App() {
       fetchProjects();
     }
 
-    setEditorMode(targetMode || EDITOR_MODES.PROJECT_MANAGER);
+    const finalMode = targetMode || EDITOR_MODES.PROJECT_MANAGER;
+    setEditorMode(finalMode);
+
+    if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(finalMode)) {
+      apiFetch(`${API_BASE}/api/projects/${selectedProjectId}/state?current_mode=${encodeURIComponent(finalMode)}`, {
+        method: 'PATCH'
+      }).catch(e => console.error('[App] Failed to persist mode:', e));
+    }
   }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
 
   // Backward-compatible wrapper for setExportingProject

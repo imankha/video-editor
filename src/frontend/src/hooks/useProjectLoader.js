@@ -118,10 +118,10 @@ export function useProjectLoader() {
       const needsOverlay = project.working_video_id && (!project.has_final_video || framingNewerThanFinal);
       const targetMode = mode || (needsOverlay ? 'overlay' : 'framing');
 
-      // Update last_opened_at (non-blocking)
-      apiFetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true`, {
+      // Update last_opened_at and persist current_mode (non-blocking)
+      apiFetch(`${API_BASE}/api/projects/${projectId}/state?update_last_opened=true&current_mode=${encodeURIComponent(targetMode)}`, {
         method: 'PATCH'
-      }).catch(e => console.error('[useProjectLoader] Failed to update last_opened_at:', e));
+      }).catch(e => console.error('[useProjectLoader] Failed to update project state:', e));
 
       // Set aspect ratio from project
       const projectAspectRatio = project.aspect_ratio || '9:16';
