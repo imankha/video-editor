@@ -30,7 +30,7 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Higher quality highlights in minutes.
+            Learn from, preserve, and celebrate your athlete's moments.
           </p>
 
           <div className="flex justify-center mb-12">
@@ -38,7 +38,7 @@ function App() {
               href={ctaHref}
               className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
             >
-              Get Started Free
+              Get Started
             </a>
           </div>
 
