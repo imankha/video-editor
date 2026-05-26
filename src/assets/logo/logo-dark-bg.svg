@@ -1,0 +1,23 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background for social/favicon use -->
+  <rect width="48" height="48" rx="8" fill="#111827"/>
+
+  <!-- Outer ring - film reel inspired -->
+  <circle cx="24" cy="24" r="18" stroke="url(#logoGradient)" stroke-width="2.5" fill="none"/>
+
+  <!-- Film sprocket holes -->
+  <circle cx="24" cy="7.5" r="1.5" fill="#a855f7"/>
+  <circle cx="24" cy="40.5" r="1.5" fill="#a855f7"/>
+  <circle cx="7.5" cy="24" r="1.5" fill="#a855f7"/>
+  <circle cx="40.5" cy="24" r="1.5" fill="#a855f7"/>
+
+  <!-- Play button -->
+  <path d="M21 17 L21 31 L33 24 Z" fill="white" opacity="0.95"/>
+
+  <defs>
+    <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+</svg>
