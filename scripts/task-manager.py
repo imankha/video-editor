@@ -812,7 +812,8 @@ HTML = r"""<!DOCTYPE html>
   .bug-card-top {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
-  .bug-id { font-family: monospace; font-size: 13px; color: var(--accent); font-weight: 600; }
+  .bug-id { font-family: monospace; font-size: 14px; color: #f0f0f0; font-weight: 700; cursor: pointer; background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 4px; }
+  .bug-id:hover { background: rgba(255,255,255,0.15); }
   .bug-reporter { font-size: 12px; color: var(--text-dim); }
   .bug-time { font-size: 12px; color: var(--text-dim); margin-left: auto; white-space: nowrap; }
   .bug-meta {
@@ -867,6 +868,7 @@ HTML = r"""<!DOCTYPE html>
     background: rgba(0,0,0,0.15);
   }
   .bug-card.expanded .bug-detail { display: block; }
+  .bug-card.expanded .bug-actions { display: flex !important; }
   .bug-detail-section { margin-bottom: 12px; }
   .bug-detail-section h4 {
     font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
@@ -889,12 +891,6 @@ HTML = r"""<!DOCTYPE html>
     max-width: 400px; max-height: 300px; border-radius: 4px;
     border: 1px solid var(--border); margin-top: 4px;
   }
-  .bug-notes-textarea {
-    width: 100%; min-height: 60px; background: var(--bg); border: 1px solid var(--border);
-    color: var(--text); padding: 8px; border-radius: 4px; font-size: 13px;
-    font-family: inherit; resize: vertical;
-  }
-  .bug-notes-textarea:focus { border-color: var(--accent); outline: none; }
   @media (max-width: 768px) {
     .task-card { grid-template-columns: 20px 50px 1fr auto auto 28px; font-size: 13px; }
     .meta-extra { display: none; }
@@ -943,6 +939,18 @@ let pendingSave = false;
 let collapseState = {}; // {msId: bool, epicId: bool} — persists across renders
 let bugData = null; // {prod: {groups, error}, staging: {groups, error}}
 
+function copyText(text, el) {
+  const orig = el.textContent;
+  function done() { el.textContent = 'copied!'; setTimeout(() => { el.textContent = orig; }, 800); }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallback());
+  } else { fallback(); }
+  function fallback() {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done();
+  }
+}
+
 function relativeTime(isoStr) {
   if (!isoStr) return '';
   const d = new Date(isoStr);
@@ -980,7 +988,7 @@ function buildBugCard(bug, env, group, isPrimary) {
   const desc = bug.description || '';
 
   let topHtml = '<div class="bug-card-top">';
-  topHtml += '<span class="bug-id">#' + bug.id + '</span>';
+  topHtml += '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + bug.id + '\',this)">#' + bug.id + '</span>';
   topHtml += '<span class="bug-reporter">' + esc(bug.reporter_email || '') + '</span>';
   topHtml += '<span class="badge ' + bugStatusClass(bug.status) + '">' + bugStatusLabel(bug.status) + '</span>';
   topHtml += '<span class="bug-time">' + esc(relativeTime(bug.created_at)) + '</span>';
@@ -988,13 +996,12 @@ function buildBugCard(bug, env, group, isPrimary) {
 
   let metaHtml = '<div class="bug-meta">';
   if (mode) metaHtml += '<span class="bug-mode-badge">' + esc(mode) + '</span>';
-  if (bug.build) metaHtml += '<span class="badge" style="font-size:10px;background:rgba(72,79,88,0.25);color:var(--gray)">' + esc(bug.build.substring(0, 8)) + '</span>';
   if (hasScreenshot) metaHtml += '<span class="bug-screenshot-icon" title="Has screenshot">&#128247;</span>';
   metaHtml += '</div>';
 
   let descHtml = '<div class="bug-desc">"' + esc(desc.substring(0, 100)) + (desc.length > 100 ? '...' : '') + '"</div>';
 
-  let actionsHtml = '<div class="bug-actions">';
+  let actionsHtml = '<div class="bug-actions" style="display:none">';
   actionsHtml += '<button class="bug-btn primary bug-kickoff-btn">Copy Kickoff Prompt</button>';
   actionsHtml += '<button class="bug-btn bug-resolve-btn">Resolve</button>';
   actionsHtml += '</div>';
@@ -1002,7 +1009,7 @@ function buildBugCard(bug, env, group, isPrimary) {
   // Detail view (expandable)
   let detailHtml = '<div class="bug-detail">';
   // Editor context
-  detailHtml += '<div class="bug-detail-section"><h4>Editor Context</h4>';
+  detailHtml += '<div class="bug-detail-section">';
   detailHtml += '<table class="bug-detail-table"><tbody>';
   if (bug.editor_context && typeof bug.editor_context === 'object') {
     Object.entries(bug.editor_context).forEach(([k, v]) => {
@@ -1049,11 +1056,6 @@ function buildBugCard(bug, env, group, isPrimary) {
     detailHtml += '</div>';
   }
 
-  // Admin notes
-  detailHtml += '<div class="bug-detail-section"><h4>Admin Notes</h4>';
-  detailHtml += '<textarea class="bug-notes-textarea" placeholder="Add notes...">' + esc(bug.admin_notes || '') + '</textarea>';
-  detailHtml += '<button class="bug-btn bug-save-notes-btn" style="margin-top:4px">Save Notes</button>';
-  detailHtml += '</div>';
 
   detailHtml += '</div>';
 
@@ -1129,9 +1131,6 @@ function buildBugCard(bug, env, group, isPrimary) {
           prompt += '- Bug #' + r.id + ': ' + r.label.replace('_', ' ') + '. ' + r.reason + '\n';
         });
       }
-      if (b.admin_notes) {
-        prompt += '\n### Admin Notes\n' + b.admin_notes + '\n';
-      }
       copyToClipboard(prompt, btn);
       btn.textContent = 'Copied!';
       setTimeout(() => { btn.textContent = 'Copy Kickoff Prompt'; btn.disabled = false; }, 2000);
@@ -1147,26 +1146,19 @@ function buildBugCard(bug, env, group, isPrimary) {
     const hasGroup = isPrimary && group && group.related && group.related.length > 0;
     const total = hasGroup ? 1 + group.related.length : 1;
     if (!confirm('Resolve' + (total > 1 ? ' all ' + total + ' bugs in this group' : ' bug #' + bug.id) + '?')) return;
-    await updateBugStatus(bug.id, env, 'testing');
+    await updateBugStatus(bug.id, env, 'done');
     if (hasGroup) {
       for (const r of group.related) {
         if (r.label === 'LIKELY_DUPLICATE') {
           await updateBugStatusRaw(r.bug.id, env, {status: 'duplicate', duplicate_of: bug.id});
         } else {
-          await updateBugStatus(r.bug.id, env, 'testing');
+          await updateBugStatus(r.bug.id, env, 'done');
         }
       }
     }
     loadBugs();
   };
 
-  const saveNotesBtn = card.querySelector('.bug-save-notes-btn');
-  saveNotesBtn.onclick = async (e) => {
-    e.stopPropagation();
-    const notes = card.querySelector('.bug-notes-textarea').value;
-    await updateBugStatusRaw(bug.id, env, {admin_notes: notes});
-    showToast('Notes saved');
-  };
 
   return card;
 }
@@ -1302,7 +1294,7 @@ function renderBugMilestones(app) {
           const labelClass = r.label === 'ADDS_VARIANCE' ? 'variance' : 'duplicate';
           const labelText = r.label === 'ADDS_VARIANCE' ? 'ADDS VARIANCE' : 'LIKELY DUPLICATE';
           relDiv.innerHTML =
-            '<span class="bug-id">#' + r.bug.id + '</span> ' +
+            '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + r.bug.id + '\',this)">#' + r.bug.id + '</span> ' +
             '<span class="bug-related-label ' + labelClass + '">' + labelText + '</span> ' +
             '<span>' + esc(r.reason) + '</span>' +
             ' <span class="bug-reporter">' + esc(r.bug.reporter_email || '') + '</span>' +

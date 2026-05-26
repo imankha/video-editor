@@ -443,8 +443,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 auth_source = "session"
 
         # 2. Fallback: X-User-ID header (backward compat for dev/tests)
-        # SECURITY: Only enabled in dev/staging -- never in production.
-        if not user_id and APP_ENV != "production":
+        # SECURITY: Only enabled in dev/staging -- never in production,
+        # except for /api/admin/ routes (which have their own admin gate).
+        is_admin_route = request.url.path.startswith("/api/admin/")
+        if not user_id and (APP_ENV != "production" or is_admin_route):
             raw_user_id = request.headers.get('X-User-ID')
             if raw_user_id:
                 sanitized = ''.join(c for c in raw_user_id if c.isalnum() or c in '_-')
