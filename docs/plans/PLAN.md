@@ -240,6 +240,10 @@ Outreach to our network once alpha milestone is complete. Ordered: create source
 | T1980 | [Alpha Outreach Email](tasks/alpha-marketing/T1980-alpha-outreach-email.md) | 9 | 3 | 3.0 | TODO | [ ] | "Save your best moments before you lose the videos" — email with demo clip link, feature screenshots, CTA to app |
 | T1990 | [Alpha List](tasks/alpha-marketing/T1990-alpha-list.md) | 9 | 1 | 9.0 | TODO | [ ] | Contact list for alpha outreach: Zack, Arshia, Chris Choie, WhatsApp group, John Gleaves, Jack's dad, Jett's dad, current team, Shannon |
 | T3070 | [Brand Messaging Audit](tasks/T3070-brand-messaging-audit.md) | 8 | 3 | 2.7 | TODO | [ ] | Audit + improve brand communication at all initial touchpoints: emails explain what Reel Ballers is, preloading communicates value, landing page uses "Learn From, Preserve and Share Your Athlete's Moments" instead of limited tagline |
+|  | **[Share Email Redesign](tasks/share-email-redesign/EPIC.md)** | 9 | 4 | 2.3 |  |  | Light-bg design system, sender names (not emails), first-touch vs returning variants, AAA contrast. Fixes conversion-killing spam appearance. |
+| T3200 | ↳ [Email Design System](tasks/share-email-redesign/T3200-email-design-system.md) | 8 | 3 | 2.7 | TESTING | [x] | Shared template builder: light background, WCAG AAA contrast, responsive layout, dark mode safe, preheader support |
+| T3210 | ↳ [Sender Name + Recipient Detection](tasks/share-email-redesign/T3210-sender-name-recipient-detection.md) | 9 | 3 | 3.0 | TESTING | [x] | Resolve display names from athlete profiles, detect first-touch vs returning recipients, update all 4 share email callers |
+| T3220 | ↳ [Rewrite Share Email Templates](tasks/share-email-redesign/T3220-rewrite-share-email-templates.md) | 9 | 4 | 2.3 | TESTING | [x] | Apply design system to all 4 emails: teammate clips, video share, game share, playback share. Two variants per email type. |
 
 ### Epic: Video Load Reliability (IN_PROGRESS) -- BUG FIX
 [tasks/video-load-reliability/EPIC.md](tasks/video-load-reliability/EPIC.md)

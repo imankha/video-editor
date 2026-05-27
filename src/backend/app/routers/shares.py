@@ -191,16 +191,20 @@ async def create_share(video_id: int, body: ShareCreateRequest):
 
     email_results = {}
     if not is_self_share:
-        from ..services.email import send_share_email
+        from ..services.email import send_share_email, _resolve_sender_name, _is_existing_user
+        sender_name = _resolve_sender_name(sharer_email)
         tasks = {}
         for s in shares:
             if s["recipient_email"].lower() == sharer_email.lower():
                 continue
+            is_first_touch = not _is_existing_user(s["recipient_email"])
             tasks[s["recipient_email"]] = send_share_email(
                 recipient_email=s["recipient_email"],
                 sharer_email=sharer_email,
                 share_token=s["share_token"],
                 video_name=video["name"],
+                sender_name=sender_name,
+                is_first_touch=is_first_touch,
             )
         if tasks:
             results = await asyncio.gather(*tasks.values())

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 RESEND_API_URL = "https://api.resend.com/emails"
 FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
 
-# T1740: CAN-SPAM compliant footer for all emails
+# T1740: CAN-SPAM compliant footer for all emails (used by OTP + bug reports)
 _CAN_SPAM_FOOTER = """
 <p style="color: #6b7280; font-size: 11px; margin-top: 16px; text-align: center;">
   Reel Ballers<br/>
@@ -26,6 +26,116 @@ _CAN_SPAM_FOOTER = """
   <a href="https://app.reelballers.com/terms" style="color: #6b7280;">Terms of Service</a>
 </p>
 """
+
+_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif"
+
+
+def _build_share_email(
+    heading: str,
+    game_name: str,
+    cta_url: str | None,
+    cta_text: str,
+    footer_reason: str,
+    is_first_touch: bool,
+    preheader: str = "",
+    secondary_cta_url: str | None = None,
+) -> str:
+    heading = _html_escape(heading)
+    game_name = _html_escape(game_name)
+    footer_reason = _html_escape(footer_reason)
+    preheader = _html_escape(preheader)
+
+    preheader_html = ""
+    if preheader:
+        preheader_html = (
+            f'<div style="display:none;font-size:1px;line-height:1px;max-height:0px;'
+            f'max-width:0px;opacity:0;overflow:hidden;">{preheader}</div>'
+        )
+
+    cta_html = ""
+    if cta_url:
+        cta_html = (
+            f'<a href="{_html_escape(cta_url)}" style="display:inline-block;'
+            f"min-width:200px;height:50px;line-height:50px;padding:0 32px;"
+            f"background:#6d28d9;color:#ffffff;text-decoration:none;"
+            f"border-radius:6px;font-weight:700;font-size:16px;"
+            f'font-family:{_FONT_STACK};text-align:center;">'
+            f"{_html_escape(cta_text)}</a>"
+        )
+
+    trust_html = ""
+    if is_first_touch:
+        trust_html = (
+            '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:24px 0 0 0;">'
+            "No account needed to watch.</p>"
+            '<p style="color:#4b5563;font-size:14px;line-height:22px;margin:8px 0 0 0;">'
+            "Reel Ballers helps soccer parents create and share game highlights.</p>"
+        )
+
+    secondary_html = ""
+    if not is_first_touch and secondary_cta_url:
+        secondary_html = (
+            '<p style="margin:16px 0 0 0;font-size:14px;">'
+            f'<a href="{_html_escape(secondary_cta_url)}" '
+            f'style="color:#6d28d9;text-decoration:underline;">Open in your gallery</a></p>'
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>{heading}</title>
+</head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:{_FONT_STACK};">
+{preheader_html}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
+  <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="padding:32px;">
+    <p style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 8px 0;">{heading}</p>
+    <p style="color:#1f2937;font-size:20px;line-height:28px;font-weight:600;margin:0 0 24px 0;">{game_name}</p>
+    <div style="text-align:center;margin:0 0 8px 0;">{cta_html}</div>
+    {trust_html}
+    {secondary_html}
+  </td></tr>
+  <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
+  <tr><td style="padding:24px 32px;">
+    <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 8px 0;">
+      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">Reel Ballers</a>
+    </p>
+    <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 16px 0;">{footer_reason}</p>
+    <p style="color:#6b7280;font-size:12px;line-height:18px;margin:0;">
+      <a href="https://app.reelballers.com/privacy" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://app.reelballers.com/terms" style="color:#6b7280;text-decoration:underline;">Terms of Service</a>
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+
+def _resolve_sender_name(sharer_email: str) -> str:
+    local_part = sharer_email.split("@")[0] if "@" in sharer_email else sharer_email
+    name = local_part.replace(".", " ").replace("_", " ").replace("-", " ")
+    return name.title()
+
+
+def _is_existing_user(email: str) -> bool:
+    from .pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM users WHERE email = %s", (email.lower().strip(),))
+        return cur.fetchone() is not None
+
+
+def _sanitize_from_name(name: str) -> str:
+    return name.replace("<", "").replace(">", "").replace('"', "")
 
 
 async def send_otp_email(to_email: str, code: str) -> None:
@@ -361,7 +471,9 @@ async def send_share_email(
     sharer_email: str,
     share_token: str,
     video_name: str,
-) -> None:
+    sender_name: str = "",
+    is_first_touch: bool = True,
+) -> bool:
     api_key = os.getenv("RESEND_API_KEY")
     share_url = _get_share_url(share_token)
 
@@ -372,28 +484,30 @@ async def send_share_email(
         )
         return True
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
-      <p style="color: #d1d5db; font-size: 16px; margin: 0 0 8px 0;">
-        Check out this soccer highlight from {_html_escape(sharer_email)}
-      </p>
-      <p style="color: #e5e7eb; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
-        {_html_escape(video_name or "Untitled")}
-      </p>
-      <a href="{_html_escape(share_url)}"
-         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-        Watch Video
-      </a>
-      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="color: #9ca3af; font-size: 12px;">
-        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
-      </p>
-      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
-        You received this because {_html_escape(sharer_email)} shared a video with you on Reel Ballers.
-      </p>
-      {_CAN_SPAM_FOOTER}
-    </div>
-    """
+    display_name = sender_name or sharer_email
+    safe_video = video_name or "Untitled"
+
+    if is_first_touch:
+        subject = f"{display_name} shared a highlight reel with you"
+        heading = f"{display_name} shared a highlight reel"
+        preheader = f"Watch now -- {display_name} thought you'd want to see this."
+    else:
+        subject = f"New shared reel: {safe_video}"
+        heading = f"{display_name} shared a highlight reel"
+        preheader = safe_video
+
+    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+
+    html_body = _build_share_email(
+        heading=heading,
+        game_name=safe_video,
+        cta_url=share_url,
+        cta_text="Watch Reel",
+        footer_reason=f"{display_name} shared a video with you",
+        is_first_touch=is_first_touch,
+        preheader=preheader,
+        secondary_cta_url=share_url if not is_first_touch else None,
+    )
 
     try:
         async def _send():
@@ -402,9 +516,9 @@ async def send_share_email(
                     RESEND_API_URL,
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "from": FROM_ADDRESS,
+                        "from": from_address,
                         "to": [recipient_email],
-                        "subject": f"{sharer_email} shared a video with you on Reel Ballers",
+                        "subject": subject,
                         "html": html_body,
                     },
                 )
@@ -427,6 +541,8 @@ async def send_teammate_share_email(
     game_name: str,
     clip_count: int,
     share_token: str | None = None,
+    sender_name: str = "",
+    is_first_touch: bool = True,
 ) -> bool:
     api_key = os.getenv("RESEND_API_KEY")
     if not api_key:
@@ -440,36 +556,30 @@ async def send_teammate_share_email(
 
     clip_text = f"{clip_count} clip{'' if clip_count == 1 else 's'}" if clip_count > 0 else "clips"
     share_url = _get_share_url(share_token, "game") if share_token else None
+    display_name = sender_name or sharer_email
+    safe_game = game_name or "Untitled Game"
 
-    cta_html = ""
-    if share_url:
-        cta_html = f"""
-      <a href="{_html_escape(share_url)}"
-         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-        View Clips
-      </a>
-"""
+    if is_first_touch:
+        subject = f"{display_name} tagged {tag_name} in a highlight from {safe_game}"
+        heading = f"{display_name} clipped highlights from"
+        preheader = f"Watch {tag_name}'s highlight -- {display_name} thought you'd want to see this."
+    else:
+        subject = f"New clip: {tag_name} tagged in {safe_game}"
+        heading = f"{display_name} tagged {tag_name} in {clip_text} from"
+        preheader = f"{clip_text} from {safe_game}"
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
-      <p style="color: #e5e7eb; font-size: 16px; margin: 0 0 8px 0;">
-        {_html_escape(sharer_email)} tagged <strong style="color: #ffffff;">{_html_escape(tag_name)}</strong>
-        in {clip_text} from:
-      </p>
-      <p style="color: #ffffff; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
-        {_html_escape(game_name or "Untitled Game")}
-      </p>
-      {cta_html}
-      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="color: #9ca3af; font-size: 12px;">
-        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
-      </p>
-      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
-        You received this because {_html_escape(sharer_email)} shared game clips with you on Reel Ballers.
-      </p>
-      {_CAN_SPAM_FOOTER}
-    </div>
-    """
+    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+
+    html_body = _build_share_email(
+        heading=heading,
+        game_name=safe_game,
+        cta_url=share_url,
+        cta_text="Watch Clips",
+        footer_reason=f"{display_name} shared game clips with you",
+        is_first_touch=is_first_touch,
+        preheader=preheader,
+        secondary_cta_url=share_url if not is_first_touch else None,
+    )
 
     try:
         async def _send():
@@ -478,9 +588,9 @@ async def send_teammate_share_email(
                     RESEND_API_URL,
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "from": FROM_ADDRESS,
+                        "from": from_address,
                         "to": [recipient_email],
-                        "subject": f"{sharer_email} shared clips of {tag_name} with you",
+                        "subject": subject,
                         "html": html_body,
                     },
                 )
@@ -501,6 +611,8 @@ async def send_game_share_email(
     sharer_email: str,
     game_name: str,
     share_token: str | None = None,
+    sender_name: str = "",
+    is_first_touch: bool = True,
 ) -> bool:
     api_key = os.getenv("RESEND_API_KEY")
     share_url = _get_share_url(share_token, "game") if share_token else None
@@ -512,34 +624,30 @@ async def send_game_share_email(
         )
         return True
 
-    cta_html = ""
-    if share_url:
-        cta_html = f"""
-      <a href="{_html_escape(share_url)}"
-         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-        View Game
-      </a>
-"""
+    display_name = sender_name or sharer_email
+    safe_game = game_name or "Untitled Game"
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
-      <p style="color: #e5e7eb; font-size: 16px; margin: 0 0 8px 0;">
-        {_html_escape(sharer_email)} shared a game with you:
-      </p>
-      <p style="color: #ffffff; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
-        {_html_escape(game_name or "Untitled Game")}
-      </p>
-      {cta_html}
-      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="color: #9ca3af; font-size: 12px;">
-        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
-      </p>
-      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
-        You received this because {_html_escape(sharer_email)} shared game footage with you on Reel Ballers.
-      </p>
-      {_CAN_SPAM_FOOTER}
-    </div>
-    """
+    if is_first_touch:
+        subject = f"{display_name} shared game footage with you"
+        heading = f"{display_name} shared a game with you"
+        preheader = f"Watch {safe_game} -- no account needed."
+    else:
+        subject = f"{display_name} shared {safe_game} with you"
+        heading = f"{display_name} shared a game with you"
+        preheader = safe_game
+
+    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+
+    html_body = _build_share_email(
+        heading=heading,
+        game_name=safe_game,
+        cta_url=share_url,
+        cta_text="View Game",
+        footer_reason=f"{display_name} shared game footage with you",
+        is_first_touch=is_first_touch,
+        preheader=preheader,
+        secondary_cta_url=share_url if not is_first_touch else None,
+    )
 
     try:
         async def _send():
@@ -548,9 +656,9 @@ async def send_game_share_email(
                     RESEND_API_URL,
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "from": FROM_ADDRESS,
+                        "from": from_address,
                         "to": [recipient_email],
-                        "subject": f"{sharer_email} shared a game with you",
+                        "subject": subject,
                         "html": html_body,
                     },
                 )
@@ -571,6 +679,8 @@ async def send_playback_share_email(
     sharer_email: str,
     game_name: str,
     share_token: str | None = None,
+    sender_name: str = "",
+    is_first_touch: bool = True,
 ) -> bool:
     api_key = os.getenv("RESEND_API_KEY")
     share_url = _get_share_url(share_token, "game") if share_token else None
@@ -582,34 +692,30 @@ async def send_playback_share_email(
         )
         return True
 
-    cta_html = ""
-    if share_url:
-        cta_html = f"""
-      <a href="{_html_escape(share_url)}"
-         style="display: inline-block; padding: 12px 28px; background: #7c3aed; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
-        Watch Annotations
-      </a>
-"""
+    display_name = sender_name or sharer_email
+    safe_game = game_name or "Untitled Game"
 
-    html_body = f"""
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 32px; background: #1f2937; border-radius: 12px;">
-      <p style="color: #e5e7eb; font-size: 16px; margin: 0 0 8px 0;">
-        {_html_escape(sharer_email)} shared game annotations from:
-      </p>
-      <p style="color: #ffffff; font-size: 20px; font-weight: 600; margin: 0 0 24px 0;">
-        {_html_escape(game_name or "Untitled Game")}
-      </p>
-      {cta_html}
-      <hr style="border: none; border-top: 1px solid #374151; margin: 24px 0;" />
-      <p style="color: #9ca3af; font-size: 12px;">
-        Sent via <a href="https://reelballers.com" style="color: #7c3aed; text-decoration: none;">Reel Ballers</a>
-      </p>
-      <p style="color: #6b7280; font-size: 11px; margin-top: 8px;">
-        You received this because {_html_escape(sharer_email)} shared game annotations with you on Reel Ballers.
-      </p>
-      {_CAN_SPAM_FOOTER}
-    </div>
-    """
+    if is_first_touch:
+        subject = f"{display_name} shared game annotations with you"
+        heading = f"{display_name} shared annotations from"
+        preheader = f"Watch annotated clips from {safe_game} -- no account needed."
+    else:
+        subject = f"{display_name} shared annotations from {safe_game}"
+        heading = f"{display_name} shared annotations from"
+        preheader = f"Annotated clips from {safe_game}"
+
+    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+
+    html_body = _build_share_email(
+        heading=heading,
+        game_name=safe_game,
+        cta_url=share_url,
+        cta_text="Watch Annotations",
+        footer_reason=f"{display_name} shared game annotations with you",
+        is_first_touch=is_first_touch,
+        preheader=preheader,
+        secondary_cta_url=share_url if not is_first_touch else None,
+    )
 
     try:
         async def _send():
@@ -618,9 +724,9 @@ async def send_playback_share_email(
                     RESEND_API_URL,
                     headers={"Authorization": f"Bearer {api_key}"},
                     json={
-                        "from": FROM_ADDRESS,
+                        "from": from_address,
                         "to": [recipient_email],
-                        "subject": f"{sharer_email} shared game annotations with you",
+                        "subject": subject,
                         "html": html_body,
                     },
                 )

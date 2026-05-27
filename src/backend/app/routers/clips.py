@@ -2104,7 +2104,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     """
     import asyncio
     import json
-    from app.services.email import send_teammate_share_email
+    from app.services.email import send_teammate_share_email, _resolve_sender_name, _is_existing_user
     from app.services.auth_db import get_user_by_id, get_user_by_email
     from app.services.sharing_db import (
         create_game_share, revoke_share, get_share_by_token,
@@ -2120,6 +2120,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     profile_id = get_current_profile_id()
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
+    sender_name = _resolve_sender_name(sharer_email)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2188,6 +2189,7 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
             # Send emails with share links
             tasks = {}
             for email, share in zip(recipient.emails, share_records):
+                is_first_touch = not _is_existing_user(email)
                 tasks[email] = send_teammate_share_email(
                     recipient_email=email,
                     sharer_email=sharer_email,
@@ -2195,6 +2197,8 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                     game_name=game_name,
                     clip_count=clip_count,
                     share_token=share["share_token"] if share else None,
+                    sender_name=sender_name,
+                    is_first_touch=is_first_touch,
                 )
 
             if tasks:

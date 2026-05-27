@@ -1546,7 +1546,7 @@ class ShareGameRequest(BaseModel):
 async def share_game(game_id: int, body: ShareGameRequest):
     """Share a game with recipients via email. Game-only sharing (no annotations)."""
     import asyncio
-    from app.services.email import send_game_share_email
+    from app.services.email import send_game_share_email, _resolve_sender_name, _is_existing_user
     from app.services.auth_db import get_user_by_id, get_user_by_email
     from app.services.sharing_db import (
         create_game_share, revoke_share, get_share_by_token,
@@ -1561,6 +1561,7 @@ async def share_game(game_id: int, body: ShareGameRequest):
     profile_id = get_current_profile_id()
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
+    sender_name = _resolve_sender_name(sharer_email)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1602,11 +1603,14 @@ async def share_game(game_id: int, body: ShareGameRequest):
 
     tasks = {}
     for email, share in zip(body.emails, share_records):
+        is_first_touch = not _is_existing_user(email)
         tasks[email] = send_game_share_email(
             recipient_email=email,
             sharer_email=sharer_email,
             game_name=game_name,
             share_token=share["share_token"] if share else None,
+            sender_name=sender_name,
+            is_first_touch=is_first_touch,
         )
 
     if tasks:
@@ -1684,7 +1688,7 @@ class SharePlaybackRequest(BaseModel):
 async def share_playback(game_id: int, body: SharePlaybackRequest):
     """Share all annotated clips for a game with recipients via email."""
     import asyncio
-    from app.services.email import send_playback_share_email
+    from app.services.email import send_playback_share_email, _resolve_sender_name, _is_existing_user
     from app.services.auth_db import get_user_by_id, get_user_by_email
     from app.services.sharing_db import (
         create_game_share, revoke_share, get_share_by_token,
@@ -1699,6 +1703,7 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     profile_id = get_current_profile_id()
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
+    sender_name = _resolve_sender_name(sharer_email)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1774,11 +1779,14 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     for email, share in zip(body.emails, share_records):
         if email in [r["email"] for r in email_results]:
             continue
+        is_first_touch = not _is_existing_user(email)
         tasks[email] = send_playback_share_email(
             recipient_email=email,
             sharer_email=sharer_email,
             game_name=game_name,
             share_token=share["share_token"] if share else None,
+            sender_name=sender_name,
+            is_first_touch=is_first_touch,
         )
 
     if tasks:
