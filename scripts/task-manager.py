@@ -991,7 +991,8 @@ function buildBugCard(bug, env, group, isPrimary) {
   const desc = bug.description || '';
 
   let topHtml = '<div class="bug-card-top">';
-  topHtml += '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + bug.id + '\',this)">#' + bug.id + '</span>';
+  const bugPrefix = env === 'prod' ? 'p' : 's';
+  topHtml += '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + bugPrefix + bug.id + '\',this)">#' + bugPrefix + bug.id + '</span>';
   topHtml += '<span class="bug-reporter">' + esc(bug.reporter_email || '') + '</span>';
   topHtml += '<span class="badge ' + bugStatusClass(bug.status) + '">' + bugStatusLabel(bug.status) + '</span>';
   topHtml += '<span class="bug-time">' + esc(relativeTime(bug.created_at)) + '</span>';
@@ -1088,8 +1089,9 @@ function buildBugCard(bug, env, group, isPrimary) {
       if (!resp.ok) { showToast(result.error || 'Failed', true); return; }
       const b = result.bug;
       const envLabel = env === 'prod' ? 'production' : 'staging';
+      const kickoffPrefix = env === 'prod' ? 'p' : 's';
       let prompt = 'Investigate and fix this ' + envLabel + ' bug. Read CLAUDE.md for project context.\n\n';
-      prompt += '## Bug #' + b.id + ': ' + (b.description || '').substring(0, 80) + '\n\n';
+      prompt += '## Bug ' + kickoffPrefix + b.id + ': ' + (b.description || '').substring(0, 80) + '\n\n';
       prompt += '**Reporter:** ' + (b.reporter_email || 'unknown') + '\n';
       prompt += '**Reported:** ' + (b.created_at || '') + '\n';
       prompt += '**Build:** ' + (b.build || 'unknown') + '\n';
@@ -1131,7 +1133,7 @@ function buildBugCard(bug, env, group, isPrimary) {
       if (relatedBugs.length > 0) {
         prompt += '\n### Related Bugs (same root cause group)\n';
         relatedBugs.forEach(r => {
-          prompt += '- Bug #' + r.id + ': ' + r.label.replace('_', ' ') + '. ' + r.reason + '\n';
+          prompt += '- Bug ' + kickoffPrefix + r.id + ': ' + r.label.replace('_', ' ') + '. ' + r.reason + '\n';
         });
       }
       copyToClipboard(prompt, btn);
@@ -1148,7 +1150,8 @@ function buildBugCard(bug, env, group, isPrimary) {
     e.stopPropagation();
     const hasGroup = isPrimary && group && group.related && group.related.length > 0;
     const total = hasGroup ? 1 + group.related.length : 1;
-    if (!confirm('Resolve' + (total > 1 ? ' all ' + total + ' bugs in this group' : ' bug #' + bug.id) + '?')) return;
+    const resolvePrefix = env === 'prod' ? 'p' : 's';
+    if (!confirm('Resolve' + (total > 1 ? ' all ' + total + ' bugs in this group' : ' bug ' + resolvePrefix + bug.id) + '?')) return;
     await updateBugStatus(bug.id, env, 'done');
     if (hasGroup) {
       for (const r of group.related) {
@@ -1182,7 +1185,7 @@ async function updateBugStatusRaw(bugId, env, updates) {
       showToast(d.error || 'Failed to update', true);
       return false;
     }
-    showToast('Bug #' + bugId + ' updated');
+    showToast('Bug ' + (env === 'prod' ? 'p' : 's') + bugId + ' updated');
     loadBugs();
     return true;
   } catch(e) {
@@ -1296,8 +1299,9 @@ function renderBugMilestones(app) {
           relDiv.className = 'bug-related';
           const labelClass = r.label === 'ADDS_VARIANCE' ? 'variance' : 'duplicate';
           const labelText = r.label === 'ADDS_VARIANCE' ? 'ADDS VARIANCE' : 'LIKELY DUPLICATE';
+          const relPrefix = env === 'prod' ? 'p' : 's';
           relDiv.innerHTML =
-            '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + r.bug.id + '\',this)">#' + r.bug.id + '</span> ' +
+            '<span class="bug-id" title="Click to copy" onclick="event.stopPropagation();copyText(\'' + relPrefix + r.bug.id + '\',this)">#' + relPrefix + r.bug.id + '</span> ' +
             '<span class="bug-related-label ' + labelClass + '">' + labelText + '</span> ' +
             '<span>' + esc(r.reason) + '</span>' +
             ' <span class="bug-reporter">' + esc(r.bug.reporter_email || '') + '</span>' +
