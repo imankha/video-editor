@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Promote 'testing' bugs to 'done' and purge old resolved bugs.
+"""Promote bugs through lifecycle stages and purge old resolved bugs.
 
 Usage:
-    python promote-bugs.py --env prod              # promote + purge (default 14 days)
-    python promote-bugs.py --env prod --check      # just count, don't change anything
-    python promote-bugs.py --env prod --purge-only  # skip promotion, just purge
+    python promote-bugs.py --env prod                        # testing->done + purge
+    python promote-bugs.py --env staging --from new --to testing  # new->testing
+    python promote-bugs.py --env prod --check                # just count
+    python promote-bugs.py --env prod --purge-only           # skip promotion, just purge
 """
 import argparse
 import json
@@ -46,21 +47,21 @@ def _load_config(env):
     return base_url, session
 
 
-def promote(base_url, session, check_only=False):
+def promote(base_url, session, from_status="testing", to_status="done", check_only=False):
     bugs = _make_request(
-        f"{base_url}/api/admin/bugs?status=testing&page_size=100",
+        f"{base_url}/api/admin/bugs?status={from_status}&page_size=100",
         session=session,
     ).get("bugs", [])
 
     if check_only:
         if bugs:
-            print(f"[bugs]     {len(bugs)} testing bug(s) to promote")
+            print(f"[bugs]     {len(bugs)} {from_status} bug(s) to promote")
             return True
-        print("[bugs]     No testing bugs to promote")
+        print(f"[bugs]     No {from_status} bugs to promote")
         return False
 
     if not bugs:
-        print("[bugs]     No testing bugs to promote")
+        print(f"[bugs]     No {from_status} bugs to promote")
         return False
 
     promoted = 0
@@ -69,15 +70,15 @@ def promote(base_url, session, check_only=False):
             _make_request(
                 f"{base_url}/api/admin/bugs/{bug['id']}",
                 method="PATCH",
-                data={"status": "done"},
+                data={"status": to_status},
                 session=session,
             )
             promoted += 1
-            print(f"[bugs]     Bug #{bug['id']} promoted to done")
+            print(f"[bugs]     Bug #{bug['id']} promoted to {to_status}")
         except Exception as e:
             print(f"[bugs]     Failed to promote bug #{bug['id']}: {e}", file=sys.stderr)
 
-    print(f"[bugs]     {promoted} bug(s) promoted to done")
+    print(f"[bugs]     {promoted} bug(s) promoted {from_status} -> {to_status}")
     return True
 
 
@@ -100,6 +101,8 @@ def purge(base_url, session, days=PURGE_DAYS):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--env", required=True, choices=["prod", "staging"])
+    parser.add_argument("--from", dest="from_status", default="testing", help="Source status (default: testing)")
+    parser.add_argument("--to", dest="to_status", default="done", help="Target status (default: done)")
     parser.add_argument("--check", action="store_true", help="Just print count, exit 0 if any found")
     parser.add_argument("--purge-only", action="store_true", help="Skip promotion, just purge old done bugs")
     args = parser.parse_args()
@@ -107,11 +110,11 @@ def main():
     base_url, session = _load_config(args.env)
 
     if args.check:
-        found = promote(base_url, session, check_only=True)
+        found = promote(base_url, session, args.from_status, args.to_status, check_only=True)
         sys.exit(0 if found else 1)
 
     if not args.purge_only:
-        promote(base_url, session)
+        promote(base_url, session, args.from_status, args.to_status)
 
     purge(base_url, session)
 

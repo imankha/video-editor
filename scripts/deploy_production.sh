@@ -168,12 +168,17 @@ if [[ -f "$PLAN_FILE" ]]; then
   fi
 fi
 
-# ── Promote "testing" bugs → "done" on prod + staging ─────────────────
-
+# ── Bug lifecycle promotions ───────────────────────────────────────────
+#
+# Staging bugs:  new -> testing (fix reached staging via auto-deploy)
+#                testing -> done (fix now reaching prod via this deploy)
+# Prod bugs:     testing -> done (fix reaching prod)
+#
 PROMOTE_BUGS="$REPO_ROOT/scripts/promote-bugs.py"
 if [[ -f "$PROMOTE_BUGS" ]]; then
+  "$PYTHON" "$PROMOTE_BUGS" --env staging --from new --to testing || true
+  "$PYTHON" "$PROMOTE_BUGS" --env staging --from testing --to done || true
   "$PYTHON" "$PROMOTE_BUGS" --env prod || true
-  "$PYTHON" "$PROMOTE_BUGS" --env staging || true
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────

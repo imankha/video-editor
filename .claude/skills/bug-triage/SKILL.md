@@ -1,6 +1,6 @@
 ---
 name: bug
-description: "Load a bug report's full context for investigation. Usage: /bug p{id} or /bug s{id}"
+description: "Load a bug report's full context for investigation. Usage: /bug {id}p or /bug {id}s"
 license: MIT
 author: video-editor
 version: 1.2.0
@@ -9,7 +9,7 @@ user_invocable: true
 
 # Bug Investigation
 
-Load a bug report and investigate it in the current session. Usage: `/bug p42` (production) or `/bug s15` (staging).
+Load a bug report and investigate it in the current session. Usage: `/bug 42p` (production) or `/bug 15s` (staging).
 
 ## Bug Lifecycle
 
@@ -29,23 +29,23 @@ Bugs follow the same lifecycle as tasks:
 
 ## When to Apply
 
-- User types `/bug p42` to load and investigate production bug #42
-- User types `/bug s15` to load and investigate staging bug #15
-- User types `/bug p42 status testing` to update a bug's status
+- User types `/bug 42p` to load and investigate production bug #42
+- User types `/bug 15s` to load and investigate staging bug #15
+- User types `/bug 42p status testing` to update a bug's status
 - Bare integer (`/bug 42`) defaults to production
 
 ## Procedure
 
 ### 1. Parse Arguments
 
-Extract the environment prefix and bug ID (required) and optional subcommand:
-- `/bug p42` -- load production bug #42
-- `/bug s15` -- load staging bug #15
-- `/bug 42` -- defaults to production (same as `/bug p42`)
-- `/bug p42 status testing` -- update status (valid: `new`, `testing`, `done`, `duplicate`)
+Extract the bug ID (required), environment suffix, and optional subcommand:
+- `/bug 42p` -- load production bug #42
+- `/bug 15s` -- load staging bug #15
+- `/bug 42` -- defaults to production (same as `/bug 42p`)
+- `/bug 42p status testing` -- update status (valid: `new`, `testing`, `done`, `duplicate`)
 
-**Prefix mapping:**
-| Prefix | Environment | Config key |
+**Suffix mapping:**
+| Suffix | Environment | Config key |
 |--------|-------------|------------|
 | `p` | production | `prod_url`, `prod_session` |
 | `s` | staging | `staging_url`, `staging_session` |
@@ -71,13 +71,13 @@ print(resp.read().decode())
 "
 ```
 
-Where `{env}` is `prod` (for `p` prefix or bare integer) or `staging` (for `s` prefix).
+Where `{env}` is `prod` (for `p` suffix or bare integer) or `staging` (for `s` suffix).
 
 If the bug is not found, tell the user and stop.
 
 ### 3. Status Update (If Requested)
 
-If the user provided a status subcommand (`/bug p{id} status {value}`):
+If the user provided a status subcommand (`/bug {id}p status {value}`):
 
 ```bash
 cd src/backend && .venv/Scripts/python.exe -c "
@@ -94,7 +94,7 @@ req.add_header('X-User-ID', session)
 req.add_header('Content-Type', 'application/json')
 req.data = json.dumps({'status': '{status}'}).encode()
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
-print(f'Bug {env[0]}{id} updated to {status}')
+print(f'Bug {id}{env[0]} updated to {status}')
 "
 ```
 
@@ -108,10 +108,10 @@ Leave the bug status as-is when loading it. Status changes happen later:
 
 ### 5. Display Structured Summary
 
-Format the bug data as (use the prefixed ID throughout, e.g. `p42` or `s15`):
+Format the bug data as (use the suffixed ID throughout, e.g. `42p` or `15s`):
 
 ```
-## Bug {prefix}{id}: {description (first 80 chars)}
+## Bug {id}{suffix}: {description (first 80 chars)}
 **Environment:** {production|staging}
 **Status:** {old_status} -> testing  (or just {status} if not changed)
 **Reporter:** {reporter_email}
@@ -156,7 +156,7 @@ If the bug detail response includes `console_logs` or `logs_url`:
 
 1. If `logs_url` is present (presigned R2 URL), download to a temp file:
    ```bash
-   curl -sL "{logs_url}" -o "$TEMP/bug-{prefix}{id}-logs.txt"
+   curl -sL "{logs_url}" -o "$TEMP/bug-{id}{suffix}-logs.txt"
    ```
 
    If no `logs_url` but `console_logs` is present in the response JSON, write them to a temp file:
@@ -164,7 +164,7 @@ If the bug detail response includes `console_logs` or `logs_url`:
    cd src/backend && .venv/Scripts/python.exe -c "
    import json, os
    logs = {console_logs_json}
-   temp = os.path.join(os.environ.get('TEMP', '/tmp'), 'bug-{prefix}{id}-logs.txt')
+   temp = os.path.join(os.environ.get('TEMP', '/tmp'), 'bug-{id}{suffix}-logs.txt')
    with open(temp, 'w') as f:
        for entry in logs:
            level = entry.get('level', 'log')
@@ -177,12 +177,12 @@ If the bug detail response includes `console_logs` or `logs_url`:
 
 2. Use `reduce_log` on the temp file to analyze:
    ```
-   reduce_log({ file: "$TEMP/bug-{prefix}{id}-logs.txt", tail: 500, level: "error" })
+   reduce_log({ file: "$TEMP/bug-{id}{suffix}-logs.txt", tail: 500, level: "error" })
    ```
 
 3. If errors exist, also run with context to find surrounding warnings:
    ```
-   reduce_log({ file: "$TEMP/bug-{prefix}{id}-logs.txt", tail: 500, level: "error", before: 10, context_level: "warning" })
+   reduce_log({ file: "$TEMP/bug-{id}{suffix}-logs.txt", tail: 500, level: "error", before: 10, context_level: "warning" })
    ```
 
 ### 9. Screenshot
@@ -191,7 +191,7 @@ If the bug detail response includes `screenshot_url` (presigned R2 URL):
 
 1. Download to temp and read it (Claude can view images):
    ```bash
-   curl -sL "{screenshot_url}" -o "$TEMP/bug-{prefix}{id}-screenshot.jpg"
+   curl -sL "{screenshot_url}" -o "$TEMP/bug-{id}{suffix}-screenshot.jpg"
    ```
 
 2. Use the Read tool to view the screenshot image file.
@@ -228,7 +228,7 @@ If the bug has `duplicate_of` set, note which bug it duplicates.
 ## Example Output
 
 ```
-## Bug p42: Clip icon placed in wrong part of timeline
+## Bug 42p: Clip icon placed in wrong part of timeline
 **Environment:** production
 **Status:** new -> testing
 **Reporter:** user@example.com
@@ -270,7 +270,7 @@ after it. The sort order in AnnotateTimeline.tsx may not account for...
 
 ### 12. Set Bug to "testing" After Fix Is Committed
 
-After the fix is committed and ready for merge (same point where tasks move to TESTING in PLAN.md), update the bug status on the **same environment** where it was reported (use the `{env}` parsed from the prefix in step 1):
+After the fix is committed and ready for merge (same point where tasks move to TESTING in PLAN.md), update the bug status on the **same environment** where it was reported (use the `{env}` parsed from the suffix in step 1):
 
 ```bash
 cd src/backend && .venv/Scripts/python.exe -c "
@@ -287,16 +287,18 @@ req.add_header('X-User-ID', session)
 req.add_header('Content-Type', 'application/json')
 req.data = json.dumps({'status': 'testing'}).encode()
 resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
-print(f'Bug {env[0]}{id} set to testing')
+print(f'Bug {id}{env[0]} set to testing')
 "
 ```
 
 **This is required.** Do not skip this step. It mirrors the task workflow where PLAN.md is updated to TESTING before merge.
 
-### 13. Deploy Promotes "testing" → "done" Automatically
+### 13. Deploy Promotes Bugs Automatically
 
-`deploy_production.sh` calls `scripts/promote-bugs.py --env prod` which:
-1. Fetches all bugs with status `testing` from the production API
-2. PATCHes each to status `done` (sets `resolved_at` timestamp)
+`deploy_production.sh` runs bug lifecycle promotions in order:
 
-No manual action needed at deploy time -- bugs follow the same TESTING → DONE promotion as tasks in PLAN.md.
+1. **Staging `new` → `testing`**: Fix reached staging via auto-deploy (push to master)
+2. **Staging `testing` → `done`**: Fix now reaching prod via this deploy
+3. **Prod `testing` → `done`**: Same — fix reaching prod
+
+No manual action needed at deploy time -- bugs follow the same lifecycle as tasks in PLAN.md.
