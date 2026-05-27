@@ -737,38 +737,73 @@ async def report_problem(body: ProblemReportRequest, request: Request):
         bug_id = cur.fetchone()["id"]
 
         # 2. Upload screenshot to R2 if present
+        from app.storage import get_r2_client, r2_global_key, R2_BUCKET
+        from app.utils.retry import retry_r2_call, TIER_2
+        import binascii
+
         screenshot_r2_key = None
         if body.screenshot and body.screenshot.startswith("data:image/"):
             try:
-                from app.storage import get_r2_client, r2_global_key, R2_BUCKET
-                _header, screenshot_b64 = body.screenshot.split(",", 1)
-                screenshot_bytes = _b64.b64decode(screenshot_b64)
-                client = get_r2_client()
-                if client:
-                    screenshot_r2_key = r2_global_key(f"bugs/{bug_id}/screenshot.jpg")
-                    client.put_object(
-                        Bucket=R2_BUCKET, Key=screenshot_r2_key,
-                        Body=screenshot_bytes, ContentType="image/jpeg",
-                    )
+                parts = body.screenshot.split(",", 1)
+                if len(parts) != 2 or not parts[1]:
+                    logger.warning(f"[Auth] Bug screenshot has malformed data URL (no base64 payload), bug_id={bug_id}")
+                else:
+                    screenshot_bytes = _b64.b64decode(parts[1])
+                    max_bytes = 10 * 1024 * 1024
+                    if len(screenshot_bytes) > max_bytes:
+                        from PIL import Image
+                        from io import BytesIO
+                        img = Image.open(BytesIO(screenshot_bytes))
+                        quality = 60
+                        while len(screenshot_bytes) > max_bytes and quality >= 10:
+                            w, h = img.size
+                            img = img.resize((w * 3 // 4, h * 3 // 4), Image.LANCZOS)
+                            buf = BytesIO()
+                            img.save(buf, format="JPEG", quality=quality)
+                            screenshot_bytes = buf.getvalue()
+                            quality -= 10
+                        logger.info(f"[Auth] Bug screenshot downscaled to {len(screenshot_bytes) / (1024*1024):.1f}MB, bug_id={bug_id}")
+                    client = get_r2_client()
+                    if client:
+                        key = r2_global_key(f"bugs/{bug_id}/screenshot.jpg")
+                        retry_r2_call(
+                            client.put_object,
+                            Bucket=R2_BUCKET, Key=key,
+                            Body=screenshot_bytes, ContentType="image/jpeg",
+                            operation=f"bug_screenshot {bug_id}", **TIER_2,
+                        )
+                        screenshot_r2_key = key
+            except binascii.Error as e:
+                logger.warning(f"[Auth] Bug screenshot has invalid base64: {e}, bug_id={bug_id}")
             except Exception as e:
-                logger.warning(f"[Auth] Failed to upload bug screenshot to R2: {e}, bug_id={bug_id}")
+                error_type = type(e).__name__
+                if "AccessDenied" in str(e) or "NoSuchBucket" in str(e):
+                    logger.error(f"[Auth] R2 config error uploading bug screenshot: {error_type}: {e}, bug_id={bug_id}")
+                else:
+                    logger.error(f"[Auth] Bug screenshot upload failed after retries: {error_type}: {e}, bug_id={bug_id}")
 
         # 3. Upload formatted console logs to R2
         logs_r2_key = None
         if body.logs:
             try:
-                from app.storage import get_r2_client, r2_global_key, R2_BUCKET
                 from app.services.email import format_log_text
                 log_text = format_log_text(body.logs)
                 client = get_r2_client()
                 if client:
-                    logs_r2_key = r2_global_key(f"bugs/{bug_id}/console-logs.txt")
-                    client.put_object(
-                        Bucket=R2_BUCKET, Key=logs_r2_key,
+                    key = r2_global_key(f"bugs/{bug_id}/console-logs.txt")
+                    retry_r2_call(
+                        client.put_object,
+                        Bucket=R2_BUCKET, Key=key,
                         Body=log_text.encode("utf-8"), ContentType="text/plain",
+                        operation=f"bug_logs {bug_id}", **TIER_2,
                     )
+                    logs_r2_key = key
             except Exception as e:
-                logger.warning(f"[Auth] Failed to upload bug logs to R2: {e}, bug_id={bug_id}")
+                error_type = type(e).__name__
+                if "AccessDenied" in str(e) or "NoSuchBucket" in str(e):
+                    logger.error(f"[Auth] R2 config error uploading bug logs: {error_type}: {e}, bug_id={bug_id}")
+                else:
+                    logger.error(f"[Auth] Bug logs upload failed after retries: {error_type}: {e}, bug_id={bug_id}")
 
         # 4. Update row with R2 keys
         if screenshot_r2_key or logs_r2_key:
@@ -778,6 +813,8 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             )
 
     logger.info(f"[Auth] Bug #{bug_id} reported: from={body.email or 'anonymous'}, "
+                f"screenshot={'yes' if screenshot_r2_key else 'no'}, "
+                f"logs={'yes' if logs_r2_key else 'no'}, "
                 f"log_count={len(body.logs)}, req_id={req_id}")
     return {"sent": True, "bug_id": bug_id}
 
