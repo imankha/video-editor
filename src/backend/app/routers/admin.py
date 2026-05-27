@@ -921,7 +921,7 @@ async def get_correlated_bugs(bug_id: int):
             "id": row["id"],
             "is_primary": row["id"] == primary_id,
             "reporter_email": row["reporter_email"],
-            "description": (row["description"] or "")[:200],
+            "description": row["description"] or "",
             "build": row["build"],
             "editor_mode": mode,
             "editor_context": row["editor_context"],

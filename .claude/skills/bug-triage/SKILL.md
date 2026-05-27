@@ -181,8 +181,11 @@ print('Notes updated on primary bug {target_id}')
 "
 ```
 
-Where `{contributions}` is a concise list like:
+Where `{contributions}` includes both the unique factual contributions AND any narrative details from the duplicate's description that add to the story. Read the source bug's description and compare it to the primary's — extract details that are new, not redundant.
+
 ```
+Description adds: reporter observed the clip reappears on page refresh, suggesting
+state desync rather than data loss.
 - Screenshot available (primary has none)
 - Error: "NetworkError: Failed to fetch" (not in primary)
 - Build: def456 (primary is abc123)
@@ -190,7 +193,7 @@ Where `{contributions}` is a concise list like:
 - Reporter: bob@example.com (new reporter)
 ```
 
-Only include lines for contributions that are actually unique. If the duplicate adds nothing new, note that.
+Only include lines for contributions that are actually unique. If the duplicate adds nothing new beyond what the primary already says, note that.
 
 **Step 4 — Mark as duplicate:**
 
@@ -379,19 +382,46 @@ Primary: Bug {primary_id}{suffix}
 | {id}{suffix} | {email} | {build} | {mode} | yes/no | {error_count} | {action_count} |
 ```
 
-Then analyze the **unique contributions** from each duplicate:
+Then produce a **consolidated description** and analyze **unique contributions**.
 
-1. **Screenshots**: List which bugs have screenshots, especially if the primary lacks one. Download and view any duplicate screenshots that could add visual context the primary's screenshot doesn't show.
+#### Consolidated Description
 
-2. **Unique errors**: Compare `error_messages` across bugs. Highlight any error messages that appear in a duplicate but NOT in the primary — these may reveal additional failure paths or upstream causes.
+Read the `description` field from every bug in the cluster. These are user-written narratives — each reporter described the problem from their perspective with their own details. Synthesize them into a single coherent description that:
 
-3. **Build versions**: If bugs span different builds, note the range. Multiple builds with the same bug confirms it's not a regression from a specific deploy. A single build narrows the regression window.
+1. **Eliminates redundancy** — If 3 reports all say "the clip disappears," say it once.
+2. **Preserves unique details** — If one reporter mentions a specific trigger ("happens after I drag a clip to the end"), a specific visual ("the timeline shows a gap where the clip was"), or a specific sequence ("I added two clips, deleted the first, then the second vanished"), keep those details and attribute them (e.g., "Bug 7p reporter noted...").
+3. **Triangulates into a coherent story** — Combine the perspectives into one narrative that tells a more complete story than any single report. Use the action breadcrumbs and editor contexts to validate or enrich what the descriptions claim.
 
-4. **Editor contexts**: If duplicates occur in different modes (annotate vs framing) or with different data (different game IDs, clip counts), that broadens the bug's scope beyond the primary's initial context.
+Write the consolidated description as a short paragraph (3-5 sentences). Lead with what the bug IS, then add the details that narrow it down.
 
-5. **Action paths**: Compare `action_types` sequences. Different user paths to the same bug reveal whether it's trigger-specific or a general state corruption.
+**Example:**
 
-6. **Reporters**: Multiple reporters confirms the bug is not user-specific or account-specific.
+```
+### Consolidated Description
+Users are losing clips from the timeline after performing delete operations in
+annotate mode. The primary report (9p) describes a clip vanishing after deleting
+an adjacent clip. Bug 7p's reporter adds that the disappearance is accompanied by
+a brief flash of the timeline re-rendering, and that the "lost" clip reappears on
+page refresh — suggesting a frontend state desync rather than a backend deletion.
+Bug 11p shows the same symptom occurring in framing mode after a crop operation,
+which broadens the scope beyond annotate and beyond delete as a trigger.
+```
+
+#### Unique Contributions
+
+Analyze what each duplicate adds beyond what the primary already tells us:
+
+1. **Screenshots**: Which bugs have screenshots, especially if the primary lacks one. Download and view any duplicate screenshots that could add visual context.
+
+2. **Unique errors**: Error messages in a duplicate but NOT in the primary — additional failure paths or upstream causes.
+
+3. **Build versions**: Different builds narrow or widen the regression window.
+
+4. **Editor contexts**: Different modes or data states broaden the bug's scope.
+
+5. **Action paths**: Different user paths reveal whether it's trigger-specific or general state corruption.
+
+6. **Reporters**: Multiple reporters confirms not user-specific or account-specific.
 
 **Example output for this section:**
 
@@ -406,9 +436,17 @@ Primary: Bug 9p
 | 7p | bob@ex.com | abc123 | annotate | yes | 3 | 8 |
 | 11p | alice@ex.com | def456 | framing | no | 1 | 15 |
 
+### Consolidated Description
+Users are losing clips from the timeline after performing delete operations.
+The primary report (9p) describes a clip vanishing after deleting an adjacent clip.
+Bug 7p adds that the clip reappears on page refresh — suggesting frontend state
+desync, not backend deletion. Bug 11p shows the same symptom in framing mode after
+a crop, broadening scope beyond annotate and delete as triggers.
+
 **Unique contributions:**
 - **Bug 7p** has a screenshot that primary 9p lacks — viewing it now.
 - **Bug 7p** has error `NetworkError: Failed to fetch` not seen in primary.
+- **Bug 7p** reporter observed clip reappears on refresh (state desync clue).
 - **Bug 11p** reproduces in **framing** mode (primary is annotate) — broader scope.
 - **Bug 11p** on build `def456` (primary on `abc123`) — bug spans 2+ deploys.
 - 2 different reporters (alice, bob) — not account-specific.
