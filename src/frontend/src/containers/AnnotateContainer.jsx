@@ -836,11 +836,12 @@ export function AnnotateContainer({
     if (!fullTimeline) return getAnnotateRegionAtTime(time);
     const { actualTime, videoIndex } = fullTimeline.virtualToActual(time);
     const videoSeq = fullTimeline.segments[videoIndex].videoSequence;
-    return clipRegions.find(r =>
+    const match = clipRegions.find(r =>
       (r.videoSequence ?? 1) === videoSeq &&
       actualTime >= r.startTime &&
       actualTime <= r.endTime
     ) ?? null;
+    return match;
   }, [fullTimeline, getAnnotateRegionAtTime, clipRegions]);
 
   /**
@@ -869,6 +870,7 @@ export function AnnotateContainer({
     }
     const region = clipRegions.find(r => r.id === regionId);
     if (region) {
+      console.log('[SelectClip] Found region:', regionId, 'actual:', region.startTime, '-', region.endTime, 'seq:', region.videoSequence, 'state:', selectionState.type);
       // If overlay is open (EDITING), stay in EDITING with new clip; otherwise SELECTED
       if (selectionState.type === 'EDITING') {
         editClip(regionId);
@@ -880,12 +882,13 @@ export function AnnotateContainer({
       if (fullTimeline && region.videoSequence) {
         seekTarget += fullTimeline.getVideoOffset(region.videoSequence);
       }
+      console.log('[SelectClip] Seeking to virtual:', seekTarget, 'currentTime:', effectiveCurrentTime);
       effectiveSeek(seekTarget);
       setAnnotateSelectedLayer('clips');
     } else {
       console.warn('[AnnotateContainer] Region not found! Available IDs:', clipRegions.map(r => r.id));
     }
-  }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, fullTimeline]);
+  }, [clipRegions, selectionState, selectClip, editClip, effectiveSeek, effectiveCurrentTime, fullTimeline]);
 
   // Effect: Auto-select/deselect based on playhead position
   // EDITING and CREATING are immune — scrub handles move playhead without deselecting
@@ -915,8 +918,11 @@ export function AnnotateContainer({
           clipEnd += offset;
         }
         if (effectiveCurrentTime < clipStart - FRAME_TOLERANCE || effectiveCurrentTime > clipEnd + FRAME_TOLERANCE) {
+          console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
           regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
         }
+      } else {
+        console.warn('[AutoDeselect] Selected clip not found in clipRegions:', clipId);
       }
     } else {
       if (regionAtPlayhead) selectClip(regionAtPlayhead.id);

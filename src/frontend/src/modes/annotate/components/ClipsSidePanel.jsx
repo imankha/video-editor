@@ -245,7 +245,7 @@ export function ClipsSidePanel({
                   index={index}
                   isSelected={region.id === selectedRegionId}
                   isPlaybackActive={region.id === activePlaybackClipId}
-                  onClick={() => onSelectRegion(region.id)}
+                  onClick={() => { console.log('[ClipClick]', index + 1, region.id, region.name, 'start:', region.startTime, 'end:', region.endTime, 'seq:', region.videoSequence); onSelectRegion(region.id); }}
                   isMobile={isMobile}
                   onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}
                   onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.endTime) : undefined}
