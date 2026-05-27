@@ -708,8 +708,20 @@ export function AnnotateContainer({
       return;
     }
 
+    // In multi-video mode, startTime/endTime from the sidebar are virtual — convert to actual
+    let actualUpdates = updates;
+    if (fullTimeline && (updates.startTime !== undefined || updates.endTime !== undefined)) {
+      actualUpdates = { ...updates };
+      if (updates.startTime !== undefined) {
+        actualUpdates.startTime = fullTimeline.virtualToActual(updates.startTime).actualTime;
+      }
+      if (updates.endTime !== undefined) {
+        actualUpdates.endTime = fullTimeline.virtualToActual(updates.endTime).actualTime;
+      }
+    }
+
     // Update locally first
-    updateClipRegion(regionId, updates);
+    updateClipRegion(regionId, actualUpdates);
 
     // Skip backend sync if no game ID
     if (!annotateGameId) {
@@ -721,19 +733,19 @@ export function AnnotateContainer({
 
       // Merge current values with updates for the save
       const clipData = {
-        start_time: updates.startTime ?? region.startTime,
-        end_time: updates.endTime ?? region.endTime,
-        name: updates.name ?? region.name,
-        rating: updates.rating ?? region.rating,
-        tags: updates.tags ?? region.tags,
-        notes: updates.notes ?? region.notes,
+        start_time: actualUpdates.startTime ?? region.startTime,
+        end_time: actualUpdates.endTime ?? region.endTime,
+        name: actualUpdates.name ?? region.name,
+        rating: actualUpdates.rating ?? region.rating,
+        tags: actualUpdates.tags ?? region.tags,
+        notes: actualUpdates.notes ?? region.notes,
         video_sequence: region.videoSequence ?? currentVideoSequence,
-        tagged_teammates: updates.tagged_teammates ?? region.tagged_teammates ?? null,
-        my_athlete: updates.my_athlete ?? region.my_athlete,
+        tagged_teammates: actualUpdates.tagged_teammates ?? region.tagged_teammates ?? null,
+        my_athlete: actualUpdates.my_athlete ?? region.my_athlete,
       };
 
-      if (updates.createProject != null) {
-        clipData.create_project = updates.createProject;
+      if (actualUpdates.createProject != null) {
+        clipData.create_project = actualUpdates.createProject;
       }
 
       const result = await saveClip(annotateGameId, clipData);
@@ -742,27 +754,27 @@ export function AnnotateContainer({
 
         if (result.project_created) {
           setAutoProjectId(region.id, result.project_id);
-          const clipName = updates.name || region.name || 'Untitled';
+          const clipName = actualUpdates.name || region.name || 'Untitled';
           toast.success(`Reel created: ${clipName}`, { duration: 5000 });
         }
       }
     } else {
       // Clip already has rawClipId, just update
       const backendUpdates = {};
-      if (updates.name !== undefined) backendUpdates.name = updates.name;
-      if (updates.rating !== undefined) backendUpdates.rating = updates.rating;
-      if (updates.tags !== undefined) backendUpdates.tags = updates.tags;
-      if (updates.notes !== undefined) backendUpdates.notes = updates.notes;
-      if (updates.startTime !== undefined) backendUpdates.start_time = updates.startTime;
-      if (updates.endTime !== undefined) backendUpdates.end_time = updates.endTime;
-      if (updates.createProject != null) backendUpdates.create_project = updates.createProject;
-      if (updates.tagged_teammates !== undefined) backendUpdates.tagged_teammates = updates.tagged_teammates;
-      if (updates.my_athlete !== undefined) backendUpdates.my_athlete = updates.my_athlete;
+      if (actualUpdates.name !== undefined) backendUpdates.name = actualUpdates.name;
+      if (actualUpdates.rating !== undefined) backendUpdates.rating = actualUpdates.rating;
+      if (actualUpdates.tags !== undefined) backendUpdates.tags = actualUpdates.tags;
+      if (actualUpdates.notes !== undefined) backendUpdates.notes = actualUpdates.notes;
+      if (actualUpdates.startTime !== undefined) backendUpdates.start_time = actualUpdates.startTime;
+      if (actualUpdates.endTime !== undefined) backendUpdates.end_time = actualUpdates.endTime;
+      if (actualUpdates.createProject != null) backendUpdates.create_project = actualUpdates.createProject;
+      if (actualUpdates.tagged_teammates !== undefined) backendUpdates.tagged_teammates = actualUpdates.tagged_teammates;
+      if (actualUpdates.my_athlete !== undefined) backendUpdates.my_athlete = actualUpdates.my_athlete;
 
       // Handle duration changes - need to send computed start_time
       // Since duration changes keep endTime fixed and adjust startTime
-      if (updates.duration !== undefined && updates.startTime === undefined) {
-        const newStartTime = Math.max(0, region.endTime - updates.duration);
+      if (actualUpdates.duration !== undefined && actualUpdates.startTime === undefined) {
+        const newStartTime = Math.max(0, region.endTime - actualUpdates.duration);
         backendUpdates.start_time = newStartTime;
       }
 
@@ -775,7 +787,7 @@ export function AnnotateContainer({
         }
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay
