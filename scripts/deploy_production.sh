@@ -168,6 +168,13 @@ if [[ -f "$PLAN_FILE" ]]; then
   fi
 fi
 
+# ── Promote "testing" bugs → "done" on production ────────────────────
+
+PROMOTE_BUGS="$REPO_ROOT/scripts/promote-bugs.py"
+if [[ -f "$PROMOTE_BUGS" ]]; then
+  "$PYTHON" "$PROMOTE_BUGS" --env prod || true
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────
 
 if $deploy_backend && $deploy_frontend; then

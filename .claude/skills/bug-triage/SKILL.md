@@ -22,9 +22,9 @@ Bugs follow the same lifecycle as tasks:
 | `done` | DONE | Fix deployed to prod and confirmed working by user |
 | `duplicate` | DUPLICATE | Duplicate of another bug |
 
-**Rules:**
-- AI sets bugs to `testing` after implementing a fix (same as tasks)
-- Only the user sets bugs to `done` after the fix is deployed to production
+**Transitions:**
+- `new` → `testing`: AI sets this after committing the fix (section 12), same timing as tasks moving to TESTING in PLAN.md
+- `testing` → `done`: `deploy_production.sh` promotes automatically (section 13), same as tasks
 - AI must never set a bug to `done`
 
 ## When to Apply
@@ -84,18 +84,11 @@ with get_pg() as conn:
 
 Report the result and stop (don't do a full investigation for status-only updates).
 
-### 4. Auto-Set Status to Testing
+### 4. Do NOT Change Status During Investigation
 
-If the bug's current status is `new`, automatically update it to `testing` when an AI agent begins investigating:
-
-```bash
-cd src/backend && .venv/Scripts/python.exe -c "
-from app.services.pg import get_pg
-with get_pg() as conn:
-    cur = conn.cursor()
-    cur.execute('UPDATE bug_reports SET status = %s, updated_at = NOW() WHERE id = %s AND status = %s', ('testing', {id}, 'new'))
-"
-```
+Leave the bug status as-is when loading it. Status changes happen later:
+- `new` → `testing`: After the fix is committed (see section 12)
+- `testing` → `done`: Automatically by `deploy_production.sh` (see section 13)
 
 ### 5. Display Structured Summary
 
@@ -275,3 +268,37 @@ Based on the editor context (annotate mode, game #7, 18 clips),
 clip #16 (start=470s) starts BEFORE clip #15 (start=495s) but appears
 after it. The sort order in AnnotateTimeline.tsx may not account for...
 ```
+
+## Bug Status After Fix
+
+### 12. Set Bug to "testing" After Fix Is Committed
+
+After the fix is committed and ready for merge (same point where tasks move to TESTING in PLAN.md), update the bug status on the **remote** server where the bug was reported:
+
+```bash
+cd src/backend && .venv/Scripts/python.exe -c "
+import json, ssl, urllib.request
+from pathlib import Path
+
+config = json.loads(Path('../../scripts/.task-manager-config.json').read_text())
+url = config['prod_url']
+session = config['prod_session']
+
+req = urllib.request.Request(f'{url}/api/admin/bugs/{id}', method='PATCH')
+req.add_header('X-User-ID', session)
+req.add_header('Content-Type', 'application/json')
+req.data = json.dumps({'status': 'testing'}).encode()
+resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
+print(f'Bug #{id} set to testing')
+"
+```
+
+**This is required.** Do not skip this step. It mirrors the task workflow where PLAN.md is updated to TESTING before merge.
+
+### 13. Deploy Promotes "testing" → "done" Automatically
+
+`deploy_production.sh` calls `scripts/promote-bugs.py --env prod` which:
+1. Fetches all bugs with status `testing` from the production API
+2. PATCHes each to status `done` (sets `resolved_at` timestamp)
+
+No manual action needed at deploy time -- bugs follow the same TESTING → DONE promotion as tasks in PLAN.md.

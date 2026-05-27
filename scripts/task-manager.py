@@ -525,6 +525,7 @@ HTML = r"""<!DOCTYPE html>
     --text: #e6edf3; --text-dim: #8b949e; --accent: #58a6ff;
     --green: #3fb950; --yellow: #d29922; --red: #f85149;
     --blue: #58a6ff; --gray: #484f58; --purple: #bc8cff;
+    --coral: #ff7b72;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -776,7 +777,7 @@ HTML = r"""<!DOCTYPE html>
   .config-actions { display: flex; gap: 8px; margin-top: 12px; }
 
   /* Bug milestone styles */
-  .bug-milestone { border-left: 3px solid var(--red); }
+  .bug-milestone { border-left: 3px solid var(--coral); }
   .bug-milestone.staging { border-left-color: var(--yellow); }
   .bug-milestone .milestone-header { gap: 10px; }
   .bug-env-icon { font-size: 10px; }
@@ -1196,7 +1197,7 @@ function renderBugMilestones(app) {
     if (!envData) return;
 
     const envLabel = env === 'prod' ? 'Production' : 'Staging';
-    const accentVar = env === 'prod' ? 'var(--red)' : 'var(--yellow)';
+    const accentVar = env === 'prod' ? 'var(--coral)' : 'var(--yellow)';
 
     const div = document.createElement('div');
     div.className = 'milestone bug-milestone' + (env === 'staging' ? ' staging' : '');

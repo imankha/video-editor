@@ -916,6 +916,65 @@ async def update_bug(bug_id: int, body: BugUpdateRequest):
     return result
 
 
+@router.delete("/bugs/purge")
+async def purge_old_bugs(days: int = Query(14, ge=1, le=365)):
+    """Delete resolved bugs older than N days. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, screenshot_r2_key, logs_r2_key FROM bug_reports "
+            "WHERE status = 'done' AND resolved_at < NOW() - INTERVAL '%s days'",
+            (days,),
+        )
+        rows = cur.fetchall()
+
+        if not rows:
+            return {"purged": 0}
+
+        from ..storage import r2_delete_object_global
+
+        for row in rows:
+            for key in (row["screenshot_r2_key"], row["logs_r2_key"]):
+                if key:
+                    r2_delete_object_global(key)
+
+        ids = [r["id"] for r in rows]
+        cur.execute(
+            "DELETE FROM bug_reports WHERE id = ANY(%s)",
+            (ids,),
+        )
+
+    return {"purged": len(ids), "bug_ids": ids}
+
+
+@router.delete("/bugs/{bug_id}")
+async def delete_bug(bug_id: int):
+    """Delete a bug report and its R2 assets. Admin only."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, screenshot_r2_key, logs_r2_key FROM bug_reports WHERE id = %s",
+            (bug_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Bug not found")
+
+        from ..storage import r2_delete_object_global
+
+        for key in (row["screenshot_r2_key"], row["logs_r2_key"]):
+            if key:
+                r2_delete_object_global(key)
+
+        cur.execute("DELETE FROM bug_reports WHERE id = %s", (bug_id,))
+
+    return {"deleted": bug_id}
+
+
 @router.get("/bugs/{bug_id}/screenshot")
 async def get_bug_screenshot(bug_id: int):
     """Redirect to presigned R2 URL for the bug's screenshot. Admin only."""
