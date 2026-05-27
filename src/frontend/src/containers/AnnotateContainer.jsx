@@ -651,6 +651,7 @@ export function AnnotateContainer({
       segmentDuration = fullTimeline.segments[result.videoIndex].duration;
       const maxDur = segmentDuration - result.actualTime;
       clipDuration = Math.min(clipDuration, maxDur);
+      console.log('[CreateClip] virtual:', clipData.startTime, '→ actual:', startTime, 'seq:', videoSeq, 'segDur:', segmentDuration, 'clipDur:', clipDuration);
     }
 
     const newRegion = addClipRegion(
@@ -665,6 +666,7 @@ export function AnnotateContainer({
       { tagged_teammates: clipData.tagged_teammates, my_athlete: clipData.my_athlete, videoDuration: segmentDuration },
     );
     if (newRegion) {
+      console.log('[CreateClip] Stored region:', newRegion.id, 'actual:', newRegion.startTime, '-', newRegion.endTime, 'seq:', newRegion.videoSequence);
       // clipData.startTime is virtual in multi-video, actual in single — matches effectiveSeek
       effectiveSeek(clipData.startTime);
 
@@ -918,7 +920,7 @@ export function AnnotateContainer({
           clipEnd += offset;
         }
         if (effectiveCurrentTime < clipStart - FRAME_TOLERANCE || effectiveCurrentTime > clipEnd + FRAME_TOLERANCE) {
-          console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
+          console.log('[AutoDeselect] Deselecting', clipId, 'playhead:', effectiveCurrentTime.toFixed(2), 'clipVirtual:', clipStart.toFixed(2), '-', clipEnd.toFixed(2), 'seq:', selectedClip.videoSequence, 'offset:', fullTimeline?.getVideoOffset(selectedClip.videoSequence) ?? 0, 'regionAtPlayhead:', regionAtPlayhead?.id ?? 'none');
           regionAtPlayhead ? selectClip(regionAtPlayhead.id) : deselectClip();
         }
       } else {
