@@ -3,6 +3,7 @@ import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 import { interpolateHighlightSpline } from '../../../utils/splineInterpolation';
 import { useOverlayHighlightColor } from '../../../stores/overlayStore';
 import { HighlightColor } from '../../../constants/highlightColors';
+import { track } from '../../../utils/analytics';
 
 /**
  * useHighlightRegions - Manages highlight regions as self-contained units
@@ -324,6 +325,7 @@ export default function useHighlightRegions(videoMetadata) {
 
     setRegions(prev => [...prev, newRegion].sort((a, b) => a.startTime - b.startTime));
     setSelectedRegionId(regionId);
+    track('highlight_region_add', { regionId, startTime: Math.round(snappedStartTime * 10) / 10 }, { debugOnly: true });
 
     return regionId;
   }, [duration, wouldOverlap, calculateDefaultHighlight, videoMetadata, framerate]);
@@ -336,6 +338,7 @@ export default function useHighlightRegions(videoMetadata) {
     if (selectedRegionId === regionId) {
       setSelectedRegionId(null);
     }
+    track('highlight_region_delete', { regionId }, { debugOnly: true });
   }, [selectedRegionId]);
 
   /**

@@ -24,8 +24,8 @@ function captureVideoFrames() {
       c.getContext('2d').drawImage(video, 0, 0);
       const dataUrl = c.toDataURL('image/jpeg', 0.8);
       frames.set(video, dataUrl);
-    } catch {
-      // Cross-origin video — canvas tainted, skip
+    } catch (err) {
+      console.warn('[ReportProblem] Video frame capture failed:', video.src?.substring(0, 80), err?.message);
     }
   });
   return frames;
@@ -38,7 +38,11 @@ async function captureScreenshot() {
     const html2canvas = mod.default || mod;
     const originalVideos = [...document.querySelectorAll('video')];
     const canvas = await html2canvas(document.body, {
-      scale: 0.75,
+      scale: 1.0,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      x: window.scrollX,
+      y: window.scrollY,
       useCORS: true,
       logging: false,
       backgroundColor: '#111827',

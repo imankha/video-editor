@@ -225,10 +225,10 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T3110 | [Bug Investigation Skill](tasks/bug-tracking/T3110-bug-triage-skill.md) | 7 | 3 | 2.3 | DONE | [ ] | `/bug {id}` loads full bug context into current Claude session for investigation. No listing -- task board handles that. |
 | T3120 | [Task Board Bug View](tasks/bug-tracking/T3120-task-board-bug-view.md) | 8 | 5 | 1.6 | DONE | [ ] | Auto-fetch from both prod+staging Postgres. Deterministic consolidation grouping (no LLM). Copy Kickoff Prompt downloads assets + builds AI prompt. Reporter column. |
 | | **[Bug Report Diagnostic Quality](tasks/bug-report-quality/EPIC.md)** | | | | | | Maximize runtime context in bug reports so AI agents can reproduce bugs without asking for more info |
-| T3150 | ↳ [Fix Backend NULL Storage](tasks/bug-report-quality/T3150-fix-null-storage.md) | 7 | 1 | 7.0 | TODO | [ ] | Fix Python truthiness bug: `if body.actions else None` stores empty `[]` as NULL. Change to `is not None`. |
-| T3160 | ↳ [Screenshot Regression](tasks/bug-report-quality/T3160-screenshot-regression.md) | 7 | 3 | 2.3 | TODO | [ ] | Constrain html2canvas to viewport (not full body), fix video frame capture (dark voids), bump scale to 1.0. |
-| T3170 | ↳ [Editor Context Enrichment](tasks/bug-report-quality/T3170-editor-context-enrichment.md) | 8 | 3 | 2.7 | TODO | [ ] | Per-mode state: annotate (game, clips, sequence), framing (keyframes, aspect ratio, segments), overlay (all effect settings). Add viewport, route. |
-| T3180 | ↳ [Action Breadcrumbs](tasks/bug-report-quality/T3180-action-breadcrumbs.md) | 8 | 4 | 2.0 | TODO | [ ] | Add ~22 event types via track() calls in gesture handlers. Covers annotate/framing/overlay/video. Buffer 50->200. |
+| T3150 | ↳ [Fix Backend NULL Storage](tasks/bug-report-quality/T3150-fix-null-storage.md) | 7 | 1 | 7.0 | TESTING | [ ] | Fix Python truthiness bug: `if body.actions else None` stores empty `[]` as NULL. Change to `is not None`. |
+| T3160 | ↳ [Screenshot Regression](tasks/bug-report-quality/T3160-screenshot-regression.md) | 7 | 3 | 2.3 | TESTING | [ ] | Constrain html2canvas to viewport (not full body), fix video frame capture (dark voids), bump scale to 1.0. |
+| T3170 | ↳ [Editor Context Enrichment](tasks/bug-report-quality/T3170-editor-context-enrichment.md) | 8 | 3 | 2.7 | TESTING | [ ] | Per-mode state: annotate (game, clips, sequence), framing (keyframes, aspect ratio, segments), overlay (all effect settings). Add viewport, route. |
+| T3180 | ↳ [Action Breadcrumbs](tasks/bug-report-quality/T3180-action-breadcrumbs.md) | 8 | 4 | 2.0 | TESTING | [ ] | Add ~22 event types via track() calls in gesture handlers. Covers annotate/framing/overlay/video. Buffer 50->200. |
 
 ### Milestone: Alpha Marketing
 

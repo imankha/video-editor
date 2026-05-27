@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
 import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
+import { track } from '../../../utils/analytics';
 
 /**
  * Hook to manage video segments with speed control and trimming
@@ -258,6 +259,7 @@ export function useSegments() {
       if (time < 0.01 || Math.abs(time - duration) < 0.01) return prev;
 
       // Add and sort
+      track('segment_add', { time: Math.round(time * 10) / 10 }, { debugOnly: true });
       const newSplits = [...prev, time].sort((a, b) => a - b);
 
       // INVARIANT: All splits must be within (0, duration)

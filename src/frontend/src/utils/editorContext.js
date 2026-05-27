@@ -42,11 +42,14 @@ export function getEditorContext() {
   const ctx = {
     mode: editor.editorMode,
     profileId: profile.currentProfileId,
+    route: window.location.pathname,
+    viewport: { width: window.innerWidth, height: window.innerHeight },
     project: projects.selectedProjectId
       ? {
           id: projects.selectedProjectId,
           clipCount: projectData.clips?.length ?? 0,
           selectedClipId: projectData.selectedClipId,
+          aspectRatio: projectData.aspectRatio,
         }
       : null,
     game: games.selectedGame
@@ -65,9 +68,13 @@ export function getEditorContext() {
   }
 
   if (editor.editorMode === 'framing') {
+    const clipState = framing.currentClipId ? framing.getClipState(framing.currentClipId) : null;
     ctx.framing = {
       currentClipId: framing.currentClipId,
       changedSinceExport: framing.framingChangedSinceExport,
+      keyframeCount: clipState?.keyframes?.length ?? null,
+      segmentCount: clipState?.segments?.length ?? null,
+      hasExported: framing.hasExported,
     };
   }
 
@@ -75,6 +82,12 @@ export function getEditorContext() {
     ctx.overlay = {
       effectType: overlay.effectType,
       changedSinceExport: overlay.overlayChangedSinceExport,
+      highlightColor: overlay.highlightColor,
+      highlightShape: overlay.highlightShape,
+      strokeWidth: overlay.strokeWidth,
+      fillEnabled: overlay.fillEnabled,
+      dimStrength: overlay.dimStrength,
+      isLoadingWorkingVideo: overlay.isLoadingWorkingVideo,
     };
   }
 

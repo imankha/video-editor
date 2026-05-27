@@ -451,6 +451,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         if (updated.endTime - updated.startTime < MIN_CLIP_DURATION) {
           updated.endTime = Math.min(updated.startTime + MIN_CLIP_DURATION, duration || Infinity);
         }
+        track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
       // Handle end time update only (recalculate start time based on current duration)
       else if (updates.endTime !== undefined) {
@@ -458,6 +459,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         updated.endTime = Math.max(MIN_CLIP_DURATION, Math.min(updates.endTime, duration || Infinity));
         // Recalculate start time to maintain duration
         updated.startTime = Math.max(0, updated.endTime - currentDuration);
+        track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
       // Handle start time update only (recalculate end time based on current duration)
       else if (updates.startTime !== undefined) {
@@ -465,6 +467,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
         updated.startTime = Math.max(0, Math.min(updates.startTime, (duration || Infinity) - MIN_CLIP_DURATION));
         // Recalculate end time to maintain duration
         updated.endTime = Math.min(updated.startTime + currentDuration, duration || Infinity);
+        track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
 
       // Handle duration update (recalculate start time from end - duration)
@@ -491,6 +494,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       // Handle rating update (1-5)
       if (updates.rating !== undefined) {
         updated.rating = Math.max(1, Math.min(5, Math.round(updates.rating)));
+        track('clip_rating', { regionId, rating: updated.rating }, { debugOnly: true });
       }
 
       // Handle position update
@@ -726,9 +730,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
   // Keep annotate snapshot up to date for bug reports
   const prevSnapshotRef = useRef(null);
   useEffect(() => {
+    const seqs = new Set(clipRegions.map(r => r.videoSequence).filter(Boolean));
+    const selectedSeq = clipRegions.find(r => r.id === selectedRegionId)?.videoSequence ?? null;
     const snapshot = {
       clipCount: clipRegions.length,
       selectedRegionId,
+      videoSequenceCount: seqs.size || null,
+      currentVideoSequence: selectedSeq,
       clips: clipRegions.map((r, i) => ({
         i,
         start: Math.round(r.startTime * 10) / 10,

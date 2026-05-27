@@ -18,10 +18,10 @@ The bug reporting system (T3100) stores data in Postgres + R2, but the data capt
 
 | ID | Task | Status |
 |----|------|--------|
-| T3150 | [Fix Backend NULL Storage](T3150-fix-null-storage.md) | TODO |
-| T3160 | [Screenshot Regression](T3160-screenshot-regression.md) | TODO |
-| T3170 | [Editor Context Enrichment](T3170-editor-context-enrichment.md) | TODO |
-| T3180 | [Action Breadcrumbs](T3180-action-breadcrumbs.md) | TODO |
+| T3150 | [Fix Backend NULL Storage](T3150-fix-null-storage.md) | TESTING |
+| T3160 | [Screenshot Regression](T3160-screenshot-regression.md) | TESTING |
+| T3170 | [Editor Context Enrichment](T3170-editor-context-enrichment.md) | TESTING |
+| T3180 | [Action Breadcrumbs](T3180-action-breadcrumbs.md) | TESTING |
 
 ## Design Decisions
 

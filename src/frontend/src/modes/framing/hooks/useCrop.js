@@ -3,6 +3,7 @@ import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
 import { normalizeToFrameKeyframes, validateFrameKeyframes } from '../../../types/keyframes';
+import { track } from '../../../utils/analytics';
 
 /**
  * Default crop sizes optimized for HD upscaling.
@@ -263,6 +264,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * Uses refs to read keyframes/isEndKeyframeExplicit to keep callback stable
    */
   const updateAspectRatio = useCallback((newRatio) => {
+    track('aspect_ratio_change', { from: aspectRatio, to: newRatio }, { debugOnly: true });
     setAspectRatio(newRatio);
 
     // Use refs to read current values without adding to dependency array

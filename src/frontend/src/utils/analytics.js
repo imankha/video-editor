@@ -15,6 +15,8 @@ import { useEditorStore } from '../stores/editorStore.js';
 import { useProjectsStore } from '../stores/projectsStore.js';
 import { useGamesDataStore } from '../stores/gamesDataStore.js';
 import { useProjectDataStore } from '../stores/projectDataStore.js';
+import { useVideoStore } from '../stores/videoStore.js';
+import { useExportStore } from '../stores/exportStore.js';
 
 const TOKEN = import.meta.env.VITE_CF_ANALYTICS_TOKEN;
 
@@ -28,7 +30,7 @@ if (TOKEN && !document.querySelector('[data-cf-beacon]')) {
 }
 
 // --- Breadcrumb ring buffer ---
-const MAX_ENTRIES = 50;
+const MAX_ENTRIES = 200;
 const _buffer = [];
 
 /**
@@ -108,6 +110,27 @@ export function setupActionTracking() {
     if (state.selectedClipId !== prevClipId) {
       track('clip_select', { id: state.selectedClipId }, { debugOnly: true });
       prevClipId = state.selectedClipId;
+    }
+  });
+
+  let prevIsPlaying = useVideoStore.getState().isPlaying;
+  useVideoStore.subscribe((state) => {
+    if (state.isPlaying !== prevIsPlaying) {
+      track('video_state', {
+        isPlaying: state.isPlaying,
+        currentTime: Math.round(state.currentTime * 10) / 10,
+      }, { debugOnly: true });
+      prevIsPlaying = state.isPlaying;
+    }
+  });
+
+  let prevExportStatuses = {};
+  useExportStore.subscribe((state) => {
+    for (const [id, exp] of Object.entries(state.activeExports)) {
+      if (prevExportStatuses[id] !== exp.status) {
+        track('export_progress', { type: exp.type, status: exp.status }, { debugOnly: true });
+        prevExportStatuses[id] = exp.status;
+      }
     }
   });
 }

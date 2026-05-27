@@ -730,9 +730,9 @@ async def report_problem(body: ProblemReportRequest, request: Request):
             body.page_url,
             body.user_agent,
             body.build,
-            Json(body.editor_context) if body.editor_context else None,
-            Json(body.actions) if body.actions else None,
-            Json(body.logs) if body.logs else None,
+            Json(body.editor_context) if body.editor_context is not None else None,
+            Json(body.actions) if body.actions is not None else None,
+            Json(body.logs) if body.logs is not None else None,
         ))
         bug_id = cur.fetchone()["id"]
 

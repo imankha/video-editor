@@ -19,6 +19,7 @@ import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useExportStore } from '../stores/exportStore';
 import * as overlayActions from '../api/overlayActions';
+import { track } from '../utils/analytics';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -651,6 +652,7 @@ export function OverlayScreen({
 
   // Wrapped handler: Set effect type
   const wrappedSetHighlightEffectType = useCallback((effectType) => {
+    track('overlay_effect_change', { to: effectType }, { debugOnly: true });
     setHighlightEffectType(effectType);
     if (canSyncActions) {
       overlayActions.setEffectType(projectId, effectType)
@@ -660,6 +662,7 @@ export function OverlayScreen({
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetHighlightColor = useCallback((color) => {
+    track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
     if (canSyncActions) {
       overlayActions.setHighlightColor(projectId, color)
@@ -669,6 +672,7 @@ export function OverlayScreen({
   }, [setHighlightColor, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetStrokeWidth = useCallback((val) => {
+    track('overlay_settings_change', { field: 'strokeWidth', value: val }, { debugOnly: true });
     setStrokeWidth(val);
     if (canSyncActions) {
       overlayActions.setStrokeWidth(projectId, val)
@@ -678,6 +682,7 @@ export function OverlayScreen({
   }, [setStrokeWidth, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetFillEnabled = useCallback((val) => {
+    track('overlay_settings_change', { field: 'fillEnabled', value: val }, { debugOnly: true });
     setFillEnabled(val);
     if (canSyncActions) {
       overlayActions.setFillEnabled(projectId, val)
@@ -696,6 +701,7 @@ export function OverlayScreen({
   }, [setFillOpacity, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetDimStrength = useCallback((val) => {
+    track('overlay_settings_change', { field: 'dimStrength', value: val }, { debugOnly: true });
     setDimStrength(val);
     if (canSyncActions) {
       overlayActions.setDimStrength(projectId, val)
@@ -705,6 +711,7 @@ export function OverlayScreen({
   }, [setDimStrength, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   const wrappedSetHighlightShape = useCallback((val) => {
+    track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
     if (canSyncActions) {
       overlayActions.setHighlightShape(projectId, val)

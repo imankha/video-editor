@@ -8,6 +8,7 @@ import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifie
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback } from '../utils/videoLoadWatchdog';
 import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute';
+import { track } from '../utils/analytics';
 
 // T1400: watchdog delay before checking buffered vs clip duration.
 const RANGE_FALLBACK_WATCHDOG_MS = 5000;
@@ -389,6 +390,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       const validTime = clampToVisibleRange
         ? clampToVisibleRange(time)
         : Math.max(0, Math.min(time, effectiveDuration));
+      if (Math.abs(validTime - currentTime) > 5) {
+        track('video_seek', { from: Math.round(currentTime * 10) / 10, to: Math.round(validTime * 10) / 10 }, { debugOnly: true });
+      }
 
       const target = clipToVideo(validTime);
       const fps = getFramerate(videoRef.current);

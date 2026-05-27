@@ -4,6 +4,7 @@ import { API_BASE } from '../config';
 import * as framingActions from '../api/framingActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { toast } from '../components/shared';
+import { track } from '../utils/analytics';
 
 /**
  * FramingContainer - Encapsulates Framing mode logic and computed state
@@ -306,6 +307,7 @@ export function FramingContainer({
     onCropChange?.(null);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
+    track('crop_keyframe_add', { frame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
 
     // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
     // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
@@ -796,6 +798,7 @@ export function FramingContainer({
     removeKeyframe(time, duration);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
+    track('crop_keyframe_delete', { frame, clipId: selectedClipId }, { debugOnly: true });
 
     // Sync to clip store so sidebar indicator updates
     if (callerClipId) {
