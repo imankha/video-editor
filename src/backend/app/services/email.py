@@ -94,7 +94,14 @@ def _build_share_email(
 <tr><td align="center" style="padding:32px 16px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
-  <tr><td style="padding:32px;">
+  <tr><td style="padding:24px 32px 0 32px;text-align:center;">
+    <a href="https://reelballers.com" style="text-decoration:none;">
+      <span style="display:block;color:#111827;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px 0;">REEL</span>
+      <img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:inline-block;width:40px;height:40px;border:0;">
+      <span style="display:block;color:#111827;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:6px 0 0 0;">BALLERS</span>
+    </a>
+  </td></tr>
+  <tr><td style="padding:20px 32px 32px 32px;">
     <p style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 8px 0;">{heading}</p>
     <p style="color:#1f2937;font-size:20px;line-height:28px;font-weight:600;margin:0 0 24px 0;">{game_name}</p>
     <div style="text-align:center;margin:0 0 8px 0;">{cta_html}</div>
