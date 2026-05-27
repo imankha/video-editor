@@ -26,9 +26,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
 
   const canSubmit = emails.length > 0 && !isSubmitting;
 
@@ -66,7 +63,6 @@ export function ShareGameModal({ gameId, gameName, onClose }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdropClick}
     >
       <div className="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md mx-4 p-6">
         <div className="flex items-center justify-between mb-4">

@@ -170,10 +170,9 @@ export function ReportProblemButton({ className = '' }) {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={handleClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
       <div
         className="bg-gray-800 border border-gray-600 rounded-xl w-full max-w-md mx-4 shadow-2xl"
-        onClick={e => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">

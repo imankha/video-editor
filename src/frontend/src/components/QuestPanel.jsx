@@ -221,8 +221,8 @@ export function QuestPanel({ inline = false }) {
     <>
     {/* Quest 3 completion modal — rendered outside quest panel to ensure centering */}
     {showCompletionModal && (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={() => setShowCompletionModal(false)}>
-        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-6 sm:p-12 max-w-2xl mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
+        <div className="bg-gray-800 border border-gray-600 rounded-2xl p-6 sm:p-12 max-w-2xl mx-4 shadow-2xl">
           <div className="text-center mb-6 sm:mb-10">
             <div className="text-4xl sm:text-6xl mb-3 sm:mb-5">🎉</div>
             <h2 className="text-2xl sm:text-4xl font-bold text-white mb-2 sm:mb-3">Congratulations!</h2>

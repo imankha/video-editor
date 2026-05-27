@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Button } from './Button';
 
 /**
@@ -13,12 +13,6 @@ import { Button } from './Button';
  * - onClose: Called when clicking outside or pressing Escape
  */
 export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClose }) {
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) {
-      onClose?.();
-    }
-  }, [onClose]);
-
   // Effect for Escape key - runs regardless of isOpen to avoid hook order issues
   useEffect(() => {
     if (!isOpen) return;
@@ -39,7 +33,6 @@ export function ConfirmationDialog({ isOpen, title, message, buttons = [], onClo
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onClick={handleBackdropClick}
     >
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 border border-gray-700">
         {/* Header */}

@@ -42,14 +42,9 @@ export function CreditGrantModal({ user, onClose }) {
     }
   }, [amount, mode, grantCredits, setCredits, user.user_id, onClose]);
 
-  const handleBackdrop = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={handleBackdrop}
     >
       <div className="bg-gray-800 border border-white/10 rounded-xl p-6 w-80 shadow-2xl">
         <div className="flex items-center justify-between mb-4">

@@ -230,7 +230,6 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   return (
     <div
       className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-      onClick={(e) => { if (e.target === e.currentTarget && mode === 'list') onClose(); }}
     >
       <div className="bg-gray-800 rounded-lg w-full max-w-md border border-gray-700 max-h-[90vh] flex flex-col">
         {/* List mode */}

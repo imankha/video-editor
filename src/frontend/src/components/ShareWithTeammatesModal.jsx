@@ -75,9 +75,6 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget) onClose();
-  }, [onClose]);
 
   const handleToggleTag = useCallback((tag) => {
     setCheckedTags(prev => {
@@ -191,7 +188,6 @@ export function ShareWithTeammatesModal({ tagCounts, tagClipIds, gameId, sharedT
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-      onMouseDown={handleBackdropClick}
     >
       <div className="bg-gray-800 rounded-lg shadow-xl w-full max-w-lg mx-4 border border-gray-700">
         {/* Header */}
