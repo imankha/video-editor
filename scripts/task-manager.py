@@ -144,12 +144,14 @@ def download_to_temp(url, filename):
     ctx = ssl.create_default_context()
     try:
         req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'TaskManager/1.0')
         with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
             path = os.path.join(tempfile.gettempdir(), filename)
             with open(path, 'wb') as f:
                 f.write(resp.read())
             return path
-    except Exception:
+    except Exception as e:
+        print(f"[download] Failed to download {filename}: {e}", file=sys.stderr)
         return None
 
 def consolidate_bugs(bugs):

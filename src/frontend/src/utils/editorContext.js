@@ -39,10 +39,13 @@ export function getEditorContext() {
   const overlay = useOverlayStore.getState();
   const profile = useProfileStore.getState();
 
+  const path = window.location.pathname;
+  const mode = modeFromRoute(path) ?? editor.editorMode;
+
   const ctx = {
-    mode: editor.editorMode,
+    mode,
     profileId: profile.currentProfileId,
-    route: window.location.pathname,
+    route: path,
     viewport: { width: window.innerWidth, height: window.innerHeight },
     project: projects.selectedProjectId
       ? {
@@ -63,11 +66,11 @@ export function getEditorContext() {
     },
   };
 
-  if (editor.editorMode === 'annotate' && _annotateSnapshot) {
+  if (mode === 'annotate' && _annotateSnapshot) {
     ctx.annotate = _annotateSnapshot;
   }
 
-  if (editor.editorMode === 'framing') {
+  if (mode === 'framing') {
     const clipState = framing.currentClipId ? framing.getClipState(framing.currentClipId) : null;
     ctx.framing = {
       currentClipId: framing.currentClipId,
@@ -78,7 +81,7 @@ export function getEditorContext() {
     };
   }
 
-  if (editor.editorMode === 'overlay') {
+  if (mode === 'overlay') {
     ctx.overlay = {
       effectType: overlay.effectType,
       changedSinceExport: overlay.overlayChangedSinceExport,
@@ -92,6 +95,16 @@ export function getEditorContext() {
   }
 
   return ctx;
+}
+
+function modeFromRoute(path) {
+  if (path.startsWith('/annotate')) return 'annotate';
+  if (path.startsWith('/framing')) return 'framing';
+  if (path.startsWith('/overlay')) return 'overlay';
+  if (path.startsWith('/home')) return 'home';
+  if (path.startsWith('/admin')) return 'admin';
+  if (path.startsWith('/gallery') || path.startsWith('/downloads')) return 'gallery';
+  return null;
 }
 
 function round1(n) {
