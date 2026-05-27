@@ -504,6 +504,7 @@ export function AnnotateModeView({
                 onAddClip={onAddClip}
                 isEditMode={isEditMode}
                 videoRef={videoRef}
+                videoBRef={multiVideo?.videoBRef}
               />
             </div>
 

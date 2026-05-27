@@ -84,26 +84,26 @@ export function AnnotateControls({
   onAddClip,
   isEditMode = false,
   videoRef,
+  videoBRef,
 }) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+
+  const applyToAllVideos = (fn) => {
+    [videoRef, videoBRef].forEach(ref => { if (ref?.current) fn(ref.current); });
+  };
 
   const handleVolumeChange = (e) => {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
-    if (videoRef?.current) {
-      videoRef.current.volume = newVolume;
-      videoRef.current.muted = newVolume === 0;
-    }
+    applyToAllVideos(v => { v.volume = newVolume; v.muted = newVolume === 0; });
   };
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    if (videoRef?.current) {
-      videoRef.current.muted = newMuted;
-    }
+    applyToAllVideos(v => { v.muted = newMuted; });
   };
   return (
     <div className={`controls-container flex flex-wrap items-center justify-between gap-y-1 py-2 px-2 sm:px-4 ${
