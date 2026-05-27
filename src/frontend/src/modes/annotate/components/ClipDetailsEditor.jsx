@@ -152,7 +152,7 @@ export function ClipDetailsEditor({
   };
 
   const handleTeammatesChange = (newTeammates) => {
-    onUpdate({ tagged_teammates: newTeammates.length > 0 ? newTeammates : null });
+    onUpdate({ tagged_teammates: newTeammates });
   };
 
   const handleMyAthleteChange = () => {
