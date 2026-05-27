@@ -168,11 +168,12 @@ if [[ -f "$PLAN_FILE" ]]; then
   fi
 fi
 
-# ── Promote "testing" bugs → "done" on production ────────────────────
+# ── Promote "testing" bugs → "done" on prod + staging ─────────────────
 
 PROMOTE_BUGS="$REPO_ROOT/scripts/promote-bugs.py"
 if [[ -f "$PROMOTE_BUGS" ]]; then
   "$PYTHON" "$PROMOTE_BUGS" --env prod || true
+  "$PYTHON" "$PROMOTE_BUGS" --env staging || true
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────

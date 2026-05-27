@@ -2217,6 +2217,9 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
                     INSERT OR REPLACE INTO teammate_shares (game_id, tag_name, shared_clip_ids, created_at)
                     VALUES (?, ?, ?, datetime('now'))
                 """, (request.game_id, recipient.tag_name, shared_clip_ids))
+                # Release SQLite write lock before materialization opens the same DB
+                # (self-share deadlocks: conn holds RESERVED, recipient_conn.commit() waits 30s)
+                conn.commit()
 
                 # T2830: Materialize for each successfully-sent email
                 for email, share in zip(recipient.emails, share_records):
