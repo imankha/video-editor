@@ -859,6 +859,91 @@ async def get_bug(bug_id: int):
     return result
 
 
+@router.get("/bugs/{bug_id}/correlated")
+async def get_correlated_bugs(bug_id: int):
+    """Get all bugs in a duplicate cluster with metadata for delta analysis."""
+    _require_admin()
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id, duplicate_of FROM bug_reports WHERE id = %s", (bug_id,))
+        bug = cur.fetchone()
+        if not bug:
+            raise HTTPException(status_code=404, detail="Bug not found")
+
+        primary_id = bug["duplicate_of"] or bug["id"]
+
+        cur.execute("""
+            SELECT id, reporter_email, description, build, editor_context,
+                   actions, console_logs, screenshot_r2_key, logs_r2_key,
+                   status, duplicate_of, created_at
+            FROM bug_reports
+            WHERE id = %s OR duplicate_of = %s
+            ORDER BY created_at ASC
+        """, (primary_id, primary_id))
+        cluster = cur.fetchall()
+
+    if len(cluster) <= 1:
+        return {"primary_id": primary_id, "cluster_size": len(cluster), "bugs": []}
+
+    from ..storage import generate_presigned_url_global
+
+    bugs = []
+    for row in cluster:
+        errors = []
+        if row["console_logs"] and isinstance(row["console_logs"], list):
+            for entry in row["console_logs"]:
+                if isinstance(entry, dict) and entry.get("level") == "error":
+                    msg = entry.get("message", "")
+                    if msg and msg not in errors:
+                        errors.append(msg)
+
+        action_types = []
+        if row["actions"] and isinstance(row["actions"], list):
+            action_types = [
+                a.get("type", a.get("action", "unknown"))
+                for a in row["actions"] if isinstance(a, dict)
+            ]
+
+        screenshot_url = None
+        if row["screenshot_r2_key"]:
+            screenshot_url = generate_presigned_url_global(row["screenshot_r2_key"])
+
+        logs_url = None
+        if row.get("logs_r2_key"):
+            logs_url = generate_presigned_url_global(row["logs_r2_key"])
+
+        mode = None
+        if row["editor_context"] and isinstance(row["editor_context"], dict):
+            mode = row["editor_context"].get("mode")
+
+        bugs.append({
+            "id": row["id"],
+            "is_primary": row["id"] == primary_id,
+            "reporter_email": row["reporter_email"],
+            "description": (row["description"] or "")[:200],
+            "build": row["build"],
+            "editor_mode": mode,
+            "editor_context": row["editor_context"],
+            "action_types": action_types,
+            "action_count": len(action_types),
+            "error_messages": errors,
+            "has_screenshot": bool(row["screenshot_r2_key"]),
+            "screenshot_url": screenshot_url,
+            "has_logs": bool(row.get("logs_r2_key")),
+            "logs_url": logs_url,
+            "status": row["status"],
+            "duplicate_of": row["duplicate_of"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        })
+
+    return {
+        "primary_id": primary_id,
+        "cluster_size": len(cluster),
+        "bugs": bugs,
+    }
+
+
 class BugUpdateRequest(BaseModel):
     status: Optional[str] = None
     admin_notes: Optional[str] = None
