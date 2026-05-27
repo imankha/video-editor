@@ -101,7 +101,7 @@ function App() {
                 <HiTag className="w-8 h-8 text-white" />
                 <HiStar className="w-7 h-7 text-white ml-0.5" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Tag & Rate Clips</h3>
+              <h3 className="text-xl font-semibold text-white mb-3">Capture Learning Moments</h3>
               <p className="text-gray-400">
                 Organize clips with tags and ratings. Export annotated videos so players can study their own performance.
               </p>
@@ -142,7 +142,7 @@ function App() {
             <div className="grid md:grid-cols-3 gap-6">
               <div className="bg-white/5 backdrop-blur rounded-xl p-6 text-left">
                 <p className="text-gray-300 text-sm mb-4">
-                  "I can prep and push my son's best plays to Instagram in minutes. What used to take me all weekend now happens during halftime of the next game."
+                  "Now when grandma can't make a game, I just send her a link to his highlights that she can view it in full resolution on her phone."
                 </p>
                 <p className="text-purple-400 font-semibold text-sm">— Mike T., Soccer Dad</p>
                 <p className="text-gray-500 text-xs">Son plays U16 club soccer</p>
@@ -156,7 +156,7 @@ function App() {
               </div>
               <div className="bg-white/5 backdrop-blur rounded-xl p-6 text-left">
                 <p className="text-gray-300 text-sm mb-4">
-                  "The way it follows my son across the field is something I've never seen anywhere else. Game changer for recruiting videos."
+                  "The way I could make the frame follow my son across the field is something I've never seen anywhere else. Total game changer for highlight videos."
                 </p>
                 <p className="text-purple-400 font-semibold text-sm">— James R., Soccer Dad</p>
                 <p className="text-gray-500 text-xs">Son plays ECNL</p>
