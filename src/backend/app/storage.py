@@ -30,7 +30,9 @@ PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 # T2880: Module-level presigned URL cache. URLs are valid for hours (expires_in param);
 # 3.5h TTL keeps cache < expiry with margin. Keyed on (r2_key, expires_in).
-_PRESIGNED_URL_CACHE: TTLCache = TTLCache(maxsize=1000, ttl=12600)
+# timer=time.time: monotonic clock pauses during Fly.io machine suspension,
+# causing expired URLs to be served from cache after wake-up.
+_PRESIGNED_URL_CACHE: TTLCache = TTLCache(maxsize=1000, ttl=12600, timer=time.time)
 _PRESIGNED_URL_CACHE_LOCK = threading.Lock()
 
 # T1539: Per-user, per-db-type upload locks. Prevents concurrent PutObject on
