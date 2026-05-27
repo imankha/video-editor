@@ -96,9 +96,11 @@ def _build_share_email(
   <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
   <tr><td style="padding:24px 32px 0 32px;text-align:center;">
     <a href="https://reelballers.com" style="text-decoration:none;">
-      <span style="display:block;color:#111827;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:0 0 6px 0;">REEL</span>
-      <img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:inline-block;width:40px;height:40px;border:0;">
-      <span style="display:block;color:#111827;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin:6px 0 0 0;">BALLERS</span>
+      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
+      </table>
     </a>
   </td></tr>
   <tr><td style="padding:20px 32px 32px 32px;">

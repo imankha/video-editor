@@ -47,4 +47,14 @@ export function Logo({ className = '', size = 40 }) {
   );
 }
 
+export function LogoWithText({ className = '' }) {
+  return (
+    <div className={`flex flex-col w-[80px] ${className}`}>
+      <span className="text-xl font-bold text-white text-left">Reel</span>
+      <Logo size={64} className="self-center" />
+      <span className="text-xl font-bold text-white text-right">Ballers</span>
+    </div>
+  );
+}
+
 export default Logo;

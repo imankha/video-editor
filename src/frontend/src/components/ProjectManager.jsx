@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers, Share2 } from 'lucide-react';
-import { Logo } from './Logo';
+import { LogoWithText } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
 import { useExportStore } from '../stores/exportStore';
@@ -539,8 +539,7 @@ export function ProjectManager({
 
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
       <div className="text-center pt-10 sm:pt-0 mb-6">
-        <Logo size={48} className="mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-white mb-2">Reel Ballers</h1>
+        <LogoWithText className="mx-auto mb-4" />
         <p className="text-gray-400">Learn from, preserve, and celebrate your athlete's moments</p>
       </div>
 
