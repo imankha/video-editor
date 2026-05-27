@@ -18,10 +18,25 @@ import { SECTION_NAMES } from './config/displayNames';
 // ProjectsScreen is static — it's the home/landing screen loaded on every visit
 import { ProjectsScreen } from './screens';
 // Editor screens are lazy-loaded — only fetched when the user navigates to them
-const AnnotateScreen = lazy(() => import('./screens/AnnotateScreen').then(m => ({ default: m.AnnotateScreen })));
-const FramingScreen = lazy(() => import('./screens/FramingScreen').then(m => ({ default: m.FramingScreen })));
-const OverlayScreen = lazy(() => import('./screens/OverlayScreen').then(m => ({ default: m.OverlayScreen })));
-const AdminScreen = lazy(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
+// After a deploy, old chunk hashes no longer exist on the CDN. Catch the import
+// failure and reload once so the browser fetches the new HTML with correct hashes.
+function lazyWithReload(importFn) {
+  return lazy(() => importFn().then(m => {
+    sessionStorage.removeItem('chunk-reload');
+    return m;
+  }).catch(() => {
+    if (!sessionStorage.getItem('chunk-reload')) {
+      sessionStorage.setItem('chunk-reload', '1');
+      window.location.reload();
+      return new Promise(() => {});
+    }
+    return importFn();
+  }));
+}
+const AnnotateScreen = lazyWithReload(() => import('./screens/AnnotateScreen').then(m => ({ default: m.AnnotateScreen })));
+const FramingScreen = lazyWithReload(() => import('./screens/FramingScreen').then(m => ({ default: m.FramingScreen })));
+const OverlayScreen = lazyWithReload(() => import('./screens/OverlayScreen').then(m => ({ default: m.OverlayScreen })));
+const AdminScreen = lazyWithReload(() => import('./screens/AdminScreen').then(m => ({ default: m.AdminScreen })));
 import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
