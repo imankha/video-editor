@@ -24,6 +24,7 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
   const playbackRateRef = useRef(playbackRate);
   const retryCountRef = useRef(0);
   const pendingSwapRef = useRef(null);
+  const pendingPlayRef = useRef(false);
   const MAX_RETRY_ATTEMPTS = 2;
 
   const [virtualTime, setVirtualTime] = useState(0);
@@ -126,6 +127,17 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
             newActive.play().catch(() => {});
           }
 
+          // Execute deferred play (e.g. ClipScrubRegion called seek+play back-to-back)
+          if (pendingPlayRef.current && newActive) {
+            pendingPlayRef.current = false;
+            newActive.playbackRate = playbackRateRef.current;
+            newActive.play().then(() => {
+              isPlayingRef.current = true;
+              setIsPlaying(true);
+              startTimeUpdateLoop();
+            }).catch(() => {});
+          }
+
           const adjacentIndex = result.videoIndex === 0 ? 1 : result.videoIndex - 1;
           if (newInactive && gameVideos && adjacentIndex >= 0 && adjacentIndex < gameVideos.length) {
             const adjUrl = getVideoUrl(adjacentIndex);
@@ -205,6 +217,10 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
   }, []);
 
   const play = useCallback(async () => {
+    if (pendingSwapRef.current) {
+      pendingPlayRef.current = true;
+      return;
+    }
     const { active } = getVideos();
     if (!active) return;
     active.playbackRate = playbackRateRef.current;
@@ -214,14 +230,13 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
       setIsPlaying(true);
       startTimeUpdateLoop();
     } catch {
-      // play() rejected — stay paused rather than desyncing state
       isPlayingRef.current = false;
       setIsPlaying(false);
     }
   }, [getVideos, startTimeUpdateLoop]);
 
   const pause = useCallback(() => {
-    // Pause both videos to prevent audio leaking from the inactive element
+    pendingPlayRef.current = false;
     if (videoARef.current) videoARef.current.pause();
     if (videoBRef.current) videoBRef.current.pause();
     isPlayingRef.current = false;
