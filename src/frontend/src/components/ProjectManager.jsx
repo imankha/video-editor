@@ -41,39 +41,26 @@ const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
 
 function TagBadges({ tagBadges }) {
   if (!tagBadges || Object.keys(tagBadges).length === 0) return null;
-  let goals = 0;
-  let assists = 0;
-  const goalLabels = [];
-  const assistLabels = [];
+  const pills = [];
   for (const [tag, count] of Object.entries(tagBadges)) {
-    if (SCORING_TAGS.has(tag)) {
-      goals += count;
-      goalLabels.push(`${tag}: ${count}`);
-    } else if (PLAYMAKING_TAGS.has(tag)) {
-      assists += count;
-      assistLabels.push(`${tag}: ${count}`);
-    }
+    const isScoring = SCORING_TAGS.has(tag);
+    const isPlaymaking = PLAYMAKING_TAGS.has(tag);
+    if (!isScoring && !isPlaymaking) continue;
+    const Icon = isScoring ? Target : Zap;
+    const colors = isScoring
+      ? 'text-amber-400 bg-amber-400/15 border-amber-400/30'
+      : 'text-cyan-400 bg-cyan-400/15 border-cyan-400/30';
+    const label = count > 1 && tag === 'Try' ? 'Tries'
+      : count > 1 ? `${tag}s`
+      : tag;
+    pills.push(
+      <span key={tag} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold ${colors}`}>
+        <Icon size={10} />{count > 1 && count} {label}
+      </span>
+    );
   }
-  return (
-    <>
-      {goals > 0 && (
-        <>
-          <span>•</span>
-          <span className="inline-flex items-center gap-0.5 text-amber-400" title={goalLabels.join(', ')}>
-            <Target size={12} />{goals > 1 && <span className="text-xs">{goals}</span>}
-          </span>
-        </>
-      )}
-      {assists > 0 && (
-        <>
-          <span>•</span>
-          <span className="inline-flex items-center gap-0.5 text-cyan-400" title={assistLabels.join(', ')}>
-            <Zap size={12} />{assists > 1 && <span className="text-xs">{assists}</span>}
-          </span>
-        </>
-      )}
-    </>
-  );
+  if (pills.length === 0) return null;
+  return <>{pills}</>;
 }
 
 /**
