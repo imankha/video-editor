@@ -108,13 +108,9 @@ export function ProjectsScreen({
   const activeExports = useExportStore(state => state.activeExports);
   const getProcessingExports = useExportStore(state => state.getProcessingExports);
 
-  // Fetch projects and games on mount (first load — profile switches
-  // are handled by _resetDataStores which calls fetchProjects/fetchGames)
   useEffect(() => {
-    fetchProjects();
-    fetchGames();
     setWarmupPriority(WARMUP_PRIORITY.DRAFT_REELS);
-  }, [fetchProjects, fetchGames]);
+  }, []);
 
   // Listen for export completion events and refresh project list
   useEffect(() => {

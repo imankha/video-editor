@@ -1041,7 +1041,7 @@ async def get_game(game_id: int):
             raise HTTPException(status_code=404, detail="Game not found")
 
         # Update last_accessed_at (local + global)
-        cursor.execute(
+        cursor.execute_local(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
             (game_id,)
         )
@@ -1240,7 +1240,7 @@ async def get_game_video(game_id: int):
             raise HTTPException(status_code=404, detail="Game not found")
 
         # Update last_accessed_at (local + global)
-        cursor.execute(
+        cursor.execute_local(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
             (game_id,)
         )

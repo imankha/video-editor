@@ -130,6 +130,24 @@ class TrackedCursor:
             )
         return self
 
+    def execute_local(self, sql: str, parameters: Any = None) -> 'TrackedCursor':
+        """Execute SQL without triggering R2 sync. Use for local-only metadata writes
+        (e.g., last_accessed_at) that don't need immediate cloud persistence."""
+        start = time.perf_counter()
+        if parameters is None:
+            self._cursor.execute(sql)
+        else:
+            self._cursor.execute(sql, parameters)
+        duration = time.perf_counter() - start
+        if duration >= SLOW_QUERY_THRESHOLD:
+            sql_preview = sql[:100].replace('\n', ' ').strip()
+            if len(sql) > 100:
+                sql_preview += '...'
+            logger.warning(
+                f"[SLOW QUERY] db={self._connection._db_type} {duration * 1000:.0f}ms - {sql_preview}"
+            )
+        return self
+
     def executemany(self, sql: str, seq_of_parameters) -> 'TrackedCursor':
         """Execute SQL for multiple parameter sets."""
         sql_upper = sql.strip().upper()
