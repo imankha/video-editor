@@ -556,7 +556,7 @@ export function AnnotateContainer({
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to load game:', err.message);
       if (err.message?.includes('not found')) {
-        toast.error('Game not found — it may have been deleted');
+        toast.error('Game not found');
         setEditorMode('projects');
       }
     } finally {
