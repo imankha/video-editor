@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers, Share2 } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers, Share2, Target, Zap } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
@@ -32,6 +32,49 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
+
+const SCORING_TAGS = new Set([
+  'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
+  'Scoring', 'Dunk', 'Try',
+]);
+const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
+
+function TagBadges({ tagBadges }) {
+  if (!tagBadges || Object.keys(tagBadges).length === 0) return null;
+  let goals = 0;
+  let assists = 0;
+  const goalLabels = [];
+  const assistLabels = [];
+  for (const [tag, count] of Object.entries(tagBadges)) {
+    if (SCORING_TAGS.has(tag)) {
+      goals += count;
+      goalLabels.push(`${tag}: ${count}`);
+    } else if (PLAYMAKING_TAGS.has(tag)) {
+      assists += count;
+      assistLabels.push(`${tag}: ${count}`);
+    }
+  }
+  return (
+    <>
+      {goals > 0 && (
+        <>
+          <span>•</span>
+          <span className="inline-flex items-center gap-0.5 text-amber-400" title={goalLabels.join(', ')}>
+            <Target size={12} />{goals > 1 && <span className="text-xs">{goals}</span>}
+          </span>
+        </>
+      )}
+      {assists > 0 && (
+        <>
+          <span>•</span>
+          <span className="inline-flex items-center gap-0.5 text-cyan-400" title={assistLabels.join(', ')}>
+            <Zap size={12} />{assists > 1 && <span className="text-xs">{assists}</span>}
+          </span>
+        </>
+      )}
+    </>
+  );
+}
 
 /**
  * ProjectManager - Shown when no project is selected
@@ -1265,6 +1308,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare }) {
                       <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
                     </>
                   )}
+                  <TagBadges tagBadges={game.tag_badges} />
                   <span className="hidden sm:inline">•</span>
                   <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
                     Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
@@ -1372,6 +1416,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare }) {
                     <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
                   </>
                 )}
+                <TagBadges tagBadges={game.tag_badges} />
                 <span className="hidden sm:inline">•</span>
                 <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
                   Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}

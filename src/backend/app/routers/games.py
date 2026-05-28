@@ -706,6 +706,78 @@ async def activate_game(game_id: int):
 
 
 
+BADGE_TAGS = frozenset({
+    'Goal', 'Assist', 'Chance Creation',
+    'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
+    'Scoring', 'Dunk',
+    'Try',
+    'Shot',
+})
+
+_EMPTY_ATHLETE_STATS = {
+    'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
+    'mistake_count': 0, 'blunder_count': 0, 'aggregate_score': 0,
+    'tag_badges': {},
+}
+
+
+def _compute_athlete_stats(cursor, game_ids: list) -> dict:
+    """Compute rating counts and tag badges for my_athlete=true clips, per game."""
+    placeholders = ','.join('?' * len(game_ids))
+    cursor.execute(f"""
+        SELECT game_id, rating, tags, my_athlete
+        FROM raw_clips WHERE game_id IN ({placeholders})
+    """, game_ids)
+
+    from collections import defaultdict
+    per_game = defaultdict(lambda: {
+        'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
+        'mistake_count': 0, 'blunder_count': 0,
+        'tag_badges': defaultdict(int),
+    })
+
+    for row in cursor.fetchall():
+        is_athlete = row['my_athlete'] is None or bool(row['my_athlete'])
+        if not is_athlete:
+            continue
+
+        gid = row['game_id']
+        stats = per_game[gid]
+        rating = row['rating'] or 3
+        if rating == 5:
+            stats['brilliant_count'] += 1
+        elif rating == 4:
+            stats['good_count'] += 1
+        elif rating == 3:
+            stats['interesting_count'] += 1
+        elif rating == 2:
+            stats['mistake_count'] += 1
+        elif rating == 1:
+            stats['blunder_count'] += 1
+
+        tags = decode_data(row['tags']) or []
+        for tag in tags:
+            if tag in BADGE_TAGS:
+                stats['tag_badges'][tag] += 1
+
+    result = {}
+    for gid, stats in per_game.items():
+        b = stats['brilliant_count']
+        g = stats['good_count']
+        m = stats['mistake_count']
+        bl = stats['blunder_count']
+        result[gid] = {
+            'brilliant_count': b,
+            'good_count': g,
+            'interesting_count': stats['interesting_count'],
+            'mistake_count': m,
+            'blunder_count': bl,
+            'aggregate_score': b * 3 + g * 2 + m * -1 + bl * -2,
+            'tag_badges': dict(stats['tag_badges']),
+        }
+    return result
+
+
 @router.get("")
 async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
@@ -758,6 +830,10 @@ async def list_games():
                 for h in unique_hashes
             ])
 
+        # Compute my_athlete-filtered stats and tag badges per game
+        game_ids = [row['id'] for row in rows]
+        athlete_stats = _compute_athlete_stats(cursor, game_ids) if game_ids else {}
+
         games = []
         for row in rows:
             if not row['opponent_name'] or not row['game_date'] or not row['game_type']:
@@ -792,6 +868,8 @@ async def list_games():
             blake3 = row['blake3_hash']
             can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
 
+            stats = athlete_stats.get(row['id'], _EMPTY_ATHLETE_STATS)
+
             games.append({
                 'id': row['id'],
                 'name': display_name,
@@ -799,12 +877,13 @@ async def list_games():
                 'blake3_hash': blake3,
                 'video_url': video_url,
                 'clip_count': row['clip_count'] or 0,
-                'brilliant_count': row['brilliant_count'] or 0,
-                'good_count': row['good_count'] or 0,
-                'interesting_count': row['interesting_count'] or 0,
-                'mistake_count': row['mistake_count'] or 0,
-                'blunder_count': row['blunder_count'] or 0,
-                'aggregate_score': row['aggregate_score'] or 0,
+                'brilliant_count': stats['brilliant_count'],
+                'good_count': stats['good_count'],
+                'interesting_count': stats['interesting_count'],
+                'mistake_count': stats['mistake_count'],
+                'blunder_count': stats['blunder_count'],
+                'aggregate_score': stats['aggregate_score'],
+                'tag_badges': stats['tag_badges'],
                 'created_at': row['created_at'],
                 'video_duration': row['effective_duration'],
                 'viewed_duration': row['viewed_duration'] or 0,
@@ -2051,8 +2130,18 @@ async def stream_game_bounded(
                         status_code=response.status_code,
                         detail=f"R2 returned {response.status_code}",
                     )
-                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
-                    yield chunk
+                bytes_streamed = 0
+                try:
+                    async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                        bytes_streamed += len(chunk)
+                        yield chunk
+                except Exception as e:
+                    logger.error(
+                        f"[game-stream] R2 stream interrupted game_id={game_id} "
+                        f"window={window_kind} range={req_start}-{req_end} "
+                        f"bytes_streamed={bytes_streamed}/{segment_len} "
+                        f"error={type(e).__name__}: {e}"
+                    )
 
     return StreamingResponse(
         stream_from_r2(),
