@@ -91,11 +91,14 @@ export function ClipScrubRegion({
   useEffect(() => { startTimeRef.current = startTime; }, [startTime]);
   useEffect(() => { endTimeRef.current = endTime; }, [endTime]);
 
+  const clearPreviewPlayhead = useCallback(() => {
+    setPreviewTime(null);
+  }, []);
+
   // Stop preview helper (must be defined before handlePointerDown which references it)
   const stopPreview = useCallback(() => {
     videoController?.pause();
     setIsPreviewing(false);
-    setPreviewTime(null);
     if (previewRafRef.current) {
       cancelAnimationFrame(previewRafRef.current);
       previewRafRef.current = null;
@@ -126,10 +129,11 @@ export function ClipScrubRegion({
     if (videoController && !videoController.isPaused()) {
       videoController.pause();
     }
-    // Stop any running preview when user starts dragging
+    // Stop any running preview and clear playhead when user starts dragging
     if (isPreviewing) {
       stopPreview();
     }
+    clearPreviewPlayhead();
     // Calculate offset: where the user clicked vs where the handle center is
     const clickTime = pixelToTime(e.clientX);
     const handleTime = handle === 'start' ? startTimeRef.current : endTimeRef.current;
@@ -142,7 +146,7 @@ export function ClipScrubRegion({
     draggingRef.current = handle;
     setDragging(handle);
     e.target.setPointerCapture(e.pointerId);
-  }, [isPreviewing, stopPreview, pixelToTime]);
+  }, [isPreviewing, stopPreview, clearPreviewPlayhead, pixelToTime]);
 
   // Handle pointer move — reads everything from refs, never stale
   const handlePointerMove = useCallback((e) => {
@@ -214,9 +218,9 @@ export function ClipScrubRegion({
       const e = endTimeRef.current;
 
       if (videoController.isPaused() && previewRafRef.current) {
-        // Video was paused externally — stop preview
+        // Video was paused externally — stop animation but keep playhead visible
         setIsPreviewing(false);
-        setPreviewTime(null);
+        setPreviewTime(videoController.getCurrentTime());
         previewRafRef.current = null;
         return;
       }
@@ -231,6 +235,16 @@ export function ClipScrubRegion({
     };
     previewRafRef.current = requestAnimationFrame(tick);
   }, [videoController, startTime, isPreviewing, stopPreview]);
+
+  // Clear stale playhead when main video starts playing (not via preview)
+  useEffect(() => {
+    if (isPreviewing || previewTime === null) return;
+    const el = videoController?.getActiveElement?.();
+    if (!el) return;
+    const onPlay = () => clearPreviewPlayhead();
+    el.addEventListener('play', onPlay);
+    return () => el.removeEventListener('play', onPlay);
+  }, [isPreviewing, previewTime, videoController, clearPreviewPlayhead]);
 
   // Cleanup preview on unmount — only pause if a preview was actively running
   useEffect(() => {
