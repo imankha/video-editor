@@ -2084,11 +2084,14 @@ async def stream_game_bounded(
                     break
 
     if window_kind is None:
-        # This endpoint is only used for annotation mode where the user
-        # watches the full video. Serve through to end-of-file so the
-        # browser's native range-request protocol handles buffering
-        # without artificial gaps from capped seek windows.
-        window_end = size - 1
+        # Window must be large enough for smooth playback (~2 min of
+        # video) but not so large that seeks become sluggish (browser
+        # has to cancel a huge in-flight download on each seek).
+        MIN_SEEK = 20 * 1024 * 1024   # 20 MB floor
+        MAX_SEEK = 100 * 1024 * 1024  # 100 MB cap
+        two_min_bytes = int((120.0 / max(duration, 1)) * size)
+        seek_size = max(MIN_SEEK, min(two_min_bytes, MAX_SEEK))
+        window_end = min(req_start + seek_size, size - 1)
         window_kind = "seek"
 
     req_end = min(req_end, window_end)
