@@ -226,7 +226,7 @@ export function AnnotateFullscreenOverlay({
   const handleRatingChange = (newRating) => {
     setRating(newRating);
     if (!createProjectManuallySet) {
-      setCreateProject(newRating === 5);
+      setCreateProject(newRating === 5 && myAthlete);
     }
   };
   handleRatingChangeRef.current = handleRatingChange;
@@ -392,7 +392,15 @@ export function AnnotateFullscreenOverlay({
           <label className="text-gray-400 text-sm">My Athlete</label>
           <button
             type="button"
-            onClick={() => setMyAthlete(prev => !prev)}
+            onClick={() => {
+              setMyAthlete(prev => {
+                const next = !prev;
+                if (!createProjectManuallySet) {
+                  setCreateProject(rating === 5 && next);
+                }
+                return next;
+              });
+            }}
             className={`relative w-9 h-5 rounded-full transition-colors ${
               myAthlete ? 'bg-cyan-600' : 'bg-gray-600'
             }`}
