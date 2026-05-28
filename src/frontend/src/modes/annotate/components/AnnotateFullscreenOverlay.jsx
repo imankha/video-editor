@@ -44,7 +44,7 @@ const RATING_NOTATION = {
 };
 
 const DEFAULT_CLIP_BEFORE = 9;  // seconds before playhead
-const DEFAULT_CLIP_DURATION = 3; // clip length in seconds
+const DEFAULT_CLIP_AFTER = 3;   // seconds after playhead
 const DEFAULT_RATING = 4; // "Good"
 
 /**
@@ -131,10 +131,11 @@ export function AnnotateFullscreenOverlay({
     }
   }, [isVisible]); // only on visibility change, not on currentTime updates
 
-  const initialStart = Math.max(0, currentTime - DEFAULT_CLIP_BEFORE);
-  const [scrubStartTime, setScrubStartTime] = useState(initialStart);
+  const [scrubStartTime, setScrubStartTime] = useState(
+    Math.max(0, currentTime - DEFAULT_CLIP_BEFORE)
+  );
   const [scrubEndTime, setScrubEndTime] = useState(
-    Math.min(initialStart + DEFAULT_CLIP_DURATION, videoDuration || Infinity)
+    Math.min(currentTime + DEFAULT_CLIP_AFTER, videoDuration || Infinity)
   );
   const [notes, setNotes] = useState('');
   const [taggedTeammates, setTaggedTeammates] = useState([]);
@@ -166,9 +167,8 @@ export function AnnotateFullscreenOverlay({
       setSelectedTags([]);
       setClipName('');
       setIsNameManuallyEdited(false);
-      const start = Math.max(0, t - DEFAULT_CLIP_BEFORE);
-      setScrubStartTime(start);
-      setScrubEndTime(Math.min(start + DEFAULT_CLIP_DURATION, videoDuration || Infinity));
+      setScrubStartTime(Math.max(0, t - DEFAULT_CLIP_BEFORE));
+      setScrubEndTime(Math.min(t + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
       setNotes('');
       setTaggedTeammates([]);
       setMyAthlete(true);
@@ -280,9 +280,8 @@ export function AnnotateFullscreenOverlay({
     setSelectedTags([]);
     setClipName('');
     setIsNameManuallyEdited(false);
-    const start = Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE);
-    setScrubStartTime(start);
-    setScrubEndTime(Math.min(start + DEFAULT_CLIP_DURATION, videoDuration || Infinity));
+    setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE));
+    setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
     setTaggedTeammates([]);
     setMyAthlete(true);
