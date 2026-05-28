@@ -28,7 +28,7 @@ export function ClipsSidePanel({
   isMobile = false,
   onJumpToClip,
   onSeek,
-  videoRef,
+  videoController,
   onScrubLock,
   onScrubUnlock,
   showAddClipForm = false,
@@ -133,7 +133,7 @@ export function ClipsSidePanel({
               maxNotesLength={maxNotesLength}
               videoDuration={videoDuration}
               onSeek={onSeek}
-              videoRef={videoRef}
+              videoController={videoController}
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
               teammateSuggestions={teammateSuggestions}
@@ -263,7 +263,7 @@ export function ClipsSidePanel({
               maxNotesLength={maxNotesLength}
               videoDuration={videoDuration}
               onSeek={onSeek}
-              videoRef={videoRef}
+              videoController={videoController}
               onScrubLock={onScrubLock}
               onScrubUnlock={onScrubUnlock}
               teammateSuggestions={teammateSuggestions}
@@ -281,7 +281,7 @@ export function ClipsSidePanel({
               onResume={onOverlayResume}
               onClose={onOverlayClose}
               onSeek={onSeek}
-              videoRef={videoRef}
+              videoController={videoController}
               layout="inline"
               teammateSuggestions={teammateSuggestions}
             />

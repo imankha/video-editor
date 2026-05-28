@@ -344,6 +344,29 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     };
   }, [stopTimeUpdateLoop]);
 
+  const videoController = useMemo(() => ({
+    play,
+    pause,
+    seek,
+    setVolume: (v) => {
+      [videoARef, videoBRef].forEach(r => { if (r.current) r.current.volume = v; });
+    },
+    setMuted: (m) => {
+      [videoARef, videoBRef].forEach(r => { if (r.current) r.current.muted = m; });
+    },
+    getCurrentTime: () => {
+      const active = getVideos().active;
+      if (!active || !fullTimeline) return 0;
+      return fullTimeline.actualToVirtual(currentVideoIndexRef.current, active.currentTime);
+    },
+    isPaused: () => {
+      const active = getVideos().active;
+      return active ? active.paused : true;
+    },
+    getActiveElement: () => getVideos().active,
+    _renderRefs: { videoARef, videoBRef },
+  }), [play, pause, seek, getVideos, fullTimeline]);
+
   // Return null for single-video mode (after all hooks have been called)
   if (!isMulti) return null;
 
@@ -371,6 +394,7 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     error,
     clearError,
     retry,
+    videoController,
     videoHandlers: {
       onError: handleVideoError,
       onWaiting: handleVideoWaiting,

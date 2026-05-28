@@ -103,6 +103,20 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     loadVideoFromStreamingUrl,
   } = useVideo(null, null);
 
+  // Single-video controller — stable object wrapping the raw ref
+  // Used when multiVideo is null (single video file)
+  const singleVideoController = useMemo(() => ({
+    play: () => videoRef.current?.play().catch(() => {}),
+    pause: () => { if (videoRef.current) videoRef.current.pause(); },
+    seek: (t) => { if (videoRef.current) videoRef.current.currentTime = t; },
+    setVolume: (v) => { if (videoRef.current) videoRef.current.volume = v; },
+    setMuted: (m) => { if (videoRef.current) videoRef.current.muted = m; },
+    getCurrentTime: () => videoRef.current?.currentTime ?? 0,
+    isPaused: () => videoRef.current?.paused ?? true,
+    getActiveElement: () => videoRef.current,
+    _renderRefs: { videoARef: videoRef },
+  }), []);
+
   // Zoom hook
   const {
     zoom,
@@ -239,6 +253,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
+
+  const videoController = multiVideo?.videoController ?? singleVideoController;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
   const virtualRegionsWithLayout = useMemo(() => {
@@ -481,7 +497,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           isLoading={isLoadingAnnotations}
           isVideoUploading={isUploadingGameVideo}
           onSeek={effectiveSeek}
-          videoRef={multiVideo ? multiVideo.videoARef : videoRef}
+          videoController={videoController}
           onScrubLock={lockScrub}
           onScrubUnlock={unlockScrub}
           showAddClipForm={showAnnotateOverlay && !annotateFullscreen}
@@ -514,7 +530,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               isMobile
               teammateSuggestions={teammateSuggestions}
               onSeek={effectiveSeek}
-              videoRef={multiVideo ? multiVideo.videoARef : videoRef}
+              videoController={videoController}
               onJumpToClip={(regionId, endTime) => {
                 if (playback?.isPlaybackMode) {
                   playback.seekToClip(regionId);
@@ -573,7 +589,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           {/* T2750: Tab UI removed -- unified timeline replaces half switching */}
           <AnnotateModeView
         // Video state
-        videoRef={multiVideo ? multiVideo.videoARef : videoRef}
+        videoController={videoController}
         annotateVideoUrl={annotateVideoUrl}
         annotateVideoMetadata={annotateVideoMetadata}
         annotateContainerRef={annotateContainerRef}

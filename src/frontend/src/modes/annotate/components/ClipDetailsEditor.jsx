@@ -71,7 +71,7 @@ export function ClipDetailsEditor({
   maxNotesLength = 280,
   videoDuration,
   onSeek,
-  videoRef,
+  videoController,
   onScrubLock,
   onScrubUnlock,
   teammateSuggestions = [],
@@ -213,7 +213,7 @@ export function ClipDetailsEditor({
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onSeek={onSeek}
-          videoRef={videoRef}
+          videoController={videoController}
         />
 
         {/* Star Rating */}

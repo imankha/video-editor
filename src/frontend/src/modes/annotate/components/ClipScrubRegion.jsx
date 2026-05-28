@@ -29,7 +29,7 @@ function formatTime(seconds) {
  * @param {Function} onStartTimeChange - Called when start handle moves
  * @param {Function} onEndTimeChange - Called when end handle moves
  * @param {Function} onSeek - Called with time in seconds to seek the video
- * @param {Object} videoRef - React ref to the video element (for play preview)
+ * @param {Object} videoController - Video controller for play/pause/seek
  */
 export function ClipScrubRegion({
   currentTime,
@@ -42,7 +42,7 @@ export function ClipScrubRegion({
   onSeek,
   onDragStart,
   onDragEnd,
-  videoRef,
+  videoController,
 }) {
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
@@ -93,15 +93,14 @@ export function ClipScrubRegion({
 
   // Stop preview helper (must be defined before handlePointerDown which references it)
   const stopPreview = useCallback(() => {
-    const video = videoRef?.current;
-    if (video) video.pause();
+    videoController?.pause();
     setIsPreviewing(false);
     setPreviewTime(null);
     if (previewRafRef.current) {
       cancelAnimationFrame(previewRafRef.current);
       previewRafRef.current = null;
     }
-  }, [videoRef]);
+  }, [videoController]);
 
   // All drag state in refs to avoid stale closures when switching handles
   const draggingRef = useRef(null);
@@ -124,9 +123,8 @@ export function ClipScrubRegion({
     e.preventDefault();
     e.stopPropagation();
     // Pause video when user starts dragging (prevents playback fighting with drag preview)
-    const video = videoRef?.current;
-    if (video && !video.paused) {
-      video.pause();
+    if (videoController && !videoController.isPaused()) {
+      videoController.pause();
     }
     // Stop any running preview when user starts dragging
     if (isPreviewing) {
@@ -199,16 +197,15 @@ export function ClipScrubRegion({
 
   // Play preview: loop from startTime to endTime with visual playhead
   const handlePreviewPlay = useCallback(() => {
-    const video = videoRef?.current;
-    if (!video) return;
+    if (!videoController) return;
 
     if (isPreviewing) {
       stopPreview();
       return;
     }
 
-    video.currentTime = startTime;
-    video.play();
+    videoController.seek(startTime);
+    videoController.play();
     setIsPreviewing(true);
     setPreviewTime(startTime);
 
@@ -216,7 +213,7 @@ export function ClipScrubRegion({
       const s = startTimeRef.current;
       const e = endTimeRef.current;
 
-      if (video.paused && previewRafRef.current) {
+      if (videoController.isPaused() && previewRafRef.current) {
         // Video was paused externally — stop preview
         setIsPreviewing(false);
         setPreviewTime(null);
@@ -224,29 +221,26 @@ export function ClipScrubRegion({
         return;
       }
 
-      if (video.currentTime >= e) {
+      if (videoController.getCurrentTime() >= e) {
         // Loop back to start
-        video.currentTime = s;
+        videoController.seek(s);
       }
 
-      setPreviewTime(video.currentTime);
+      setPreviewTime(videoController.getCurrentTime());
       previewRafRef.current = requestAnimationFrame(tick);
     };
     previewRafRef.current = requestAnimationFrame(tick);
-  }, [videoRef, startTime, isPreviewing, stopPreview]);
+  }, [videoController, startTime, isPreviewing, stopPreview]);
 
   // Cleanup preview on unmount — only pause if a preview was actively running
   useEffect(() => {
     return () => {
       if (previewRafRef.current) {
         cancelAnimationFrame(previewRafRef.current);
-        // Preview was running when we unmounted — pause the video
-        if (videoRef?.current && !videoRef.current.paused) {
-          videoRef.current.pause();
-        }
+        videoController?.pause();
       }
     };
-  }, [videoRef]);
+  }, [videoController]);
 
   const startPercent = timeToPercent(startTime);
   const endPercent = timeToPercent(endTime);

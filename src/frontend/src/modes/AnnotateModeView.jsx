@@ -16,8 +16,8 @@ import { formatFileSize } from '../utils/fileValidation';
  * 2. Playback — dual-video ping-pong, virtual timeline, NotesOverlay per clip
  */
 export function AnnotateModeView({
-  // Video state
-  videoRef,
+  // Video control
+  videoController,
   annotateVideoUrl,
   annotateVideoMetadata,
   annotateContainerRef,
@@ -347,7 +347,7 @@ export function AnnotateModeView({
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
                      style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
                   <video
-                    ref={multiVideo.videoARef}
+                    ref={videoController._renderRefs.videoARef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'A' ? 1 : 0,
@@ -361,7 +361,7 @@ export function AnnotateModeView({
                     preload="auto"
                   />
                   <video
-                    ref={multiVideo.videoBRef}
+                    ref={videoController._renderRefs.videoBRef}
                     className="absolute inset-0 w-full h-full object-contain bg-black"
                     style={{
                       opacity: multiVideo.activeVideoLabel === 'B' ? 1 : 0,
@@ -423,7 +423,7 @@ export function AnnotateModeView({
               ) : (
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'contents'}>
                   <VideoPlayer
-                    videoRef={videoRef}
+                    videoRef={videoController._renderRefs.videoARef}
                     videoUrl={annotateVideoUrl}
                     handlers={handlers}
                     onVideoClick={togglePlay}
@@ -480,7 +480,7 @@ export function AnnotateModeView({
                 onResume={onOverlayResume}
                 onClose={onOverlayClose}
                 onSeek={seek}
-                videoRef={videoRef}
+                videoController={videoController}
                 isFullscreen={annotateFullscreen}
                 teammateSuggestions={teammateSuggestions}
               />
@@ -503,8 +503,7 @@ export function AnnotateModeView({
                 onToggleFullscreen={onToggleFullscreen}
                 onAddClip={onAddClip}
                 isEditMode={isEditMode}
-                videoRef={videoRef}
-                videoBRef={multiVideo?.videoBRef}
+                videoController={videoController}
               />
             </div>
 

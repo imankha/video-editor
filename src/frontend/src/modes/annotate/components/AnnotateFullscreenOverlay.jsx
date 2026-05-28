@@ -102,7 +102,7 @@ export function AnnotateFullscreenOverlay({
   onResume,
   onClose,
   onSeek,
-  videoRef,
+  videoController,
   isFullscreen = false,
   layout = 'overlay',
   teammateSuggestions = [],
@@ -324,7 +324,7 @@ export function AnnotateFullscreenOverlay({
           onStartTimeChange={setScrubStartTime}
           onEndTimeChange={setScrubEndTime}
           onSeek={onSeek}
-          videoRef={videoRef}
+          videoController={videoController}
         />
 
         {/* Star Rating */}
