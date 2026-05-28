@@ -24,6 +24,7 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T3090 | [Multi-Video Controller Abstraction](tasks/T3090-multi-video-controller-abstraction.md) | 7 | 5 | P1 | TESTING | [ ] | Multi-video mode leaks dual-element implementation to consumers via raw videoARef. Components directly manipulate the wrong DOM element when video B is active. Fix: seal the abstraction behind a unified videoController interface. Bugs: 10p, 11p. |
 | T2040 | [Connection-Aware Cache Warming](tasks/T2040-connection-aware-cache-warming.md) | 8 | 5 | P0 | DONE | [ ] | Cache warming holds R2 sockets during video load. For reels (proxy), warming is FREE (different origin) but we stop it anyway. Split FOREGROUND_ACTIVE into proxy-aware vs direct modes; warm sibling clips during first-clip proxy load. |
 | T2010 | [VACUUM Blocks Server During Archive](tasks/T2010-vacuum-blocks-server.md) | 9 | 2 | P0 | DONE | [ ] | `archive_project()` calls VACUUM synchronously, acquiring exclusive DB lock that blocks ALL other requests. Causes recurring "Failed to Fetch" on prod. Fix: move VACUUM to signout. |
 | T2030 | [Archive Sync Regression in Publish](tasks/T2030-archive-sync-regression.md) | 7 | 2 | P0 | DONE | [ ] | `publish_to_my_reels()` calls `archive_project()` synchronously (no `asyncio.to_thread`). Regression from 9e58feb0 — old export path used threading. Blocks event loop during R2 upload + DB deletes. |
