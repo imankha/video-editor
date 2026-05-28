@@ -2084,13 +2084,12 @@ async def stream_game_bounded(
                     break
 
     if window_kind is None:
-        SEEK_WINDOW_SIZE = 20 * 1024 * 1024  # 20MB
-        window_end = min(req_start + SEEK_WINDOW_SIZE, size - 1)
+        # This endpoint is only used for annotation mode where the user
+        # watches the full video. Serve through to end-of-file so the
+        # browser's native range-request protocol handles buffering
+        # without artificial gaps from capped seek windows.
+        window_end = size - 1
         window_kind = "seek"
-        logger.info(
-            f"[game-stream] seek window game_id={game_id} req={req_start}-{req_end} "
-            f"window_end={window_end}"
-        )
 
     req_end = min(req_end, window_end)
     if req_start > req_end:

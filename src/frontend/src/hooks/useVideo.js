@@ -507,18 +507,45 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsPlaying(false);
   };
 
+  const stallTimerRef = useRef(null);
+
+  // Find how far the buffer extends from the current position.
+  // buffered.end(last) is misleading when there are gaps -- it reports the
+  // end of the LAST range, not the range containing currentTime.
+  const getBufferAheadAt = (v, time) => {
+    if (!v.buffered?.length) return { ahead: 0, rangeCount: 0, inGap: true };
+    const rangeCount = v.buffered.length;
+    for (let i = 0; i < rangeCount; i++) {
+      const start = v.buffered.start(i);
+      const end = v.buffered.end(i);
+      if (time >= start - 0.5 && time <= end) {
+        return { ahead: end - time, rangeCount, inGap: false };
+      }
+    }
+    return { ahead: 0, rangeCount, inGap: true };
+  };
+
   const handleStalled = () => {
     if (!videoRef.current) return;
     const v = videoRef.current;
-    const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
-    console.warn(`[VIDEO] Stalled: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
+    const { ahead, rangeCount, inGap } = getBufferAheadAt(v, v.currentTime);
+    console.warn(
+      `[VIDEO] Stalled: currentTime=${v.currentTime.toFixed(1)} ` +
+      `bufferAhead=${ahead.toFixed(1)}s inGap=${inGap} ranges=${rangeCount} ` +
+      `networkState=${v.networkState} readyState=${v.readyState} ` +
+      `src=${v.src?.substring(0, 80)}`
+    );
   };
 
   const handleSuspend = () => {
     if (!videoRef.current) return;
     const v = videoRef.current;
-    const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
-    console.warn(`[VIDEO] Suspend: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
+    const { ahead, rangeCount, inGap } = getBufferAheadAt(v, v.currentTime);
+    console.warn(
+      `[VIDEO] Suspend: currentTime=${v.currentTime.toFixed(1)} ` +
+      `bufferAhead=${ahead.toFixed(1)}s inGap=${inGap} ranges=${rangeCount} ` +
+      `networkState=${v.networkState} readyState=${v.readyState}`
+    );
   };
 
   // Buffering event handlers - pause time updates when video is waiting for data
@@ -526,19 +553,52 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     setIsBuffering(true);
     if (videoRef.current) {
       const v = videoRef.current;
-      const bufferedEnd = v.buffered?.length ? v.buffered.end(v.buffered.length - 1) : 0;
-      console.warn(`[VIDEO] Waiting: currentTime=${v.currentTime.toFixed(1)} bufferedEnd=${bufferedEnd.toFixed(1)} networkState=${v.networkState} readyState=${v.readyState}`);
+      const { ahead, rangeCount, inGap } = getBufferAheadAt(v, v.currentTime);
+      console.warn(
+        `[VIDEO] Waiting: currentTime=${v.currentTime.toFixed(1)} ` +
+        `bufferAhead=${ahead.toFixed(1)}s inGap=${inGap} ranges=${rangeCount} ` +
+        `networkState=${v.networkState} readyState=${v.readyState}`
+      );
+
+      // Stall watchdog: if still waiting after 10s, check if we're in a
+      // buffer gap (data exists after currentTime but not AT it). This
+      // happens when the stream proxy's Content-Length promised more bytes
+      // than were delivered, leaving holes the browser can't fill.
+      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
+      stallTimerRef.current = setTimeout(() => {
+        stallTimerRef.current = null;
+        const vv = videoRef.current;
+        if (!vv || vv.paused) return;
+
+        const state = getBufferAheadAt(vv, vv.currentTime);
+        if (state.ahead < 1) {
+          console.warn(
+            `[VIDEO] Stall watchdog: no buffer at currentTime=${vv.currentTime.toFixed(1)} ` +
+            `(inGap=${state.inGap} ranges=${state.rangeCount}), reloading`
+          );
+          const resumeAt = vv.currentTime;
+          retryAttemptRef.current += 1;
+          vv.addEventListener('loadeddata', () => {
+            if (vv && !Number.isNaN(resumeAt) && resumeAt > 0) {
+              try { vv.currentTime = resumeAt; } catch (_) {}
+            }
+          }, { once: true });
+          vv.load();
+        }
+      }, 10000);
     }
   };
 
   const handlePlaying = () => {
     setIsBuffering(false);
+    if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
   };
 
   const handleCanPlay = () => {
     if (isBuffering) {
       setIsBuffering(false);
     }
+    if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
   };
 
   // T55: Update elapsed seconds during video loading for better progress feedback
@@ -819,6 +879,24 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     // Build user-friendly error message
     let userMessage;
     if (kind === VideoErrorKind.NETWORK_ERROR) {
+      // Auto-retry for transient stream failures before showing error to user
+      if (retryAttemptRef.current < MAX_RETRY_ATTEMPTS && !videoUrl?.startsWith('blob:')) {
+        const resumeAt = video.currentTime;
+        retryAttemptRef.current += 1;
+        console.warn(
+          `[VIDEO] Network error, auto-retrying (attempt ${retryAttemptRef.current}/${MAX_RETRY_ATTEMPTS})`,
+          { currentTime: resumeAt, url: videoUrl?.substring(0, 80) },
+        );
+        const restoreTime = () => {
+          if (videoRef.current && !Number.isNaN(resumeAt) && resumeAt > 0) {
+            try { videoRef.current.currentTime = resumeAt; } catch (_) {}
+          }
+        };
+        video.addEventListener('loadeddata', restoreTime, { once: true });
+        video.load();
+        return;
+      }
+
       userMessage = 'Video playback was interrupted. Please retry.';
       // Invalidate the URL cache so next load gets a fresh URL
       if (videoUrl && !videoUrl.startsWith('blob:')) {
@@ -1031,6 +1109,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (seekWatchdogRef.current) {
         clearTimeout(seekWatchdogRef.current);
         seekWatchdogRef.current = null;
+      }
+      if (stallTimerRef.current) {
+        clearTimeout(stallTimerRef.current);
+        stallTimerRef.current = null;
       }
     };
   }, []);
