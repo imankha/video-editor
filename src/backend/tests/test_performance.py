@@ -44,6 +44,7 @@ class TestQuestProgressPerformance:
                 id INTEGER PRIMARY KEY,
                 game_id INTEGER,
                 rating INTEGER DEFAULT 0,
+                auto_project_id INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS export_jobs (
@@ -97,14 +98,19 @@ class TestQuestProgressPerformance:
         for key in ['played_annotations', 'opened_framing_editor', 'viewed_gallery_video']:
             conn.execute("INSERT INTO achievements (key) VALUES (?)", (key,))
 
-        # 1 auto project, 1 manual project
-        conn.execute("INSERT INTO projects (is_auto_created) VALUES (1)")
-        conn.execute("INSERT INTO projects (is_auto_created) VALUES (0)")
+        # 2 auto projects, 1 manual project
+        conn.execute("INSERT INTO projects (is_auto_created) VALUES (1)")  # id=1
+        conn.execute("INSERT INTO projects (is_auto_created) VALUES (1)")  # id=2
+        conn.execute("INSERT INTO projects (is_auto_created) VALUES (0)")  # id=3
 
-        # Working clips for manual project from 2 different games
+        # Link 2 five-star clips to auto projects (needed for annotate_brilliant / annotate_second_5_star)
+        conn.execute("UPDATE raw_clips SET auto_project_id = 1 WHERE id = 1")
+        conn.execute("UPDATE raw_clips SET auto_project_id = 2 WHERE id = 2")
+
+        # Working clips for manual project (id=3) from 2 different games
         # raw_clip 1 is game_id=1, raw_clip 5 is game_id=2 (i%3+1 with i=4)
-        conn.execute("INSERT INTO working_clips (project_id, raw_clip_id) VALUES (2, 1)")
-        conn.execute("INSERT INTO working_clips (project_id, raw_clip_id) VALUES (2, 5)")
+        conn.execute("INSERT INTO working_clips (project_id, raw_clip_id) VALUES (3, 1)")
+        conn.execute("INSERT INTO working_clips (project_id, raw_clip_id) VALUES (3, 5)")
 
         conn.commit()
         self.conn = conn
@@ -156,7 +162,7 @@ class TestQuestProgressPerformance:
 
         # Quest 1
         assert steps["upload_game"] is True  # 3 games exist
-        assert steps["annotate_brilliant"] is True  # 4 clips rated 5
+        assert steps["annotate_brilliant"] is True  # 2 clips with auto_project_id
         assert steps["playback_annotations"] is True  # achievement exists
 
         # Quest 2
@@ -168,7 +174,7 @@ class TestQuestProgressPerformance:
 
         # Quest 3
         assert steps["annotate_5_more"] is True  # 10 >= 3
-        assert steps["annotate_second_5_star"] is True  # 4 >= 2
+        assert steps["annotate_second_5_star"] is True  # 2 reels >= 2
         assert steps["export_second_highlight"] is True  # 3 framing >= 2
         assert steps["wait_for_export_2"] is True  # 2 completed framing >= 2
         assert steps["overlay_second_highlight"] is True  # 2 completed overlay >= 2

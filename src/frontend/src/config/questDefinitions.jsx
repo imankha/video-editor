@@ -48,14 +48,14 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
   upload_game: 'Add Your First Game',
-  annotate_brilliant: 'Annotate a 5 Star Play',
+  annotate_brilliant: 'Create a Reel',
   playback_annotations: 'Watch Your Clips Back',
   open_framing: 'Open a Reel',
   export_framing: 'Frame Video',
   wait_for_export: 'Wait For Export',
   export_overlay: 'Spotlight Your Player',
   view_gallery_video: 'Move to My Reels & Watch',
-  annotate_second_5_star: 'Find Another 5 Star Moment',
+  annotate_second_5_star: 'Create Another Reel',
   annotate_5_more: 'Annotate More Clips',
   export_second_highlight: 'Export Another Highlight',
   wait_for_export_2: 'Wait For Export',
@@ -73,14 +73,14 @@ export const STEP_TITLES = {
 /** Step descriptions keyed by step ID — JSX with inline icons */
 export const STEP_DESCRIPTIONS = {
   upload_game: 'Add a game to start clipping highlights',
-  annotate_brilliant: <>When you spot a great play, click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> and rate it <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></>,
+  annotate_brilliant: <>You can automatically create a reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player. Click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> and rate it 5 stars with My Athlete on.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   open_framing: <>Click <QIcon icon={Home} className="text-white" /> Home → {SECTION_NAMES.DRAFTS} and select a reel.</>,
   export_framing: <>Drag and resize the <QIcon icon={Crop} className="text-yellow-300" /> crop box around your player at different keyframes so your player stays in view. When ready, click <MiniButton icon={Film} variant="purple">Frame Video</MiniButton>.</>,
   wait_for_export: 'Wait for the framing export to finish. We AI upscale your video to crisp 1080p.',
   export_overlay: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
   view_gallery_video: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> in the top bar to watch it.</>,
-  annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and find and annotate another 5 star moment.</>,
+  annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and create another reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player.</>,
   annotate_5_more: 'Annotate more clips, try to get every touch that could be a learning or celebration.',
   export_second_highlight: <>Pick a reel, crop it along the timeline and then click <MiniButton icon={Film}>Frame Video</MiniButton> to frame it.</>,
   wait_for_export_2: 'Wait for the framing export to finish.',

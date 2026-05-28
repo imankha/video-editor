@@ -165,16 +165,18 @@ async function getProjects(page) {
 }
 
 /** Create a raw clip via API (uses page session cookie for auth) */
-async function createClipViaAPI(page, gameId, { start_time, end_time, name, rating, tags = [], notes = '' }) {
-  return await page.evaluate(async ({ apiBase, gameId, start_time, end_time, name, rating, tags, notes }) => {
+async function createClipViaAPI(page, gameId, { start_time, end_time, name, rating, tags = [], notes = '', create_project = false }) {
+  return await page.evaluate(async ({ apiBase, gameId, start_time, end_time, name, rating, tags, notes, create_project }) => {
+    const body = { game_id: gameId, start_time, end_time, name, rating, tags, notes };
+    if (create_project) body.create_project = true;
     const res = await fetch(`${apiBase}/clips/raw/save`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ game_id: gameId, start_time, end_time, name, rating, tags, notes }),
+      body: JSON.stringify(body),
     });
     return { ok: res.ok, status: res.status };
-  }, { apiBase: '/api', gameId, start_time, end_time, name, rating, tags, notes });
+  }, { apiBase: '/api', gameId, start_time, end_time, name, rating, tags, notes, create_project });
 }
 
 /** Frame all clips in a project via API (uses page session cookie for auth).
@@ -446,8 +448,8 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     expect(q1s1).toBeTruthy();
     console.log('[Q1.1] upload_game step verified');
 
-    // --- Q1 Step 2: Annotate a 5 Star Play ---
-    console.log('[Q1.2] Annotate a 5 Star Play');
+    // --- Q1 Step 2: Create a Reel ---
+    console.log('[Q1.2] Create a Reel');
 
     // Dismiss the quest overlay so it doesn't intercept pointer events on clip rows.
     // The quest panel is a fixed z-50 element that floats above the sidebar.
@@ -474,10 +476,16 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await fiveStarBtn.click({ force: true });
     await page.waitForTimeout(1000);
 
+    // Click "Create Reel" — quest now requires a reel, not just a 5-star rating
+    const createReelBtn = page.locator('[data-clip-details] button:has-text("Create Reel")');
+    await expect(createReelBtn).toBeVisible({ timeout: 5000 });
+    await createReelBtn.click({ force: true });
+    await page.waitForTimeout(2000);
+
     // Verify quest step: annotate_brilliant
     const q1s2 = await waitForQuestStep(page, 'annotate_brilliant');
     expect(q1s2).toBeTruthy();
-    console.log('[Q1.2] annotate_brilliant step verified');
+    console.log('[Q1.2] annotate_brilliant (Create a Reel) step verified');
 
     // --- Q1 Step 3: Watch Your Clips Back ---
     console.log('[Q1.3] Watch Your Clips Back (Playback Annotations)');
@@ -655,10 +663,10 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     const game1Id = games[0]?.id;
     expect(game1Id).toBeTruthy();
 
-    // Create a second 5-star clip via API (need 2+ five-star clips on first game)
+    // Create a second 5-star clip via API with reel (need 2+ reels)
     await createClipViaAPI(page, game1Id, {
       start_time: 15, end_time: 21, name: 'Amazing Dribble', rating: 5, tags: ['Dribble'],
-      notes: 'Incredible footwork',
+      notes: 'Incredible footwork', create_project: true,
     });
 
     // Verify annotate_second_5_star and annotate_5_more (3+ clips on first game)

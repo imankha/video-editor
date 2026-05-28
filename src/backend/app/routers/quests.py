@@ -79,7 +79,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
 
         steps["playback_annotations"] = 'played_annotations' in achieved
         steps["annotate_brilliant"] = cursor.execute(
-            "SELECT 1 FROM raw_clips WHERE rating = 5 LIMIT 1"
+            "SELECT 1 FROM raw_clips WHERE auto_project_id IS NOT NULL LIMIT 1"
         ).fetchone() is not None
     else:
         # Still need achievements for other quests — fetch if any non-skipped quest uses them
@@ -149,14 +149,14 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
             _t = time.perf_counter()
 
         row = cursor.execute(
-            "SELECT count(*) as total, count(CASE WHEN rating = 5 THEN 1 END) as five_star FROM raw_clips"
+            "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels FROM raw_clips"
         ).fetchone()
 
         if PROFILING_ENABLED:
             step_times["raw_clips_batch"] = time.perf_counter() - _t
 
         steps["annotate_5_more"] = row["total"] >= 3
-        steps["annotate_second_5_star"] = row["five_star"] >= 2
+        steps["annotate_second_5_star"] = row["reels"] >= 2
 
         # Use pre-fetched export data
         steps["export_second_highlight"] = export_type_totals.get('framing', 0) >= 2
