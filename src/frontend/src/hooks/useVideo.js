@@ -49,6 +49,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Seek watchdog: recovers from stuck seeks (browser gave up fetching)
   const seekWatchdogRef = useRef(null);
 
+  // Delayed seek buffering: show spinner after 300ms if seek hasn't resolved
+  const seekBufferingTimerRef = useRef(null);
+
   // T1400: monotonic load id + watchdog timer handle so range-fallback
   // warnings can be correlated across concurrent/serial loads and cleared
   // on loadeddata/error/unmount.
@@ -402,6 +405,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setCurrentTime(validTime);
       videoRef.current.currentTime = target;
 
+      // Show buffering spinner if seek takes >300ms (out-of-buffer seek)
+      if (seekBufferingTimerRef.current) clearTimeout(seekBufferingTimerRef.current);
+      seekBufferingTimerRef.current = setTimeout(() => {
+        if (videoRef.current && isSeeking) setIsBuffering(true);
+      }, 300);
+
       if (seekWatchdogRef.current) clearTimeout(seekWatchdogRef.current);
       seekWatchdogRef.current = setTimeout(() => {
         const v = videoRef.current;
@@ -671,6 +680,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   };
 
   const handleSeeked = () => {
+    if (seekBufferingTimerRef.current) {
+      clearTimeout(seekBufferingTimerRef.current);
+      seekBufferingTimerRef.current = null;
+    }
+    setIsBuffering(false);
     if (seekWatchdogRef.current) {
       clearTimeout(seekWatchdogRef.current);
       seekWatchdogRef.current = null;
@@ -1113,6 +1127,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
+      }
+      if (seekBufferingTimerRef.current) {
+        clearTimeout(seekBufferingTimerRef.current);
+        seekBufferingTimerRef.current = null;
       }
     };
   }, []);

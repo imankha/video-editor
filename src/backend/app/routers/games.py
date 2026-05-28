@@ -2023,19 +2023,8 @@ async def stream_game_bounded(
     if not presigned_url:
         raise HTTPException(404, "Failed to generate R2 URL")
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
-        probe_resp = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
-    if probe_resp.status_code not in (200, 206):
-        error_body = probe_resp.text[:500] if probe_resp.text else "(empty)"
-        logger.error(
-            f"[game-stream] R2 probe error game_id={game_id} "
-            f"r2_status={probe_resp.status_code} blake3={blake3_hash} "
-            f"body_snippet={error_body!r}"
-        )
-        raise HTTPException(
-            status_code=502 if probe_resp.status_code >= 500 else probe_resp.status_code,
-            detail=f"R2 returned {probe_resp.status_code} for game video",
-        )
+    # No upfront R2 probe -- it added ~1.5s of latency per seek
+    # (separate TCP/TLS handshake). Errors are caught in stream_from_r2().
 
     range_hdr = request.headers.get("range") or request.headers.get("Range")
     req_start = 0
