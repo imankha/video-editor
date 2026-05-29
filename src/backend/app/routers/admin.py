@@ -246,30 +246,17 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
 # T1510: Impersonation
 # ---------------------------------------------------------------------------
 
-import os as _os
-
-_SECURE_COOKIES = _os.getenv("SECURE_COOKIES", "false").lower() == "true"
-_SAMESITE = "none" if _SECURE_COOKIES else "lax"
+from app.utils.cookies import set_cookie as _set_cookie_raw, delete_cookie as _delete_cookie_raw
 
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
-    response.set_cookie(
-        key="rb_session",
-        value=session_id,
-        max_age=30 * 24 * 60 * 60,
-        httponly=True,
-        samesite=_SAMESITE,
-        secure=_SECURE_COOKIES,
-        path="/",
-    )
+    _set_cookie_raw(response, "rb_session", session_id)
 
 
 def _clear_machine_pin_cookie(response: Response) -> None:
     """T1190 hook: clear fly_machine_id so the next request re-routes to the
-    correct Fly machine for whichever user we are now acting as. No-op until
-    T1190 ships — safe to call either way (set_cookie with empty value + max_age=0
-    deletes it on the browser)."""
-    response.delete_cookie("fly_machine_id", path="/")
+    correct Fly machine for whichever user we are now acting as."""
+    _delete_cookie_raw(response, "fly_machine_id")
 
 
 @router.post("/impersonate/stop")

@@ -28,6 +28,7 @@ from app.services.auth_db import (
     invalidate_user_sessions,
 )
 from app.user_context import get_current_user_id
+from app.utils.cookies import delete_cookie as _delete_cookie
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ async def delete_account(request: Request):
 
     # 4. Clear session cookie
     response = JSONResponse(content={"deleted": True, "user_id": user_id})
-    response.delete_cookie("rb_session")
+    _delete_cookie(response, "rb_session")
 
     logger.info(f"[Privacy] Account fully deleted: user={user_id}")
     return response

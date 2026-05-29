@@ -62,14 +62,17 @@ from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED, APP_ENV
 from ..user_context import set_current_user_id, set_current_req_id
+from ..utils.cookies import set_cookie as _set_cookie
 
 logger = logging.getLogger(__name__)
 
 FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
 FLY_APP_NAME = os.getenv("FLY_APP_NAME", "")
-_SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
-_SAMESITE = "none" if _SECURE_COOKIES else "lax"
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
+
+
+def _set_machine_cookie(response):
+    _set_cookie(response, "fly_machine_id", FLY_MACHINE_ID)
 
 # Live machine IDs for stale-cookie detection. Populated on startup via Fly internal API.
 _LIVE_MACHINES: set[str] = set()
@@ -513,11 +516,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         if not should_sync:
             response = await call_next(request)
             if should_set_machine_cookie:
-                response.set_cookie(
-                    key="fly_machine_id", value=FLY_MACHINE_ID,
-                    max_age=30 * 24 * 60 * 60, httponly=True,
-                    samesite=_SAMESITE, secure=_SECURE_COOKIES, path="/",
-                )
+                _set_machine_cookie(response)
             return response
 
         # T1531: serialize WRITE requests per user (R2 version race protection).
@@ -527,11 +526,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
             response = await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
             if should_set_machine_cookie:
-                response.set_cookie(
-                    key="fly_machine_id", value=FLY_MACHINE_ID,
-                    max_age=30 * 24 * 60 * 60, httponly=True,
-                    samesite=_SAMESITE, secure=_SECURE_COOKIES, path="/",
-                )
+                _set_machine_cookie(response)
             return response
 
     async def _sync_aware_flow(

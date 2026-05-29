@@ -123,12 +123,7 @@ def _reset_test_account(user_id: str, email: str) -> None:
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# Secure cookies require HTTPS — false for local dev, true for staging/production
-_SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
-# Cross-site deployments (Pages <-> Fly) require SameSite=None; Secure so
-# the cookie is sent on post-login XHR. Local dev is same-site on localhost,
-# where Lax is fine and avoids needing HTTPS.
-_SAMESITE = "none" if _SECURE_COOKIES else "lax"
+from app.utils.cookies import set_cookie as _set_cookie, delete_cookie as _delete_cookie
 
 
 class InitResponse(BaseModel):
@@ -321,26 +316,10 @@ def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
     invalidate_user_sessions(user_id)
     session_id = create_session(user_id)
     response = JSONResponse(content=payload)
-    response.set_cookie(
-        key="rb_session",
-        value=session_id,
-        max_age=30 * 24 * 60 * 60,  # 30 days
-        httponly=True,
-        samesite=_SAMESITE,
-        secure=_SECURE_COOKIES,
-        path="/",
-    )
+    _set_cookie(response, "rb_session", session_id)
     fly_machine_id = os.getenv("FLY_MACHINE_ID", "")
     if fly_machine_id:
-        response.set_cookie(
-            key="fly_machine_id",
-            value=fly_machine_id,
-            max_age=30 * 24 * 60 * 60,
-            httponly=True,
-            samesite=_SAMESITE,
-            secure=_SECURE_COOKIES,
-            path="/",
-        )
+        _set_cookie(response, "fly_machine_id", fly_machine_id)
     return response
 
 
@@ -670,12 +649,7 @@ async def logout(request: Request):
         asyncio.ensure_future(asyncio.to_thread(_vacuum_user_dbs, user_id))
 
     response = JSONResponse(content={"logged_out": True})
-    response.delete_cookie(
-        "rb_session",
-        samesite=_SAMESITE,
-        secure=_SECURE_COOKIES,
-        path="/",
-    )
+    _delete_cookie(response, "rb_session")
     return response
 
 
