@@ -43,7 +43,7 @@ def _make_request(url, method="GET", data=None, session="", retries=3):
             return json.loads(resp.read())
         except urllib.error.HTTPError:
             raise
-        except (urllib.error.URLError, ConnectionResetError) as e:
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
             last_err = str(getattr(e, "reason", e))
             if attempt < retries - 1:
                 time.sleep(1)
