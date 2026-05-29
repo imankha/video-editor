@@ -5,7 +5,11 @@
 **Impact:** 7
 **Complexity:** 5
 **Status:** TODO
-**Depends on:** T2550
+**Depends on:** T2550 + T3240 results (may be skipped entirely)
+
+## May Be Unnecessary
+
+If T3240 proves presigned URLs work for game clip streaming (smooth playback, no stalling), byte-range clamping may be unnecessary. The clamping was originally about bandwidth, not content protection — and with R2's zero egress fees, bandwidth is free. Additionally, research shows Workers proxying large R2 files have reliability issues (stalling 1-2 min on load). **Evaluate T3240 results before starting this task.**
 
 ## Problem
 

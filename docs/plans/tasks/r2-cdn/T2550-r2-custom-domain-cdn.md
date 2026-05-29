@@ -5,6 +5,7 @@
 **Impact:** 8
 **Complexity:** 4
 **Status:** TODO
+**Depends on:** T3240 (experiment results determine Worker scope)
 
 ## Problem
 
@@ -85,8 +86,20 @@ Game clip streaming (unchanged until T2560):
 **Not modified (yet):**
 - `src/backend/app/routers/clips.py` — game clip streaming stays on Fly.io proxy until T2560
 
+## Scope Adaptation Based on T3240
+
+If T3240 proves presigned URLs work for game clip streaming:
+- **Worker becomes auth-only**: HMAC validation + redirect/pass-through. No byte proxying. This avoids the documented Worker stalling issues with large files (see [EPIC.md](EPIC.md) research section).
+- **Steps 1-4 simplify**: Worker validates HMAC then does `env.BUCKET.get(key)` pass-through, or redirects to presigned URL.
+- **Game clip streaming switches to presigned URL path** (proven in T3240) instead of proxying through Worker.
+
+If T3240 reveals issues (missing headers, R2 bugs):
+- Worker must fix/add headers (e.g., `Accept-Ranges: bytes`).
+- Worker scope may need to include response header transformation.
+
 ## Risks
 
+- **Worker stalling on large files (NEW)**: Research shows Workers proxying large R2 video bytes stall for 1-2 minutes. Mitigated by preferring auth-only Worker (no byte proxying) if T3240 validates direct presigned URLs.
 - **New runtime in the stack**: TypeScript Worker alongside Python backend. Two deploy pipelines, two logging systems. Mitigated by keeping the Worker simple (auth + pass-through) in this task.
 - **HMAC secret management**: Secret shared between Fly.io env and Worker secret. Rotation requires checking both old and new secret during transition.
 - **Cache invalidation on re-export**: Working/final videos can be overwritten. Short edge TTLs (60s-5min) + explicit purge API call on re-export.

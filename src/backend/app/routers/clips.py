@@ -1573,7 +1573,7 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
                                         status_code=response.status_code,
                                         detail=f"R2 returned {response.status_code}"
                                     )
-                                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
                                     yield chunk
                         return
                     except HTTPException:
@@ -1817,7 +1817,7 @@ async def stream_working_clip_bounded(
                         status_code=response.status_code,
                         detail=f"R2 returned {response.status_code}",
                     )
-                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
                     yield chunk
 
     return StreamingResponse(
@@ -1828,7 +1828,7 @@ async def stream_working_clip_bounded(
             "Content-Range": f"bytes {req_start}-{req_end}/{size}",
             "Content-Length": str(segment_len),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
+            "Cache-Control": "private, max-age=300, immutable",
         },
     )
 

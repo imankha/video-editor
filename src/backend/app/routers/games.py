@@ -2123,7 +2123,7 @@ async def stream_game_bounded(
                     )
                 bytes_streamed = 0
                 try:
-                    async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
+                    async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
                         bytes_streamed += len(chunk)
                         yield chunk
                 except Exception as e:
@@ -2142,6 +2142,6 @@ async def stream_game_bounded(
             "Content-Range": f"bytes {req_start}-{req_end}/{size}",
             "Content-Length": str(segment_len),
             "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
+            "Cache-Control": "private, max-age=300, immutable",
         },
     )
