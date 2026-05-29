@@ -8,9 +8,14 @@ export const ShareCapability = {
   NONE: 'none',
 };
 
+function isMobileDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+}
+
 export function useWebShare() {
   const capability = useMemo(() => {
-    if (!navigator.share) return ShareCapability.NONE;
+    if (!navigator.share || !isMobileDevice()) return ShareCapability.NONE;
     try {
       const testFile = new File([''], 'test.mp4', { type: 'video/mp4' });
       if (navigator.canShare?.({ files: [testFile] })) {

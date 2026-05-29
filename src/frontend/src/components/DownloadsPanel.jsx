@@ -5,7 +5,7 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
-import { useWebShare, ShareCapability } from '../hooks/useWebShare';
+import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
@@ -93,7 +93,7 @@ export function DownloadsPanel({
   const [sharingDownload, setSharingDownload] = useState(null);
 
   // Native share support
-  const { capability: shareCapability, share } = useWebShare();
+  const { share } = useWebShare();
 
   if (!isOpen && !playingVideo) return null;
 
@@ -349,10 +349,6 @@ export function DownloadsPanel({
                 <button
                   onClick={async (e) => {
                     e.stopPropagation();
-                    if (shareCapability === ShareCapability.NONE) {
-                      setSharingDownload(download);
-                      return;
-                    }
                     try {
                       const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
                       const method = await share({
