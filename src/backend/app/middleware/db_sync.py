@@ -222,8 +222,8 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     """
     Retry a previously-failed R2 sync using explicit sync functions.
 
-    Runs before init_request_context(), so it must NOT rely on request-scoped
-    ContextVars. Uses the explicit helpers that take user_id/profile_id directly.
+    Uses explicit helpers that take user_id/profile_id directly rather than
+    request-scoped ContextVars, so it works in any calling context.
 
     Returns True iff both profile.sqlite and user.sqlite synced successfully.
     """
@@ -489,45 +489,49 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         meta["user_id"] = user_id
         set_current_user_id(user_id)
+        init_request_context()
 
-        # Identity-only routes (auth.sqlite only) skip session_init so /me stays
-        # cheap on cold cache. /api/auth/init and all non-auth paths still run it.
-        path = request.url.path
-        skip_session_init = path in self.SKIP_SESSION_INIT_PATHS
+        try:
+            # Identity-only routes (auth.sqlite only) skip session_init so /me stays
+            # cheap on cold cache. /api/auth/init and all non-auth paths still run it.
+            path = request.url.path
+            skip_session_init = path in self.SKIP_SESSION_INIT_PATHS
 
-        profile_id = request.headers.get('X-Profile-ID')
-        if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
-            set_current_profile_id(profile_id)
-        elif not skip_session_init:
-            if profile_id:
-                logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
-            init_start = time.perf_counter()
-            init_result = user_session_init(user_id)
-            meta["init_ms"] = (time.perf_counter() - init_start) * 1000
-            profile_id = init_result.get("profile_id")
-            if profile_id:
+            profile_id = request.headers.get('X-Profile-ID')
+            if profile_id and re.match(r'^[a-f0-9]{8}$', profile_id):
                 set_current_profile_id(profile_id)
+            elif not skip_session_init:
+                if profile_id:
+                    logger.warning(f"Invalid X-Profile-ID format: '{profile_id}', falling back to session init")
+                init_start = time.perf_counter()
+                init_result = user_session_init(user_id)
+                meta["init_ms"] = (time.perf_counter() - init_start) * 1000
+                profile_id = init_result.get("profile_id")
+                if profile_id:
+                    set_current_profile_id(profile_id)
 
-        # --- Skip sync for certain paths ---
-        should_sync = R2_ENABLED and not any(
-            request.url.path.startswith(prefix) for prefix in self.SKIP_SYNC_PATHS
-        )
+            # --- Skip sync for certain paths ---
+            should_sync = R2_ENABLED and not any(
+                request.url.path.startswith(prefix) for prefix in self.SKIP_SYNC_PATHS
+            )
 
-        if not should_sync:
-            response = await call_next(request)
-            if should_set_machine_cookie:
-                _set_machine_cookie(response)
-            return response
+            if not should_sync:
+                response = await call_next(request)
+                if should_set_machine_cookie:
+                    _set_machine_cookie(response)
+                return response
 
-        # T1531: serialize WRITE requests per user (R2 version race protection).
-        # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
-        # next request after a write will see locally-committed state since we
-        # commit BEFORE releasing the lock.
-        async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
-            response = await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
-            if should_set_machine_cookie:
-                _set_machine_cookie(response)
-            return response
+            # T1531: serialize WRITE requests per user (R2 version race protection).
+            # Reads bypass the lock — SQLite WAL handles concurrent reads, and the
+            # next request after a write will see locally-committed state since we
+            # commit BEFORE releasing the lock.
+            async with _maybe_write_lock(user_id, request.method, request.url.path, req_id):
+                response = await self._sync_aware_flow(request, call_next, meta, user_id, req_id, profile_id=profile_id)
+                if should_set_machine_cookie:
+                    _set_machine_cookie(response)
+                return response
+        finally:
+            clear_request_context()
 
     async def _sync_aware_flow(
         self,
@@ -585,9 +589,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         do_profile = profile_on_breach_enabled() or force_profile
 
         try:
-            # Initialize request context for write tracking
-            init_request_context()
-
             # Process the request
             handler_start = time.perf_counter()
             response = await call_next(request)
@@ -776,8 +777,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             raise
 
         finally:
-            # Always clean up request context
-            clear_request_context()
             meta["sync_duration"] = sync_duration
             meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
 
