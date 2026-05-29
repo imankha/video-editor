@@ -444,40 +444,36 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       const updated = { ...region };
 
       // Handle combined startTime + endTime update (set both directly)
+      // Callers (ClipScrubRegion, updateClipRegionWithSync) already validate/clamp times.
       if (updates.startTime !== undefined && updates.endTime !== undefined) {
         updated.startTime = Math.max(0, updates.startTime);
-        updated.endTime = Math.min(updates.endTime, duration || Infinity);
-        // Ensure minimum duration
+        updated.endTime = updates.endTime;
         if (updated.endTime - updated.startTime < MIN_CLIP_DURATION) {
-          updated.endTime = Math.min(updated.startTime + MIN_CLIP_DURATION, duration || Infinity);
+          updated.endTime = updated.startTime + MIN_CLIP_DURATION;
         }
         track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
       // Handle end time update only (recalculate start time based on current duration)
       else if (updates.endTime !== undefined) {
         const currentDuration = region.endTime - region.startTime;
-        updated.endTime = Math.max(MIN_CLIP_DURATION, Math.min(updates.endTime, duration || Infinity));
-        // Recalculate start time to maintain duration
+        updated.endTime = Math.max(MIN_CLIP_DURATION, updates.endTime);
         updated.startTime = Math.max(0, updated.endTime - currentDuration);
         track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
       // Handle start time update only (recalculate end time based on current duration)
       else if (updates.startTime !== undefined) {
         const currentDuration = region.endTime - region.startTime;
-        updated.startTime = Math.max(0, Math.min(updates.startTime, (duration || Infinity) - MIN_CLIP_DURATION));
-        // Recalculate end time to maintain duration
-        updated.endTime = Math.min(updated.startTime + currentDuration, duration || Infinity);
+        updated.startTime = Math.max(0, updates.startTime);
+        updated.endTime = updated.startTime + currentDuration;
         track('clip_trim', { regionId, start: Math.round(updated.startTime * 10) / 10, end: Math.round(updated.endTime * 10) / 10 }, { debugOnly: true });
       }
 
       // Handle duration update (recalculate start time from end - duration)
       if (updates.duration !== undefined) {
         const clampedDuration = Math.max(MIN_CLIP_DURATION, Math.min(updates.duration, MAX_CLIP_DURATION));
-        // Keep end time fixed, adjust start time
         updated.startTime = Math.max(0, region.endTime - clampedDuration);
-        // If start would go below 0, adjust end time instead
         if (updated.startTime === 0) {
-          updated.endTime = Math.min(clampedDuration, duration || Infinity);
+          updated.endTime = clampedDuration;
         }
       }
 
@@ -525,7 +521,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
 
       return updated;
     }));
-  }, [duration]);
+  }, []);
 
   /**
    * Set the rawClipId for a region after backend save completes
