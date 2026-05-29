@@ -939,7 +939,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
               setError('Your session expired. Please refresh to sign in again.');
             } else if (resp.status === 404) {
               console.warn(`[VIDEO_LOAD] not_found id=${loadIdRef.current} url=${probeUrl.substring(0, 80)}`);
-              setError('Video not found. It may have been deleted or moved.');
+              setError('Video not found. Please retry in a moment.');
             } else if (resp.status >= 500) {
               console.warn(`[VIDEO_LOAD] server_error id=${loadIdRef.current} status=${resp.status}`);
               setError('Video server error. Please retry in a moment.');
