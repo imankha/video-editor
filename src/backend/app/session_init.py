@@ -100,6 +100,47 @@ def user_session_init(user_id: str) -> dict:
     from .database import ensure_database
     ensure_database()
 
+    # T3230: Auto-materialize pending teammate shares for single-profile users
+    try:
+        from .services.auth_db import get_user_by_id
+        from .services.sharing_db import (
+            get_pending_shares_for_email, resolve_pending_share,
+            mark_game_share_materialized,
+        )
+        from .services.materialization import materialize_game_share
+        from .utils.encoding import decode_data
+        from .services.user_db import get_profiles
+
+        user = get_user_by_id(user_id)
+        if user and user["email"]:
+            pending = get_pending_shares_for_email(user["email"])
+            if pending:
+                profiles = get_profiles(user_id)
+                if len(profiles) == 1:
+                    for p in pending:
+                        try:
+                            clip_data = decode_data(p["clip_data"])
+                            sharer = get_user_by_id(p["sharer_user_id"])
+                            sharer_email = sharer["email"] if sharer else None
+                            materialize_game_share(
+                                sharer_user_id=p["sharer_user_id"],
+                                sharer_profile_id=p["sharer_profile_id"],
+                                recipient_user_id=user_id,
+                                recipient_profile_id=profile_id,
+                                game_id=p["game_id"],
+                                tag_name=p["tag_name"],
+                                share_id=p["share_id"],
+                                clip_data=clip_data,
+                                sharer_email=sharer_email,
+                            )
+                            resolve_pending_share(p["id"], profile_id)
+                            mark_game_share_materialized(p["share_id"], profile_id)
+                            logger.info(f"T3230: Auto-materialized pending share {p['id']} for user {user_id}")
+                        except Exception as e:
+                            logger.error(f"T3230: Failed to auto-materialize pending share {p['id']}: {e}")
+    except Exception as e:
+        logger.error(f"T3230: Failed to check pending shares: {e}")
+
     # 5. T890: Recover orphaned credit reservations
     try:
         from .services.user_db import recover_orphaned_reservations
