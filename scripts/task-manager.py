@@ -669,7 +669,7 @@ HTML = r"""<!DOCTYPE html>
   .add-epic-btn:hover { background: rgba(188,140,255,0.1); border-style: solid; }
 
   .task-card {
-    display: grid; grid-template-columns: 24px 64px 1fr auto auto auto auto 24px 24px;
+    display: grid; grid-template-columns: 24px 64px 1fr auto auto auto auto auto 24px 24px;
     align-items: center; gap: 8px; padding: 10px 16px;
     border-bottom: 1px solid var(--border); cursor: pointer;
     transition: background 0.1s;
@@ -755,6 +755,21 @@ HTML = r"""<!DOCTYPE html>
     line-height: 1;
   }
   .delete-btn:hover { color: var(--red); background: rgba(248,81,73,0.1); }
+
+  .status-btn {
+    background: none; border: 1px solid var(--border); cursor: pointer;
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 4px;
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .status-btn:hover { filter: brightness(1.2); }
+  .status-btn.to-testing {
+    color: var(--yellow); border-color: var(--yellow);
+  }
+  .status-btn.to-testing:hover { background: rgba(210,153,34,0.15); }
+  .status-btn.to-done {
+    color: var(--green); border-color: var(--green);
+  }
+  .status-btn.to-done:hover { background: rgba(63,185,80,0.15); }
 
   .empty-state {
     padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;
@@ -902,7 +917,7 @@ HTML = r"""<!DOCTYPE html>
     border: 1px solid var(--border); margin-top: 4px;
   }
   @media (max-width: 768px) {
-    .task-card { grid-template-columns: 20px 50px 1fr auto auto 28px; font-size: 13px; }
+    .task-card { grid-template-columns: 20px 50px 1fr auto auto auto 28px; font-size: 13px; }
     .meta-extra { display: none; }
   }
 </style>
@@ -1451,11 +1466,20 @@ function buildTaskCard(t, ms) {
   const pri = t.pri || '';
   const needsMigr = (t.migr || '').includes('x');
 
+  const statusLower = (t.status || '').toLowerCase().replace(/\s/g, '');
+  let statusBtnHtml = '';
+  if (statusLower === 'todo' || statusLower === 'in_progress' || statusLower === 'in progress') {
+    statusBtnHtml = '<button class="status-btn to-testing" title="Move to Testing">Testing</button>';
+  } else if (statusLower === 'testing') {
+    statusBtnHtml = '<button class="status-btn to-done" title="Resolve (mark Done)">Resolve</button>';
+  }
+
   card.innerHTML = `
     <span class="drag-handle">&#9776;</span>
     <span class="task-id" title="Click to copy"><span class="copy-hint">Click to copy</span>${esc(t.id)}</span>
     <span class="task-name">${esc(t.name)}${needsMigr ? ' <span class="migr-badge" title="Requires DB migration">DB</span>' : ''}</span>
     <span class="badge ${statusClass(t.status)}">${esc(t.status || 'TODO')}</span>
+    ${statusBtnHtml}
     <span class="meta" title="Priority">${esc(pri)}</span>
     <span class="meta meta-extra" title="Impact">${impact ? 'I:' + esc(impact) : ''}</span>
     <span class="meta meta-extra" title="Complexity">${cmplx ? 'C:' + esc(cmplx) : ''}</span>
@@ -1487,6 +1511,18 @@ function buildTaskCard(t, ms) {
     autoSave();
   };
 
+  const statusBtn = card.querySelector('.status-btn');
+  if (statusBtn) {
+    statusBtn.onclick = (e) => {
+      e.stopPropagation();
+      const newStatus = statusBtn.classList.contains('to-testing') ? 'TESTING' : 'DONE';
+      t.status = newStatus;
+      render();
+      autoSave();
+      showToast(t.id + ' moved to ' + newStatus);
+    };
+  }
+
   card.querySelector('.task-epic-btn').onclick = (e) => {
     e.stopPropagation();
     showTaskEpicDropdown(e.currentTarget, t, ms);
@@ -1498,7 +1534,7 @@ function buildTaskCard(t, ms) {
   };
 
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.open-editor-btn')) return;
+    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.status-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.open-editor-btn')) return;
     card.classList.toggle('expanded');
   });
 

@@ -23,9 +23,9 @@ Bugs follow the same lifecycle as tasks:
 | `duplicate` | DUPLICATE | Duplicate of another bug |
 
 **Transitions:**
-- `new` → `testing`: AI sets this after committing the fix (section 12), same timing as tasks moving to TESTING in PLAN.md
-- `testing` → `done`: `deploy_production.sh` promotes automatically (section 13), same as tasks
-- AI must never set a bug to `done`
+- `new` → `testing`: User promotes manually via task board Resolve button, or `/bug {id} status testing`
+- `testing` → `done`: User promotes manually via task board Resolve button, or `/bug {id} status done`
+- AI does not change bug statuses -- the user does it manually
 
 ## When to Apply
 
@@ -220,9 +220,9 @@ print('Bug {id}{suffix} marked as duplicate of {target_id}{suffix}')
 
 ### 4. Do NOT Change Status During Investigation
 
-Leave the bug status as-is when loading it. Status changes happen later:
-- `new` → `testing`: After the fix is committed (see section 12)
-- `testing` → `done`: Automatically by `deploy_production.sh` (see section 13)
+Leave the bug status as-is when loading it. Status changes are manual:
+- The user promotes bugs via the task board buttons or `/bug {id} status {status}`
+- AI does not change bug statuses
 
 ### 5. Display Structured Summary
 
@@ -497,37 +497,13 @@ after it. The sort order in AnnotateTimeline.tsx may not account for...
 
 ## Bug Status After Fix
 
-### 12. Set Bug to "testing" After Fix Is Committed
+### 12. Do Not Change Bug Status
 
-After the fix is committed and ready for merge (same point where tasks move to TESTING in PLAN.md), update the bug status on the **same environment** where it was reported (use the `{env}` parsed from the suffix in step 1):
+AI does not change bug statuses. After committing the fix, tell the user the bug fix is ready. The user will promote the bug status manually via the task board or `/bug {id} status testing`.
 
-```bash
-cd src/backend && .venv/Scripts/python.exe -c "
-import json, ssl, urllib.request
-from pathlib import Path
+### 13. Bug Status Promotion is Manual
 
-config = json.loads(Path('../../scripts/.task-manager-config.json').read_text())
-env = '{env}'  # 'prod' or 'staging' — from the bug's prefix
-url = config[f'{env}_url']
-session = config[f'{env}_session']
-
-req = urllib.request.Request(f'{url}/api/admin/bugs/{id}', method='PATCH')
-req.add_header('X-User-ID', session)
-req.add_header('Content-Type', 'application/json')
-req.data = json.dumps({'status': 'testing'}).encode()
-resp = urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=15)
-print(f'Bug {id}{env[0]} set to testing')
-"
-```
-
-**This is required.** Do not skip this step. It mirrors the task workflow where PLAN.md is updated to TESTING before merge.
-
-### 13. Deploy Promotes Bugs Automatically
-
-`deploy_production.sh` runs bug lifecycle promotions in order:
-
-1. **Staging `new` → `testing`**: Fix reached staging via auto-deploy (push to master)
-2. **Staging `testing` → `done`**: Fix now reaching prod via this deploy
-3. **Prod `testing` → `done`**: Same — fix reaching prod
-
-No manual action needed at deploy time -- bugs follow the same lifecycle as tasks in PLAN.md.
+Bug status changes are done by the user:
+- Via the task board "Resolve" button
+- Via `/bug {id} status {status}` command
+- AI does not change bug statuses automatically

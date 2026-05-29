@@ -46,11 +46,10 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | Classify | Before starting | Determine stack layers, files, LOC, test scope, agent inclusion |
 | Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for <10 LOC single-file) |
 | Commit | After implementation | Commit with co-author line |
-| PLAN.md | After commit | Update task status to TESTING |
 
 ### Task Completion Rule
 
-**AI cannot mark tasks as DONE.** AI sets status to TESTING after implementation and tests pass. DONE is only set after the task is deployed to production — the user will say "complete" or "done" at that point. TESTING is the correct status to proceed to the next task in an epic.
+**AI does NOT change task statuses.** The user manually promotes tasks via the task board buttons ("Move to Testing", "Resolve"). AI should NOT update PLAN.md status fields. After implementation and tests pass, tell the user the task is ready -- they will promote it themselves.
 
 ### Classification Output (Required)
 

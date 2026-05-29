@@ -240,7 +240,6 @@ Files: 6+ | LOC: 100+ | Layers: 3+
 - Classify before starting
 - Create branch (except <10 LOC single-file)
 - Commit with co-author
-- Update PLAN.md to TESTING
 
 ### Must Justify Skipping
 - Code Expert (scope < 3 files AND familiar area)

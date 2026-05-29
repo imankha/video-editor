@@ -1,4 +1,4 @@
----
+﻿---
 name: task-management
 description: "Task creation, prioritization, and tracking. Tasks live in individual files under docs/plans/tasks/ with full context. PLAN.md contains priority ordering and status. Use gap-based IDs (T10, T20) to allow insertions."
 license: MIT
@@ -15,8 +15,8 @@ When the user requests a new task, create it as a standalone file AND add it to 
 - User asks to update task priority
 - User asks to record progress on a task
 - Starting work on an existing task (update context)
-- **User asks "what's next"** → Show TODO tasks sorted by priority
-- **User asks for a prompt/handoff for a task** → Generate task prompt (see below)
+- **User asks "what's next"** â†’ Show TODO tasks sorted by priority
+- **User asks for a prompt/handoff for a task** â†’ Generate task prompt (see below)
 
 ## Rule Categories
 
@@ -32,16 +32,16 @@ When the user requests a new task, create it as a standalone file AND add it to 
 
 ```
 docs/plans/
-├── PLAN.md                    # Central status dashboard (THE source of truth)
-└── tasks/
-    ├── T10-feature-name.md    # Standalone task
-    ├── T20-another-task.md
-    ├── T15-inserted-task.md   # Inserted between T10 and T20
-    └── deployment/            # Epic folder
-        ├── EPIC.md            # Epic overview
-        ├── T30-flyio-backend.md
-        ├── T40-cloudflare-pages.md
-        └── T50-dns-ssl.md
+â”œâ”€â”€ PLAN.md                    # Central status dashboard (THE source of truth)
+â””â”€â”€ tasks/
+    â”œâ”€â”€ T10-feature-name.md    # Standalone task
+    â”œâ”€â”€ T20-another-task.md
+    â”œâ”€â”€ T15-inserted-task.md   # Inserted between T10 and T20
+    â””â”€â”€ deployment/            # Epic folder
+        â”œâ”€â”€ EPIC.md            # Epic overview
+        â”œâ”€â”€ T30-flyio-backend.md
+        â”œâ”€â”€ T40-cloudflare-pages.md
+        â””â”€â”€ T50-dns-ssl.md
 ```
 
 ## Task ID System
@@ -72,10 +72,10 @@ An **epic** is a folder containing related tasks that form a larger initiative.
 
 ```
 docs/plans/tasks/{epic-name}/
-├── EPIC.md           # Overview, goals, completion criteria
-├── T30-subtask-1.md
-├── T40-subtask-2.md
-└── T50-subtask-3.md
+â”œâ”€â”€ EPIC.md           # Overview, goals, completion criteria
+â”œâ”€â”€ T30-subtask-1.md
+â”œâ”€â”€ T40-subtask-2.md
+â””â”€â”€ T50-subtask-3.md
 ```
 
 ### EPIC.md Template
@@ -112,7 +112,7 @@ What does completing this epic achieve?
 2. **Epic in PLAN.md** - Reference the epic folder, not individual tasks
 3. **Complete together** - Mark epic complete only when ALL tasks done
 4. **Epics get aggregate scores** - Each epic has Impact/Complexity/Priority so it competes with other epics and standalone tasks at the milestone level
-5. **Within-epic order = dependency** - Tasks inside an epic are ordered by dependency (foundational layers first: DB → API → UI), not by individual priority score
+5. **Within-epic order = dependency** - Tasks inside an epic are ordered by dependency (foundational layers first: DB â†’ API â†’ UI), not by individual priority score
 6. **Impact over complexity** - Within a milestone, favor high-impact work; the Priority formula (Impact / Complexity) naturally rewards this
 
 ---
@@ -159,22 +159,22 @@ Priority = Impact / Complexity
 ```
 
 Higher score = do first. Examples:
-- Impact 8, Complexity 2 → Priority = **4.0** (excellent opportunity)
-- Impact 6, Complexity 3 → Priority = **2.0** (good opportunity)
-- Impact 5, Complexity 6 → Priority = **0.8** (lower priority)
-- Impact 3, Complexity 9 → Priority = **0.3** (deprioritize)
+- Impact 8, Complexity 2 â†’ Priority = **4.0** (excellent opportunity)
+- Impact 6, Complexity 3 â†’ Priority = **2.0** (good opportunity)
+- Impact 5, Complexity 6 â†’ Priority = **0.8** (lower priority)
+- Impact 3, Complexity 9 â†’ Priority = **0.3** (deprioritize)
 
 ### Infrastructure Depth (Bug Prioritization)
 
-**For bugs, prioritize by infrastructure depth** — the deeper the bug sits in the stack (the more systems depend on the affected layer), the higher the priority. A bug in a foundational layer silently corrupts everything above it.
+**For bugs, prioritize by infrastructure depth** â€” the deeper the bug sits in the stack (the more systems depend on the affected layer), the higher the priority. A bug in a foundational layer silently corrupts everything above it.
 
 Depth ranking (deepest first):
-1. **Schema/Data integrity** — FK constraints, data model correctness. Everything reads/writes through this.
-2. **Sync/Persistence** — R2 sync, database backup. If sync fails silently, all user data is at risk.
-3. **Storage/Performance** — DB size, query speed. Affects reliability of layers above (e.g., slow sync = more sync failures).
-4. **API/Business logic** — Endpoint bugs, incorrect behavior. Visible but contained.
-5. **UI/UX** — Display bugs, interaction issues. User-facing but no data risk.
-6. **Tests** — Broken tests. No user impact but blocks confidence in changes.
+1. **Schema/Data integrity** â€” FK constraints, data model correctness. Everything reads/writes through this.
+2. **Sync/Persistence** â€” R2 sync, database backup. If sync fails silently, all user data is at risk.
+3. **Storage/Performance** â€” DB size, query speed. Affects reliability of layers above (e.g., slow sync = more sync failures).
+4. **API/Business logic** â€” Endpoint bugs, incorrect behavior. Visible but contained.
+5. **UI/UX** â€” Display bugs, interaction issues. User-facing but no data risk.
+6. **Tests** â€” Broken tests. No user impact but blocks confidence in changes.
 
 When two bugs have similar Impact/Complexity scores, **depth breaks the tie**. A silent sync failure (depth 2) is always higher priority than a slow query (depth 3), even if the slow query has higher impact score.
 
@@ -400,7 +400,7 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 ### Agent Workflow
 | Agent | Include? | Justification |
 |-------|----------|---------------|
-| Code Expert | Yes | 3+ files affected, need to trace framing→overlay transition flow |
+| Code Expert | Yes | 3+ files affected, need to trace framingâ†’overlay transition flow |
 | Architect | No | Bug fix following existing patterns, no new architecture needed |
 | Tester | Yes | Behavior change - must verify multi-clip scenarios work |
 | Reviewer | No | Architect not included |
@@ -412,12 +412,12 @@ Read: docs/plans/tasks/T70-multiclip-overlay-shows-single-clip.md
 ## Workflow
 
 1. **Branch** - `git checkout -b feature/T70-multiclip-overlay`
-2. **Code Expert** - Trace the framing→overlay transition in App.jsx, OverlayScreen.jsx, and useOverlayState.js to find where clip filtering occurs
+2. **Code Expert** - Trace the framingâ†’overlay transition in App.jsx, OverlayScreen.jsx, and useOverlayState.js to find where clip filtering occurs
 3. **Test First** - Write failing test for multi-clip overlay loading after framing edit
 4. **Implement** - Fix the state/filtering logic so all project clips load
 5. **Automated Testing** - Run frontend unit tests for useOverlayState + E2E for overlay workflow
 6. **Manual Testing** - Provide steps to verify with a real multi-clip project
-7. **Complete** - Update PLAN.md status to TESTING
+7. **Complete** - Tell user the task is ready (user promotes via task board)
 
 ## Key Rules
 

@@ -151,34 +151,6 @@ if $deploy_frontend; then
   echo "[tag]      Created $tag"
 fi
 
-# ── Promote TESTING → DONE in PLAN.md ────────────────────────────────
-
-PLAN_FILE="$REPO_ROOT/docs/plans/PLAN.md"
-if [[ -f "$PLAN_FILE" ]]; then
-  testing_count=$(grep -c '| TESTING |' "$PLAN_FILE" || true)
-  if [[ "$testing_count" -gt 0 ]]; then
-    echo "[plan]     Promoting $testing_count TESTING tasks to DONE..."
-    sed -i 's/| TESTING |/| DONE |/g' "$PLAN_FILE"
-    git add "$PLAN_FILE"
-    git commit -m "Promote $testing_count TESTING tasks to DONE after deploy"
-    git push origin master --quiet
-    echo "[plan]     $testing_count tasks promoted ✓"
-  else
-    echo "[plan]     No TESTING tasks to promote ✓"
-  fi
-fi
-
-# ── Bug lifecycle promotions ───────────────────────────────────────────
-#
-# On prod deploy, testing bugs are done (fix is now live).
-# The new->testing step happens at staging push time via --from-git.
-#
-PROMOTE_BUGS="$REPO_ROOT/scripts/promote-bugs.py"
-if [[ -f "$PROMOTE_BUGS" ]]; then
-  "$PYTHON" "$PROMOTE_BUGS" --env staging --from testing --to done || true
-  "$PYTHON" "$PROMOTE_BUGS" --env prod --from testing --to done || true
-fi
-
 # ── Summary ──────────────────────────────────────────────────────────
 
 if $deploy_backend && $deploy_frontend; then

@@ -29,10 +29,9 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (except DATABASE_URL, managed by `fly postgres attach`)
    - Backend: `fly deploy` + health check
    - Frontend: `npm run build:production` + `wrangler pages deploy` + site verify
-   - **TESTING → DONE**: promotes all TESTING tasks in PLAN.md to DONE
    - Git tagging of successful deploys
 
-4. **Report result**: Summarize what deployed, confirm the health/verify checks passed, and list which tasks were promoted from TESTING to DONE.
+4. **Report result**: Summarize what deployed and confirm the health/verify checks passed.
 
 ## Secrets Management
 

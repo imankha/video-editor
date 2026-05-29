@@ -18,11 +18,7 @@ This is a **conversation boundary** -- the implementation AI's job ends here. Th
 - [ ] No commented-out code blocks
 - [ ] No TODO comments for this task
 
-### 2. Update Task Status
-
-Update PLAN.md status to TESTING (if not already done).
-
-### 3. Generate Testing Handoff Prompt
+### 2. Generate Testing Handoff Prompt
 
 **Create file:** `docs/plans/tasks/T{id}-testing-kickoff.md`
 

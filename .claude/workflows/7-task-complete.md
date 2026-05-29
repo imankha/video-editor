@@ -23,30 +23,7 @@ grep -r "console.log" src/frontend/src --include="*.jsx" --include="*.js" | grep
 grep -r "print(" src/backend/app --include="*.py" | grep -v "__pycache__"
 ```
 
-### 2. Update Task Status to DONE
-
-Edit `docs/plans/tasks/T{id}-*.md`:
-```markdown
-**Status:** DONE
-**Updated:** {today's date}
-```
-
-Mark implementation items complete:
-```markdown
-## Implementation
-1. [x] Step one
-2. [x] Step two
-3. [x] Step three
-```
-
-### 3. Update PLAN.md
-
-Edit `docs/plans/PLAN.md`:
-```markdown
-| T{id} | [Task Name](tasks/T{id}-*.md) | DONE | ... |
-```
-
-### 4. Commit Final Changes
+### 2. Commit Final Changes
 
 ```bash
 git add -A
