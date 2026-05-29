@@ -21,6 +21,7 @@ import os
 import sys
 import shutil
 import subprocess
+import time
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -77,34 +78,40 @@ def save_bug_config(config):
     with open(CONFIG_PATH, 'w') as f:
         json.dump(config, f, indent=2)
 
-def _make_request(url, method='GET', data=None, session_cookie='', timeout=10):
+def _make_request(url, method='GET', data=None, session_cookie='', timeout=10, retries=3):
     """Make an HTTP request with session cookie auth. Returns (parsed_json, error_string).
 
     If session_cookie looks like a UUID (user_id), sends X-User-ID header instead
     of a cookie -- this works for local dev/staging where the header fallback is enabled.
     """
-    req = urllib.request.Request(url, method=method)
-    if session_cookie:
-        if len(session_cookie) == 36 and session_cookie.count('-') == 4:
-            req.add_header('X-User-ID', session_cookie)
-        else:
-            req.add_header('Cookie', f'rb_session={session_cookie}')
-    if data is not None:
-        payload = json.dumps(data).encode()
-        req.data = payload
-        req.add_header('Content-Type', 'application/json')
-    ctx = ssl.create_default_context()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-            return json.loads(resp.read().decode()), None
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            return None, "Auth required"
-        return None, f"HTTP {e.code}"
-    except urllib.error.URLError as e:
-        return None, f"Connection failed: {e.reason}"
-    except Exception as e:
-        return None, str(e)
+    last_err = None
+    for attempt in range(retries):
+        req = urllib.request.Request(url, method=method)
+        if session_cookie:
+            if len(session_cookie) == 36 and session_cookie.count('-') == 4:
+                req.add_header('X-User-ID', session_cookie)
+            else:
+                req.add_header('Cookie', f'rb_session={session_cookie}')
+        if data is not None:
+            payload = json.dumps(data).encode()
+            req.data = payload
+            req.add_header('Content-Type', 'application/json')
+        ctx = ssl.create_default_context()
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+                return json.loads(resp.read().decode()), None
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403):
+                return None, "Auth required"
+            return None, f"HTTP {e.code}"
+        except (urllib.error.URLError, ConnectionResetError) as e:
+            last_err = str(getattr(e, 'reason', e))
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+        except Exception as e:
+            return None, str(e)
+    return None, f"Connection failed: {last_err}"
 
 def fetch_remote_bugs(env):
     """Fetch bugs from a remote backend. Returns (bugs_list, error_string_or_None)."""
@@ -784,7 +791,7 @@ HTML = r"""<!DOCTYPE html>
   .bug-milestone .milestone-header { gap: 10px; }
   .bug-env-icon { font-size: 10px; }
   .bug-offline {
-    font-size: 12px; color: var(--red); background: rgba(248,81,73,0.1);
+    font-size: 12px; color: var(--text-muted); background: rgba(255,255,255,0.05);
     padding: 2px 8px; border-radius: 4px;
   }
 
@@ -1220,7 +1227,7 @@ function renderBugMilestones(app) {
         '<span class="arrow' + (msCollapsed ? ' collapsed' : '') + '">&#9660;</span>' +
         '<span class="bug-env-icon" style="color:' + accentVar + '">&#9679;</span>' +
         '<h2>' + envLabel + ' Reported Bugs</h2>' +
-        '<span class="bug-offline">' + esc(envData.error) + '</span>';
+        '<span class="bug-offline">' + (envData.error.includes('Auth') ? 'Session expired' : 'Offline') + '</span>';
       hdr.onclick = () => {
         const list = div.querySelector('.task-list');
         if (list) {

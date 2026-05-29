@@ -170,15 +170,13 @@ fi
 
 # ── Bug lifecycle promotions ───────────────────────────────────────────
 #
-# Staging bugs:  new -> testing (fix reached staging via auto-deploy)
-#                testing -> done (fix now reaching prod via this deploy)
-# Prod bugs:     testing -> done (fix reaching prod)
+# On prod deploy, testing bugs are done (fix is now live).
+# The new->testing step happens at staging push time via --from-git.
 #
 PROMOTE_BUGS="$REPO_ROOT/scripts/promote-bugs.py"
 if [[ -f "$PROMOTE_BUGS" ]]; then
-  "$PYTHON" "$PROMOTE_BUGS" --env staging --from new --to testing || true
   "$PYTHON" "$PROMOTE_BUGS" --env staging --from testing --to done || true
-  "$PYTHON" "$PROMOTE_BUGS" --env prod || true
+  "$PYTHON" "$PROMOTE_BUGS" --env prod --from testing --to done || true
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────

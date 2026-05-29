@@ -196,7 +196,7 @@ export const useGamesDataStore = create((set, get) => ({
         const response = await apiFetch(`${API_BASE}/api/games/${gameId}`);
         if (!response.ok) {
           const msg = response.status === 404
-            ? `Game ${gameId} not found — it may have been deleted or belongs to another account`
+            ? `Game ${gameId} not found`
             : `Failed to fetch game: ${response.status}`;
           throw new Error(msg);
         }
