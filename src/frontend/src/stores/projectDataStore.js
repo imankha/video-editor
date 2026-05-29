@@ -141,7 +141,15 @@ export const useProjectDataStore = create((set, get) => ({
         return response.json();
       })
       .then(data => {
-        set({ clips: data, clipsLoadedAt: Date.now(), clipsFetching: false, _clipsInflight: null });
+        const { selectedClipId } = get();
+        const clipStillExists = selectedClipId && data.some(c => c.id === selectedClipId);
+        set({
+          clips: data,
+          clipsLoadedAt: Date.now(),
+          clipsFetching: false,
+          _clipsInflight: null,
+          selectedClipId: clipStillExists ? selectedClipId : (data.length > 0 ? data[0].id : null),
+        });
         return data;
       })
       .catch(err => {
