@@ -2,35 +2,54 @@
 """Promote bugs through lifecycle stages and purge old resolved bugs.
 
 Usage:
-    python promote-bugs.py --env prod                        # testing->done + purge
+    python promote-bugs.py --env prod                             # testing->done + purge
     python promote-bugs.py --env staging --from new --to testing  # new->testing
-    python promote-bugs.py --env prod --check                # just count
-    python promote-bugs.py --env prod --purge-only           # skip promotion, just purge
+    python promote-bugs.py --env prod --check                     # just count
+    python promote-bugs.py --env prod --purge-only                # skip promotion, just purge
+    python promote-bugs.py --from-git                             # scan commits for bug refs, promote new->testing
+    python promote-bugs.py --from-git --since deploy/backend/2026-05-28  # explicit baseline
 """
 import argparse
 import json
+import re
 import ssl
+import subprocess
 import sys
+import time
 import urllib.request
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).parent / ".task-manager-config.json"
 PURGE_DAYS = 14
 
+BUG_REF_PATTERN = re.compile(r"(?:bug\s+#?|#)(\d+)(p|s)", re.IGNORECASE)
 
-def _make_request(url, method="GET", data=None, session=""):
-    req = urllib.request.Request(url, method=method)
-    if session:
-        if len(session) == 36 and session.count("-") == 4:
-            req.add_header("X-User-ID", session)
-        else:
-            req.add_header("Cookie", f"rb_session={session}")
-    if data is not None:
-        req.data = json.dumps(data).encode()
-        req.add_header("Content-Type", "application/json")
-    ctx = ssl.create_default_context()
-    resp = urllib.request.urlopen(req, context=ctx, timeout=15)
-    return json.loads(resp.read())
+
+def _make_request(url, method="GET", data=None, session="", retries=3):
+    last_err = None
+    for attempt in range(retries):
+        req = urllib.request.Request(url, method=method)
+        if session:
+            if len(session) == 36 and session.count("-") == 4:
+                req.add_header("X-User-ID", session)
+            else:
+                req.add_header("Cookie", f"rb_session={session}")
+        if data is not None:
+            req.data = json.dumps(data).encode()
+            req.add_header("Content-Type", "application/json")
+        ctx = ssl.create_default_context()
+        try:
+            resp = urllib.request.urlopen(req, context=ctx, timeout=15)
+            return json.loads(resp.read())
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, ConnectionResetError) as e:
+            last_err = str(getattr(e, "reason", e))
+            if attempt < retries - 1:
+                time.sleep(1)
+                continue
+            raise
+    raise Exception(f"Failed after {retries} retries: {last_err}")
 
 
 def _load_config(env):
@@ -47,11 +66,52 @@ def _load_config(env):
     return base_url, session
 
 
-def promote(base_url, session, from_status="testing", to_status="done", check_only=False):
+def _find_last_deploy_tag():
+    """Find the most recent deploy tag to use as the baseline for commit scanning."""
+    try:
+        result = subprocess.run(
+            ["git", "tag", "-l", "deploy/*", "--sort=-creatordate"],
+            capture_output=True, text=True, check=True,
+        )
+        tags = result.stdout.strip().split("\n")
+        if tags and tags[0]:
+            return tags[0]
+    except subprocess.CalledProcessError:
+        pass
+    return None
+
+
+def _extract_bug_refs_from_commits(since_ref=None):
+    """Parse bug references from commit messages since a given ref."""
+    if since_ref:
+        cmd = ["git", "log", f"{since_ref}..HEAD", "--format=%s%n%b"]
+    else:
+        cmd = ["git", "log", "-20", "--format=%s%n%b"]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"[bugs]     git log failed: {e}", file=sys.stderr)
+        return {}
+
+    refs = {}  # {env: set of bug_ids}
+    for match in BUG_REF_PATTERN.finditer(result.stdout):
+        bug_id = int(match.group(1))
+        env = "prod" if match.group(2).lower() == "p" else "staging"
+        refs.setdefault(env, set()).add(bug_id)
+
+    return refs
+
+
+def promote(base_url, session, from_status="testing", to_status="done",
+            check_only=False, bug_ids=None):
     bugs = _make_request(
         f"{base_url}/api/admin/bugs?status={from_status}&page_size=100",
         session=session,
     ).get("bugs", [])
+
+    if bug_ids is not None:
+        bugs = [b for b in bugs if b["id"] in bug_ids]
 
     if check_only:
         if bugs:
@@ -98,14 +158,44 @@ def purge(base_url, session, days=PURGE_DAYS):
         print(f"[bugs]     Purge failed: {e}", file=sys.stderr)
 
 
+def from_git(since_ref=None):
+    """Scan commits for bug references and promote new -> testing."""
+    if since_ref is None:
+        since_ref = _find_last_deploy_tag()
+        if since_ref:
+            print(f"[bugs]     Scanning commits since {since_ref}")
+        else:
+            print(f"[bugs]     No deploy tag found, scanning last 20 commits")
+
+    refs = _extract_bug_refs_from_commits(since_ref)
+    if not refs:
+        print("[bugs]     No bug references found in commits")
+        return
+
+    for env, bug_ids in refs.items():
+        print(f"[bugs]     Found {env} bug refs: {', '.join(f'#{bid}' for bid in sorted(bug_ids))}")
+        base_url, session = _load_config(env)
+        promote(base_url, session, from_status="new", to_status="testing", bug_ids=bug_ids)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", required=True, choices=["prod", "staging"])
-    parser.add_argument("--from", dest="from_status", default="testing", help="Source status (default: testing)")
-    parser.add_argument("--to", dest="to_status", default="done", help="Target status (default: done)")
-    parser.add_argument("--check", action="store_true", help="Just print count, exit 0 if any found")
-    parser.add_argument("--purge-only", action="store_true", help="Skip promotion, just purge old done bugs")
+    parser.add_argument("--env", choices=["prod", "staging"])
+    parser.add_argument("--from", dest="from_status", default="testing")
+    parser.add_argument("--to", dest="to_status", default="done")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--purge-only", action="store_true")
+    parser.add_argument("--from-git", action="store_true",
+                        help="Scan commits for bug refs and promote new->testing")
+    parser.add_argument("--since", help="Git ref to scan from (default: last deploy tag)")
     args = parser.parse_args()
+
+    if args.from_git:
+        from_git(args.since)
+        return
+
+    if not args.env:
+        parser.error("--env is required (unless using --from-git)")
 
     base_url, session = _load_config(args.env)
 
