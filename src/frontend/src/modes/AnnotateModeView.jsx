@@ -567,16 +567,19 @@ export function AnnotateModeView({
                 {onShare && (
                   <button
                     onClick={onShare}
-                    disabled={!hasUnsentShares}
                     className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                      !hasUnsentShares
-                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                        : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                      hasUnsentShares
+                        ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                        : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
                     }`}
                   >
                     <Share2 size={18} />
-                    <span className="hidden sm:inline">Share w/ Tagged Teammates</span>
-                    <span className="sm:hidden">Share</span>
+                    <span className="hidden sm:inline">
+                      {hasUnsentShares ? 'Share w/ Tagged Teammates' : 'Shared w/ Tagged Teammates'}
+                    </span>
+                    <span className="sm:hidden">
+                      {hasUnsentShares ? 'Share' : 'Shared'}
+                    </span>
                   </button>
                 )}
               </div>
