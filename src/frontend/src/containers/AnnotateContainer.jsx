@@ -121,6 +121,20 @@ export function AnnotateContainer({
     [gameVideos],
   );
 
+  // Unified videoController — multi-video uses proxy's controller, single-video wraps the raw ref
+  const singleVideoController = useMemo(() => ({
+    play: () => videoRef.current?.play().catch(() => {}),
+    pause: () => { if (videoRef.current) videoRef.current.pause(); },
+    seek: (t) => { if (videoRef.current) videoRef.current.currentTime = t; },
+    setVolume: (v) => { if (videoRef.current) videoRef.current.volume = v; },
+    setMuted: (m) => { if (videoRef.current) videoRef.current.muted = m; },
+    getCurrentTime: () => videoRef.current?.currentTime ?? 0,
+    isPaused: () => videoRef.current?.paused ?? true,
+    getActiveElement: () => videoRef.current,
+    _renderRefs: { videoARef: videoRef },
+  }), []);
+  const videoController = multiVideo?.videoController ?? singleVideoController;
+
   // T2750: Effective values — virtual in multi-video, actual in single
   const effectiveCurrentTime = multiVideo?.virtualTime ?? currentTime;
   const effectiveSeek = multiVideo?.seek ?? seek;
@@ -1165,6 +1179,7 @@ export function AnnotateContainer({
     gameVideos,
     currentVideoSequence,
     multiVideo,
+    videoController,
     fullTimeline,
     effectiveCurrentTime,
     effectiveSeek,

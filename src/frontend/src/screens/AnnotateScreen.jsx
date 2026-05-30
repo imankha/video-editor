@@ -103,20 +103,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     loadVideoFromStreamingUrl,
   } = useVideo(null, null);
 
-  // Single-video controller — stable object wrapping the raw ref
-  // Used when multiVideo is null (single video file)
-  const singleVideoController = useMemo(() => ({
-    play: () => videoRef.current?.play().catch(() => {}),
-    pause: () => { if (videoRef.current) videoRef.current.pause(); },
-    seek: (t) => { if (videoRef.current) videoRef.current.currentTime = t; },
-    setVolume: (v) => { if (videoRef.current) videoRef.current.volume = v; },
-    setMuted: (m) => { if (videoRef.current) videoRef.current.muted = m; },
-    getCurrentTime: () => videoRef.current?.currentTime ?? 0,
-    isPaused: () => videoRef.current?.paused ?? true,
-    getActiveElement: () => videoRef.current,
-    _renderRefs: { videoARef: videoRef },
-  }), []);
-
   // Zoom hook
   const {
     zoom,
@@ -230,6 +216,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     gameVideos,
     currentVideoSequence,
     multiVideo,
+    videoController,
     fullTimeline,
     effectiveCurrentTime,
     effectiveDuration,
@@ -253,8 +240,6 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     // T251: View progress tracking
     getViewedDuration,
   } = annotate;
-
-  const videoController = multiVideo?.videoController ?? singleVideoController;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
   const virtualRegionsWithLayout = useMemo(() => {
