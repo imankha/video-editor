@@ -1,213 +1,69 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { buildFullVideoTimeline } from './useVirtualTimeline';
-import { classifyVideoError, VideoErrorKind } from '../../../utils/videoErrorClassifier';
+import { useVideoProxy } from '../../../hooks/useVideoProxy';
 
 /**
  * useMultiVideoScrub -- Dual-video scrub for unified multi-video annotate mode.
  *
- * Adapted from useAnnotationPlayback's ping-pong pattern but for full-video
- * scrubbing instead of clip-to-clip playback. Two <video> elements overlap;
- * only one is visible at a time (CSS opacity). When the user scrubs across a
- * video boundary, visibility swaps instantly.
+ * Delegates video element management to useVideoProxy. Owns only scrub-specific
+ * logic: RAF playback loop, play/pause state, step/seek navigation.
  *
  * Returns null when gameVideos is null/single-video (after all hooks are called).
  */
 export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls = null }) {
   const isMulti = !!gameVideos && gameVideos.length > 1;
 
-  const videoARef = useRef(null);
-  const videoBRef = useRef(null);
-  const activeVideoRef = useRef('A');
-  const currentVideoIndexRef = useRef(0);
+  const proxy = useVideoProxy({ videos: gameVideos, playbackRate, onRefreshUrls });
+
   const rafIdRef = useRef(null);
   const isPlayingRef = useRef(false);
-  const playbackRateRef = useRef(playbackRate);
-  const retryCountRef = useRef(0);
-  const pendingSwapRef = useRef(null);
   const pendingPlayRef = useRef(false);
-  const MAX_RETRY_ATTEMPTS = 2;
 
-  const [virtualTime, setVirtualTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [activeVideoLabel, setActiveVideoLabel] = useState('A');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
-  const fullTimeline = useMemo(
-    () => isMulti ? buildFullVideoTimeline(gameVideos) : null,
-    [gameVideos, isMulti],
-  );
-
-  const getVideos = useCallback(() => {
-    const isA = activeVideoRef.current === 'A';
-    return {
-      active: isA ? videoARef.current : videoBRef.current,
-      inactive: isA ? videoBRef.current : videoARef.current,
-    };
-  }, []);
-
-  const swapVideos = useCallback(() => {
-    activeVideoRef.current = activeVideoRef.current === 'A' ? 'B' : 'A';
-    setActiveVideoLabel(activeVideoRef.current);
-  }, []);
-
-  const getVideoUrl = useCallback((index) => {
-    if (!gameVideos) return null;
-    const v = gameVideos[index];
-    return v?.url || v?.serverUrl;
-  }, [gameVideos]);
-
-  useEffect(() => {
-    playbackRateRef.current = playbackRate;
-    const { active } = getVideos();
-    if (active) active.playbackRate = playbackRate;
-  }, [playbackRate, getVideos]);
-
-  // Initialize: load video A with first video, video B with second
-  useEffect(() => {
-    if (!fullTimeline || !isMulti) return;
-    const a = videoARef.current;
-    const b = videoBRef.current;
-    if (a) {
-      a.src = getVideoUrl(0);
-      a.load();
-    }
-    if (b && gameVideos.length > 1) {
-      b.src = getVideoUrl(1);
-      b.load();
-    }
-    activeVideoRef.current = 'A';
-    currentVideoIndexRef.current = 0;
-    setActiveVideoLabel('A');
-    setVirtualTime(0);
-  }, [fullTimeline, isMulti, getVideoUrl, gameVideos?.length]);
-
-  const seek = useCallback((vt) => {
-    if (!fullTimeline) return;
-    const result = fullTimeline.virtualToActual(vt);
-    const { active, inactive } = getVideos();
-    if (!active) return;
-
-    if (result.videoIndex !== currentVideoIndexRef.current) {
-      // Pause active video immediately to prevent audio leaking during swap
-      active.pause();
-
-      const targetUrl = getVideoUrl(result.videoIndex);
-      if (inactive && inactive.src !== targetUrl) {
-        inactive.src = targetUrl;
-        inactive.load();
-      }
-      if (inactive) {
-        // Cancel any pending swap from a previous rapid seek
-        if (pendingSwapRef.current) {
-          const prev = pendingSwapRef.current;
-          prev.el.removeEventListener('seeked', prev.handler);
-          prev.el.removeEventListener('canplay', prev.handler);
-          pendingSwapRef.current = null;
-        }
-
-        inactive.currentTime = result.actualTime;
-        setIsLoading(true);
-        const wasPlaying = isPlayingRef.current;
-        const onReady = () => {
-          inactive.removeEventListener('seeked', onReady);
-          inactive.removeEventListener('canplay', onReady);
-          pendingSwapRef.current = null;
-          swapVideos();
-          currentVideoIndexRef.current = result.videoIndex;
-          setIsLoading(false);
-
-          // Ensure old active (now inactive) is paused
-          const { active: newActive, inactive: newInactive } = getVideos();
-          if (newInactive && !newInactive.paused) newInactive.pause();
-
-          // Resume playback on new active if was playing before seek
-          if (wasPlaying && newActive) {
-            newActive.playbackRate = playbackRateRef.current;
-            newActive.play().catch(() => {});
-          }
-
-          // Execute deferred play (e.g. ClipScrubRegion called seek+play back-to-back)
-          if (pendingPlayRef.current && newActive) {
-            pendingPlayRef.current = false;
-            newActive.playbackRate = playbackRateRef.current;
-            newActive.play().then(() => {
-              isPlayingRef.current = true;
-              setIsPlaying(true);
-              startTimeUpdateLoop();
-            }).catch(() => {});
-          }
-
-          const adjacentIndex = result.videoIndex === 0 ? 1 : result.videoIndex - 1;
-          if (newInactive && gameVideos && adjacentIndex >= 0 && adjacentIndex < gameVideos.length) {
-            const adjUrl = getVideoUrl(adjacentIndex);
-            if (newInactive.src !== adjUrl) {
-              newInactive.src = adjUrl;
-              newInactive.load();
-            }
-          }
-        };
-        pendingSwapRef.current = { el: inactive, handler: onReady };
-        inactive.addEventListener('seeked', onReady, { once: true });
-        inactive.addEventListener('canplay', onReady, { once: true });
-      } else {
-        swapVideos();
-        currentVideoIndexRef.current = result.videoIndex;
-      }
-    } else {
-      active.currentTime = result.actualTime;
-    }
-
-    setVirtualTime(vt);
-  }, [fullTimeline, getVideos, getVideoUrl, swapVideos, gameVideos]);
-
-  // RAF time update loop for playback
   const startTimeUpdateLoop = useCallback(() => {
     const tick = () => {
-      if (!isPlayingRef.current || !fullTimeline) return;
+      if (!isPlayingRef.current || !proxy.timeline) return;
 
-      const { active } = getVideos();
+      const { active } = proxy.getVideos();
       if (!active) {
         rafIdRef.current = requestAnimationFrame(tick);
         return;
       }
 
       const actualTime = active.currentTime;
-      const seg = fullTimeline.segments[currentVideoIndexRef.current];
+      const seg = proxy.timeline.segments[proxy.currentVideoIndexRef.current];
 
-      // Check if we've hit the end of the current video
       if (seg && actualTime >= seg.duration - 0.05) {
-        const nextIndex = currentVideoIndexRef.current + 1;
-        if (nextIndex < fullTimeline.segments.length) {
-          const { inactive } = getVideos();
+        const nextIndex = proxy.currentVideoIndexRef.current + 1;
+        if (nextIndex < proxy.timeline.segments.length) {
+          const { inactive } = proxy.getVideos();
           if (inactive) {
             inactive.currentTime = 0;
-            inactive.playbackRate = playbackRateRef.current;
+            inactive.playbackRate = proxy.playbackRateRef.current;
             inactive.play().catch(() => {
-              // play() failed on new segment — stop playback to prevent desync
               isPlayingRef.current = false;
               setIsPlaying(false);
             });
           }
           active.pause();
-          swapVideos();
-          currentVideoIndexRef.current = nextIndex;
+          proxy.swapVideos();
+          proxy.currentVideoIndexRef.current = nextIndex;
         } else {
           active.pause();
           isPlayingRef.current = false;
           setIsPlaying(false);
-          setVirtualTime(fullTimeline.totalDuration);
+          proxy.setVirtualTime(proxy.timeline.totalDuration);
           rafIdRef.current = null;
           return;
         }
       }
 
-      const vt = fullTimeline.actualToVirtual(currentVideoIndexRef.current, actualTime);
-      setVirtualTime(vt);
+      const vt = proxy.timeline.actualToVirtual(proxy.currentVideoIndexRef.current, actualTime);
+      proxy.setVirtualTime(vt);
       rafIdRef.current = requestAnimationFrame(tick);
     };
     rafIdRef.current = requestAnimationFrame(tick);
-  }, [fullTimeline, getVideos, swapVideos]);
+  }, [proxy.timeline, proxy.getVideos, proxy.swapVideos, proxy.currentVideoIndexRef, proxy.playbackRateRef, proxy.setVirtualTime]);
 
   const stopTimeUpdateLoop = useCallback(() => {
     if (rafIdRef.current) {
@@ -216,16 +72,28 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     }
   }, []);
 
+  // Execute deferred play when proxy finishes a cross-boundary swap
+  useEffect(() => {
+    if (!proxy.isLoading && pendingPlayRef.current) {
+      pendingPlayRef.current = false;
+      proxy.videoController.play().then(() => {
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        startTimeUpdateLoop();
+      }).catch(() => {
+        isPlayingRef.current = false;
+        setIsPlaying(false);
+      });
+    }
+  }, [proxy.isLoading, proxy.videoController, startTimeUpdateLoop]);
+
   const play = useCallback(async () => {
-    if (pendingSwapRef.current) {
+    if (proxy.isLoading) {
       pendingPlayRef.current = true;
       return;
     }
-    const { active } = getVideos();
-    if (!active) return;
-    active.playbackRate = playbackRateRef.current;
     try {
-      await active.play();
+      await proxy.videoController.play();
       isPlayingRef.current = true;
       setIsPlaying(true);
       startTimeUpdateLoop();
@@ -233,164 +101,90 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
       isPlayingRef.current = false;
       setIsPlaying(false);
     }
-  }, [getVideos, startTimeUpdateLoop]);
+  }, [proxy.videoController, proxy.isLoading, startTimeUpdateLoop]);
 
   const pause = useCallback(() => {
     pendingPlayRef.current = false;
-    if (videoARef.current) videoARef.current.pause();
-    if (videoBRef.current) videoBRef.current.pause();
+    proxy.videoController.pause();
     isPlayingRef.current = false;
     setIsPlaying(false);
     stopTimeUpdateLoop();
-  }, [stopTimeUpdateLoop]);
+  }, [proxy.videoController, stopTimeUpdateLoop]);
 
   const togglePlay = useCallback(async () => {
-    // Use video element's paused state as source of truth to handle desync
-    const { active } = getVideos();
-    if ((active && !active.paused) || isPlayingRef.current) {
+    const activeEl = proxy.videoController.getActiveElement();
+    if ((activeEl && !activeEl.paused) || isPlayingRef.current) {
       pause();
     } else {
-      if (fullTimeline && virtualTime >= fullTimeline.totalDuration - 0.1) {
-        seek(0);
+      if (proxy.timeline && proxy.virtualTime >= proxy.timeline.totalDuration - 0.1) {
+        proxy.videoController.seek(0);
       }
       await play();
     }
-  }, [pause, play, seek, fullTimeline, virtualTime]);
+  }, [pause, play, proxy.videoController, proxy.timeline, proxy.virtualTime]);
 
   const stepForward = useCallback(() => {
-    if (!fullTimeline) return;
-    const { active } = getVideos();
-    if (!active) return;
+    if (!proxy.timeline) return;
+    const activeEl = proxy.videoController.getActiveElement();
+    if (!activeEl) return;
     const fps = 30;
-    const currentFrame = Math.round(virtualTime * fps);
+    const currentFrame = Math.round(proxy.virtualTime * fps);
     const nextFrame = currentFrame + 1;
-    const maxFrame = Math.floor(fullTimeline.totalDuration * fps);
+    const maxFrame = Math.floor(proxy.timeline.totalDuration * fps);
     const newVt = Math.min(nextFrame, maxFrame) / fps;
-    seek(newVt);
-  }, [fullTimeline, virtualTime, seek, getVideos]);
+    proxy.videoController.seek(newVt);
+  }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 
   const stepBackward = useCallback(() => {
-    if (!fullTimeline) return;
+    if (!proxy.timeline) return;
     const fps = 30;
-    const currentFrame = Math.round(virtualTime * fps);
+    const currentFrame = Math.round(proxy.virtualTime * fps);
     const prevFrame = Math.max(currentFrame - 1, 0);
     const newVt = prevFrame / fps;
-    seek(newVt);
-  }, [fullTimeline, virtualTime, seek]);
+    proxy.videoController.seek(newVt);
+  }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 
   const seekForward = useCallback((seconds = 5) => {
-    if (!fullTimeline) return;
-    const newVt = Math.min(virtualTime + seconds, fullTimeline.totalDuration);
-    seek(newVt);
-  }, [fullTimeline, virtualTime, seek]);
+    if (!proxy.timeline) return;
+    const newVt = Math.min(proxy.virtualTime + seconds, proxy.timeline.totalDuration);
+    proxy.videoController.seek(newVt);
+  }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 
   const seekBackward = useCallback((seconds = 5) => {
-    if (!fullTimeline) return;
-    const newVt = Math.max(virtualTime - seconds, 0);
-    seek(newVt);
-  }, [fullTimeline, virtualTime, seek]);
+    if (!proxy.timeline) return;
+    const newVt = Math.max(proxy.virtualTime - seconds, 0);
+    proxy.videoController.seek(newVt);
+  }, [proxy.timeline, proxy.virtualTime, proxy.videoController]);
 
   const restart = useCallback(() => {
     pause();
-    seek(0);
-  }, [pause, seek]);
+    proxy.videoController.seek(0);
+  }, [pause, proxy.videoController]);
 
-  const handleVideoError = useCallback((e) => {
-    const video = e.target;
-    const code = video?.error?.code;
-    const kind = classifyVideoError({ code, videoSrc: video?.src });
-
-    if (kind === VideoErrorKind.ABORTED) return;
-
-    if ((kind === VideoErrorKind.NETWORK_ERROR || kind === VideoErrorKind.FORMAT_ERROR) &&
-        retryCountRef.current < MAX_RETRY_ATTEMPTS && onRefreshUrls) {
-      retryCountRef.current += 1;
-      onRefreshUrls();
-      return;
-    }
-
-    const messages = {
-      [VideoErrorKind.NETWORK_ERROR]: 'Network error — video URL may have expired',
-      [VideoErrorKind.DECODE_ERROR]: 'Video decode error — file may be corrupt',
-      [VideoErrorKind.FORMAT_ERROR]: 'Video format not supported',
-      [VideoErrorKind.STALE_BLOB]: 'Video source expired',
-    };
-    setError(messages[kind] || 'Video failed to load');
-  }, [onRefreshUrls]);
-
-  const handleVideoWaiting = useCallback(() => {
-    if (pendingSwapRef.current) {
-      setIsLoading(true);
-    }
-  }, []);
-
-  const handleVideoCanPlay = useCallback(() => {
-    setIsLoading(false);
-    setError(null);
-  }, []);
-
-  const clearError = useCallback(() => {
-    setError(null);
-    retryCountRef.current = 0;
-  }, []);
-
-  const retry = useCallback(() => {
-    clearError();
-    if (onRefreshUrls) {
-      onRefreshUrls();
-    }
-  }, [clearError, onRefreshUrls]);
-
-  // Clear error display when URLs change (refresh succeeded).
-  // Retry counter is NOT reset here — only on user-initiated retry or game change.
-  // Resetting it here created an infinite retry loop: error → refresh → reset counter → error → ...
-  useEffect(() => {
-    if (gameVideos) {
-      setError(null);
-    }
-  }, [gameVideos]);
-
-  // Cleanup on unmount — pause both videos to prevent audio leaking
   useEffect(() => {
     return () => {
       stopTimeUpdateLoop();
-      if (videoARef.current) videoARef.current.pause();
-      if (videoBRef.current) videoBRef.current.pause();
     };
   }, [stopTimeUpdateLoop]);
 
   const videoController = useMemo(() => ({
     play,
     pause,
-    seek,
-    setVolume: (v) => {
-      [videoARef, videoBRef].forEach(r => { if (r.current) r.current.volume = v; });
-    },
-    setMuted: (m) => {
-      [videoARef, videoBRef].forEach(r => { if (r.current) r.current.muted = m; });
-    },
-    getCurrentTime: () => {
-      const active = getVideos().active;
-      if (!active || !fullTimeline) return 0;
-      return fullTimeline.actualToVirtual(currentVideoIndexRef.current, active.currentTime);
-    },
-    isPaused: () => {
-      const active = getVideos().active;
-      return active ? active.paused : true;
-    },
-    getActiveElement: () => getVideos().active,
-    _renderRefs: { videoARef, videoBRef },
-  }), [play, pause, seek, getVideos, fullTimeline]);
+    seek: proxy.videoController.seek,
+    setVolume: proxy.videoController.setVolume,
+    setMuted: proxy.videoController.setMuted,
+    getCurrentTime: proxy.videoController.getCurrentTime,
+    isPaused: proxy.videoController.isPaused,
+    getActiveElement: proxy.videoController.getActiveElement,
+    _renderRefs: proxy.videoController._renderRefs,
+  }), [play, pause, proxy.videoController]);
 
-  // Return null for single-video mode (after all hooks have been called)
   if (!isMulti) return null;
 
   return {
-    videoARef,
-    videoBRef,
-    virtualTime,
-    totalDuration: fullTimeline?.totalDuration ?? 0,
-    seek,
+    virtualTime: proxy.virtualTime,
+    totalDuration: proxy.totalDuration,
+    seek: proxy.videoController.seek,
     play,
     pause,
     togglePlay,
@@ -400,21 +194,17 @@ export function useMultiVideoScrub({ gameVideos, playbackRate = 1, onRefreshUrls
     seekBackward,
     restart,
     isPlaying,
-    activeVideoLabel,
-    currentVideoSequence: fullTimeline?.segments[currentVideoIndexRef.current]?.videoSequence ?? null,
-    currentVideoIndex: currentVideoIndexRef.current,
-    fullTimeline,
-    boundaryOffsets: fullTimeline?.getVideoBoundaries() ?? [],
-    isLoading,
-    error,
-    clearError,
-    retry,
+    activeVideoLabel: proxy.activeSlotLabel,
+    currentVideoSequence: proxy.timeline?.segments[proxy.currentVideoIndexRef.current]?.videoSequence ?? null,
+    currentVideoIndex: proxy.currentVideoIndex,
+    fullTimeline: proxy.timeline,
+    boundaryOffsets: proxy.boundaryOffsets,
+    isLoading: proxy.isLoading,
+    error: proxy.error,
+    clearError: proxy.clearError,
+    retry: proxy.retry,
     videoController,
-    videoHandlers: {
-      onError: handleVideoError,
-      onWaiting: handleVideoWaiting,
-      onCanPlay: handleVideoCanPlay,
-    },
+    videoHandlers: proxy.videoHandlers,
   };
 }
 
