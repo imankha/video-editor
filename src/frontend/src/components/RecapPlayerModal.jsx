@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Play } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
@@ -22,6 +22,15 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
   const contentRef = useRef(null);
+
+  const recapVideoController = useMemo(() => ({
+    setVolume: (v) => { if (recapVideoRef.current) recapVideoRef.current.volume = v; },
+    setMuted: (m) => { if (recapVideoRef.current) recapVideoRef.current.muted = m; },
+  }), []);
+  const highlightsVideoController = useMemo(() => ({
+    setVolume: (v) => { if (highlightsVideoRef.current) highlightsVideoRef.current.volume = v; },
+    setMuted: (m) => { if (highlightsVideoRef.current) highlightsVideoRef.current.muted = m; },
+  }), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -287,8 +296,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     isFullscreen={isFullscreen}
                     onToggleFullscreen={toggleFullscreen}
                     onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
-                    videoARef={recapVideoRef}
-                    videoBRef={recapVideoRef}
+                    videoController={recapVideoController}
                   />
                 </div>
               )}
@@ -356,8 +364,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   isFullscreen={isFullscreen}
                   onToggleFullscreen={toggleFullscreen}
                   onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
-                  videoARef={highlightsVideoRef}
-                  videoBRef={highlightsVideoRef}
+                  videoController={highlightsVideoController}
                 />
               </div>
             </div>

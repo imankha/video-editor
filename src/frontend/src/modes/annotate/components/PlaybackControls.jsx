@@ -84,8 +84,7 @@ export function PlaybackControls({
   onPlaybackRateChange,
   isFullscreen = false,
   onToggleFullscreen,
-  videoARef,
-  videoBRef,
+  videoController,
 }) {
   const progress = totalVirtualDuration > 0 ? (virtualTime / totalVirtualDuration) * 100 : 0;
   const progressBarRef = useRef(null);
@@ -101,17 +100,14 @@ export function PlaybackControls({
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
-    [videoARef?.current, videoBRef?.current].forEach(v => {
-      if (v) { v.volume = newVolume; v.muted = newVolume === 0; }
-    });
+    videoController?.setVolume(newVolume);
+    videoController?.setMuted(newVolume === 0);
   };
 
   const handleToggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    [videoARef?.current, videoBRef?.current].forEach(v => {
-      if (v) v.muted = newMuted;
-    });
+    videoController?.setMuted(newMuted);
   };
 
   // --- Main timeline drag-to-scrub ---

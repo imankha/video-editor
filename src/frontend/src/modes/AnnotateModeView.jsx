@@ -250,8 +250,7 @@ export function AnnotateModeView({
             onPlaybackRateChange={playback.changePlaybackRate}
             isFullscreen={isFS}
             onToggleFullscreen={togglePlaybackFullscreen}
-            videoARef={playback.videoARef}
-            videoBRef={playback.videoBRef}
+            videoController={playback.videoController}
           />
         </div>
       </div>

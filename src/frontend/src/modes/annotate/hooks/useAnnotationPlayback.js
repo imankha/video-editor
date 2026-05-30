@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { buildVirtualTimeline } from './useVirtualTimeline';
 import { useQuestStore } from '../../../stores/questStore';
 
@@ -633,6 +633,16 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
     // Derived
     timeline: timelineRef.current,
+
+    // Controller (volume/mute only -- full proxy migration was dropped with T3120)
+    videoController: useMemo(() => ({
+      setVolume: (v) => {
+        [videoARef, videoBRef].forEach(r => { if (r.current) r.current.volume = v; });
+      },
+      setMuted: (m) => {
+        [videoARef, videoBRef].forEach(r => { if (r.current) r.current.muted = m; });
+      },
+    }), []),
 
     // Actions
     enterPlaybackMode,
