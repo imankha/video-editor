@@ -57,9 +57,10 @@ Frontend                    Backend                     R2 Storage
    │                          │── TrackedConnection ───────│
    │                          │   (marks writes)           │
    │                          │                            │
-   │◄── Response ─────────────│                            │
+   │                          │── mark_sync_pending ───────│
+   │◄── Response ─────────────│   (crash safety)           │
    │                          │                            │
-   │                          │── If writes: upload ───────►│
+   │                          │── Background: upload ──────►│
    │                          │   with version++           │
 ```
 

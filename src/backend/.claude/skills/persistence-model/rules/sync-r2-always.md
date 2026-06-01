@@ -16,19 +16,26 @@ R2 provides:
 ## Implementation
 
 ```python
-# In middleware/db_sync.py
+# In middleware/db_sync.py (T3250: non-blocking sync)
 class DatabaseSyncMiddleware:
     async def dispatch(self, request, call_next):
         # Before request: sync from R2 if newer
         await sync_database_from_r2_if_newer(user_id)
 
-        response = await call_next(request)
+        async with write_lock:
+            response = await call_next(request)
 
-        # After request: sync to R2 if writes occurred
-        if request_context.has_writes:
-            await sync_database_to_r2_with_version(user_id)
+            # Mark pending BEFORE response returns (crash safety)
+            if request_context.has_writes:
+                mark_sync_pending(user_id)
+                asyncio.create_task(background_sync(user_id))
 
-        return response
+        return response  # Response returns immediately
+
+    async def background_sync(self, user_id):
+        # Runs AFTER response is sent, OUTSIDE write lock
+        await sync_database_to_r2_with_version(user_id)
+        clear_sync_pending(user_id)
 ```
 
 ## Version-Based Sync

@@ -587,6 +587,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # Profiler enable/dispatch-level logging happens in dispatch() — see outer shell.
         force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
         do_profile = profile_on_breach_enabled() or force_profile
+        method = request.method
+        path = request.url.path
 
         try:
             # Process the request
@@ -595,148 +597,38 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             handler_duration = time.perf_counter() - handler_start
             meta["handler_duration"] = handler_duration
 
-            # After request, sync if writes occurred
+            # After request, check if writes occurred
             had_writes = get_request_has_writes()
             had_user_db_writes = get_request_has_user_db_writes()
             if had_writes or had_user_db_writes:
-                # T930: Mark pending BEFORE sync attempt — survives crash
+                # T930: Mark pending BEFORE response returns (crash safety)
                 mark_sync_pending(user_id)
+                # T3250: Signal sync in progress BEFORE response returns.
+                # Prevents concurrent readers from seeing a stale .sync_pending
+                # marker and flashing X-Sync-Status: failed.
                 _begin_sync_attempt(user_id)
+                # T3250: Fire sync as background task — response returns
+                # immediately. Write lock releases when _sync_aware_flow
+                # returns; background sync runs outside the lock.
+                asyncio.create_task(
+                    self._background_sync(
+                        user_id, profile_id, req_id, method, path,
+                        had_writes, had_user_db_writes,
+                        do_profile, force_profile,
+                    )
+                )
 
-                sync_start = time.perf_counter()
-                sync_status = "ok"
-                try:
-                    if had_writes and had_user_db_writes:
-                        # Both need syncing — run in parallel using explicit
-                        # functions that take args instead of relying on ContextVars
-                        _user_id = user_id
-                        _profile_id = profile_id
-                        timing = {}
-
-                        # T1530/T1531: these run on worker threads, so the
-                        # request-level cProfile (which only traces its own
-                        # thread) misses them. Install per-worker profilers
-                        # and dump siblings on breach.
-                        do_sync_profile = do_profile
-
-                        def _sync_profile():
-                            sub_prof = cProfile.Profile() if do_sync_profile else None
-                            if sub_prof:
-                                sub_prof.enable()
-                            t0 = time.perf_counter()
-                            try:
-                                return sync_db_to_r2_explicit(_user_id, _profile_id, lock_timeout=_SYNC_LOCK_TIMEOUT)
-                            finally:
-                                elapsed_ms = (time.perf_counter() - t0) * 1000
-                                timing['profile_ms'] = elapsed_ms
-                                if sub_prof:
-                                    sub_prof.disable()
-                                    if force_profile or elapsed_ms >= profile_breach_ms():
-                                        dump_profile(
-                                            sub_prof,
-                                            tag=f"syncthread_profile_{_user_id}",
-                                            elapsed_ms=elapsed_ms,
-                                            req_id=req_id,
-                                        )
-
-                        def _sync_user():
-                            sub_prof = cProfile.Profile() if do_sync_profile else None
-                            if sub_prof:
-                                sub_prof.enable()
-                            t0 = time.perf_counter()
-                            try:
-                                return sync_user_db_to_r2_explicit(_user_id, lock_timeout=_SYNC_LOCK_TIMEOUT)
-                            finally:
-                                elapsed_ms = (time.perf_counter() - t0) * 1000
-                                timing['user_ms'] = elapsed_ms
-                                if sub_prof:
-                                    sub_prof.disable()
-                                    if force_profile or elapsed_ms >= profile_breach_ms():
-                                        dump_profile(
-                                            sub_prof,
-                                            tag=f"syncthread_user_{_user_id}",
-                                            elapsed_ms=elapsed_ms,
-                                            req_id=req_id,
-                                        )
-
-                        # T1536: run both syncs on worker threads and AWAIT them.
-                        # Uses asyncio.to_thread (not run_in_executor) so that
-                        # ContextVars (profile_id, user_id) propagate to the
-                        # worker threads — r2_key() reads them to build R2 paths.
-                        profile_ok, user_ok = await asyncio.gather(
-                            asyncio.to_thread(_sync_profile),
-                            asyncio.to_thread(_sync_user),
-                        )
-
-                        # T1154: distinguishing log for partial-success events so we can
-                        # measure frequency before deciding on atomic-sync strategy.
-                        if profile_ok != user_ok:
-                            logger.warning(
-                                f"[SYNC_PARTIAL] user={_user_id} profile_ok={profile_ok} "
-                                f"user_ok={user_ok} path={request.url.path} "
-                                f"method={request.method}"
-                            )
-
-                        # Map explicit sync return values to middleware expectations
-                        db_status = "ok" if profile_ok else "failed"
-                        user_sync_success = user_ok
-
-                        if PROFILING_ENABLED:
-                            parallel_ms = (time.perf_counter() - sync_start) * 1000
-                            p_ms = timing.get('profile_ms', 0)
-                            u_ms = timing.get('user_ms', 0)
-                            logger.info(
-                                f"[PROFILE] R2 sync: {parallel_ms:.0f}ms parallel "
-                                f"(would be {p_ms + u_ms:.0f}ms sequential: "
-                                f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
-                            )
-                    elif had_writes:
-                        _user_id = user_id
-                        _profile_id = profile_id
-                        result = await asyncio.to_thread(sync_db_to_r2_explicit, _user_id, _profile_id, _SYNC_LOCK_TIMEOUT)
-                        db_status = "ok" if result else "failed"
-                        user_sync_success = True
-                    else:
-                        # had_user_db_writes only
-                        db_status = "ok"
-                        user_sync_success = await asyncio.to_thread(sync_user_db_to_r2_explicit, user_id, _SYNC_LOCK_TIMEOUT)
-
-                    if db_status == "conflict":
-                        sync_status = "conflict"
-                    elif db_status == "failed" or not user_sync_success:
-                        sync_status = "failed"
-                except Exception as sync_error:
-                    logger.error(f"Sync to R2 raised exception: {sync_error}")
-                    sync_status = "failed"
-                finally:
-                    _end_sync_attempt(user_id)
-                sync_duration = time.perf_counter() - sync_start
-
-                if sync_status == "ok":
-                    # T930/T1152: clearing the marker is the single source of truth for recovery
-                    clear_sync_pending(user_id)
-                    logger.info(f"[SYNC] {request.method} {request.url.path} -> R2 sync OK ({sync_duration:.2f}s)")
-                elif sync_status == "conflict":
-                    # Marker remains (set by mark_sync_pending before the attempt)
-                    logger.warning(f"[SYNC] {request.method} {request.url.path} -> version conflict ({sync_duration:.2f}s)")
-                else:
-                    logger.warning(f"[SYNC] {request.method} {request.url.path} -> R2 sync FAILED ({sync_duration:.2f}s)")
-
-            # T950: Distinguish conflict from failure in header.
-            # AND-gate with is_sync_attempt_in_progress: during a normal
-            # in-flight sync the .sync_pending marker exists (set BEFORE
-            # the attempt for crash-recovery), so concurrent readers would
-            # otherwise emit X-Sync-Status: failed and flicker the
-            # frontend warning button. Surface "failed" only when the
-            # marker is stale and no attempt is running.
+            # T950: Surface prior sync failure on response header.
+            # AND-gate: only show "failed" when the marker is stale and no
+            # sync attempt is running. For write requests, _begin_sync_attempt
+            # was just called above, suppressing the header until the
+            # background sync completes.
             if is_sync_failed(user_id) and not is_sync_attempt_in_progress(user_id):
-                response.headers["X-Sync-Status"] = sync_status if (had_writes or had_user_db_writes) else "failed"
+                response.headers["X-Sync-Status"] = "failed"
 
             # Default Cache-Control for GET JSON responses that don't set their own.
-            # stale-while-revalidate lets the browser serve cached data instantly on
-            # rapid re-fetches (e.g. mode switches) while refreshing in the background.
             if (
-                request.method == "GET"
+                method == "GET"
                 and "cache-control" not in response.headers
                 and response.headers.get("content-type", "").startswith("application/json")
             ):
@@ -750,26 +642,16 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 had_writes = get_request_has_writes()
                 had_user_db_writes = get_request_has_user_db_writes()
                 if had_writes or had_user_db_writes:
-                    sync_start = time.perf_counter()
+                    mark_sync_pending(user_id)
                     _begin_sync_attempt(user_id)
-                    try:
-                        _err_user_id = user_id
-                        _err_profile_id = profile_id
-                        profile_ok = await asyncio.to_thread(
-                            sync_db_to_r2_explicit, _err_user_id, _err_profile_id
-                        ) if had_writes and _err_profile_id else True
-                        user_ok = await asyncio.to_thread(
-                            sync_user_db_to_r2_explicit, _err_user_id
-                        ) if had_user_db_writes else True
-                        overall_ok = profile_ok and user_ok
-                    except Exception as sync_error:
-                        logger.error(f"Sync to R2 raised exception after request error: {sync_error}")
-                        overall_ok = False
-                    finally:
-                        _end_sync_attempt(user_id)
-                    sync_duration = time.perf_counter() - sync_start
-
-                    set_sync_failed(user_id, not overall_ok)
+                    asyncio.create_task(
+                        self._background_sync(
+                            user_id, profile_id, req_id, method, path,
+                            had_writes, had_user_db_writes,
+                            do_profile, force_profile,
+                            is_error_path=True,
+                        )
+                    )
             except Exception as tracking_error:
                 logger.error(f"Failed to track sync state after error: {tracking_error}")
 
@@ -779,6 +661,137 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         finally:
             meta["sync_duration"] = sync_duration
             meta["inflight_exit"] = _inflight_exit(user_id) if user_id else 0
+
+
+    async def _background_sync(
+        self,
+        user_id: str,
+        profile_id: str | None,
+        req_id: str,
+        method: str,
+        path: str,
+        had_writes: bool,
+        had_user_db_writes: bool,
+        do_profile: bool,
+        force_profile: bool,
+        is_error_path: bool = False,
+    ):
+        """T3250: R2 sync as background task. Runs after response is sent.
+
+        _begin_sync_attempt must be called BEFORE this task is created
+        (so the X-Sync-Status header doesn't flash "failed").
+        _end_sync_attempt is called in the finally block here.
+        """
+        lock_timeout = None if is_error_path else _SYNC_LOCK_TIMEOUT
+        sync_start = time.perf_counter()
+        sync_status = "ok"
+        try:
+            if had_writes and had_user_db_writes:
+                _user_id = user_id
+                _profile_id = profile_id
+                timing = {}
+                do_sync_profile = do_profile
+
+                def _sync_profile():
+                    sub_prof = cProfile.Profile() if do_sync_profile else None
+                    if sub_prof:
+                        sub_prof.enable()
+                    t0 = time.perf_counter()
+                    try:
+                        return sync_db_to_r2_explicit(_user_id, _profile_id, lock_timeout=lock_timeout)
+                    finally:
+                        elapsed_ms = (time.perf_counter() - t0) * 1000
+                        timing['profile_ms'] = elapsed_ms
+                        if sub_prof:
+                            sub_prof.disable()
+                            if force_profile or elapsed_ms >= profile_breach_ms():
+                                dump_profile(
+                                    sub_prof,
+                                    tag=f"syncthread_profile_{_user_id}",
+                                    elapsed_ms=elapsed_ms,
+                                    req_id=req_id,
+                                )
+
+                def _sync_user():
+                    sub_prof = cProfile.Profile() if do_sync_profile else None
+                    if sub_prof:
+                        sub_prof.enable()
+                    t0 = time.perf_counter()
+                    try:
+                        return sync_user_db_to_r2_explicit(_user_id, lock_timeout=lock_timeout)
+                    finally:
+                        elapsed_ms = (time.perf_counter() - t0) * 1000
+                        timing['user_ms'] = elapsed_ms
+                        if sub_prof:
+                            sub_prof.disable()
+                            if force_profile or elapsed_ms >= profile_breach_ms():
+                                dump_profile(
+                                    sub_prof,
+                                    tag=f"syncthread_user_{_user_id}",
+                                    elapsed_ms=elapsed_ms,
+                                    req_id=req_id,
+                                )
+
+                profile_ok, user_ok = await asyncio.gather(
+                    asyncio.to_thread(_sync_profile),
+                    asyncio.to_thread(_sync_user),
+                )
+
+                if profile_ok != user_ok:
+                    logger.warning(
+                        f"[SYNC_PARTIAL] user={_user_id} profile_ok={profile_ok} "
+                        f"user_ok={user_ok} path={path} method={method}"
+                    )
+
+                db_status = "ok" if profile_ok else "failed"
+                user_sync_success = user_ok
+
+                if PROFILING_ENABLED:
+                    parallel_ms = (time.perf_counter() - sync_start) * 1000
+                    p_ms = timing.get('profile_ms', 0)
+                    u_ms = timing.get('user_ms', 0)
+                    logger.info(
+                        f"[PROFILE] R2 sync: {parallel_ms:.0f}ms parallel "
+                        f"(would be {p_ms + u_ms:.0f}ms sequential: "
+                        f"profile: {p_ms:.0f}ms + user: {u_ms:.0f}ms)"
+                    )
+            elif had_writes:
+                result = await asyncio.to_thread(
+                    sync_db_to_r2_explicit, user_id, profile_id, lock_timeout
+                )
+                db_status = "ok" if result else "failed"
+                user_sync_success = True
+            else:
+                db_status = "ok"
+                user_sync_success = await asyncio.to_thread(
+                    sync_user_db_to_r2_explicit, user_id, lock_timeout
+                )
+
+            if db_status == "conflict":
+                sync_status = "conflict"
+            elif db_status == "failed" or not user_sync_success:
+                sync_status = "failed"
+        except Exception as sync_error:
+            log_msg = "Sync to R2 raised exception"
+            if is_error_path:
+                log_msg += " after request error"
+            logger.error(f"{log_msg}: {sync_error}")
+            sync_status = "failed"
+        finally:
+            _end_sync_attempt(user_id)
+
+        sync_duration = time.perf_counter() - sync_start
+
+        if sync_status == "ok":
+            clear_sync_pending(user_id)
+            logger.info(f"[SYNC] {method} {path} -> R2 sync OK ({sync_duration:.2f}s)")
+        elif sync_status == "conflict":
+            logger.warning(f"[SYNC] {method} {path} -> version conflict ({sync_duration:.2f}s)")
+        else:
+            logger.warning(f"[SYNC] {method} {path} -> R2 sync FAILED ({sync_duration:.2f}s)")
+
+        if is_error_path:
+            set_sync_failed(user_id, sync_status != "ok")
 
 
 # Keep old name for backward compatibility with imports
