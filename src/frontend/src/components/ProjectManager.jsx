@@ -570,7 +570,7 @@ export function ProjectManager({
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
       <div className="text-center pt-10 sm:pt-0 mb-6">
         <LogoWithText className="mx-auto mb-4" />
-        <p className="text-gray-400">Learn from, preserve, and celebrate your athlete's moments</p>
+        <p className="text-gray-400">Learn from, organize, and celebrate your athlete's moments</p>
       </div>
 
       {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}

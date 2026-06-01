@@ -30,7 +30,7 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Learn from, preserve, and celebrate your athlete's moments.
+            Learn from, organize, and celebrate your athlete's moments.
           </p>
 
           <div className="flex justify-center mb-12">
@@ -47,6 +47,66 @@ function App() {
             beforeSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/before.mp4"
             afterSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/after.mp4"
           />
+
+          {/* Product Showcase */}
+          <div className="mt-24 md:mt-32 space-y-20 md:space-y-28 mb-24 md:mb-32 text-left">
+            {/* Learn */}
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
+              <div className="w-full md:w-[60%]">
+                <img
+                  src="/annotate.png"
+                  alt="ReelBallers annotation editor showing coaching notes on game footage"
+                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300"
+                />
+              </div>
+              <div className="w-full md:w-[40%] text-center md:text-left">
+                <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-4">
+                  Learn
+                </h3>
+                <p className="text-lg text-gray-300 leading-relaxed">
+                  Leave notes on the moments that matter. Your athlete reviews at their own pace — no sideline lectures, no pressure.
+                </p>
+              </div>
+            </div>
+
+            {/* Organize */}
+            <div className="flex flex-col md:flex-row-reverse items-center gap-8 md:gap-16">
+              <div className="w-full md:w-[60%]">
+                <img
+                  src="/newreel.png"
+                  alt="ReelBallers reel creator with filters, tags, and one-click highlight reel generation"
+                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300"
+                />
+              </div>
+              <div className="w-full md:w-[40%] text-center md:text-left">
+                <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent mb-4">
+                  Organize
+                </h3>
+                <p className="text-lg text-gray-300 leading-relaxed">
+                  Every clip tagged, rated, and searchable. Filter by skill, pick your best, and generate a highlight reel in one click.
+                </p>
+              </div>
+            </div>
+
+            {/* Celebrate */}
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
+              <div className="w-full md:w-[60%]">
+                <img
+                  src="/frame.png"
+                  alt="ReelBallers framing tool with vertical crop overlay on wide-angle game footage"
+                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300"
+                />
+              </div>
+              <div className="w-full md:w-[40%] text-center md:text-left">
+                <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent mb-4">
+                  Celebrate
+                </h3>
+                <p className="text-lg text-gray-300 leading-relaxed">
+                  Turn sideline footage into a pro-quality vertical reel. AI upscaling and animated framing keeps your player centered and sharp.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Features */}
           <div className="grid md:grid-cols-3 gap-8 mb-16">
