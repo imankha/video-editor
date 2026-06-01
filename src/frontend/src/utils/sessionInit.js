@@ -95,13 +95,14 @@ function installFetchInterceptor() {
           // Clone + read body to measure body transfer time
           if (PROFILING_ENABLED) {
             const tBody0 = performance.now();
-            response.clone().text().then(() => {
+            response.clone().text().then((bodyText) => {
               const bodyMs = Math.round(performance.now() - tBody0);
               const total = Math.round(performance.now() - t0);
+              const sizeKB = (bodyText.length / 1024).toFixed(1);
               if (total >= SLOW_FETCH_MS) {
                 // eslint-disable-next-line no-console
                 console.warn(
-                  `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms req_id=${reqId} status=${response.status}`
+                  `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms size=${sizeKB}KB req_id=${reqId} status=${response.status}`
                 );
               }
               // User Timing mark for DevTools Performance timeline
