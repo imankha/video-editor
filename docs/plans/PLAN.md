@@ -78,6 +78,7 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T1535 | [Mobile Video Load Verify](tasks/T1535-mobile-video-load-verify.md) | 7 | 2 | 2.0 | DONE | [ ] | Verified on Chrome Android (1.7Mbps 4G): time-to-first-frame 2.0s, metadata fetch 716ms (moov at head), no 15s stall. Metadata extractor + video element run concurrently. No iOS Safari device available. |
 | T1539 | [R2 Concurrent-Write Rate Limit](tasks/T1539-r2-concurrent-write-rate-limit.md) | 7 | 2 | 3.5 | DONE | [ ] | Per-user per-key upload lock (`threading.Lock`) inside `sync_database_to_r2_with_version` and `sync_user_db_to_r2_with_version` serializes PutObject calls. Prevents export worker vs middleware sync race (the actual 429 source -- not request-to-request races, which the asyncio write lock already prevents). tryLock optimization skips redundant retry_pending_sync when upload already in progress. |
 | T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 4 | 1.0 | DONE | [ ] | T1539 shipped the R2 push lock; remaining handler-level parallelism gated on `[WRITE_LOCK_WAIT]` evidence that hasn't materialized. |
+| T3250 | [Non-Blocking R2 Sync](tasks/T3250-non-blocking-r2-sync.md) | 9 | 5 | 1.8 | TODO | [ ] | Write lock held during R2 sync (~600ms) serializes all write requests per user. Rapid navigation queues requests behind each other (115s DELETE observed on prod). Narrow write lock to handler only; fire R2 sync as background task. |
 
 ---
 
