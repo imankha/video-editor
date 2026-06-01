@@ -226,6 +226,59 @@ class TestWriteLockDoesNotBlockOnSync:
 
         asyncio.run(runner())
 
+    def test_5_rapid_deletes_under_250ms(self):
+        """Reproduce 2026-05-31 prod incident: user rapidly deleted 5 reels.
+
+        Before T3250: write lock held for handler (~50ms) + R2 sync (~200ms)
+          = 250ms each, serialized = ~1250ms total. Real prod saw 420s.
+        After T3250: lock covers handler only (~10ms each), sync fires in
+          background. 5 serialized handlers = ~50ms + overhead < 250ms.
+        Background syncs still complete (no data loss).
+        """
+
+        async def runner():
+            user = "test-rapid-delete-user"
+            sync_tasks = []
+            syncs_completed = []
+
+            async def slow_r2_sync(project_id):
+                await asyncio.sleep(0.2)
+                syncs_completed.append(project_id)
+
+            async def simulate_delete_request(project_id):
+                t0 = time.perf_counter()
+                async with db_sync._maybe_write_lock(
+                    user, "DELETE", f"/api/projects/{project_id}", f"rid_{project_id}"
+                ):
+                    await asyncio.sleep(0.01)  # handler: ~10ms
+                    mark_sync_pending(user)
+                    _begin_sync_attempt(user)
+                    task = asyncio.create_task(slow_r2_sync(project_id))
+                    sync_tasks.append(task)
+                return time.perf_counter() - t0
+
+            t0 = time.perf_counter()
+            response_times = await asyncio.gather(
+                *[simulate_delete_request(i) for i in range(5)]
+            )
+            total_response_time = time.perf_counter() - t0
+
+            assert total_response_time < 0.25, (
+                f"5 deletes took {total_response_time:.3f}s -- "
+                f"expected <250ms. Individual: "
+                f"{[f'{t:.3f}s' for t in response_times]}"
+            )
+
+            assert len(syncs_completed) == 0, (
+                "syncs should still be running when responses return"
+            )
+            await asyncio.gather(*sync_tasks)
+            assert len(syncs_completed) == 5, (
+                "all 5 background syncs must complete (no data loss)"
+            )
+
+        asyncio.run(runner())
+
     def test_background_task_runs_outside_lock(self):
         """asyncio.create_task inside the lock runs AFTER lock releases."""
 
