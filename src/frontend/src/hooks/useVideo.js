@@ -52,6 +52,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   // Delayed seek buffering: show spinner after 300ms if seek hasn't resolved
   const seekBufferingTimerRef = useRef(null);
 
+  // Desync resume: cooldown + retry cap to avoid endless play() spam
+  const lastDesyncResumeRef = useRef(0);
+  const desyncRetriesRef = useRef(0);
+  const DESYNC_MAX_RETRIES = 3;
+
   // T1400: monotonic load id + watchdog timer handle so range-fallback
   // warnings can be correlated across concurrent/serial loads and cleared
   // on loadeddata/error/unmount.
@@ -569,37 +574,46 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         `networkState=${v.networkState} readyState=${v.readyState}`
       );
 
-      // Stall watchdog: if still waiting after 10s, check if we're in a
-      // buffer gap (data exists after currentTime but not AT it). This
-      // happens when the stream proxy's Content-Length promised more bytes
-      // than were delivered, leaving holes the browser can't fill.
-      if (stallTimerRef.current) clearTimeout(stallTimerRef.current);
-      stallTimerRef.current = setTimeout(() => {
-        stallTimerRef.current = null;
-        const vv = videoRef.current;
-        if (!vv || vv.paused) return;
+      // Stall watchdog: if still waiting after 10s, reload the video.
+      // Don't reset on repeated waiting events — the first one starts the
+      // timer and subsequent ones leave it running so it actually fires.
+      if (!stallTimerRef.current) {
+        stallTimerRef.current = setTimeout(() => {
+          stallTimerRef.current = null;
+          const vv = videoRef.current;
+          if (!vv) return;
 
-        const state = getBufferAheadAt(vv, vv.currentTime);
-        if (state.ahead < 1) {
-          console.warn(
-            `[VIDEO] Stall watchdog: no buffer at currentTime=${vv.currentTime.toFixed(1)} ` +
-            `(inGap=${state.inGap} ranges=${state.rangeCount}), reloading`
-          );
-          const resumeAt = vv.currentTime;
-          retryAttemptRef.current += 1;
-          vv.addEventListener('loadeddata', () => {
-            if (vv && !Number.isNaN(resumeAt) && resumeAt > 0) {
-              try { vv.currentTime = resumeAt; } catch (_) {}
-            }
-          }, { once: true });
-          vv.load();
-        }
-      }, 10000);
+          const state = getBufferAheadAt(vv, vv.currentTime);
+          const needsReload = state.ahead < 1
+            || vv.readyState <= HTMLMediaElement.HAVE_METADATA;
+
+          if (needsReload) {
+            console.warn(
+              `[VIDEO] Stall watchdog: stuck at currentTime=${vv.currentTime.toFixed(1)} ` +
+              `(ahead=${state.ahead.toFixed(1)}s inGap=${state.inGap} ranges=${state.rangeCount} ` +
+              `readyState=${vv.readyState} networkState=${vv.networkState}), reloading`
+            );
+            const resumeAt = vv.currentTime;
+            const wasPlaying = !vv.paused || isPlaying;
+            retryAttemptRef.current += 1;
+            vv.addEventListener('loadeddata', () => {
+              if (vv && !Number.isNaN(resumeAt) && resumeAt > 0) {
+                try { vv.currentTime = resumeAt; } catch (_) {}
+              }
+              if (wasPlaying) {
+                try { vv.play(); } catch (_) {}
+              }
+            }, { once: true });
+            vv.load();
+          }
+        }, 10000);
+      }
     }
   };
 
   const handlePlaying = () => {
     setIsBuffering(false);
+    desyncRetriesRef.current = 0;
     if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
   };
 
@@ -639,11 +653,26 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     const updateTime = () => {
       if (videoRef.current) {
         // Desync fix: store says playing but video element is actually paused.
-        // This can happen when the video gets stuck buffering and the browser
-        // silently gives up, or during rapid clip switching.
+        // Try to resume up to DESYNC_MAX_RETRIES times. If the browser keeps
+        // pausing immediately after play(), give up and sync UI to paused.
         if (videoRef.current.paused) {
-          console.warn('[VIDEO] Desync: isPlaying=true but video.paused=true, syncing');
-          setIsPlaying(false);
+          if (desyncRetriesRef.current >= DESYNC_MAX_RETRIES) {
+            console.warn(`[VIDEO] Desync: giving up after ${DESYNC_MAX_RETRIES} retries, syncing to paused`);
+            desyncRetriesRef.current = 0;
+            setIsPlaying(false);
+            return;
+          }
+          const now = performance.now();
+          if (now - lastDesyncResumeRef.current > 3000) {
+            desyncRetriesRef.current += 1;
+            lastDesyncResumeRef.current = now;
+            console.warn(`[VIDEO] Desync: attempting resume (${desyncRetriesRef.current}/${DESYNC_MAX_RETRIES})`);
+            videoRef.current.play().catch(() => {
+              console.warn('[VIDEO] Desync: resume failed, syncing to paused');
+              desyncRetriesRef.current = 0;
+              setIsPlaying(false);
+            });
+          }
           return;
         }
 

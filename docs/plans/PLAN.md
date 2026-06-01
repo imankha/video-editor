@@ -296,6 +296,8 @@ Goal: Make money, virality, super polished. Most tasks here are yet to be genera
 | T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
 | T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
 | T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
+| T3260 | [Edit Game Metadata Post-Upload](tasks/T3260-edit-game-metadata.md) | 5 | 3 | 1.7 | TODO | [ ] | Allow editing game date, title, and other metadata after upload. Currently no way to change game details once created. |
+| T3270 | [Clip Boundary Visual Indicator](tasks/T3270-clip-boundary-indicator.md) | 5 | 2 | 2.5 | TODO | [ ] | White border on video player when playhead is within clip boundaries in Annotate mode. User can't tell when they're inside vs outside the clip. |
 |  | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 |  |  | Background export + push notifications + background uploads + share target + offline playback |
 | T443 | ↳ [Background Export Tracking](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close -- service worker tracks Modal job, notifies on completion. |
 | T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
@@ -446,6 +448,8 @@ IDs use gaps of 10 to allow insertions:
 - `T3080` - Sync User Activity to SQLite (dual-write activity to per-user SQLite)
 - `T3050` - Multi-Video Blank Video (bug fix, no error handling on dual video elements)
 - `T3060` - Make It Load Fast (Playwright perf benchmarks against prod)
+- `T3260` - Edit Game Metadata Post-Upload
+- `T3270` - Clip Boundary Visual Indicator (Annotate mode)
 - `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
