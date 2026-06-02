@@ -321,6 +321,25 @@ export const useGamesDataStore = create((set, get) => ({
     return `${API_BASE}/api/games/${gameId}/video`;
   },
 
+  fetchGameUrls: async (gameId) => {
+    try {
+      const res = await apiFetch(`${API_BASE}/api/games/${gameId}/urls`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      set(state => ({
+        games: state.games.map(g =>
+          g.id === gameId ? { ...g, video_url: data.video_url, recap_video_url: data.recap_video_url } : g
+        ),
+        readyGames: state.readyGames.map(g =>
+          g.id === gameId ? { ...g, video_url: data.video_url, recap_video_url: data.recap_video_url } : g
+        ),
+      }));
+      return data;
+    } catch {
+      return null;
+    }
+  },
+
   /**
    * Finish annotation for a game — persists view progress
    */

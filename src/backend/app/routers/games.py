@@ -909,6 +909,26 @@ async def _list_games_impl(skip_presigned_urls=False):
         return {'games': games}
 
 
+@router.get("/{game_id:int}/urls")
+async def get_game_urls(game_id: int):
+    """Return presigned URLs for a single game (lazy-loaded on demand)."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT blake3_hash, video_filename, recap_video_url FROM games WHERE id = ?",
+            (game_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+        video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+        return {
+            "game_id": game_id,
+            "video_url": video_url,
+            "recap_video_url": row['recap_video_url'],
+        }
+
+
 @router.get("/{game_id:int}/recap-url")
 async def get_recap_url(game_id: int):
     """Get presigned URL for a game's recap video."""
