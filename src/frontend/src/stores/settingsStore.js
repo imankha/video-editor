@@ -43,7 +43,10 @@ export const useSettingsStore = create((set, get) => ({
   isInitialized: false,
   error: null,
 
-  // Load settings from backend
+  setFromBootstrap: (settings) => {
+    set({ settings: { ...DEFAULT_SETTINGS, ...settings }, isLoading: false, isInitialized: true });
+  },
+
   loadSettings: async () => {
     // T1330: pre-login, stay on defaults — don't call backend.
     const { useAuthStore } = await import('./authStore');

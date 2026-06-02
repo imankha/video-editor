@@ -52,6 +52,13 @@ export const useGamesDataStore = create((set, get) => ({
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).
    */
+  setFromBootstrap: (gamesResponse) => {
+    const gamesList = gamesResponse.games || [];
+    const readyGames = gamesList.filter(g => g.status !== 'pending');
+    const pendingGameIds = new Set(gamesList.filter(g => g.status === 'pending').map(g => g.id));
+    set({ games: gamesList, readyGames, pendingGameIds, isLoading: false });
+  },
+
   fetchGames: async ({ force = false } = {}) => {
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.
@@ -312,6 +319,25 @@ export const useGamesDataStore = create((set, get) => ({
   getGameVideoUrl: (gameId, game = null) => {
     if (game?.video_url) return game.video_url;
     return `${API_BASE}/api/games/${gameId}/video`;
+  },
+
+  fetchGameUrls: async (gameId) => {
+    try {
+      const res = await apiFetch(`${API_BASE}/api/games/${gameId}/urls`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      set(state => ({
+        games: state.games.map(g =>
+          g.id === gameId ? { ...g, video_url: data.video_url, recap_video_url: data.recap_video_url } : g
+        ),
+        readyGames: state.readyGames.map(g =>
+          g.id === gameId ? { ...g, video_url: data.video_url, recap_video_url: data.recap_video_url } : g
+        ),
+      }));
+      return data;
+    } catch {
+      return null;
+    }
   },
 
   /**

@@ -21,6 +21,11 @@ export const useProfileStore = create((set, get) => ({
   isInitialized: false,
   error: null,
 
+  setFromBootstrap: (profiles) => {
+    const current = profiles.find(p => p.isCurrent);
+    set({ profiles, currentProfileId: current?.id || null, isLoading: false, isInitialized: true });
+  },
+
   fetchProfiles: async ({ force = false } = {}) => {
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchPromise && !force) return _fetchPromise;

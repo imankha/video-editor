@@ -7,7 +7,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#7c3aed" />
     <title>Reel Ballers</title>
+    <link rel="preconnect" href="https://app.reelballers.com" crossorigin>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      if (location.hostname !== 'localhost') {
+        fetch('/storage/warmup', {credentials: 'omit'}).catch(function(){});
+      }
+    </script>
     <style>
       /* Preloader — shown instantly, hidden by App.jsx when ready */
       #preloader {

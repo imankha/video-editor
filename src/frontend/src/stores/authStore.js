@@ -120,8 +120,9 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  // Called on app load after session check
-  setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null) => {
+  // Called on app load after session check.
+  // skipFetches: true when bootstrap will provide credits/admin data.
+  setSessionState: (isAuthenticated, email = null, pictureUrl = null, impersonator = null, { skipFetches = false } = {}) => {
     console.log(`[Auth] Session state: authenticated=${isAuthenticated}${email ? `, email=${email}` : ''}${impersonator ? ` (impersonated by ${impersonator.email})` : ''}`);
     set({
       isAuthenticated,
@@ -130,12 +131,8 @@ export const useAuthStore = create((set, get) => ({
       impersonator,
       isCheckingSession: false,
     });
-    // T530: Fetch credit balance if authenticated
-    if (isAuthenticated) {
+    if (!skipFetches && isAuthenticated) {
       useCreditStore.getState().fetchCredits();
-    }
-    // T550: Check admin status
-    if (isAuthenticated) {
       useAuthStore.getState().checkAdmin();
     }
   },

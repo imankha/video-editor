@@ -12,6 +12,10 @@ import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
 import { PROFILING_ENABLED } from './profiling';
 
+function fireAndForgetWarmup() {
+  fetch(`${API_BASE}/storage/warmup`, { credentials: 'omit' }).catch(() => {});
+}
+
 let _profileId = null;
 let _currentProfileId = null;
 let _currentUserId = null;
@@ -190,6 +194,8 @@ export async function initSession() {
   _initPromise = (async () => {
     const { useAuthStore } = await import('../stores/authStore');
 
+    fireAndForgetWarmup();
+
     updatePreloader(10, 'Connecting to server...');
     const authExpected = sessionStorage.getItem('authExpected');
     if (authExpected) sessionStorage.removeItem('authExpected');
@@ -200,7 +206,7 @@ export async function initSession() {
     let impersonator = null;
 
     try {
-      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`);
+      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, undefined, { retries: 2, baseDelay: 500 });
       if (meResponse.ok) {
         const meData = await meResponse.json();
         userId = meData.user_id;
@@ -234,39 +240,53 @@ export async function initSession() {
     if (!userId) {
       useAuthStore.getState().setSessionState(false);
       updatePreloader(40, 'Getting things ready...');
-      return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false };
+      return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false, profileReady: Promise.resolve() };
     }
 
-    // Authenticated — load profile + mark session state
-    useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
+    // T3360: Phase A complete (auth/me resolved). Do NOT call setSessionState
+    // yet -- that happens after Phase B sets _currentProfileId, preventing
+    // reactive fetches from arriving at the backend without X-Profile-ID.
 
+    // Phase B: fire auth/init (profile DB download) -- callers can await
+    // profileReady to know when profile-dependent endpoints are safe.
     updatePreloader(25, 'Initializing profile...');
-    const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
+    const cachedProfileId = _currentProfileId || sessionStorage.getItem('rb_profile_id');
+    const initBody = cachedProfileId ? JSON.stringify({ profile_id: cachedProfileId }) : '{}';
+    const profileReady = fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
-    });
-    if (!initResponse.ok) {
-      throw new Error(`Session init failed: ${initResponse.status}`);
-    }
-    const initData = await initResponse.json();
-    _profileId = initData.profile_id;
-    _currentProfileId = initData.profile_id;
-    updatePreloader(40, 'Getting things ready...');
+      headers: { 'Content-Type': 'application/json' },
+      body: initBody,
+    }).then(async (initResponse) => {
+      if (!initResponse.ok) {
+        throw new Error(`Session init failed: ${initResponse.status}`);
+      }
+      const initData = await initResponse.json();
+      _profileId = initData.profile_id;
+      _currentProfileId = initData.profile_id;
+      sessionStorage.setItem('rb_profile_id', initData.profile_id);
 
-    if (useAuthStore.getState().needsTermsAcceptance) {
-      apiFetch(`${API_BASE}/api/auth/accept-terms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ terms_version: '2026-05-07' }),
-      }).then(() => {
-        useAuthStore.setState({ needsTermsAcceptance: false });
-      }).catch(() => {});
-    }
+      // NOW set session state -- _currentProfileId is set so all subsequent
+      // requests will include X-Profile-ID header.
+      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator, { skipFetches: true });
+      updatePreloader(40, 'Getting things ready...');
+
+      if (useAuthStore.getState().needsTermsAcceptance) {
+        apiFetch(`${API_BASE}/api/auth/accept-terms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms_version: '2026-05-07' }),
+        }).then(() => {
+          useAuthStore.setState({ needsTermsAcceptance: false });
+        }).catch(() => {});
+      }
+
+      return initData;
+    });
 
     return {
-      profileId: initData.profile_id,
       userId,
-      isNewUser: initData.is_new_user,
       isAuthenticated: true,
+      profileReady,
     };
   })();
 

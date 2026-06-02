@@ -148,45 +148,53 @@ function App() {
 
     let initialLoadInProgress = true;
 
-    initSession().then((session) => {
-      // T1330: only fetch per-user data when authenticated. Pre-login we
-      // show the empty app shell; per-user stores stay empty until login.
+    initSession().then(async (session) => {
       if (!session.isAuthenticated) {
-        // T1330: show the new-user quest panel pre-login. Definitions are
-        // public; progress 401s harmlessly and the panel renders all steps
-        // as incomplete — that's the onboarding UI.
-        useQuestStore.getState().fetchDefinitions();
         useQuestStore.getState().fetchProgress();
         initialLoadInProgress = false;
         dismissPreloader();
         return;
       }
-      // T630/T635: Fire all initial data fetches in parallel after auth resolves
-      warmAllUserVideos();
-      const dataFetches = [
-        useProfileStore.getState().fetchProfiles(),
-        useProjectsStore.getState().fetchProjects(),
-        useGamesDataStore.getState().fetchGames(),
-        useQuestStore.getState().fetchDefinitions(),
-        useQuestStore.getState().fetchProgress(),
-        useSettingsStore.getState().loadSettings(),
-        useGalleryStore.getState().fetchCount(),
-      ];
 
-      let completed = 0;
-      let dismissed = false;
-      const total = dataFetches.length;
-      const tryDismiss = () => { if (!dismissed) { dismissed = true; dismissPreloader(); } };
-      dataFetches.forEach(p => {
-        const tick = () => {
-          completed++;
-          const pct = 40 + Math.round((completed / total) * 50);
-          updatePreloader(pct, 'Getting things ready...');
-          if (completed >= total) tryDismiss();
-        };
-        Promise.resolve(p).then(tick, tick);
-      });
-      setTimeout(tryDismiss, 8000);
+      // Wait for Phase B (profile ready) before bootstrap
+      await session.profileReady;
+
+      // T3370: Single bootstrap call replaces 9+ individual fetches
+      updatePreloader(50, 'Loading data...');
+      try {
+        const res = await apiFetch(`${API_BASE}/api/bootstrap`);
+        if (res.ok) {
+          const data = await res.json();
+          useProfileStore.getState().setFromBootstrap(data.profiles);
+          useSettingsStore.getState().setFromBootstrap(data.settings);
+          useCreditStore.getState().setFromBootstrap(data.credits);
+          useProjectsStore.getState().setFromBootstrap(data.projects);
+          useGamesDataStore.getState().setFromBootstrap(data.games);
+          useQuestStore.getState().setFromBootstrap(data.quests_progress);
+          useGalleryStore.getState().setFromBootstrap(data.downloads);
+          // Export recovery handled by useExportRecovery hook using bootstrap data
+          if (data.exports) {
+            const { useExportStore } = await import('./stores');
+            const exportStore = useExportStore.getState();
+            if (exportStore.setExportsFromServer && data.exports.active) {
+              exportStore.setExportsFromServer(data.exports.active);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[App] Bootstrap failed, falling back to individual fetches:', err);
+        await Promise.all([
+          useProfileStore.getState().fetchProfiles(),
+          useSettingsStore.getState().loadSettings(),
+          useProjectsStore.getState().fetchProjects(),
+          useGamesDataStore.getState().fetchGames(),
+          useQuestStore.getState().fetchProgress(),
+          useGalleryStore.getState().fetchCount(),
+        ]);
+      }
+
+      warmAllUserVideos();
+      dismissPreloader();
       initialLoadInProgress = false;
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)
@@ -292,7 +300,6 @@ function App() {
         useProfileStore.getState().fetchProfiles();
         useProjectsStore.getState().fetchProjects();
         useGamesDataStore.getState().fetchGames();
-        useQuestStore.getState().fetchDefinitions();
         useQuestStore.getState().fetchProgress();
         useSettingsStore.getState().loadSettings();
         useGalleryStore.getState().fetchCount();

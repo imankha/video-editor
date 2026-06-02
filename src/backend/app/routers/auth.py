@@ -126,6 +126,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 from app.utils.cookies import set_cookie as _set_cookie, delete_cookie as _delete_cookie
 
 
+class InitRequest(BaseModel):
+    profile_id: Optional[str] = None
+
+
 class InitResponse(BaseModel):
     user_id: str
     profile_id: str
@@ -133,17 +137,19 @@ class InitResponse(BaseModel):
 
 
 @router.post("/init", response_model=InitResponse)
-async def init_session():
+async def init_session(body: InitRequest = InitRequest()):
     """
     Initialize user session. Frontend calls this once on app mount AFTER login.
 
     Creates default profile if needed, ensures database exists. Returns
     profile_id for the frontend to include as X-Profile-ID header on all
     subsequent requests.
+
+    T3350: accepts optional profile_id hint to parallelize R2 downloads.
     """
     user_id = get_current_user_id()
     cancel_active_vacuum(user_id)
-    result = user_session_init(user_id)
+    result = user_session_init(user_id, hint_profile_id=body.profile_id)
 
     return InitResponse(
         user_id=user_id,

@@ -21,6 +21,10 @@ export const useCreditStore = create((set, get) => ({
   balance: 0,
   loaded: false,
 
+  setFromBootstrap: (credits) => {
+    set({ balance: credits.balance, loaded: true });
+  },
+
   fetchCredits: async () => {
     if (_fetchPromise) return _fetchPromise;
     _fetchPromise = (async () => {
