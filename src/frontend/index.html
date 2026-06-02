@@ -11,7 +11,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       if (location.hostname !== 'localhost') {
-        fetch('/api/storage/warmup', {credentials: 'omit'}).catch(function(){});
+        fetch('/storage/warmup', {credentials: 'omit'}).catch(function(){});
       }
     </script>
     <style>

@@ -13,7 +13,7 @@ import apiFetch from './apiFetch';
 import { PROFILING_ENABLED } from './profiling';
 
 function fireAndForgetWarmup() {
-  fetch(`${API_BASE}/api/storage/warmup`, { credentials: 'omit' }).catch(() => {});
+  fetch(`${API_BASE}/storage/warmup`, { credentials: 'omit' }).catch(() => {});
 }
 
 let _profileId = null;
