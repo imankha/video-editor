@@ -504,7 +504,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
             elif action.action == "set_highlight_shape":
                 if not action.data or action.data.highlight_shape is None:
                     raise ValueError("set_highlight_shape requires data.highlight_shape")
-                val = action.data.highlight_shape if action.data.highlight_shape in ('body', 'ground') else 'body'
+                val = action.data.highlight_shape if action.data.highlight_shape in ('body', 'ground') else 'ground'
                 cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
@@ -1576,11 +1576,11 @@ async def get_overlay_data(project_id: int):
         highlight_color = None
         video_duration = None
         from_raw_clip = False
-        highlight_shape = 'body'
+        highlight_shape = 'ground'
         stroke_width = 2
-        fill_enabled = False
-        fill_opacity = 0.10
-        dim_strength = 0.15
+        fill_enabled = True
+        fill_opacity = 0.20
+        dim_strength = 0.20
 
         if result:
             if result['highlights_data']:
@@ -1595,7 +1595,7 @@ async def get_overlay_data(project_id: int):
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
             video_duration = result['duration']
-            highlight_shape = result['highlight_shape'] or 'body'
+            highlight_shape = result['highlight_shape'] or 'ground'
             stroke_width = result['stroke_width']
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
@@ -1686,7 +1686,7 @@ class OverlayRenderRequest(BaseModel):
     effect_type: str = "dark_overlay"
 
 
-async def _run_local_overlay_export(
+async def _run_overlay_export_background(
     export_id: str,
     project_id: int,
     project_name: str,
@@ -1698,16 +1698,19 @@ async def _run_local_overlay_export(
     overlay_settings: dict = None,
 ):
     """
-    T760: Run overlay export in background when Modal is disabled.
-
-    Same processing logic as the Modal path in render_overlay(),
-    but runs as asyncio.create_task so the HTTP response returns immediately.
+    Run overlay export in background via asyncio.create_task.
+    Routes to Modal or local automatically via call_modal_overlay_auto.
     All progress is reported via WebSocket.
     """
     try:
         from app.services.export_helpers import send_progress, create_progress_callback, store_modal_call_id as store_call_id
 
-        logger.info(f"[Overlay Background] Starting local export for project {project_id}")
+        logger.info(f"[Overlay Background] Starting export for project {project_id}")
+
+        await send_progress(
+            export_id, 5, 100, 'processing', 'Starting export...',
+            'overlay', project_id=project_id, project_name=project_name
+        )
 
         output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
 
@@ -1857,7 +1860,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         video_duration = project['duration'] if project['duration'] else None
 
         overlay_settings = {
-            'highlight_shape': project['highlight_shape'] or 'body',
+            'highlight_shape': project['highlight_shape'] or 'ground',
             'stroke_width': project['stroke_width'],
             'fill_enabled': bool(project['fill_enabled']),
             'fill_opacity': project['fill_opacity'],
@@ -2037,145 +2040,23 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             logger.error(f"[Overlay Render] TEST MODE failed: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Test mode overlay export failed: {e}")
 
-    # T760: When Modal is disabled, run processing in background to avoid blocking the server
-    if not modal_enabled():
-        asyncio.create_task(
-            _run_local_overlay_export(
-                export_id=export_id,
-                project_id=project_id,
-                project_name=project_name,
-                user_id=user_id,
-                working_filename=working_filename,
-                highlight_regions=highlight_regions,
-                effect_type=effect_type,
-                video_duration=video_duration,
-                overlay_settings=overlay_settings,
-            )
-        )
-        return JSONResponse(
-            status_code=202,
-            content={"status": "accepted", "export_id": export_id}
-        )
-
-    # Update progress
-    progress_data = {
-        "progress": 5,
-        "message": "Sending to cloud GPU...",
-        "status": "processing",
-        "projectId": project_id,
-        "projectName": project_name,
-        "type": "overlay"
-    }
-    export_progress[export_id] = progress_data
-    await manager.send_progress(export_id, progress_data)
-
-    try:
-        # Use unified interface - routes to Modal or local automatically
-        from app.services.export_helpers import send_progress, create_progress_callback, store_modal_call_id as store_call_id
-
-        # Generate output filename
-        output_filename = f"final_{project_id}_{uuid.uuid4().hex[:8]}.mp4"
-        parallel_used = False
-
-        logger.info(f"[Overlay Render] Starting overlay processing (Modal: {modal_enabled()})")
-
-        # Create progress callback for unified interface
-        progress_callback = create_progress_callback(
-            export_id, 'overlay',
-            project_id=project_id, project_name=project_name
-        )
-
-        # Callback to store Modal call_id for job recovery
-        def modal_call_id_callback(modal_call_id: str):
-            store_call_id(export_id, modal_call_id)
-
-        result = await call_modal_overlay_auto(
-            job_id=export_id,
+    # Always run in background so the per-user write lock is released immediately.
+    # All progress is reported via WebSocket. call_modal_overlay_auto routes to
+    # Modal or local automatically.
+    asyncio.create_task(
+        _run_overlay_export_background(
+            export_id=export_id,
+            project_id=project_id,
+            project_name=project_name,
             user_id=user_id,
-            input_key=f"working_videos/{working_filename}",
-            output_key=f"final_videos/{output_filename}",
+            working_filename=working_filename,
             highlight_regions=highlight_regions,
             effect_type=effect_type,
             video_duration=video_duration,
-            progress_callback=progress_callback,
-            call_id_callback=modal_call_id_callback,
             overlay_settings=overlay_settings,
         )
-
-        if result.get("status") != "success":
-            error = result.get("error", "Unknown error")
-            raise RuntimeError(f"Overlay processing failed: {error}")
-
-        # Send progress update
-        await send_progress(
-            export_id, 95, 100, 'finalizing', 'Saving to library...',
-            'overlay', project_id=project_id, project_name=project_name
-        )
-
-        parallel_used = result.get("parallel", False)
-        logger.info(f"[Overlay Render] Processing complete (parallel={parallel_used})")
-
-        _t0 = time_module.monotonic()
-        final_video_id = await asyncio.to_thread(
-            _finalize_overlay_export,
-            project_id, output_filename, export_id, user_id,
-            gpu_seconds=result.get("gpu_seconds"), modal_function=result.get("modal_function"),
-        )
-        logger.info(f"[T1110] _finalize_overlay_export (Modal) took {time_module.monotonic() - _t0:.2f}s (threaded)")
-
-        # Send complete progress
-        complete_data = {
-            "progress": 100,
-            "message": "Export complete!",
-            "status": ExportStatus.COMPLETE,
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "overlay",
-            "finalVideoId": final_video_id,
-            "finalFilename": output_filename
-        }
-        export_progress[export_id] = complete_data
-        await manager.send_progress(export_id, complete_data)
-
-        logger.info(f"[Overlay Render] Complete: final_video_id={final_video_id}, parallel={parallel_used}")
-
-        return JSONResponse({
-            'success': True,
-            'final_video_id': final_video_id,
-            'filename': output_filename,
-            'project_id': project_id,
-            'export_id': export_id,
-            'modal_used': modal_enabled(),
-            'parallel_used': parallel_used,
-            'video_duration': video_duration
-        })
-
-    except Exception as e:
-        logger.error(f"[Overlay Render] Failed: {e}", exc_info=True)
-
-        # Update export_jobs to error
-        try:
-            with get_db_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    UPDATE export_jobs SET status = 'error', error = ?, completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (str(e)[:500], export_id))
-                conn.commit()
-        except Exception:
-            pass
-
-        from app.websocket import make_progress_data
-        error_data = make_progress_data(
-            current=0,
-            total=100,
-            phase='error',
-            message=f"Export failed: {e}",
-            export_type='overlay',
-            project_id=project_id,
-            project_name=project_name,
-        )
-        export_progress[export_id] = error_data
-        await manager.send_progress(export_id, error_data)
-
-        raise HTTPException(status_code=500, detail=str(e))
+    )
+    return JSONResponse(
+        status_code=202,
+        content={"status": "accepted", "export_id": export_id}
+    )

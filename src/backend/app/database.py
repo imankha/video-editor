@@ -647,11 +647,11 @@ def ensure_database():
                 effect_type TEXT DEFAULT 'original',
                 overlay_version INTEGER DEFAULT 0,
                 highlight_color TEXT DEFAULT NULL,
-                highlight_shape TEXT DEFAULT 'body',
+                highlight_shape TEXT DEFAULT 'ground',
                 stroke_width REAL DEFAULT 2,
-                fill_enabled INTEGER DEFAULT 0,
-                fill_opacity REAL DEFAULT 0.10,
-                dim_strength REAL DEFAULT 0.15,
+                fill_enabled INTEGER DEFAULT 1,
+                fill_opacity REAL DEFAULT 0.20,
+                dim_strength REAL DEFAULT 0.20,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
