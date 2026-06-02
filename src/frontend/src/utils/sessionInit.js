@@ -267,7 +267,7 @@ export async function initSession() {
 
       // NOW set session state -- _currentProfileId is set so all subsequent
       // requests will include X-Profile-ID header.
-      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
+      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator, { skipFetches: true });
       updatePreloader(40, 'Getting things ready...');
 
       if (useAuthStore.getState().needsTermsAcceptance) {
