@@ -12,6 +12,10 @@ import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
 import { PROFILING_ENABLED } from './profiling';
 
+function fireAndForgetWarmup() {
+  fetch(`${API_BASE}/api/storage/warmup`, { credentials: 'omit' }).catch(() => {});
+}
+
 let _profileId = null;
 let _currentProfileId = null;
 let _currentUserId = null;
@@ -189,6 +193,8 @@ export async function initSession() {
 
   _initPromise = (async () => {
     const { useAuthStore } = await import('../stores/authStore');
+
+    fireAndForgetWarmup();
 
     updatePreloader(10, 'Connecting to server...');
     const authExpected = sessionStorage.getItem('authExpected');

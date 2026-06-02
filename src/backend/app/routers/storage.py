@@ -206,21 +206,18 @@ async def get_warmup_urls(
     """
     Get all video URLs for the current user to pre-warm CDN cache.
 
-    Returns presigned URLs for:
-    - Game videos (source footage) - includes size for tail warming
-    - Final videos (exported results)
-    - Working videos (intermediate exports)
+    T3310: When called without auth, returns 200 immediately -- this just
+    wakes the Fly.io machine and initializes the Postgres connection pool.
+    The frontend fires this before auth/me so the machine is warm.
 
-    Call this on user login/app init to warm Cloudflare edge cache.
-    First access to R2 can be slow (cold cache), but subsequent
-    accesses are fast. Pre-warming ensures videos load quickly.
-
-    For large game videos, the frontend should warm BOTH the start
-    AND the end of the file (where moov atom often lives for non-faststart MP4s).
-
-    Returns:
-        {"urls": [url1, url2, ...], "count": N}
+    With auth, returns presigned URLs for cache warming as before.
     """
+    from ..user_context import _current_user_id
+    try:
+        _current_user_id.get()
+    except LookupError:
+        return {"urls": [], "count": 0, "r2_enabled": R2_ENABLED, "warmup_only": True}
+
     if not R2_ENABLED:
         return {"urls": [], "count": 0, "r2_enabled": False}
 

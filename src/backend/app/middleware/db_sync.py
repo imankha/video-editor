@@ -291,6 +291,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
         '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/api/shared/',             # T1750: public share links work without auth
+        '/storage/warmup',          # T3310: unauthenticated warmup wakes Fly.io machine
         '/docs',                    # API docs
         '/redoc',                   # API docs
         '/openapi.json',            # OpenAPI spec
