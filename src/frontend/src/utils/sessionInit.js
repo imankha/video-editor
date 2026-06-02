@@ -206,7 +206,7 @@ export async function initSession() {
     let impersonator = null;
 
     try {
-      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`);
+      const meResponse = await fetchWithRetry(`${API_BASE}/api/auth/me`, undefined, { retries: 2, baseDelay: 500 });
       if (meResponse.ok) {
         const meData = await meResponse.json();
         userId = meData.user_id;
