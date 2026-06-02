@@ -19,6 +19,7 @@ import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
 import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
+import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
 
@@ -373,21 +374,34 @@ export function FramingScreen({
    * Get the video URL and clip range for a clip.
    * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
    */
-  const getClipVideoConfig = useCallback((clip) => {
+  const getClipVideoConfig = useCallback(async (clip) => {
     if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
-      // T1460: return BOTH URLs (proxy + raw R2). useVideo.loadVideo picks the
-      // right one at load time using the freshest warm state — moving the
-      // decision here meant it was frozen at clip-select and missed warm
-      // completions that finished mid-load.
-      const proxyUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`;
-      return {
-        url: proxyUrl,
-        gameUrl: clip.game_video_url,
-        clipRange: {
-          clipOffset: clip.start_time,
-          clipDuration: clip.end_time - clip.start_time,
-        },
-      };
+      try {
+        const res = await apiFetch(
+          `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/playback-url`
+        );
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        return {
+          url: data.url,
+          gameUrl: null,
+          clipRange: {
+            clipOffset: data.start_time,
+            clipDuration: data.end_time - data.start_time,
+          },
+        };
+      } catch (err) {
+        console.warn('[Framing] Presigned URL fetch failed, falling back to proxy:', err.message);
+        const proxyUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`;
+        return {
+          url: proxyUrl,
+          gameUrl: null,
+          clipRange: {
+            clipOffset: clip.start_time,
+            clipDuration: clip.end_time - clip.start_time,
+          },
+        };
+      }
     }
     // Uploaded/extracted clip: use file_url directly (no offset)
     const url = getClipFileUrlSelector(clip, projectId);
@@ -397,9 +411,14 @@ export function FramingScreen({
   // Derive clip range for the currently selected clip (used by VideoPlayer for preload hints)
   const currentClipRange = useMemo(() => {
     if (!selectedClip) return null;
-    const { clipRange } = getClipVideoConfig(selectedClip);
-    return clipRange;
-  }, [selectedClip, getClipVideoConfig]);
+    if (selectedClip.game_video_url && selectedClip.start_time != null && selectedClip.end_time != null) {
+      return {
+        clipOffset: selectedClip.start_time,
+        clipDuration: selectedClip.end_time - selectedClip.start_time,
+      };
+    }
+    return null;
+  }, [selectedClip]);
 
   // Re-fetch clips on mount — picks up any changes made in annotate mode.
   // fetchClips dedupes in-flight requests, so concurrent calls from useProjectLoader are free.
@@ -442,20 +461,20 @@ export function FramingScreen({
   // user never sees stale video or a "no video loaded" flash.
   useLayoutEffect(() => {
     if (clips.length === 0) return;
-    // T1410: AbortController lets StrictMode's synthetic unmount cancel the
-    // first mount's init work. loadVideoFromStreamingUrl only mutates store
-    // state (the <video> element does the actual network fetch), but we still
-    // guard so that any auxiliary async work scheduled off this effect can
-    // be cancelled cleanly.
     const controller = new AbortController();
     const targetClip = (selectedClipId && clips.find(c => c.id === selectedClipId)) || clips[0];
-    const { url: clipUrl, gameUrl, clipRange } = getClipVideoConfig(targetClip);
-    if (!clipUrl || clipUrl.startsWith('blob:')) return;
-    const meta = clipMetadataCache[targetClip.id];
-    warmVideoCache(clipUrl);
-    if (controller.signal.aborted) return;
-    loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange, { gameUrl });
-    lastLoadedUrlRef.current = clipUrl.split('?')[0];
+
+    (async () => {
+      const { url: clipUrl, gameUrl, clipRange } = await getClipVideoConfig(targetClip);
+      if (!clipUrl || clipUrl.startsWith('blob:')) return;
+      if (controller.signal.aborted) return;
+      const meta = clipMetadataCache[targetClip.id];
+      warmVideoCache(clipUrl);
+      if (controller.signal.aborted) return;
+      loadVideoFromStreamingUrl(clipUrl, meta?.metadata || null, clipRange, { gameUrl });
+      lastLoadedUrlRef.current = clipUrl.split('?')[0];
+    })();
+
     return () => controller.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- mount-only, mirrors initial load effect
 
@@ -465,51 +484,51 @@ export function FramingScreen({
     if (clips.length === 0) return;
 
     const firstClip = clips[0];
-    const { url: clipUrl, gameUrl: firstGameUrl, clipRange } = getClipVideoConfig(firstClip);
-    if (!clipUrl) return;
+    const controller = new AbortController();
 
-    const firstClipWithMeta = getClipWithMeta(firstClip);
+    (async () => {
+      const { url: clipUrl, gameUrl: firstGameUrl, clipRange } = await getClipVideoConfig(firstClip);
+      if (!clipUrl) return;
+      if (controller.signal.aborted) return;
 
-    // Restore framing state (crop keyframes, segments) from clip data if not already done.
-    // The useLayoutEffect above may have already loaded the video (for overlay→framing
-    // transitions), but state restoration still needs to happen. Guard with ref to
-    // prevent infinite loops (restore updates state → re-render → effect re-fires).
-    // Guard on URL path (without query) because R2 signatures regenerate per render.
-    const clipUrlKey = clipUrl.split('?')[0];
-    const clipDuration = firstClipWithMeta?.duration;
-    if (stateRestoredForUrlRef.current !== clipUrlKey && clipDuration) {
-      stateRestoredForUrlRef.current = clipUrlKey;
-      const parsedSegments = clipSegments(firstClip, clipDuration);
-      const parsedCropKfs = clipCropKeyframes(firstClip);
+      const firstClipWithMeta = getClipWithMeta(firstClip);
 
-      if (parsedSegments) {
-        restoreSegmentState(parsedSegments, clipDuration);
-      }
+      // Restore framing state (crop keyframes, segments) from clip data if not already done.
+      // The useLayoutEffect above may have already loaded the video (for overlay→framing
+      // transitions), but state restoration still needs to happen. Guard with ref to
+      // prevent infinite loops (restore updates state → re-render → effect re-fires).
+      // Guard on URL path (without query) because R2 signatures regenerate per render.
+      const clipUrlKey = clipUrl.split('?')[0];
+      const clipDuration = firstClipWithMeta?.duration;
+      if (stateRestoredForUrlRef.current !== clipUrlKey && clipDuration) {
+        stateRestoredForUrlRef.current = clipUrlKey;
+        const parsedSegments = clipSegments(firstClip, clipDuration);
+        const parsedCropKfs = clipCropKeyframes(firstClip);
 
-      if (parsedCropKfs && parsedCropKfs.length > 0) {
-        const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
-        if (endFrame > 0) {
-          restoreCropState(parsedCropKfs, endFrame);
+        if (parsedSegments) {
+          restoreSegmentState(parsedSegments, clipDuration);
+        }
+
+        if (parsedCropKfs && parsedCropKfs.length > 0) {
+          const endFrame = Math.round(clipDuration * (firstClipWithMeta?.framerate || 30));
+          if (endFrame > 0) {
+            restoreCropState(parsedCropKfs, endFrame);
+          }
+        }
+
+        if (firstClip.id) {
+          previousClipIdRef.current = firstClip.id;
         }
       }
 
-      if (firstClip.id) {
-        previousClipIdRef.current = firstClip.id;
-      }
-    }
+      // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
+      // Compare path-without-query since signed R2 URLs regenerate per render.
+      if (lastLoadedUrlRef.current === clipUrlKey) return;
+      if (controller.signal.aborted) return;
 
-    // Skip video loading if already loaded (e.g., by useLayoutEffect on mount)
-    // Compare path-without-query since signed R2 URLs regenerate per render.
-    if (lastLoadedUrlRef.current === clipUrlKey) return;
+      lastLoadedUrlRef.current = clipUrlKey;
+      initialLoadDoneRef.current = true;
 
-    console.log('[FramingScreen] Initializing video for first clip:', firstClip.id);
-    lastLoadedUrlRef.current = clipUrlKey;
-    initialLoadDoneRef.current = true;
-
-    // T1410: AbortController so StrictMode's synthetic unmount can short-circuit
-    // the (blob-path) async download before it mutates store state.
-    const controller = new AbortController();
-    const loadFirstClipVideo = async () => {
       if (!clipUrl.startsWith('blob:')) {
         warmVideoCache(clipUrl);
         if (controller.signal.aborted) return;
@@ -521,9 +540,8 @@ export function FramingScreen({
           setVideoFile(file);
         }
       }
-    };
+    })();
 
-    loadFirstClipVideo();
     return () => controller.abort();
   }, [clips, projectId, clipMetadataCache, loadVideoFromUrl, loadVideoFromStreamingUrl, restoreSegmentState, restoreCropState, getClipWithMeta]);
 
@@ -583,7 +601,7 @@ export function FramingScreen({
         }
 
         // 3. Load new clip's video (or just seek if same video URL)
-        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = getClipVideoConfig(newClip);
+        const { url: newClipUrl, gameUrl: newGameUrl, clipRange: newClipRange } = await getClipVideoConfig(newClip);
         if (newClipUrl) {
           if (!newClipUrl.startsWith('blob:')) {
             warmVideoCache(newClipUrl);

@@ -1938,6 +1938,39 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     return {"results": email_results, "all_sent": all_sent}
 
 
+@router.get("/{game_id:int}/playback-url")
+async def get_game_playback_url(game_id: int):
+    """Return presigned R2 URL for direct browser playback."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                g.video_filename,
+                COALESCE(gv.video_size, g.video_size) AS video_size
+            FROM games g
+            LEFT JOIN game_videos gv
+                ON gv.game_id = g.id AND gv.sequence = 1
+            WHERE g.id = ?
+        """, (game_id,))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(404, "Game not found")
+    if not row['blake3_hash']:
+        raise HTTPException(422, "Game video missing blake3 hash")
+
+    url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+    if not url:
+        raise HTTPException(502, "Failed to generate R2 URL")
+
+    return {
+        "url": url,
+        "expires_in": 14400,
+        "file_size": row['video_size'],
+    }
+
+
 @router.get("/{game_id:int}/stream")
 async def stream_game_bounded(
     game_id: int,

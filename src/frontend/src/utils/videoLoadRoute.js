@@ -1,15 +1,12 @@
 /**
  * Decide, at video-load time, which URL to feed the <video> element.
  *
- * Game clips always go through T1430's bounded proxy. The proxy clamps
- * Content-Length to the clip window + moov boxes — without it, the browser
- * issues open-ended Range requests against the raw R2 URL and over-buffers
- * by orders of magnitude (observed: 454s buffered for an 8s clip even when
- * the byte range had been warmed). T1460 previously added a DIRECT_WARM
- * bypass on the assumption that warming would prevent overbuffer; HAR
- * evidence proved otherwise (the browser ignored the warmed cache entries),
- * so the bypass was removed. Warming still helps — it warms the proxy's
- * upstream R2 fetch — just not the browser's <video> request.
+ * T3250: Game clips now use presigned R2 URLs by default (direct browser
+ * streaming). The bounded proxy (T1430) remains as a fallback if the
+ * presigned URL fetch fails. When the presigned URL is the main url and
+ * gameUrl is null, chooseLoadRoute returns PASSTHROUGH.
+ *
+ * DIRECT_FORCED (?direct=1) still exists as a debug override.
  *
  * `rangeCovered` is still computed and returned so warm-coverage telemetry
  * survives even though it no longer changes the route.

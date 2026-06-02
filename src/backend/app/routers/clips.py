@@ -1599,6 +1599,47 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
         return RedirectResponse(url=presigned_url, status_code=302)
 
 
+@router.get("/projects/{project_id}/clips/{clip_id}/playback-url")
+async def get_clip_playback_url(project_id: int, clip_id: int):
+    """Return presigned R2 URL + clip timing for direct browser playback."""
+    from app.routers.games import get_game_video_url
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT
+                rc.start_time, rc.end_time,
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                g.video_filename,
+                COALESCE(gv.video_size, g.video_size) AS video_size
+            FROM working_clips wc
+            JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv
+                ON gv.game_id = rc.game_id
+                AND gv.sequence = COALESCE(rc.video_sequence, 1)
+            WHERE wc.id = ? AND wc.project_id = ?
+        """, (clip_id, project_id))
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(404, "Clip not found")
+    if not row['blake3_hash']:
+        raise HTTPException(422, "Game video missing blake3 hash")
+
+    url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+    if not url:
+        raise HTTPException(502, "Failed to generate R2 URL")
+
+    return {
+        "url": url,
+        "expires_in": 14400,
+        "file_size": row['video_size'],
+        "start_time": row['start_time'],
+        "end_time": row['end_time'],
+    }
+
+
 @router.get("/projects/{project_id}/clips/{clip_id}/stream")
 async def stream_working_clip_bounded(
     project_id: int,

@@ -114,6 +114,34 @@ export function AnnotateContainer({
     }
   }, [getGame]);
 
+  const playbackUrlRefreshTimerRef = useRef(null);
+
+  const schedulePlaybackUrlRefresh = useCallback((gameId, ttlSeconds) => {
+    if (playbackUrlRefreshTimerRef.current) {
+      clearTimeout(playbackUrlRefreshTimerRef.current);
+    }
+    const refreshMs = ttlSeconds * 0.75 * 1000;
+    playbackUrlRefreshTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await apiFetch(`${API_BASE}/api/games/${gameId}/playback-url`);
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        setAnnotateVideoUrl(data.url);
+        schedulePlaybackUrlRefresh(gameId, data.expires_in);
+      } catch (err) {
+        console.warn('[Annotate] Presigned URL refresh failed:', err.message);
+      }
+    }, refreshMs);
+  }, [setAnnotateVideoUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (playbackUrlRefreshTimerRef.current) {
+        clearTimeout(playbackUrlRefreshTimerRef.current);
+      }
+    };
+  }, []);
+
   // T2750: Dual-video scrub for unified multi-video experience
   const multiVideo = useMultiVideoScrub({ gameVideos, playbackRate: annotatePlaybackSpeed, onRefreshUrls: refreshMultiVideoUrls });
   const fullTimeline = useMemo(
@@ -484,12 +512,21 @@ export function AnnotateContainer({
 
       // Set annotate state with the game's video
       setAnnotateVideoFile(null);
-      // Use bounded streaming proxy -- only downloads moov + clip byte ranges
-      const proxyBase = `${API_BASE}/api/games/${gameId}/stream`;
-      const proxyUrl = pendingClipSeekTime != null
-        ? `${proxyBase}?t=${pendingClipSeekTime}#t=${pendingClipSeekTime}`
-        : proxyBase;
-      setAnnotateVideoUrl(proxyUrl);
+      let playbackUrl;
+      try {
+        const res = await apiFetch(`${API_BASE}/api/games/${gameId}/playback-url`);
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json();
+        playbackUrl = data.url;
+        schedulePlaybackUrlRefresh(gameId, data.expires_in);
+      } catch (err) {
+        console.warn('[Annotate] Presigned URL fetch failed, falling back to proxy:', err.message);
+        playbackUrl = `${API_BASE}/api/games/${gameId}/stream`;
+      }
+      if (pendingClipSeekTime != null) {
+        playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
+      }
+      setAnnotateVideoUrl(playbackUrl);
       setAnnotateVideoMetadata(videoMetadata);
       annotateGameIdRef.current = gameId;
       setAnnotateGameId(gameId);
