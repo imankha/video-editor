@@ -15,6 +15,7 @@ in _init_cache. Subsequent calls just set the profile context and return.
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 from .profile_context import set_current_profile_id
@@ -46,7 +47,7 @@ def invalidate_user_cache(user_id: str) -> None:
     _init_cache.pop(user_id, None)
 
 
-def user_session_init(user_id: str) -> dict:
+def user_session_init(user_id: str, hint_profile_id: str | None = None) -> dict:
     """
     Initialize a user session. Idempotent — safe to call on every request.
 
@@ -80,48 +81,74 @@ def user_session_init(user_id: str) -> dict:
             set_current_profile_id(cached["profile_id"])
             return cached
 
-        return _init_slow_path(user_id)
+        return _init_slow_path(user_id, hint_profile_id)
 
 
-def _init_slow_path(user_id: str) -> dict:
-    # 1. Ensure user-level database exists (needed before profile lookup)
+def _ensure_database_with_context(user_id: str, profile_id: str) -> None:
+    """Run ensure_database in a thread with the correct context vars set."""
+    from .user_context import set_current_user_id
+    set_current_user_id(user_id)
+    set_current_profile_id(profile_id)
+    from .database import ensure_database
+    ensure_database()
+
+
+def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     from .services.user_db import ensure_user_database
-    ensure_user_database(user_id)
-
-    # 2. Load or create profile (user.sqlite is source of truth)
     from .services.user_db import (
         get_selected_profile_id,
         create_profile, set_selected_profile_id,
     )
+    from .database import ensure_database
 
     profile_id = None
     is_new_user = False
 
-    profile_id = get_selected_profile_id(user_id)
-    if profile_id:
-        logger.info(f"Loaded profile {profile_id} for user {user_id} from user.sqlite")
+    if hint_profile_id:
+        # T3350: Parallelize R2 downloads when profile_id is known upfront.
+        # Fire user.sqlite and profile.sqlite downloads concurrently.
+        set_current_profile_id(hint_profile_id)
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            f_user = executor.submit(ensure_user_database, user_id)
+            f_profile = executor.submit(_ensure_database_with_context, user_id, hint_profile_id)
+            f_user.result()
+            f_profile.result()
+
+        # Validate: does the hinted profile_id actually exist in user.sqlite?
+        actual_profile_id = get_selected_profile_id(user_id)
+        if actual_profile_id == hint_profile_id:
+            profile_id = hint_profile_id
+            logger.info(f"T3350: Parallel init OK, profile {profile_id} for user {user_id}")
+        else:
+            # Hint was stale -- fall back to the real selected profile
+            profile_id = actual_profile_id
+            if profile_id:
+                logger.info(f"T3350: Hint stale, using actual profile {profile_id} for user {user_id}")
+                set_current_profile_id(profile_id)
+                ensure_database()
+    else:
+        # Sequential path: no hint available
+        ensure_user_database(user_id)
+        profile_id = get_selected_profile_id(user_id)
+        if profile_id:
+            logger.info(f"Loaded profile {profile_id} for user {user_id} from user.sqlite")
 
     if not profile_id:
-        # New user — create default profile in user.sqlite
         profile_id = uuid4().hex[:8]
         is_new_user = True
         create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True)
         set_selected_profile_id(user_id, profile_id)
         logger.info(f"Created new profile {profile_id} for user {user_id}")
 
-        # T1580: seed starting credits for new accounts
         from .services.storage_credits import NEW_ACCOUNT_CREDITS
         from .services.user_db import grant_credits
         grant_credits(user_id, NEW_ACCOUNT_CREDITS, source="new_account_bonus")
         logger.info(f"Seeded {NEW_ACCOUNT_CREDITS} credits for new user {user_id}")
 
-    # 2. Set profile context
     set_current_profile_id(profile_id)
 
-    # 3. Ensure database exists
-    # Import here to avoid circular imports (database.py imports from storage.py)
-    from .database import ensure_database
-    ensure_database()
+    if not hint_profile_id or is_new_user:
+        ensure_database()
 
     # T3230: Auto-materialize pending teammate shares for single-profile users
     try:

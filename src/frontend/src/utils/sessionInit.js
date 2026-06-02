@@ -247,8 +247,12 @@ export async function initSession() {
     useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
 
     updatePreloader(25, 'Initializing profile...');
+    const cachedProfileId = _currentProfileId || sessionStorage.getItem('rb_profile_id');
+    const initBody = cachedProfileId ? JSON.stringify({ profile_id: cachedProfileId }) : '{}';
     const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: initBody,
     });
     if (!initResponse.ok) {
       throw new Error(`Session init failed: ${initResponse.status}`);
@@ -256,6 +260,7 @@ export async function initSession() {
     const initData = await initResponse.json();
     _profileId = initData.profile_id;
     _currentProfileId = initData.profile_id;
+    sessionStorage.setItem('rb_profile_id', initData.profile_id);
     updatePreloader(40, 'Getting things ready...');
 
     if (useAuthStore.getState().needsTermsAcceptance) {
