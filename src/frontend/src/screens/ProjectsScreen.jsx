@@ -148,6 +148,10 @@ export function ProjectsScreen({
       // Fetch project details (selectProject updates the Zustand store,
       // which App.jsx reads reactively — no separate callback needed)
       const project = await selectProject(projectId);
+      if (!project) {
+        console.error('[ProjectsScreen] Failed to fetch project', projectId);
+        return;
+      }
 
       // Load project with all associated data
       const result = await loadProject(project);
@@ -186,6 +190,10 @@ export function ProjectsScreen({
 
       // Fetch project details
       const project = await selectProject(projectId);
+      if (!project) {
+        console.error('[ProjectsScreen] Failed to fetch project', projectId);
+        return;
+      }
 
       // Set mode immediately to prevent flash (e.g. framing flash before overlay)
       if (options.mode) {
