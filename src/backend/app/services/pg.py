@@ -274,8 +274,11 @@ def init_pg_pool():
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL environment variable is required")
-    _pool = ThreadedConnectionPool(minconn=2, maxconn=10, dsn=dsn, cursor_factory=RealDictCursor)
-    logger.info("[PG] Connection pool initialized (min=2, max=10)")
+    _pool = ThreadedConnectionPool(
+        minconn=2, maxconn=10, dsn=dsn, cursor_factory=RealDictCursor,
+        keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
+    )
+    logger.info("[PG] Connection pool initialized (min=2, max=10, keepalive=30s)")
 
 
 def close_pg_pool():
@@ -286,6 +289,17 @@ def close_pg_pool():
         logger.info("[PG] Connection pool closed")
 
 
+def _is_connection_dead(conn) -> bool:
+    """Check if connection is alive by running a trivial query."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+        conn.rollback()
+        return False
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        return True
+
+
 @contextmanager
 def get_pg():
     """Yield a connection from the pool. Auto-commits on clean exit, rolls back on error."""
@@ -293,7 +307,8 @@ def get_pg():
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
     conn = _pool.getconn()
     try:
-        if conn.closed:
+        if conn.closed or _is_connection_dead(conn):
+            logger.warning("[PG] Discarding dead connection, fetching fresh one")
             _pool.putconn(conn, close=True)
             conn = _pool.getconn()
         yield conn
