@@ -2,42 +2,38 @@
 
 **Status:** TODO
 **Started:** --
-**Depends on:** T3240 (Direct R2 Streaming Experiment) — results determine scope
+**Depends on:** T3250 (Direct R2 Video Streaming) -- presigned URL streaming must be deployed first
 
 ## Goal
 
-Move video serving from Fly.io backend proxy to Cloudflare edge (R2 custom domain + optional Worker). Eliminates Fly.io egress cost, HTTP/1.1 socket exhaustion, and lack of CDN caching. Backend becomes API-only for video requests.
+Add Cloudflare edge infrastructure on top of T3250's direct R2 streaming: custom domain for HTTP/2 multiplexing, HMAC-signed URLs for tighter auth, and CDN caching for smaller video types. Backend becomes API-only for video requests.
 
-## Prerequisite: T3240 Experiment Results
+## Prerequisite: T3250 Deployed
 
-T3240 tests presigned URLs direct to browser (no Worker, no custom domain) behind a feature flag. Its results determine **which tasks in this epic are needed**:
+T3250 replaces the Fly.io video proxy with presigned R2 URLs for game and clip streaming. Once T3250 is deployed and validated, this epic adds edge infrastructure:
 
-| T3240 Result | Epic Scope |
-|---|---|
-| Presigned URLs fix TTFB + playback smooth | T2550 simplifies to custom domain + HMAC auth (no proxying Worker). T2560 (byte-range clamping) likely unnecessary — presigned URLs already work. T2570 cleanup proceeds. |
-| Presigned URLs fix TTFB but non-faststart files break | T2550 adds faststart enforcement on upload. T2560 may shrink to moov-only proxying instead of full 3-window clamping. |
-| Presigned URLs don't fix TTFB (R2 origin too slow) | Full epic proceeds as designed — CDN caching via Worker required. |
-| `Accept-Ranges` header missing or R2 bugs surface | T2550 Worker must add/fix headers. Worker becomes required, not optional. |
+- **Custom domain** (`cdn.reelballers.com`) -- HTTP/2 multiplexing eliminates the 6-connection-per-origin limit on R2's S3 endpoint
+- **HMAC auth Worker** -- replaces presigned URLs with CDN-friendly signed URLs (cache key = path only, not query params)
+- **CDN edge caching** -- repeat requests served from nearest PoP
+- **Byte-range clamping** -- likely unnecessary since T3250 drops clamping (user-owned content, zero egress)
 
-**Do not start T2550 until T3240 results are analyzed.** The experiment is small (Complexity 4) and fast — it will either prove the simple path works or reveal exactly what the Worker needs to solve.
+## Why (after T3250)
 
-## Why
+T3250 fixes the throughput bottleneck (Fly.io proxy) but leaves two gaps:
 
-Current architecture proxies all video bytes through Fly.io:
-- **$0.02/GB egress** -- 85% of total cost at scale (>500GB/mo crossover)
-- **HTTP/1.1 socket exhaustion** -- R2 S3 endpoint caps Chrome at 6 connections. Warmup prefetcher and video player compete for sockets.
-- **No caching** -- `Cache-Control: no-store` everywhere. Presigned URL query params bust any CDN cache.
-- **600KB/s observed** on staging for 9MB game video fetch (15.3s)
+1. **HTTP/1.1 connection limit**: R2 S3 endpoint caps Chrome at 6 connections per origin. Video player and warmup prefetcher compete for sockets. Custom domain with HTTP/2 eliminates this.
+2. **No CDN caching**: Working/final videos are re-fetched from R2 origin on every request. CDN edge caching serves repeat requests in <10ms.
+
+Additionally, HMAC-signed URLs provide tighter auth than presigned URLs (shorter TTLs possible, cache-friendly).
 
 ## Architecture
 
-Custom domain `cdn.reelballers.com` -> Cloudflare CDN edge -> Worker (HMAC auth + serving) -> R2 binding (internal, zero egress).
+Custom domain `cdn.reelballers.com` -> Cloudflare CDN edge -> Worker (HMAC auth + pass-through) -> R2 binding (internal, zero egress).
 
 Key design decisions:
-- **HMAC signed URLs** replace S3 presigned URLs (CDN-friendly, cache key = path only)
-- **Worker scope adapts** based on T3240: may be auth-only pass-through (if presigned URLs work) or include byte-range clamping (if needed)
+- **Auth-only Worker**: HMAC validation + `env.BUCKET.get()` pass-through. No byte proxying (avoids documented Worker stalling issues with large files).
 - **Cache Reserve required** ($5/mo) for game videos >512MB (Free/Pro plan limit)
-- **SQLite DBs stay on S3 API** -- never exposed on public custom domain
+- **SQLite DBs stay on S3 API** -- never exposed on custom domain
 - **Custom domain + Worker deploy together** -- no public bucket without auth
 
 ## Research Findings (2026-05-29)
@@ -46,7 +42,7 @@ Key design decisions:
 
 Multiple Cloudflare community reports (2025-2026) document Workers proxying R2 video **stalling for 1-2 minutes** on load, with root cause traced to `cache_put` events taking up to 30s. This is a known pattern with large files.
 
-**Implication for T2560:** Byte-range clamping in a Worker means the Worker proxies video bytes. If T3240 proves presigned URLs work without clamping, the Worker can be auth-only (HMAC validation + redirect to R2) which avoids the stalling pattern entirely.
+**Implication:** Worker should be auth-only (HMAC validation + pass-through), not byte-proxying. T3250 proves presigned URLs work, so the Worker doesn't need to proxy video bytes.
 
 Sources: [Worker stalling](https://community.cloudflare.com/t/r2-video-streaming-via-worker-stalling-on-load-for-minutes/861913), [MP4 seeking unreliable](https://community.cloudflare.com/t/mp4-streaming-seeking-from-r2-no-longer-works-reliably-despite-no-config-changes/844957), [video ends abruptly](https://community.cloudflare.com/t/r2-mp4-video-streaming-ends-abruptly/759300)
 
@@ -66,30 +62,31 @@ Full 2GB game videos won't cache without Cache Reserve. CDN caching primarily be
 - `Accept-Ranges: bytes` header may be missing on public bucket responses
 - Video ends abruptly on non-faststart files
 
-See T3240 research section for full details and sources.
+See T3250 for full details and sources.
 
 ## Tasks
 
 | ID | Task | Status | Depends On |
 |----|------|--------|------------|
-| T3240 | [Direct R2 Streaming Experiment](../T3240-direct-r2-streaming.md) | TODO | -- |
-| T2550 | [CDN + Auth Worker](T2550-r2-custom-domain-cdn.md) | TODO | T3240 results |
-| T2560 | [Edge Byte-Range Clamping](T2560-edge-video-worker.md) | TODO | T2550 + T3240 results may eliminate need |
-| T2570 | [Remove Fly.io Video Proxy](T2570-remove-flyio-video-proxy.md) | TODO | T2560 stable 2+ weeks (or T2550 if T2560 skipped) |
+| T3250 | [Direct R2 Video Streaming](../T3250-direct-r2-streaming-fix.md) | TODO | -- |
+| T2550 | [CDN + Auth Worker](T2550-r2-custom-domain-cdn.md) | TODO | T3250 deployed |
+| T2560 | [Edge Byte-Range Clamping](T2560-edge-video-worker.md) | TODO | T2550 + likely skipped |
+| T2570 | [Remove Fly.io Video Proxy](T2570-remove-flyio-video-proxy.md) | TODO | T2550 stable 2+ weeks |
+| T2580 | [Faststart Upload Validation](T2580-faststart-upload-validation.md) | TODO | T3250 deployed |
 
 **Sequencing rationale:**
-- **T3240** runs first — cheap experiment that validates whether presigned URLs solve the problem without new infra. Results gate the rest of the epic.
-- **T2550** ships the custom domain, Worker, and HMAC auth together. Scope may simplify to auth-only (no video proxying) if T3240 proves presigned URLs sufficient. Worker avoids the stalling pattern by doing HMAC validation + redirect, not byte proxying.
-- **T2560** ports 3-window byte-range clamping to Worker. **May be skipped entirely** if T3240 proves clamping unnecessary (game videos are user's own content, soft barrier not security boundary). If kept, the Worker reliability risk requires Fly.io fallback and cautious rollout.
+- **T3250** ships first -- fixes playback stalls by switching to presigned R2 URLs. No new infrastructure.
+- **T2550** ships the custom domain, Worker, and HMAC auth. Worker is auth-only (HMAC validation + pass-through to R2 binding). No byte proxying.
+- **T2560** ports 3-window byte-range clamping to Worker. **Likely skipped** -- T3250 drops clamping because game videos are user-owned content and R2 has zero egress fees.
 - **T2570** cleanup after CDN path is stable. Deletes dead proxy code.
 
 ## Completion Criteria
 
 - [ ] All video served via `cdn.reelballers.com` with HTTP/2
-- [ ] Game videos cached at CDN edge (immutable, 1yr TTL) — requires Cache Reserve for >512MB
-- [ ] Working/final videos cached with short TTL + purge on re-export
 - [ ] HMAC auth on all video URLs, SQLite excluded from custom domain
-- [ ] Byte-range clamping at edge OR explicit decision to drop it (documented in T3240 results)
+- [ ] Working/final videos cached at CDN edge with appropriate TTLs
+- [ ] Game videos cached with Cache Reserve (immutable, 1yr TTL)
+- [ ] Byte-range clamping at edge OR explicit decision to drop it (documented)
 - [ ] Zero video bytes flowing through Fly.io
 - [ ] Backend video proxy endpoints removed
 
@@ -114,12 +111,11 @@ See T3240 research section for full details and sources.
 
 ## Key Risks
 
-1. **Worker stalling (NEW from research)** -- Workers proxying large R2 video bytes have documented reliability issues. Mitigated by preferring auth-only Worker (HMAC + redirect) over byte-proxying Worker if T3240 validates presigned URLs.
-2. **New runtime** -- TypeScript Worker alongside Python backend. Two deploy pipelines, two logging systems.
-3. **512MB cache limit** -- Cache Reserve ($5/mo) required for game videos on Free/Pro plans.
-4. **Byte-range clamping port** -- 3-window logic must be carefully ported from Python to Worker JS. May be unnecessary if T3240 proves clamping can be dropped.
-5. **Cache invalidation** -- re-exported working/final videos need CDN purge API call.
-6. **Observability gap** -- Worker logging weaker than Fly.io backend. Must set up persistent logging before cutting over.
+1. **Worker stalling**: Workers proxying large R2 video bytes have documented reliability issues. Mitigated by auth-only Worker (HMAC + pass-through, no byte proxying) since T3250 validates presigned URLs.
+2. **New runtime**: TypeScript Worker alongside Python backend. Two deploy pipelines, two logging systems.
+3. **512MB cache limit**: Cache Reserve ($5/mo) required for game videos on Free/Pro plans.
+4. **Cache invalidation**: Re-exported working/final videos need CDN purge API call.
+5. **Observability gap**: Worker logging weaker than Fly.io backend. Must set up persistent logging before cutting over.
 
 ## Full Analysis
 

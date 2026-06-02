@@ -123,6 +123,14 @@ Goal: Eliminate orphaned accounts by removing guest accounts entirely. Users mus
 | T1290 | [Auth DB Restore Must Succeed](tasks/auth-integrity/T1290-auth-db-restore-must-succeed.md) | 9 | 4 | 2.3 | DONE | [ ] | Fail startup if auth.sqlite can't restore from R2 |
 | T1330 | [Remove Guest Accounts](tasks/auth-integrity/T1330-remove-guest-accounts.md) | 10 | 6 | 1.7 | DONE | [x] | Shipped earlier — init-guest + migration helpers removed; tests/test_auth_no_guest.py guards the removal |
 
+### For Alpha - Video Streaming
+
+Fix playback stalls observed on staging (2026-06-02). Video proxy bottleneck (~590 KB/s) causes buffering during game playback. Must fix before alpha testers hit this.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T3250 | [Direct R2 Video Streaming](tasks/T3250-direct-r2-streaming-fix.md) | 9 | 4 | 2.3 | TODO | [ ] | Fix playback stalls: presigned R2 URLs for game + clip streaming, bypass Fly.io proxy bottleneck (~590 KB/s). Absorbs T3240. |
+
 ### For Alpha - Infrastructure
 
 Scale, reliability, and data format changes that must land before alpha users arrive.
@@ -238,16 +246,27 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T3170 | ↳ [Editor Context Enrichment](tasks/bug-report-quality/T3170-editor-context-enrichment.md) | 8 | 3 | 2.7 | DONE | [ ] | Per-mode state: annotate (game, clips, sequence), framing (keyframes, aspect ratio, segments), overlay (all effect settings). Add viewport, route. |
 | T3180 | ↳ [Action Breadcrumbs](tasks/bug-report-quality/T3180-action-breadcrumbs.md) | 8 | 4 | 2.0 | DONE | [ ] | Add ~22 event types via track() calls in gesture handlers. Covers annotate/framing/overlay/video. Buffer 50->200. |
 
+### For Alpha - Polish
+
+Final pre-alpha polish: source material, analytics review, returning-user experience, and landing page refinement.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T1970 | [Annotate Mehdi Source Files](tasks/alpha-marketing/T1970-annotate-mehdi-source-files.md) | 8 | 2 | 4.0 | TODO | [ ] | Annotate, frame, and export Mehdi's game footage end-to-end to produce demo clips and before/after examples |
+| T3280 | [Analytics Review](tasks/T3280-analytics-review.md) | 7 | 3 | 2.3 | TODO | [ ] | Review analytics setup and data quality before alpha launch. Conversation needed to scope. |
+| T3290 | [Tune NUF for Returning Users](tasks/T3290-tune-nuf-returning-users.md) | 8 | 4 | 2.0 | TODO | [ ] | Differentiate new user flow for returning users vs first-timers. Conversation needed to scope. |
+|  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Before/after examples from Mehdi footage + tutorial video |
+| T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
+| T3300 | ↳ [Build Tutorial Video for Landing Page](tasks/T3300-tutorial-video-landing-page.md) | 8 | 3 | 2.7 | TODO | [ ] | Build tutorial video and add to landing page |
+
 ### Milestone: Alpha Marketing
 
 Outreach to our network once alpha milestone is complete. Ordered: create source material first, then compose email, then send.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T1970 | [Annotate Mehdi Source Files](tasks/alpha-marketing/T1970-annotate-mehdi-source-files.md) | 8 | 2 | 4.0 | TODO | [ ] | Annotate, frame, and export Mehdi's game footage end-to-end to produce demo clips for outreach email |
 | T1980 | [Alpha Outreach Email](tasks/alpha-marketing/T1980-alpha-outreach-email.md) | 9 | 3 | 3.0 | TODO | [ ] | "Save your best moments before you lose the videos" — email with demo clip link, feature screenshots, CTA to app |
 | T1990 | [Alpha List](tasks/alpha-marketing/T1990-alpha-list.md) | 9 | 1 | 9.0 | TODO | [ ] | Contact list for alpha outreach: Zack, Arshia, Chris Choie, WhatsApp group, John Gleaves, Jack's dad, Jett's dad, current team, Shannon |
-| T3070 | [Brand Messaging Audit](tasks/T3070-brand-messaging-audit.md) | 8 | 3 | 2.7 | TODO | [ ] | Audit + improve brand communication at all initial touchpoints: emails explain what Reel Ballers is, preloading communicates value, landing page uses "Learn From, Preserve and Share Your Athlete's Moments" instead of limited tagline |
 |  | **[Share Email Redesign](tasks/share-email-redesign/EPIC.md)** | 9 | 4 | 2.3 |  |  | Light-bg design system, sender names (not emails), first-touch vs returning variants, AAA contrast. Fixes conversion-killing spam appearance. |
 | T3200 | ↳ [Email Design System](tasks/share-email-redesign/T3200-email-design-system.md) | 8 | 3 | 2.7 | DONE | [x] | Shared template builder: light background, WCAG AAA contrast, responsive layout, dark mode safe, preheader support |
 | T3210 | ↳ [Sender Name + Recipient Detection](tasks/share-email-redesign/T3210-sender-name-recipient-detection.md) | 9 | 3 | 3.0 | DONE | [x] | Resolve display names from athlete profiles, detect first-touch vs returning recipients, update all 4 share email callers |
@@ -280,53 +299,25 @@ Goal: Robust video loading — no misleading format errors, no oversized preload
 
 Goal: Make money, virality, super polished. Most tasks here are yet to be generated based on alpha feedback.
 
-#### Features
-
-| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
-|------|------|------|------|------|------|------|------|
-| T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | DONE | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
-| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
-|  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Deferred from alpha: more before/after examples, how-it-works steps, feature tile cut, sample reels grid, FAQ/footer |
-| T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
-| T2340 | ↳ [How It Works](tasks/landing-page-redesign/T2340-how-it-works.md) | 6 | 3 | 2.0 | TODO | [ ] | 3 numbered steps with real UI screen recording loops |
-| T2360 | ↳ [Sample Reels Grid](tasks/landing-page-redesign/T2360-sample-reels-grid.md) | 7 | 4 | 1.8 | TODO | [ ] | 8-12 real reels: keepers, defenders, assists -- not just goals. 3-up desktop, 2-up mobile. |
-|  | **[Overlay 2](tasks/overlay-2/EPIC.md)** |  |  |  |  |  |  |
-| T2950 | ↳ [Ground Spotlight](tasks/overlay-v2/T2950-ground-spotlight.md) | 8 | 4 | 2.0 | DONE | [ ] | Flat ellipse at player's feet instead of body halo. Bbox bottom-edge projection, wide aspect ratio, fill-forward spotlight pool. Shape selector (Body/Ground) in settings. |
-| T2160 | ↳ [Tracker Gap Bridging](tasks/overlay-v2/T2160-tracker-reacquisition.md) | 9 | 6 | 1.5 | TODO | [ ] | Spline interpolation through <0.5s tracking drops + appearance embedding for re-acquisition auto-suggest. |
-| T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
-| T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
-| T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
-|  | **[PWA Epic](tasks/pwa/EPIC.md)** | 7 | 4 | 1.8 |  |  | Background export + push notifications + background uploads + share target + offline playback |
-| T443 | ↳ [Background Export Tracking](tasks/pwa/T443-background-sync.md) | 7 | 5 | 1.4 | TODO | [ ] | Export survives app close -- service worker tracks Modal job, notifies on completion. |
-| T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | 8 | 5 | 1.6 | TODO | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
-| T447 | ↳ [Background Fetch for Uploads](tasks/pwa/T447-background-fetch-uploads.md) | 8 | 4 | 2.0 | TODO | [ ] | Multi-GB game uploads survive app close/switch. Parents upload at the field on cellular. THE differentiator. |
-| T448 | ↳ [Share Target API](tasks/pwa/T448-share-target-api.md) | 7 | 3 | 2.3 | TODO | [ ] | Receive videos FROM camera roll directly into Reel Ballers upload flow. Eliminates file picker friction. |
-| T449 | ↳ [Offline Reel Playback](tasks/pwa/T449-offline-reel-playback.md) | 6 | 3 | 2.0 | TODO | [ ] | Cache exported reels for offline viewing + persistent storage. Show reels without cell signal. |
-| T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | 8 | 3 | 2.7 | TODO | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
-|  | **[Overlay 3](tasks/overlay-v2/EPIC.md)** | 9 | 7 | 1.3 |  |  | Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits. |
-| T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | 9 | 7 | 1.3 | TODO | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
-| T2120 | ↳ [Pulse Ring Primitive](tasks/overlay-v2/T2120-pulse-ring-primitive.md) | 7 | 3 | 2.3 | TODO | [ ] | Animated scale + opacity loop for dramatic moments (goals, big saves). 1-2s duration. |
-| T2150 | ↳ [Overlay Presets System](tasks/overlay-v2/T2150-overlay-presets-system.md) | 8 | 4 | 2.0 | TODO | [ ] | One-click templates: "Spotlight", "Goal", "Custom". Wire up multiple primitives at once. |
-
 #### Infrastructure
 
 Scale, performance, and reliability — must be solid before feature work.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T3240 | [Direct R2 Streaming Experiment](tasks/T3240-direct-r2-streaming.md) | 8 | 4 | 2.0 | TODO | [ ] | Feature-flagged presigned URL experiment: bypass Fly proxy, measure TTFB. Results gate CDN epic scope (T2550/T2560 may simplify or be skipped). |
-|  | **[R2 CDN Video Serving](tasks/r2-cdn/EPIC.md)** | 9 | 5 | 1.8 |  |  | Move video serving from Fly.io proxy to Cloudflare edge. HTTP/2, CDN caching, zero egress. Scope adapts based on T3240 results. |
-| T2550 | ↳ [CDN + Auth Worker](tasks/r2-cdn/T2550-r2-custom-domain-cdn.md) | 8 | 4 | 2.0 | TODO | [ ] | Custom domain + HMAC auth Worker. Scope adapts: auth-only pass-through if T3240 works, or byte-proxying if not. |
-| T2560 | ↳ [Edge Byte-Range Clamping](tasks/r2-cdn/T2560-edge-video-worker.md) | 7 | 5 | 1.4 | TODO | [ ] | Port 3-window clamping to Worker. **May be skipped** if T3240 proves clamping unnecessary. Worker stalling risk (research). |
-| T2570 | ↳ [Remove Fly.io Video Proxy](tasks/r2-cdn/T2570-remove-flyio-video-proxy.md) | 4 | 3 | 1.3 | TODO | [ ] | Delete proxy endpoints + R2 transfer client + frontend socket management. After CDN path stable 2+ weeks. |
-|  | **[Session Scaling Epic](tasks/session-scaling/EPIC.md)** | 8 | 5 | 1.6 |  |  | Session pinning + write-back R2 sync + data loss recovery. Makes per-user SQLite correct and fast at multi-machine scale. |
-| T2250 | ↳ [Write-Back R2 Sync](tasks/session-scaling/T2250-write-back-r2-sync.md) | 8 | 5 | 1.6 | TODO | [ ] | Move R2 sync from blocking-per-gesture to periodic background (~3 min). Sync on sign-out, export, session invalidation. Writes respond in <5ms instead of ~200ms. |
-| T40 | ↳ [Single Active Session Handoff](tasks/session-scaling/T40-single-active-session-handoff.md) | 8 | 5 | 1.6 | TODO | [ ] | Auto-signout old device on new login, sync R2 before 401, retry on failure, "signed in elsewhere" UX. Orchestrates device handoff end-to-end. |
-| T2260 | ↳ [Data Loss Detection & Recovery](tasks/session-scaling/T2260-data-loss-detection-recovery.md) | 7 | 4 | 1.8 | TODO | [ ] | Detect version gaps on reconnect after crash. Auto-grant goodwill credits, notify user with clear explanation. |
+|  | **[R2 CDN Video Serving](tasks/r2-cdn/EPIC.md)** | 9 | 5 | 1.8 |  |  | Custom domain + HMAC auth + HTTP/2 + CDN caching. Presigned URL streaming done in T3250; this epic adds edge infrastructure. Depends on T3250. |
+| T2550 | ↳ [CDN + Auth Worker](tasks/r2-cdn/T2550-r2-custom-domain-cdn.md) | 8 | 4 | 2.0 | TODO | [ ] | Custom domain (`cdn.reelballers.com`) + HMAC auth Worker + HTTP/2 + CDN caching. Auth-only Worker (no byte proxying). |
+| T2560 | ↳ [Edge Byte-Range Clamping](tasks/r2-cdn/T2560-edge-video-worker.md) | 7 | 5 | 1.4 | TODO | [ ] | Port 3-window clamping to Worker. **Likely skipped** -- T3250 drops clamping (user-owned content, zero egress). |
+| T2570 | ↳ [Remove Fly.io Video Proxy](tasks/r2-cdn/T2570-remove-flyio-video-proxy.md) | 4 | 3 | 1.3 | TODO | [ ] | Delete proxy endpoints made redundant by T3250 + CDN path. After CDN stable 2+ weeks. |
+| T2580 | ↳ [Faststart Upload Validation](tasks/r2-cdn/T2580-faststart-upload-validation.md) | 6 | 2 | 3.0 | TODO | [x] | Validate faststart on upload, auto-remux if needed, store is_faststart flag. Prevents non-faststart regression after T3250 drops proxy moov windows. |
 |  | **[Export Pipeline](tasks/export-pipeline/EPIC.md)** | 5 | 4 | 1.3 |  |  | Non-blocking I/O + unify single/multi-clip export paths |
 | T1110 | ↳ [Non-Blocking Export I/O](tasks/export-pipeline/T1110-never-block-server.md) | 5 | 3 | 1.0 | DONE | [ ] | Wrap sync subprocess/R2 calls in `asyncio.to_thread()` — Modal calls already async, surrounding I/O blocks event loop |
 | T1116 | ↳ [Extract Shared Pipeline](tasks/export-pipeline/T1116-extract-shared-pipeline.md) | 4 | 4 | 1.0 | DONE | [ ] | Extract `_export_clips()` + `ClipExportData` from multi_clip.py; `export_multi_clip` becomes thin adapter. No behavior change. |
 | T1117 | ↳ [Route Single-Clip Through Pipeline](tasks/export-pipeline/T1117-route-single-clip.md) | 4 | 5 | 0.8 | DONE | [ ] | `render_project` delegates to `_export_clips([clip])`. Delete 800 lines of duplicated logic. Unify response shapes. |
+|  | **[Session Scaling Epic](tasks/session-scaling/EPIC.md)** | 8 | 5 | 1.6 |  |  | Session pinning + write-back R2 sync + data loss recovery. Makes per-user SQLite correct and fast at multi-machine scale. |
+| T2250 | ↳ [Write-Back R2 Sync](tasks/session-scaling/T2250-write-back-r2-sync.md) | 8 | 5 | 1.6 | TODO | [ ] | Move R2 sync from blocking-per-gesture to periodic background (~3 min). Sync on sign-out, export, session invalidation. Writes respond in <5ms instead of ~200ms. |
+| T40 | ↳ [Single Active Session Handoff](tasks/session-scaling/T40-single-active-session-handoff.md) | 8 | 5 | 1.6 | TODO | [ ] | Auto-signout old device on new login, sync R2 before 401, retry on failure, "signed in elsewhere" UX. Orchestrates device handoff end-to-end. |
+| T2260 | ↳ [Data Loss Detection & Recovery](tasks/session-scaling/T2260-data-loss-detection-recovery.md) | 7 | 4 | 1.8 | TODO | [ ] | Detect version gaps on reconnect after crash. Auto-grant goodwill credits, notify user with clear explanation. |
 |  | **[Analytics System (OpenPanel)](tasks/analytics/EPIC.md)** |  |  |  |  |  | Replace CF Web Analytics with self-hosted OpenPanel: 41 events, 4-tier dashboards, credit-economy metrics, computed intelligence (churn/LTV/tiers), alerts |
 | T1700 | ↳ [Foundation](tasks/analytics/T1700-foundation.md) | 6 | 5 | 1.2 | TODO | [ ] | Deploy OpenPanel VPS, SDK integration (frontend + backend), 8 activation events, L1 Daily Pulse dashboard, remove CF Web Analytics |
 | T1701 | ↳ [Core Analytics](tasks/analytics/T1701-core-analytics.md) | 6 | 5 | 1.2 | TODO | [ ] | Full 41-event taxonomy, L2 Weekly Health dashboard (7 sections), session replay, quest funnels, admin panel -> OpenPanel links |
@@ -335,6 +326,18 @@ Scale, performance, and reliability — must be solid before feature work.
 | T2270 | [Session Inactivity TTL](tasks/T2270-session-inactivity-ttl.md) | 5 | 2 | 2.5 | TODO | [ ] | Expire sessions after N days of inactivity using last_seen_at. Absorbs T420 inactivity portion. Depends on T1190. |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
+
+#### Features
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T2050 | [Framing Background Dim Control](tasks/T2050-framing-background-dim-control.md) | 6 | 2 | 3.0 | DONE | [ ] | Add dim/dark/preview toggle for area outside crop keyframe — lets users black out background for faithful reel preview before destructive "Frame Video" export |
+| T1080 | [Gallery Player Scrub Controls](tasks/for-launch/T1080-gallery-player-scrub-controls.md) | 6 | 3 | 2.0 | DONE | [ ] | Scrub/seek controls in gallery video player are non-functional; users can't seek through exported videos |
+|  | **[Overlay 2](tasks/overlay-2/EPIC.md)** |  |  |  |  |  |  |
+| T2950 | ↳ [Ground Spotlight](tasks/overlay-v2/T2950-ground-spotlight.md) | 8 | 4 | 2.0 | DONE | [ ] | Flat ellipse at player's feet instead of body halo. Bbox bottom-edge projection, wide aspect ratio, fill-forward spotlight pool. Shape selector (Body/Ground) in settings. |
+| T2180 | ↳ [Manual Telestration](tasks/overlay-v2/T2180-manual-telestration.md) | 6 | 5 | 1.2 | TODO | [ ] | Phase 2: freeze frame + draw arrow/circle/line, hold 1-2s, resume. Recruiting use case. CPU-only. |
+| T2130 | ↳ [Player Label Overlay](tasks/overlay-v2/T2130-player-label-overlay.md) | 8 | 5 | 1.6 | TODO | [ ] | Name/number text tag following player tracker. Auto-positions, "minimal" and "broadcast" style presets. |
+| T2140 | ↳ [Screen-Anchored Event Overlays](tasks/overlay-v2/T2140-screen-anchored-event-overlays.md) | 7 | 4 | 1.8 | TODO | [ ] | Score bug, GOAL/ASSIST badge, match metadata, time of play. Timestamp-triggered, corner-anchored. |
 
 #### Completed
 
@@ -375,6 +378,17 @@ Improvements after real user traffic.
 | T2190 | [Extended Presets](tasks/overlay-v2/T2190-extended-presets.md) | TODO | 2.5 | [ ] | "Recruiting" (minimal + persistent label) and "Social" (pulse + glow + broadcast name) presets. |
 | T2200 | [Outline Trace Primitive](tasks/overlay-v2/T2200-outline-trace-primitive.md) | TODO | 0.7 | [ ] | Edge-detect player silhouette outline. Expensive to compute, premium-feel. |
 | T2210 | [Spotlight Cone Primitive](tasks/overlay-v2/T2210-spotlight-cone-primitive.md) | TODO | 1.2 | [ ] | Darken/desaturate everything outside player region. High-drama cinematic effect. |
+|  | **[Overlay 3](tasks/overlay-v2/EPIC.md)** |  |  |  | Composable overlay system: player labels, pulse rings, score bugs, event badges, presets. Clips look like pro TikTok/IG edits. |
+| T2100 | ↳ [Composable Overlay Architecture](tasks/overlay-v2/T2100-composable-overlay-architecture.md) | TODO | 1.3 | [ ] | Refactor single ellipse into composable primitive system with common config, composition engine, stacking rules |
+| T2120 | ↳ [Pulse Ring Primitive](tasks/overlay-v2/T2120-pulse-ring-primitive.md) | TODO | 2.3 | [ ] | Animated scale + opacity loop for dramatic moments (goals, big saves). 1-2s duration. |
+| T2150 | ↳ [Overlay Presets System](tasks/overlay-v2/T2150-overlay-presets-system.md) | TODO | 2.0 | [ ] | One-click templates: "Spotlight", "Goal", "Custom". Wire up multiple primitives at once. |
+|  | **[PWA Epic](tasks/pwa/EPIC.md)** |  |  |  | Background export + push notifications + background uploads + share target + offline playback |
+| T443 | ↳ [Background Export Tracking](tasks/pwa/T443-background-sync.md) | TODO | 1.4 | [ ] | Export survives app close -- service worker tracks Modal job, notifies on completion. |
+| T444 | ↳ [Push Notifications & Badges](tasks/pwa/T444-push-notifications-badges.md) | TODO | 1.6 | [ ] | Push for export complete + shared clips received. Badge count on app icon for pending items. |
+| T447 | ↳ [Background Fetch for Uploads](tasks/pwa/T447-background-fetch-uploads.md) | TODO | 2.0 | [ ] | Multi-GB game uploads survive app close/switch. Parents upload at the field on cellular. THE differentiator. |
+| T448 | ↳ [Share Target API](tasks/pwa/T448-share-target-api.md) | TODO | 2.3 | [ ] | Receive videos FROM camera roll directly into Reel Ballers upload flow. Eliminates file picker friction. |
+| T449 | ↳ [Offline Reel Playback](tasks/pwa/T449-offline-reel-playback.md) | TODO | 2.0 | [ ] | Cache exported reels for offline viewing + persistent storage. Show reels without cell signal. |
+| T1910 | ↳ [Tutorial Video](tasks/for-launch/T1910-tutorial-video.md) | TODO | 2.7 | [ ] | Record walkthrough video: upload game, annotate clips, frame, overlay, export. Embeddable on landing page and in-app onboarding. |
 
 ---
 
@@ -448,6 +462,9 @@ IDs use gaps of 10 to allow insertions:
 - `T3060` - Make It Load Fast (Playwright perf benchmarks against prod)
 - `T3260` - Edit Game Metadata Post-Upload
 - `T3270` - Clip Boundary Visual Indicator (Annotate mode)
+- `T3280` - Analytics Review (pre-alpha analytics audit)
+- `T3290` - Tune NUF for Returning Users (differentiate returning vs first-time)
+- `T3300` - Build Tutorial Video for Landing Page
 - `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
