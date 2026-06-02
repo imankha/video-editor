@@ -14,6 +14,7 @@ in _init_cache. Subsequent calls just set the profile context and return.
 """
 
 import logging
+import threading
 from uuid import uuid4
 
 from .profile_context import set_current_profile_id
@@ -24,6 +25,16 @@ logger = logging.getLogger(__name__)
 # Populated on first call, returned on subsequent calls.
 # This makes user_session_init() cheap to call from middleware on every request.
 _init_cache: dict[str, dict] = {}
+
+_init_locks: dict[str, threading.Lock] = {}
+_init_locks_guard = threading.Lock()
+
+
+def _get_init_lock(user_id: str) -> threading.Lock:
+    with _init_locks_guard:
+        if user_id not in _init_locks:
+            _init_locks[user_id] = threading.Lock()
+        return _init_locks[user_id]
 
 
 def invalidate_user_cache(user_id: str) -> None:
@@ -60,7 +71,19 @@ def user_session_init(user_id: str) -> dict:
         return cached
 
     # --- Slow path: first init for this user ---
+    # Per-user lock prevents redundant R2 downloads when multiple
+    # concurrent requests arrive for the same user.
+    with _get_init_lock(user_id):
+        # Double-check after acquiring lock
+        cached = _init_cache.get(user_id)
+        if cached:
+            set_current_profile_id(cached["profile_id"])
+            return cached
 
+        return _init_slow_path(user_id)
+
+
+def _init_slow_path(user_id: str) -> dict:
     # 1. Ensure user-level database exists (needed before profile lookup)
     from .services.user_db import ensure_user_database
     ensure_user_database(user_id)
