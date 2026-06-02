@@ -3,13 +3,15 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useCreditStore } from './creditStore';
 import { track } from '../utils/analytics';
+import { QUEST_DEFINITIONS } from '../data/questDefinitions';
 
 // Module-level ref for fetch dedup
 let _fetchProgressPromise = null;
 let _fetchProgressGeneration = 0;
-let _fetchDefinitionsPromise = null;
 // Track achievements already recorded this session to prevent duplicate POSTs
 const _recordedAchievements = new Set();
+
+const _totalSteps = QUEST_DEFINITIONS.reduce((sum, q) => sum + q.step_ids.length, 0);
 
 /**
  * Quest Store — manages quest progress and reward claiming (T540, T1000).
@@ -19,37 +21,17 @@ const _recordedAchievements = new Set();
  * Progress is fetched separately via GET /api/quests/progress.
  */
 export const useQuestStore = create((set, get) => ({
-  // Quest definitions from backend (T1000)
-  definitions: null, // [{id, title, reward, step_ids}]
+  definitions: QUEST_DEFINITIONS,
 
-  // Quest progress from backend
   quests: [],
   loaded: false,
 
-  // Derived totals (computed on fetch)
   totalCompleted: 0,
-  totalSteps: 0,
+  totalSteps: _totalSteps,
 
-  // Which quest is currently active (progressive disclosure)
   activeQuestId: null,
 
-  fetchDefinitions: async () => {
-    if (_fetchDefinitionsPromise) return _fetchDefinitionsPromise;
-    _fetchDefinitionsPromise = (async () => {
-      try {
-        const res = await apiFetch(`${API_BASE}/api/quests/definitions`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const totalSteps = data.reduce((sum, q) => sum + q.step_ids.length, 0);
-        set({ definitions: data, totalSteps });
-      } catch {
-        // Best-effort
-      } finally {
-        _fetchDefinitionsPromise = null;
-      }
-    })();
-    return _fetchDefinitionsPromise;
-  },
+  fetchDefinitions: () => {},
 
   fetchProgress: async ({ force = false } = {}) => {
     // Dedup: if a fetch is already in flight, return the existing promise
@@ -152,14 +134,13 @@ export const useQuestStore = create((set, get) => ({
 
   reset: () => {
     _fetchProgressPromise = null;
-    _fetchDefinitionsPromise = null;
     _recordedAchievements.clear();
     set({
-      definitions: null,
+      definitions: QUEST_DEFINITIONS,
       quests: [],
       loaded: false,
       totalCompleted: 0,
-      totalSteps: 0,
+      totalSteps: _totalSteps,
       activeQuestId: null,
     });
   },

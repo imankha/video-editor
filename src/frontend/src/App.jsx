@@ -152,10 +152,6 @@ function App() {
       // T1330: only fetch per-user data when authenticated. Pre-login we
       // show the empty app shell; per-user stores stay empty until login.
       if (!session.isAuthenticated) {
-        // T1330: show the new-user quest panel pre-login. Definitions are
-        // public; progress 401s harmlessly and the panel renders all steps
-        // as incomplete — that's the onboarding UI.
-        useQuestStore.getState().fetchDefinitions();
         useQuestStore.getState().fetchProgress();
         initialLoadInProgress = false;
         dismissPreloader();
@@ -167,7 +163,6 @@ function App() {
         useProfileStore.getState().fetchProfiles(),
         useProjectsStore.getState().fetchProjects(),
         useGamesDataStore.getState().fetchGames(),
-        useQuestStore.getState().fetchDefinitions(),
         useQuestStore.getState().fetchProgress(),
         useSettingsStore.getState().loadSettings(),
         useGalleryStore.getState().fetchCount(),
@@ -292,7 +287,6 @@ function App() {
         useProfileStore.getState().fetchProfiles();
         useProjectsStore.getState().fetchProjects();
         useGamesDataStore.getState().fetchGames();
-        useQuestStore.getState().fetchDefinitions();
         useQuestStore.getState().fetchProgress();
         useSettingsStore.getState().loadSettings();
         useGalleryStore.getState().fetchCount();
