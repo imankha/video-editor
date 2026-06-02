@@ -35,6 +35,10 @@ export const useGalleryStore = create((set) => ({
    * Fetch downloads count from backend (for badge).
    * Deduped: concurrent callers share the same promise.
    */
+  setFromBootstrap: (downloads) => {
+    set({ count: downloads.count || 0, unwatchedCount: downloads.unwatched_count || 0, countLoaded: true });
+  },
+
   fetchCount: async ({ force = false } = {}) => {
     if (_fetchCountPromise && !force) return _fetchCountPromise;
 

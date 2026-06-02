@@ -37,6 +37,10 @@ export const useProjectsStore = create((set, get) => ({
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).
    */
+  setFromBootstrap: (projects) => {
+    set({ projects, loading: false });
+  },
+
   fetchProjects: async ({ force = false } = {}) => {
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.

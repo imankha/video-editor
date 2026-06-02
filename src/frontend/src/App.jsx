@@ -156,39 +156,45 @@ function App() {
         return;
       }
 
-      // T3360: Phase A complete (userId available). Fire user-id-only
-      // fetches immediately, concurrent with Phase B (auth/init).
-      const userIdFetches = [
-        useProfileStore.getState().fetchProfiles(),
-        useSettingsStore.getState().loadSettings(),
-      ];
-
-      // Wait for Phase B (profile ready) before profile-scoped fetches
+      // Wait for Phase B (profile ready) before bootstrap
       await session.profileReady;
 
-      warmAllUserVideos();
-      const profileFetches = [
-        useProjectsStore.getState().fetchProjects(),
-        useGamesDataStore.getState().fetchGames(),
-        useQuestStore.getState().fetchProgress(),
-        useGalleryStore.getState().fetchCount(),
-      ];
+      // T3370: Single bootstrap call replaces 9+ individual fetches
+      updatePreloader(50, 'Loading data...');
+      try {
+        const res = await apiFetch(`${API_BASE}/api/bootstrap`);
+        if (res.ok) {
+          const data = await res.json();
+          useProfileStore.getState().setFromBootstrap(data.profiles);
+          useSettingsStore.getState().setFromBootstrap(data.settings);
+          useCreditStore.getState().setFromBootstrap(data.credits);
+          useProjectsStore.getState().setFromBootstrap(data.projects);
+          useGamesDataStore.getState().setFromBootstrap(data.games);
+          useQuestStore.getState().setFromBootstrap(data.quests_progress);
+          useGalleryStore.getState().setFromBootstrap(data.downloads);
+          // Export recovery handled by useExportRecovery hook using bootstrap data
+          if (data.exports) {
+            const { useExportStore } = await import('./stores');
+            const exportStore = useExportStore.getState();
+            if (exportStore.setExportsFromServer && data.exports.active) {
+              exportStore.setExportsFromServer(data.exports.active);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[App] Bootstrap failed, falling back to individual fetches:', err);
+        await Promise.all([
+          useProfileStore.getState().fetchProfiles(),
+          useSettingsStore.getState().loadSettings(),
+          useProjectsStore.getState().fetchProjects(),
+          useGamesDataStore.getState().fetchGames(),
+          useQuestStore.getState().fetchProgress(),
+          useGalleryStore.getState().fetchCount(),
+        ]);
+      }
 
-      const dataFetches = [...userIdFetches, ...profileFetches];
-      let completed = 0;
-      let dismissed = false;
-      const total = dataFetches.length;
-      const tryDismiss = () => { if (!dismissed) { dismissed = true; dismissPreloader(); } };
-      dataFetches.forEach(p => {
-        const tick = () => {
-          completed++;
-          const pct = 40 + Math.round((completed / total) * 50);
-          updatePreloader(pct, 'Getting things ready...');
-          if (completed >= total) tryDismiss();
-        };
-        Promise.resolve(p).then(tick, tick);
-      });
-      setTimeout(tryDismiss, 8000);
+      warmAllUserVideos();
+      dismissPreloader();
       initialLoadInProgress = false;
 
       // Restore navigation state after auth-triggered reload (cross-device recovery)

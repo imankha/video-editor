@@ -52,6 +52,13 @@ export const useGamesDataStore = create((set, get) => ({
    * Cancels any in-flight fetch to prevent stale data from a previous
    * profile overwriting the current one (race condition on rapid switch).
    */
+  setFromBootstrap: (gamesResponse) => {
+    const gamesList = gamesResponse.games || [];
+    const readyGames = gamesList.filter(g => g.status !== 'pending');
+    const pendingGameIds = new Set(gamesList.filter(g => g.status === 'pending').map(g => g.id));
+    set({ games: gamesList, readyGames, pendingGameIds, isLoading: false });
+  },
+
   fetchGames: async ({ force = false } = {}) => {
     // T1330: guest accounts removed — pre-login the list is empty.
     // App.jsx fires this fetch on the auth transition.

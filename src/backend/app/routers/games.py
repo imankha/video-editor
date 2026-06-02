@@ -778,11 +778,20 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
     return result
 
 
+async def list_games_metadata():
+    """Return game metadata without presigned URLs (used by bootstrap endpoint)."""
+    ensure_directories()
+    return await _list_games_impl(skip_presigned_urls=True)
+
+
 @router.get("")
 async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
     ensure_directories()
+    return await _list_games_impl(skip_presigned_urls=False)
 
+
+async def _list_games_impl(skip_presigned_urls=False):
     from app.profile_context import get_current_profile_id
     from app.user_context import get_current_user_id
     from app.database import get_database_path
@@ -821,14 +830,14 @@ async def list_games():
         all_ref_hashes = {r['blake3_hash'] for r in storage_rows}
 
         # T2880: Pre-generate presigned URLs for all games concurrently.
-        # get_game_video_url -> generate_presigned_url_global hits the TTL cache;
-        # on cache miss, each call is ~200-300ms to R2. Parallelize misses.
-        unique_hashes = {row['blake3_hash'] for row in rows if row['blake3_hash']}
-        if unique_hashes:
-            await asyncio.gather(*[
-                asyncio.to_thread(generate_presigned_url_global, f"games/{h}.mp4", 14400)
-                for h in unique_hashes
-            ])
+        # T3380: Skip when called from bootstrap (URLs loaded lazily on demand).
+        if not skip_presigned_urls:
+            unique_hashes = {row['blake3_hash'] for row in rows if row['blake3_hash']}
+            if unique_hashes:
+                await asyncio.gather(*[
+                    asyncio.to_thread(generate_presigned_url_global, f"games/{h}.mp4", 14400)
+                    for h in unique_hashes
+                ])
 
         # Compute my_athlete-filtered stats and tag badges per game
         game_ids = [row['id'] for row in rows]
@@ -850,7 +859,7 @@ async def list_games():
                 row['name']
             )
 
-            video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+            video_url = None if skip_presigned_urls else get_game_video_url(row['blake3_hash'], row['video_filename'])
 
             expires_at_val = expiry_by_hash.get(row['blake3_hash'])
             if expires_at_val:

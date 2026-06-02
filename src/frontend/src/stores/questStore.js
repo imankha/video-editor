@@ -33,6 +33,21 @@ export const useQuestStore = create((set, get) => ({
 
   fetchDefinitions: () => {},
 
+  setFromBootstrap: (questsProgress) => {
+    let totalCompleted = 0;
+    for (const quest of questsProgress) {
+      totalCompleted += Object.values(quest.steps).filter(Boolean).length;
+    }
+    const q1 = questsProgress.find(q => q.id === 'quest_1');
+    const q2 = questsProgress.find(q => q.id === 'quest_2');
+    const q3 = questsProgress.find(q => q.id === 'quest_3');
+    let activeQuestId = 'quest_1';
+    if (q1?.reward_claimed) activeQuestId = 'quest_2';
+    if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+    if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
+    set({ quests: questsProgress, loaded: true, totalCompleted, activeQuestId });
+  },
+
   fetchProgress: async ({ force = false } = {}) => {
     // Dedup: if a fetch is already in flight, return the existing promise
     if (_fetchProgressPromise && !force) return _fetchProgressPromise;
