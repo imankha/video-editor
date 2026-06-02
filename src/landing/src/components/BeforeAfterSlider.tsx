@@ -16,22 +16,21 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
   const containerRef = useRef<HTMLDivElement>(null)
   const beforeVideoRef = useRef<HTMLVideoElement>(null)
   const afterVideoRef = useRef<HTMLVideoElement>(null)
-
-  const syncVideos = useCallback(() => {
-    const before = beforeVideoRef.current
-    const after = afterVideoRef.current
-    if (!before || !after) return
-    if (Math.abs(before.currentTime - after.currentTime) > 0.15) {
-      after.currentTime = before.currentTime
-    }
-  }, [])
+  const sliderPosRef = useRef(sliderPos)
+  useEffect(() => { sliderPosRef.current = sliderPos }, [sliderPos])
 
   useEffect(() => {
-    const before = beforeVideoRef.current
-    if (!before) return
-    const id = setInterval(syncVideos, 500)
+    const id = setInterval(() => {
+      if (sliderPosRef.current <= 0 || sliderPosRef.current >= 100) return
+      const before = beforeVideoRef.current
+      const after = afterVideoRef.current
+      if (!before || !after) return
+      if (Math.abs(before.currentTime - after.currentTime) > 0.15) {
+        after.currentTime = before.currentTime
+      }
+    }, 500)
     return () => clearInterval(id)
-  }, [syncVideos])
+  }, [])
 
   useEffect(() => {
     if (hasRevealed || !videosReady) return
