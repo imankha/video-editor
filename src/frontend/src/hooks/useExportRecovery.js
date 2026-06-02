@@ -41,6 +41,8 @@ export function useExportRecovery() {
       const session = await initSession();
       // T1330: no exports to recover pre-login.
       if (!session.isAuthenticated) return;
+      // T3360: Wait for profile to be ready before fetching profile-scoped data
+      if (session.profileReady) await session.profileReady;
       console.log('[ExportRecovery] Fetching active exports from backend...');
 
       const [activeResult, unacknowledgedResult] = await Promise.allSettled([

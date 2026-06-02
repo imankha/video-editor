@@ -240,44 +240,53 @@ export async function initSession() {
     if (!userId) {
       useAuthStore.getState().setSessionState(false);
       updatePreloader(40, 'Getting things ready...');
-      return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false };
+      return { profileId: null, userId: null, isNewUser: false, isAuthenticated: false, profileReady: Promise.resolve() };
     }
 
-    // Authenticated — load profile + mark session state
-    useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
+    // T3360: Phase A complete (auth/me resolved). Do NOT call setSessionState
+    // yet -- that happens after Phase B sets _currentProfileId, preventing
+    // reactive fetches from arriving at the backend without X-Profile-ID.
 
+    // Phase B: fire auth/init (profile DB download) -- callers can await
+    // profileReady to know when profile-dependent endpoints are safe.
     updatePreloader(25, 'Initializing profile...');
     const cachedProfileId = _currentProfileId || sessionStorage.getItem('rb_profile_id');
     const initBody = cachedProfileId ? JSON.stringify({ profile_id: cachedProfileId }) : '{}';
-    const initResponse = await fetchWithRetry(`${API_BASE}/api/auth/init`, {
+    const profileReady = fetchWithRetry(`${API_BASE}/api/auth/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: initBody,
-    });
-    if (!initResponse.ok) {
-      throw new Error(`Session init failed: ${initResponse.status}`);
-    }
-    const initData = await initResponse.json();
-    _profileId = initData.profile_id;
-    _currentProfileId = initData.profile_id;
-    sessionStorage.setItem('rb_profile_id', initData.profile_id);
-    updatePreloader(40, 'Getting things ready...');
+    }).then(async (initResponse) => {
+      if (!initResponse.ok) {
+        throw new Error(`Session init failed: ${initResponse.status}`);
+      }
+      const initData = await initResponse.json();
+      _profileId = initData.profile_id;
+      _currentProfileId = initData.profile_id;
+      sessionStorage.setItem('rb_profile_id', initData.profile_id);
 
-    if (useAuthStore.getState().needsTermsAcceptance) {
-      apiFetch(`${API_BASE}/api/auth/accept-terms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ terms_version: '2026-05-07' }),
-      }).then(() => {
-        useAuthStore.setState({ needsTermsAcceptance: false });
-      }).catch(() => {});
-    }
+      // NOW set session state -- _currentProfileId is set so all subsequent
+      // requests will include X-Profile-ID header.
+      useAuthStore.getState().setSessionState(true, email, pictureUrl, impersonator);
+      updatePreloader(40, 'Getting things ready...');
+
+      if (useAuthStore.getState().needsTermsAcceptance) {
+        apiFetch(`${API_BASE}/api/auth/accept-terms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms_version: '2026-05-07' }),
+        }).then(() => {
+          useAuthStore.setState({ needsTermsAcceptance: false });
+        }).catch(() => {});
+      }
+
+      return initData;
+    });
 
     return {
-      profileId: initData.profile_id,
       userId,
-      isNewUser: initData.is_new_user,
       isAuthenticated: true,
+      profileReady,
     };
   })();
 

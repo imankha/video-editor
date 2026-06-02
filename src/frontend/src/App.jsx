@@ -148,26 +148,33 @@ function App() {
 
     let initialLoadInProgress = true;
 
-    initSession().then((session) => {
-      // T1330: only fetch per-user data when authenticated. Pre-login we
-      // show the empty app shell; per-user stores stay empty until login.
+    initSession().then(async (session) => {
       if (!session.isAuthenticated) {
         useQuestStore.getState().fetchProgress();
         initialLoadInProgress = false;
         dismissPreloader();
         return;
       }
-      // T630/T635: Fire all initial data fetches in parallel after auth resolves
-      warmAllUserVideos();
-      const dataFetches = [
+
+      // T3360: Phase A complete (userId available). Fire user-id-only
+      // fetches immediately, concurrent with Phase B (auth/init).
+      const userIdFetches = [
         useProfileStore.getState().fetchProfiles(),
+        useSettingsStore.getState().loadSettings(),
+      ];
+
+      // Wait for Phase B (profile ready) before profile-scoped fetches
+      await session.profileReady;
+
+      warmAllUserVideos();
+      const profileFetches = [
         useProjectsStore.getState().fetchProjects(),
         useGamesDataStore.getState().fetchGames(),
         useQuestStore.getState().fetchProgress(),
-        useSettingsStore.getState().loadSettings(),
         useGalleryStore.getState().fetchCount(),
       ];
 
+      const dataFetches = [...userIdFetches, ...profileFetches];
       let completed = 0;
       let dismissed = false;
       const total = dataFetches.length;
