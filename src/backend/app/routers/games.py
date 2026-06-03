@@ -2000,6 +2000,129 @@ async def get_game_playback_url(game_id: int):
     }
 
 
+@router.get("/{game_id:int}/load")
+async def load_game(game_id: int):
+    """Single endpoint returning everything needed to render the annotate screen.
+
+    Combines: get_game + playback-url + teammate-tags + teammate-shares
+    into one request to eliminate sequential fetch waterfall and thread pool contention.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # 1. Game data (same as get_game)
+        cursor.execute("""
+            SELECT id, name, blake3_hash, video_filename, created_at,
+                   video_duration, video_width, video_height, video_size,
+                   opponent_name, game_date, game_type, tournament_name,
+                   viewed_duration, status
+            FROM games
+            WHERE id = ?
+        """, (game_id,))
+        row = cursor.fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Game not found")
+
+        cursor.execute_local(
+            "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (game_id,)
+        )
+
+        annotations = load_annotations_from_db(game_id)
+
+        display_name = generate_game_display_name(
+            row['opponent_name'],
+            row['game_date'],
+            row['game_type'],
+            row['tournament_name'],
+            row['name']
+        )
+
+        videos = _get_game_videos_response(cursor, game_id)
+
+        if videos:
+            video_url = videos[0]['video_url'] if videos else None
+            total_duration = sum(v['duration'] for v in videos if v['duration'])
+            video_width = videos[0].get('video_width') or row['video_width']
+            video_height = videos[0].get('video_height') or row['video_height']
+        else:
+            video_url = get_game_video_url(row['blake3_hash'], row['video_filename'])
+            total_duration = row['video_duration']
+            video_width = row['video_width']
+            video_height = row['video_height']
+
+        game = {
+            'id': row['id'],
+            'name': display_name,
+            'raw_name': row['name'],
+            'blake3_hash': row['blake3_hash'],
+            'video_url': video_url,
+            'videos': videos,
+            'annotations': annotations,
+            'clip_count': len(annotations),
+            'created_at': row['created_at'],
+            'viewed_duration': row['viewed_duration'] or 0,
+            'video_duration': total_duration,
+            'video_width': video_width,
+            'video_height': video_height,
+            'video_size': row['video_size'],
+        }
+
+        # 2. Playback URL (same as get_game_playback_url)
+        cursor.execute("""
+            SELECT
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS blake3_hash,
+                g.video_filename,
+                COALESCE(gv.video_size, g.video_size) AS video_size
+            FROM games g
+            LEFT JOIN game_videos gv
+                ON gv.game_id = g.id AND gv.sequence = 1
+            WHERE g.id = ?
+        """, (game_id,))
+        pb_row = cursor.fetchone()
+
+        playback_url = None
+        if pb_row and pb_row['blake3_hash']:
+            playback_url = get_game_video_url(pb_row['blake3_hash'], pb_row['video_filename'])
+
+        # 3. Teammate tags (same as clips.get_teammate_tags)
+        cursor.execute("""
+            SELECT tag_name, COUNT(*) as cnt
+            FROM clip_teammates
+            GROUP BY tag_name
+            ORDER BY cnt DESC
+        """)
+        teammate_tags = [r["tag_name"] for r in cursor.fetchall()]
+
+        # 4. Teammate shares (same as clips.get_teammate_shares)
+        cursor.execute(
+            "SELECT tag_name, shared_clip_ids, created_at FROM teammate_shares WHERE game_id = ? ORDER BY created_at",
+            (game_id,)
+        )
+        teammate_shares = [
+            {
+                "tag_name": r["tag_name"],
+                "shared_clip_ids": json.loads(r["shared_clip_ids"]),
+                "shared_at": r["created_at"],
+            }
+            for r in cursor.fetchall()
+        ]
+
+        conn.commit()
+
+    return {
+        "game": game,
+        "playback_url": {
+            "url": playback_url,
+            "expires_in": 14400,
+            "file_size": pb_row['video_size'] if pb_row else None,
+        } if playback_url else None,
+        "teammate_tags": teammate_tags,
+        "teammate_shares": teammate_shares,
+    }
+
+
 @router.get("/{game_id:int}/stream")
 async def stream_game_bounded(
     game_id: int,

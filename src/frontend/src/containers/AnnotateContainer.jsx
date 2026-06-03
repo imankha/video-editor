@@ -46,6 +46,7 @@ export function AnnotateContainer({
   // Game management
   uploadGameVideo, // T80: Unified upload with deduplication
   getGame,
+  loadGame,
   getGameVideoUrl,
 
   // Project management
@@ -453,107 +454,138 @@ export function AnnotateContainer({
   };
 
   /**
-   * Handle loading a saved game into annotate mode
-   * Supports both single-video and multi-video games.
+   * Apply game data to annotate state. Shared by both the single-request
+   * load path and the legacy fallback.
+   */
+  const applyGameData = useCallback((gameData, playbackUrlData, teammateSharesData, pendingClipSeekTime) => {
+    const isMultiVideo = gameData.videos && gameData.videos.length > 1;
+
+    let videoMetadata = null;
+
+    if (isMultiVideo) {
+      videoMetadata = {
+        duration: gameData.videos[0].duration,
+        width: gameData.videos[0].video_width || gameData.video_width,
+        height: gameData.videos[0].video_height || gameData.video_height,
+        size: gameData.video_size,
+        aspectRatio: (gameData.videos[0].video_width || gameData.video_width) /
+                     (gameData.videos[0].video_height || gameData.video_height),
+        fileName: gameData.name,
+        format: 'mp4',
+      };
+    } else {
+      if (gameData.video_duration && gameData.video_width && gameData.video_height) {
+        videoMetadata = {
+          duration: gameData.video_duration,
+          width: gameData.video_width,
+          height: gameData.video_height,
+          size: gameData.video_size,
+          aspectRatio: gameData.video_width / gameData.video_height,
+          fileName: gameData.name,
+          format: 'mp4',
+        };
+      }
+    }
+
+    if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(annotateVideoUrl);
+    }
+
+    viewedHighWaterRef.current = new Map();
+    persistedViewedDurationRef.current = gameData.viewed_duration || 0;
+
+    resetAnnotate();
+    setAnnotateVideoFile(null);
+
+    let playbackUrl;
+    if (playbackUrlData?.url) {
+      playbackUrl = playbackUrlData.url;
+      schedulePlaybackUrlRefresh(gameData.id, playbackUrlData.expires_in);
+    } else {
+      playbackUrl = `${API_BASE}/api/games/${gameData.id}/stream`;
+    }
+    if (pendingClipSeekTime != null) {
+      playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
+    }
+    setAnnotateVideoUrl(playbackUrl);
+    setAnnotateVideoMetadata(videoMetadata);
+    annotateGameIdRef.current = gameData.id;
+    setAnnotateGameId(gameData.id);
+    setAnnotateGameName(gameData.name);
+
+    if (isMultiVideo) {
+      setGameVideos(gameData.videos.map(v => {
+        const url = getWarmedPresignedUrl(v.video_url) || v.video_url;
+        return {
+          sequence: v.sequence,
+          url,
+          serverUrl: v.video_url,
+          duration: v.duration,
+          width: v.video_width,
+          height: v.video_height,
+        };
+      }));
+      setActiveVideoIndex(0);
+    } else {
+      setGameVideos(null);
+      setActiveVideoIndex(0);
+    }
+
+    if (teammateSharesData && teammateSharesData.length > 0) {
+      const tagData = {};
+      for (const s of teammateSharesData) {
+        tagData[s.tag_name] = new Set(s.shared_clip_ids || []);
+      }
+      setSharedTagData(tagData);
+    }
+
+    return { isMultiVideo, videoMetadata };
+  }, [annotateVideoUrl, resetAnnotate]);
+
+  /**
+   * Handle loading a saved game into annotate mode.
+   * T3430: Uses single /load endpoint, falls back to individual fetches.
    */
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     try {
-      const gameData = await getGame(gameId);
+      let gameData, playbackUrlData, teammateSharesData, teammateTagsData;
 
-      // T82: Check if multi-video game
-      const isMultiVideo = gameData.videos && gameData.videos.length > 1;
-
-      let videoUrl;
-      let videoMetadata = null;
-
-      if (isMultiVideo) {
-        // Multi-video game: load first video, each video has its own timeline
-        videoUrl = gameData.videos[0].video_url;
-
-        videoMetadata = {
-          duration: gameData.videos[0].duration,
-          width: gameData.videos[0].video_width || gameData.video_width,
-          height: gameData.videos[0].video_height || gameData.video_height,
-          size: gameData.video_size,
-          aspectRatio: (gameData.videos[0].video_width || gameData.video_width) /
-                       (gameData.videos[0].video_height || gameData.video_height),
-          fileName: gameData.name,
-          format: 'mp4',
-        };
-      } else {
-        // Single-video game (legacy or single game_videos row)
-        videoUrl = gameData.videos?.[0]?.video_url || getGameVideoUrl(gameId, gameData);
-        if (gameData.video_duration && gameData.video_width && gameData.video_height) {
-          videoMetadata = {
-            duration: gameData.video_duration,
-            width: gameData.video_width,
-            height: gameData.video_height,
-            size: gameData.video_size,
-            aspectRatio: gameData.video_width / gameData.video_height,
-            fileName: gameData.name,
-            format: 'mp4',
-          };
-        }
-      }
-
-      // Clean up any existing annotate video URL
-      if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(annotateVideoUrl);
-      }
-
-      // T251: Initialize high-water mark from persisted data
-      viewedHighWaterRef.current = new Map();
-      persistedViewedDurationRef.current = gameData.viewed_duration || 0;
-
-      // Reset annotate state before loading new game
-      resetAnnotate();
-
-      // Set annotate state with the game's video
-      setAnnotateVideoFile(null);
-      let playbackUrl;
       try {
-        const res = await apiFetch(`${API_BASE}/api/games/${gameId}/playback-url`);
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = await res.json();
-        playbackUrl = data.url;
-        schedulePlaybackUrlRefresh(gameId, data.expires_in);
-      } catch (err) {
-        console.warn('[Annotate] Presigned URL fetch failed, falling back to proxy:', err.message);
-        playbackUrl = `${API_BASE}/api/games/${gameId}/stream`;
+        const loadResult = await loadGame(gameId);
+        gameData = loadResult.game;
+        playbackUrlData = loadResult.playback_url;
+        teammateSharesData = loadResult.teammate_shares;
+        teammateTagsData = loadResult.teammate_tags;
+      } catch (loadErr) {
+        if (loadErr.message?.includes('not found')) throw loadErr;
+        console.warn('[AnnotateContainer] /load failed, falling back to individual fetches:', loadErr.message);
+        gameData = await getGame(gameId);
+        try {
+          const res = await apiFetch(`${API_BASE}/api/games/${gameId}/playback-url`);
+          if (res.ok) playbackUrlData = await res.json();
+        } catch { /* proxy fallback handled below */ }
+        apiFetch(`${API_BASE}/api/clips/teammate-shares/${gameId}`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            const tagData = {};
+            for (const s of data) {
+              tagData[s.tag_name] = new Set(s.shared_clip_ids || []);
+            }
+            setSharedTagData(tagData);
+          })
+          .catch(() => {});
       }
-      if (pendingClipSeekTime != null) {
-        playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
-      }
-      setAnnotateVideoUrl(playbackUrl);
-      setAnnotateVideoMetadata(videoMetadata);
-      annotateGameIdRef.current = gameId;
-      setAnnotateGameId(gameId);
-      setAnnotateGameName(gameData.name);
 
-      // Set multi-video state
-      if (isMultiVideo) {
-        setGameVideos(gameData.videos.map(v => {
-          const url = getWarmedPresignedUrl(v.video_url) || v.video_url;
-          return {
-            sequence: v.sequence,
-            url,
-            serverUrl: v.video_url,
-            duration: v.duration,
-            width: v.video_width,
-            height: v.video_height,
-          };
-        }));
-        setActiveVideoIndex(0);
-      } else {
-        setGameVideos(null);
-        setActiveVideoIndex(0);
+      const { isMultiVideo, videoMetadata } = applyGameData(gameData, playbackUrlData, teammateSharesData, pendingClipSeekTime);
+
+      if (teammateTagsData) {
+        setServerTeammateTags(teammateTagsData);
       }
 
       // Import saved annotations if they exist
       if (gameData.annotations && gameData.annotations.length > 0) {
-        // For multi-video, use the max video duration for clamping (each video's clips are relative to their own video)
         const gameDuration = isMultiVideo
           ? Math.max(...gameData.videos.map(v => v.duration || 0))
           : (videoMetadata?.duration || gameData.video_duration);
@@ -584,24 +616,10 @@ export function AnnotateContainer({
 
         importAnnotations(gameData.annotations, gameDuration);
 
-        // T740: If navigating from Framing, select the clip the user was editing
-        // (importAnnotations auto-selects the first clip; override with the intended one)
         if (pendingClipSeekTime != null) {
           pendingSelectSeekTimeRef.current = pendingClipSeekTime;
         }
       }
-
-      // T2820: Fetch shared tags for this game
-      apiFetch(`${API_BASE}/api/clips/teammate-shares/${gameId}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(data => {
-          const tagData = {};
-          for (const s of data) {
-            tagData[s.tag_name] = new Set(s.shared_clip_ids || []);
-          }
-          setSharedTagData(tagData);
-        })
-        .catch(() => {});
 
       setEditorMode('annotate');
     } catch (err) {
@@ -622,7 +640,7 @@ export function AnnotateContainer({
         performance.clearMarks('gesture:load-game:end');
       }
     }
-  }, [getGame, getGameVideoUrl, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
+  }, [loadGame, getGame, applyGameData, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
   const playback = useAnnotationPlayback({

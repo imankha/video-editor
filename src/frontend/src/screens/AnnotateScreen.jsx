@@ -43,6 +43,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Games — Zustand store (reactive to profile switches)
   const uploadGameVideo = useGamesDataStore(state => state.uploadGameVideo);
   const getGame = useGamesDataStore(state => state.getGame);
+  const loadGame = useGamesDataStore(state => state.loadGame);
   const getGameVideoUrl = useGamesDataStore(state => state.getGameVideoUrl);
   const finishAnnotation = useGamesDataStore(state => state.finishAnnotation);
 
@@ -164,6 +165,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     seek,
     uploadGameVideo, // T80: Unified upload with deduplication
     getGame,
+    loadGame,
     getGameVideoUrl,
     fetchProjects,
     onBackToProjects: handleBackToProjects,

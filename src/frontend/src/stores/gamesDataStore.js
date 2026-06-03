@@ -224,6 +224,39 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
+   * Load full game context in a single request (game + playback URL + teammate data).
+   * Falls back to getGame() if the endpoint fails.
+   */
+  loadGame: async (gameId) => {
+    const inflight = _getGameInflight.get(gameId);
+    if (inflight) return inflight;
+
+    set({ isLoading: true, error: null });
+    const promise = (async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/api/games/${gameId}/load`);
+        if (!response.ok) {
+          throw new Error(response.status === 404
+            ? `Game ${gameId} not found`
+            : `Failed to load game: ${response.status}`);
+        }
+        const data = await response.json();
+        set({ selectedGame: data.game, isLoading: false });
+        return data;
+      } catch (err) {
+        const is404 = err.message?.includes('not found');
+        (is404 ? console.warn : console.error).call(console, '[gamesDataStore] loadGame failed:', err.message);
+        set({ error: err.message, isLoading: false });
+        throw err;
+      } finally {
+        _getGameInflight.delete(gameId);
+      }
+    })();
+    _getGameInflight.set(gameId, promise);
+    return promise;
+  },
+
+  /**
    * Update game name
    */
   updateGame: async (gameId, updates) => {
