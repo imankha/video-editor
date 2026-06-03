@@ -237,14 +237,9 @@ export function AnnotateContainer({
   }, [annotateSelectedRegionId, setAnnotateHasSelectedClip]);
 
 
-  // T2810: Teammate tag suggestions (server baseline + locally-used tags)
+  // T2810: Teammate tag suggestions (server baseline + locally-used tags).
+  // Populated by handleLoadGame from the /load endpoint response.
   const [serverTeammateTags, setServerTeammateTags] = useState([]);
-  useEffect(() => {
-    apiFetch(`${API_BASE}/api/clips/teammate-tags`)
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setServerTeammateTags(data))
-      .catch(() => {});
-  }, []);
   const teammateSuggestions = useMemo(() => {
     const localTags = clipRegions.flatMap(r => r.tagged_teammates || []);
     const seen = new Set();
@@ -575,6 +570,10 @@ export function AnnotateContainer({
             }
             setSharedTagData(tagData);
           })
+          .catch(() => {});
+        apiFetch(`${API_BASE}/api/clips/teammate-tags`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => setServerTeammateTags(data))
           .catch(() => {});
       }
 
