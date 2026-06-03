@@ -7,6 +7,7 @@ This router handles health checks, status endpoints, and the hello world endpoin
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ async def health_check():
     Works without X-Profile-ID header — reports profile-scoped DB status
     only when profile context is available.
     """
+    t0 = time.perf_counter()
     from ..profile_context import get_current_profile_id
     try:
         profile_id = get_current_profile_id()
@@ -84,6 +86,8 @@ async def health_check():
             "user_data_path": None,
             "note": "No X-Profile-ID header — call /api/auth/init first",
         }
+    t1 = time.perf_counter()
+    logger.info(f"[PROFILE health] handler={int((t1-t0)*1000)}ms")
 
     return {
         "status": "healthy",

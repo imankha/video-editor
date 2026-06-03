@@ -5,6 +5,7 @@ sequentially in a single request handler.
 """
 
 import logging
+import time
 from fastapi import APIRouter
 
 from ..user_context import get_current_user_id
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api", tags=["bootstrap"])
 
 @router.get("/bootstrap")
 async def bootstrap():
+    t_start = time.perf_counter()
     user_id = get_current_user_id()
 
     # --- User-scoped data (user.sqlite) ---
@@ -37,12 +39,15 @@ async def bootstrap():
         }
         for p in profiles_raw
     ]
+    t_profiles = time.perf_counter()
 
     credits = get_credit_balance(user_id)
+    t_credits = time.perf_counter()
 
     from ..routers.settings import get_all_preferences, DEFAULTS, _to_nested
     stored = get_all_preferences()
     settings = _to_nested({**DEFAULTS, **stored})
+    t_settings = time.perf_counter()
 
     # Quest progress
     from ..quest_config import QUEST_DEFINITIONS
@@ -72,13 +77,16 @@ async def bootstrap():
                 "completed": all(quest_steps.values()),
                 "reward_claimed": quest_id in claimed_quest_ids,
             })
+    t_quests = time.perf_counter()
 
     # --- Profile-scoped data (profile.sqlite) ---
     from ..routers.projects import list_projects
     projects_response = await list_projects()
+    t_projects = time.perf_counter()
 
     from ..routers.games import list_games_metadata
     games_response = await list_games_metadata()
+    t_games = time.perf_counter()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -97,6 +105,7 @@ async def bootstrap():
             "count": dl_row['count'] if dl_row else 0,
             "unwatched_count": dl_row['unwatched_count'] if dl_row else 0,
         }
+        t_downloads = time.perf_counter()
 
         # Active exports
         cursor.execute("""
@@ -125,6 +134,7 @@ async def bootstrap():
             ORDER BY e.completed_at DESC
         """)
         unacknowledged_exports = [dict(row) for row in cursor.fetchall()]
+        t_exports = time.perf_counter()
 
         # Pending uploads (raw list, no R2 validation for speed)
         cursor.execute("""
@@ -134,6 +144,20 @@ async def bootstrap():
             ORDER BY created_at DESC
         """)
         pending_uploads = [dict(row) for row in cursor.fetchall()]
+    t_pending = time.perf_counter()
+
+    logger.info(
+        f"[PROFILE bootstrap] profiles={int((t_profiles-t_start)*1000)}ms "
+        f"credits={int((t_credits-t_profiles)*1000)}ms "
+        f"settings={int((t_settings-t_credits)*1000)}ms "
+        f"quests={int((t_quests-t_settings)*1000)}ms "
+        f"projects={int((t_projects-t_quests)*1000)}ms "
+        f"games={int((t_games-t_projects)*1000)}ms "
+        f"downloads={int((t_downloads-t_games)*1000)}ms "
+        f"exports={int((t_exports-t_downloads)*1000)}ms "
+        f"pending={int((t_pending-t_exports)*1000)}ms "
+        f"total={int((t_pending-t_start)*1000)}ms"
+    )
 
     return {
         "profiles": profiles,

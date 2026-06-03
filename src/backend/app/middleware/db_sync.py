@@ -387,13 +387,17 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             profile_timing_suffix = f" profile={profile_path}" if profile_path else ""
             auth_ms = meta["auth_ms"]
             init_ms = meta["init_ms"]
+            handler_ms = handler_duration * 1000
+            sync_ms_val = sync_duration * 1000
+            overhead_ms = total_ms - auth_ms - init_ms - handler_ms - sync_ms_val
             logger.info(
                 f"[REQ_TIMING] {method} {path} user={meta.get('user_id') or 'none'} "
                 f"total_ms={int(total_ms)} "
                 f"auth_ms={int(auth_ms)} "
                 f"init_ms={int(init_ms)} "
-                f"handler_ms={int(handler_duration * 1000)} "
-                f"sync_ms={int(sync_duration * 1000)} "
+                f"handler_ms={int(handler_ms)} "
+                f"sync_ms={int(sync_ms_val)} "
+                f"overhead_ms={int(overhead_ms)} "
                 f"inflight_entry={meta['inflight_entry']} "
                 f"inflight_exit={meta['inflight_exit']}"
                 f"{req_id_suffix}{profile_timing_suffix}"
@@ -401,6 +405,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
+        t_dispatch_start = time.perf_counter()
 
         # --- T1190: Fly.io machine pinning ---
         should_set_machine_cookie = False
@@ -517,7 +522,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             )
 
             if not should_sync:
+                handler_start = time.perf_counter()
                 response = await call_next(request)
+                meta["handler_duration"] = time.perf_counter() - handler_start
                 if should_set_machine_cookie:
                     _set_machine_cookie(response)
                 return response

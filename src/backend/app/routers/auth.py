@@ -386,6 +386,9 @@ async def auth_me(request: Request):
                     "impersonator": None,
                 }
 
+    import time as _time
+    t_me_start = _time.perf_counter()
+
     session_id = request.cookies.get("rb_session")
     if not session_id:
         logger.debug("[Auth] /me: no rb_session cookie")
@@ -394,11 +397,13 @@ async def auth_me(request: Request):
     # Degrade to 401 on auth-DB transients. /me is the very first call on
     # every page load — a 500 here bricks the whole app; a 401 lets the
     # frontend fall through to the unauthenticated path.
+    t0 = _time.perf_counter()
     try:
         session = validate_session(session_id)
     except Exception:
         logger.exception("[Auth] /me: validate_session raised — degrading to 401")
         raise HTTPException(status_code=401, detail="Session check failed")
+    t_validate = _time.perf_counter()
 
     if not session:
         logger.info("[Auth] /me: invalid/expired session")
@@ -411,9 +416,11 @@ async def auth_me(request: Request):
         update_last_seen(user_id)
     except Exception:
         logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
+    t_last_seen = _time.perf_counter()
 
     is_pwa = request.headers.get("X-PWA") == "1"
     update_session(user_id, is_pwa=is_pwa)
+    t_update_session = _time.perf_counter()
 
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
@@ -426,6 +433,15 @@ async def auth_me(request: Request):
             needs_terms_acceptance = not user_record.get("terms_accepted_at")
     except Exception:
         logger.exception(f"[Auth] /me: get_user_by_id failed for user={user_id} (ignored)")
+    t_get_user = _time.perf_counter()
+
+    logger.info(
+        f"[PROFILE auth/me] validate_session={int((t_validate-t0)*1000)}ms "
+        f"update_last_seen={int((t_last_seen-t_validate)*1000)}ms "
+        f"update_session={int((t_update_session-t_last_seen)*1000)}ms "
+        f"get_user={int((t_get_user-t_update_session)*1000)}ms "
+        f"total={int((t_get_user-t_me_start)*1000)}ms"
+    )
 
     # T1510: surface impersonation state so the frontend can show the banner.
     impersonator = None

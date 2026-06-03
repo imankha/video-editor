@@ -7,6 +7,7 @@ This module replaces the SQLite-based auth_db and sharing_db connection manageme
 
 import logging
 import os
+import time
 from contextlib import contextmanager
 
 import psycopg2
@@ -305,12 +306,24 @@ def get_pg():
     """Yield a connection from the pool. Auto-commits on clean exit, rolls back on error."""
     if _pool is None:
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
+    t0 = time.perf_counter()
     conn = _pool.getconn()
+    t1 = time.perf_counter()
+    health_checked = False
     try:
         if conn.closed or _is_connection_dead(conn):
             logger.warning("[PG] Discarding dead connection, fetching fresh one")
             _pool.putconn(conn, close=True)
             conn = _pool.getconn()
+        health_checked = True
+        t2 = time.perf_counter()
+        getconn_ms = (t1 - t0) * 1000
+        health_ms = (t2 - t1) * 1000
+        if getconn_ms > 5 or health_ms > 5:
+            logger.info(
+                f"[PROFILE pg] getconn={getconn_ms:.1f}ms "
+                f"health_check={health_ms:.1f}ms"
+            )
         yield conn
         conn.commit()
     except Exception:
