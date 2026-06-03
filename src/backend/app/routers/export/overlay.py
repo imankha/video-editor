@@ -504,7 +504,7 @@ async def overlay_action(project_id: int, action: OverlayAction):
             elif action.action == "set_highlight_shape":
                 if not action.data or action.data.highlight_shape is None:
                     raise ValueError("set_highlight_shape requires data.highlight_shape")
-                val = action.data.highlight_shape if action.data.highlight_shape in ('body', 'ground') else 'ground'
+                val = action.data.highlight_shape if action.data.highlight_shape in ('body', 'ground') else 'body'
                 cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
@@ -1576,7 +1576,7 @@ async def get_overlay_data(project_id: int):
         highlight_color = None
         video_duration = None
         from_raw_clip = False
-        highlight_shape = 'ground'
+        highlight_shape = 'body'
         stroke_width = 2
         fill_enabled = True
         fill_opacity = 0.20
@@ -1595,7 +1595,7 @@ async def get_overlay_data(project_id: int):
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
             video_duration = result['duration']
-            highlight_shape = result['highlight_shape'] or 'ground'
+            highlight_shape = result['highlight_shape'] or 'body'
             stroke_width = result['stroke_width']
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
@@ -1860,7 +1860,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         video_duration = project['duration'] if project['duration'] else None
 
         overlay_settings = {
-            'highlight_shape': project['highlight_shape'] or 'ground',
+            'highlight_shape': project['highlight_shape'] or 'body',
             'stroke_width': project['stroke_width'],
             'fill_enabled': bool(project['fill_enabled']),
             'fill_opacity': project['fill_opacity'],

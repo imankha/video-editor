@@ -21,7 +21,7 @@ export const useOverlayStore = create((set) => ({
   highlightColor: '#FFFFFF',
 
   // Overlay tuning settings
-  highlightShape: 'ground',
+  highlightShape: 'body',
   strokeWidth: 2,
   fillEnabled: true,
   fillOpacity: 0.20,
@@ -48,7 +48,7 @@ export const useOverlayStore = create((set) => ({
   reset: () => set({
     effectType: HighlightEffect.DARK_OVERLAY,
     highlightColor: '#FFFFFF',
-    highlightShape: 'ground',
+    highlightShape: 'body',
     strokeWidth: 2,
     fillEnabled: true,
     fillOpacity: 0.20,

@@ -647,7 +647,7 @@ def ensure_database():
                 effect_type TEXT DEFAULT 'original',
                 overlay_version INTEGER DEFAULT 0,
                 highlight_color TEXT DEFAULT NULL,
-                highlight_shape TEXT DEFAULT 'ground',
+                highlight_shape TEXT DEFAULT 'body',
                 stroke_width REAL DEFAULT 2,
                 fill_enabled INTEGER DEFAULT 1,
                 fill_opacity REAL DEFAULT 0.20,
