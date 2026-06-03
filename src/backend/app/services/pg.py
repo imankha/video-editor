@@ -290,42 +290,31 @@ def close_pg_pool():
         logger.info("[PG] Connection pool closed")
 
 
-def _is_connection_dead(conn) -> bool:
-    """Check if connection is alive by running a trivial query."""
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-        conn.rollback()
-        return False
-    except (psycopg2.OperationalError, psycopg2.InterfaceError):
-        return True
-
-
 @contextmanager
 def get_pg():
-    """Yield a connection from the pool. Auto-commits on clean exit, rolls back on error."""
+    """Yield a connection from the pool. Auto-commits on clean exit, rolls back on error.
+
+    Relies on TCP keepalives (keepalives_idle=30s) to detect dead connections
+    rather than a per-checkout SELECT 1 health check, which added 2 round-trips
+    (~100-200ms on remote Fly PG) to every single call.
+    """
     if _pool is None:
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
-    t0 = time.perf_counter()
     conn = _pool.getconn()
-    t1 = time.perf_counter()
-    health_checked = False
     try:
-        if conn.closed or _is_connection_dead(conn):
-            logger.warning("[PG] Discarding dead connection, fetching fresh one")
+        if conn.closed:
+            logger.warning("[PG] Discarding closed connection, fetching fresh one")
             _pool.putconn(conn, close=True)
             conn = _pool.getconn()
-        health_checked = True
-        t2 = time.perf_counter()
-        getconn_ms = (t1 - t0) * 1000
-        health_ms = (t2 - t1) * 1000
-        if getconn_ms > 5 or health_ms > 5:
-            logger.info(
-                f"[PROFILE pg] getconn={getconn_ms:.1f}ms "
-                f"health_check={health_ms:.1f}ms"
-            )
         yield conn
         conn.commit()
+    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+        logger.warning(f"[PG] Connection error, discarding: {e}")
+        try:
+            conn.rollback()
+        except (psycopg2.InterfaceError, psycopg2.OperationalError):
+            pass
+        raise
     except Exception:
         try:
             conn.rollback()

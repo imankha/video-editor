@@ -50,7 +50,6 @@ from app.services.auth_db import (
     invalidate_session,
     invalidate_user_sessions,
     generate_user_id,
-    get_user_by_id,
     update_last_seen,
     update_picture_url,
     get_auth_db,
@@ -369,9 +368,12 @@ async def auth_me(request: Request):
 
     Returns user info if session cookie is valid, 401 if not.
     In dev/test: also accepts X-User-ID header (same as middleware fallback).
+
+    T3420: Optimized to reuse middleware's validate_session result (stored on
+    request.state.session) and defer writes (update_last_seen, update_session)
+    to background tasks. picture_url/terms come from the enriched
+    validate_session query -- no separate get_user_by_id call needed.
     """
-    # E2E test bypass: X-User-ID header acts as valid auth (mirrors middleware behavior)
-    # SECURITY: Only enabled in dev/staging -- never in production.
     if APP_ENV != "production":
         x_user_id = request.headers.get("X-User-ID")
         if x_user_id:
@@ -389,21 +391,19 @@ async def auth_me(request: Request):
     import time as _time
     t_me_start = _time.perf_counter()
 
-    session_id = request.cookies.get("rb_session")
-    if not session_id:
-        logger.debug("[Auth] /me: no rb_session cookie")
-        raise HTTPException(status_code=401, detail="No session")
+    session = getattr(request.state, "session", None)
+    if not session:
+        session_id = request.cookies.get("rb_session")
+        if not session_id:
+            logger.debug("[Auth] /me: no rb_session cookie")
+            raise HTTPException(status_code=401, detail="No session")
+        try:
+            session = validate_session(session_id)
+        except Exception:
+            logger.exception("[Auth] /me: validate_session raised — degrading to 401")
+            raise HTTPException(status_code=401, detail="Session check failed")
 
-    # Degrade to 401 on auth-DB transients. /me is the very first call on
-    # every page load — a 500 here bricks the whole app; a 401 lets the
-    # frontend fall through to the unauthenticated path.
-    t0 = _time.perf_counter()
-    try:
-        session = validate_session(session_id)
-    except Exception:
-        logger.exception("[Auth] /me: validate_session raised — degrading to 401")
-        raise HTTPException(status_code=401, detail="Session check failed")
-    t_validate = _time.perf_counter()
+    t_after_session = _time.perf_counter()
 
     if not session:
         logger.info("[Auth] /me: invalid/expired session")
@@ -411,39 +411,32 @@ async def auth_me(request: Request):
 
     user_id = session["user_id"]
     email = session.get("email")
-
-    try:
-        update_last_seen(user_id)
-    except Exception:
-        logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
-    t_last_seen = _time.perf_counter()
-
-    is_pwa = request.headers.get("X-PWA") == "1"
-    update_session(user_id, is_pwa=is_pwa)
-    t_update_session = _time.perf_counter()
+    picture_url = session.get("picture_url")
+    needs_terms_acceptance = not session.get("terms_accepted_at")
 
     logger.info(f"[Auth] /me: valid session — user={user_id}, email={email}")
 
-    picture_url = None
-    needs_terms_acceptance = False
-    try:
-        user_record = get_user_by_id(user_id)
-        if user_record:
-            picture_url = user_record["picture_url"]
-            needs_terms_acceptance = not user_record.get("terms_accepted_at")
-    except Exception:
-        logger.exception(f"[Auth] /me: get_user_by_id failed for user={user_id} (ignored)")
-    t_get_user = _time.perf_counter()
+    import asyncio
+    is_pwa = request.headers.get("X-PWA") == "1"
+
+    async def _background_writes():
+        try:
+            await asyncio.to_thread(update_last_seen, user_id)
+        except Exception:
+            logger.exception(f"[Auth] /me: update_last_seen failed for user={user_id} (ignored)")
+        try:
+            await asyncio.to_thread(update_session, user_id, is_pwa=is_pwa)
+        except Exception:
+            logger.exception(f"[Auth] /me: update_session failed for user={user_id} (ignored)")
+
+    asyncio.create_task(_background_writes())
 
     logger.info(
-        f"[PROFILE auth/me] validate_session={int((t_validate-t0)*1000)}ms "
-        f"update_last_seen={int((t_last_seen-t_validate)*1000)}ms "
-        f"update_session={int((t_update_session-t_last_seen)*1000)}ms "
-        f"get_user={int((t_get_user-t_update_session)*1000)}ms "
-        f"total={int((t_get_user-t_me_start)*1000)}ms"
+        f"[PROFILE auth/me] session_resolve={int((t_after_session-t_me_start)*1000)}ms "
+        f"total={int((_time.perf_counter()-t_me_start)*1000)}ms "
+        f"(writes deferred to background)"
     )
 
-    # T1510: surface impersonation state so the frontend can show the banner.
     impersonator = None
     if session.get("impersonator_user_id"):
         impersonator = {

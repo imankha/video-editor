@@ -310,6 +310,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth/send-otp',
         '/api/auth/verify-otp',
         '/api/auth/test-login',
+        '/api/health',
     )
 
     def _is_allowlisted(self, request: Request) -> bool:
@@ -450,6 +451,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             if session:
                 user_id = session["user_id"]
                 auth_source = "session"
+                request.state.session = session
 
         # 2. Fallback: X-User-ID header (backward compat for dev/tests)
         # SECURITY: Only enabled in dev/staging -- never in production,
