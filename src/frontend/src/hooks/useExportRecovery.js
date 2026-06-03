@@ -43,22 +43,38 @@ export function useExportRecovery() {
       if (!session.isAuthenticated) return;
       // T3360: Wait for profile to be ready before fetching profile-scoped data
       if (session.profileReady) await session.profileReady;
-      console.log('[ExportRecovery] Fetching active exports from backend...');
 
-      const [activeResult, unacknowledgedResult] = await Promise.allSettled([
-        apiFetch(`${API_BASE}/api/exports/active`),
-        apiFetch(`${API_BASE}/api/exports/unacknowledged`),
-      ]);
+      // T3370: Bootstrap provides export data — wait for it instead of fetching independently.
+      // Poll briefly for bootstrap data to arrive (App.jsx sets it from bootstrap response).
+      let bootstrapExports = null;
+      for (let i = 0; i < 20; i++) {
+        const bootstrapData = window.__bootstrapExports;
+        if (bootstrapData) {
+          bootstrapExports = bootstrapData;
+          break;
+        }
+        await new Promise(r => setTimeout(r, 100));
+      }
+
+      // Fallback to individual fetches if bootstrap data didn't arrive
+      let activeExports, unacknowledgedExports;
+      if (bootstrapExports) {
+        activeExports = bootstrapExports.active || [];
+        unacknowledgedExports = bootstrapExports.unacknowledged || [];
+      } else {
+        const [activeResult, unacknowledgedResult] = await Promise.allSettled([
+          apiFetch(`${API_BASE}/api/exports/active`),
+          apiFetch(`${API_BASE}/api/exports/unacknowledged`),
+        ]);
+        activeExports = activeResult.status === 'fulfilled' && activeResult.value.ok
+          ? (await activeResult.value.json()).exports || [] : [];
+        unacknowledgedExports = unacknowledgedResult.status === 'fulfilled' && unacknowledgedResult.value.ok
+          ? (await unacknowledgedResult.value.json()).exports || [] : [];
+      }
 
       // Process active exports
       try {
-        if (activeResult.status !== 'fulfilled') {
-          console.error('[ExportRecovery] Failed to load exports:', activeResult.reason);
-        } else if (!activeResult.value.ok) {
-          console.warn('[ExportRecovery] Failed to fetch active exports:', activeResult.value.status);
-        } else {
-          const data = await activeResult.value.json();
-          const serverExports = data.exports || [];
+          const serverExports = activeExports;
 
           console.log(`[ExportRecovery] Found ${serverExports.length} active exports`);
 
@@ -98,13 +114,7 @@ export function useExportRecovery() {
 
       // Process unacknowledged exports (completed while user was away)
       try {
-        if (unacknowledgedResult.status !== 'fulfilled') {
-          console.error('[ExportRecovery] Failed to show completed export notifications:', unacknowledgedResult.reason);
-        } else if (!unacknowledgedResult.value.ok) {
-          console.warn('[ExportRecovery] Failed to fetch unacknowledged exports:', unacknowledgedResult.value.status);
-        } else {
-          const data = await unacknowledgedResult.value.json();
-          const completedExports = data.exports || [];
+          const completedExports = unacknowledgedExports;
 
           if (completedExports.length === 0) {
             console.log('[ExportRecovery] No unacknowledged completed exports');
@@ -134,7 +144,6 @@ export function useExportRecovery() {
               }
             }
           }
-        }
       } catch (err) {
         console.error('[ExportRecovery] Failed to show completed export notifications:', err);
       }

@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { X, Coins, HardDrive, Calendar } from 'lucide-react';
 import { Button } from './shared/Button';
-import { BuyCreditsModal } from './BuyCreditsModal';
+
+const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { toast } from './shared';
 import { useCreditStore } from '../stores/creditStore';
 import { daysPerCredit, calculateExtensionCost } from '../utils/storageCost';
@@ -194,10 +195,12 @@ export function StorageExtensionModal({ game, onClose, onExtensionSuccess }) {
       </div>
 
       {showBuyCredits && (
-        <BuyCreditsModal
-          onClose={() => setShowBuyCredits(false)}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
+        <Suspense fallback={null}>
+          <BuyCreditsModal
+            onClose={() => setShowBuyCredits(false)}
+            onPaymentSuccess={handlePaymentSuccess}
+          />
+        </Suspense>
       )}
     </div>
   );

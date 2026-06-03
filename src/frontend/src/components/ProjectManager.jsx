@@ -135,18 +135,12 @@ export function ProjectManager({
   // Project filter state - persisted via settings store
   const {
     settings,
-    loadSettings,
     setStatusFilter,
     setAspectFilter,
     setCreationFilter,
   } = useSettingsStore();
 
   const { statusFilter, aspectFilter, creationFilter } = settings.projectFilters;
-
-  // Load settings on mount
-  useEffect(() => {
-    loadSettings();
-  }, [loadSettings]);
 
   // Viewport-aware cache warming: promote visible game videos in the warm queue
   useEffect(() => {

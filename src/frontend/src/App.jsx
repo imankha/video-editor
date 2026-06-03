@@ -172,14 +172,11 @@ function App() {
           useGamesDataStore.getState().setFromBootstrap(data.games);
           useQuestStore.getState().setFromBootstrap(data.quests_progress);
           useGalleryStore.getState().setFromBootstrap(data.downloads);
-          // Export recovery handled by useExportRecovery hook using bootstrap data
+          // Publish export data for useExportRecovery to consume (avoids separate fetch)
           if (data.exports) {
-            const { useExportStore } = await import('./stores');
-            const exportStore = useExportStore.getState();
-            if (exportStore.setExportsFromServer && data.exports.active) {
-              exportStore.setExportsFromServer(data.exports.active);
-            }
+            window.__bootstrapExports = data.exports;
           }
+          window.__bootstrapLoaded = true;
         }
       } catch (err) {
         console.error('[App] Bootstrap failed, falling back to individual fetches:', err);

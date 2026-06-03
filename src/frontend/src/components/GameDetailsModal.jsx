@@ -1,7 +1,8 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { X, Upload, Gamepad2, Calendar, MapPin, Trophy, ChevronDown, Coins } from 'lucide-react';
 import { Button } from './shared/Button';
-import { BuyCreditsModal } from './BuyCreditsModal';
+
+const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { toast } from './shared';
 import { GameType, VideoMode } from '../constants/gameConstants';
 import { useCreditStore } from '../stores/creditStore';
@@ -527,10 +528,12 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
       </div>
 
       {showBuyCredits && (
-        <BuyCreditsModal
-          onClose={() => setShowBuyCredits(false)}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
+        <Suspense fallback={null}>
+          <BuyCreditsModal
+            onClose={() => setShowBuyCredits(false)}
+            onPaymentSuccess={handlePaymentSuccess}
+          />
+        </Suspense>
       )}
     </div>
   );

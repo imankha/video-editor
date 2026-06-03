@@ -1,9 +1,10 @@
-import { forwardRef, useImperativeHandle } from 'react';
+import { forwardRef, useImperativeHandle, lazy, Suspense } from 'react';
 import { Download, Loader, AlertCircle, Check } from 'lucide-react';
 import { Button, Toggle } from './shared';
 import { HighlightColor, HIGHLIGHT_COLOR_ORDER, HIGHLIGHT_COLOR_LABELS } from '../constants/highlightColors';
 import { HighlightEffect } from '../constants/highlightEffects';
-import { BuyCreditsModal } from './BuyCreditsModal';
+
+const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 import { SECTION_NAMES } from '../config/displayNames';
 
 /**
@@ -385,11 +386,13 @@ const ExportButtonView = forwardRef(function ExportButtonView({
 
       {/* T525: Buy Credits Modal (merged with insufficient credits info) */}
       {showBuyCredits && (
-        <BuyCreditsModal
-          onClose={() => { onCloseBuyCredits(); onCloseInsufficientCredits(); }}
-          onPaymentSuccess={onPaymentSuccess}
-          insufficientCredits={showInsufficientCredits}
-        />
+        <Suspense fallback={null}>
+          <BuyCreditsModal
+            onClose={() => { onCloseBuyCredits(); onCloseInsufficientCredits(); }}
+            onPaymentSuccess={onPaymentSuccess}
+            insufficientCredits={showInsufficientCredits}
+          />
+        </Suspense>
       )}
     </div>
   );

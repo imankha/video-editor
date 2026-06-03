@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, lazy, Suspense } from 'react';
 import { Coins } from 'lucide-react';
 import { useCreditStore } from '../stores/creditStore';
 import { useIsAuthenticated } from '../stores/authStore';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { toast } from './shared';
-import { BuyCreditsModal } from './BuyCreditsModal';
+
+const BuyCreditsModal = lazy(() => import('./BuyCreditsModal').then(m => ({ default: m.BuyCreditsModal })));
 
 /**
  * CreditBalance - Small pill showing credit balance in the header (T530)
@@ -58,10 +59,12 @@ export function CreditBalance() {
       </button>
 
       {showBuyCredits && (
-        <BuyCreditsModal
-          onClose={() => setShowBuyCredits(false)}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
+        <Suspense fallback={null}>
+          <BuyCreditsModal
+            onClose={() => setShowBuyCredits(false)}
+            onPaymentSuccess={handlePaymentSuccess}
+          />
+        </Suspense>
       )}
     </>
   );

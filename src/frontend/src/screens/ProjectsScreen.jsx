@@ -128,9 +128,9 @@ export function ProjectsScreen({
     };
   }, [fetchProjects]);
 
-  // Fetch pending uploads on mount
+  // Fetch pending uploads on mount (skip if bootstrap already loaded data)
   useEffect(() => {
-    fetchPendingUploads();
+    if (!window.__bootstrapLoaded) fetchPendingUploads();
   }, [fetchPendingUploads]);
 
   // Handle project selection
