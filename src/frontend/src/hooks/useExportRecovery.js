@@ -74,76 +74,75 @@ export function useExportRecovery() {
 
       // Process active exports
       try {
-          const serverExports = activeExports;
+        const serverExports = activeExports;
 
-          console.log(`[ExportRecovery] Found ${serverExports.length} active exports`);
+        console.log(`[ExportRecovery] Found ${serverExports.length} active exports`);
 
-          setExportsFromServer(serverExports);
+        setExportsFromServer(serverExports);
 
-          for (const exp of serverExports) {
-            if (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) {
-              console.log(`[ExportRecovery] Checking Modal status for ${exp.job_id}`);
+        for (const exp of serverExports) {
+          if (exp.status === ExportStatus.PENDING || exp.status === ExportStatus.PROCESSING) {
+            console.log(`[ExportRecovery] Checking Modal status for ${exp.job_id}`);
 
-              const stillRunning = await checkModalStatusOnce(exp);
+            const stillRunning = await checkModalStatusOnce(exp);
 
-              if (stillRunning) {
-                console.log(`[ExportRecovery] Connecting WebSocket for ${exp.job_id}`);
+            if (stillRunning) {
+              console.log(`[ExportRecovery] Connecting WebSocket for ${exp.job_id}`);
 
-                setupSilenceTimeout(exp);
+              setupSilenceTimeout(exp);
 
-                await exportWebSocketManager.connect(exp.job_id, {
-                  onProgress: () => {
-                    resetSilenceTimeout(exp);
-                  },
-                  onComplete: () => {
-                    clearSilenceTimeout(exp.job_id);
-                  },
-                  onError: () => {
-                    clearSilenceTimeout(exp.job_id);
-                  },
-                });
-              }
+              await exportWebSocketManager.connect(exp.job_id, {
+                onProgress: () => {
+                  resetSilenceTimeout(exp);
+                },
+                onComplete: () => {
+                  clearSilenceTimeout(exp.job_id);
+                },
+                onError: () => {
+                  clearSilenceTimeout(exp.job_id);
+                },
+              });
             }
           }
-
-          console.log('[ExportRecovery] Recovery complete');
         }
+
+        console.log('[ExportRecovery] Recovery complete');
       } catch (err) {
         console.error('[ExportRecovery] Failed to load exports:', err);
       }
 
       // Process unacknowledged exports (completed while user was away)
       try {
-          const completedExports = unacknowledgedExports;
+        const completedExports = unacknowledgedExports;
 
-          if (completedExports.length === 0) {
-            console.log('[ExportRecovery] No unacknowledged completed exports');
-          } else {
-            console.log(`[ExportRecovery] Found ${completedExports.length} exports that completed while away`);
+        if (completedExports.length === 0) {
+          console.log('[ExportRecovery] No unacknowledged completed exports');
+        } else {
+          console.log(`[ExportRecovery] Found ${completedExports.length} exports that completed while away`);
 
-            const jobIdsToAcknowledge = [];
-            for (const exp of completedExports) {
-              if (exp.status === ExportStatus.COMPLETE) {
-                completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
-              } else if (exp.status === ExportStatus.ERROR) {
-                failExport(exp.job_id, exp.error || 'Export failed');
-              }
-              jobIdsToAcknowledge.push(exp.job_id);
+          const jobIdsToAcknowledge = [];
+          for (const exp of completedExports) {
+            if (exp.status === ExportStatus.COMPLETE) {
+              completeExport(exp.job_id, exp.output_video_id, exp.output_filename);
+            } else if (exp.status === ExportStatus.ERROR) {
+              failExport(exp.job_id, exp.error || 'Export failed');
             }
+            jobIdsToAcknowledge.push(exp.job_id);
+          }
 
-            if (jobIdsToAcknowledge.length > 0) {
-              try {
-                await apiFetch(`${API_BASE}/api/exports/acknowledge`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(jobIdsToAcknowledge),
-                });
-                console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
-              } catch (ackErr) {
-                console.warn('[ExportRecovery] Failed to acknowledge exports:', ackErr);
-              }
+          if (jobIdsToAcknowledge.length > 0) {
+            try {
+              await apiFetch(`${API_BASE}/api/exports/acknowledge`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(jobIdsToAcknowledge),
+              });
+              console.log(`[ExportRecovery] Acknowledged ${jobIdsToAcknowledge.length} exports`);
+            } catch (ackErr) {
+              console.warn('[ExportRecovery] Failed to acknowledge exports:', ackErr);
             }
           }
+        }
       } catch (err) {
         console.error('[ExportRecovery] Failed to show completed export notifications:', err);
       }
