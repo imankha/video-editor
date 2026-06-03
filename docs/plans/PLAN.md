@@ -335,6 +335,8 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1702 | ↳ [Monetization + Intelligence](tasks/analytics/T1702-monetization-intelligence.md) | 6 | 5 | 1.2 | TODO | [ ] | Credit events, Stripe revenue tracking, nightly analytics engine (churn risk, engagement tiers, credit health, LTV), hourly/weekly alerts, viral attribution |
 | T1703 | ↳ [Optimization](tasks/analytics/T1703-optimization.md) | 5 | 4 | 1.3 | TODO | [ ] | L3 deep-dive template, feature release protocol, aha moment regression, magic number testing (requires 200+ users) |
 | T2270 | [Session Inactivity TTL](tasks/T2270-session-inactivity-ttl.md) | 5 | 2 | 2.5 | TODO | [ ] | Expire sessions after N days of inactivity using last_seen_at. Absorbs T420 inactivity portion. Depends on T1190. |
+| T3410 | [Keep Fly.io Machines Warm](tasks/for-launch/T3410-keep-machines-warm.md) | 9 | 1 | 9.0 | TODO | [ ] | Cold-start auth/me takes 1.8s (machine boot). Set min_machines_running=1 in fly.production.toml (~$3-5/mo). Drops page load from 3.1s to ~1.2s. |
+| T3420 | [Profile Bootstrap Endpoint](tasks/for-launch/T3420-profile-bootstrap-endpoint.md) | 7 | 3 | 2.3 | TODO | [ ] | Bootstrap takes 800ms server wait on warm machine. Profile per-query timing, optimize slow queries (projects JOIN, games athlete stats, quest progress). Target < 400ms. |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
 
@@ -477,6 +479,8 @@ IDs use gaps of 10 to allow insertions:
 - `T3290` - Tune NUF for Returning Users (differentiate returning vs first-time)
 - `T3300` - Build Tutorial Video for Landing Page
 - `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
+- `T3410` - Keep Fly.io Machines Warm (min_machines_running=1, eliminate cold starts)
+- `T3420` - Profile Bootstrap Endpoint (optimize 800ms server wait to < 400ms)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
