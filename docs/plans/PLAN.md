@@ -80,16 +80,16 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T1538 | [Per-Resource Locks](tasks/T1538-per-resource-locks.md) | 4 | 4 | 1.0 | DONE | [ ] | T1539 shipped the R2 push lock; remaining handler-level parallelism gated on `[WRITE_LOCK_WAIT]` evidence that hasn't materialized. |
 | T3250 | [Non-Blocking R2 Sync](tasks/T3250-non-blocking-r2-sync.md) | 9 | 5 | 1.8 | DONE | [ ] | Write lock held during R2 sync (~600ms) serializes all write requests per user. Rapid navigation queues requests behind each other (115s DELETE observed on prod). Narrow write lock to handler only; fire R2 sync as background task. |
 |  | **[Initial Load Time](tasks/initial-load-time/EPIC.md)** |  |  |  |  |  | Cut 7.8s initial load to ~2-3s: pre-auth warmup, parallel R2 downloads, collapse fetch phases, bootstrap endpoint |
-| T3310 | ↳ [Pre-Auth Machine Warmup](tasks/initial-load-time/T3310-pre-auth-machine-warmup.md) | 9 | 2 | P0 | TODO | [ ] | Warmup fires after auth (Phase 3), providing zero cold-start benefit. Fire unauthenticated warmup before auth/me to pre-wake Fly.io machine. ~1-1.5s saved. |
-| T3320 | ↳ [Preconnect + Inline Warmup](tasks/initial-load-time/T3320-preconnect-inline-warmup.md) | 6 | 1 | P0 | TODO | [ ] | Add preconnect hint + inline warmup fetch in index.html. Fires during HTML parse, ~500ms before React loads. |
-| T3330 | ↳ [Embed Quest Definitions](tasks/initial-load-time/T3330-embed-quest-definitions.md) | 5 | 1 | P1 | TODO | [ ] | Quest definitions are hardcoded on backend but fetched via HTTP. Embed in frontend bundle to eliminate a round-trip. |
-| T3340 | ↳ [Thread-Safe Session Init Cache](tasks/initial-load-time/T3340-thread-safe-session-init-cache.md) | 7 | 2 | P0 | TODO | [ ] | _init_cache has no lock; concurrent requests bypass cache and redundantly download from R2. Add per-user threading.Lock. |
-| T3350 | ↳ [Parallelize R2 Downloads](tasks/initial-load-time/T3350-parallelize-r2-downloads.md) | 8 | 3 | P0 | TODO | [ ] | auth/init downloads user.sqlite then profile.sqlite sequentially. Parallelize with speculative profile_id from frontend. ~0.5-1.0s saved. |
-| T3360 | ↳ [Collapse Frontend Load Phases](tasks/initial-load-time/T3360-collapse-frontend-load-phases.md) | 9 | 4 | P0 | TODO | [ ] | Data fetches wait for both auth/me + auth/init. Fire user-id-only requests (credits, settings, admin, profiles) after auth/me, concurrent with auth/init. Fix premature setSessionState. |
-| T3370 | ↳ [Bootstrap Endpoint](tasks/initial-load-time/T3370-bootstrap-endpoint.md) | 10 | 5 | P0 | TODO | [ ] | Replace 9 concurrent data fetches with single GET /api/bootstrap. Eliminates thread pool convoy (3.6s uniform wait), CORS preflights, per-request overhead. ~2-3s saved. |
-| T3380 | ↳ [Lazy Presigned URLs](tasks/initial-load-time/T3380-lazy-presigned-urls.md) | 7 | 3 | P1 | TODO | [ ] | /api/games generates R2 presigned URLs for all games on every load (~200-300ms each on cache miss). Return metadata only; lazy-load URLs on game navigation. |
-| T3390 | ↳ [Reduce Auth Retry Config](tasks/initial-load-time/T3390-reduce-auth-retry-config.md) | 4 | 1 | P2 | TODO | [ ] | fetchWithRetry uses 3 retries with 1s base delay. Reduce to 2 retries / 500ms for auth/me. Risk reduction after T3310 makes cold starts rare. |
-| T3400 | ↳ [Defer Stripe JS](tasks/initial-load-time/T3400-defer-stripe-js.md) | 4 | 2 | P2 | TODO | [ ] | Stripe SDK chain (5 requests, 78-1453ms) loads on every page load. Defer to payment flow interaction. Frees bandwidth on slow connections. |
+| T3310 | ↳ [Pre-Auth Machine Warmup](tasks/initial-load-time/T3310-pre-auth-machine-warmup.md) | 9 | 2 | P0 | DONE | [ ] | Warmup fires after auth (Phase 3), providing zero cold-start benefit. Fire unauthenticated warmup before auth/me to pre-wake Fly.io machine. ~1-1.5s saved. |
+| T3320 | ↳ [Preconnect + Inline Warmup](tasks/initial-load-time/T3320-preconnect-inline-warmup.md) | 6 | 1 | P0 | DONE | [ ] | Add preconnect hint + inline warmup fetch in index.html. Fires during HTML parse, ~500ms before React loads. |
+| T3330 | ↳ [Embed Quest Definitions](tasks/initial-load-time/T3330-embed-quest-definitions.md) | 5 | 1 | P1 | DONE | [ ] | Quest definitions are hardcoded on backend but fetched via HTTP. Embed in frontend bundle to eliminate a round-trip. |
+| T3340 | ↳ [Thread-Safe Session Init Cache](tasks/initial-load-time/T3340-thread-safe-session-init-cache.md) | 7 | 2 | P0 | DONE | [ ] | _init_cache has no lock; concurrent requests bypass cache and redundantly download from R2. Add per-user threading.Lock. |
+| T3350 | ↳ [Parallelize R2 Downloads](tasks/initial-load-time/T3350-parallelize-r2-downloads.md) | 8 | 3 | P0 | DONE | [ ] | auth/init downloads user.sqlite then profile.sqlite sequentially. Parallelize with speculative profile_id from frontend. ~0.5-1.0s saved. |
+| T3360 | ↳ [Collapse Frontend Load Phases](tasks/initial-load-time/T3360-collapse-frontend-load-phases.md) | 9 | 4 | P0 | DONE | [ ] | Data fetches wait for both auth/me + auth/init. Fire user-id-only requests (credits, settings, admin, profiles) after auth/me, concurrent with auth/init. Fix premature setSessionState. |
+| T3370 | ↳ [Bootstrap Endpoint](tasks/initial-load-time/T3370-bootstrap-endpoint.md) | 10 | 5 | P0 | DONE | [ ] | Replace 9 concurrent data fetches with single GET /api/bootstrap. Eliminates thread pool convoy (3.6s uniform wait), CORS preflights, per-request overhead. ~2-3s saved. |
+| T3380 | ↳ [Lazy Presigned URLs](tasks/initial-load-time/T3380-lazy-presigned-urls.md) | 7 | 3 | P1 | DONE | [ ] | /api/games generates R2 presigned URLs for all games on every load (~200-300ms each on cache miss). Return metadata only; lazy-load URLs on game navigation. |
+| T3390 | ↳ [Reduce Auth Retry Config](tasks/initial-load-time/T3390-reduce-auth-retry-config.md) | 4 | 1 | P2 | DONE | [ ] | fetchWithRetry uses 3 retries with 1s base delay. Reduce to 2 retries / 500ms for auth/me. Risk reduction after T3310 makes cold starts rare. |
+| T3400 | ↳ [Defer Stripe JS](tasks/initial-load-time/T3400-defer-stripe-js.md) | 4 | 2 | P2 | DONE | [ ] | Stripe SDK chain (5 requests, 78-1453ms) loads on every page load. Defer to payment flow interaction. Frees bandwidth on slow connections. |
 
 ---
 
@@ -140,7 +140,7 @@ Fix playback stalls observed on staging (2026-06-02). Video proxy bottleneck (~5
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
-| T3250 | [Direct R2 Video Streaming](tasks/T3250-direct-r2-streaming-fix.md) | 9 | 4 | 2.3 | TODO | [ ] | Fix playback stalls: presigned R2 URLs for game + clip streaming, bypass Fly.io proxy bottleneck (~590 KB/s). Absorbs T3240. |
+| T3250 | [Direct R2 Video Streaming](tasks/T3250-direct-r2-streaming-fix.md) | 9 | 4 | 2.3 | DONE | [ ] | Fix playback stalls: presigned R2 URLs for game + clip streaming, bypass Fly.io proxy bottleneck (~590 KB/s). Absorbs T3240. |
 
 ### For Alpha - Infrastructure
 
@@ -335,7 +335,8 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1702 | ↳ [Monetization + Intelligence](tasks/analytics/T1702-monetization-intelligence.md) | 6 | 5 | 1.2 | TODO | [ ] | Credit events, Stripe revenue tracking, nightly analytics engine (churn risk, engagement tiers, credit health, LTV), hourly/weekly alerts, viral attribution |
 | T1703 | ↳ [Optimization](tasks/analytics/T1703-optimization.md) | 5 | 4 | 1.3 | TODO | [ ] | L3 deep-dive template, feature release protocol, aha moment regression, magic number testing (requires 200+ users) |
 | T2270 | [Session Inactivity TTL](tasks/T2270-session-inactivity-ttl.md) | 5 | 2 | 2.5 | TODO | [ ] | Expire sessions after N days of inactivity using last_seen_at. Absorbs T420 inactivity portion. Depends on T1190. |
-| T3420 | [Profile Critical-Path Endpoints](tasks/for-launch/T3420-profile-bootstrap-endpoint.md) | 9 | 3 | 3.0 | TODO | [ ] | auth/me takes 1774ms on WARM machine (not cold start). Bootstrap takes 741ms. Profile both, optimize. Target: auth/me < 300ms, bootstrap < 400ms, page load < 1.5s. |
+| T3420 | [Profile Critical-Path Endpoints](tasks/for-launch/T3420-profile-bootstrap-endpoint.md) | 9 | 3 | 3.0 | TODO | [ ] | 375ms per-request baseline on ALL endpoints (even /api/health). Profile middleware + auth/me + bootstrap to find root cause. Target: baseline < 50ms, page load < 1.5s. |
+| T3430 | [Parallelize Game Load](tasks/for-launch/T3430-parallelize-game-load.md) | 7 | 3 | 2.3 | TODO | [ ] | Opening a game fires 4 sequential requests (2.3s). game_id is known upfront -- single /api/games/{id}/load endpoint returns game + playback URLs + teammate data. Target < 1s. |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
 
@@ -478,7 +479,8 @@ IDs use gaps of 10 to allow insertions:
 - `T3290` - Tune NUF for Returning Users (differentiate returning vs first-time)
 - `T3300` - Build Tutorial Video for Landing Page
 - `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
-- `T3420` - Profile Critical-Path Endpoints (auth/me 1774ms + bootstrap 741ms on warm machine)
+- `T3420` - Profile Critical-Path Endpoints (375ms per-request baseline, auth/me 1774ms, bootstrap 741ms)
+- `T3430` - Parallelize Game Load (4 sequential requests -> 1 game bootstrap endpoint)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
