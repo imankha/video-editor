@@ -128,9 +128,12 @@ export function ProjectsScreen({
     };
   }, [fetchProjects]);
 
-  // Fetch pending uploads on mount (skip if bootstrap already loaded data)
+  // Fetch pending uploads after bootstrap has had time to complete.
+  // Bootstrap includes pending_uploads data; this is a fallback for
+  // cases where bootstrap fails or the user navigates back later.
   useEffect(() => {
-    if (!window.__bootstrapLoaded) fetchPendingUploads();
+    const id = setTimeout(() => fetchPendingUploads(), 3000);
+    return () => clearTimeout(id);
   }, [fetchPendingUploads]);
 
   // Handle project selection
