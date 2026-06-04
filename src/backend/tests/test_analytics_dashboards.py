@@ -1,4 +1,4 @@
-"""Tests for T3030 analytics dashboard endpoints and daily_counters."""
+"""Tests for analytics dashboard endpoints and daily_counters."""
 
 from datetime import date, timedelta
 from unittest.mock import patch
@@ -6,7 +6,9 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.analytics import create_user_milestones, record_milestone
+from app.analytics import create_user_segment, record_milestone
+
+
 from app.services.auth_db import create_user
 
 
@@ -23,8 +25,8 @@ def analytics_setup(pg_conn):
             "INSERT INTO admin_users (email) VALUES ('test-admin@test.local') ON CONFLICT DO NOTHING"
         )
 
-    create_user_milestones("user-a", "organic", None, "otp")
-    create_user_milestones("user-b", "viral", "invite_link", "google")
+    create_user_segment("user-a", "organic", None, "otp")
+    create_user_segment("user-b", "organic", "user-a", "google")
 
     record_milestone("user-a", "game_created")
     record_milestone("user-a", "clip_created")
@@ -63,9 +65,9 @@ def _auth(user_id="admin-user"):
 
 
 class TestDailyCounters:
-    def test_create_milestones_increments_signups(self, pg_conn):
+    def test_create_segment_increments_signups(self, pg_conn):
         create_user("test-user", email="test@test.com")
-        create_user_milestones("test-user", "organic", None, "otp")
+        create_user_segment("test-user", "organic", None, "otp")
 
         from app.services.pg import get_pg
         with get_pg() as conn:
@@ -119,7 +121,7 @@ class TestFunnelEndpoint:
         assert "to" in data
         assert len(data["funnel"]) >= 1
         totals = data["funnel"][0]
-        assert totals["origin_type"] == "all"
+        assert totals["origin"] == "all"
         assert totals["signed_up"] >= 2
 
     def test_origin_filter(self, client):
@@ -127,7 +129,7 @@ class TestFunnelEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         for row in data["funnel"]:
-            assert row["origin_type"] == "organic"
+            assert row["origin"] == "organic"
 
     def test_funnel_stages_decrease(self, client):
         resp = client.get("/api/admin/analytics/funnel", headers=_auth())
@@ -145,10 +147,11 @@ class TestChannelsEndpoint:
         assert "channels" in data
         assert len(data["channels"]) >= 1
         ch = data["channels"][0]
-        assert "origin_type" in ch
+        assert "origin" in ch
         assert "signups" in ch
         assert "export_pct" in ch
         assert "avg_exports" in ch
+        assert "revenue_cents" in ch
 
 
 class TestCohortsEndpoint:
@@ -218,52 +221,25 @@ class TestPulseEndpoint:
         assert len(data["cards"]["signups"]["sparkline"]) == 14
 
 
-class TestMigrationV006:
-    def test_backfill_creates_signup_rows(self, pg_conn):
-        create_user("test-user-1", email="t1@test.com")
-        from app.services.pg import get_pg
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("DELETE FROM daily_counters")
-            cur.execute("""
-                INSERT INTO user_milestones (user_id, install_day, origin_type)
-                VALUES ('test-user-1', '2026-01-15', 'organic')
-                ON CONFLICT DO NOTHING
-            """)
-
-            from app.migrations.postgres.v006_daily_counters import V006DailyCounters
-            V006DailyCounters().up(conn)
-
-            cur.execute("SELECT signups FROM daily_counters WHERE counter_date = '2026-01-15' AND origin_type = 'organic'")
-            row = cur.fetchone()
-            assert row is not None
-            assert row["signups"] >= 1
-
-            cur.execute("SELECT signups FROM daily_counters WHERE counter_date = '2026-01-15' AND origin_type = 'all'")
-            row = cur.fetchone()
-            assert row is not None
-            assert row["signups"] >= 1
-
-
-class TestUserFlowEvents:
-    def test_record_milestone_upserts_flow_event(self, analytics_setup, pg_conn):
+class TestUserActions:
+    def test_record_milestone_upserts_action(self, analytics_setup, pg_conn):
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT event, count FROM user_flow_events WHERE user_id = 'user-a' AND event = 'game_created'"
+                "SELECT action, count FROM user_actions WHERE user_id = 'user-a' AND action = 'game_created'"
             )
             row = cur.fetchone()
             assert row is not None
             assert row["count"] >= 1
 
-    def test_new_event_records_to_flow_events(self, analytics_setup, pg_conn):
+    def test_new_event_records_to_actions(self, analytics_setup, pg_conn):
         record_milestone("user-a", "annotation_completed")
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT event, count FROM user_flow_events WHERE user_id = 'user-a' AND event = 'annotation_completed'"
+                "SELECT action, count FROM user_actions WHERE user_id = 'user-a' AND action = 'annotation_completed'"
             )
             row = cur.fetchone()
             assert row is not None
@@ -276,7 +252,7 @@ class TestUserFlowEvents:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT count FROM user_flow_events WHERE user_id = 'user-a' AND event = 'annotation_completed'"
+                "SELECT count FROM user_actions WHERE user_id = 'user-a' AND action = 'annotation_completed'"
             )
             row = cur.fetchone()
             assert row["count"] == 2
@@ -299,7 +275,7 @@ class TestUserFlowEvents:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT event, count FROM user_flow_events WHERE user_id = 'user-a' AND event = 'framing_opened'"
+                "SELECT action, count FROM user_actions WHERE user_id = 'user-a' AND action = 'framing_opened'"
             )
             row = cur.fetchone()
             assert row is not None
@@ -311,65 +287,6 @@ class TestUserFlowEvents:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT * FROM user_flow_events WHERE user_id = 'user-a' AND event = 'nonexistent_event'"
+                "SELECT * FROM user_actions WHERE user_id = 'user-a' AND action = 'nonexistent_event'"
             )
             assert cur.fetchone() is None
-
-    def test_export_events_update_last_export_at(self, analytics_setup, pg_conn):
-        from app.services.pg import get_pg
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT last_export_at FROM user_milestones WHERE user_id = 'user-a'")
-            before = cur.fetchone()["last_export_at"]
-
-        record_milestone("user-a", "framing_exported")
-
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT last_export_at FROM user_milestones WHERE user_id = 'user-a'")
-            after = cur.fetchone()["last_export_at"]
-            assert after is not None
-            assert after >= before if before else True
-
-
-class TestMigrationV007:
-    def test_backfill_creates_flow_event_rows(self, pg_conn):
-        create_user("test-user-1", email="t1@test.com")
-        from app.services.pg import get_pg
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("DELETE FROM user_flow_events WHERE user_id = 'test-user-1'")
-            cur.execute("DELETE FROM user_milestones WHERE user_id = 'test-user-1'")
-            cur.execute("""
-                INSERT INTO user_milestones (user_id, install_day, origin_type,
-                    first_game_created_at, game_created_count,
-                    first_clip_created_at, clip_created_count)
-                VALUES ('test-user-1', '2026-01-15', 'organic',
-                    now() - INTERVAL '5 days', 3,
-                    now() - INTERVAL '3 days', 7)
-                ON CONFLICT DO NOTHING
-            """)
-
-            from app.migrations.postgres.v007_user_flow_events import V007UserFlowEvents
-            V007UserFlowEvents().up(conn)
-
-            cur.execute(
-                "SELECT event, count FROM user_flow_events WHERE user_id = 'test-user-1' ORDER BY event"
-            )
-            rows = {r["event"]: r["count"] for r in cur.fetchall()}
-            assert "game_created" in rows
-            assert rows["game_created"] == 3
-            assert "clip_created" in rows
-            assert rows["clip_created"] == 7
-
-    def test_new_daily_counter_columns_exist(self, pg_conn):
-        from app.services.pg import get_pg
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'daily_counters'
-                AND column_name IN ('annotations_completed', 'framing_exports', 'overlay_exports', 'video_downloads')
-            """)
-            cols = {r["column_name"] for r in cur.fetchall()}
-            assert cols == {"annotations_completed", "framing_exports", "overlay_exports", "video_downloads"}

@@ -19,7 +19,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ..analytics import record_milestone
+from ..analytics import record_milestone, increment_total_spent, CREDIT_AMOUNT_TO_CENTS
 from ..user_context import get_current_user_id
 from ..services.user_db import (
     get_stripe_customer_id,
@@ -235,6 +235,11 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
         balance = get_credit_balance(user_id)
         return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
 
+    record_milestone(user_id, "credit_purchased")
+    pack_info = CREDIT_PACKS.get(pack)
+    if pack_info:
+        increment_total_spent(user_id, pack_info["price_cents"])
+
     logger.info(
         f"[Payments] Confirmed + granted {credits} credits to {user_id} "
         f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -298,6 +303,9 @@ async def stripe_webhook(request: Request):
             return {"status": "already_processed"}
 
         record_milestone(user_id, "credit_purchased")
+        pack_info = CREDIT_PACKS.get(pack)
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -330,6 +338,9 @@ async def stripe_webhook(request: Request):
             return {"status": "already_processed"}
 
         record_milestone(user_id, "credit_purchased")
+        pack_info = CREDIT_PACKS.get(pack)
+        if pack_info:
+            increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -411,6 +422,11 @@ async def verify_session(request: Request):
         from ..services.user_db import get_credit_balance
         balance = get_credit_balance(user_id)
         return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
+
+    record_milestone(user_id, "credit_purchased")
+    pack_info = CREDIT_PACKS.get(pack)
+    if pack_info:
+        increment_total_spent(user_id, pack_info["price_cents"])
 
     logger.info(
         f"[Payments] Verified + granted {credits} credits to {user_id} "

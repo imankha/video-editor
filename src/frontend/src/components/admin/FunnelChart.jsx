@@ -19,7 +19,7 @@ export function FunnelChart({ data }) {
     return <p className="text-gray-500 text-sm">No funnel data available.</p>;
   }
 
-  const totals = data.funnel.find(r => r.origin_type === 'all') || data.funnel[0];
+  const totals = data.funnel.find(r => r.origin === 'all') || data.funnel[0];
   const maxVal = totals[STAGES[0].key] || 1;
 
   return (

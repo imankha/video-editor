@@ -823,46 +823,50 @@ def backfill_user_activity(user_id: str) -> bool:
             with get_pg() as pg:
                 cur = pg.cursor()
                 cur.execute(
-                    """SELECT session_count, pwa_session_count, last_active_at, last_export_at
-                       FROM user_milestones WHERE user_id = %s""",
+                    "SELECT last_active_at FROM user_segments WHERE user_id = %s",
                     (user_id,),
                 )
-                milestone_row = cur.fetchone()
+                segment_row = cur.fetchone()
 
                 cur.execute(
-                    "SELECT event, count, first_at FROM user_flow_events WHERE user_id = %s",
+                    "SELECT action, count, first_at FROM user_actions WHERE user_id = %s",
                     (user_id,),
                 )
-                event_rows = cur.fetchall()
+                action_rows = cur.fetchall()
         except Exception:
             logger.warning("[UserDB] Postgres unavailable for activity backfill user=%s", user_id)
             return False
 
-        if milestone_row:
-            conn.execute(
-                """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, last_export_at)
-                   VALUES (?, ?, ?, ?, ?)""",
-                (
-                    user_id,
-                    milestone_row["session_count"],
-                    milestone_row["pwa_session_count"],
-                    str(milestone_row["last_active_at"]) if milestone_row["last_active_at"] else None,
-                    str(milestone_row["last_export_at"]) if milestone_row["last_export_at"] else None,
-                ),
-            )
+        if not segment_row and not action_rows:
+            return False
 
-        for row in event_rows:
+        action_map = {r["action"]: r for r in action_rows}
+        session_count = action_map.get("session_started", {}).get("count", 0)
+        pwa_session_count = action_map.get("pwa_session_started", {}).get("count", 0)
+        last_active = str(segment_row["last_active_at"]) if segment_row and segment_row["last_active_at"] else None
+
+        export_actions = {"export_completed", "framing_exported", "overlay_exported"}
+        last_export = None
+        for ea in export_actions:
+            if ea in action_map and action_map[ea].get("first_at"):
+                last_export = str(action_map[ea]["first_at"])
+                break
+
+        conn.execute(
+            """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, last_export_at)
+               VALUES (?, ?, ?, ?, ?)""",
+            (user_id, session_count, pwa_session_count, last_active, last_export),
+        )
+
+        for row in action_rows:
             conn.execute(
                 """INSERT OR IGNORE INTO user_activity_events (event, count, first_at)
                    VALUES (?, ?, ?)""",
-                (row["event"], row["count"], str(row["first_at"]) if row["first_at"] else None),
+                (row["action"], row["count"], str(row["first_at"]) if row["first_at"] else None),
             )
 
-        if not milestone_row and not event_rows:
-            return False
-
         conn.commit()
-        logger.info("[UserDB] Backfilled user activity for user=%s (%d events)", user_id, len(event_rows))
+        logger.info("[UserDB] Backfilled user activity for user=%s (%d actions)", user_id, len(action_rows))
         return True
 
 

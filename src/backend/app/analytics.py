@@ -38,32 +38,79 @@ FUNNEL_STEPS = [
 
 _EXPORT_EVENTS = {"export_completed", "framing_exported", "overlay_exported"}
 
+CREDIT_AMOUNT_TO_CENTS = {
+    120: 499,
+    400: 1299,
+    1000: 2499,
+}
 
-def _upsert_daily_counter(cur, origin_type: str, column: str):
+
+def _upsert_daily_counter(cur, origin: str, column: str):
     sql = f"""
         INSERT INTO daily_counters (counter_date, origin_type, {column})
         VALUES (CURRENT_DATE, %s, 1)
         ON CONFLICT (counter_date, origin_type)
         DO UPDATE SET {column} = daily_counters.{column} + 1
     """
-    cur.execute(sql, (origin_type,))
+    cur.execute(sql, (origin,))
 
 
-def create_user_milestones(user_id: str, origin_type: str, origin_channel: str | None, signup_method: str):
+def _get_user_origin(user_id: str) -> str:
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT origin FROM user_segments WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+    return row["origin"] if row else "organic"
+
+
+def _determine_origin(user_id: str, ref: str | None) -> tuple[str, str | None]:
+    """Determine origin and referrer_id for a new user.
+
+    Returns (origin, referrer_id).
+    """
+    from app.services.sharing_db import resolve_invite_code
+
+    if ref:
+        referrer_id = resolve_invite_code(ref)
+        if referrer_id:
+            inviter_origin = _get_user_origin(referrer_id)
+            return inviter_origin, referrer_id
+
+        return ref, None
+
+    from app.services.sharing_db import attribute_from_existing_shares
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT sharer_user_id FROM shares
+               WHERE recipient_email = (SELECT email FROM users WHERE user_id = %s)
+                 AND sharer_user_id != %s
+               ORDER BY shared_at ASC LIMIT 1""",
+            (user_id, user_id),
+        )
+        row = cur.fetchone()
+    if row:
+        sharer_origin = _get_user_origin(row["sharer_user_id"])
+        return sharer_origin, row["sharer_user_id"]
+
+    return "organic", None
+
+
+def create_user_segment(user_id: str, origin: str, referrer_id: str | None, signup_method: str):
     try:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                """INSERT INTO user_milestones (user_id, origin_type, origin_channel, signup_method)
+                """INSERT INTO user_segments (user_id, origin, referrer_id, signup_method)
                    VALUES (%s, %s, %s, %s)
                    ON CONFLICT (user_id) DO NOTHING""",
-                (user_id, origin_type, origin_channel, signup_method),
+                (user_id, origin, referrer_id, signup_method),
             )
-            _upsert_daily_counter(cur, origin_type, "signups")
+            _upsert_daily_counter(cur, origin, "signups")
             _upsert_daily_counter(cur, "all", "signups")
-        logger.info("[Analytics] Created milestones: user=%s origin=%s channel=%s method=%s", user_id, origin_type, origin_channel, signup_method)
+        logger.info("[Analytics] Created segment: user=%s origin=%s referrer=%s method=%s", user_id, origin, referrer_id, signup_method)
     except Exception:
-        logger.exception("[Analytics] Failed to create milestones for %s", user_id)
+        logger.exception("[Analytics] Failed to create segment for %s", user_id)
 
     try:
         from app.services.user_db import get_user_db_connection
@@ -75,7 +122,7 @@ def create_user_milestones(user_id: str, origin_type: str, origin_channel: str |
             )
             conn.commit()
     except Exception:
-        logger.warning("[Analytics] SQLite sync failed for create_user_milestones user=%s", user_id)
+        logger.warning("[Analytics] SQLite sync failed for create_user_segment user=%s", user_id)
 
 
 def record_milestone(user_id: str, event: str):
@@ -89,24 +136,21 @@ def record_milestone(user_id: str, event: str):
             cur = conn.cursor()
 
             cur.execute("""
-                INSERT INTO user_flow_events (user_id, event)
+                INSERT INTO user_actions (user_id, action)
                 VALUES (%s, %s)
-                ON CONFLICT (user_id, event)
-                DO UPDATE SET count = user_flow_events.count + 1
+                ON CONFLICT (user_id, action)
+                DO UPDATE SET count = user_actions.count + 1
             """, (user_id, event))
 
-            set_clauses = ["last_active_at = now()"]
-            if event in _EXPORT_EVENTS:
-                set_clauses.append("last_export_at = now()")
             cur.execute(
-                f"UPDATE user_milestones SET {', '.join(set_clauses)} WHERE user_id = %s RETURNING origin_type",
+                "SELECT origin FROM user_segments WHERE user_id = %s",
                 (user_id,),
             )
             row = cur.fetchone()
 
             daily_col = cfg["daily_col"]
             if daily_col and row:
-                origin = row["origin_type"]
+                origin = row["origin"]
                 _upsert_daily_counter(cur, origin, daily_col)
                 _upsert_daily_counter(cur, "all", daily_col)
 
@@ -144,44 +188,86 @@ def update_session(user_id: str, is_pwa: bool = False):
     try:
         with get_pg() as conn:
             cur = conn.cursor()
+
+            # Check gap before updating last_active_at
             cur.execute(
-                """UPDATE user_milestones
-                   SET session_count = CASE
-                           WHEN last_active_at < now() - INTERVAL '30 minutes' THEN session_count + 1
-                           ELSE session_count
-                       END,
-                       pwa_session_count = CASE
-                           WHEN %s AND last_active_at < now() - INTERVAL '30 minutes' THEN pwa_session_count + 1
-                           ELSE pwa_session_count
-                       END,
-                       last_active_at = now()
-                   WHERE user_id = %s
-                   RETURNING session_count, pwa_session_count, last_active_at""",
-                (is_pwa, user_id),
+                """SELECT last_active_at < now() - INTERVAL '30 minutes' AS is_new_session
+                   FROM user_segments WHERE user_id = %s""",
+                (user_id,),
             )
-            row = cur.fetchone()
-            if row:
-                pwa_info = f" pwa_sessions={row['pwa_session_count']}" if is_pwa else ""
-                logger.info("[Analytics] Session update: user=%s session_count=%s%s", user_id, row["session_count"], pwa_info)
+            seg_row = cur.fetchone()
+            if not seg_row:
+                return
+
+            is_new_session = seg_row["is_new_session"]
+
+            cur.execute(
+                "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
+                (user_id,),
+            )
+
+            cur.execute("""
+                INSERT INTO user_actions (user_id, action, count, first_at)
+                VALUES (%s, 'session_started', 1, now())
+                ON CONFLICT (user_id, action)
+                DO UPDATE SET count = CASE
+                    WHEN %s THEN user_actions.count + 1
+                    ELSE user_actions.count
+                END
+            """, (user_id, is_new_session))
+
+            if is_pwa:
+                cur.execute("""
+                    INSERT INTO user_actions (user_id, action, count, first_at)
+                    VALUES (%s, 'pwa_session_started', 1, now())
+                    ON CONFLICT (user_id, action)
+                    DO UPDATE SET count = CASE
+                        WHEN %s THEN user_actions.count + 1
+                        ELSE user_actions.count
+                    END
+                """, (user_id, is_new_session))
+
+            cur.execute(
+                "SELECT action, count FROM user_actions WHERE user_id = %s AND action IN ('session_started', 'pwa_session_started')",
+                (user_id,),
+            )
+            counts = {r["action"]: r["count"] for r in cur.fetchall()}
+            session_count = counts.get("session_started", 0)
+            pwa_session_count = counts.get("pwa_session_started", 0)
+
+            pwa_info = f" pwa_sessions={pwa_session_count}" if is_pwa else ""
+            logger.info("[Analytics] Session update: user=%s session_count=%s%s", user_id, session_count, pwa_info)
     except Exception:
         logger.exception("[Analytics] Failed to update session for %s", user_id)
         return
 
-    if row:
-        try:
-            from app.services.user_db import get_user_db_connection
-            with get_user_db_connection(user_id) as conn:
-                conn.execute(
-                    """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, updated_at)
-                       VALUES (?, ?, ?, datetime('now'), datetime('now'))
-                       ON CONFLICT(user_id) DO UPDATE SET
-                           session_count = ?,
-                           pwa_session_count = ?,
-                           last_active_at = datetime('now'),
-                           updated_at = datetime('now')""",
-                    (user_id, row["session_count"], row["pwa_session_count"],
-                     row["session_count"], row["pwa_session_count"]),
-                )
-                conn.commit()
-        except Exception:
-            logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
+    try:
+        from app.services.user_db import get_user_db_connection
+        with get_user_db_connection(user_id) as conn:
+            conn.execute(
+                """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, updated_at)
+                   VALUES (?, ?, ?, datetime('now'), datetime('now'))
+                   ON CONFLICT(user_id) DO UPDATE SET
+                       session_count = ?,
+                       pwa_session_count = ?,
+                       last_active_at = datetime('now'),
+                       updated_at = datetime('now')""",
+                (user_id, session_count, pwa_session_count,
+                 session_count, pwa_session_count),
+            )
+            conn.commit()
+    except Exception:
+        logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
+
+
+def increment_total_spent(user_id: str, amount_cents: int):
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE user_segments SET total_spent_cents = total_spent_cents + %s WHERE user_id = %s",
+                (amount_cents, user_id),
+            )
+        logger.info("[Analytics] Incremented total_spent: user=%s amount_cents=%s", user_id, amount_cents)
+    except Exception:
+        logger.exception("[Analytics] Failed to increment total_spent for %s", user_id)

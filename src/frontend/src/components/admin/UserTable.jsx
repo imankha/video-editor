@@ -11,36 +11,32 @@ function fmtMoney(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-const ORIGIN_STYLES = {
-  organic: 'bg-green-500/20 text-green-400 border-green-500/30',
-  viral: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  ad_campaign: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-};
-
-function OriginBadge({ type, channel }) {
-  if (!type) return <span className="text-gray-600">{'—'}</span>;
-  const style = ORIGIN_STYLES[type] || ORIGIN_STYLES.organic;
+function OriginBadge({ origin }) {
+  if (!origin) return <span className="text-gray-600">{'—'}</span>;
+  const style = origin === 'organic'
+    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+    : 'bg-blue-500/20 text-blue-400 border-blue-500/30';
   return (
     <span
       className={`inline-block px-1.5 py-0.5 text-[10px] rounded border ${style}`}
-      title={channel ? `Channel: ${channel}` : undefined}
+      title={origin}
     >
-      {type === 'ad_campaign' ? 'ad' : type}
+      {origin}
     </span>
   );
 }
 
 const COLUMNS = [
   { key: 'email', label: 'Email', align: 'left' },
-  { key: 'origin_type', label: 'Origin', align: 'center' },
+  { key: 'origin', label: 'Origin', align: 'center' },
   { key: 'last_step', label: 'Last Step', align: 'center' },
-  { key: 'install_day', label: 'Joined', align: 'right' },
+  { key: 'acquired_at', label: 'Joined', align: 'right' },
   { key: 'game_created_count', label: 'Games', align: 'right' },
   { key: 'clip_created_count', label: 'Clips', align: 'right' },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
   { key: 'share_completed_count', label: 'Shares', align: 'right' },
   { key: 'credits', label: 'Credits', align: 'right' },
-  { key: 'money_spent_cents', label: '$ Spent', align: 'right' },
+  { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
   { key: 'session_count', label: 'Sessions', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
@@ -79,7 +75,7 @@ const FILTERS = [
 
 function matchesFilter(user, filter) {
   switch (filter) {
-    case 'paying': return (user.money_spent_cents || 0) > 0;
+    case 'paying': return (user.total_spent_cents || 0) > 0;
     case 'active': {
       if (!user.last_active_at) return false;
       const seen = new Date(user.last_active_at);
@@ -278,7 +274,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-center">
-                  <OriginBadge type={user.origin_type} channel={user.origin_channel} />
+                  <OriginBadge origin={user.origin} />
                 </td>
 
                 <td className="px-3 py-2.5 text-center">
@@ -286,7 +282,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.install_day || '—'}
+                  {user.acquired_at || '—'}
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.game_created_count ?? 0}</td>
@@ -308,7 +304,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {fmtMoney(user.money_spent_cents)}
+                  {fmtMoney(user.total_spent_cents)}
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>

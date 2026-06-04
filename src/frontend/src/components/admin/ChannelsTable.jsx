@@ -27,8 +27,7 @@ export function ChannelsTable({ data }) {
           {data.channels.map((ch, i) => (
             <tr key={i} className="border-b border-white/5 hover:bg-white/5 transition-colors">
               <td className="px-3 py-2.5 text-gray-200 text-xs">
-                {ch.origin_type}
-                {ch.origin_channel && <span className="text-gray-500 ml-1">/ {ch.origin_channel}</span>}
+                {ch.origin}
               </td>
               <td className="px-3 py-2.5 text-right text-gray-300 text-xs">{ch.signups}</td>
               <td className={`px-3 py-2.5 text-right text-xs ${pctColor(ch.export_pct)}`}>

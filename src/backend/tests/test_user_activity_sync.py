@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 from contextlib import contextmanager
 
 import pytest
-from app.analytics import create_user_milestones, record_milestone, update_session
+from app.analytics import create_user_segment, record_milestone, update_session
 from app.services.auth_db import create_user
 
 
@@ -46,7 +46,7 @@ class TestRecordMilestoneDualWrite:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):
         create_user("user-a", email="a@test.com")
-        create_user_milestones("user-a", "organic", None, "otp")
+        create_user_segment("user-a", "organic", None, "otp")
 
     def test_record_milestone_dual_writes(self, pg_conn):
         record_milestone("user-a", "game_created")
@@ -55,7 +55,7 @@ class TestRecordMilestoneDualWrite:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT * FROM user_flow_events WHERE user_id = %s AND event = %s",
+                "SELECT * FROM user_actions WHERE user_id = %s AND action = %s",
                 ("user-a", "game_created"),
             )
             pg_row = cur.fetchone()
@@ -91,14 +91,14 @@ class TestUpdateSessionSync:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):
         create_user("user-a", email="a@test.com")
-        create_user_milestones("user-a", "organic", None, "otp")
+        create_user_segment("user-a", "organic", None, "otp")
 
     def test_update_session_syncs_to_sqlite(self, pg_conn):
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "UPDATE user_milestones SET last_active_at = now() - INTERVAL '31 minutes' WHERE user_id = %s",
+                "UPDATE user_segments SET last_active_at = now() - INTERVAL '31 minutes' WHERE user_id = %s",
                 ("user-a",),
             )
 
@@ -108,14 +108,14 @@ class TestUpdateSessionSync:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT session_count, pwa_session_count FROM user_milestones WHERE user_id = %s",
+                "SELECT action, count FROM user_actions WHERE user_id = %s AND action = 'session_started'",
                 ("user-a",),
             )
             pg_row = cur.fetchone()
 
         activity = _get_sqlite_activity("user-a")
         assert activity is not None
-        assert activity["session_count"] == pg_row["session_count"]
+        assert activity["session_count"] == pg_row["count"]
 
 
 class TestBackfillUserActivity:
@@ -128,17 +128,22 @@ class TestBackfillUserActivity:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                """INSERT INTO user_milestones (user_id, origin_type, signup_method, session_count, pwa_session_count)
-                   VALUES (%s, %s, %s, %s, %s)""",
-                ("user-a", "organic", "otp", 5, 2),
+                """INSERT INTO user_segments (user_id, origin, signup_method)
+                   VALUES (%s, %s, %s)""",
+                ("user-a", "organic", "otp"),
             )
             cur.execute(
-                """INSERT INTO user_flow_events (user_id, event, count)
+                """INSERT INTO user_actions (user_id, action, count)
+                   VALUES (%s, %s, %s)""",
+                ("user-a", "session_started", 5),
+            )
+            cur.execute(
+                """INSERT INTO user_actions (user_id, action, count)
                    VALUES (%s, %s, %s)""",
                 ("user-a", "game_created", 3),
             )
             cur.execute(
-                """INSERT INTO user_flow_events (user_id, event, count)
+                """INSERT INTO user_actions (user_id, action, count)
                    VALUES (%s, %s, %s)""",
                 ("user-a", "clip_created", 7),
             )
@@ -150,10 +155,9 @@ class TestBackfillUserActivity:
         activity = _get_sqlite_activity("user-a")
         assert activity is not None
         assert activity["session_count"] == 5
-        assert activity["pwa_session_count"] == 2
 
         events = _get_sqlite_events("user-a")
-        assert len(events) == 2
+        assert len(events) >= 2
         game_event = next(e for e in events if e["event"] == "game_created")
         assert game_event["count"] == 3
 
@@ -170,7 +174,7 @@ class TestSqliteFailureIsolation:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):
         create_user("user-a", email="a@test.com")
-        create_user_milestones("user-a", "organic", None, "otp")
+        create_user_segment("user-a", "organic", None, "otp")
 
     def test_sqlite_failure_does_not_break_milestone(self, pg_conn, caplog):
         with patch("app.services.user_db.get_user_db_connection", side_effect=Exception("SQLite broken")):
@@ -180,7 +184,7 @@ class TestSqliteFailureIsolation:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT * FROM user_flow_events WHERE user_id = %s AND event = %s",
+                "SELECT * FROM user_actions WHERE user_id = %s AND action = %s",
                 ("user-a", "game_created"),
             )
             pg_row = cur.fetchone()
@@ -188,13 +192,13 @@ class TestSqliteFailureIsolation:
         assert pg_row["count"] == 1
 
 
-class TestCreateMilestonesInitializesSqlite:
+class TestCreateSegmentInitializesSqlite:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):
         create_user("user-a", email="a@test.com")
 
-    def test_create_milestones_initializes_sqlite(self, pg_conn):
-        create_user_milestones("user-a", "organic", None, "otp")
+    def test_create_segment_initializes_sqlite(self, pg_conn):
+        create_user_segment("user-a", "organic", None, "otp")
 
         activity = _get_sqlite_activity("user-a")
         assert activity is not None

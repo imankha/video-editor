@@ -170,52 +170,28 @@ CREATE TABLE IF NOT EXISTS referrals (
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_channel ON referrals(channel);
 
-CREATE TABLE IF NOT EXISTS user_milestones (
+CREATE TABLE IF NOT EXISTS user_segments (
     user_id TEXT PRIMARY KEY REFERENCES users(user_id),
-
-    -- Cohort dimensions (set at signup, immutable)
-    install_day DATE NOT NULL DEFAULT CURRENT_DATE,
-    origin_type TEXT NOT NULL DEFAULT 'organic'
-        CHECK (origin_type IN ('organic', 'viral', 'ad_campaign')),
-    origin_channel TEXT,
+    acquired_at DATE NOT NULL DEFAULT CURRENT_DATE,
+    origin TEXT NOT NULL DEFAULT 'organic',
+    referrer_id TEXT REFERENCES users(user_id),
     signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
-
-    -- Journey milestones (NULL = not reached yet)
-    signup_completed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    first_game_created_at TIMESTAMPTZ,
-    first_clip_created_at TIMESTAMPTZ,
-    first_export_completed_at TIMESTAMPTZ,
-    first_share_completed_at TIMESTAMPTZ,
-    first_credit_purchase_at TIMESTAMPTZ,
-    pwa_installed_at TIMESTAMPTZ,
-
-    -- Lifetime counts
-    game_created_count INTEGER NOT NULL DEFAULT 0,
-    clip_created_count INTEGER NOT NULL DEFAULT 0,
-    export_completed_count INTEGER NOT NULL DEFAULT 0,
-    export_failed_count INTEGER NOT NULL DEFAULT 0,
-    share_completed_count INTEGER NOT NULL DEFAULT 0,
-    credit_purchase_count INTEGER NOT NULL DEFAULT 0,
-    credits_consumed_count INTEGER NOT NULL DEFAULT 0,
-
-    -- Activity
-    session_count INTEGER NOT NULL DEFAULT 0,
-    pwa_session_count INTEGER NOT NULL DEFAULT 0,
+    total_spent_cents INTEGER NOT NULL DEFAULT 0,
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_export_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS idx_milestones_install_day ON user_milestones(install_day);
-CREATE INDEX IF NOT EXISTS idx_milestones_origin ON user_milestones(origin_type);
-CREATE INDEX IF NOT EXISTS idx_milestones_cohort ON user_milestones(install_day, origin_type);
+CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);
+CREATE INDEX IF NOT EXISTS idx_segments_origin ON user_segments(origin);
+CREATE INDEX IF NOT EXISTS idx_segments_referrer ON user_segments(referrer_id);
 
-CREATE TABLE IF NOT EXISTS user_flow_events (
+CREATE TABLE IF NOT EXISTS user_actions (
     user_id TEXT NOT NULL REFERENCES users(user_id),
-    event TEXT NOT NULL,
+    action TEXT NOT NULL,
     first_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     count INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY (user_id, event)
+    PRIMARY KEY (user_id, action)
 );
-CREATE INDEX IF NOT EXISTS idx_flow_events_event ON user_flow_events(event);
+CREATE INDEX IF NOT EXISTS idx_actions_action ON user_actions(action);
 
 CREATE TABLE IF NOT EXISTS daily_counters (
     counter_date DATE NOT NULL DEFAULT CURRENT_DATE,

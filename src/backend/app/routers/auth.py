@@ -31,7 +31,7 @@ from pathlib import Path
 
 import sqlite3
 
-from app.analytics import create_user_milestones, record_milestone, update_session
+from app.analytics import create_user_segment, _determine_origin, record_milestone, update_session
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
@@ -114,7 +114,8 @@ def _reset_test_account(user_id: str, email: str) -> None:
                WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
             (email,),
         )
-        cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
     logger.info(f"[Auth] Cleared auth DB records for {user_id}")
@@ -306,17 +307,6 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
     return user_id, True
 
 
-def _get_origin_for_user(user_id: str) -> tuple[str, str | None]:
-    from app.services.pg import get_pg
-    with get_pg() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT channel FROM referrals WHERE referred_id = %s", (user_id,))
-        row = cur.fetchone()
-    if row:
-        return "viral", row["channel"]
-    return "organic", None
-
-
 def _issue_session_cookie(user_id: str, payload: dict) -> JSONResponse:
     invalidate_user_sessions(user_id)
     session_id = create_session(user_id)
@@ -348,8 +338,8 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref)
 
     if is_new:
-        origin_type, origin_channel = _get_origin_for_user(user_id)
-        create_user_milestones(user_id, origin_type, origin_channel, signup_method="google")
+        origin, referrer_id = _determine_origin(user_id, body.ref)
+        create_user_segment(user_id, origin, referrer_id, signup_method="google")
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -589,8 +579,8 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     if is_new:
-        origin_type, origin_channel = _get_origin_for_user(user_id)
-        create_user_milestones(user_id, origin_type, origin_channel, signup_method="otp")
+        origin, referrer_id = _determine_origin(user_id, body.ref)
+        create_user_segment(user_id, origin, referrer_id, signup_method="otp")
 
     return _issue_session_cookie(
         user_id,

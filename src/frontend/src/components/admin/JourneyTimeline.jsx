@@ -36,8 +36,8 @@ export function JourneyTimeline({ data, onClose }) {
           <div>
             <h3 className="text-white font-medium">{data.email}</h3>
             <div className="text-gray-400 text-xs mt-0.5">
-              {data.origin_type}{data.origin_channel ? ` / ${data.origin_channel}` : ''}
-              {' · '}Joined {data.install_day}
+              {data.origin}
+              {' · '}Joined {data.acquired_at}
               {' · '}{data.session_count} sessions
             </div>
           </div>
