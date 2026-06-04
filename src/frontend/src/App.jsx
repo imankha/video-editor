@@ -118,12 +118,36 @@ function App() {
   const clearSelection = useProjectsStore(state => state.clearSelection);
   const discardUncommittedChanges = useProjectsStore(state => state.discardUncommittedChanges);
 
-  // T2900: Capture referral code from URL before any navigation clears it
+  // T3455: Capture campaign params from URL (first-touch attribution)
   useEffect(() => {
+    if (sessionStorage.getItem('campaignParams')) return;
+
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
-    if (ref && !sessionStorage.getItem('referralCode')) {
-      sessionStorage.setItem('referralCode', ref);
+    const utm_source = params.get('utm_source');
+    const utm_medium = params.get('utm_medium');
+    const utm_campaign = params.get('utm_campaign');
+    const utm_content = params.get('utm_content');
+    const utm_term = params.get('utm_term');
+
+    let click_source = null;
+    if (params.has('fbclid'))                                                    click_source = 'facebook';
+    else if (params.has('gclid') || params.has('gbraid') || params.has('wbraid')) click_source = 'google';
+    else if (params.has('ttclid'))                                               click_source = 'tiktok';
+    else if (params.has('sclid') || params.has('ScCid'))                         click_source = 'snapchat';
+    else if (params.has('epik'))                                                 click_source = 'pinterest';
+    else if (params.has('rdt_cid'))                                              click_source = 'reddit';
+
+    if (ref || utm_campaign || click_source) {
+      const data = {};
+      if (ref)          data.ref = ref;
+      if (utm_source)   data.utm_source = utm_source;
+      if (utm_medium)   data.utm_medium = utm_medium;
+      if (utm_campaign) data.utm_campaign = utm_campaign;
+      if (utm_content)  data.utm_content = utm_content;
+      if (utm_term)     data.utm_term = utm_term;
+      if (click_source) data.click_source = click_source;
+      sessionStorage.setItem('campaignParams', JSON.stringify(data));
     }
   }, []);
 

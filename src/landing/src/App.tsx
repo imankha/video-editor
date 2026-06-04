@@ -10,11 +10,10 @@ import { HiTag, HiStar } from 'react-icons/hi2'
 
 function App() {
   const ctaHref = useMemo(() => {
-    const params = new URLSearchParams(window.location.search)
-    const ref = params.get('ref')
-    return ref
-      ? `https://app.reelballers.com?ref=${encodeURIComponent(ref)}`
-      : 'https://app.reelballers.com'
+    const search = window.location.search;
+    return search
+      ? `https://app.reelballers.com${search}`
+      : 'https://app.reelballers.com';
   }, [])
 
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)

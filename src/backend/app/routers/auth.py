@@ -218,6 +218,12 @@ async def delete_user():
 class GoogleAuthRequest(BaseModel):
     token: str
     ref: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_content: Optional[str] = None
+    utm_term: Optional[str] = None
+    click_source: Optional[str] = None
 
 
 class AuthResponse(BaseModel):
@@ -338,8 +344,20 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref)
 
     if is_new:
-        origin, referrer_id = _determine_origin(user_id, body.ref)
-        create_user_segment(user_id, origin, referrer_id, signup_method="google")
+        origin, referrer_id = _determine_origin(
+            user_id, body.ref,
+            utm_campaign=body.utm_campaign,
+            click_source=body.click_source,
+        )
+        create_user_segment(
+            user_id, origin, referrer_id, signup_method="google",
+            utm_source=body.utm_source,
+            utm_medium=body.utm_medium,
+            utm_campaign=body.utm_campaign,
+            utm_content=body.utm_content,
+            utm_term=body.utm_term,
+            click_source=body.click_source,
+        )
 
     picture_url = token_data.get("picture")
     if picture_url:
@@ -470,6 +488,12 @@ class VerifyOtpRequest(BaseModel):
     email: str
     code: str
     ref: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_content: Optional[str] = None
+    utm_term: Optional[str] = None
+    click_source: Optional[str] = None
 
 
 @router.post("/send-otp")
@@ -579,8 +603,20 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     if is_new:
-        origin, referrer_id = _determine_origin(user_id, body.ref)
-        create_user_segment(user_id, origin, referrer_id, signup_method="otp")
+        origin, referrer_id = _determine_origin(
+            user_id, body.ref,
+            utm_campaign=body.utm_campaign,
+            click_source=body.click_source,
+        )
+        create_user_segment(
+            user_id, origin, referrer_id, signup_method="otp",
+            utm_source=body.utm_source,
+            utm_medium=body.utm_medium,
+            utm_campaign=body.utm_campaign,
+            utm_content=body.utm_content,
+            utm_term=body.utm_term,
+            click_source=body.click_source,
+        )
 
     return _issue_session_cookie(
         user_id,

@@ -99,14 +99,86 @@ class TestDetermineOrigin:
     def test_viral_chain_propagation(self, pg_conn):
         from app.services.sharing_db import persist_invite_code
         create_user_segment("user-a", "ig_summer", None, "otp")
-        persist_invite_code("user-a", "code_a")
-        record_referral("user-a", "user-b", "invite_link", "code_a")
+        persist_invite_code("user-a", "a1b2c3d4")
+        record_referral("user-a", "user-b", "invite_link", "a1b2c3d4")
         create_user_segment("user-b", "ig_summer", "user-a", "google")
-        persist_invite_code("user-b", "code_b")
+        persist_invite_code("user-b", "e5f6a7b8")
 
-        origin, referrer_id = _determine_origin("user-c", "code_b")
+        origin, referrer_id = _determine_origin("user-c", "e5f6a7b8")
         assert origin == "ig_summer"
         assert referrer_id == "user-b"
+
+
+    def test_unresolved_hex_falls_to_utm_campaign(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", "deadbeef", utm_campaign="summer_sale")
+        assert origin == "summer_sale"
+        assert referrer_id is None
+
+    def test_unresolved_hex_falls_to_click_source(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", "deadbeef", click_source="facebook")
+        assert origin == "facebook_unknown"
+        assert referrer_id is None
+
+    def test_unresolved_hex_no_fallback_is_organic(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", "deadbeef")
+        assert origin == "organic"
+        assert referrer_id is None
+
+    def test_utm_campaign_without_ref(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", None, utm_campaign="brand_search")
+        assert origin == "brand_search"
+        assert referrer_id is None
+
+    def test_click_source_without_ref_or_utm(self, pg_conn):
+        origin, referrer_id = _determine_origin("user-b", None, click_source="google")
+        assert origin == "google_unknown"
+        assert referrer_id is None
+
+    def test_utm_campaign_beats_click_source(self, pg_conn):
+        origin, referrer_id = _determine_origin(
+            "user-b", None, utm_campaign="summer_sale", click_source="facebook"
+        )
+        assert origin == "summer_sale"
+        assert referrer_id is None
+
+    def test_nonhex_ref_beats_utm_campaign(self, pg_conn):
+        origin, referrer_id = _determine_origin(
+            "user-b", "ig_summer_camp", utm_campaign="should_not_win"
+        )
+        assert origin == "ig_summer_camp"
+        assert referrer_id is None
+
+
+class TestCreateUserSegmentUtm:
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+
+    def test_utm_fields_stored(self, pg_conn):
+        create_user_segment(
+            "user-a", "summer_sale", None, "google",
+            utm_source="facebook",
+            utm_medium="paid_social",
+            utm_campaign="summer_sale",
+            utm_content="video_v2",
+            utm_term="soccer",
+            click_source="facebook",
+        )
+        row = _get_segment("user-a")
+        assert row["utm_source"] == "facebook"
+        assert row["utm_medium"] == "paid_social"
+        assert row["utm_campaign"] == "summer_sale"
+        assert row["utm_content"] == "video_v2"
+        assert row["utm_term"] == "soccer"
+        assert row["click_source"] == "facebook"
+
+    def test_utm_fields_null_for_viral(self, pg_conn):
+        create_user("user-b", email="b@test.com")
+        create_user_segment("user-a", "ig_summer", "user-b", "otp")
+        row = _get_segment("user-a")
+        assert row["utm_source"] is None
+        assert row["utm_campaign"] is None
+        assert row["click_source"] is None
 
 
 class TestRecordMilestone:

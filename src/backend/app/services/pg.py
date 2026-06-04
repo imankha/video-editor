@@ -178,6 +178,12 @@ CREATE TABLE IF NOT EXISTS user_segments (
     signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
     total_spent_cents INTEGER NOT NULL DEFAULT 0,
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    utm_source TEXT,
+    utm_medium TEXT,
+    utm_campaign TEXT,
+    utm_content TEXT,
+    utm_term TEXT,
+    click_source TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);

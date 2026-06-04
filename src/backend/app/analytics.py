@@ -1,8 +1,11 @@
 import logging
+import re
 
 from app.services.pg import get_pg
 
 logger = logging.getLogger(__name__)
+
+INVITE_CODE_RE = re.compile(r'^[0-9a-f]{8}$')
 
 FLOW_EVENTS = {
     # Original events (T3010)
@@ -63,22 +66,31 @@ def _get_user_origin(user_id: str) -> str:
     return row["origin"] if row else "organic"
 
 
-def _determine_origin(user_id: str, ref: str | None) -> tuple[str, str | None]:
+def _determine_origin(
+    user_id: str,
+    ref: str | None,
+    utm_campaign: str | None = None,
+    click_source: str | None = None,
+) -> tuple[str, str | None]:
     """Determine origin and referrer_id for a new user.
 
-    Returns (origin, referrer_id).
+    Priority: ref invite code -> ref campaign ID -> utm_campaign ->
+    share-based -> click_source fallback -> organic.
     """
     from app.services.sharing_db import resolve_invite_code
 
     if ref:
-        referrer_id = resolve_invite_code(ref)
-        if referrer_id:
-            inviter_origin = _get_user_origin(referrer_id)
-            return inviter_origin, referrer_id
+        if INVITE_CODE_RE.match(ref):
+            referrer_id = resolve_invite_code(ref)
+            if referrer_id:
+                inviter_origin = _get_user_origin(referrer_id)
+                return inviter_origin, referrer_id
+        else:
+            return ref, None
 
-        return ref, None
+    if utm_campaign:
+        return utm_campaign, None
 
-    from app.services.sharing_db import attribute_from_existing_shares
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -93,18 +105,33 @@ def _determine_origin(user_id: str, ref: str | None) -> tuple[str, str | None]:
         sharer_origin = _get_user_origin(row["sharer_user_id"])
         return sharer_origin, row["sharer_user_id"]
 
+    if click_source:
+        return f"{click_source}_unknown", None
+
     return "organic", None
 
 
-def create_user_segment(user_id: str, origin: str, referrer_id: str | None, signup_method: str):
+def create_user_segment(
+    user_id: str, origin: str, referrer_id: str | None, signup_method: str,
+    *,
+    utm_source: str | None = None,
+    utm_medium: str | None = None,
+    utm_campaign: str | None = None,
+    utm_content: str | None = None,
+    utm_term: str | None = None,
+    click_source: str | None = None,
+):
     try:
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
-                """INSERT INTO user_segments (user_id, origin, referrer_id, signup_method)
-                   VALUES (%s, %s, %s, %s)
+                """INSERT INTO user_segments
+                   (user_id, origin, referrer_id, signup_method,
+                    utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    ON CONFLICT (user_id) DO NOTHING""",
-                (user_id, origin, referrer_id, signup_method),
+                (user_id, origin, referrer_id, signup_method,
+                 utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source),
             )
             _upsert_daily_counter(cur, origin, "signups")
             _upsert_daily_counter(cur, "all", "signups")
