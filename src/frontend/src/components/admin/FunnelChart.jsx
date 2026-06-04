@@ -2,15 +2,20 @@ import React from 'react';
 
 const STAGES = [
   { key: 'signed_up', label: 'Signed Up' },
+  { key: 'session', label: 'Session' },
   { key: 'uploaded', label: 'Uploaded' },
   { key: 'clipped', label: 'Clipped' },
   { key: 'annotation_done', label: 'Annotation Done' },
   { key: 'framing_opened', label: 'Framing Opened' },
   { key: 'framing_exported', label: 'Framing Exported' },
   { key: 'overlay_exported', label: 'Overlay Exported' },
+  { key: 'export_started', label: 'Export Started' },
+  { key: 'exported', label: 'Exported' },
   { key: 'gallery_viewed', label: 'Gallery Viewed' },
   { key: 'downloaded', label: 'Downloaded' },
   { key: 'shared', label: 'Shared' },
+  { key: 'invited', label: 'Invited' },
+  { key: 'share_viewed', label: 'Share Viewed' },
   { key: 'purchased', label: 'Purchased' },
 ];
 

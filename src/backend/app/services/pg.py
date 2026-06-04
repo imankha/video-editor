@@ -214,6 +214,10 @@ CREATE TABLE IF NOT EXISTS daily_counters (
     framing_exports INTEGER NOT NULL DEFAULT 0,
     overlay_exports INTEGER NOT NULL DEFAULT 0,
     video_downloads INTEGER NOT NULL DEFAULT 0,
+    sessions_started INTEGER NOT NULL DEFAULT 0,
+    invites_sent INTEGER NOT NULL DEFAULT 0,
+    shares_viewed INTEGER NOT NULL DEFAULT 0,
+    exports_started INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (counter_date, origin_type)
 );
 

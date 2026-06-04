@@ -383,6 +383,9 @@ async def claim_reward(quest_id: str):
     # T970: Mark quest as completed in user.sqlite (user-scoped, survives profile switch)
     mark_quest_completed(user_id, quest_id)
 
+    from ..analytics import record_milestone
+    record_milestone(user_id, "quest_completed", {"quest_id": quest_id, "quest_name": qdef["title"]})
+
     logger.info(f"[Quests] Granted {qdef['reward']} credits for {quest_id} to {user_id}, balance={new_balance}")
 
     return {"credits_granted": qdef["reward"], "new_balance": new_balance, "already_claimed": False}
@@ -429,7 +432,7 @@ async def record_achievement(key: str):
     milestone_event = ACHIEVEMENT_TO_MILESTONE.get(key)
     if milestone_event:
         from ..analytics import record_milestone
-        record_milestone(get_current_user_id(), milestone_event)
+        record_milestone(get_current_user_id(), milestone_event, {})
 
     logger.info(f"[Quests] Achievement recorded: {key} ({total_ms:.0f}ms)")
     return {"key": row["key"], "achieved_at": row["achieved_at"]}

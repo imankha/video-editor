@@ -169,6 +169,7 @@ async def create_payment_intent(request: CreateIntentRequest):
         logger.error(f"[Payments] Stripe error creating PaymentIntent for {user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})")
 
+    record_milestone(user_id, "payment_started", {"amount_cents": pack["price_cents"]})
     logger.info(f"[Payments] PaymentIntent created for {user_id}, pack={request.pack}, pi={intent.id}")
     return {"client_secret": intent.client_secret}
 
@@ -235,8 +236,9 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
         balance = get_credit_balance(user_id)
         return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
 
-    record_milestone(user_id, "credit_purchased")
     pack_info = CREDIT_PACKS.get(pack)
+    record_milestone(user_id, "payment_completed", {"amount_cents": pack_info["price_cents"] if pack_info else 0, "credits": credits})
+    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
     if pack_info:
         increment_total_spent(user_id, pack_info["price_cents"])
 
@@ -302,8 +304,8 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Payment {session_id} already processed (idempotent)")
             return {"status": "already_processed"}
 
-        record_milestone(user_id, "credit_purchased")
         pack_info = CREDIT_PACKS.get(pack)
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
         if pack_info:
             increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
@@ -337,8 +339,8 @@ async def stripe_webhook(request: Request):
             logger.info(f"[Payments] Payment {pi_id} already processed (idempotent)")
             return {"status": "already_processed"}
 
-        record_milestone(user_id, "credit_purchased")
         pack_info = CREDIT_PACKS.get(pack)
+        record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
         if pack_info:
             increment_total_spent(user_id, pack_info["price_cents"])
         logger.info(
@@ -423,8 +425,8 @@ async def verify_session(request: Request):
         balance = get_credit_balance(user_id)
         return {"status": "already_processed", "balance": balance["balance"], "credits": credits}
 
-    record_milestone(user_id, "credit_purchased")
     pack_info = CREDIT_PACKS.get(pack)
+    record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
     if pack_info:
         increment_total_spent(user_id, pack_info["price_cents"])
 

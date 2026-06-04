@@ -186,8 +186,8 @@ async def process_export_job(job_id: str):
         update_job_complete(job_id, output_video_id, output_filename)
         credit_user_id = config.get("credit_user_id")
         if credit_user_id:
-            record_milestone(credit_user_id, "export_completed")
-            record_milestone(credit_user_id, "framing_exported")
+            record_milestone(credit_user_id, "export_completed", {"export_id": job_id, "type": "framing"})
+            record_milestone(credit_user_id, "framing_exported", {"export_id": job_id, "project_id": project_id})
         await send_progress(job_id, 100, "Export complete!", "complete")
 
         logger.info(f"[ExportWorker] Job {job_id} completed successfully")
@@ -200,7 +200,7 @@ async def process_export_job(job_id: str):
         update_job_error(job_id, str(e))
         fail_user_id = config.get("credit_user_id")
         if fail_user_id:
-            record_milestone(fail_user_id, "export_failed")
+            record_milestone(fail_user_id, "export_failed", {"export_id": job_id, "project_id": project_id})
         await send_progress(job_id, 0, f"Export failed: {e}", "error")
 
         # T530: Refund credits on framing failure

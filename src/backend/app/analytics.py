@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 
@@ -24,18 +25,31 @@ FLOW_EVENTS = {
     "overlay_exported":     {"label": "Overlay Exported",   "daily_col": "overlay_exports"},
     "gallery_viewed":       {"label": "Gallery Viewed",     "daily_col": None},
     "video_downloaded":     {"label": "Downloaded",         "daily_col": "video_downloads"},
+    # Tracking gap events (T3470)
+    "session_started":      {"label": "Session",            "daily_col": "sessions_started"},
+    "quest_completed":      {"label": "Quest Done",         "daily_col": None},
+    "invite_sent":          {"label": "Invited",            "daily_col": "invites_sent"},
+    "share_viewed":         {"label": "Share Viewed",       "daily_col": "shares_viewed"},
+    "payment_started":      {"label": "Payment Started",    "daily_col": None},
+    "payment_completed":    {"label": "Payment Done",       "daily_col": None},
+    "export_started":       {"label": "Export Started",     "daily_col": "exports_started"},
 }
 
 FUNNEL_STEPS = [
+    "session_started",
     "game_created",
     "clip_created",
     "annotation_completed",
     "framing_opened",
     "framing_exported",
     "overlay_exported",
+    "export_started",
+    "export_completed",
     "gallery_viewed",
     "video_downloaded",
     "share_completed",
+    "invite_sent",
+    "share_viewed",
     "credit_purchased",
 ]
 
@@ -152,7 +166,7 @@ def create_user_segment(
         logger.warning("[Analytics] SQLite sync failed for create_user_segment user=%s", user_id)
 
 
-def record_milestone(user_id: str, event: str):
+def record_milestone(user_id: str, event: str, context: dict | None = None):
     try:
         cfg = FLOW_EVENTS.get(event)
         if not cfg:
@@ -189,6 +203,10 @@ def record_milestone(user_id: str, event: str):
     try:
         from app.services.user_db import get_user_db_connection
         with get_user_db_connection(user_id) as conn:
+            conn.execute(
+                "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
+                (event, json.dumps(context) if context else None),
+            )
             conn.execute(
                 """INSERT INTO user_activity_events (event, count, first_at)
                    VALUES (?, 1, datetime('now'))
@@ -254,6 +272,16 @@ def update_session(user_id: str, is_pwa: bool = False):
                     END
                 """, (user_id, is_new_session))
 
+            if is_new_session:
+                cur.execute(
+                    "SELECT origin FROM user_segments WHERE user_id = %s",
+                    (user_id,),
+                )
+                origin_row = cur.fetchone()
+                if origin_row:
+                    _upsert_daily_counter(cur, origin_row["origin"], "sessions_started")
+                    _upsert_daily_counter(cur, "all", "sessions_started")
+
             cur.execute(
                 "SELECT action, count FROM user_actions WHERE user_id = %s AND action IN ('session_started', 'pwa_session_started')",
                 (user_id,),
@@ -271,6 +299,11 @@ def update_session(user_id: str, is_pwa: bool = False):
     try:
         from app.services.user_db import get_user_db_connection
         with get_user_db_connection(user_id) as conn:
+            if is_new_session:
+                conn.execute(
+                    "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
+                    ("session_started", json.dumps({"is_pwa": is_pwa})),
+                )
             conn.execute(
                 """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, updated_at)
                    VALUES (?, ?, ?, datetime('now'), datetime('now'))

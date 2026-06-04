@@ -467,7 +467,7 @@ async def auth_me(request: Request):
 async def pwa_installed():
     """Record that the user installed the PWA."""
     user_id = get_current_user_id()
-    record_milestone(user_id, "pwa_installed")
+    record_milestone(user_id, "pwa_installed", {})
     return {"recorded": True}
 
 

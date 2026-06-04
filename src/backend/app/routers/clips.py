@@ -926,7 +926,7 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
-        record_milestone(get_current_user_id(), "clip_created")
+        record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
         logger.info(f"Saved clip {raw_clip_id} for game {clip_data.game_id}")
 
         return RawClipSaveResponse(

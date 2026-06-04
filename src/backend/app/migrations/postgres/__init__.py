@@ -9,6 +9,7 @@ from .v007_user_flow_events import V007UserFlowEvents
 from .v008_bug_reports_table import V008BugReportsTable
 from .v009_normalize_analytics import V009NormalizeAnalytics
 from .v010_campaign_utm_columns import V010CampaignUtmColumns
+from .v011_daily_counters_tracking_gaps import V011DailyCountersTrackingGaps
 
 MIGRATIONS = [
     V001Baseline(),
@@ -21,6 +22,7 @@ MIGRATIONS = [
     V008BugReportsTable(),
     V009NormalizeAnalytics(),
     V010CampaignUtmColumns(),
+    V011DailyCountersTrackingGaps(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

@@ -37,6 +37,8 @@ const COLUMNS = [
   { key: 'share_completed_count', label: 'Shares', align: 'right' },
   { key: 'credits', label: 'Credits', align: 'right' },
   { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
+  { key: 'action_count', label: 'Actions', align: 'right' },
+  { key: 'usage_days', label: 'Usage', align: 'right' },
   { key: 'session_count', label: 'Sessions', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
@@ -307,6 +309,8 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   {fmtMoney(user.total_spent_cents)}
                 </td>
 
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.action_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.usage_days != null ? `${user.usage_days}d` : '--'}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">

@@ -104,6 +104,15 @@ _USER_DB_SCHEMA = """
         first_at TEXT,
         updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS user_action_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        context TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_action_log_action ON user_action_log(action);
+    CREATE INDEX IF NOT EXISTS idx_action_log_created ON user_action_log(created_at);
 """
 
 
@@ -446,7 +455,7 @@ def confirm_reservation(user_id: str, job_id: str) -> bool:
         )
         conn.commit()
         from app.analytics import record_milestone
-        record_milestone(user_id, "credits_consumed")
+        record_milestone(user_id, "credits_consumed", {"job_id": job_id})
         return True
 
 

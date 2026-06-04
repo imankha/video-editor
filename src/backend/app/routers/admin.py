@@ -91,30 +91,56 @@ async def admin_me():
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(DEFAULT_PAGE_SIZE, ge=1, le=50),
+    origin: str = Query(None),
+    acquired_from: str = Query(None),
+    acquired_to: str = Query(None),
 ):
     """List users with milestone stats from Postgres. Paginated by user count. Admin only."""
     _require_admin()
 
+    where_parts = []
+    params: list = []
+    if origin:
+        where_parts.append("s.origin = %s")
+        params.append(origin)
+    if acquired_from:
+        where_parts.append("s.acquired_at >= %s")
+        params.append(date.fromisoformat(acquired_from))
+    if acquired_to:
+        where_parts.append("s.acquired_at <= %s")
+        params.append(date.fromisoformat(acquired_to))
+
+    where_clause = ""
+    if where_parts:
+        where_clause = "WHERE " + " AND ".join(where_parts)
+
     with get_pg() as conn:
         cur = conn.cursor()
 
-        cur.execute("SELECT COUNT(*) AS cnt FROM users")
+        cur.execute(f"""
+            SELECT COUNT(*) AS cnt
+            FROM users u
+            JOIN user_segments s ON u.user_id = s.user_id
+            {where_clause}
+        """, params)
         total_users = cur.fetchone()["cnt"]
         total_pages = max(1, math.ceil(total_users / page_size))
         page = min(page, total_pages)
 
         offset = (page - 1) * page_size
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 u.user_id, u.email,
                 s.origin, s.acquired_at,
-                s.total_spent_cents, s.last_active_at
+                s.total_spent_cents, s.last_active_at,
+                s.created_at
             FROM users u
-            LEFT JOIN user_segments s ON u.user_id = s.user_id
+            JOIN user_segments s ON u.user_id = s.user_id
+            {where_clause}
             ORDER BY s.last_active_at DESC NULLS LAST
             LIMIT %s OFFSET %s
-        """, (page_size, offset))
+        """, params + [page_size, offset])
 
         rows = cur.fetchall()
         page_user_ids = [row["user_id"] for row in rows]
@@ -134,16 +160,18 @@ async def list_users(
             actions_by_user.setdefault(ar["user_id"], {})[ar["action"]] = ar["count"]
 
         from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
-        cur.execute("""
+
+        funnel_join = f"JOIN user_segments s ON a.user_id = s.user_id {where_clause}" if where_parts else ""
+        funnel_params = list(params) if where_parts else []
+        cur.execute(f"""
             SELECT a.action, COUNT(DISTINCT a.user_id) AS users
             FROM user_actions a
+            {funnel_join}
             GROUP BY a.action
-        """)
+        """, funnel_params)
         action_totals = {r["action"]: r["users"] for r in cur.fetchall()}
-        cur.execute("SELECT COUNT(*) AS cnt FROM user_segments")
-        signed_up_count = cur.fetchone()["cnt"]
 
-        funnel_totals = {"signed_up": signed_up_count}
+        funnel_totals = {"signed_up": total_users}
         for step in FUNNEL_STEPS:
             label = FLOW_EVENTS[step]["label"]
             key = label.lower().replace(" ", "_")
@@ -162,6 +190,12 @@ async def list_users(
         user_actions = actions_by_user.get(user_id, {})
         last_step = _compute_last_step(set(user_actions.keys()))
         session_count = user_actions.get("session_started", 0)
+        action_count = sum(user_actions.values())
+
+        usage_days = None
+        if row["created_at"] and row["last_active_at"]:
+            delta = row["last_active_at"] - row["created_at"]
+            usage_days = max(0, delta.days)
 
         users.append({
             "user_id": user_id,
@@ -181,6 +215,8 @@ async def list_users(
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
             "session_count": session_count,
             "last_step": last_step,
+            "action_count": action_count,
+            "usage_days": usage_days,
         })
 
     return {
@@ -446,32 +482,37 @@ async def analytics_channels(
         cur.execute("""
             SELECT
                 s.origin,
-                COUNT(DISTINCT s.user_id) AS signups,
+                COUNT(DISTINCT s.user_id) AS users,
+                COUNT(DISTINCT s.user_id) FILTER (WHERE s.referrer_id IS NULL) AS direct,
+                COUNT(DISTINCT s.user_id) FILTER (WHERE s.referrer_id IS NOT NULL) AS viral,
                 COUNT(DISTINCT CASE WHEN a_exp.action = 'export_completed' THEN s.user_id END) AS exported,
                 COUNT(DISTINCT CASE WHEN a_pur.action = 'credit_purchased' THEN s.user_id END) AS purchased,
                 COALESCE(SUM(a_exp.count), 0) AS total_exports,
-                COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
+                SUM(s.total_spent_cents) AS revenue_cents
             FROM user_segments s
             LEFT JOIN user_actions a_exp ON s.user_id = a_exp.user_id AND a_exp.action = 'export_completed'
             LEFT JOIN user_actions a_pur ON s.user_id = a_pur.user_id AND a_pur.action = 'credit_purchased'
             WHERE s.acquired_at BETWEEN %s AND %s
             GROUP BY s.origin
-            ORDER BY signups DESC
+            ORDER BY SUM(s.total_spent_cents) DESC NULLS LAST
         """, (d_from, d_to))
         rows = cur.fetchall()
 
     channels = []
     for r in rows:
-        signups = r["signups"]
+        users = r["users"]
+        revenue = r["revenue_cents"] or 0
         channels.append({
             "origin": r["origin"],
-            "signups": signups,
+            "users": users,
+            "direct": r["direct"],
+            "viral": r["viral"],
             "exported": r["exported"],
-            "export_pct": round(r["exported"] / signups * 100, 1) if signups else 0,
+            "export_pct": round(r["exported"] / users * 100, 1) if users else 0,
             "purchased": r["purchased"],
-            "purchase_pct": round(r["purchased"] / signups * 100, 1) if signups else 0,
-            "avg_exports": round(r["total_exports"] / signups, 1) if signups else 0,
-            "revenue_cents": r["revenue_cents"],
+            "purchase_pct": round(r["purchased"] / users * 100, 1) if users else 0,
+            "avg_exports": round(r["total_exports"] / users, 1) if users else 0,
+            "revenue_cents": revenue,
         })
 
     return {"channels": channels}
@@ -499,13 +540,17 @@ async def analytics_cohorts(
         cur.execute(f"""
             SELECT
                 date_trunc(%s, s.acquired_at)::date AS cohort_period,
-                COUNT(*) AS signups
+                COUNT(*) AS signups,
+                COALESCE(SUM(s.total_spent_cents), 0) AS revenue_cents
             FROM user_segments s
             {origin_filter}
             GROUP BY cohort_period
             ORDER BY cohort_period DESC
         """, [trunc] + params)
-        signup_rows = {str(r["cohort_period"]): r["signups"] for r in cur.fetchall()}
+        signup_data = {}
+        for r in cur.fetchall():
+            cp = str(r["cohort_period"])
+            signup_data[cp] = {"signups": r["signups"], "revenue_cents": r["revenue_cents"] or 0}
 
         cur.execute(f"""
             SELECT
@@ -520,9 +565,42 @@ async def analytics_cohorts(
         """, [trunc] + params)
         action_rows = cur.fetchall()
 
+        cur.execute(f"""
+            SELECT
+                date_trunc(%s, s.acquired_at)::date AS cohort_period,
+                percentile_cont(0.5) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (a.first_at - s.created_at)) / 86400.0
+                ) AS median_days_to_export
+            FROM user_segments s
+            JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
+            {origin_filter}
+            GROUP BY cohort_period
+        """, [trunc] + params)
+        tte_rows = {str(r["cohort_period"]): round(float(r["median_days_to_export"]), 1) if r["median_days_to_export"] else None for r in cur.fetchall()}
+
+        cur.execute(f"""
+            SELECT
+                date_trunc(%s, s.acquired_at)::date AS cohort_period,
+                COUNT(DISTINCT s.user_id) FILTER (
+                    WHERE EXISTS (
+                        SELECT 1 FROM user_actions a
+                        WHERE a.user_id = s.user_id AND a.action = 'session_started'
+                          AND a.first_at >= s.created_at + INTERVAL '7 days'
+                    )
+                ) AS returned
+            FROM user_segments s
+            {origin_filter}
+            GROUP BY cohort_period
+        """, [trunc] + params)
+        return_rows = {str(r["cohort_period"]): r["returned"] for r in cur.fetchall()}
+
     by_cohort: dict[str, dict] = {}
-    for cp, signups in signup_rows.items():
-        by_cohort[cp] = {"cohort_period": cp, "signups": signups}
+    for cp, data in signup_data.items():
+        by_cohort[cp] = {
+            "cohort_period": cp,
+            "signups": data["signups"],
+            "revenue_cents": data["revenue_cents"],
+        }
 
     for ar in action_rows:
         cp = str(ar["cohort_period"])
@@ -541,6 +619,10 @@ async def analytics_cohorts(
             label = FLOW_EVENTS[step]["label"]
             key = label.lower().replace(" ", "_") + "_pct"
             row.setdefault(key, 0)
+        row["time_to_export_days"] = tte_rows.get(cp)
+        returned = return_rows.get(cp, 0)
+        s = row["signups"]
+        row["return_7d_pct"] = round(returned / s * 100) if s else 0
         cohorts.append(row)
 
     return {"cohorts": cohorts, "granularity": granularity}
@@ -608,6 +690,51 @@ async def analytics_journey(user_id: str):
     }
 
 
+@router.get("/analytics/user/{user_id}/actions")
+async def analytics_user_actions(
+    user_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+):
+    _require_admin()
+
+    from ..services.pg import get_pg
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM users WHERE user_id = %s", (user_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="User not found")
+
+    import json
+    from ..services.user_db import get_user_db_connection
+    with get_user_db_connection(user_id) as conn:
+        total_row = conn.execute("SELECT COUNT(*) as cnt FROM user_action_log").fetchone()
+        total = total_row["cnt"]
+
+        offset = (page - 1) * page_size
+        rows = conn.execute(
+            "SELECT id, action, context, created_at FROM user_action_log ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset),
+        ).fetchall()
+
+    actions = []
+    for r in rows:
+        ctx = None
+        if r["context"]:
+            try:
+                ctx = json.loads(r["context"])
+            except (json.JSONDecodeError, TypeError):
+                ctx = r["context"]
+        actions.append({
+            "id": r["id"],
+            "action": r["action"],
+            "context": ctx,
+            "created_at": r["created_at"],
+        })
+
+    return {"actions": actions, "total": total, "page": page, "page_size": page_size}
+
+
 @router.get("/analytics/pulse")
 async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
     _require_admin()
@@ -619,7 +746,9 @@ async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
         cur = conn.cursor()
 
         cur.execute("""
-            SELECT counter_date, signups, exports_completed, credit_purchases
+            SELECT counter_date, signups, exports_completed, credit_purchases,
+                   COALESCE(shares_completed, 0) AS shares_completed,
+                   COALESCE(shares_viewed, 0) AS shares_viewed
             FROM daily_counters
             WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
             ORDER BY counter_date
@@ -634,6 +763,12 @@ async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
         """, (start, today))
         active_rows = cur.fetchall()
 
+        cur.execute("""
+            SELECT COALESCE(SUM(total_spent_cents), 0) AS total
+            FROM user_segments
+        """)
+        revenue_total = cur.fetchone()["total"]
+
     date_range = [(start + timedelta(days=i)) for i in range(days)]
     counter_by_date = {r["counter_date"]: r for r in counter_rows}
     active_by_date = {r["d"]: r["cnt"] for r in active_rows}
@@ -641,10 +776,25 @@ async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
     def build_sparkline(getter):
         return [getter(d) for d in date_range]
 
-    signups_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("signups", 0) if isinstance(counter_by_date.get(d), dict) else 0)
-    exports_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("exports_completed", 0) if isinstance(counter_by_date.get(d), dict) else 0)
-    purchases_spark = build_sparkline(lambda d: counter_by_date.get(d, {}).get("credit_purchases", 0) if isinstance(counter_by_date.get(d), dict) else 0)
+    def _counter_val(d, col):
+        r = counter_by_date.get(d)
+        return r[col] if r else 0
+
+    signups_spark = build_sparkline(lambda d: _counter_val(d, "signups"))
+    exports_spark = build_sparkline(lambda d: _counter_val(d, "exports_completed"))
     active_spark = build_sparkline(lambda d: active_by_date.get(d, 0))
+
+    total_shares = sum(_counter_val(d, "shares_completed") for d in date_range)
+    total_views = sum(_counter_val(d, "shares_viewed") for d in date_range)
+    viral_pct = round(total_views / total_shares * 100, 1) if total_shares else 0
+
+    shares_spark = build_sparkline(lambda d: _counter_val(d, "shares_completed"))
+    views_spark = build_sparkline(lambda d: _counter_val(d, "shares_viewed"))
+    viral_spark = []
+    for i in range(len(date_range)):
+        s = shares_spark[i]
+        v = views_spark[i]
+        viral_spark.append(round(v / s * 100) if s else 0)
 
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
@@ -657,7 +807,8 @@ async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
             "signups": make_card(signups_spark),
             "exports": make_card(exports_spark),
             "active_users": make_card(active_spark),
-            "purchases": make_card(purchases_spark),
+            "revenue": {"today": revenue_total, "sparkline": [], "change_pct": 0},
+            "viral_conversion": {"today": viral_pct, "sparkline": viral_spark, "change_pct": 0},
         },
         "days": days,
     }
