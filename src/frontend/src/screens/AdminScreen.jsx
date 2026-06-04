@@ -98,61 +98,61 @@ export function AdminScreen({ onBack }) {
           </div>
         </div>
 
-        {/* User type filters */}
-        <div className="flex items-center gap-2 mb-5 flex-wrap">
-          {USER_FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setUserFilter(userFilter === f.key ? null : f.key)}
-              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                userFilter === f.key
-                  ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                  : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-          {hasFilter && (
-            <button
-              onClick={clearSegmentFilter}
-              className="text-gray-500 hover:text-white text-xs underline ml-1"
-            >
-              Clear all
-            </button>
-          )}
+        {/* Filters -- all dimensions in one panel */}
+        <div className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
+          {/* User type pills */}
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 flex-wrap">
+            <span className="text-gray-500 text-xs uppercase tracking-wider mr-1">Filter</span>
+            {USER_FILTERS.map(f => (
+              <button
+                key={f.key}
+                onClick={() => setUserFilter(userFilter === f.key ? null : f.key)}
+                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                  userFilter === f.key
+                    ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
+                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+            {hasFilter && (
+              <button
+                onClick={clearSegmentFilter}
+                className="text-gray-500 hover:text-white text-xs underline ml-auto"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+
+          {/* Campaigns */}
+          <div className="px-5 py-3 border-b border-white/5">
+            <h4 className="text-gray-500 text-xs uppercase tracking-wider mb-2">Campaign</h4>
+            {channelsLoading
+              ? <p className="text-gray-500 text-xs">Loading...</p>
+              : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
+            }
+          </div>
+
+          {/* Cohorts */}
+          <div className="px-5 py-3">
+            <h4 className="text-gray-500 text-xs uppercase tracking-wider mb-2">Cohort</h4>
+            {cohortsLoading
+              ? <p className="text-gray-500 text-xs">Loading...</p>
+              : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} selectedPeriod={segmentFrom} />
+            }
+          </div>
         </div>
+
+        {/* Results -- everything below reflects the active filters */}
 
         {/* Pulse */}
         <PulseCards data={pulseData} />
 
-        {/* Campaigns table -- click row to select/deselect */}
-        <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
-          <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
-            Campaigns
-            <span className="text-gray-600 font-normal normal-case ml-2">Click a row to filter</span>
-          </h3>
-          {channelsLoading
-            ? <p className="text-gray-500 text-sm">Loading...</p>
-            : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
-          }
-        </div>
-
-        {/* Cohorts table -- click row to select/deselect */}
-        <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
-          <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
-            Cohorts
-            <span className="text-gray-600 font-normal normal-case ml-2">Click a row to filter</span>
-          </h3>
-          {cohortsLoading
-            ? <p className="text-gray-500 text-sm">Loading...</p>
-            : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} selectedPeriod={segmentFrom} />
-          }
-        </div>
-
         {/* Funnel */}
         {funnelTotals && (
-          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
+          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-6">
             <FunnelChart data={{ funnel: [{ origin: 'all', ...funnelTotals }] }} />
           </div>
         )}
