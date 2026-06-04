@@ -264,7 +264,13 @@ Final pre-alpha polish: source material, analytics review, returning-user experi
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
 | T1970 | [Annotate Mehdi Source Files](tasks/alpha-marketing/T1970-annotate-mehdi-source-files.md) | 8 | 2 | 4.0 | TODO | [ ] | Annotate, frame, and export Mehdi's game footage end-to-end to produce demo clips and before/after examples |
-| T3280 | [Analytics Review](tasks/T3280-analytics-review.md) | 7 | 3 | 2.3 | TODO | [ ] | Review analytics setup and data quality before alpha launch. Conversation needed to scope. |
+|  | **[Analytics Power-Up](tasks/analytics-power-up/EPIC.md)** | 9 | 4 | 2.3 |  |  | Normalize schema, origin propagation through viral chains, revenue per campaign, per-user action log, admin redesign |
+| T3450 | ↳ [Normalize Postgres Schema](tasks/analytics-power-up/T3450-normalize-postgres-schema.md) | 8 | 5 | 1.6 | TODO | [x] | user_segments (origin + referrer_id + total_spent) + user_actions. Origin propagation: viral inherits inviter's campaign. |
+| T3455 | ↳ [Campaign URL Parsing](tasks/analytics-power-up/T3455-campaign-url-parsing-spec.md) | 7 | 3 | 2.3 | SPEC | [ ] | Parse ad network URL params (fbclid, gclid, utm_campaign, ttclid) into normalized origin string. Feeds T3450's _determine_origin(). |
+| T3460 | ↳ [SQLite Action Log](tasks/analytics-power-up/T3460-sqlite-action-log.md) | 8 | 3 | 2.7 | TODO | [ ] | Per-user user_action_log table: every action timestamped with context JSON. Admin endpoint to read. |
+| T3470 | ↳ [Fill Tracking Gaps](tasks/analytics-power-up/T3470-fill-tracking-gaps.md) | 7 | 2 | 3.5 | TODO | [ ] | Instrument 7 missing events: session_started, quest_completed, invite_sent, share_viewed, payment_started/completed, export_started |
+| T3480 | ↳ [Admin User Detail Redesign](tasks/analytics-power-up/T3480-admin-user-detail.md) | 9 | 4 | 2.3 | TODO | [ ] | Replace dot timeline with vertical action log: every action, timestamp, delta, context. Power over pretty. |
+| T3490 | ↳ [Admin Analytics Upgrade](tasks/analytics-power-up/T3490-admin-analytics-upgrade.md) | 7 | 3 | 2.3 | TODO | [ ] | Funnel with new events, campaigns view with revenue per origin (incl viral), cohorts with revenue + 7d return |
 | T3290 | [Tune NUF for Returning Users](tasks/T3290-tune-nuf-returning-users.md) | 8 | 4 | 2.0 | TODO | [ ] | Differentiate new user flow for returning users vs first-timers. Conversation needed to scope. |
 |  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Before/after examples from Mehdi footage + tutorial video |
 | T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
@@ -335,8 +341,8 @@ Scale, performance, and reliability — must be solid before feature work.
 | T1702 | ↳ [Monetization + Intelligence](tasks/analytics/T1702-monetization-intelligence.md) | 6 | 5 | 1.2 | TODO | [ ] | Credit events, Stripe revenue tracking, nightly analytics engine (churn risk, engagement tiers, credit health, LTV), hourly/weekly alerts, viral attribution |
 | T1703 | ↳ [Optimization](tasks/analytics/T1703-optimization.md) | 5 | 4 | 1.3 | TODO | [ ] | L3 deep-dive template, feature release protocol, aha moment regression, magic number testing (requires 200+ users) |
 | T2270 | [Session Inactivity TTL](tasks/T2270-session-inactivity-ttl.md) | 5 | 2 | 2.5 | TODO | [ ] | Expire sessions after N days of inactivity using last_seen_at. Absorbs T420 inactivity portion. Depends on T1190. |
-| T3420 | [Profile Critical-Path Endpoints](tasks/for-launch/T3420-profile-bootstrap-endpoint.md) | 9 | 3 | 3.0 | TODO | [ ] | 375ms per-request baseline on ALL endpoints (even /api/health). Profile middleware + auth/me + bootstrap to find root cause. Target: baseline < 50ms, page load < 1.5s. |
-| T3430 | [Parallelize Game Load](tasks/for-launch/T3430-parallelize-game-load.md) | 7 | 3 | 2.3 | TODO | [ ] | Opening a game fires 4 sequential requests (2.3s). game_id is known upfront -- single /api/games/{id}/load endpoint returns game + playback URLs + teammate data. Target < 1s. |
+| T3420 | [Profile Critical-Path Endpoints](tasks/for-launch/T3420-profile-bootstrap-endpoint.md) | 9 | 3 | 3.0 | DONE | [ ] | 375ms per-request baseline on ALL endpoints (even /api/health). Profile middleware + auth/me + bootstrap to find root cause. Target: baseline < 50ms, page load < 1.5s. |
+| T3430 | [Parallelize Game Load](tasks/for-launch/T3430-parallelize-game-load.md) | 7 | 3 | 2.3 | DONE | [ ] | Opening a game fires 4 sequential requests (2.3s). game_id is known upfront -- single /api/games/{id}/load endpoint returns game + playback URLs + teammate data. Target < 1s. |
 | T3440 | [Cache CORS Preflight Responses](tasks/for-launch/T3440-cors-preflight-caching.md) | 5 | 1 | 5.0 | TODO | [ ] | No Access-Control-Max-Age header -- browser fires OPTIONS preflight on every cross-origin request. 826ms overhead (17.8% of page time). One-line fix: add max_age=7200 to CORSMiddleware. |
 | T1730 | [Performance Optimization Pass](tasks/for-launch/T1730-performance-optimization-pass.md) | 7 | 5 | 1.4 | TODO | [ ] | Pre-launch audit: slow endpoints, UI jank, bundle size, slow queries, unnecessary R2 round-trips |
 | T2650 | [Move Sweep Auto-Export to Modal](tasks/T2650-sweep-to-modal.md) | 7 | 4 | 1.8 | TODO | [ ] | Sweep runs FFmpeg/recap on Fly.io via asyncio.to_thread — violates fast-server principle. Move auto-export compute to Modal; server becomes lightweight orchestrator (DB queries + Modal RPC). |
@@ -476,7 +482,7 @@ IDs use gaps of 10 to allow insertions:
 - `T3060` - Make It Load Fast (Playwright perf benchmarks against prod)
 - `T3260` - Edit Game Metadata Post-Upload
 - `T3270` - Clip Boundary Visual Indicator (Annotate mode)
-- `T3280` - Analytics Review (pre-alpha analytics audit)
+- `T3450-T3490` - Analytics Power-Up epic (normalize schema, action log, fill tracking gaps, admin redesign)
 - `T3290` - Tune NUF for Returning Users (differentiate returning vs first-time)
 - `T3300` - Build Tutorial Video for Landing Page
 - `T3070` - Brand Messaging Audit (emails, preloading, landing page high concept)
