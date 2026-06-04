@@ -133,8 +133,7 @@ async def list_users(
             SELECT
                 u.user_id, u.email,
                 s.origin, s.acquired_at,
-                s.total_spent_cents, s.last_active_at,
-                s.created_at
+                s.total_spent_cents, s.last_active_at
             FROM users u
             JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
@@ -192,11 +191,6 @@ async def list_users(
         session_count = user_actions.get("session_started", 0)
         action_count = sum(user_actions.values())
 
-        usage_days = None
-        if row["created_at"] and row["last_active_at"]:
-            delta = row["last_active_at"] - row["created_at"]
-            usage_days = max(0, delta.days)
-
         users.append({
             "user_id": user_id,
             "email": row["email"],
@@ -216,7 +210,6 @@ async def list_users(
             "session_count": session_count,
             "last_step": last_step,
             "action_count": action_count,
-            "usage_days": usage_days,
         })
 
     return {
