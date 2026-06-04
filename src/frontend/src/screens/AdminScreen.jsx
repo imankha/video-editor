@@ -20,6 +20,14 @@ const DETAIL_TABS = [
   { key: 'cohorts', label: 'Cohorts' },
 ];
 
+const USER_FILTERS = [
+  { key: 'paying', label: 'Paying' },
+  { key: 'active_7d', label: 'Active (7d)' },
+  { key: 'has_exports', label: 'Has Exports' },
+  { key: 'invited_others', label: 'Invited Others' },
+  { key: 'was_invited', label: 'Was Invited' },
+];
+
 export function AdminScreen({ onBack }) {
   const [detailTab, setDetailTab] = useState(null);
 
@@ -33,6 +41,8 @@ export function AdminScreen({ onBack }) {
   const segmentTo = useAdminStore(s => s.segmentTo);
   const setSegmentFilter = useAdminStore(s => s.setSegmentFilter);
   const clearSegmentFilter = useAdminStore(s => s.clearSegmentFilter);
+  const userFilter = useAdminStore(s => s.userFilter);
+  const setUserFilter = useAdminStore(s => s.setUserFilter);
   const userDetailData = useAdminStore(s => s.userDetailData);
   const userDetailLoading = useAdminStore(s => s.userDetailLoading);
   const fetchUserDetail = useAdminStore(s => s.fetchUserDetail);
@@ -58,7 +68,7 @@ export function AdminScreen({ onBack }) {
     if (detailTab === 'cohorts' && !cohortsData) fetchCohorts();
   }, [detailTab, channelsData, cohortsData, fetchChannels, fetchCohorts]);
 
-  const hasFilter = segmentOrigin || segmentFrom || segmentTo;
+  const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
   const knownUsers = users.filter(u => u.email);
 
   function handleCampaignClick(origin) {
@@ -94,29 +104,46 @@ export function AdminScreen({ onBack }) {
           </div>
         </div>
 
-        {/* Segment filter bar */}
-        {hasFilter && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-2 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-            <span className="text-purple-300 text-xs font-medium">Filtered:</span>
-            {segmentOrigin && (
-              <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-0.5 rounded">
-                Campaign: {segmentOrigin}
-              </span>
-            )}
-            {segmentFrom && (
-              <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-0.5 rounded">
-                Cohort: {segmentFrom}{segmentTo ? ` to ${segmentTo}` : ''}
-              </span>
-            )}
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {/* User filter pills */}
+          {USER_FILTERS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setUserFilter(userFilter === f.key ? null : f.key)}
+              className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
+                userFilter === f.key
+                  ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
+                  : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+
+          {/* Segment chips */}
+          {segmentOrigin && (
+            <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-1 rounded-full border border-purple-500/30 flex items-center gap-1">
+              Campaign: {segmentOrigin}
+              <button onClick={() => setSegmentFilter(null, segmentFrom, segmentTo)} className="text-purple-400 hover:text-white"><X size={10} /></button>
+            </span>
+          )}
+          {segmentFrom && (
+            <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-1 rounded-full border border-purple-500/30 flex items-center gap-1">
+              Cohort: {segmentFrom}{segmentTo ? ` - ${segmentTo}` : ''}
+              <button onClick={() => setSegmentFilter(segmentOrigin, null, null)} className="text-purple-400 hover:text-white"><X size={10} /></button>
+            </span>
+          )}
+
+          {hasFilter && (
             <button
               onClick={clearSegmentFilter}
-              className="text-purple-400 hover:text-white ml-1"
-              title="Clear filter"
+              className="text-gray-500 hover:text-white text-xs underline ml-1"
             >
-              <X size={14} />
+              Clear all
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Pulse */}
         <PulseCards data={pulseData} />

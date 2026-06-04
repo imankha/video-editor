@@ -94,6 +94,7 @@ async def list_users(
     origin: str = Query(None),
     acquired_from: str = Query(None),
     acquired_to: str = Query(None),
+    filter: str = Query(None),
 ):
     """List users with milestone stats from Postgres. Paginated by user count. Admin only."""
     _require_admin()
@@ -109,6 +110,20 @@ async def list_users(
     if acquired_to:
         where_parts.append("s.acquired_at <= %s")
         params.append(date.fromisoformat(acquired_to))
+    if filter == "paying":
+        where_parts.append("s.total_spent_cents > 0")
+    elif filter == "active_7d":
+        where_parts.append("s.last_active_at > now() - INTERVAL '7 days'")
+    elif filter == "has_exports":
+        where_parts.append(
+            "EXISTS (SELECT 1 FROM user_actions a WHERE a.user_id = s.user_id AND a.action = 'export_completed')"
+        )
+    elif filter == "invited_others":
+        where_parts.append(
+            "s.user_id IN (SELECT DISTINCT referrer_id FROM user_segments WHERE referrer_id IS NOT NULL)"
+        )
+    elif filter == "was_invited":
+        where_parts.append("s.referrer_id IS NOT NULL")
 
     where_clause = ""
     if where_parts:

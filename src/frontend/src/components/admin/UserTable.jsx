@@ -67,28 +67,6 @@ function StepBadge({ step }) {
   );
 }
 
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'paying', label: 'Paying' },
-  { key: 'active', label: 'Active (7d)' },
-  { key: 'has_exports', label: 'Has Exports' },
-];
-
-function matchesFilter(user, filter) {
-  switch (filter) {
-    case 'paying': return (user.total_spent_cents || 0) > 0;
-    case 'active': {
-      if (!user.last_active_at) return false;
-      const seen = new Date(user.last_active_at);
-      const week = new Date();
-      week.setDate(week.getDate() - 7);
-      return seen >= week;
-    }
-    case 'has_exports': return (user.export_completed_count || 0) > 0;
-    default: return true;
-  }
-}
-
 function getSortValue(user, key) {
   const v = user[key];
   if (v == null) return -Infinity;
@@ -146,16 +124,12 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('last_active_at');
   const [sortDir, setSortDir] = useState('desc');
-  const [filter, setFilter] = useState('all');
 
   const matchedUsers = useMemo(() => {
-    let result = users;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(u => (u.email || '').toLowerCase().includes(q));
-    }
-    return result.filter(u => matchesFilter(u, filter));
-  }, [users, search, filter]);
+    if (!search) return users;
+    const q = search.toLowerCase();
+    return users.filter(u => (u.email || '').toLowerCase().includes(q));
+  }, [users, search]);
 
   const sorted = useMemo(() => {
     return [...matchedUsers].sort((a, b) => {
@@ -197,22 +171,6 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
               placeholder="Search email..."
               className="bg-white/5 border border-white/10 rounded-md pl-8 pr-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 outline-none focus:border-purple-500/50 w-56"
             />
-          </div>
-
-          <div className="flex items-center gap-1">
-            {FILTERS.map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                  filter === f.key
-                    ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
           </div>
 
           <span className="text-gray-500 text-xs">

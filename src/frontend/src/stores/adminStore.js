@@ -19,6 +19,7 @@ export const useAdminStore = create((set, get) => ({
   segmentOrigin: null,
   segmentFrom: null,
   segmentTo: null,
+  userFilter: null,
 
   funnelData: null, funnelLoading: false,
   channelsData: null, channelsLoading: false,
@@ -31,8 +32,13 @@ export const useAdminStore = create((set, get) => ({
     get().fetchUsers(1);
   },
 
+  setUserFilter: (filter) => {
+    set({ userFilter: filter || null });
+    get().fetchUsers(1);
+  },
+
   clearSegmentFilter: () => {
-    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null });
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
     get().fetchUsers(1);
   },
 
@@ -47,6 +53,7 @@ export const useAdminStore = create((set, get) => ({
       if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
       if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
       if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.userFilter) params.set('filter', state.userFilter);
       const res = await apiFetch(`${API_BASE}/api/admin/users?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
