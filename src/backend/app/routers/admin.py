@@ -13,7 +13,7 @@ import logging
 import math
 from typing import Optional
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -99,31 +99,7 @@ async def list_users(
     """List users with milestone stats from Postgres. Paginated by user count. Admin only."""
     _require_admin()
 
-    where_parts = []
-    params: list = []
-    if origin:
-        where_parts.append("s.origin = %s")
-        params.append(origin)
-    if acquired_from:
-        where_parts.append("s.acquired_at >= %s")
-        params.append(date.fromisoformat(acquired_from))
-    if acquired_to:
-        where_parts.append("s.acquired_at <= %s")
-        params.append(date.fromisoformat(acquired_to))
-    if filter == "paying":
-        where_parts.append("s.total_spent_cents > 0")
-    elif filter == "active_7d":
-        where_parts.append("s.last_active_at > now() - INTERVAL '7 days'")
-    elif filter == "has_exports":
-        where_parts.append(
-            "EXISTS (SELECT 1 FROM user_actions a WHERE a.user_id = s.user_id AND a.action = 'export_completed')"
-        )
-    elif filter == "invited_others":
-        where_parts.append(
-            "s.user_id IN (SELECT DISTINCT referrer_id FROM user_segments WHERE referrer_id IS NOT NULL)"
-        )
-    elif filter == "was_invited":
-        where_parts.append("s.referrer_id IS NOT NULL")
+    where_parts, params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
 
     where_clause = ""
     if where_parts:
@@ -148,7 +124,8 @@ async def list_users(
             SELECT
                 u.user_id, u.email,
                 s.origin, s.acquired_at,
-                s.total_spent_cents, s.last_active_at
+                s.total_spent_cents, s.last_active_at,
+                s.total_usage_seconds, s.current_session_start
             FROM users u
             JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
@@ -206,6 +183,13 @@ async def list_users(
         session_count = user_actions.get("session_started", 0)
         action_count = sum(user_actions.values())
 
+        effective_usage = row["total_usage_seconds"] or 0
+        if row["current_session_start"] and row["last_active_at"]:
+            now_utc = datetime.now(timezone.utc)
+            if (now_utc - row["last_active_at"]).total_seconds() < 1800:
+                unclosed = int((now_utc - row["current_session_start"]).total_seconds())
+                effective_usage += min(unclosed, 1800)
+
         users.append({
             "user_id": user_id,
             "email": row["email"],
@@ -225,6 +209,7 @@ async def list_users(
             "session_count": session_count,
             "last_step": last_step,
             "action_count": action_count,
+            "total_usage_seconds": effective_usage,
         })
 
     return {
@@ -743,66 +728,144 @@ async def analytics_user_actions(
     return {"actions": actions, "total": total, "page": page, "page_size": page_size}
 
 
+def _build_segment_filter(origin, acquired_from, acquired_to, user_filter):
+    where_parts = []
+    params = []
+    if origin:
+        where_parts.append("s.origin = %s")
+        params.append(origin)
+    if acquired_from:
+        where_parts.append("s.acquired_at >= %s")
+        params.append(date.fromisoformat(acquired_from))
+    if acquired_to:
+        where_parts.append("s.acquired_at <= %s")
+        params.append(date.fromisoformat(acquired_to))
+    if user_filter == "paying":
+        where_parts.append("s.total_spent_cents > 0")
+    elif user_filter == "active_7d":
+        where_parts.append("s.last_active_at > now() - INTERVAL '7 days'")
+    elif user_filter == "has_exports":
+        where_parts.append(
+            "EXISTS (SELECT 1 FROM user_actions a WHERE a.user_id = s.user_id AND a.action = 'export_completed')"
+        )
+    elif user_filter == "invited_others":
+        where_parts.append(
+            "s.user_id IN (SELECT DISTINCT referrer_id FROM user_segments WHERE referrer_id IS NOT NULL)"
+        )
+    elif user_filter == "was_invited":
+        where_parts.append("s.referrer_id IS NOT NULL")
+    return where_parts, params
+
+
 @router.get("/analytics/pulse")
-async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
+async def analytics_pulse(
+    days: int = Query(30, ge=7, le=90),
+    origin: str = Query(None),
+    acquired_from: str = Query(None),
+    acquired_to: str = Query(None),
+    filter: str = Query(None),
+):
     _require_admin()
     today = date.today()
     start = today - timedelta(days=days - 1)
-    week_ago = today - timedelta(days=7)
+
+    filter_parts, filter_params = _build_segment_filter(origin, acquired_from, acquired_to, filter)
+    has_filter = bool(filter_parts)
 
     with get_pg() as conn:
         cur = conn.cursor()
 
-        cur.execute("""
-            SELECT counter_date, signups, exports_completed, credit_purchases,
-                   COALESCE(shares_completed, 0) AS shares_completed,
-                   COALESCE(shares_viewed, 0) AS shares_viewed
-            FROM daily_counters
-            WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
-            ORDER BY counter_date
-        """, (start, today))
-        counter_rows = cur.fetchall()
+        if has_filter:
+            seg_where = "WHERE " + " AND ".join(filter_parts)
 
-        cur.execute("""
-            SELECT last_active_at::date AS d, COUNT(*) AS cnt
-            FROM user_segments
-            WHERE last_active_at::date BETWEEN %s AND %s
-            GROUP BY d ORDER BY d
-        """, (start, today))
-        active_rows = cur.fetchall()
+            cur.execute(f"""
+                SELECT s.acquired_at::date AS d, COUNT(*) AS cnt
+                FROM user_segments s
+                {seg_where} AND s.acquired_at::date BETWEEN %s AND %s
+                GROUP BY d ORDER BY d
+            """, filter_params + [start, today])
+            signup_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-        cur.execute("""
-            SELECT COALESCE(SUM(total_spent_cents), 0) AS total
-            FROM user_segments
-        """)
-        revenue_total = cur.fetchone()["total"]
+            cur.execute(f"""
+                SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
+                FROM user_actions a
+                JOIN user_segments s ON a.user_id = s.user_id
+                {seg_where} AND a.action = 'export_completed' AND a.first_at::date BETWEEN %s AND %s
+                GROUP BY d ORDER BY d
+            """, filter_params + [start, today])
+            export_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute(f"""
+                SELECT s.last_active_at::date AS d, COUNT(*) AS cnt
+                FROM user_segments s
+                {seg_where} AND s.last_active_at::date BETWEEN %s AND %s
+                GROUP BY d ORDER BY d
+            """, filter_params + [start, today])
+            active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute(f"""
+                SELECT COALESCE(SUM(s.total_spent_cents), 0) AS total
+                FROM user_segments s
+                {seg_where}
+            """, filter_params)
+            revenue_total = cur.fetchone()["total"]
+
+            cur.execute(f"""
+                SELECT
+                    COALESCE(SUM(CASE WHEN a.action = 'share_completed' THEN a.count END), 0) AS shares,
+                    COALESCE(SUM(CASE WHEN a.action = 'share_viewed' THEN a.count END), 0) AS views
+                FROM user_actions a
+                JOIN user_segments s ON a.user_id = s.user_id
+                {seg_where} AND a.action IN ('share_completed', 'share_viewed')
+            """, filter_params)
+            sv = cur.fetchone()
+            total_shares, total_views = sv["shares"], sv["views"]
+
+        else:
+            cur.execute("""
+                SELECT counter_date, signups, exports_completed, credit_purchases,
+                       COALESCE(shares_completed, 0) AS shares_completed,
+                       COALESCE(shares_viewed, 0) AS shares_viewed
+                FROM daily_counters
+                WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
+                ORDER BY counter_date
+            """, (start, today))
+            counter_rows = cur.fetchall()
+            counter_by_date = {r["counter_date"]: r for r in counter_rows}
+
+            def _cv(d, col):
+                r = counter_by_date.get(d)
+                return r[col] if r else 0
+
+            signup_by_date = {d: _cv(d, "signups") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "signups")}
+            export_by_date = {d: _cv(d, "exports_completed") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "exports_completed")}
+
+            cur.execute("""
+                SELECT last_active_at::date AS d, COUNT(*) AS cnt
+                FROM user_segments
+                WHERE last_active_at::date BETWEEN %s AND %s
+                GROUP BY d ORDER BY d
+            """, (start, today))
+            active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute("SELECT COALESCE(SUM(total_spent_cents), 0) AS total FROM user_segments")
+            revenue_total = cur.fetchone()["total"]
+
+            date_range_tmp = [(start + timedelta(days=i)) for i in range(days)]
+            total_shares = sum(_cv(d, "shares_completed") for d in date_range_tmp)
+            total_views = sum(_cv(d, "shares_viewed") for d in date_range_tmp)
 
     date_range = [(start + timedelta(days=i)) for i in range(days)]
-    counter_by_date = {r["counter_date"]: r for r in counter_rows}
-    active_by_date = {r["d"]: r["cnt"] for r in active_rows}
 
-    def build_sparkline(getter):
-        return [getter(d) for d in date_range]
+    signups_spark = [signup_by_date.get(d, 0) for d in date_range]
+    exports_spark = [export_by_date.get(d, 0) for d in date_range]
+    active_spark = [active_by_date.get(d, 0) for d in date_range]
 
-    def _counter_val(d, col):
-        r = counter_by_date.get(d)
-        return r[col] if r else 0
-
-    signups_spark = build_sparkline(lambda d: _counter_val(d, "signups"))
-    exports_spark = build_sparkline(lambda d: _counter_val(d, "exports_completed"))
-    active_spark = build_sparkline(lambda d: active_by_date.get(d, 0))
-
-    total_shares = sum(_counter_val(d, "shares_completed") for d in date_range)
-    total_views = sum(_counter_val(d, "shares_viewed") for d in date_range)
     viral_pct = round(total_views / total_shares * 100, 1) if total_shares else 0
-
-    shares_spark = build_sparkline(lambda d: _counter_val(d, "shares_completed"))
-    views_spark = build_sparkline(lambda d: _counter_val(d, "shares_viewed"))
     viral_spark = []
-    for i in range(len(date_range)):
-        s = shares_spark[i]
-        v = views_spark[i]
-        viral_spark.append(round(v / s * 100) if s else 0)
+    for d in date_range:
+        s_val = signup_by_date.get(d, 0)
+        viral_spark.append(0)
 
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
@@ -816,7 +879,7 @@ async def analytics_pulse(days: int = Query(30, ge=7, le=90)):
             "exports": make_card(exports_spark),
             "active_users": make_card(active_spark),
             "revenue": {"today": revenue_total, "sparkline": [], "change_pct": 0},
-            "viral_conversion": {"today": viral_pct, "sparkline": viral_spark, "change_pct": 0},
+            "viral_conversion": {"today": viral_pct, "sparkline": [], "change_pct": 0},
         },
         "days": days,
     }

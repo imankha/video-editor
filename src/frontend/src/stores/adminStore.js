@@ -30,16 +30,19 @@ export const useAdminStore = create((set, get) => ({
   setSegmentFilter: (origin, from, to) => {
     set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
     get().fetchUsers(1);
+    get().fetchPulse();
   },
 
   setUserFilter: (filter) => {
     set({ userFilter: filter || null });
     get().fetchUsers(1);
+    get().fetchPulse();
   },
 
   clearSegmentFilter: () => {
     set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
     get().fetchUsers(1);
+    get().fetchPulse();
   },
 
   fetchUsers: async (page, pageSize) => {
@@ -148,9 +151,15 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchPulse: async (days = 30) => {
+    const state = get();
     set({ pulseLoading: true });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?days=${days}`);
+      const params = new URLSearchParams({ days });
+      if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
+      if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
+      if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.userFilter) params.set('filter', state.userFilter);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ pulseData: await res.json(), pulseLoading: false });
     } catch { set({ pulseLoading: false }); }
