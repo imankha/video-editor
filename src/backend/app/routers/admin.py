@@ -575,11 +575,7 @@ async def analytics_cohorts(
             SELECT
                 date_trunc(%s, s.acquired_at)::date AS cohort_period,
                 COUNT(DISTINCT s.user_id) FILTER (
-                    WHERE EXISTS (
-                        SELECT 1 FROM user_actions a
-                        WHERE a.user_id = s.user_id AND a.action = 'session_started'
-                          AND a.first_at >= s.created_at + INTERVAL '7 days'
-                    )
+                    WHERE s.last_active_at >= s.created_at + INTERVAL '7 days'
                 ) AS returned
             FROM user_segments s
             {origin_filter}
@@ -795,13 +791,22 @@ async def analytics_pulse(
             """, filter_params + [start, today])
             export_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
-            cur.execute(f"""
-                SELECT s.last_active_at::date AS d, COUNT(*) AS cnt
-                FROM user_segments s
-                {seg_where} AND s.last_active_at::date BETWEEN %s AND %s
-                GROUP BY d ORDER BY d
-            """, filter_params + [start, today])
-            active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+            if origin and not acquired_from and not acquired_to and not filter:
+                cur.execute("""
+                    SELECT counter_date AS d, sessions_started AS cnt
+                    FROM daily_counters
+                    WHERE origin_type = %s AND counter_date BETWEEN %s AND %s
+                    ORDER BY counter_date
+                """, (origin, start, today))
+                active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall() if r["cnt"]}
+            else:
+                cur.execute(f"""
+                    SELECT s.last_active_at::date AS d, COUNT(*) AS cnt
+                    FROM user_segments s
+                    {seg_where} AND s.last_active_at::date BETWEEN %s AND %s
+                    GROUP BY d ORDER BY d
+                """, filter_params + [start, today])
+                active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
             cur.execute(f"""
                 SELECT COALESCE(SUM(s.total_spent_cents), 0) AS total
@@ -840,13 +845,7 @@ async def analytics_pulse(
             signup_by_date = {d: _cv(d, "signups") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "signups")}
             export_by_date = {d: _cv(d, "exports_completed") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "exports_completed")}
 
-            cur.execute("""
-                SELECT last_active_at::date AS d, COUNT(*) AS cnt
-                FROM user_segments
-                WHERE last_active_at::date BETWEEN %s AND %s
-                GROUP BY d ORDER BY d
-            """, (start, today))
-            active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+            active_by_date = {d: _cv(d, "sessions_started") for d in [(start + timedelta(days=i)) for i in range(days)] if _cv(d, "sessions_started")}
 
             cur.execute("SELECT COALESCE(SUM(total_spent_cents), 0) AS total FROM user_segments")
             revenue_total = cur.fetchone()["total"]

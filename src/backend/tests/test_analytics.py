@@ -257,3 +257,101 @@ class TestUpdateSession:
 
     def test_fire_and_forget_invalid_user(self, pg_conn):
         update_session("nonexistent-user")
+
+    def test_first_call_sets_current_session_start(self, pg_conn):
+        """First update_session sets current_session_start (was NULL post-migration)."""
+        seg_before = _get_segment("user-a")
+        assert seg_before["current_session_start"] is None
+
+        update_session("user-a")
+
+        seg_after = _get_segment("user-a")
+        assert seg_after["current_session_start"] is not None
+        assert seg_after["total_usage_seconds"] == 0
+
+    def test_same_session_does_not_accumulate(self, pg_conn):
+        """Within 30min window, total_usage_seconds stays unchanged."""
+        update_session("user-a")
+        seg1 = _get_segment("user-a")
+        assert seg1["current_session_start"] is not None
+
+        update_session("user-a")
+        seg2 = _get_segment("user-a")
+        assert seg2["total_usage_seconds"] == 0
+        assert seg2["current_session_start"] == seg1["current_session_start"]
+
+    def test_new_session_accumulates_duration(self, pg_conn):
+        """When 30min gap detected, previous session duration is accumulated."""
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE user_segments SET
+                       current_session_start = now() - INTERVAL '45 minutes',
+                       last_active_at = now() - INTERVAL '35 minutes',
+                       total_usage_seconds = 100
+                   WHERE user_id = %s""",
+                ("user-a",),
+            )
+
+        update_session("user-a")
+
+        seg = _get_segment("user-a")
+        # Previous session: 45min ago start, 35min ago last active = 10min = 600s
+        assert seg["total_usage_seconds"] == 100 + 600
+        assert seg["current_session_start"] is not None
+        assert seg["current_session_start"] > seg["last_active_at"] - timedelta(seconds=5)
+
+    def test_new_session_null_start_no_accumulation(self, pg_conn):
+        """Pre-migration user: current_session_start is NULL, gap detected, no accumulation."""
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE user_segments SET
+                       last_active_at = now() - INTERVAL '31 minutes',
+                       current_session_start = NULL,
+                       total_usage_seconds = 50
+                   WHERE user_id = %s""",
+                ("user-a",),
+            )
+
+        update_session("user-a")
+
+        seg = _get_segment("user-a")
+        assert seg["total_usage_seconds"] == 50
+        assert seg["current_session_start"] is not None
+
+    def test_multiple_sessions_accumulate(self, pg_conn):
+        """Multiple session gaps accumulate total_usage_seconds correctly."""
+        from app.services.pg import get_pg
+
+        # Session 1: 10min duration
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE user_segments SET
+                       current_session_start = now() - INTERVAL '50 minutes',
+                       last_active_at = now() - INTERVAL '40 minutes',
+                       total_usage_seconds = 0
+                   WHERE user_id = %s""",
+                ("user-a",),
+            )
+        update_session("user-a")
+        seg1 = _get_segment("user-a")
+        assert seg1["total_usage_seconds"] == 600
+
+        # Session 2: 5min duration
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """UPDATE user_segments SET
+                       current_session_start = now() - INTERVAL '50 minutes',
+                       last_active_at = now() - INTERVAL '45 minutes',
+                       total_usage_seconds = %s
+                   WHERE user_id = %s""",
+                (seg1["total_usage_seconds"], "user-a"),
+            )
+        update_session("user-a")
+        seg2 = _get_segment("user-a")
+        assert seg2["total_usage_seconds"] == 900

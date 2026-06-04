@@ -1,10 +1,79 @@
+import atexit
 import json
 import logging
 import re
+import threading
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 from app.services.pg import get_pg
 
 logger = logging.getLogger(__name__)
+
+_analytics_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="analytics")
+
+
+# ---------------------------------------------------------------------------
+# Buffered daily counters — collapse per-row upserts into periodic batch flush
+# ---------------------------------------------------------------------------
+
+class _DailyCounterBuffer:
+    def __init__(self, flush_interval=15):
+        self._buffer: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self._lock = threading.Lock()
+        self._flush_interval = flush_interval
+        self._timer: threading.Timer | None = None
+        self._start_flush_timer()
+
+    def increment(self, origin: str, column: str):
+        with self._lock:
+            self._buffer[origin][column] += 1
+
+    def flush(self):
+        with self._lock:
+            if not self._buffer:
+                return
+            to_flush = dict(self._buffer)
+            self._buffer = defaultdict(lambda: defaultdict(int))
+
+        try:
+            with get_pg() as conn:
+                cur = conn.cursor()
+                for origin, columns in to_flush.items():
+                    set_clauses = ", ".join(
+                        f"{col} = daily_counters.{col} + %s" for col in columns
+                    )
+                    col_names = ", ".join(columns.keys())
+                    placeholders = ", ".join(["%s"] * len(columns))
+                    counts = list(columns.values())
+
+                    cur.execute(
+                        f"INSERT INTO daily_counters (counter_date, origin_type, {col_names}) "
+                        f"VALUES (CURRENT_DATE, %s, {placeholders}) "
+                        f"ON CONFLICT (counter_date, origin_type) "
+                        f"DO UPDATE SET {set_clauses}",
+                        [origin] + counts + counts,
+                    )
+            logger.info("[Analytics] Flushed daily counters: %d origins", len(to_flush))
+        except Exception:
+            with self._lock:
+                for origin, columns in to_flush.items():
+                    for col, count in columns.items():
+                        self._buffer[origin][col] += count
+            logger.exception("[Analytics] Failed to flush daily counters, will retry")
+
+    def _start_flush_timer(self):
+        self._timer = threading.Timer(self._flush_interval, self._on_timer)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _on_timer(self):
+        self.flush()
+        self._start_flush_timer()
+
+
+_counter_buffer = _DailyCounterBuffer(flush_interval=15)
+atexit.register(_counter_buffer.flush)
 
 INVITE_CODE_RE = re.compile(r'^[0-9a-f]{8}$')
 
@@ -53,23 +122,11 @@ FUNNEL_STEPS = [
     "credit_purchased",
 ]
 
-_EXPORT_EVENTS = {"export_completed", "framing_exported", "overlay_exported"}
-
 CREDIT_AMOUNT_TO_CENTS = {
     120: 499,
     400: 1299,
     1000: 2499,
 }
-
-
-def _upsert_daily_counter(cur, origin: str, column: str):
-    sql = f"""
-        INSERT INTO daily_counters (counter_date, origin_type, {column})
-        VALUES (CURRENT_DATE, %s, 1)
-        ON CONFLICT (counter_date, origin_type)
-        DO UPDATE SET {column} = daily_counters.{column} + 1
-    """
-    cur.execute(sql, (origin,))
 
 
 def _get_user_origin(user_id: str) -> str:
@@ -147,26 +204,18 @@ def create_user_segment(
                 (user_id, origin, referrer_id, signup_method,
                  utm_source, utm_medium, utm_campaign, utm_content, utm_term, click_source),
             )
-            _upsert_daily_counter(cur, origin, "signups")
-            _upsert_daily_counter(cur, "all", "signups")
+        _counter_buffer.increment(origin, "signups")
+        _counter_buffer.increment("all", "signups")
         logger.info("[Analytics] Created segment: user=%s origin=%s referrer=%s method=%s", user_id, origin, referrer_id, signup_method)
     except Exception:
         logger.exception("[Analytics] Failed to create segment for %s", user_id)
 
-    try:
-        from app.services.user_db import get_user_db_connection
-        with get_user_db_connection(user_id) as conn:
-            conn.execute(
-                """INSERT OR IGNORE INTO user_activity (user_id)
-                   VALUES (?)""",
-                (user_id,),
-            )
-            conn.commit()
-    except Exception:
-        logger.warning("[Analytics] SQLite sync failed for create_user_segment user=%s", user_id)
-
 
 def record_milestone(user_id: str, event: str, context: dict | None = None):
+    _analytics_pool.submit(_record_milestone_sync, user_id, event, context)
+
+
+def _record_milestone_sync(user_id: str, event: str, context: dict | None = None):
     try:
         cfg = FLOW_EVENTS.get(event)
         if not cfg:
@@ -183,17 +232,16 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
                 DO UPDATE SET count = user_actions.count + 1
             """, (user_id, event))
 
-            cur.execute(
-                "SELECT origin FROM user_segments WHERE user_id = %s",
-                (user_id,),
-            )
-            row = cur.fetchone()
-
             daily_col = cfg["daily_col"]
-            if daily_col and row:
-                origin = row["origin"]
-                _upsert_daily_counter(cur, origin, daily_col)
-                _upsert_daily_counter(cur, "all", daily_col)
+            if daily_col:
+                cur.execute(
+                    "SELECT origin FROM user_segments WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = cur.fetchone()
+                if row:
+                    _counter_buffer.increment(row["origin"], daily_col)
+                    _counter_buffer.increment("all", daily_col)
 
         logger.info("[Analytics] Recorded: event=%s user=%s", event, user_id)
     except Exception:
@@ -207,36 +255,23 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
                 "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
                 (event, json.dumps(context) if context else None),
             )
-            conn.execute(
-                """INSERT INTO user_activity_events (event, count, first_at)
-                   VALUES (?, 1, datetime('now'))
-                   ON CONFLICT(event) DO UPDATE SET
-                       count = count + 1,
-                       updated_at = datetime('now')""",
-                (event,),
-            )
-            set_parts = ["last_active_at = datetime('now')", "updated_at = datetime('now')"]
-            if event in _EXPORT_EVENTS:
-                set_parts.append("last_export_at = datetime('now')")
-            conn.execute(
-                f"""INSERT INTO user_activity (user_id, last_active_at, updated_at)
-                    VALUES (?, datetime('now'), datetime('now'))
-                    ON CONFLICT(user_id) DO UPDATE SET {', '.join(set_parts)}""",
-                (user_id,),
-            )
             conn.commit()
     except Exception:
         logger.warning("[Analytics] SQLite sync failed for record_milestone user=%s event=%s", user_id, event)
 
 
 def update_session(user_id: str, is_pwa: bool = False):
+    total_usage_seconds = 0
     try:
         with get_pg() as conn:
             cur = conn.cursor()
 
-            # Check gap before updating last_active_at
             cur.execute(
-                """SELECT last_active_at < now() - INTERVAL '30 minutes' AS is_new_session
+                """SELECT
+                       last_active_at < now() - INTERVAL '30 minutes' AS is_new_session,
+                       current_session_start,
+                       last_active_at,
+                       total_usage_seconds
                    FROM user_segments WHERE user_id = %s""",
                 (user_id,),
             )
@@ -245,11 +280,36 @@ def update_session(user_id: str, is_pwa: bool = False):
                 return
 
             is_new_session = seg_row["is_new_session"]
+            current_session_start = seg_row["current_session_start"]
+            last_active_at = seg_row["last_active_at"]
+            total_usage_seconds = seg_row["total_usage_seconds"]
 
-            cur.execute(
-                "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
-                (user_id,),
-            )
+            if is_new_session:
+                if current_session_start is not None and last_active_at is not None:
+                    prev_duration = int((last_active_at - current_session_start).total_seconds())
+                    if prev_duration > 0:
+                        total_usage_seconds += prev_duration
+                cur.execute(
+                    """UPDATE user_segments
+                       SET last_active_at = now(),
+                           current_session_start = now(),
+                           total_usage_seconds = %s
+                       WHERE user_id = %s""",
+                    (total_usage_seconds, user_id),
+                )
+            elif current_session_start is None:
+                cur.execute(
+                    """UPDATE user_segments
+                       SET last_active_at = now(),
+                           current_session_start = now()
+                       WHERE user_id = %s""",
+                    (user_id,),
+                )
+            else:
+                cur.execute(
+                    "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
+                    (user_id,),
+                )
 
             cur.execute("""
                 INSERT INTO user_actions (user_id, action, count, first_at)
@@ -279,8 +339,8 @@ def update_session(user_id: str, is_pwa: bool = False):
                 )
                 origin_row = cur.fetchone()
                 if origin_row:
-                    _upsert_daily_counter(cur, origin_row["origin"], "sessions_started")
-                    _upsert_daily_counter(cur, "all", "sessions_started")
+                    _counter_buffer.increment(origin_row["origin"], "sessions_started")
+                    _counter_buffer.increment("all", "sessions_started")
 
             cur.execute(
                 "SELECT action, count FROM user_actions WHERE user_id = %s AND action IN ('session_started', 'pwa_session_started')",
@@ -291,36 +351,29 @@ def update_session(user_id: str, is_pwa: bool = False):
             pwa_session_count = counts.get("pwa_session_started", 0)
 
             pwa_info = f" pwa_sessions={pwa_session_count}" if is_pwa else ""
-            logger.info("[Analytics] Session update: user=%s session_count=%s%s", user_id, session_count, pwa_info)
+            logger.info("[Analytics] Session update: user=%s session_count=%s usage=%ss%s", user_id, session_count, total_usage_seconds, pwa_info)
     except Exception:
         logger.exception("[Analytics] Failed to update session for %s", user_id)
         return
 
-    try:
-        from app.services.user_db import get_user_db_connection
-        with get_user_db_connection(user_id) as conn:
-            if is_new_session:
+    if is_new_session:
+        try:
+            from app.services.user_db import get_user_db_connection
+            with get_user_db_connection(user_id) as conn:
                 conn.execute(
                     "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
                     ("session_started", json.dumps({"is_pwa": is_pwa})),
                 )
-            conn.execute(
-                """INSERT INTO user_activity (user_id, session_count, pwa_session_count, last_active_at, updated_at)
-                   VALUES (?, ?, ?, datetime('now'), datetime('now'))
-                   ON CONFLICT(user_id) DO UPDATE SET
-                       session_count = ?,
-                       pwa_session_count = ?,
-                       last_active_at = datetime('now'),
-                       updated_at = datetime('now')""",
-                (user_id, session_count, pwa_session_count,
-                 session_count, pwa_session_count),
-            )
-            conn.commit()
-    except Exception:
-        logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
+                conn.commit()
+        except Exception:
+            logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
 
 
 def increment_total_spent(user_id: str, amount_cents: int):
+    _analytics_pool.submit(_increment_total_spent_sync, user_id, amount_cents)
+
+
+def _increment_total_spent_sync(user_id: str, amount_cents: int):
     try:
         with get_pg() as conn:
             cur = conn.cursor()

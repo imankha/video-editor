@@ -178,6 +178,8 @@ CREATE TABLE IF NOT EXISTS user_segments (
     signup_method TEXT CHECK (signup_method IN ('google', 'otp')),
     total_spent_cents INTEGER NOT NULL DEFAULT 0,
     last_active_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    total_usage_seconds INTEGER NOT NULL DEFAULT 0,
+    current_session_start TIMESTAMPTZ,
     utm_source TEXT,
     utm_medium TEXT,
     utm_campaign TEXT,
@@ -189,6 +191,8 @@ CREATE TABLE IF NOT EXISTS user_segments (
 CREATE INDEX IF NOT EXISTS idx_segments_acquired ON user_segments(acquired_at);
 CREATE INDEX IF NOT EXISTS idx_segments_origin ON user_segments(origin);
 CREATE INDEX IF NOT EXISTS idx_segments_referrer ON user_segments(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_segments_last_active ON user_segments(last_active_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_segments_acquired_origin ON user_segments(acquired_at, origin);
 
 CREATE TABLE IF NOT EXISTS user_actions (
     user_id TEXT NOT NULL REFERENCES users(user_id),
@@ -198,6 +202,7 @@ CREATE TABLE IF NOT EXISTS user_actions (
     PRIMARY KEY (user_id, action)
 );
 CREATE INDEX IF NOT EXISTS idx_actions_action ON user_actions(action);
+CREATE INDEX IF NOT EXISTS idx_actions_action_user ON user_actions(action, user_id);
 
 CREATE TABLE IF NOT EXISTS daily_counters (
     counter_date DATE NOT NULL DEFAULT CURRENT_DATE,

@@ -95,6 +95,7 @@ _USER_DB_SCHEMA = """
         pwa_session_count INTEGER NOT NULL DEFAULT 0,
         last_active_at TEXT,
         last_export_at TEXT,
+        total_usage_seconds INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT DEFAULT (datetime('now'))
     );
 

@@ -11,6 +11,20 @@ function fmtMoney(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+function fmtDuration(seconds) {
+  if (!seconds) return '—';
+  if (seconds < 60) return '<1m';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+}
+
 function OriginBadge({ origin }) {
   if (!origin) return <span className="text-gray-600">{'—'}</span>;
   const style = origin === 'organic'
@@ -39,6 +53,7 @@ const COLUMNS = [
   { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
   { key: 'action_count', label: 'Actions', align: 'right' },
   { key: 'session_count', label: 'Sessions', align: 'right' },
+  { key: 'total_usage_seconds', label: 'Usage', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
 
@@ -268,6 +283,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.action_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{fmtDuration(user.total_usage_seconds)}</td>
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   <div className="flex items-center justify-end gap-1.5">
