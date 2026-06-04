@@ -15,7 +15,7 @@ function cellColor(pct) {
   return 'bg-red-500/15 text-red-400';
 }
 
-export function CohortGrid({ data, onRowClick }) {
+export function CohortGrid({ data, onRowClick, selectedPeriod }) {
   if (!data?.cohorts?.length) {
     return <p className="text-gray-500 text-sm">No cohort data available.</p>;
   }
@@ -37,7 +37,7 @@ export function CohortGrid({ data, onRowClick }) {
         </thead>
         <tbody>
           {data.cohorts.map(row => (
-            <tr key={row.cohort_period} className={`border-b border-white/5 ${onRowClick ? 'cursor-pointer hover:bg-white/5' : ''}`} onClick={() => onRowClick && onRowClick(row.cohort_period)}>
+            <tr key={row.cohort_period} className={`border-b border-white/5 cursor-pointer hover:bg-white/5 ${selectedPeriod === row.cohort_period ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(row.cohort_period)}>
               <td className="px-3 py-2 text-gray-300 text-xs whitespace-nowrap">
                 {row.cohort_period}
               </td>

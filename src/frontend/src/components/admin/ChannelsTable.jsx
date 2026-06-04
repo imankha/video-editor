@@ -11,7 +11,7 @@ function formatRevenue(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export function ChannelsTable({ data, onRowClick }) {
+export function ChannelsTable({ data, onRowClick, selectedOrigin }) {
   if (!data?.channels?.length) {
     return <p className="text-gray-500 text-sm">No campaign data available.</p>;
   }
@@ -33,7 +33,7 @@ export function ChannelsTable({ data, onRowClick }) {
         </thead>
         <tbody>
           {data.channels.map((ch, i) => (
-            <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`} onClick={() => onRowClick && onRowClick(ch.origin)}>
+            <tr key={i} className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${selectedOrigin === ch.origin ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(ch.origin)}>
               <td className="px-3 py-2.5 text-gray-200 text-xs">
                 {ch.origin}
               </td>

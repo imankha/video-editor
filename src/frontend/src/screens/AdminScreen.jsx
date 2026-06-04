@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ShieldCheck, X } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { ArrowLeft, ShieldCheck } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
@@ -15,11 +15,6 @@ const ENV_STYLES = {
   production: 'bg-red-500/20 text-red-400 border-red-500/40',
 };
 
-const DETAIL_TABS = [
-  { key: 'campaigns', label: 'Campaigns' },
-  { key: 'cohorts', label: 'Cohorts' },
-];
-
 const USER_FILTERS = [
   { key: 'paying', label: 'Paying' },
   { key: 'active_7d', label: 'Active (7d)' },
@@ -29,8 +24,6 @@ const USER_FILTERS = [
 ];
 
 export function AdminScreen({ onBack }) {
-  const [detailTab, setDetailTab] = useState(null);
-
   const fetchUsers = useAdminStore(s => s.fetchUsers);
   const users = useAdminStore(s => s.users);
   const loading = useAdminStore(s => s.usersLoading);
@@ -61,28 +54,29 @@ export function AdminScreen({ onBack }) {
   useEffect(() => {
     fetchUsers();
     fetchPulse();
-  }, [fetchUsers, fetchPulse]);
-
-  useEffect(() => {
-    if (detailTab === 'campaigns' && !channelsData) fetchChannels();
-    if (detailTab === 'cohorts' && !cohortsData) fetchCohorts();
-  }, [detailTab, channelsData, cohortsData, fetchChannels, fetchCohorts]);
+    fetchChannels();
+    fetchCohorts();
+  }, [fetchUsers, fetchPulse, fetchChannels, fetchCohorts]);
 
   const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
   const knownUsers = users.filter(u => u.email);
 
   function handleCampaignClick(origin) {
-    setSegmentFilter(origin, null, null);
-    setDetailTab(null);
+    if (segmentOrigin === origin) {
+      setSegmentFilter(null, segmentFrom, segmentTo);
+    } else {
+      setSegmentFilter(origin, segmentFrom, segmentTo);
+    }
   }
 
   function handleCohortClick(cohortPeriod) {
-    const from = cohortPeriod;
-    const d = new Date(cohortPeriod);
-    d.setDate(d.getDate() + 6);
-    const to = d.toISOString().slice(0, 10);
-    setSegmentFilter(null, from, to);
-    setDetailTab(null);
+    if (segmentFrom === cohortPeriod) {
+      setSegmentFilter(segmentOrigin, null, null);
+    } else {
+      const d = new Date(cohortPeriod);
+      d.setDate(d.getDate() + 6);
+      setSegmentFilter(segmentOrigin, cohortPeriod, d.toISOString().slice(0, 10));
+    }
   }
 
   return (
@@ -104,9 +98,8 @@ export function AdminScreen({ onBack }) {
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {/* User filter pills */}
+        {/* User type filters */}
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
           {USER_FILTERS.map(f => (
             <button
               key={f.key}
@@ -120,21 +113,6 @@ export function AdminScreen({ onBack }) {
               {f.label}
             </button>
           ))}
-
-          {/* Segment chips */}
-          {segmentOrigin && (
-            <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-1 rounded-full border border-purple-500/30 flex items-center gap-1">
-              Campaign: {segmentOrigin}
-              <button onClick={() => setSegmentFilter(null, segmentFrom, segmentTo)} className="text-purple-400 hover:text-white"><X size={10} /></button>
-            </span>
-          )}
-          {segmentFrom && (
-            <span className="text-purple-200 text-xs bg-purple-500/20 px-2 py-1 rounded-full border border-purple-500/30 flex items-center gap-1">
-              Cohort: {segmentFrom}{segmentTo ? ` - ${segmentTo}` : ''}
-              <button onClick={() => setSegmentFilter(segmentOrigin, null, null)} className="text-purple-400 hover:text-white"><X size={10} /></button>
-            </span>
-          )}
-
           {hasFilter && (
             <button
               onClick={clearSegmentFilter}
@@ -148,48 +126,33 @@ export function AdminScreen({ onBack }) {
         {/* Pulse */}
         <PulseCards data={pulseData} />
 
-        {/* Detail tabs (campaigns / cohorts) */}
-        <div className="flex items-center gap-1 mb-4">
-          {DETAIL_TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setDetailTab(detailTab === t.key ? null : t.key)}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                detailTab === t.key
-                  ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                  : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-          <span className="text-gray-600 text-xs ml-2">Click a row to filter users</span>
+        {/* Campaigns table -- click row to select/deselect */}
+        <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
+          <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+            Campaigns
+            <span className="text-gray-600 font-normal normal-case ml-2">Click a row to filter</span>
+          </h3>
+          {channelsLoading
+            ? <p className="text-gray-500 text-sm">Loading...</p>
+            : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} selectedOrigin={segmentOrigin} />
+          }
         </div>
 
-        {detailTab === 'campaigns' && (
-          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-6">
-            {channelsLoading
-              ? <p className="text-gray-500 text-sm">Loading campaigns...</p>
-              : <ChannelsTable data={channelsData} onRowClick={handleCampaignClick} />
-            }
-          </div>
-        )}
-
-        {detailTab === 'cohorts' && (
-          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-6">
-            {cohortsLoading
-              ? <p className="text-gray-500 text-sm">Loading cohorts...</p>
-              : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} />
-            }
-          </div>
-        )}
+        {/* Cohorts table -- click row to select/deselect */}
+        <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
+          <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
+            Cohorts
+            <span className="text-gray-600 font-normal normal-case ml-2">Click a row to filter</span>
+          </h3>
+          {cohortsLoading
+            ? <p className="text-gray-500 text-sm">Loading...</p>
+            : <CohortGrid data={cohortsData} onRowClick={handleCohortClick} selectedPeriod={segmentFrom} />
+          }
+        </div>
 
         {/* Funnel */}
         {funnelTotals && (
-          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-6">
-            <h3 className="text-gray-400 text-xs uppercase tracking-wider mb-3">
-              Funnel{hasFilter ? ' (filtered)' : ''}
-            </h3>
+          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-4">
             <FunnelChart data={{ funnel: [{ origin: 'all', ...funnelTotals }] }} />
           </div>
         )}
