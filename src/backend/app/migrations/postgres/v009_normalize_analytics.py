@@ -86,6 +86,13 @@ class V009NormalizeAnalytics(BaseMigration):
             cur.execute("DROP INDEX IF EXISTS idx_flow_events_event")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_actions_action ON user_actions(action)")
 
-        # 5. Drop user_milestones
+        # 5. Ensure every user has a segment row (INNER JOIN in admin depends on this)
+        cur.execute("""
+            INSERT INTO user_segments (user_id)
+            SELECT u.user_id FROM users u
+            WHERE NOT EXISTS (SELECT 1 FROM user_segments s WHERE s.user_id = u.user_id)
+        """)
+
+        # 6. Drop user_milestones
         if has_milestones:
             cur.execute("DROP TABLE IF EXISTS user_milestones")
