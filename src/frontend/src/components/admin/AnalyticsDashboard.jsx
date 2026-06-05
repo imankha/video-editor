@@ -7,7 +7,7 @@ import { CohortGrid } from './CohortGrid';
 
 const SUB_TABS = [
   { key: 'funnel', label: 'Funnel' },
-  { key: 'channels', label: 'Channels' },
+  { key: 'channels', label: 'Campaigns' },
   { key: 'cohorts', label: 'Cohorts' },
 ];
 

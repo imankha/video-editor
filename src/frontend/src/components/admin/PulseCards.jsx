@@ -26,7 +26,8 @@ const CARD_LABELS = {
   signups: 'Signups',
   exports: 'Exports',
   active_users: 'Active Users',
-  purchases: 'Purchases',
+  revenue: 'Revenue',
+  viral_conversion: 'Viral Conv.',
 };
 
 export function PulseCards({ data }) {
@@ -38,12 +39,15 @@ export function PulseCards({ data }) {
         const card = data.cards[key];
         if (!card) return null;
         const up = card.change_pct >= 0;
+        let displayVal = card.today;
+        if (key === 'revenue') displayVal = `$${((card.today || 0) / 100).toFixed(2)}`;
+        if (key === 'viral_conversion') displayVal = `${card.today || 0}%`;
         return (
           <div key={key} className="bg-white/5 rounded-lg p-4 border border-white/10">
             <div className="text-gray-400 text-xs uppercase tracking-wider mb-1">{label}</div>
-            <div className="text-white text-2xl font-bold">{card.today}</div>
+            <div className="text-white text-2xl font-bold">{displayVal}</div>
             <div className={`text-xs mt-0.5 ${up ? 'text-green-400' : 'text-red-400'}`}>
-              {up ? '↑' : '↓'} {Math.abs(card.change_pct)}% vs last week
+              {up ? '+' : ''}{card.change_pct}% vs last week
             </div>
             <Sparkline data={card.sparkline} />
           </div>

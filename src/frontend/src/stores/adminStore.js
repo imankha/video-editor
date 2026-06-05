@@ -16,11 +16,34 @@ export const useAdminStore = create((set, get) => ({
   grantState: {},
   funnelTotals: null,
 
+  segmentOrigin: null,
+  segmentFrom: null,
+  segmentTo: null,
+  userFilter: null,
+
   funnelData: null, funnelLoading: false,
   channelsData: null, channelsLoading: false,
   cohortsData: null, cohortsLoading: false,
   pulseData: null, pulseLoading: false,
-  journeyData: null, journeyLoading: false, journeyUserId: null,
+  userDetailData: null, userDetailLoading: false, userDetailUserId: null,
+
+  setSegmentFilter: (origin, from, to) => {
+    set({ segmentOrigin: origin || null, segmentFrom: from || null, segmentTo: to || null });
+    get().fetchUsers(1);
+    get().fetchPulse();
+  },
+
+  setUserFilter: (filter) => {
+    set({ userFilter: filter || null });
+    get().fetchUsers(1);
+    get().fetchPulse();
+  },
+
+  clearSegmentFilter: () => {
+    set({ segmentOrigin: null, segmentFrom: null, segmentTo: null, userFilter: null });
+    get().fetchUsers(1);
+    get().fetchPulse();
+  },
 
   fetchUsers: async (page, pageSize) => {
     const state = get();
@@ -29,9 +52,12 @@ export const useAdminStore = create((set, get) => ({
 
     set({ usersLoading: true, usersError: null });
     try {
-      const res = await apiFetch(
-        `${API_BASE}/api/admin/users?page=${p}&page_size=${ps}`,
-      );
+      const params = new URLSearchParams({ page: p, page_size: ps });
+      if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
+      if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
+      if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.userFilter) params.set('filter', state.userFilter);
+      const res = await apiFetch(`${API_BASE}/api/admin/users?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       set({
@@ -125,24 +151,35 @@ export const useAdminStore = create((set, get) => ({
   },
 
   fetchPulse: async (days = 30) => {
+    const state = get();
     set({ pulseLoading: true });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?days=${days}`);
+      const params = new URLSearchParams({ days });
+      if (state.segmentOrigin) params.set('origin', state.segmentOrigin);
+      if (state.segmentFrom) params.set('acquired_from', state.segmentFrom);
+      if (state.segmentTo) params.set('acquired_to', state.segmentTo);
+      if (state.userFilter) params.set('filter', state.userFilter);
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/pulse?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ pulseData: await res.json(), pulseLoading: false });
     } catch { set({ pulseLoading: false }); }
   },
 
-  fetchJourney: async (userId) => {
-    set({ journeyLoading: true, journeyUserId: userId });
+  fetchUserDetail: async (userId) => {
+    set({ userDetailLoading: true, userDetailUserId: userId });
     try {
-      const res = await apiFetch(`${API_BASE}/api/admin/analytics/journey/${userId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      set({ journeyData: await res.json(), journeyLoading: false });
-    } catch { set({ journeyLoading: false }); }
+      const [journeyRes, actionsRes] = await Promise.all([
+        apiFetch(`${API_BASE}/api/admin/analytics/journey/${userId}`),
+        apiFetch(`${API_BASE}/api/admin/analytics/user/${userId}/actions?page_size=200`),
+      ]);
+      if (!journeyRes.ok || !actionsRes.ok) throw new Error('Failed to fetch user detail');
+      const journey = await journeyRes.json();
+      const actions = await actionsRes.json();
+      set({ userDetailData: { ...journey, actionLog: actions.actions }, userDetailLoading: false });
+    } catch { set({ userDetailLoading: false }); }
   },
 
-  clearJourney: () => set({ journeyData: null, journeyUserId: null }),
+  clearUserDetail: () => set({ userDetailData: null, userDetailUserId: null }),
 
   setCredits: async (userId, amount) => {
     set(state => ({

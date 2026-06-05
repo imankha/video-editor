@@ -269,7 +269,7 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
 
             conn.commit()
 
-        record_milestone(user_id, "export_completed")
+        record_milestone(user_id, "export_completed", {"export_id": job_id, "type": "recovered"})
         logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
 
         return {
@@ -460,6 +460,7 @@ async def start_export(
 
     # Create job in database
     job_id = create_export_job(request.project_id, request.type, request.config)
+    record_milestone(get_current_user_id(), "export_started", {"export_id": job_id, "type": request.type})
 
     # Start background processing
     background_tasks.add_task(process_export_job, job_id)

@@ -11,37 +11,49 @@ function fmtMoney(cents) {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-const ORIGIN_STYLES = {
-  organic: 'bg-green-500/20 text-green-400 border-green-500/30',
-  viral: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  ad_campaign: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-};
+function fmtDuration(seconds) {
+  if (!seconds) return '—';
+  if (seconds < 60) return '<1m';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  }
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+}
 
-function OriginBadge({ type, channel }) {
-  if (!type) return <span className="text-gray-600">{'—'}</span>;
-  const style = ORIGIN_STYLES[type] || ORIGIN_STYLES.organic;
+function OriginBadge({ origin }) {
+  if (!origin) return <span className="text-gray-600">{'—'}</span>;
+  const style = origin === 'organic'
+    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+    : 'bg-blue-500/20 text-blue-400 border-blue-500/30';
   return (
     <span
       className={`inline-block px-1.5 py-0.5 text-[10px] rounded border ${style}`}
-      title={channel ? `Channel: ${channel}` : undefined}
+      title={origin}
     >
-      {type === 'ad_campaign' ? 'ad' : type}
+      {origin}
     </span>
   );
 }
 
 const COLUMNS = [
   { key: 'email', label: 'Email', align: 'left' },
-  { key: 'origin_type', label: 'Origin', align: 'center' },
+  { key: 'origin', label: 'Origin', align: 'center' },
   { key: 'last_step', label: 'Last Step', align: 'center' },
-  { key: 'install_day', label: 'Joined', align: 'right' },
+  { key: 'acquired_at', label: 'Joined', align: 'right' },
   { key: 'game_created_count', label: 'Games', align: 'right' },
   { key: 'clip_created_count', label: 'Clips', align: 'right' },
   { key: 'export_completed_count', label: 'Exports', align: 'right' },
   { key: 'share_completed_count', label: 'Shares', align: 'right' },
   { key: 'credits', label: 'Credits', align: 'right' },
-  { key: 'money_spent_cents', label: '$ Spent', align: 'right' },
+  { key: 'total_spent_cents', label: '$ Spent', align: 'right' },
+  { key: 'action_count', label: 'Actions', align: 'right' },
   { key: 'session_count', label: 'Sessions', align: 'right' },
+  { key: 'total_usage_seconds', label: 'Usage', align: 'right' },
   { key: 'last_active_at', label: 'Last active', align: 'right' },
 ];
 
@@ -68,28 +80,6 @@ function StepBadge({ step }) {
       {step}
     </span>
   );
-}
-
-const FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'paying', label: 'Paying' },
-  { key: 'active', label: 'Active (7d)' },
-  { key: 'has_exports', label: 'Has Exports' },
-];
-
-function matchesFilter(user, filter) {
-  switch (filter) {
-    case 'paying': return (user.money_spent_cents || 0) > 0;
-    case 'active': {
-      if (!user.last_active_at) return false;
-      const seen = new Date(user.last_active_at);
-      const week = new Date();
-      week.setDate(week.getDate() - 7);
-      return seen >= week;
-    }
-    case 'has_exports': return (user.export_completed_count || 0) > 0;
-    default: return true;
-  }
 }
 
 function getSortValue(user, key) {
@@ -149,16 +139,12 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('last_active_at');
   const [sortDir, setSortDir] = useState('desc');
-  const [filter, setFilter] = useState('all');
 
   const matchedUsers = useMemo(() => {
-    let result = users;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter(u => (u.email || '').toLowerCase().includes(q));
-    }
-    return result.filter(u => matchesFilter(u, filter));
-  }, [users, search, filter]);
+    if (!search) return users;
+    const q = search.toLowerCase();
+    return users.filter(u => (u.email || '').toLowerCase().includes(q));
+  }, [users, search]);
 
   const sorted = useMemo(() => {
     return [...matchedUsers].sort((a, b) => {
@@ -200,22 +186,6 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
               placeholder="Search email..."
               className="bg-white/5 border border-white/10 rounded-md pl-8 pr-3 py-1.5 text-sm text-gray-200 placeholder-gray-500 outline-none focus:border-purple-500/50 w-56"
             />
-          </div>
-
-          <div className="flex items-center gap-1">
-            {FILTERS.map(f => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`px-2.5 py-1 text-xs rounded-full transition-colors ${
-                  filter === f.key
-                    ? 'bg-purple-500/30 text-purple-300 border border-purple-500/40'
-                    : 'text-gray-400 hover:text-gray-300 border border-white/10 hover:border-white/20'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
           </div>
 
           <span className="text-gray-500 text-xs">
@@ -278,7 +248,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-center">
-                  <OriginBadge type={user.origin_type} channel={user.origin_channel} />
+                  <OriginBadge origin={user.origin} />
                 </td>
 
                 <td className="px-3 py-2.5 text-center">
@@ -286,7 +256,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {user.install_day || '—'}
+                  {user.acquired_at || '—'}
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.game_created_count ?? 0}</td>
@@ -308,10 +278,12 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                 </td>
 
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">
-                  {fmtMoney(user.money_spent_cents)}
+                  {fmtMoney(user.total_spent_cents)}
                 </td>
 
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.action_count ?? 0}</td>
                 <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{user.session_count ?? 0}</td>
+                <td className="px-3 py-2.5 text-right text-gray-400 text-xs">{fmtDuration(user.total_usage_seconds)}</td>
 
                 <td className="px-3 py-2.5 text-right text-gray-500 text-xs">
                   <div className="flex items-center justify-end gap-1.5">

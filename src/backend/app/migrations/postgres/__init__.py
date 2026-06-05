@@ -7,6 +7,11 @@ from .v005_user_milestones import V005UserMilestones
 from .v006_daily_counters import V006DailyCounters
 from .v007_user_flow_events import V007UserFlowEvents
 from .v008_bug_reports_table import V008BugReportsTable
+from .v009_normalize_analytics import V009NormalizeAnalytics
+from .v010_campaign_utm_columns import V010CampaignUtmColumns
+from .v011_daily_counters_tracking_gaps import V011DailyCountersTrackingGaps
+from .v012_session_duration import V012SessionDuration
+from .v013_analytics_indexes import V013AnalyticsIndexes
 
 MIGRATIONS = [
     V001Baseline(),
@@ -17,6 +22,11 @@ MIGRATIONS = [
     V006DailyCounters(),
     V007UserFlowEvents(),
     V008BugReportsTable(),
+    V009NormalizeAnalytics(),
+    V010CampaignUtmColumns(),
+    V011DailyCountersTrackingGaps(),
+    V012SessionDuration(),
+    V013AnalyticsIndexes(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

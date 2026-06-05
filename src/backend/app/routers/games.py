@@ -433,7 +433,7 @@ async def create_game(request: CreateGameRequest):
 
         conn.commit()
 
-    record_milestone(get_current_user_id(), "game_created")
+    record_milestone(get_current_user_id(), "game_created", {"game_id": game_id, "game_name": display_name})
     logger.info(f"Created game {game_id}: {display_name} with {len(request.videos)} video(s) status={game_status.value}")
 
     # Build response with video URLs
@@ -1635,7 +1635,7 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
             logger.info(f"[FinishAnnotation] Updated viewed_duration={body.viewed_duration:.1f}s for game {game_id}")
 
         from ..analytics import record_milestone
-        record_milestone(get_current_user_id(), "annotation_completed")
+        record_milestone(get_current_user_id(), "annotation_completed", {"game_id": game_id})
     else:
         logger.info(f"[FinishAnnotation] User left annotation mode for game {game_id} (no progress update)")
 

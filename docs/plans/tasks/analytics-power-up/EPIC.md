@@ -136,6 +136,7 @@ Enhance the funnel/channels/cohorts views with richer data from the new action s
 | T3470 | [Fill Tracking Gaps](T3470-fill-tracking-gaps.md) | TODO |
 | T3480 | [Admin User Detail Redesign](T3480-admin-user-detail.md) | TODO |
 | T3490 | [Admin Analytics Upgrade](T3490-admin-analytics-upgrade.md) | TODO |
+| T3500 | [Session Duration Tracking](T3500-session-duration-tracking.md) | TODO |
 
 ## Completion Criteria
 

@@ -183,7 +183,7 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         recipient_emails=recipient_emails,
         is_public=body.is_public,
     )
-    record_milestone(user_id, "share_completed")
+    record_milestone(user_id, "share_completed", {"recipient_count": len(recipient_emails), "share_type": "public" if body.is_public else "direct"})
 
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
@@ -209,6 +209,8 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         if tasks:
             results = await asyncio.gather(*tasks.values())
             email_results = dict(zip(tasks.keys(), results))
+            for email in tasks:
+                record_milestone(user_id, "invite_sent", {"recipient_email": email, "share_type": "public" if body.is_public else "direct"})
 
     return ShareCreateResponse(
         shares=[
@@ -313,6 +315,8 @@ async def get_shared_video(share_token: str, request: Request):
         email = _get_email_from_request(request)
         if not email or email.lower() != share["recipient_email"].lower():
             raise HTTPException(403, "Access denied")
+
+    record_milestone(share["sharer_user_id"], "share_viewed", {"share_token": share_token, "sharer_user_id": share["sharer_user_id"]})
 
     video_url = generate_presigned_url_global(_build_video_r2_key(share))
 

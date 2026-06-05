@@ -3,12 +3,7 @@ import React from 'react';
 const STAGE_COLS = [
   { key: 'uploaded_pct', label: 'Uploaded' },
   { key: 'clipped_pct', label: 'Clipped' },
-  { key: 'annotation_done_pct', label: 'Annotated' },
-  { key: 'framing_opened_pct', label: 'Framing' },
-  { key: 'framing_exported_pct', label: 'Framed' },
-  { key: 'overlay_exported_pct', label: 'Overlay' },
-  { key: 'gallery_viewed_pct', label: 'Gallery' },
-  { key: 'downloaded_pct', label: 'Download' },
+  { key: 'exported_pct', label: 'Exported' },
   { key: 'shared_pct', label: 'Shared' },
   { key: 'purchased_pct', label: 'Purchased' },
 ];
@@ -20,7 +15,7 @@ function cellColor(pct) {
   return 'bg-red-500/15 text-red-400';
 }
 
-export function CohortGrid({ data }) {
+export function CohortGrid({ data, onRowClick, selectedPeriod }) {
   if (!data?.cohorts?.length) {
     return <p className="text-gray-500 text-sm">No cohort data available.</p>;
   }
@@ -35,11 +30,14 @@ export function CohortGrid({ data }) {
             {STAGE_COLS.map(c => (
               <th key={c.key} className="text-center px-3 py-2.5">{c.label}</th>
             ))}
+            <th className="text-right px-3 py-2.5">Revenue</th>
+            <th className="text-right px-3 py-2.5">Time-to-Export</th>
+            <th className="text-right px-3 py-2.5">7d Return</th>
           </tr>
         </thead>
         <tbody>
           {data.cohorts.map(row => (
-            <tr key={row.cohort_period} className="border-b border-white/5">
+            <tr key={row.cohort_period} className={`border-b border-white/5 cursor-pointer hover:bg-white/5 ${selectedPeriod === row.cohort_period ? 'bg-purple-500/15 border-l-2 border-l-purple-500' : ''}`} onClick={() => onRowClick && onRowClick(row.cohort_period)}>
               <td className="px-3 py-2 text-gray-300 text-xs whitespace-nowrap">
                 {row.cohort_period}
               </td>
@@ -51,6 +49,15 @@ export function CohortGrid({ data }) {
                   </span>
                 </td>
               ))}
+              <td className="px-3 py-2 text-right text-green-400 text-xs">
+                {row.revenue_cents ? `$${(row.revenue_cents / 100).toFixed(0)}` : '$0'}
+              </td>
+              <td className="px-3 py-2 text-right text-gray-400 text-xs">
+                {row.time_to_export_days != null ? `${row.time_to_export_days}d` : '--'}
+              </td>
+              <td className="px-3 py-2 text-right text-gray-400 text-xs">
+                {row.return_7d_pct}%
+              </td>
             </tr>
           ))}
         </tbody>

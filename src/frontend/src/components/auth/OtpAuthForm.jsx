@@ -149,8 +149,17 @@ export function OtpAuthForm({ resetKey = null }) {
     setError(null);
     try {
       const verifyBody = { email: email.trim(), code: joined };
-      const ref = sessionStorage.getItem('referralCode');
-      if (ref) verifyBody.ref = ref;
+      const raw = sessionStorage.getItem('campaignParams');
+      if (raw) {
+        const campaign = JSON.parse(raw);
+        if (campaign.ref)          verifyBody.ref = campaign.ref;
+        if (campaign.utm_source)   verifyBody.utm_source = campaign.utm_source;
+        if (campaign.utm_medium)   verifyBody.utm_medium = campaign.utm_medium;
+        if (campaign.utm_campaign) verifyBody.utm_campaign = campaign.utm_campaign;
+        if (campaign.utm_content)  verifyBody.utm_content = campaign.utm_content;
+        if (campaign.utm_term)     verifyBody.utm_term = campaign.utm_term;
+        if (campaign.click_source) verifyBody.click_source = campaign.click_source;
+      }
       const res = await apiFetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

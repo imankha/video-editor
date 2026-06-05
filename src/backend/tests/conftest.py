@@ -73,7 +73,7 @@ def _mock_pg_startup():
 
 _TEST_USER_IDS = (
     "admin-user", "regular-user", "sharer-user", "recipient-user",
-    "user-1", "user-2", "test-user-1", "test-user", "user-a", "user-b",
+    "user-1", "user-2", "test-user-1", "test-user", "user-a", "user-b", "user-c",
     "other-admin", "target-user", "other-regular",
 )
 
@@ -101,14 +101,17 @@ def pg_conn(monkeypatch):
     setup = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     setup.autocommit = True
     cur = setup.cursor()
+    # Drop analytics tables that may have stale schemas from prior migrations
+    cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
+    cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
     cur.execute(_SCHEMA_DDL)
 
     from app.migrations.postgres import RUNNER
     RUNNER.run(setup, "postgres")
 
     placeholders = ",".join(["%s"] * len(_TEST_USER_IDS))
-    cur.execute(f"DELETE FROM user_flow_events WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    cur.execute(f"DELETE FROM user_milestones WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    cur.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     cur.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     cur.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
@@ -142,8 +145,8 @@ def pg_conn(monkeypatch):
     teardown = psycopg2.connect(dsn, cursor_factory=RealDictCursor)
     teardown.autocommit = True
     tc = teardown.cursor()
-    tc.execute(f"DELETE FROM user_flow_events WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
-    tc.execute(f"DELETE FROM user_milestones WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM user_actions WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
+    tc.execute(f"DELETE FROM user_segments WHERE user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM referrals WHERE referrer_id IN ({placeholders}) OR referred_id IN ({placeholders})", _TEST_USER_IDS + _TEST_USER_IDS)
     tc.execute(f"DELETE FROM pending_teammate_shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)
     tc.execute(f"DELETE FROM shares WHERE sharer_user_id IN ({placeholders})", _TEST_USER_IDS)

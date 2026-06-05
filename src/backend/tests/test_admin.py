@@ -44,23 +44,35 @@ def isolated_auth_db(pg_conn):
 
 @pytest.fixture()
 def milestones_data(pg_conn):
-    """Insert milestones rows for test users."""
+    """Insert user_segments and user_actions rows for test users."""
     from app.services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO user_milestones (
-                user_id, install_day, origin_type, origin_channel,
-                game_created_count, clip_created_count,
-                export_completed_count, export_failed_count,
-                share_completed_count, credit_purchase_count,
-                credits_consumed_count, session_count
-            ) VALUES
-            ('admin-user', '2026-01-15', 'organic', NULL,
-             10, 25, 5, 1, 2, 3, 50, 20),
-            ('regular-user', '2026-03-10', 'viral', 'share_link',
-             3, 8, 1, 0, 0, 0, 0, 5)
+            INSERT INTO user_segments (user_id, acquired_at, origin, signup_method)
+            VALUES
+            ('admin-user', '2026-01-15', 'organic', 'google'),
+            ('regular-user', '2026-03-10', 'organic', 'otp')
         """)
+        actions = [
+            ("admin-user", "game_created", 10),
+            ("admin-user", "clip_created", 25),
+            ("admin-user", "export_completed", 5),
+            ("admin-user", "export_failed", 1),
+            ("admin-user", "share_completed", 2),
+            ("admin-user", "credit_purchased", 3),
+            ("admin-user", "credits_consumed", 50),
+            ("admin-user", "session_started", 20),
+            ("regular-user", "game_created", 3),
+            ("regular-user", "clip_created", 8),
+            ("regular-user", "export_completed", 1),
+            ("regular-user", "session_started", 5),
+        ]
+        for user_id, action, count in actions:
+            cur.execute(
+                "INSERT INTO user_actions (user_id, action, count) VALUES (%s, %s, %s)",
+                (user_id, action, count),
+            )
     yield
 
 
@@ -182,8 +194,8 @@ class TestAdminUsers:
             assert "user_id" in user
             assert "email" in user
             assert "credits" in user
-            assert "origin_type" in user
-            assert "install_day" in user
+            assert "origin" in user
+            assert "acquired_at" in user
             assert "session_count" in user
             assert "last_active_at" in user
 
@@ -194,19 +206,18 @@ class TestAdminUsers:
         assert resp.status_code == 200
         data = resp.json()
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
-        assert admin["origin_type"] == "organic"
+        assert admin["origin"] == "organic"
         assert admin["game_created_count"] == 10
         assert admin["clip_created_count"] == 25
         assert admin["export_completed_count"] == 5
         assert admin["session_count"] == 20
 
         regular = next(u for u in data["users"] if u["user_id"] == "regular-user")
-        assert regular["origin_type"] == "viral"
-        assert regular["origin_channel"] == "share_link"
-        assert regular["install_day"] == "2026-03-10"
+        assert regular["origin"] == "organic"
+        assert regular["acquired_at"] == "2026-03-10"
 
-    def test_left_join_users_without_milestones(self, client):
-        """Users without milestones rows still appear with NULL/zero values."""
+    def test_left_join_users_without_segments(self, client):
+        """Users without segment rows still appear with NULL/zero values."""
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
         data = resp.json()
@@ -214,7 +225,7 @@ class TestAdminUsers:
         assert "admin-user" in user_ids
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["game_created_count"] == 0
-        assert admin["origin_type"] is None
+        assert admin["origin"] is None
 
     def test_pagination(self, client_with_milestones):
         resp = client_with_milestones.get(

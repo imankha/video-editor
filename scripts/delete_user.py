@@ -153,12 +153,15 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
             cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
 
     if dry_run:
-        cur.execute("SELECT COUNT(*) as cnt FROM user_milestones WHERE user_id = %s", (user_id,))
-        print(f"    would delete {cur.fetchone()['cnt']} rows from user_milestones")
+        cur.execute("SELECT COUNT(*) as cnt FROM user_actions WHERE user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from user_actions")
+        cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE user_id = %s", (user_id,))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from user_segments")
         cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from users")
     else:
-        cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+        cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
 
 

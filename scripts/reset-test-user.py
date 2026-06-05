@@ -44,6 +44,24 @@ TABLES_TO_CLEAR = [
     "pending_uploads",
 ]
 
+ACTION_TO_DAILY_COL = {
+    "game_created": "games_created",
+    "clip_created": "clips_created",
+    "export_completed": "exports_completed",
+    "export_failed": "exports_failed",
+    "share_completed": "shares_completed",
+    "credit_purchased": "credit_purchases",
+    "credits_consumed": "credits_consumed",
+    "annotation_completed": "annotations_completed",
+    "framing_exported": "framing_exports",
+    "overlay_exported": "overlay_exports",
+    "video_downloaded": "video_downloads",
+    "session_started": "sessions_started",
+    "invite_sent": "invites_sent",
+    "share_viewed": "shares_viewed",
+    "export_started": "exports_started",
+}
+
 FLY_APPS = {
     "staging": "reel-ballers-api-staging",
     "prod": "reel-ballers-api",
@@ -242,6 +260,63 @@ def main():
             r2_key = f"{app_env}/users/{user_id}/profiles/{profile_id}/profile.sqlite"
             checkpoint_and_upload(db_path, r2_client, bucket, r2_key)
 
+    # Subtract analytics footprint from daily_counters
+    print("\n--- Subtracting analytics from daily_counters ---")
+    cur.execute("SELECT origin, acquired_at FROM user_segments WHERE user_id = %s", (user_id,))
+    seg = cur.fetchone()
+    if seg:
+        origin = seg["origin"]
+
+        # Try user.sqlite action_log for per-day precision
+        user_db_path = USER_DATA / user_id / "user.sqlite"
+        if is_remote and not user_db_path.exists():
+            r2_key = f"{app_env}/users/{user_id}/user.sqlite"
+            try:
+                download_from_r2(r2_client, bucket, r2_key, user_db_path)
+            except Exception:
+                print(f"  No user.sqlite in R2 — falling back to PG approximation")
+
+        decrements = {}  # (date_str, col) -> count
+        if user_db_path.exists():
+            uconn = sqlite3.connect(str(user_db_path))
+            rows = uconn.execute(
+                "SELECT action, date(created_at) AS d FROM user_action_log"
+            ).fetchall()
+            uconn.close()
+            for action, d in rows:
+                col = ACTION_TO_DAILY_COL.get(action)
+                if col and d:
+                    decrements[(d, col)] = decrements.get((d, col), 0) + 1
+            print(f"  Read {len(rows)} action_log entries from user.sqlite")
+        else:
+            cur.execute(
+                "SELECT action, count, first_at::date AS d FROM user_actions WHERE user_id = %s",
+                (user_id,),
+            )
+            for row in cur.fetchall():
+                col = ACTION_TO_DAILY_COL.get(row["action"])
+                if col and row["d"]:
+                    decrements[(str(row["d"]), col)] = row["count"]
+            print(f"  No user.sqlite — using PG user_actions (per-day approximation)")
+
+        # Signup counter
+        acquired_date = str(seg["acquired_at"])
+        decrements[(acquired_date, "signups")] = decrements.get((acquired_date, "signups"), 0) + 1
+
+        # Apply decrements
+        total_decremented = 0
+        for (d, col), count in decrements.items():
+            cur.execute(
+                f"UPDATE daily_counters SET {col} = GREATEST({col} - %s, 0) "
+                f"WHERE counter_date = %s AND origin_type IN (%s, 'all')",
+                (count, d, origin),
+            )
+            total_decremented += count
+        pg_conn.commit()
+        print(f"  Decremented {total_decremented} counter entries across {len(decrements)} (date, action) pairs")
+    else:
+        print("  No user_segments row — skipping counter subtraction")
+
     # Delete user from Postgres
     print("\n--- Deleting user from Postgres ---")
     # Reset recipient-side share state so share links can be re-materialized
@@ -255,8 +330,8 @@ def main():
            WHERE share_id IN (SELECT id FROM shares WHERE recipient_email = %s)""",
         (args.email,),
     )
-    cur.execute("DELETE FROM user_flow_events WHERE user_id = %s", (user_id,))
-    cur.execute("DELETE FROM user_milestones WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+    cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
     cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
     cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (user_id,))
     cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (user_id,))
@@ -266,6 +341,14 @@ def main():
     pg_conn.commit()
     pg_conn.close()
     print(f"  Deleted: user record + sessions + refs for '{user_id}'")
+
+    # Delete user.sqlite from R2
+    r2_key = f"{app_env}/users/{user_id}/user.sqlite"
+    try:
+        r2_client.delete_object(Bucket=bucket, Key=r2_key)
+        print(f"  Deleted R2: {r2_key}")
+    except Exception:
+        pass
 
     if is_remote and not args.no_restart:
         restart_fly_machines(args.env, config)
