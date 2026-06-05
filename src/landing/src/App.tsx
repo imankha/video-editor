@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { LogoWithText } from './components/Logo'
+import { LearnIllustration, OrganizeIllustration, CelebrateIllustration } from './components/Illustrations'
 import { BeforeAfterSlider } from './components/BeforeAfterSlider'
 import { TbFocusCentered } from 'react-icons/tb'
 import { HiSparkles } from 'react-icons/hi2'
@@ -16,17 +17,6 @@ function App() {
       ? `https://app.reelballers.com?ref=${encodeURIComponent(ref)}`
       : 'https://app.reelballers.com'
   }, [])
-
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
-
-  const closeLightbox = useCallback(() => setLightboxSrc(null), [])
-
-  useEffect(() => {
-    if (!lightboxSrc) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeLightbox() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [lightboxSrc, closeLightbox])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -64,12 +54,7 @@ function App() {
             {/* Learn */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="w-full md:w-[60%]">
-                <img
-                  src="/annotate.png"
-                  alt="ReelBallers annotation editor showing coaching notes on game footage"
-                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300 cursor-pointer"
-                  onClick={() => setLightboxSrc('/annotate.png')}
-                />
+                <LearnIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
               </div>
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -84,12 +69,7 @@ function App() {
             {/* Organize */}
             <div className="flex flex-col md:flex-row-reverse items-center gap-8 md:gap-16">
               <div className="w-full md:w-[60%]">
-                <img
-                  src="/newreel.png"
-                  alt="ReelBallers reel creator with filters, tags, and one-click highlight reel generation"
-                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300 cursor-pointer"
-                  onClick={() => setLightboxSrc('/newreel.png')}
-                />
+                <OrganizeIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
               </div>
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -104,12 +84,7 @@ function App() {
             {/* Celebrate */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="w-full md:w-[60%]">
-                <img
-                  src="/frame.png"
-                  alt="ReelBallers framing tool with vertical crop overlay on wide-angle game footage"
-                  className="rounded-2xl border border-white/10 shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300 cursor-pointer"
-                  onClick={() => setLightboxSrc('/frame.png')}
-                />
+                <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
               </div>
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent pb-1 mb-4">
@@ -239,27 +214,6 @@ function App() {
           </div>
         </div>
       </div>
-
-      {/* Lightbox */}
-      {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8"
-          onClick={closeLightbox}
-        >
-          <button
-            className="absolute top-4 right-4 text-white/70 hover:text-white text-4xl leading-none"
-            onClick={closeLightbox}
-          >
-            &times;
-          </button>
-          <img
-            src={lightboxSrc}
-            alt=""
-            className="max-w-full max-h-full rounded-2xl shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-500 space-y-2">
