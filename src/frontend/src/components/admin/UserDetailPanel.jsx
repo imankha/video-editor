@@ -43,7 +43,12 @@ function formatDate(str) {
 function formatTime(str) {
   if (!str) return '';
   const d = new Date(str);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  const match = str.match(/\.(\d+)/);
+  const frac = match ? match[1].padEnd(2, '0').slice(0, 2) : '00';
+  return `${hh}:${mm}:${ss}.${frac}`;
 }
 
 function formatShortDate(str) {
@@ -84,14 +89,14 @@ export function UserDetailPanel({ data, onClose }) {
         return a.action.toLowerCase().includes(q) || ctxStr.includes(q);
       });
     }
-    return actions;
+    return [...actions].reverse();
   }, [data?.actionLog, actionFilter, searchText]);
 
   if (!data) return null;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 rounded-xl border border-white/10 max-w-4xl w-full max-h-[90vh] flex flex-col">
+      <div className="bg-gray-900 rounded-xl border border-white/10 max-w-4xl w-full h-[90vh] flex flex-col">
         {/* Header */}
         <div className="p-5 border-b border-white/10 flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
@@ -149,7 +154,7 @@ export function UserDetailPanel({ data, onClose }) {
             <thead className="sticky top-0 bg-gray-900 border-b border-white/10">
               <tr className="text-gray-500 text-left">
                 <th className="px-5 py-2 w-20">DATE</th>
-                <th className="px-2 py-2 w-20">TIME</th>
+                <th className="px-2 py-2 w-40">TIME</th>
                 <th className="px-2 py-2 w-44">ACTION</th>
                 <th className="px-2 py-2 w-20 text-right">DELTA</th>
                 <th className="px-2 py-2">CONTEXT</th>
@@ -160,7 +165,7 @@ export function UserDetailPanel({ data, onClose }) {
                 <tr><td colSpan={5} className="px-5 py-8 text-gray-500 text-center">No actions recorded yet</td></tr>
               )}
               {filteredActions.map((action, i) => {
-                const prev = i < filteredActions.length - 1 ? filteredActions[i + 1] : null;
+                const prev = i > 0 ? filteredActions[i - 1] : null;
                 const delta = prev ? new Date(action.created_at) - new Date(prev.created_at) : 0;
                 const isSessionBoundary = action.action === 'session_started';
                 const curDate = formatDate(action.created_at);

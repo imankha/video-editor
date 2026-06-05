@@ -4,13 +4,11 @@ import logging
 import re
 import threading
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 from app.services.pg import get_pg
 
 logger = logging.getLogger(__name__)
-
-_analytics_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="analytics")
 
 
 # ---------------------------------------------------------------------------
@@ -212,10 +210,6 @@ def create_user_segment(
 
 
 def record_milestone(user_id: str, event: str, context: dict | None = None):
-    _analytics_pool.submit(_record_milestone_sync, user_id, event, context)
-
-
-def _record_milestone_sync(user_id: str, event: str, context: dict | None = None):
     try:
         cfg = FLOW_EVENTS.get(event)
         if not cfg:
@@ -251,9 +245,10 @@ def _record_milestone_sync(user_id: str, event: str, context: dict | None = None
     try:
         from app.services.user_db import get_user_db_connection
         with get_user_db_connection(user_id) as conn:
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             conn.execute(
-                "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
-                (event, json.dumps(context) if context else None),
+                "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                (event, json.dumps(context) if context else None, now),
             )
             conn.commit()
     except Exception:
@@ -360,9 +355,10 @@ def update_session(user_id: str, is_pwa: bool = False):
         try:
             from app.services.user_db import get_user_db_connection
             with get_user_db_connection(user_id) as conn:
+                now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 conn.execute(
-                    "INSERT INTO user_action_log (action, context) VALUES (?, ?)",
-                    ("session_started", json.dumps({"is_pwa": is_pwa})),
+                    "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
+                    ("session_started", json.dumps({"is_pwa": is_pwa}), now),
                 )
                 conn.commit()
         except Exception:
@@ -370,10 +366,6 @@ def update_session(user_id: str, is_pwa: bool = False):
 
 
 def increment_total_spent(user_id: str, amount_cents: int):
-    _analytics_pool.submit(_increment_total_spent_sync, user_id, amount_cents)
-
-
-def _increment_total_spent_sync(user_id: str, amount_cents: int):
     try:
         with get_pg() as conn:
             cur = conn.cursor()

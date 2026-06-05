@@ -264,17 +264,22 @@ def main():
         print(f"\n--- {user_id} ({email}) ---")
         reset_profiles(user_id, r2_configs)
 
-    print(f"\n--- Clearing Postgres auth tables ---")
+    print(f"\n--- Clearing Postgres tables ---")
     for env_name, conn in pg_conns.items():
         cur = conn.cursor()
-        for table in ("referrals", "pending_teammate_shares",
+        for table in ("user_actions", "user_segments", "daily_counters",
+                       "referrals", "pending_teammate_shares",
+                       "impersonation_audit",
                        "game_storage_refs", "r2_grace_deletions",
                        "share_games", "share_videos", "shares",
                        "sessions", "otp_codes", "users"):
-            cur.execute(f"DELETE FROM {table}")
+            try:
+                cur.execute(f"DELETE FROM {table}")
+            except Exception:
+                conn.rollback()
         conn.commit()
         conn.close()
-        print(f"  [{env_name}] Cleared all auth tables")
+        print(f"  [{env_name}] Cleared all auth + analytics tables")
 
     print(f"\n{'='*60}")
     print(f"  DONE. All accounts reset in: {', '.join(r2_configs.keys())}")
