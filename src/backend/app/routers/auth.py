@@ -58,19 +58,15 @@ from app.services.auth_db import (
 # Test accounts that auto-reset on every login (fresh new-user experience).
 # Read from nuf-reset-emails.txt at module load time.
 def _load_nuf_reset_emails():
-    """Load NUF reset emails from config file. One email per line, # for comments."""
-    candidates = [
-        Path(__file__).parent.parent.parent / "nuf-reset-emails.txt",
-        Path(__file__).parent.parent.parent.parent.parent / "nuf-reset-emails.txt",
-    ]
-    for config_path in candidates:
-        if config_path.exists():
-            emails = set()
-            for line in config_path.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    emails.add(line.lower())
-            return emails
+    """Load NUF reset emails from nuf-reset-emails.txt at project root."""
+    config_path = Path(__file__).parent.parent.parent.parent.parent / "nuf-reset-emails.txt"
+    if config_path.exists():
+        emails = set()
+        for line in config_path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                emails.add(line.lower())
+        return emails
     return set()
 
 NUF_RESET_EMAILS = _load_nuf_reset_emails()

@@ -100,6 +100,11 @@ FLOW_EVENTS = {
     "payment_started":      {"label": "Payment Started",    "daily_col": None},
     "payment_completed":    {"label": "Payment Done",       "daily_col": None},
     "export_started":       {"label": "Export Started",     "daily_col": "exports_started"},
+    # Achievement-bridged events (quest-tracked actions)
+    "annotations_played":           {"label": "Annotations Played",         "daily_col": None},
+    "custom_project_viewed":        {"label": "Custom Project Viewed",      "daily_col": None},
+    "gallery_watched_1s":           {"label": "Gallery Watched 1s",         "daily_col": None},
+    "gallery_watched_after_overlays": {"label": "Gallery Watched (Overlays)", "daily_col": None},
 }
 
 FUNNEL_STEPS = [

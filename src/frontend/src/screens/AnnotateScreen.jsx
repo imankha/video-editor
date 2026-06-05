@@ -49,6 +49,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Projects — Zustand store
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
+  const selectProject = useProjectsStore(state => state.selectProject);
   const selectedProject = useProjectsStore(state => state.selectedProject);
 
   // Track if we're loading a game (ref persists across re-renders without causing them)
@@ -121,6 +122,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const gameIdRef = useRef(null);
   // T251: Ref to store getViewedDuration function from AnnotateContainer
   const getViewedDurationRef = useRef(null);
+  // Ref to clip regions for annotate-to-framing project selection
+  const clipRegionsRef = useRef([]);
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
@@ -146,9 +149,18 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
       finishAnnotation(gameIdRef.current, viewedDuration);
     }
+    // When switching to framing, select the auto-project from the most recent clip
+    if (newMode === 'framing') {
+      const regions = clipRegionsRef.current;
+      const withProject = regions.filter(r => r.autoProjectId);
+      if (withProject.length > 0) {
+        const latest = withProject[withProject.length - 1];
+        selectProject(latest.autoProjectId);
+      }
+    }
     // Delegate to App.jsx mode change handler (handles project selection, confirmations)
     onModeChange?.(newMode);
-  }, [handleBackToProjects, finishAnnotation, onModeChange]);
+  }, [handleBackToProjects, finishAnnotation, selectProject, onModeChange]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -316,6 +328,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useEffect(() => {
     gameIdRef.current = annotateGameId;
   }, [annotateGameId]);
+
+  // Keep clipRegionsRef updated for annotate-to-framing project selection
+  clipRegionsRef.current = clipRegions;
 
   // T251: Keep getViewedDuration ref updated for handleBackToProjects
   getViewedDurationRef.current = getViewedDuration;

@@ -30,6 +30,10 @@ KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "view
 ACHIEVEMENT_TO_MILESTONE = {
     "opened_framing_editor": "framing_opened",
     "viewed_gallery_video": "gallery_viewed",
+    "played_annotations": "annotations_played",
+    "viewed_custom_project_video": "custom_project_viewed",
+    "watched_gallery_video_1s": "gallery_watched_1s",
+    "watched_gallery_video_after_2_overlays": "gallery_watched_after_overlays",
 }
 
 # Map step_id -> quest_id for skip lookups

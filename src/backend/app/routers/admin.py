@@ -830,7 +830,8 @@ async def analytics_pulse(
             cur.execute("""
                 SELECT counter_date, signups, exports_completed, credit_purchases,
                        COALESCE(shares_completed, 0) AS shares_completed,
-                       COALESCE(shares_viewed, 0) AS shares_viewed
+                       COALESCE(shares_viewed, 0) AS shares_viewed,
+                       COALESCE(sessions_started, 0) AS sessions_started
                 FROM daily_counters
                 WHERE origin_type = 'all' AND counter_date BETWEEN %s AND %s
                 ORDER BY counter_date
