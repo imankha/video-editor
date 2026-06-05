@@ -574,17 +574,20 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         `networkState=${v.networkState} readyState=${v.readyState}`
       );
 
-      // Stall watchdog: if still waiting after 10s, reload the video.
-      // Don't reset on repeated waiting events — the first one starts the
-      // timer and subsequent ones leave it running so it actually fires.
+      // Stall watchdog: if still waiting, reload the video.
+      // Scale timeout by playback rate — at 2x, buffer drains twice as fast
+      // so we need to react sooner.
       if (!stallTimerRef.current) {
+        const rate = v.playbackRate || 1;
+        const watchdogMs = Math.max(4000, 10000 / rate);
         stallTimerRef.current = setTimeout(() => {
           stallTimerRef.current = null;
           const vv = videoRef.current;
           if (!vv) return;
 
+          const rr = vv.playbackRate || 1;
           const state = getBufferAheadAt(vv, vv.currentTime);
-          const needsReload = state.ahead < 1
+          const needsReload = state.ahead < rr
             || vv.readyState <= HTMLMediaElement.HAVE_METADATA;
 
           if (needsReload) {
@@ -606,7 +609,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
             }, { once: true });
             vv.load();
           }
-        }, 10000);
+        }, watchdogMs);
       }
     }
   };
