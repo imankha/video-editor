@@ -554,7 +554,7 @@ export function AnnotateContainer({
         teammateSharesData = loadResult.teammate_shares;
         teammateTagsData = loadResult.teammate_tags;
       } catch (loadErr) {
-        if (loadErr.message?.includes('not found')) throw loadErr;
+        if (loadErr.message?.includes('not found') || loadErr.message?.includes('401')) throw loadErr;
         console.warn('[AnnotateContainer] /load failed, falling back to individual fetches:', loadErr.message);
         gameData = await getGame(gameId);
         try {
@@ -626,6 +626,19 @@ export function AnnotateContainer({
       if (err.message?.includes('not found')) {
         toast.error('Game not found');
         setEditorMode('projects');
+      } else if (err.message?.includes('401')) {
+        useAuthStore.setState({ isAuthenticated: false });
+        setEditorMode('projects');
+        requireAuth(() => {
+          sessionStorage.setItem('pendingGameId', gameId.toString());
+          if (pendingClipSeekTime != null) {
+            sessionStorage.setItem('pendingClipSeekTime', pendingClipSeekTime.toString());
+          }
+          setEditorMode('annotate');
+        });
+      } else {
+        toast.error('Failed to load game. Please try again.');
+        setEditorMode('projects');
       }
     } finally {
       if (PROFILING_ENABLED) {
@@ -639,7 +652,7 @@ export function AnnotateContainer({
         performance.clearMarks('gesture:load-game:end');
       }
     }
-  }, [loadGame, getGame, applyGameData, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip]);
+  }, [loadGame, getGame, applyGameData, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip, requireAuth]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
   const playback = useAnnotationPlayback({
