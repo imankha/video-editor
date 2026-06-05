@@ -1,5 +1,6 @@
-"""Tests for T3080: dual-write of user activity to per-user SQLite."""
+"""Tests for dual-write of user activity to per-user SQLite."""
 
+import json
 import sqlite3
 import logging
 from pathlib import Path
@@ -20,6 +21,7 @@ def _clean_sqlite_activity():
             with get_user_db_connection(uid) as conn:
                 conn.execute("DELETE FROM user_activity")
                 conn.execute("DELETE FROM user_activity_events")
+                conn.execute("DELETE FROM user_action_log")
                 conn.commit()
         except Exception:
             pass
@@ -39,6 +41,18 @@ def _get_sqlite_events(user_id: str) -> list[dict]:
     from app.services.user_db import get_user_db_connection
     with get_user_db_connection(user_id) as conn:
         rows = conn.execute("SELECT * FROM user_activity_events").fetchall()
+        return [dict(r) for r in rows]
+
+
+def _get_sqlite_action_log(user_id: str, action: str | None = None) -> list[dict]:
+    from app.services.user_db import get_user_db_connection
+    with get_user_db_connection(user_id) as conn:
+        if action:
+            rows = conn.execute(
+                "SELECT * FROM user_action_log WHERE action = ? ORDER BY id", (action,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM user_action_log ORDER BY id").fetchall()
         return [dict(r) for r in rows]
 
 
@@ -62,29 +76,31 @@ class TestRecordMilestoneDualWrite:
         assert pg_row is not None
         assert pg_row["count"] == 1
 
-        events = _get_sqlite_events("user-a")
-        game_event = next((e for e in events if e["event"] == "game_created"), None)
-        assert game_event is not None
-        assert game_event["count"] == 1
+        entries = _get_sqlite_action_log("user-a", "game_created")
+        assert len(entries) == 1
+        assert entries[0]["action"] == "game_created"
+        assert entries[0]["created_at"] is not None
 
-        activity = _get_sqlite_activity("user-a")
-        assert activity is not None
-        assert activity["last_active_at"] is not None
-
-    def test_record_milestone_increments_sqlite_count(self, pg_conn):
+    def test_record_milestone_appends_action_log_rows(self, pg_conn):
         record_milestone("user-a", "game_created")
         record_milestone("user-a", "game_created")
 
-        events = _get_sqlite_events("user-a")
-        game_event = next((e for e in events if e["event"] == "game_created"), None)
-        assert game_event["count"] == 2
+        entries = _get_sqlite_action_log("user-a", "game_created")
+        assert len(entries) == 2
 
-    def test_export_event_sets_last_export_at(self, pg_conn):
+    def test_record_milestone_writes_action_log_with_context(self, pg_conn):
+        record_milestone("user-a", "game_created", {"game_id": 1})
+
+        entries = _get_sqlite_action_log("user-a", "game_created")
+        assert len(entries) == 1
+        assert json.loads(entries[0]["context"]) == {"game_id": 1}
+        assert entries[0]["created_at"] is not None
+
+    def test_export_event_writes_to_action_log(self, pg_conn):
         record_milestone("user-a", "export_completed")
 
-        activity = _get_sqlite_activity("user-a")
-        assert activity is not None
-        assert activity["last_export_at"] is not None
+        entries = _get_sqlite_action_log("user-a", "export_completed")
+        assert len(entries) == 1
 
 
 class TestUpdateSessionSync:
@@ -93,7 +109,7 @@ class TestUpdateSessionSync:
         create_user("user-a", email="a@test.com")
         create_user_segment("user-a", "organic", None, "otp")
 
-    def test_update_session_syncs_to_sqlite(self, pg_conn):
+    def test_update_session_writes_action_log(self, pg_conn):
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
@@ -104,18 +120,10 @@ class TestUpdateSessionSync:
 
         update_session("user-a")
 
-        from app.services.pg import get_pg
-        with get_pg() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT action, count FROM user_actions WHERE user_id = %s AND action = 'session_started'",
-                ("user-a",),
-            )
-            pg_row = cur.fetchone()
-
-        activity = _get_sqlite_activity("user-a")
-        assert activity is not None
-        assert activity["session_count"] == pg_row["count"]
+        entries = _get_sqlite_action_log("user-a", "session_started")
+        assert len(entries) == 1
+        assert json.loads(entries[0]["context"]) == {"is_pwa": False}
+        assert entries[0]["created_at"] is not None
 
 
 class TestBackfillUserActivity:
@@ -192,14 +200,15 @@ class TestSqliteFailureIsolation:
         assert pg_row["count"] == 1
 
 
-class TestCreateSegmentInitializesSqlite:
+class TestCreateSegmentDoesNotWriteSqlite:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):
         create_user("user-a", email="a@test.com")
 
-    def test_create_segment_initializes_sqlite(self, pg_conn):
+    def test_create_segment_does_not_write_sqlite(self, pg_conn):
         create_user_segment("user-a", "organic", None, "otp")
 
         activity = _get_sqlite_activity("user-a")
-        assert activity is not None
-        assert activity["session_count"] == 0
+        assert activity is None
+        entries = _get_sqlite_action_log("user-a")
+        assert len(entries) == 0
