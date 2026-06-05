@@ -759,12 +759,13 @@ export function AnnotateContainer({
           if (result.project_created) {
             setAutoProjectId(newRegion.id, result.project_id);
             toast.success('Reel created!', { duration: 5000 });
+            fetchProjects({ force: true });
           }
         }
       }
     }
     // Overlay closes automatically: addClipRegion calls onSelect → selectClip → CREATING→SELECTED
-  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline]);
+  }, [addClipRegion, effectiveSeek, annotateGameId, saveClip, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
 
   /**
    * Update a clip region - syncs to backend
@@ -776,6 +777,16 @@ export function AnnotateContainer({
     if (!region) {
       console.warn('[AnnotateContainer] Region not found for update:', regionId);
       return;
+    }
+
+    if (updates.createProject != null) {
+      console.log('[CreateReel] updateClipRegionWithSync entered', {
+        regionId,
+        rawClipId: region.rawClipId,
+        autoProjectId: region.autoProjectId,
+        annotateGameId,
+        createProject: updates.createProject,
+      });
     }
 
     // In multi-video mode, startTime/endTime from the sidebar are virtual — convert to actual
@@ -795,11 +806,17 @@ export function AnnotateContainer({
 
     // Skip backend sync if no game ID
     if (!annotateGameId) {
+      if (updates.createProject != null) {
+        console.warn('[CreateReel] ABORT: no annotateGameId, cannot sync to backend');
+      }
       return;
     }
 
     // If clip doesn't have rawClipId, save it to backend first
     if (!region.rawClipId) {
+      if (updates.createProject != null) {
+        console.log('[CreateReel] Taking SAVE path (no rawClipId)');
+      }
 
       // Merge current values with updates for the save
       const clipData = {
@@ -819,6 +836,9 @@ export function AnnotateContainer({
       }
 
       const result = await saveClip(annotateGameId, clipData);
+      if (updates.createProject != null) {
+        console.log('[CreateReel] SAVE path result:', result);
+      }
       if (result?.raw_clip_id) {
         setRawClipId(region.id, result.raw_clip_id);
 
@@ -826,6 +846,7 @@ export function AnnotateContainer({
           setAutoProjectId(region.id, result.project_id);
           const clipName = actualUpdates.name || region.name || 'Untitled';
           toast.success(`Reel created: ${clipName}`, { duration: 5000 });
+          fetchProjects({ force: true });
         }
       }
     } else {
@@ -849,15 +870,24 @@ export function AnnotateContainer({
       }
 
       if (Object.keys(backendUpdates).length > 0) {
+        if (updates.createProject != null) {
+          console.log('[CreateReel] Taking UPDATE path', { clipId: region.rawClipId, backendUpdates });
+        }
         const result = await updateClipRemote(region.rawClipId, backendUpdates);
+        if (updates.createProject != null) {
+          console.log('[CreateReel] UPDATE path result:', result);
+        }
         if (result?.project_created) {
           setAutoProjectId(region.id, result.project_id);
           const clipName = region.name || 'Untitled';
           toast.success(`Reel created: ${clipName}`, { duration: 5000 });
+          fetchProjects({ force: true });
         }
+      } else if (updates.createProject != null) {
+        console.warn('[CreateReel] ABORT: backendUpdates was empty, nothing sent to backend');
       }
     }
-  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline]);
+  }, [clipRegions, updateClipRegion, annotateGameId, saveClip, updateClipRemote, setRawClipId, setAutoProjectId, currentVideoSequence, fullTimeline, fetchProjects]);
 
   /**
    * Handle updating an existing clip from fullscreen overlay

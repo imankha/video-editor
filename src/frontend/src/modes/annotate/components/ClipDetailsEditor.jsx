@@ -306,7 +306,17 @@ export function ClipDetailsEditor({
             size="sm"
             icon={reelCreated ? Check : Plus}
             disabled={reelCreated}
-            onClick={() => { setReelRequested(true); onUpdate({ createProject: true }); }}
+            onClick={() => {
+              console.log('[CreateReel] Button clicked', {
+                regionId: region.id,
+                rawClipId: region.rawClipId,
+                autoProjectId: region.autoProjectId,
+                reelCreated,
+                rating: region.rating,
+              });
+              setReelRequested(true);
+              onUpdate({ createProject: true });
+            }}
           >
             {reelCreated ? 'Reel Created' : 'Create Reel'}
           </Button>

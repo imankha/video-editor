@@ -53,6 +53,9 @@ export function useRawClipSave() {
     // Skip if already saving this clip
     if (pendingSaves.current.has(saveKey)) {
       console.log('[useRawClipSave] Skipping duplicate save:', saveKey);
+      if (clipData.create_project) {
+        console.warn('[CreateReel] BLOCKED by pendingSaves dedup guard, saveKey:', saveKey);
+      }
       return null;
     }
 
@@ -61,26 +64,33 @@ export function useRawClipSave() {
     setError(null);
 
     try {
+      const payload = {
+        game_id: gameId,
+        start_time: clipData.start_time,
+        end_time: clipData.end_time,
+        name: clipData.name || '',
+        rating: clipData.rating || 3,
+        tags: clipData.tags || [],
+        notes: clipData.notes || '',
+        ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
+        ...(clipData.create_project != null && { create_project: clipData.create_project }),
+        ...(clipData.tagged_teammates != null && { tagged_teammates: clipData.tagged_teammates }),
+        ...(clipData.my_athlete != null && { my_athlete: clipData.my_athlete }),
+      };
+      if (clipData.create_project) {
+        console.log('[CreateReel] saveClip sending POST /clips/raw/save', { create_project: payload.create_project, game_id: payload.game_id });
+      }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          game_id: gameId,
-          start_time: clipData.start_time,
-          end_time: clipData.end_time,
-          name: clipData.name || '',
-          rating: clipData.rating || 3,
-          tags: clipData.tags || [],
-          notes: clipData.notes || '',
-          ...(clipData.video_sequence != null && { video_sequence: clipData.video_sequence }),
-          ...(clipData.create_project != null && { create_project: clipData.create_project }),
-          ...(clipData.tagged_teammates != null && { tagged_teammates: clipData.tagged_teammates }),
-          ...(clipData.my_athlete != null && { my_athlete: clipData.my_athlete }),
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (clipData.create_project) {
+          console.error('[CreateReel] saveClip got HTTP error:', response.status, errorData);
+        }
         throw new Error(errorData.detail || 'Failed to save clip');
       }
 
@@ -119,6 +129,9 @@ export function useRawClipSave() {
     setError(null);
 
     try {
+      if (updates.create_project) {
+        console.log('[CreateReel] updateClip sending PUT /clips/raw/' + clipId, { updates });
+      }
       const response = await apiFetch(`${API_BASE_URL}/clips/raw/${clipId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -127,11 +140,17 @@ export function useRawClipSave() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (updates.create_project) {
+          console.error('[CreateReel] updateClip got HTTP error:', response.status, errorData);
+        }
         throw new Error(errorData.detail || 'Failed to update clip');
       }
 
       const result = await response.json();
       console.log('[useRawClipSave] Updated clip:', clipId);
+      if (updates.create_project) {
+        console.log('[CreateReel] updateClip response:', { project_created: result.project_created, project_id: result.project_id });
+      }
 
       if (result.project_created) {
         console.log('[useRawClipSave] Auto-created project:', result.project_id);

@@ -819,6 +819,9 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
     Idempotent: If a clip with the same game_id + end_time + video_sequence already exists,
     updates that clip instead of creating a duplicate.
     """
+    if clip_data.create_project:
+        logger.info(f"[CreateReel] save_raw_clip called with create_project=True, game_id={clip_data.game_id}")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -836,6 +839,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
         existing = cursor.fetchone()
 
         if existing:
+            if clip_data.create_project:
+                logger.info(f"[CreateReel] save_raw_clip: clip exists (id={existing['id']}), auto_project_id={existing['auto_project_id']}")
             # Update existing clip metadata
             clip_id = existing['id']
             old_start_time = existing['start_time']
@@ -895,6 +900,8 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
             _refresh_game_aggregates(cursor, clip_data.game_id)
             conn.commit()
+            if clip_data.create_project:
+                logger.info(f"[CreateReel] save_raw_clip EXISTING clip response: project_created={project_created}, project_id={project_id}")
             logger.info(f"Updated clip {clip_id} for game {clip_data.game_id}")
 
             return RawClipSaveResponse(
@@ -926,7 +933,9 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
         _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
-        record_milestone(get_current_user_id(), "clip_created")
+        record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
+        if clip_data.create_project:
+            logger.info(f"[CreateReel] save_raw_clip NEW clip response: project_created={project_created}, project_id={project_id}")
         logger.info(f"Saved clip {raw_clip_id} for game {clip_data.game_id}")
 
         return RawClipSaveResponse(
@@ -947,6 +956,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
     - If rating changed FROM 5: Delete auto-project (if unmodified)
     - If duration changed: Increment boundaries_version
     """
+    if update.create_project:
+        logger.info(f"[CreateReel] update_raw_clip called with create_project=True, clip_id={clip_id}")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -964,6 +976,9 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
 
         if not clip:
             raise HTTPException(status_code=404, detail="Raw clip not found")
+
+        if update.create_project:
+            logger.info(f"[CreateReel] update_raw_clip: clip found, auto_project_id={clip['auto_project_id']}, game_id={clip['game_id']}")
 
         old_rating = clip['rating']
         new_rating = update.rating if update.rating is not None else old_rating
@@ -1044,6 +1059,8 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
 
         _refresh_game_aggregates(cursor, clip['game_id'])
         conn.commit()
+        if update.create_project:
+            logger.info(f"[CreateReel] update_raw_clip response: project_created={project_created}, project_id={auto_project_id}")
         logger.info(f"Updated raw clip {clip_id}")
 
     return {
