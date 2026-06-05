@@ -530,10 +530,16 @@ export function ProjectManager({
         className="hidden"
       />
 
-      {/* Top right controls - Credits + Gallery (auth only) + Sign-in/Profile */}
-      <div className="fixed top-4 right-4 z-30 flex items-center gap-2 sm:gap-4">
+      {/* Credits anchored far left */}
+      {isAuthenticated && (
+        <div className="fixed top-4 left-4 z-30">
+          <CreditBalance />
+        </div>
+      )}
+
+      {/* Top right controls - Gallery (auth only) + Invite + Sign-in/Profile */}
+      <div className="fixed top-4 right-4 z-30 flex items-center gap-3 sm:gap-4">
         <InstallButton />
-        {isAuthenticated && <CreditBalance />}
         {isAuthenticated && onOpenDownloads && (
           <Button
             variant="reelOutline"

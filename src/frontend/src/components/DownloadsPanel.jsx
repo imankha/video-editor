@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Pencil } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Pencil, MoreVertical } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -92,8 +92,27 @@ export function DownloadsPanel({
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
 
+  // State for overflow menu on reel cards
+  const [overflowMenuId, setOverflowMenuId] = useState(null);
+  const overflowMenuRef = useRef(null);
+
   // Native share support
   const { share } = useWebShare();
+
+  useEffect(() => {
+    if (!overflowMenuId) return;
+    const handleClickOutside = (e) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target)) {
+        setOverflowMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [overflowMenuId]);
 
   if (!isOpen && !playingVideo) return null;
 
@@ -321,29 +340,29 @@ export function DownloadsPanel({
                 {showFilename ? download.filename : sourceTypeLabel}
               </div>
             )}
-            <div className="flex items-center mt-1">
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{formatDate(download.created_at)}</span>
-                {formatDuration(download.duration) && <span>{formatDuration(download.duration)}</span>}
-              </div>
-              <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+            <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+              <span>{formatDate(download.created_at)}</span>
+              {formatDuration(download.duration) && <span>{formatDuration(download.duration)}</span>}
+            </div>
+            <div className="flex items-center mt-2">
+              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
                 <button
                   onClick={(e) => handlePlay(e, download)}
-                  className={`p-1 hover:${REEL.bgMuted} rounded transition-colors`}
+                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center hover:${REEL.bgMuted} rounded-lg transition-colors`}
                   title="Play video"
                 >
-                  <Play size={14} className={`${REEL.accent} hover:text-cyan-300`} />
+                  <Play size={20} className={`${REEL.accent} hover:text-cyan-300`} />
                 </button>
                 <button
                   onClick={(e) => handleDownload(e, download)}
                   disabled={downloadingId === download.id}
-                  className="p-1 hover:bg-gray-600 rounded transition-colors disabled:opacity-50"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
                   title="Download file"
                 >
                   {downloadingId === download.id ? (
-                    <Loader size={14} className="text-gray-400 animate-spin" />
+                    <Loader size={20} className="text-gray-400 animate-spin" />
                   ) : (
-                    <Download size={14} className="text-gray-400 hover:text-white" />
+                    <Download size={20} className="text-gray-400 hover:text-white" />
                   )}
                 </button>
                 <button
@@ -366,46 +385,63 @@ export function DownloadsPanel({
                       setSharingDownload(download);
                     }
                   }}
-                  className="p-1 hover:bg-gray-600 rounded transition-colors"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
                   title="Share video"
                 >
-                  <Share2 size={14} className="text-gray-400 hover:text-cyan-400" />
+                  <Share2 size={20} className="text-gray-400 hover:text-cyan-400" />
                 </button>
-                {!import.meta.env.PROD && (
+                {/* Overflow menu for secondary actions */}
+                <div className="relative" ref={overflowMenuId === download.id ? overflowMenuRef : undefined}>
                   <button
-                    onClick={(e) => handleBeforeAfter(e, download)}
-                    disabled={exportingBeforeAfter === download.id}
-                    className="p-1 hover:bg-blue-900/40 rounded transition-colors disabled:opacity-50"
-                    title="Export Before/After comparison"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOverflowMenuId(overflowMenuId === download.id ? null : download.id);
+                    }}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
+                    title="More actions"
                   >
-                    {exportingBeforeAfter === download.id ? (
-                      <Loader size={14} className="text-blue-400 animate-spin" />
-                    ) : (
-                      <Columns size={14} className="text-blue-400 hover:text-blue-300" />
-                    )}
+                    <MoreVertical size={20} className="text-gray-400" />
                   </button>
-                )}
-                {canOpenSource(download) && (
-                  <button
-                    onClick={(e) => handleOpenProject(e, download)}
-                    disabled={restoringProjectId === download.id}
-                    className="p-1 hover:bg-gray-600 rounded transition-colors disabled:opacity-50"
-                    title={getOpenSourceTitle(download)}
-                  >
-                    {restoringProjectId === download.id ? (
-                      <Loader size={14} className="text-gray-400 animate-spin" />
-                    ) : (
-                      <FolderOpen size={14} className="text-gray-400 hover:text-white" />
-                    )}
-                  </button>
-                )}
-                <button
-                  onClick={(e) => handleDelete(e, download)}
-                  className="p-1 hover:bg-red-900/40 rounded transition-colors"
-                  title="Delete download"
-                >
-                  <Trash2 size={14} className="text-gray-400 hover:text-red-400" />
-                </button>
+                  {overflowMenuId === download.id && (
+                    <div className="absolute right-0 bottom-full mb-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[180px] py-1">
+                      {!import.meta.env.PROD && (
+                        <button
+                          onClick={(e) => { handleBeforeAfter(e, download); setOverflowMenuId(null); }}
+                          disabled={exportingBeforeAfter === download.id}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
+                        >
+                          {exportingBeforeAfter === download.id ? (
+                            <Loader size={18} className="text-blue-400 animate-spin flex-shrink-0" />
+                          ) : (
+                            <Columns size={18} className="text-blue-400 flex-shrink-0" />
+                          )}
+                          <span className="text-gray-200">Before / After</span>
+                        </button>
+                      )}
+                      {canOpenSource(download) && (
+                        <button
+                          onClick={(e) => { handleOpenProject(e, download); setOverflowMenuId(null); }}
+                          disabled={restoringProjectId === download.id}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
+                        >
+                          {restoringProjectId === download.id ? (
+                            <Loader size={18} className="text-gray-300 animate-spin flex-shrink-0" />
+                          ) : (
+                            <FolderOpen size={18} className="text-gray-300 flex-shrink-0" />
+                          )}
+                          <span className="text-gray-200">Open as Draft</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { handleDelete(e, download); setOverflowMenuId(null); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-red-900/40 transition-colors"
+                      >
+                        <Trash2 size={18} className="text-red-400 flex-shrink-0" />
+                        <span className="text-red-400">Delete</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -541,8 +577,8 @@ export function DownloadsPanel({
           />
         </div>
 
-        {/* Filter Tabs - Icon only with tooltips */}
-        <div className="flex gap-1 p-2 border-b border-gray-700 bg-gray-800/50">
+        {/* Filter Tabs */}
+        <div className="flex gap-2 p-2 border-b border-gray-700 bg-gray-800/50">
           {FILTER_OPTIONS.map((option) => {
             const isActive = filter === option.value;
             const Icon = option.icon;
@@ -551,13 +587,13 @@ export function DownloadsPanel({
                 key={option.value ?? 'all'}
                 onClick={() => setFilter(option.value)}
                 title={option.label}
-                className={`p-2 rounded-lg transition-colors ${
+                className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors ${
                   isActive
                     ? `${REEL.bg} text-white`
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
                 }`}
               >
-                <Icon size={18} className={isActive ? 'text-white' : option.color} />
+                <Icon size={20} className={isActive ? 'text-white' : option.color} />
               </button>
             );
           })}
