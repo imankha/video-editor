@@ -95,6 +95,20 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
         else:
             dst_cur = dst_conn.cursor()
 
+            # Remove any existing user with this email but different user_id
+            dst_cur.execute("SELECT user_id FROM users WHERE email = %s", (email,))
+            existing = dst_cur.fetchone()
+            if existing and existing["user_id"] != user_id:
+                old_id = existing["user_id"]
+                log.info(f"Removing existing dev user {old_id} (same email, different user_id)")
+                for table in ("game_storage_refs", "sessions", "user_segments", "user_actions"):
+                    dst_cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (old_id,))
+                dst_cur.execute("DELETE FROM pending_teammate_shares WHERE sharer_user_id = %s", (old_id,))
+                dst_cur.execute("DELETE FROM shares WHERE sharer_user_id = %s", (old_id,))
+                dst_cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (old_id, old_id))
+                dst_cur.execute("DELETE FROM otp_codes WHERE email = %s", (email,))
+                dst_cur.execute("DELETE FROM users WHERE user_id = %s", (old_id,))
+
             # Upsert user row
             cols = list(user_row.keys())
             vals = [user_row[c] for c in cols]
