@@ -31,7 +31,7 @@ from pathlib import Path
 
 import sqlite3
 
-from app.analytics import create_user_segment, _determine_origin, record_milestone, update_session
+from app.analytics import create_user_segment, _determine_origin, record_milestone, update_session, close_session
 from app.user_context import get_current_user_id, set_current_user_id
 from app.profile_context import set_current_profile_id
 from app.database import USER_DATA_BASE
@@ -677,6 +677,7 @@ async def logout(request: Request):
         session = validate_session(session_id)
         if session:
             user_id = session["user_id"]
+            close_session(user_id)
             invalidate_user_cache(user_id)
         invalidate_session(session_id)
 

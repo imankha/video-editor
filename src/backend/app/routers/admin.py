@@ -189,6 +189,10 @@ async def list_users(
             if (now_utc - row["last_active_at"]).total_seconds() < 1800:
                 unclosed = int((now_utc - row["current_session_start"]).total_seconds())
                 effective_usage += min(unclosed, 1800)
+            else:
+                expired_duration = int((row["last_active_at"] - row["current_session_start"]).total_seconds())
+                if expired_duration > 0:
+                    effective_usage += min(expired_duration, 1800)
 
         users.append({
             "user_id": user_id,

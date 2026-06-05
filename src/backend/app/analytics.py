@@ -231,6 +231,11 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
                 DO UPDATE SET count = user_actions.count + 1
             """, (user_id, event))
 
+            cur.execute(
+                "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
+                (user_id,),
+            )
+
             daily_col = cfg["daily_col"]
             if daily_col:
                 cur.execute(
@@ -368,6 +373,37 @@ def update_session(user_id: str, is_pwa: bool = False):
                 conn.commit()
         except Exception:
             logger.warning("[Analytics] SQLite sync failed for update_session user=%s", user_id)
+
+
+def close_session(user_id: str):
+    """Close the current session and accumulate usage. Called on logout."""
+    try:
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """SELECT current_session_start, last_active_at, total_usage_seconds
+                   FROM user_segments WHERE user_id = %s""",
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if not row or not row["current_session_start"]:
+                return
+
+            last_active = row["last_active_at"] or row["current_session_start"]
+            duration = max(0, int((last_active - row["current_session_start"]).total_seconds()))
+            total = (row["total_usage_seconds"] or 0) + duration
+
+            cur.execute(
+                """UPDATE user_segments
+                   SET total_usage_seconds = %s,
+                       current_session_start = NULL,
+                       last_active_at = now()
+                   WHERE user_id = %s""",
+                (total, user_id),
+            )
+            logger.info("[Analytics] Session closed: user=%s duration=%ss total=%ss", user_id, duration, total)
+    except Exception:
+        logger.exception("[Analytics] Failed to close session for %s", user_id)
 
 
 def increment_total_spent(user_id: str, amount_cents: int):
