@@ -655,7 +655,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
         // Desync fix: store says playing but video element is actually paused.
         // Try to resume up to DESYNC_MAX_RETRIES times. If the browser keeps
         // pausing immediately after play(), give up and sync UI to paused.
-        if (videoRef.current.paused) {
+        // Skip during buffering — the browser pauses legitimately while
+        // fetching data (especially at higher playback rates like 2x).
+        if (videoRef.current.paused && !isBuffering) {
           if (desyncRetriesRef.current >= DESYNC_MAX_RETRIES) {
             console.warn(`[VIDEO] Desync: giving up after ${DESYNC_MAX_RETRIES} retries, syncing to paused`);
             desyncRetriesRef.current = 0;

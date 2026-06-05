@@ -148,10 +148,11 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       const actualTime = active.currentTime;
       const rate = playbackRateRef.current;
 
-      // Preload next segment when approaching end
+      // Preload next segment when approaching end.
+      // Scale threshold by rate so higher speeds get more lead time.
       if (!hasPreloadedNextRef.current && segIndex + 1 < timeline.segments.length) {
         const timeRemaining = (seg.endTime - actualTime) / rate;
-        if (timeRemaining <= PRELOAD_AHEAD_SECONDS) {
+        if (timeRemaining <= PRELOAD_AHEAD_SECONDS * Math.max(1, rate)) {
           preloadNextSegment(segIndex + 1);
         }
       }
