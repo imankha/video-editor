@@ -62,9 +62,6 @@ function App() {
           <div className="mt-24 md:mt-32 space-y-20 md:space-y-28 mb-24 md:mb-32 text-left">
             {/* Learn */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
-              <div className="w-full md:w-[60%]">
-                <LearnIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
-              </div>
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
                   Learn
@@ -78,13 +75,13 @@ function App() {
                   <FeaturePill icon={<HiUsers className="w-5 h-5 text-white" />} label="Tag teammates" color="from-emerald-400 to-teal-500" />
                 </div>
               </div>
+              <div className="w-full md:w-[60%] md:order-first">
+                <LearnIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
+              </div>
             </div>
 
             {/* Organize */}
-            <div className="flex flex-col md:flex-row-reverse items-center gap-8 md:gap-16">
-              <div className="w-full md:w-[60%]">
-                <OrganizeIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
-              </div>
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent pb-1 mb-4">
                   Organize
@@ -98,13 +95,13 @@ function App() {
                   <FeaturePill icon={<MdFilterList className="w-5 h-5 text-white" />} label="Powerful filtering" color="from-purple-500 to-pink-500" />
                 </div>
               </div>
+              <div className="w-full md:w-[60%]">
+                <OrganizeIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
+              </div>
             </div>
 
             {/* Celebrate */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
-              <div className="w-full md:w-[60%]">
-                <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
-              </div>
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent pb-1 mb-4">
                   Celebrate
@@ -117,6 +114,9 @@ function App() {
                   <FeaturePill icon={<HiSparkles className="w-5 h-5 text-white" />} label="AI-Enhanced Quality" color="from-yellow-400 to-orange-500" />
                   <FeaturePill icon={<><FaInstagram className="w-4 h-4 text-white" /><FaTiktok className="w-3.5 h-3.5 text-white" /></>} label="Social-Ready Formats" color="from-pink-500 to-rose-500" />
                 </div>
+              </div>
+              <div className="w-full md:w-[60%] md:order-first">
+                <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
               </div>
             </div>
           </div>
