@@ -3,11 +3,20 @@ import { LogoWithText } from './components/Logo'
 import { LearnIllustration, OrganizeIllustration, CelebrateIllustration } from './components/Illustrations'
 import { BeforeAfterSlider } from './components/BeforeAfterSlider'
 import { TbFocusCentered } from 'react-icons/tb'
-import { HiSparkles } from 'react-icons/hi2'
+import { HiSparkles, HiTag, HiStar, HiPlay, HiUsers } from 'react-icons/hi2'
 import { FaInstagram, FaTiktok } from 'react-icons/fa'
-import { MdVideoLibrary } from 'react-icons/md'
-import { BiSolidUserVoice } from 'react-icons/bi'
-import { HiTag, HiStar } from 'react-icons/hi2'
+import { MdVideoLibrary, MdSearch, MdFilterList } from 'react-icons/md'
+
+function FeaturePill({ icon, label, color }: { icon: React.ReactNode; label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+      <div className={`w-6 h-6 rounded-full bg-gradient-to-br ${color} flex items-center justify-center gap-0.5 shrink-0`}>
+        <span className="scale-[0.55] flex items-center gap-0.5">{icon}</span>
+      </div>
+      <span className="text-gray-300 text-xs font-medium">{label}</span>
+    </div>
+  )
+}
 
 function App() {
   const ctaHref = useMemo(() => {
@@ -60,9 +69,14 @@ function App() {
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
                   Learn
                 </h3>
-                <p className="text-lg text-gray-300 leading-relaxed">
+                <p className="text-lg text-gray-300 leading-relaxed mb-5">
                   Leave notes on the moments that matter. Your athlete reviews at their own pace — no sideline lectures, no pressure.
                 </p>
+                <div className="flex flex-wrap gap-2.5">
+                  <FeaturePill icon={<HiPlay className="w-5 h-5 text-white" />} label="Playback with coaching notes" color="from-cyan-400 to-blue-500" />
+                  <FeaturePill icon={<><HiTag className="w-4 h-4 text-white" /><HiStar className="w-3.5 h-3.5 text-white" /></>} label="Rate & tag by play type" color="from-violet-400 to-purple-500" />
+                  <FeaturePill icon={<HiUsers className="w-5 h-5 text-white" />} label="Tag teammates" color="from-emerald-400 to-teal-500" />
+                </div>
               </div>
             </div>
 
@@ -75,9 +89,14 @@ function App() {
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent pb-1 mb-4">
                   Organize
                 </h3>
-                <p className="text-lg text-gray-300 leading-relaxed">
+                <p className="text-lg text-gray-300 leading-relaxed mb-5">
                   Every clip tagged, rated, and searchable. Filter by skill, pick your best, and generate a highlight reel in one click.
                 </p>
+                <div className="flex flex-wrap gap-2.5">
+                  <FeaturePill icon={<MdVideoLibrary className="w-5 h-5 text-white" />} label="Clip Library" color="from-emerald-400 to-teal-500" />
+                  <FeaturePill icon={<MdSearch className="w-5 h-5 text-white" />} label="Find clips in seconds" color="from-amber-400 to-orange-500" />
+                  <FeaturePill icon={<MdFilterList className="w-5 h-5 text-white" />} label="Powerful filtering" color="from-purple-500 to-pink-500" />
+                </div>
               </div>
             </div>
 
@@ -90,70 +109,15 @@ function App() {
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-pink-400 to-rose-500 bg-clip-text text-transparent pb-1 mb-4">
                   Celebrate
                 </h3>
-                <p className="text-lg text-gray-300 leading-relaxed">
+                <p className="text-lg text-gray-300 leading-relaxed mb-5">
                   Turn sideline footage into a pro-quality vertical reel. AI upscaling and animated framing keeps your player centered and sharp.
                 </p>
+                <div className="flex flex-wrap gap-2.5">
+                  <FeaturePill icon={<TbFocusCentered className="w-5 h-5 text-white" />} label="Dynamic Crop Window" color="from-purple-500 to-pink-500" />
+                  <FeaturePill icon={<HiSparkles className="w-5 h-5 text-white" />} label="AI-Enhanced Quality" color="from-yellow-400 to-orange-500" />
+                  <FeaturePill icon={<><FaInstagram className="w-4 h-4 text-white" /><FaTiktok className="w-3.5 h-3.5 text-white" /></>} label="Social-Ready Formats" color="from-pink-500 to-rose-500" />
+                </div>
               </div>
-            </div>
-          </div>
-
-          {/* Features */}
-          <div className="grid md:grid-cols-3 gap-8 mb-16">
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-                <TbFocusCentered className="w-10 h-10 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Dynamic Player Framing</h3>
-              <p className="text-gray-400">
-                Our unique technology smoothly follows your player across the field, keeping them centered in every frame.
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 flex items-center justify-center">
-                <HiSparkles className="w-10 h-10 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">AI-Enhanced Quality</h3>
-              <p className="text-gray-400">
-                Grainy footage? Our AI upscaling makes it look professional.
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 flex items-center justify-center">
-                <FaInstagram className="w-8 h-8 text-white" />
-                <FaTiktok className="w-7 h-7 text-white ml-1" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Social-Ready Formats</h3>
-              <p className="text-gray-400">
-                One-click export to Instagram Reels, TikTok, or YouTube Shorts. Vertical, square, or widescreen.
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">
-                <BiSolidUserVoice className="w-10 h-10 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">AI Player Highlighting</h3>
-              <p className="text-gray-400">
-                Easily spotlight your player so coaches never lose track of them in game footage.
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-                <MdVideoLibrary className="w-10 h-10 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Clip Library</h3>
-              <p className="text-gray-400">
-                Build a searchable database of your player's best moments. Reuse the same clips across different videos and formats instantly.
-              </p>
-            </div>
-            <div className="bg-white/5 backdrop-blur rounded-2xl p-8 text-center hover:bg-white/10 transition-colors">
-              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 flex items-center justify-center">
-                <HiTag className="w-8 h-8 text-white" />
-                <HiStar className="w-7 h-7 text-white ml-0.5" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-3">Capture Learning Moments</h3>
-              <p className="text-gray-400">
-                Organize clips with tags and ratings. Export annotated videos so players can study their own performance.
-              </p>
             </div>
           </div>
 
