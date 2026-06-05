@@ -826,6 +826,33 @@ async def analytics_pulse(
             sv = cur.fetchone()
             total_shares, total_views = sv["shares"], sv["views"]
 
+            cur.execute(f"""
+                SELECT a.first_at::date AS d, COUNT(DISTINCT a.user_id) AS cnt
+                FROM user_actions a
+                JOIN user_segments s ON a.user_id = s.user_id
+                {seg_where} AND a.action = 'credit_purchased'
+                    AND a.first_at::date BETWEEN %s AND %s
+                GROUP BY d ORDER BY d
+            """, filter_params + [start, today])
+            revenue_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
+
+            cur.execute(f"""
+                SELECT a.first_at::date AS d, a.action,
+                       COUNT(DISTINCT a.user_id) AS cnt
+                FROM user_actions a
+                JOIN user_segments s ON a.user_id = s.user_id
+                {seg_where} AND a.action IN ('share_completed', 'share_viewed')
+                    AND a.first_at::date BETWEEN %s AND %s
+                GROUP BY d, a.action ORDER BY d
+            """, filter_params + [start, today])
+            shares_by_date = {}
+            views_by_date = {}
+            for r in cur.fetchall():
+                if r["action"] == "share_completed":
+                    shares_by_date[r["d"]] = r["cnt"]
+                else:
+                    views_by_date[r["d"]] = r["cnt"]
+
         else:
             cur.execute("""
                 SELECT counter_date, signups, exports_completed, credit_purchases,
@@ -855,17 +882,23 @@ async def analytics_pulse(
             total_shares = sum(_cv(d, "shares_completed") for d in date_range_tmp)
             total_views = sum(_cv(d, "shares_viewed") for d in date_range_tmp)
 
+            revenue_by_date = {d: _cv(d, "credit_purchases") for d in date_range_tmp if _cv(d, "credit_purchases")}
+            shares_by_date = {d: _cv(d, "shares_completed") for d in date_range_tmp if _cv(d, "shares_completed")}
+            views_by_date = {d: _cv(d, "shares_viewed") for d in date_range_tmp if _cv(d, "shares_viewed")}
+
     date_range = [(start + timedelta(days=i)) for i in range(days)]
 
     signups_spark = [signup_by_date.get(d, 0) for d in date_range]
     exports_spark = [export_by_date.get(d, 0) for d in date_range]
     active_spark = [active_by_date.get(d, 0) for d in date_range]
+    revenue_spark = [revenue_by_date.get(d, 0) for d in date_range]
 
     viral_pct = round(total_views / total_shares * 100, 1) if total_shares else 0
     viral_spark = []
     for d in date_range:
-        s_val = signup_by_date.get(d, 0)
-        viral_spark.append(0)
+        s = shares_by_date.get(d, 0)
+        v = views_by_date.get(d, 0)
+        viral_spark.append(round(v / s * 100, 1) if s else 0)
 
     def make_card(sparkline, today_val=None, week_ago_val=None):
         t = today_val if today_val is not None else (sparkline[-1] if sparkline else 0)
@@ -873,13 +906,18 @@ async def analytics_pulse(
         change = round((t - w) / w * 100, 1) if w else (100.0 if t else 0.0)
         return {"today": t, "last_week_same_day": w, "change_pct": change, "sparkline": sparkline}
 
+    revenue_card = make_card(revenue_spark)
+    revenue_card["today"] = revenue_total
+    viral_card = make_card(viral_spark)
+    viral_card["today"] = viral_pct
+
     return {
         "cards": {
             "signups": make_card(signups_spark),
             "exports": make_card(exports_spark),
             "active_users": make_card(active_spark),
-            "revenue": {"today": revenue_total, "sparkline": [], "change_pct": 0},
-            "viral_conversion": {"today": viral_pct, "sparkline": [], "change_pct": 0},
+            "revenue": revenue_card,
+            "viral_conversion": viral_card,
         },
         "days": days,
     }

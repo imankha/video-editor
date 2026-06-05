@@ -205,20 +205,24 @@ class TestPulseEndpoint:
         data = resp.json()
         assert "cards" in data
         assert "days" in data
-        for key in ("signups", "exports", "active_users", "purchases"):
+        for key in ("signups", "exports", "active_users", "revenue", "viral_conversion"):
             card = data["cards"][key]
             assert "today" in card
             assert "last_week_same_day" in card
             assert "change_pct" in card
             assert "sparkline" in card
             assert isinstance(card["sparkline"], list)
+            assert len(card["sparkline"]) > 0
+            assert all(isinstance(v, (int, float)) for v in card["sparkline"])
+            assert isinstance(card["change_pct"], (int, float))
 
     def test_pulse_custom_days(self, client):
         resp = client.get("/api/admin/analytics/pulse?days=14", headers=_auth())
         assert resp.status_code == 200
         data = resp.json()
         assert data["days"] == 14
-        assert len(data["cards"]["signups"]["sparkline"]) == 14
+        for key in ("signups", "exports", "active_users", "revenue", "viral_conversion"):
+            assert len(data["cards"][key]["sparkline"]) == 14
 
 
 class TestUserActions:
