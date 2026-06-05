@@ -883,6 +883,10 @@ async def _list_games_impl(skip_presigned_urls=False):
                 'id': row['id'],
                 'name': display_name,
                 'raw_name': row['name'],
+                'opponent_name': row['opponent_name'],
+                'game_date': row['game_date'],
+                'game_type': row['game_type'],
+                'tournament_name': row['tournament_name'],
                 'blake3_hash': blake3,
                 'video_url': video_url,
                 'clip_count': row['clip_count'] or 0,
@@ -1202,24 +1206,58 @@ async def get_game(game_id: int):
 @router.put("/{game_id:int}")
 async def update_game(
     game_id: int,
-    name: Optional[str] = Form(None)
+    name: Optional[str] = Form(None),
+    opponent_name: Optional[str] = Form(None),
+    game_date: Optional[str] = Form(None),
+    game_type: Optional[str] = Form(None),
+    tournament_name: Optional[str] = Form(None),
 ):
-    """Update game name."""
+    """Update game metadata (opponent, date, type, tournament)."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Check game exists
-        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
-        if not cursor.fetchone():
+        cursor.execute(
+            "SELECT id, name, opponent_name, game_date, game_type, tournament_name FROM games WHERE id = ?",
+            (game_id,),
+        )
+        game = cursor.fetchone()
+        if not game:
             raise HTTPException(status_code=404, detail="Game not found")
 
-        if name is None:
+        updates = {}
+        if opponent_name is not None:
+            updates['opponent_name'] = opponent_name
+        if game_date is not None:
+            updates['game_date'] = game_date
+        if game_type is not None:
+            if game_type not in (GameType.HOME, GameType.AWAY, GameType.TOURNAMENT):
+                raise HTTPException(status_code=422, detail=f"Invalid game_type: {game_type}")
+            updates['game_type'] = game_type
+        if tournament_name is not None:
+            updates['tournament_name'] = tournament_name
+        if name is not None:
+            updates['name'] = name
+
+        if not updates:
             raise HTTPException(status_code=400, detail="No updates provided")
 
-        cursor.execute("UPDATE games SET name = ? WHERE id = ?", (name, game_id))
+        # Regenerate display name if any metadata field changed
+        metadata_fields = {'opponent_name', 'game_date', 'game_type', 'tournament_name'}
+        if metadata_fields & updates.keys():
+            final_opponent = updates.get('opponent_name', game['opponent_name'])
+            final_date = updates.get('game_date', game['game_date'])
+            final_type = updates.get('game_type', game['game_type'])
+            final_tournament = updates.get('tournament_name', game['tournament_name'])
+            updates['name'] = generate_game_display_name(
+                final_opponent, final_date, final_type, final_tournament, game['name']
+            )
+
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [game_id]
+        cursor.execute(f"UPDATE games SET {set_clause} WHERE id = ?", values)
         conn.commit()
 
-        logger.info(f"Updated game {game_id} name to: {name}")
+        logger.info(f"Updated game {game_id}: {list(updates.keys())}")
         return {'success': True}
 
 

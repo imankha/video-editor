@@ -257,14 +257,16 @@ export const useGamesDataStore = create((set, get) => ({
   },
 
   /**
-   * Update game name
+   * Update game metadata (opponent, date, type, tournament, name)
    */
   updateGame: async (gameId, updates) => {
     set({ isLoading: true, error: null });
     try {
       const formData = new FormData();
-      if (updates.name !== undefined) {
-        formData.append('name', updates.name);
+      for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) {
+          formData.append(key, value ?? '');
+        }
       }
 
       const response = await apiFetch(`${API_BASE}/api/games/${gameId}`, {

@@ -28,6 +28,7 @@ import { ExpirationBadge, getDaysUntil } from './ExpirationBadge';
 import { StorageExtensionModal } from './StorageExtensionModal';
 import { RecapPlayerModal } from './RecapPlayerModal';
 import { ShareGameModal } from './ShareGameModal';
+import { EditGameModal } from './EditGameModal';
 import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
@@ -126,6 +127,7 @@ export function ProjectManager({
   const [extensionGame, setExtensionGame] = useState(null);
   const [recapGame, setRecapGame] = useState(null);
   const [shareGame, setShareGame] = useState(null);
+  const [editGame, setEditGame] = useState(null);
   const gameFileInputRef = useRef(null);
   const resumeFileInputRef = useRef(null);
   const gamesContainerRef = useRef(null);
@@ -805,6 +807,7 @@ export function ProjectManager({
                         onExtend={() => setExtensionGame(game)}
                         onPlayRecap={(tab) => setRecapGame({ game, initialTab: tab })}
                         onShare={() => setShareGame(game)}
+                        onEdit={() => setEditGame(game)}
                       />
                     </div>
                   ))}
@@ -1054,6 +1057,14 @@ export function ProjectManager({
         />
       )}
 
+      {editGame && (
+        <EditGameModal
+          isOpen={!!editGame}
+          game={editGame}
+          onClose={() => setEditGame(null)}
+        />
+      )}
+
     </div>
   );
 }
@@ -1214,7 +1225,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare }) {
+function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const isExpired = game.storage_status === 'expired';
 
@@ -1407,8 +1418,17 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare }) {
           </div>
         </div>
 
-        {/* Share + Delete buttons - shown on hover */}
+        {/* Edit + Share + Delete buttons - shown on hover */}
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Pencil}
+            iconOnly
+            onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+            className="opacity-0 group-hover:opacity-100"
+            title="Edit game details"
+          />
           <Button
             variant="ghost"
             size="sm"
