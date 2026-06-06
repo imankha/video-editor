@@ -360,6 +360,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const pause = () => {
     if (videoRef.current) {
       videoRef.current.pause();
+      setIsPlaying(false);
     }
   };
 

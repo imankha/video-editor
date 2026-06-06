@@ -37,6 +37,7 @@ export function AnnotateContainer({
   duration: videoDuration,
   isPlaying,
   togglePlay,
+  pause,
   stepForward,
   stepBackward,
   seekBackward,
@@ -168,6 +169,7 @@ export function AnnotateContainer({
   const effectiveCurrentTime = multiVideo?.virtualTime ?? currentTime;
   const effectiveSeek = multiVideo?.seek ?? seek;
   const effectiveTogglePlay = multiVideo?.togglePlay ?? togglePlay;
+  const effectivePause = multiVideo?.pause ?? pause;
   const effectiveIsPlaying = multiVideo?.isPlaying ?? isPlaying;
   const effectiveStepForward = multiVideo?.stepForward ?? stepForward;
   const effectiveStepBackward = multiVideo?.stepBackward ?? stepBackward;
@@ -702,17 +704,13 @@ export function AnnotateContainer({
    * Context (paused video, timestamp) is preserved through the auth modal.
    */
   const handleAddClipFromButton = useCallback(() => {
-    if (multiVideo) {
-      multiVideo.pause();
-    } else if (videoRef.current && !videoRef.current.paused) {
-      videoRef.current.pause();
-    }
+    effectivePause();
     if (selectionState.type === 'SELECTED') {
       editClip(selectionState.clipId);
     } else {
       requireAuth(() => startCreating());
     }
-  }, [videoRef, multiVideo, selectionState, editClip, startCreating, requireAuth]);
+  }, [effectivePause, selectionState, editClip, startCreating, requireAuth]);
 
   /**
    * Handle creating a clip from fullscreen overlay
