@@ -339,9 +339,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # is request-scoped by Starlette.
         set_current_req_id(req_id)
 
-        is_pwa = request.headers.get("X-PWA") == "1"
-        x_platform = request.headers.get("X-Platform", "")
-        set_current_platform("pwa" if is_pwa else x_platform)
+        set_current_platform(request.headers.get("X-Platform", ""))
 
         force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
         do_profile = profile_on_breach_enabled() or force_profile

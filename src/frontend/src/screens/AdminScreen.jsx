@@ -7,6 +7,7 @@ import { PulseCards } from '../components/admin/PulseCards';
 import { FunnelChart } from '../components/admin/FunnelChart';
 import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
+import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
 
 const ENV_STYLES = {
@@ -50,13 +51,16 @@ export function AdminScreen({ onBack }) {
   const fetchCohorts = useAdminStore(s => s.fetchCohorts);
   const cohortsData = useAdminStore(s => s.cohortsData);
   const cohortsLoading = useAdminStore(s => s.cohortsLoading);
+  const fetchPlatforms = useAdminStore(s => s.fetchPlatforms);
+  const platformsData = useAdminStore(s => s.platformsData);
 
   useEffect(() => {
     fetchUsers();
     fetchPulse();
     fetchChannels();
     fetchCohorts();
-  }, [fetchUsers, fetchPulse, fetchChannels, fetchCohorts]);
+    fetchPlatforms();
+  }, [fetchUsers, fetchPulse, fetchChannels, fetchCohorts, fetchPlatforms]);
 
   const hasFilter = segmentOrigin || segmentFrom || segmentTo || userFilter;
   const knownUsers = users.filter(u => u.email);
@@ -149,6 +153,9 @@ export function AdminScreen({ onBack }) {
 
         {/* Pulse */}
         <PulseCards data={pulseData} />
+
+        {/* Platform Breakdown */}
+        <PlatformBreakdown data={platformsData} />
 
         {/* Funnel */}
         {funnelTotals && (

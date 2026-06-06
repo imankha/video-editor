@@ -25,6 +25,7 @@ export const useAdminStore = create((set, get) => ({
   channelsData: null, channelsLoading: false,
   cohortsData: null, cohortsLoading: false,
   pulseData: null, pulseLoading: false,
+  platformsData: null, platformsLoading: false,
   userDetailData: null, userDetailLoading: false, userDetailUserId: null,
 
   setSegmentFilter: (origin, from, to) => {
@@ -163,6 +164,15 @@ export const useAdminStore = create((set, get) => ({
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       set({ pulseData: await res.json(), pulseLoading: false });
     } catch { set({ pulseLoading: false }); }
+  },
+
+  fetchPlatforms: async () => {
+    set({ platformsLoading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/analytics/platforms`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      set({ platformsData: await res.json(), platformsLoading: false });
+    } catch { set({ platformsLoading: false }); }
   },
 
   fetchUserDetail: async (userId) => {

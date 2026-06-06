@@ -78,13 +78,14 @@ function installFetchInterceptor() {
       }
       const isPwa = window.matchMedia('(display-mode: standalone)').matches;
       const isMobile = window.innerWidth <= 768;
+      const platform = `${isPwa ? 'pwa' : 'webapp'}-${isMobile ? 'mobile' : 'desktop'}`;
       init.headers = {
         ...(init.headers || {}),
         'X-Request-ID': reqId,
         ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
         ...(_currentUserId ? { 'X-User-ID': _currentUserId } : {}),
         ...(isPwa ? { 'X-PWA': '1' } : {}),
-        'X-Platform': isMobile ? 'mobile' : 'desktop',
+        'X-Platform': platform,
       };
 
       const t0 = performance.now();

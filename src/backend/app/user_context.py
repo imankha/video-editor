@@ -43,8 +43,11 @@ def get_current_platform() -> str:
     return _current_platform.get()
 
 
+_VALID_PLATFORMS = {'pwa-mobile', 'pwa-desktop', 'webapp-mobile', 'webapp-desktop'}
+
+
 def set_current_platform(platform: str) -> None:
-    _current_platform.set(platform if platform in ('mobile', 'desktop', 'pwa') else 'unknown')
+    _current_platform.set(platform if platform in _VALID_PLATFORMS else 'unknown')
 
 
 def get_current_user_id() -> str:
