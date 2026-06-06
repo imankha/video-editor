@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { ArrowLeft, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAdminStore } from '../stores/adminStore';
 import { useAuthStore } from '../stores/authStore';
 import { UserTable } from '../components/admin/UserTable';
@@ -9,6 +9,22 @@ import { ChannelsTable } from '../components/admin/ChannelsTable';
 import { CohortGrid } from '../components/admin/CohortGrid';
 import { PlatformBreakdown } from '../components/admin/PlatformBreakdown';
 import { UserDetailPanel } from '../components/admin/UserDetailPanel';
+
+function CollapsibleSection({ title, defaultOpen = false, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="bg-white/5 rounded-xl border border-white/10 mb-6 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-white/5 transition-colors"
+      >
+        {open ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+        <span className="text-gray-300 text-sm font-medium">{title}</span>
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
 
 const ENV_STYLES = {
   dev: 'bg-green-500/20 text-green-400 border-green-500/40',
@@ -154,18 +170,20 @@ export function AdminScreen({ onBack }) {
         {/* Pulse */}
         <PulseCards data={pulseData} />
 
-        {/* Platform Breakdown */}
-        <PlatformBreakdown data={platformsData} />
+        {/* Platform Breakdown -- collapsed by default */}
+        <CollapsibleSection title="Platform Breakdown">
+          <PlatformBreakdown data={platformsData} />
+        </CollapsibleSection>
 
-        {/* Funnel */}
+        {/* Funnel -- collapsed by default */}
         {funnelTotals && (
-          <div className="bg-white/5 rounded-xl p-5 border border-white/10 mb-6">
+          <CollapsibleSection title="Funnel">
             <FunnelChart data={{ funnel: [{ origin: 'all', ...funnelTotals }] }} />
-          </div>
+          </CollapsibleSection>
         )}
 
-        {/* Users */}
-        <div className="bg-white/5 rounded-xl p-6 border border-white/10">
+        {/* Users -- expanded by default */}
+        <CollapsibleSection title="Users" defaultOpen>
           {loading && <p className="text-gray-500 text-sm">Loading users...</p>}
           {error && <p className="text-red-400 text-sm">Error: {error}</p>}
           {!loading && !error && knownUsers.length === 0 && (
@@ -174,7 +192,7 @@ export function AdminScreen({ onBack }) {
           {!loading && !error && knownUsers.length > 0 && (
             <UserTable users={knownUsers} onUserClick={(userId) => fetchUserDetail(userId)} funnelTotals={funnelTotals} />
           )}
-        </div>
+        </CollapsibleSection>
 
         {(userDetailData || userDetailLoading) && (
           <UserDetailPanel data={userDetailData} onClose={clearUserDetail} />
