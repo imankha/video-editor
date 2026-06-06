@@ -12,6 +12,7 @@ from .v010_campaign_utm_columns import V010CampaignUtmColumns
 from .v011_daily_counters_tracking_gaps import V011DailyCountersTrackingGaps
 from .v012_session_duration import V012SessionDuration
 from .v013_analytics_indexes import V013AnalyticsIndexes
+from .v014_platform_tracking import V014PlatformTracking
 
 MIGRATIONS = [
     V001Baseline(),
@@ -27,6 +28,7 @@ MIGRATIONS = [
     V011DailyCountersTrackingGaps(),
     V012SessionDuration(),
     V013AnalyticsIndexes(),
+    V014PlatformTracking(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
