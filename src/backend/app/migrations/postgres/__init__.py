@@ -13,6 +13,7 @@ from .v011_daily_counters_tracking_gaps import V011DailyCountersTrackingGaps
 from .v012_session_duration import V012SessionDuration
 from .v013_analytics_indexes import V013AnalyticsIndexes
 from .v014_platform_tracking import V014PlatformTracking
+from .v015_platform_normalize import V015PlatformNormalize
 
 MIGRATIONS = [
     V001Baseline(),
@@ -29,6 +30,7 @@ MIGRATIONS = [
     V012SessionDuration(),
     V013AnalyticsIndexes(),
     V014PlatformTracking(),
+    V015PlatformNormalize(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
