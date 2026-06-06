@@ -324,7 +324,16 @@ def get_pg():
 def init_pg_schema():
     with get_pg() as conn:
         cur = conn.cursor()
-        cur.execute(_SCHEMA_DDL)
+        try:
+            cur.execute(_SCHEMA_DDL)
+        except (psycopg2.errors.UndefinedColumn, psycopg2.errors.UndefinedTable):
+            conn.rollback()
+            logger.warning("[PG] DDL failed (pending migrations) — running Postgres migrations before retry")
+            from app.migrations.postgres import RUNNER as PG_RUNNER
+            applied = PG_RUNNER.run(conn, "postgres")
+            for m in applied:
+                logger.info(f"[PG] Applied migration v{m.version}: {m.description}")
+            cur.execute(_SCHEMA_DDL)
         cur.execute(_SEED_SQL)
 
         # T2847: Migrate clip_data JSONB → BYTEA (pre-launch, no real data to preserve)
