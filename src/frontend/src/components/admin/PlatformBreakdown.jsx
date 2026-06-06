@@ -7,6 +7,51 @@ const GRID_CELLS = [
   { key: 'webapp-desktop',row: 'Website', col: 'Desktop', color: 'rgb(251, 191, 36)' },
 ];
 
+const ACTION_LABELS = {
+  session_started: 'Sessions',
+  game_created: 'Games Uploaded',
+  clip_created: 'Clips Created',
+  annotation_completed: 'Annotations',
+  framing_opened: 'Framing Opened',
+  framing_exported: 'Framing Exports',
+  export_started: 'Exports Started',
+  export_completed: 'Exports Done',
+  overlay_exported: 'Overlay Exports',
+  gallery_viewed: 'Gallery Views',
+  video_downloaded: 'Downloads',
+  share_completed: 'Shares',
+  invite_sent: 'Invites',
+  credit_purchased: 'Purchases',
+};
+
+function buildActionRows(byAction) {
+  if (!byAction?.length) return [];
+  return byAction
+    .map(entry => {
+      const lookup = {};
+      for (const p of entry.platforms) lookup[p.platform] = p;
+      const known = entry.platforms.filter(p => p.platform !== 'unknown');
+      const total = known.reduce((s, p) => s + p.count, 0);
+      if (!total) return null;
+      const mobile = known.filter(p => p.platform.endsWith('-mobile')).reduce((s, p) => s + p.count, 0);
+      const pwa = known.filter(p => p.platform.startsWith('pwa-')).reduce((s, p) => s + p.count, 0);
+      return {
+        action: entry.action,
+        label: ACTION_LABELS[entry.action] || entry.action,
+        total,
+        mobilePct: Math.round(mobile / total * 100),
+        pwaPct: Math.round(pwa / total * 100),
+        cells: GRID_CELLS.map(c => {
+          const p = lookup[c.key];
+          return { key: c.key, color: c.color, count: p?.count || 0, pct: total ? Math.round((p?.count || 0) / total * 100) : 0 };
+        }),
+      };
+    })
+    .filter(Boolean)
+    .filter(r => ACTION_LABELS[r.action])
+    .sort((a, b) => b.total - a.total);
+}
+
 function buildMatrix(platforms) {
   const lookup = {};
   for (const p of platforms) lookup[p.platform] = p;
@@ -48,8 +93,9 @@ function buildMatrix(platforms) {
 export function PlatformBreakdown({ data }) {
   if (!data) return null;
 
-  const { platforms, total_users, total_actions } = data;
+  const { platforms, by_action, total_users, total_actions } = data;
   const m = buildMatrix(platforms);
+  const actionRows = buildActionRows(by_action);
 
   if (!m.knownActions && !m.unknownActions) return null;
 
@@ -123,6 +169,53 @@ export function PlatformBreakdown({ data }) {
               </div>
             )}
           </div>
+
+          {/* Per-action breakdown */}
+          {actionRows.length > 0 && (
+            <div className="mt-6">
+              <h4 className="text-gray-400 text-xs uppercase tracking-wider mb-3">By Action</h4>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10">
+                    <th className="text-left text-gray-500 text-xs font-normal py-2 pr-4">Action</th>
+                    <th className="text-right text-gray-500 text-xs font-normal py-2 px-2 w-16">Total</th>
+                    <th className="text-right text-gray-500 text-xs font-normal py-2 px-2 w-20">Mobile</th>
+                    <th className="text-right text-gray-500 text-xs font-normal py-2 px-2 w-16">PWA</th>
+                    <th className="text-left text-gray-500 text-xs font-normal py-2 pl-4" style={{ width: '40%' }}>Distribution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {actionRows.map(row => (
+                    <tr key={row.action} className="border-b border-white/5 hover:bg-white/5">
+                      <td className="text-gray-300 py-2 pr-4">{row.label}</td>
+                      <td className="text-gray-400 text-right py-2 px-2">{row.total}</td>
+                      <td className="text-right py-2 px-2">
+                        <span className={row.mobilePct >= 50 ? 'text-emerald-400 font-medium' : 'text-gray-400'}>{row.mobilePct}%</span>
+                      </td>
+                      <td className="text-right py-2 px-2">
+                        <span className={row.pwaPct >= 50 ? 'text-purple-400 font-medium' : 'text-gray-400'}>{row.pwaPct}%</span>
+                      </td>
+                      <td className="py-2 pl-4">
+                        <div className="flex h-4 rounded overflow-hidden">
+                          {row.cells.map(c => {
+                            if (!c.pct) return null;
+                            return (
+                              <div
+                                key={c.key}
+                                style={{ width: `${c.pct}%`, backgroundColor: c.color }}
+                                className="min-w-[2px]"
+                                title={`${c.pct}%`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>
