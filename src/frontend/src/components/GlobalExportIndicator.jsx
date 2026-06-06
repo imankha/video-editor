@@ -3,7 +3,7 @@ import { Download, Check, X, ChevronUp, ChevronDown, Loader, Clock } from 'lucid
 import { useExportStore } from '../stores/exportStore';
 import { toast } from './shared';
 import { ExportStatus } from '../constants/exportStatus';
-import { useWebShare, ShareCapability } from '../hooks/useWebShare';
+import { useWebShare } from '../hooks/useWebShare';
 import { track } from '../utils/analytics';
 
 /**
@@ -75,7 +75,7 @@ const toastedExports = new Set();
 
 export function GlobalExportIndicator() {
   const [isExpanded, setIsExpanded] = useState(false);
-  const { capability: shareCapability, share } = useWebShare();
+  const { isMobile, share, copyLink } = useWebShare();
 
   // Get export state from store (updated via WebSocket)
   const activeExports = useExportStore((state) => state.activeExports);
@@ -102,18 +102,24 @@ export function GlobalExportIndicator() {
       const projectLabel = getExportLabel(exp);
       if (exp.status === ExportStatus.COMPLETE) {
         const shareAction = exp.outputVideoId ? {
-          label: shareCapability === ShareCapability.NONE ? 'Copy Link' : 'Share',
+          label: isMobile ? 'Share' : 'Copy Link',
           onClick: async () => {
             try {
-              const filename = `${exp.projectName || projectLabel}-highlight.mp4`;
-              const method = await share({
-                downloadId: exp.outputVideoId,
-                title: projectLabel,
-                text: `Check out my ${projectLabel} highlight reel!`,
-                filename,
-              });
-              track('share_initiated', { method, source: 'toast' });
-              if (method === 'clipboard') {
+              if (isMobile) {
+                const filename = `${exp.projectName || projectLabel}-highlight.mp4`;
+                const method = await share({
+                  downloadId: exp.outputVideoId,
+                  title: projectLabel,
+                  text: `Check out my ${projectLabel} highlight reel!`,
+                  filename,
+                });
+                track('share_initiated', { method, source: 'toast' });
+                if (method === 'clipboard') {
+                  toast.success('Link copied to clipboard');
+                }
+              } else {
+                await copyLink({ downloadId: exp.outputVideoId });
+                track('share_initiated', { method: 'clipboard', source: 'toast' });
                 toast.success('Link copied to clipboard');
               }
             } catch (err) {

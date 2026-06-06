@@ -839,7 +839,7 @@ def backfill_user_activity(user_id: str) -> bool:
                 segment_row = cur.fetchone()
 
                 cur.execute(
-                    "SELECT action, count, first_at FROM user_actions WHERE user_id = %s",
+                    "SELECT action, SUM(count) AS count, MIN(first_at) AS first_at FROM user_actions WHERE user_id = %s GROUP BY action",
                     (user_id,),
                 )
                 action_rows = cur.fetchall()

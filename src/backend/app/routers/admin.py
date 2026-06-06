@@ -138,9 +138,10 @@ async def list_users(
 
         if page_user_ids:
             cur.execute("""
-                SELECT user_id, action, count
+                SELECT user_id, action, SUM(count) AS count
                 FROM user_actions
                 WHERE user_id = ANY(%s)
+                GROUP BY user_id, action
             """, (page_user_ids,))
             action_rows = cur.fetchall()
         else:
@@ -642,10 +643,12 @@ async def analytics_journey(user_id: str):
             raise HTTPException(status_code=404, detail="No segment data for user")
 
         cur.execute("""
-            SELECT action, first_at, count
+            SELECT action, MIN(first_at) AS first_at, SUM(count) AS count,
+                   jsonb_object_agg(platform, count) AS platform_counts
             FROM user_actions
             WHERE user_id = %s
-            ORDER BY first_at NULLS LAST
+            GROUP BY action
+            ORDER BY MIN(first_at) NULLS LAST
         """, (user_id,))
         action_rows = cur.fetchall()
 
@@ -663,6 +666,8 @@ async def analytics_journey(user_id: str):
         entry: dict = {"event": ar["action"], "at": ar["first_at"].isoformat() if ar["first_at"] else None}
         if ar["count"] is not None:
             entry["count"] = ar["count"]
+        if ar["platform_counts"]:
+            entry["platforms"] = ar["platform_counts"]
         completed.append(entry)
 
     pending = [{"event": ev, "at": None} for ev in FLOW_EVENTS if ev not in seen_actions]
@@ -1003,6 +1008,82 @@ async def referral_tree(user_id: str):
         rows = cur.fetchall()
         total = sum(r["count"] for r in rows)
         return {"user_id": user_id, "total": total, "by_depth": rows}
+
+
+# ---------------------------------------------------------------------------
+# Platform analytics
+# ---------------------------------------------------------------------------
+
+@router.get("/analytics/platforms")
+async def analytics_platforms(
+    action: Optional[str] = Query(None),
+):
+    """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
+    _require_admin()
+    from ..services.pg import get_pg
+
+    with get_pg() as conn:
+        cur = conn.cursor()
+
+        action_filter = "WHERE action = %s" if action else ""
+        action_params = [action] if action else []
+
+        cur.execute(f"""
+            SELECT platform,
+                   COUNT(DISTINCT user_id) AS users,
+                   SUM(count) AS total_actions
+            FROM user_actions
+            {action_filter}
+            GROUP BY platform
+            ORDER BY total_actions DESC
+        """, action_params)
+        rows = cur.fetchall()
+
+        total_users = sum(r["users"] for r in rows)
+        total_actions = sum(r["total_actions"] for r in rows)
+
+        platforms = []
+        for r in rows:
+            platforms.append({
+                "platform": r["platform"],
+                "users": r["users"],
+                "user_pct": round(r["users"] / total_users * 100, 1) if total_users else 0,
+                "actions": r["total_actions"],
+                "action_pct": round(r["total_actions"] / total_actions * 100, 1) if total_actions else 0,
+            })
+
+        by_action = []
+        if not action:
+            cur.execute("""
+                SELECT action, platform,
+                       COUNT(DISTINCT user_id) AS users,
+                       SUM(count) AS total
+                FROM user_actions
+                GROUP BY action, platform
+                ORDER BY action, total DESC
+            """)
+            action_platform_rows = cur.fetchall()
+            action_totals: dict[str, int] = {}
+            action_data: dict[str, list] = {}
+            for r in action_platform_rows:
+                action_totals[r["action"]] = action_totals.get(r["action"], 0) + r["total"]
+                action_data.setdefault(r["action"], []).append({
+                    "platform": r["platform"],
+                    "users": r["users"],
+                    "count": r["total"],
+                })
+            for act, plats in action_data.items():
+                act_total = action_totals[act]
+                for p in plats:
+                    p["pct"] = round(p["count"] / act_total * 100, 1) if act_total else 0
+                by_action.append({"action": act, "platforms": plats})
+
+    return {
+        "total_users": total_users,
+        "total_actions": total_actions,
+        "platforms": platforms,
+        "by_action": by_action,
+    }
 
 
 # ---------------------------------------------------------------------------

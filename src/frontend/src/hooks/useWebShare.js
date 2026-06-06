@@ -13,9 +13,35 @@ function isMobileDevice() {
     (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
 }
 
+async function createShareUrl(downloadId) {
+  const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipient_emails: [], is_public: true }),
+  });
+  if (!resp.ok) throw new Error('Failed to create share link');
+  const data = await resp.json();
+  return `${window.location.origin}/shared/${data.shares[0].share_token}`;
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const input = document.createElement('input');
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+}
+
 export function useWebShare() {
+  const isMobile = useMemo(() => isMobileDevice(), []);
+
   const capability = useMemo(() => {
-    if (!navigator.share || !isMobileDevice()) return ShareCapability.NONE;
+    if (!navigator.share || !isMobile) return ShareCapability.NONE;
     try {
       const testFile = new File([''], 'test.mp4', { type: 'video/mp4' });
       if (navigator.canShare?.({ files: [testFile] })) {
@@ -25,9 +51,15 @@ export function useWebShare() {
       // canShare not available or threw
     }
     return ShareCapability.LINK_ONLY;
+  }, [isMobile]);
+
+  const copyLink = useCallback(async ({ downloadId }) => {
+    const shareUrl = await createShareUrl(downloadId);
+    await copyToClipboard(shareUrl);
+    return 'clipboard';
   }, []);
 
-  const share = useCallback(async ({ downloadId, title, text, filename }) => {
+  const webShare = useCallback(async ({ downloadId, title, text, filename }) => {
     if (capability === ShareCapability.FULL) {
       const resp = await apiFetch(`${API_BASE}/api/downloads/${downloadId}/file`);
       if (!resp.ok) throw new Error('Failed to fetch video for sharing');
@@ -37,32 +69,24 @@ export function useWebShare() {
       return 'native';
     }
 
-    const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ recipient_emails: [], is_public: true }),
-    });
-    if (!resp.ok) throw new Error('Failed to create share link');
-    const data = await resp.json();
-    const shareUrl = `${window.location.origin}/shared/${data.shares[0].share_token}`;
+    const shareUrl = await createShareUrl(downloadId);
 
-    if (capability === ShareCapability.LINK_ONLY) {
+    if (navigator.share) {
       await navigator.share({ title, text, url: shareUrl });
       return 'link';
     }
 
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      const input = document.createElement('input');
-      input.value = shareUrl;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand('copy');
-      document.body.removeChild(input);
-    }
+    await copyToClipboard(shareUrl);
     return 'clipboard';
   }, [capability]);
 
-  return { capability, share };
+  // Legacy: single share function that picks the best method
+  const share = useCallback(async (opts) => {
+    if (capability !== ShareCapability.NONE) {
+      return webShare(opts);
+    }
+    return copyLink(opts);
+  }, [capability, webShare, copyLink]);
+
+  return { capability, isMobile, share, copyLink, webShare };
 }

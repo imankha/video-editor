@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Pencil, MoreVertical } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
@@ -97,7 +97,7 @@ export function DownloadsPanel({
   const overflowMenuRef = useRef(null);
 
   // Native share support
-  const { share } = useWebShare();
+  const { isMobile, copyLink, webShare } = useWebShare();
 
   useEffect(() => {
     if (!overflowMenuId) return;
@@ -345,7 +345,7 @@ export function DownloadsPanel({
               {formatDuration(download.duration) && <span>{formatDuration(download.duration)}</span>}
             </div>
             <div className="flex items-center mt-2">
-              <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+              <div className="flex items-center gap-4 ml-auto flex-shrink-0">
                 <button
                   onClick={(e) => handlePlay(e, download)}
                   className={`min-w-[44px] min-h-[44px] flex items-center justify-center hover:${REEL.bgMuted} rounded-lg transition-colors`}
@@ -353,44 +353,52 @@ export function DownloadsPanel({
                 >
                   <Play size={20} className={`${REEL.accent} hover:text-cyan-300`} />
                 </button>
-                <button
-                  onClick={(e) => handleDownload(e, download)}
-                  disabled={downloadingId === download.id}
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors disabled:opacity-50"
-                  title="Download file"
-                >
-                  {downloadingId === download.id ? (
-                    <Loader size={20} className="text-gray-400 animate-spin" />
-                  ) : (
-                    <Download size={20} className="text-gray-400 hover:text-white" />
-                  )}
-                </button>
-                <button
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
-                      const method = await share({
-                        downloadId: download.id,
-                        title: download.project_name || 'Highlight Reel',
-                        text: `Check out ${download.project_name || 'this highlight reel'}!`,
-                        filename,
-                      });
-                      track('share_initiated', { method, source: 'gallery' });
-                      if (method === 'clipboard') {
-                        toast.success('Link copied to clipboard');
+                {isMobile ? (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
+                        const method = await webShare({
+                          downloadId: download.id,
+                          title: download.project_name || 'Highlight Reel',
+                          text: `Check out ${download.project_name || 'this highlight reel'}!`,
+                          filename,
+                        });
+                        track('share_initiated', { method, source: 'gallery' });
+                        if (method === 'clipboard') {
+                          toast.success('Link copied to clipboard');
+                        }
+                      } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        setSharingDownload(download);
                       }
-                    } catch (err) {
-                      if (err.name === 'AbortError') return;
-                      setSharingDownload(download);
-                    }
-                  }}
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
-                  title="Share video"
-                >
-                  <Share2 size={20} className="text-gray-400 hover:text-cyan-400" />
-                </button>
-                {/* Overflow menu for secondary actions */}
+                    }}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Share video"
+                  >
+                    <Share2 size={20} className="text-gray-400 hover:text-cyan-400" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await copyLink({ downloadId: download.id });
+                        track('share_initiated', { method: 'clipboard', source: 'gallery' });
+                        toast.success('Link copied to clipboard');
+                      } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        setSharingDownload(download);
+                      }
+                    }}
+                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
+                    title="Copy link"
+                  >
+                    <Link2 size={20} className="text-gray-400 hover:text-cyan-400" />
+                  </button>
+                )}
+                {/* Overflow menu */}
                 <div className="relative" ref={overflowMenuId === download.id ? overflowMenuRef : undefined}>
                   <button
                     onClick={(e) => {
@@ -404,6 +412,65 @@ export function DownloadsPanel({
                   </button>
                   {overflowMenuId === download.id && (
                     <div className="absolute right-0 bottom-full mb-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[180px] py-1">
+                      <button
+                        onClick={(e) => { handleDownload(e, download); setOverflowMenuId(null); }}
+                        disabled={downloadingId === download.id}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
+                      >
+                        {downloadingId === download.id ? (
+                          <Loader size={18} className="text-gray-400 animate-spin flex-shrink-0" />
+                        ) : (
+                          <Download size={18} className="text-gray-300 flex-shrink-0" />
+                        )}
+                        <span className="text-gray-200">Download</span>
+                      </button>
+                      {isMobile ? (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setOverflowMenuId(null);
+                            try {
+                              await copyLink({ downloadId: download.id });
+                              track('share_initiated', { method: 'clipboard', source: 'gallery' });
+                              toast.success('Link copied to clipboard');
+                            } catch (err) {
+                              if (err.name === 'AbortError') return;
+                              setSharingDownload(download);
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors"
+                        >
+                          <Link2 size={18} className="text-gray-300 flex-shrink-0" />
+                          <span className="text-gray-200">Copy Link</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setOverflowMenuId(null);
+                            try {
+                              const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
+                              const method = await webShare({
+                                downloadId: download.id,
+                                title: download.project_name || 'Highlight Reel',
+                                text: `Check out ${download.project_name || 'this highlight reel'}!`,
+                                filename,
+                              });
+                              track('share_initiated', { method, source: 'gallery' });
+                              if (method === 'clipboard') {
+                                toast.success('Link copied to clipboard');
+                              }
+                            } catch (err) {
+                              if (err.name === 'AbortError') return;
+                              setSharingDownload(download);
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors"
+                        >
+                          <Share2 size={18} className="text-gray-300 flex-shrink-0" />
+                          <span className="text-gray-200">Share</span>
+                        </button>
+                      )}
                       {!import.meta.env.PROD && (
                         <button
                           onClick={(e) => { handleBeforeAfter(e, download); setOverflowMenuId(null); }}

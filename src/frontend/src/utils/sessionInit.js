@@ -77,12 +77,14 @@ function installFetchInterceptor() {
         init.credentials = 'include';
       }
       const isPwa = window.matchMedia('(display-mode: standalone)').matches;
+      const isMobile = window.innerWidth <= 768;
       init.headers = {
         ...(init.headers || {}),
         'X-Request-ID': reqId,
         ...(_currentProfileId ? { 'X-Profile-ID': _currentProfileId } : {}),
         ...(_currentUserId ? { 'X-User-ID': _currentUserId } : {}),
         ...(isPwa ? { 'X-PWA': '1' } : {}),
+        'X-Platform': isMobile ? 'mobile' : 'desktop',
       };
 
       const t0 = performance.now();

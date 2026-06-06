@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.services.pg import get_pg
+from app.user_context import get_current_platform
 
 logger = logging.getLogger(__name__)
 
@@ -221,15 +222,20 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
             logger.warning("[Analytics] Unknown event: %s", event)
             return
 
+        try:
+            platform = get_current_platform()
+        except Exception:
+            platform = "unknown"
+
         with get_pg() as conn:
             cur = conn.cursor()
 
             cur.execute("""
-                INSERT INTO user_actions (user_id, action)
-                VALUES (%s, %s)
-                ON CONFLICT (user_id, action)
+                INSERT INTO user_actions (user_id, action, platform)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id, action, platform)
                 DO UPDATE SET count = user_actions.count + 1
-            """, (user_id, event))
+            """, (user_id, event, platform))
 
             cur.execute(
                 "UPDATE user_segments SET last_active_at = now() WHERE user_id = %s",
@@ -267,6 +273,11 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
 
 def update_session(user_id: str, is_pwa: bool = False):
     total_usage_seconds = 0
+    try:
+        platform = get_current_platform()
+    except Exception:
+        platform = "unknown"
+
     try:
         with get_pg() as conn:
             cur = conn.cursor()
@@ -317,25 +328,25 @@ def update_session(user_id: str, is_pwa: bool = False):
                 )
 
             cur.execute("""
-                INSERT INTO user_actions (user_id, action, count, first_at)
-                VALUES (%s, 'session_started', 1, now())
-                ON CONFLICT (user_id, action)
+                INSERT INTO user_actions (user_id, action, platform, count, first_at)
+                VALUES (%s, 'session_started', %s, 1, now())
+                ON CONFLICT (user_id, action, platform)
                 DO UPDATE SET count = CASE
                     WHEN %s THEN user_actions.count + 1
                     ELSE user_actions.count
                 END
-            """, (user_id, is_new_session))
+            """, (user_id, platform, is_new_session))
 
             if is_pwa:
                 cur.execute("""
-                    INSERT INTO user_actions (user_id, action, count, first_at)
-                    VALUES (%s, 'pwa_session_started', 1, now())
-                    ON CONFLICT (user_id, action)
+                    INSERT INTO user_actions (user_id, action, platform, count, first_at)
+                    VALUES (%s, 'pwa_session_started', %s, 1, now())
+                    ON CONFLICT (user_id, action, platform)
                     DO UPDATE SET count = CASE
                         WHEN %s THEN user_actions.count + 1
                         ELSE user_actions.count
                     END
-                """, (user_id, is_new_session))
+                """, (user_id, platform, is_new_session))
 
             if is_new_session:
                 cur.execute(
@@ -348,7 +359,7 @@ def update_session(user_id: str, is_pwa: bool = False):
                     _counter_buffer.increment("all", "sessions_started")
 
             cur.execute(
-                "SELECT action, count FROM user_actions WHERE user_id = %s AND action IN ('session_started', 'pwa_session_started')",
+                "SELECT action, SUM(count) AS count FROM user_actions WHERE user_id = %s AND action IN ('session_started', 'pwa_session_started') GROUP BY action",
                 (user_id,),
             )
             counts = {r["action"]: r["count"] for r in cur.fetchall()}
@@ -356,7 +367,7 @@ def update_session(user_id: str, is_pwa: bool = False):
             pwa_session_count = counts.get("pwa_session_started", 0)
 
             pwa_info = f" pwa_sessions={pwa_session_count}" if is_pwa else ""
-            logger.info("[Analytics] Session update: user=%s session_count=%s usage=%ss%s", user_id, session_count, total_usage_seconds, pwa_info)
+            logger.info("[Analytics] Session update: user=%s session_count=%s platform=%s usage=%ss%s", user_id, session_count, platform, total_usage_seconds, pwa_info)
     except Exception:
         logger.exception("[Analytics] Failed to update session for %s", user_id)
         return

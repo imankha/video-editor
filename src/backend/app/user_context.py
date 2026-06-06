@@ -26,6 +26,8 @@ _current_user_id: ContextVar[str] = ContextVar('current_user_id')
 # all be correlated to the originating HTTP request.
 _current_req_id: ContextVar[str] = ContextVar('current_req_id', default='')
 
+_current_platform: ContextVar[str] = ContextVar('current_platform', default='unknown')
+
 
 def get_current_req_id() -> str:
     """Return the request id for the current context, or '' if none set."""
@@ -35,6 +37,14 @@ def get_current_req_id() -> str:
 def set_current_req_id(req_id: str) -> None:
     """Set the request id for this request context."""
     _current_req_id.set(req_id or '')
+
+
+def get_current_platform() -> str:
+    return _current_platform.get()
+
+
+def set_current_platform(platform: str) -> None:
+    _current_platform.set(platform if platform in ('mobile', 'desktop', 'pwa') else 'unknown')
 
 
 def get_current_user_id() -> str:

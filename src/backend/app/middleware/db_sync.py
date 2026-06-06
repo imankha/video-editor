@@ -61,7 +61,7 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED, APP_ENV
-from ..user_context import set_current_user_id, set_current_req_id
+from ..user_context import set_current_user_id, set_current_req_id, set_current_platform
 from ..utils.cookies import set_cookie as _set_cookie
 
 logger = logging.getLogger(__name__)
@@ -338,6 +338,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         # explicitly. Safe to set before user_id is resolved — the ContextVar
         # is request-scoped by Starlette.
         set_current_req_id(req_id)
+
+        is_pwa = request.headers.get("X-PWA") == "1"
+        x_platform = request.headers.get("X-Platform", "")
+        set_current_platform("pwa" if is_pwa else x_platform)
 
         force_profile = request.headers.get("X-Profile-Request", "").lower() in ("1", "true", "yes")
         do_profile = profile_on_breach_enabled() or force_profile

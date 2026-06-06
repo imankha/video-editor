@@ -197,12 +197,14 @@ CREATE INDEX IF NOT EXISTS idx_segments_acquired_origin ON user_segments(acquire
 CREATE TABLE IF NOT EXISTS user_actions (
     user_id TEXT NOT NULL REFERENCES users(user_id),
     action TEXT NOT NULL,
+    platform TEXT NOT NULL DEFAULT 'unknown',
     first_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     count INTEGER NOT NULL DEFAULT 1,
-    PRIMARY KEY (user_id, action)
+    PRIMARY KEY (user_id, action, platform)
 );
 CREATE INDEX IF NOT EXISTS idx_actions_action ON user_actions(action);
 CREATE INDEX IF NOT EXISTS idx_actions_action_user ON user_actions(action, user_id);
+CREATE INDEX IF NOT EXISTS idx_actions_platform ON user_actions(platform);
 
 CREATE TABLE IF NOT EXISTS daily_counters (
     counter_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -266,10 +268,13 @@ def init_pg_pool():
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
         raise RuntimeError("DATABASE_URL environment variable is required")
-    _pool = ThreadedConnectionPool(
-        minconn=2, maxconn=10, dsn=dsn, cursor_factory=RealDictCursor,
-        keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
-    )
+    try:
+        _pool = ThreadedConnectionPool(
+            minconn=2, maxconn=10, dsn=dsn, cursor_factory=RealDictCursor,
+            keepalives=1, keepalives_idle=30, keepalives_interval=5, keepalives_count=3,
+        )
+    except psycopg2.OperationalError:
+        raise RuntimeError("Postgres is not running — start it with: docker start reelballers-postgres") from None
     logger.info("[PG] Connection pool initialized (min=2, max=10, keepalive=30s)")
 
 
