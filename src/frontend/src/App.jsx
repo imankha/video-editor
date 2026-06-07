@@ -738,8 +738,8 @@ function App() {
         }}
       />
 
-      {/* Quest Panel (T540) — hidden on mobile (shown inline on Home screen instead) */}
-      <div className="hidden lg:block">
+      {/* Quest Panel (T540) — hidden on mobile/touch (shown inline on Home screen instead) */}
+      <div className="hidden lg:block hide-on-touch">
         <QuestPanel />
       </div>
 

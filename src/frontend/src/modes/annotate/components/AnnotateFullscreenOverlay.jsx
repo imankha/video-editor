@@ -106,6 +106,7 @@ export function AnnotateFullscreenOverlay({
   isFullscreen = false,
   layout = 'overlay',
   teammateSuggestions = [],
+  onScrubDragChange,
 }) {
   const isEditMode = !!existingClip;
   const currentProfile = useCurrentProfile();
@@ -324,6 +325,8 @@ export function AnnotateFullscreenOverlay({
           onStartTimeChange={setScrubStartTime}
           onEndTimeChange={setScrubEndTime}
           onSeek={onSeek}
+          onDragStart={() => onScrubDragChange?.(true)}
+          onDragEnd={() => onScrubDragChange?.(false)}
           videoController={videoController}
         />
 

@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react';
-import { Minimize, Crop, Move } from 'lucide-react';
+import { Minimize, ArrowLeft, Crop, Move } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
@@ -10,6 +10,7 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '.
 import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { useEditorStore } from '../stores/editorStore';
 
 /**
  * ExportButtonSection - Container+View composition for Framing mode export
@@ -219,7 +220,8 @@ export function FramingModeView({
   const [touchMode, setTouchMode] = useState('crop');
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
-  const mobileFs = isFullscreen && isMobile;
+  const mobileFs = isMobile;
+  const setEditorMode = useEditorStore((s) => s.setEditorMode);
 
   return (
     <>
@@ -284,9 +286,9 @@ export function FramingModeView({
       )}
 
       {/* Main Editor Area */}
-      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
-        {/* Controls Bar - hidden in fullscreen */}
-        {videoUrl && !isFullscreen && (
+      <div className={`${(isFullscreen || mobileFs) ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
+        {/* Controls Bar - hidden in fullscreen and on mobile */}
+        {videoUrl && !isFullscreen && !mobileFs && (
           <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
@@ -320,14 +322,14 @@ export function FramingModeView({
         {/* Fullscreen container - uses fixed positioning to overlay viewport */}
         <div
           ref={fullscreenContainerRef}
-          className={`${isFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
+          className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
           onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with CropOverlay */}
           <div
             className={`relative bg-gray-900 ${
-              isFullscreen
+              (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
@@ -339,7 +341,7 @@ export function FramingModeView({
               handlers={handlers}
               clipRange={clipRange}
               muted={!includeAudio}
-              onFileSelect={isFullscreen ? undefined : onFileSelect}
+              onFileSelect={(isFullscreen || mobileFs) ? undefined : onFileSelect}
               panEnabled={!mobileFs || touchMode === 'view'}
               overlays={[
                 videoUrl && currentCropState && metadata && (
@@ -412,7 +414,7 @@ export function FramingModeView({
           </div>
 
           {/* Mobile-only clip title — minimal, under video */}
-          {clipTitle && !isFullscreen && (
+          {clipTitle && !isFullscreen && !mobileFs && (
             <div className="lg:hidden px-2 py-1 text-sm text-gray-300 truncate">
               <span className="font-medium text-white">{clipTitle}</span>
               {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
@@ -545,7 +547,22 @@ export function FramingModeView({
                 </div>
               </div>
               <div
-                className={`absolute top-2 right-2 z-30 flex items-center gap-2 transition-opacity duration-300 ${
+                className={`absolute top-2 left-2 z-30 transition-opacity duration-300 ${
+                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={isFullscreen ? Minimize : ArrowLeft}
+                  iconOnly
+                  onClick={isFullscreen ? onToggleFullscreen : () => setEditorMode('project-manager')}
+                  title={isFullscreen ? 'Exit fullscreen' : 'Home'}
+                  className="bg-black/50 hover:bg-black/70"
+                />
+              </div>
+              <div
+                className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
               >
@@ -558,22 +575,13 @@ export function FramingModeView({
                   title={touchMode === 'crop' ? 'Switch to Pan/Zoom mode' : 'Switch to Crop mode'}
                   className={touchMode === 'crop' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-black/50 hover:bg-black/70'}
                 />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={Minimize}
-                  iconOnly
-                  onClick={onToggleFullscreen}
-                  title="Exit fullscreen (Esc)"
-                  className="bg-black/50 hover:bg-black/70"
-                />
               </div>
             </>
           )}
         </div>
 
-        {/* Export Button - hidden in fullscreen */}
-        {videoUrl && !isFullscreen && (
+        {/* Export Button - hidden in fullscreen and on mobile */}
+        {videoUrl && !isFullscreen && !mobileFs && (
           <ExportButtonSection
             ref={exportButtonRef}
             videoFile={videoFile}

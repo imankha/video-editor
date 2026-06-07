@@ -25,6 +25,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthGateModal />
     <AuthErrorBanner />
     {/* T1650: Global report button — visible on every screen. Hidden on mobile (shown on Home screen instead). */}
-    <ReportProblemButton className="hidden lg:block fixed bottom-20 right-4 z-[9999] bg-gray-800/90 border border-gray-600 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors" />
+    <ReportProblemButton className="hidden lg:block hide-on-touch fixed bottom-20 right-4 z-[9999] bg-gray-800/90 border border-gray-600 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 shadow-lg transition-colors" />
   </React.StrictMode>,
 )

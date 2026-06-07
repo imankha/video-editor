@@ -111,6 +111,7 @@ export function AnnotateModeView({
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
   const mobileFs = annotateFullscreen && isMobile;
+  const [isDraggingScrub, setIsDraggingScrub] = useState(false);
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -430,6 +431,7 @@ export function AnnotateModeView({
                         rating={region.rating}
                         isVisible={true}
                         isFullscreen={annotateFullscreen}
+                        isMobile={isMobile}
                       />
                     ) : null;
                   })()}
@@ -465,6 +467,7 @@ export function AnnotateModeView({
                             rating={region.rating}
                             isVisible={true}
                             isFullscreen={annotateFullscreen}
+                            isMobile={isMobile}
                           />
                         ) : null;
                       })(),
@@ -497,6 +500,7 @@ export function AnnotateModeView({
                 videoController={videoController}
                 isFullscreen={annotateFullscreen}
                 teammateSuggestions={teammateSuggestions}
+                onScrubDragChange={isMobile ? setIsDraggingScrub : undefined}
               />
             )}
 
@@ -548,6 +552,7 @@ export function AnnotateModeView({
             <>
               <div
                 className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
+                  isDraggingScrub ? 'opacity-0 pointer-events-none' :
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
                 onClick={e => e.stopPropagation()}
@@ -589,6 +594,7 @@ export function AnnotateModeView({
               </div>
               <div
                 className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+                  isDraggingScrub ? 'opacity-0 pointer-events-none' :
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
               >

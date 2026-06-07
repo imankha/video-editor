@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
-const MOBILE_QUERY = '(max-width: 1023px)';
+// Detect mobile: either narrow viewport OR touch-primary device without hover (phones/tablets)
+const MOBILE_QUERY = '(max-width: 1023px), ((hover: none) and (pointer: coarse))';
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => {

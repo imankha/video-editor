@@ -34,7 +34,7 @@ const RATING_COLORS = {
  *
  * Only visible when playhead is in a clip region with a name or notes.
  */
-export function NotesOverlay({ name, notes, rating, isVisible, isFullscreen = false }) {
+export function NotesOverlay({ name, notes, rating, isVisible, isFullscreen = false, isMobile = false }) {
   if (!isVisible || (!name && !notes)) {
     return null;
   }
@@ -45,7 +45,7 @@ export function NotesOverlay({ name, notes, rating, isVisible, isFullscreen = fa
   return (
     <div
       className={`absolute left-1/2 -translate-x-1/2 w-4/5 max-w-2xl z-50 pointer-events-none ${
-        isFullscreen ? 'top-16' : 'top-2'
+        isMobile ? 'top-0' : isFullscreen ? 'top-16' : 'top-2'
       }`}
       style={{
         // Using inline styles for precise control per spec

@@ -8,8 +8,9 @@ import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
-import { Minimize } from 'lucide-react';
+import { Minimize, ArrowLeft } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
+import { useEditorStore } from '../stores/editorStore';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -239,7 +240,8 @@ export function OverlayModeView({
   const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
-  const mobileFs = isFullscreen && isMobile;
+  const mobileFs = isMobile;
+  const setEditorMode = useEditorStore((s) => s.setEditorMode);
 
   return (
     <>
@@ -306,9 +308,9 @@ export function OverlayModeView({
       ))}
 
       {/* Main Editor Area */}
-      <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
+      <div className={`${(isFullscreen || mobileFs) ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen and on mobile */}
-        {effectiveOverlayVideoUrl && !isFullscreen && (
+        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
               <ZoomControls
@@ -326,14 +328,14 @@ export function OverlayModeView({
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={fullscreenContainerRef}
-          className={`${isFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
+          className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
           onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with overlay-specific overlays */}
           <div
             className={`relative bg-gray-900 ${
-              isFullscreen
+              (isFullscreen || mobileFs)
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
@@ -428,7 +430,7 @@ export function OverlayModeView({
           </div>
 
           {/* Mobile-only clip title — minimal, under video */}
-          {videoTitle && !isFullscreen && (
+          {videoTitle && !isFullscreen && !mobileFs && (
             <div className="lg:hidden px-2 py-1 text-sm text-gray-300 truncate">
               <span className="font-medium text-white">{videoTitle}</span>
             </div>
@@ -557,17 +559,17 @@ export function OverlayModeView({
                 </div>
               </div>
               <div
-                className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+                className={`absolute top-2 left-2 z-30 transition-opacity duration-300 ${
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
               >
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={Minimize}
+                  icon={isFullscreen ? Minimize : ArrowLeft}
                   iconOnly
-                  onClick={onToggleFullscreen}
-                  title="Exit fullscreen (Esc)"
+                  onClick={isFullscreen ? onToggleFullscreen : () => setEditorMode('project-manager')}
+                  title={isFullscreen ? 'Exit fullscreen' : 'Home'}
                   className="bg-black/50 hover:bg-black/70"
                 />
               </div>
@@ -575,8 +577,8 @@ export function OverlayModeView({
           )}
         </div>
 
-        {/* Export Required Message - hidden in fullscreen */}
-        {showExportRequired && !isFullscreen && (
+        {/* Export Required Message - hidden in fullscreen and on mobile */}
+        {showExportRequired && !isFullscreen && !mobileFs && (
           <div className="mt-6 bg-purple-900/30 border border-purple-500/50 rounded-lg p-6 text-center">
             <p className="text-purple-200 font-medium mb-2">
               Export required for overlay mode
@@ -595,8 +597,8 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Export Button - hidden in fullscreen */}
-        {effectiveOverlayVideoUrl && !isFullscreen && (
+        {/* Export Button - hidden in fullscreen and on mobile */}
+        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <OverlayExportButtonSection
             ref={exportButtonRef}
             videoFile={effectiveOverlayFile}
