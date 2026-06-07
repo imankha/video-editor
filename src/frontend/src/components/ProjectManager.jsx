@@ -33,6 +33,7 @@ import { prioritizeUrls } from '../utils/cacheWarming';
 import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
@@ -1233,6 +1234,10 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
  */
 function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [actionsRevealed, setActionsRevealed] = useState(false);
+  const longPressTimer = useRef(null);
+  const touchMoved = useRef(false);
+  const isMobile = useIsMobile();
   const isExpired = game.storage_status === 'expired';
 
   const hasBeenViewed = game.viewed_duration > 0;
@@ -1260,6 +1265,10 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
   const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
 
   const handleClick = () => {
+    if (isMobile && actionsRevealed) {
+      setActionsRevealed(false);
+      return;
+    }
     if (isExpired) {
       if (canExtend) {
         onExtend?.();
@@ -1268,6 +1277,36 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
       }
     } else {
       onLoad();
+    }
+  };
+
+  const longPressFired = useRef(false);
+
+  const handleTouchStart = () => {
+    touchMoved.current = false;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      longPressFired.current = true;
+      setActionsRevealed(true);
+    }, 500);
+  };
+
+  const handleTouchMove = () => {
+    touchMoved.current = true;
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (longPressFired.current) {
+      e.preventDefault();
     }
   };
 
@@ -1376,6 +1415,9 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
   return (
     <div
       onClick={handleClick}
+      onTouchStart={isMobile ? handleTouchStart : undefined}
+      onTouchMove={isMobile ? handleTouchMove : undefined}
+      onTouchEnd={isMobile ? handleTouchEnd : undefined}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 transition-all hover:bg-gray-750 cursor-pointer ${GAME.borderHover}`}
     >
       <div className="flex items-center justify-between">
@@ -1424,15 +1466,15 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
           </div>
         </div>
 
-        {/* Edit + Share + Delete buttons - shown on hover */}
-        <div className="flex items-center gap-1">
+        {/* Edit + Share + Delete buttons - hover on desktop, long-press on mobile */}
+        <div className={`flex items-center gap-1 transition-opacity ${isMobile ? (actionsRevealed ? 'opacity-100' : 'opacity-0 pointer-events-none') : ''}`}>
           <Button
             variant="ghost"
             size="sm"
             icon={Pencil}
             iconOnly
             onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-            className="opacity-0 group-hover:opacity-100"
+            className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
             title="Edit game details"
           />
           <Button
@@ -1441,7 +1483,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
             icon={Share2}
             iconOnly
             onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-            className="opacity-0 group-hover:opacity-100"
+            className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
             title="Share game"
           />
           <Button
@@ -1450,7 +1492,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
             icon={Trash2}
             iconOnly
             onClick={handleDelete}
-            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
+            className={isMobile ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
             title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
           />
         </div>
@@ -1952,46 +1994,42 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
 
       {isReadyToPublish ? (
         <>
-          {/* Secondary actions row */}
+          {/* Secondary actions row — icon-only on mobile to prevent overflow */}
           <div className="mt-2 flex items-center justify-center gap-2">
             {project.final_video_id && (
               <Button
                 variant="ghost"
                 size="sm"
                 icon={Play}
+                iconOnly
                 onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
                 title="Preview video"
-              >
-                Preview
-              </Button>
+              />
             )}
             <Button
               variant="ghost"
               size="sm"
               icon={Crop}
+              iconOnly
               onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
               title="Open in Framing"
-            >
-              Framing
-            </Button>
+            />
             <Button
               variant="ghost"
               size="sm"
               icon={Layers}
+              iconOnly
               onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
               title="Open in Overlay"
-            >
-              Overlay
-            </Button>
+            />
             <Button
               variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"
               icon={Trash2}
+              iconOnly
               onClick={handleDelete}
               title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-            >
-              Delete
-            </Button>
+            />
           </div>
         </>
       ) : isComplete ? (

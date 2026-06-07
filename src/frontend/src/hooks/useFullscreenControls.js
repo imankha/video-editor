@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
 const AUTO_HIDE_MS = 3000;
+const LONG_PRESS_MS = 500;
 
 export const ControlState = {
   HIDDEN: 'HIDDEN',
@@ -11,6 +12,8 @@ export const ControlState = {
 export function useFullscreenControls({ isPlaying = false } = {}) {
   const [state, setState] = useState(ControlState.VISIBLE);
   const timerRef = useRef(null);
+  const longPressRef = useRef(null);
+  const longPressFired = useRef(false);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -60,6 +63,40 @@ export function useFullscreenControls({ isPlaying = false } = {}) {
     startTimer();
   }, [startTimer]);
 
+  // Long-press handlers: long press toggles controls, quick tap does nothing (caller handles it)
+  const handleLongPressTouchStart = useCallback(() => {
+    longPressFired.current = false;
+    longPressRef.current = setTimeout(() => {
+      longPressRef.current = null;
+      longPressFired.current = true;
+      setState((prev) => {
+        if (prev === ControlState.DRAG_MODE) return prev;
+        if (prev === ControlState.HIDDEN) {
+          return ControlState.VISIBLE;
+        }
+        return ControlState.HIDDEN;
+      });
+    }, LONG_PRESS_MS);
+  }, []);
+
+  const handleLongPressTouchMove = useCallback(() => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  }, []);
+
+  const handleLongPressTouchEnd = useCallback((e) => {
+    if (longPressRef.current) {
+      clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+    if (longPressFired.current) {
+      e.preventDefault();
+      longPressFired.current = false;
+    }
+  }, []);
+
   // Auto-hide when playing and controls are visible
   useEffect(() => {
     if (isPlaying && state === ControlState.VISIBLE) {
@@ -90,5 +127,8 @@ export function useFullscreenControls({ isPlaying = false } = {}) {
     handleTouchControl,
     handleDragStart,
     handleDragEnd,
+    handleLongPressTouchStart,
+    handleLongPressTouchMove,
+    handleLongPressTouchEnd,
   };
 }

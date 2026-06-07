@@ -342,7 +342,6 @@ export function AnnotateModeView({
           ref={annotateContainerRef}
           className={`${annotateFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
-          onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with annotate overlays */}
           <div
@@ -351,7 +350,10 @@ export function AnnotateModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0 flex flex-col'
                 : 'rounded-lg'
             }`}
-            onClick={mobileFs && !showAnnotateOverlay ? fsControls.handleTapVideo : undefined}
+            onClick={mobileFs && !showAnnotateOverlay ? togglePlay : undefined}
+            onTouchStart={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchStart : undefined}
+            onTouchMove={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchMove : undefined}
+            onTouchEnd={mobileFs && !showAnnotateOverlay ? fsControls.handleLongPressTouchEnd : undefined}
           >
             {/* In fullscreen: flex-1 fills remaining space after controls/timeline */}
             <div
@@ -597,6 +599,7 @@ export function AnnotateModeView({
                   isDraggingScrub ? 'opacity-0 pointer-events-none' :
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
+                onClick={e => e.stopPropagation()}
               >
                 <Button
                   variant="ghost"

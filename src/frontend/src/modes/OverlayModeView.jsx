@@ -330,7 +330,6 @@ export function OverlayModeView({
           ref={fullscreenContainerRef}
           className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
-          onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with overlay-specific overlays */}
           <div
@@ -339,7 +338,10 @@ export function OverlayModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
-            onClick={mobileFs ? fsControls.handleTapVideo : undefined}
+            onClick={mobileFs ? togglePlay : undefined}
+            onTouchStart={mobileFs ? fsControls.handleLongPressTouchStart : undefined}
+            onTouchMove={mobileFs ? fsControls.handleLongPressTouchMove : undefined}
+            onTouchEnd={mobileFs ? fsControls.handleLongPressTouchEnd : undefined}
           >
             <VideoPlayer
             videoRef={videoRef}
@@ -562,6 +564,7 @@ export function OverlayModeView({
                 className={`absolute top-2 left-2 z-30 transition-opacity duration-300 ${
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
+                onClick={e => e.stopPropagation()}
               >
                 <Button
                   variant="ghost"

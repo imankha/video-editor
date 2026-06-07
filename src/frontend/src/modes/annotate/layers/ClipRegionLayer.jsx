@@ -169,7 +169,7 @@ export default function ClipRegionLayer({
               </div>
               {/* Show tooltip on hover or select - end timestamp before clip name */}
               {showTooltip && (
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow z-30">
+                <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white bg-gray-900 px-1.5 py-0.5 rounded shadow z-30 pointer-events-none">
                   <span className="text-blue-400">{formatTime(region.endTime)}</span>
                   <span className="text-gray-500 mx-1">|</span>
                   <span className="text-gray-400">{region.index + 1}.</span> {displayName}
