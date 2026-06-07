@@ -1723,6 +1723,11 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [actionsRevealed, setActionsRevealed] = useState(false);
+  const longPressTimer = useRef(null);
+  const touchMoved = useRef(false);
+  const longPressFired = useRef(false);
+  const isMobile = useIsMobile();
   const isOffline = useSyncStore((state) => state.isOffline);
   const [renameValue, setRenameValue] = useState('');
   const renameInputRef = useRef(null);
@@ -1832,7 +1837,11 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   };
 
   const handleCardClick = () => {
-    if (isRenaming) return; // Don't open while renaming
+    if (isRenaming) return;
+    if (isMobile && actionsRevealed) {
+      setActionsRevealed(false);
+      return;
+    }
     if (!canOpen) return;
     const needsOverlay = project.has_working_video && (
       !project.has_final_video ||
@@ -1846,6 +1855,34 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     }
   };
 
+  const handleTouchStart = () => {
+    touchMoved.current = false;
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null;
+      longPressFired.current = true;
+      setActionsRevealed(true);
+    }, 500);
+  };
+
+  const handleTouchMove = () => {
+    touchMoved.current = true;
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    if (longPressFired.current) {
+      e.preventDefault();
+    }
+  };
+
   const isComplete = project.has_final_video;
 
   const isReadyToPublish = isComplete && !project.is_published;
@@ -1854,6 +1891,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
     <div
       data-testid="project-card"
       onClick={isReadyToPublish ? undefined : handleCardClick}
+      onTouchStart={isMobile ? handleTouchStart : undefined}
+      onTouchMove={isMobile ? handleTouchMove : undefined}
+      onTouchEnd={isMobile ? handleTouchEnd : undefined}
       className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
         isReadyToPublish
           ? 'border-gray-700'
@@ -1888,7 +1928,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                 </h3>
                 <button
                   onClick={handleStartRename}
-                  className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-gray-400 transition-opacity flex-shrink-0"
+                  className={`${isMobile ? (actionsRevealed ? 'opacity-60' : 'opacity-0 pointer-events-none') : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'} text-gray-400 transition-opacity flex-shrink-0`}
                   title="Rename reel"
                 >
                   <Pencil size={14} />
@@ -1986,7 +2026,9 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
             icon={Trash2}
             iconOnly
             onClick={handleDelete}
-            className={!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : ''}
+            className={isMobile
+              ? (!showDeleteConfirm && !actionsRevealed ? 'opacity-0 pointer-events-none' : '')
+              : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
             title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
           />
         )}
@@ -1994,8 +2036,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
 
       {isReadyToPublish ? (
         <>
-          {/* Secondary actions row — icon-only on mobile to prevent overflow */}
-          <div className="mt-2 flex items-center justify-center gap-2">
+          {/* Secondary actions row — hidden until long-press on mobile */}
+          <div className={`mt-2 flex items-center justify-center gap-2 transition-opacity ${isMobile ? (actionsRevealed ? 'opacity-100' : 'opacity-0 pointer-events-none') : ''}`}>
             {project.final_video_id && (
               <Button
                 variant="ghost"
