@@ -12,6 +12,7 @@ import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
+import { useIsMobile } from './hooks/useIsMobile';
 import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { SECTION_NAMES } from './config/displayNames';
@@ -96,6 +97,8 @@ function App() {
   // Overlay store - for loading state and tracking changes
   const isLoadingWorkingVideo = useOverlayStore(state => state.isLoadingWorkingVideo);
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
+
+  const isMobile = useIsMobile();
 
   // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
   const selectedClipId = useProjectDataStore(state => state.selectedClipId);
@@ -738,10 +741,10 @@ function App() {
         }}
       />
 
-      {/* Quest Panel (T540) — hidden on mobile/touch (shown inline on Home screen instead) */}
-      <div className="hidden lg:block hide-on-touch">
+      {/* Quest Panel (T540) — only on desktop in editor modes (shown inline on Home screen for mobile) */}
+      {!isMobile && (
         <QuestPanel />
-      </div>
+      )}
 
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog
