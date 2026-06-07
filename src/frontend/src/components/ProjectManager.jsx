@@ -2036,8 +2036,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
 
       {isReadyToPublish ? (
         <>
-          {/* Secondary actions row — hidden until long-press on mobile */}
-          <div className={`mt-2 flex items-center justify-center gap-2 transition-opacity ${isMobile ? (actionsRevealed ? 'opacity-100' : 'opacity-0 pointer-events-none') : ''}`}>
+          {/* Secondary actions row — always visible (no card-level tap action in this state) */}
+          <div className="mt-2 flex items-center justify-center gap-2">
             {project.final_video_id && (
               <Button
                 variant="ghost"
