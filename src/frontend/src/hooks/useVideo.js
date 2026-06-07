@@ -56,6 +56,9 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const lastDesyncResumeRef = useRef(0);
   const desyncRetriesRef = useRef(0);
   const DESYNC_MAX_RETRIES = 3;
+  // Hard recovery: seek-to-self forces browser to reinitialize its decoder
+  const hardRecoveryCountRef = useRef(0);
+  const HARD_RECOVERY_MAX = 2;
 
   // T1400: monotonic load id + watchdog timer handle so range-fallback
   // warnings can be correlated across concurrent/serial loads and cleared
@@ -617,7 +620,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   const handlePlaying = () => {
     setIsBuffering(false);
-    desyncRetriesRef.current = 0;
+    // Only reset desync counters after stable playback (>5s since last resume).
+    // Prevents reset when play() works for only milliseconds before stalling again.
+    if (performance.now() - lastDesyncResumeRef.current > 5000) {
+      desyncRetriesRef.current = 0;
+      hardRecoveryCountRef.current = 0;
+    }
     if (stallTimerRef.current) { clearTimeout(stallTimerRef.current); stallTimerRef.current = null; }
   };
 
@@ -657,15 +665,29 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     const updateTime = () => {
       if (videoRef.current) {
         // Desync fix: store says playing but video element is actually paused.
-        // Try to resume up to DESYNC_MAX_RETRIES times. If the browser keeps
-        // pausing immediately after play(), give up and sync UI to paused.
+        // Try play() up to DESYNC_MAX_RETRIES times. If the browser keeps
+        // stalling, escalate to seek-to-self (forces decoder reinitialization).
         // Skip during buffering — the browser pauses legitimately while
         // fetching data (especially at higher playback rates like 2x).
         if (videoRef.current.paused && !isBuffering) {
           if (desyncRetriesRef.current >= DESYNC_MAX_RETRIES) {
-            console.warn(`[VIDEO] Desync: giving up after ${DESYNC_MAX_RETRIES} retries, syncing to paused`);
             desyncRetriesRef.current = 0;
-            setIsPlaying(false);
+            hardRecoveryCountRef.current += 1;
+            if (hardRecoveryCountRef.current > HARD_RECOVERY_MAX) {
+              console.warn(`[VIDEO] Desync: giving up after ${HARD_RECOVERY_MAX} hard recoveries, syncing to paused`);
+              hardRecoveryCountRef.current = 0;
+              setIsPlaying(false);
+              return;
+            }
+            console.warn(`[VIDEO] Desync: seek-to-self recovery (${hardRecoveryCountRef.current}/${HARD_RECOVERY_MAX})`);
+            const ct = videoRef.current.currentTime;
+            videoRef.current.currentTime = ct;
+            lastDesyncResumeRef.current = performance.now();
+            videoRef.current.play().catch(() => {
+              console.warn('[VIDEO] Desync: hard recovery failed, syncing to paused');
+              hardRecoveryCountRef.current = 0;
+              setIsPlaying(false);
+            });
             return;
           }
           const now = performance.now();
