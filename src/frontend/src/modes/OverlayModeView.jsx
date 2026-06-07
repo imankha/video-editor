@@ -2,6 +2,8 @@ import { forwardRef } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
@@ -235,6 +237,9 @@ export function OverlayModeView({
 }) {
   // Show "export required" message if no overlay video but framing has edits
   const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
+  const isMobile = useIsMobile();
+  const fsControls = useFullscreenControls({ isPlaying });
+  const mobileFs = isFullscreen && isMobile;
 
   return (
     <>
@@ -252,10 +257,10 @@ export function OverlayModeView({
           </button>
         </div>
       )}
-      {/* Video Metadata - use overlay metadata, hidden in fullscreen */}
+      {/* Video Metadata - use overlay metadata, hidden in fullscreen, hidden below lg on mobile */}
       {!isFullscreen && (effectiveOverlayMetadata ? (
-        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 text-sm text-gray-300">
+        <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-1 lg:gap-0 text-sm text-gray-300">
             {/* Left: Title + Tags */}
             <div className="flex flex-col gap-1">
               {videoTitle && <span className="font-semibold text-white">{videoTitle}</span>}
@@ -288,7 +293,7 @@ export function OverlayModeView({
           </div>
         </div>
       ) : isLoading && (
-        <div className="mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20 animate-pulse">
+        <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 border border-white/20 animate-pulse">
           <div className="flex items-center justify-between">
             <div className="h-4 bg-gray-600 rounded w-32"></div>
             <div className="flex space-x-6">
@@ -302,9 +307,9 @@ export function OverlayModeView({
 
       {/* Main Editor Area */}
       <div className={`${isFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-6 border border-white/20'}`}>
-        {/* Controls Bar - hidden in fullscreen */}
+        {/* Controls Bar - hidden in fullscreen and on mobile */}
         {effectiveOverlayVideoUrl && !isFullscreen && (
-          <div className="mb-3 sm:mb-6 flex gap-4 items-center">
+          <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
             <div className="ml-auto flex items-center gap-3">
               <ZoomControls
                 zoom={zoom}
@@ -321,16 +326,24 @@ export function OverlayModeView({
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={fullscreenContainerRef}
-          className={`${isFullscreen ? 'fixed inset-0 z-[100] flex flex-col bg-gray-900' : ''}`}
+          className={`${isFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
+          onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
+          onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with overlay-specific overlays */}
-          <div className={`relative bg-gray-900 ${isFullscreen ? 'flex-1 min-h-0' : 'rounded-lg'}`}>
+          <div
+            className={`relative bg-gray-900 ${
+              isFullscreen
+                ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
+                : 'rounded-lg'
+            }`}
+            onClick={mobileFs ? fsControls.handleTapVideo : undefined}
+          >
             <VideoPlayer
             videoRef={videoRef}
             videoUrl={effectiveOverlayVideoUrl}
             handlers={handlers}
             overlays={[
-              // HighlightOverlay - highlight box around player
               currentHighlightState && effectiveOverlayMetadata && (
                 <HighlightOverlay
                   key="highlight"
@@ -351,7 +364,6 @@ export function OverlayModeView({
                   isFullscreen={isFullscreen}
                 />
               ),
-              // PlayerDetectionOverlay - AI-detected player boxes (dimmed when layer disabled)
               effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
                 <PlayerDetectionOverlay
                   key="player-detection"
@@ -384,8 +396,8 @@ export function OverlayModeView({
             loadingMessage={loadingMessage}
           />
 
-            {/* Fullscreen exit button - top right corner */}
-            {isFullscreen && (
+            {/* Fullscreen exit button - desktop only */}
+            {isFullscreen && !mobileFs && (
               <div className="absolute top-4 right-4 z-10">
                 <Button
                   variant="ghost"
@@ -399,8 +411,8 @@ export function OverlayModeView({
               </div>
             )}
 
-            {/* Controls */}
-            {effectiveOverlayVideoUrl && (
+            {/* Controls - desktop fullscreen & non-fullscreen */}
+            {!mobileFs && effectiveOverlayVideoUrl && (
               <Controls
                 isPlaying={isPlaying}
                 currentTime={currentTime}
@@ -415,8 +427,16 @@ export function OverlayModeView({
             )}
           </div>
 
-          {/* Overlay Mode Timeline - visible in fullscreen */}
-          <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-6'}`}>
+          {/* Mobile-only clip title — minimal, under video */}
+          {videoTitle && !isFullscreen && (
+            <div className="lg:hidden px-2 py-1 text-sm text-gray-300 truncate">
+              <span className="font-medium text-white">{videoTitle}</span>
+            </div>
+          )}
+
+          {/* Timeline - desktop fullscreen & non-fullscreen */}
+          {!mobileFs && (
+          <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5' : 'mt-6'}`}>
             {effectiveOverlayVideoUrl ? (
               <OverlayMode
             videoRef={videoRef}
@@ -465,6 +485,94 @@ export function OverlayModeView({
               </div>
             ) : null}
           </div>
+          )}
+
+          {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
+          {mobileFs && (
+            <>
+              <div
+                className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
+                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
+                  {effectiveOverlayVideoUrl && (
+                    <Controls
+                      isPlaying={isPlaying}
+                      currentTime={currentTime}
+                      duration={effectiveOverlayMetadata?.duration || duration}
+                      onTogglePlay={togglePlay}
+                      onStepForward={stepForward}
+                      onStepBackward={stepBackward}
+                      onRestart={restart}
+                      isFullscreen={isFullscreen}
+                      onToggleFullscreen={onToggleFullscreen}
+                    />
+                  )}
+                  {effectiveOverlayVideoUrl && (
+                    <div className="bg-gray-900/90 px-2 py-0.5">
+                      <OverlayMode
+                        videoRef={videoRef}
+                        videoUrl={effectiveOverlayVideoUrl}
+                        metadata={effectiveOverlayMetadata}
+                        currentTime={currentTime}
+                        duration={effectiveOverlayMetadata?.duration || duration}
+                        highlightRegions={highlightRegions}
+                        highlightBoundaries={highlightBoundaries}
+                        highlightKeyframes={highlightRegionKeyframes}
+                        highlightFramerate={highlightRegionsFramerate}
+                        selectedHighlightKeyframeIndex={selectedHighlightKeyframeIndex}
+                        onAddHighlightRegion={onAddHighlightRegion}
+                        onDeleteHighlightRegion={onDeleteHighlightRegion}
+                        onMoveHighlightRegionStart={onMoveHighlightRegionStart}
+                        onMoveHighlightRegionEnd={onMoveHighlightRegionEnd}
+                        onRemoveHighlightKeyframe={onRemoveHighlightKeyframe}
+                        onToggleHighlightRegion={onToggleHighlightRegion}
+                        onSelectedKeyframeChange={onSelectedKeyframeChange}
+                        onHighlightChange={onHighlightChange}
+                        onHighlightComplete={onHighlightComplete}
+                        zoom={zoom}
+                        panOffset={panOffset}
+                        visualDuration={effectiveOverlayMetadata?.duration || duration}
+                        selectedLayer={selectedLayer}
+                        onLayerSelect={onLayerSelect}
+                        onSeek={seek}
+                        sourceTimeToVisualTime={(t) => t}
+                        visualTimeToSourceTime={(t) => t}
+                        timelineZoom={timelineZoom}
+                        onTimelineZoomByWheel={onTimelineZoomByWheel}
+                        timelineScale={getTimelineScale()}
+                        timelineScrollPosition={timelineScrollPosition}
+                        onTimelineScrollPositionChange={onTimelineScrollPositionChange}
+                        trimRange={null}
+                        isPlaying={isPlaying}
+                        isFullscreen={isFullscreen}
+                        showPlayerBoxes={showPlayerBoxes}
+                        onTogglePlayerBoxes={onTogglePlayerBoxes}
+                        onDetectionMarkerClick={onDetectionMarkerClick}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div
+                className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Minimize}
+                  iconOnly
+                  onClick={onToggleFullscreen}
+                  title="Exit fullscreen (Esc)"
+                  className="bg-black/50 hover:bg-black/70"
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Export Required Message - hidden in fullscreen */}

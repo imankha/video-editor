@@ -71,7 +71,7 @@ export function FramingTimeline({
     <>
       {/* Video Timeline Label */}
       <div
-        className={`h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+        className={`h-8 lg:h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
@@ -82,7 +82,7 @@ export function FramingTimeline({
 
       {/* Crop Layer Label */}
       <div
-        className={`mt-1 h-12 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-8 lg:h-12 flex items-center justify-center border-r border-gray-700/50 transition-colors cursor-pointer ${
           selectedLayer === 'crop' ? 'bg-yellow-900/30' : 'bg-gray-900 hover:bg-gray-800'
         } ${segments.length === 0 ? 'rounded-bl-lg' : ''}`}
         onClick={() => onLayerSelect && onLayerSelect('crop')}
@@ -94,7 +94,7 @@ export function FramingTimeline({
       {/* Segment Layer Label (only if segments exist) */}
       {segments.length > 0 && (
         <div
-          className="mt-1 h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
+          className="mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center bg-gray-900 border-r border-gray-700/50 rounded-bl-lg"
           title="Speed & trim — click segments to change playback speed. Drag edges to trim the clip."
         >
           <Split size={18} className="text-purple-400" />
@@ -126,7 +126,7 @@ export function FramingTimeline({
       isPlaying={isPlaying}
     >
       {/* Crop Layer */}
-      <div className="mt-1">
+      <div className="mt-0.5 lg:mt-1">
         <CropLayer
           keyframes={cropKeyframes}
           duration={duration}
@@ -151,7 +151,7 @@ export function FramingTimeline({
 
       {/* Segment Layer */}
       {segments.length > 0 && (
-        <div className="mt-1">
+        <div className="mt-0.5 lg:mt-1">
           <SegmentLayer
             segments={segments}
             boundaries={segmentBoundaries}

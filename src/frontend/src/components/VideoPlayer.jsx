@@ -52,6 +52,7 @@ export function VideoPlayer({
   onRetryVideo,
   onVideoClick,
   muted = false,
+  panEnabled = true,
   loadingMessage = 'Loading video...'
 }) {
   const isBuffering = useVideoStore((s) => s.isBuffering);
@@ -126,8 +127,8 @@ export function VideoPlayer({
    * Handle mouse down for panning
    */
   const handleMouseDown = useCallback((e) => {
-    // Only pan if zoomed
-    if (zoom === 1) return;
+    // Only pan if zoomed and pan is enabled
+    if (zoom === 1 || !panEnabled) return;
 
     // Check if clicking on video (not controls or crop handles)
     if (e.target.tagName === 'VIDEO' || e.target.closest('.video-container')) {
@@ -135,7 +136,7 @@ export function VideoPlayer({
       setIsPanning(true);
       setPanStart({ x: e.clientX, y: e.clientY });
     }
-  }, [zoom]);
+  }, [zoom, panEnabled]);
 
   /**
    * Handle mouse move for panning

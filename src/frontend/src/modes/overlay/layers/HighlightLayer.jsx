@@ -138,9 +138,9 @@ export default function HighlightLayer({
   return (
     <div className={`relative bg-gray-800/95 border-t border-gray-700/50 rounded-r-lg transition-all ${
       isLayerSelected ? 'ring-2 ring-orange-400 ring-opacity-75' : ''
-    } ${isEnabled ? 'h-20' : 'h-12'}`}>
+    } ${isEnabled ? 'h-14 lg:h-20' : 'h-8 lg:h-12'}`}>
       {/* Main row with toggle and keyframes */}
-      <div className="relative h-12">
+      <div className="relative h-8 lg:h-12">
         {/* Keyframes track */}
         <div
           ref={trackRef}

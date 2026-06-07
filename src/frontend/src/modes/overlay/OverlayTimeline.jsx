@@ -59,7 +59,7 @@ export function OverlayTimeline({
     <>
       {/* Video Timeline Label */}
       <div
-        className={`h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+        className={`h-8 lg:h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
@@ -69,9 +69,9 @@ export function OverlayTimeline({
 
       {/* Highlight Layer Label */}
       <div
-        className={`mt-1 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
-        } ${isHighlightActive ? 'h-20' : 'h-12'}`}
+        } ${isHighlightActive ? 'h-14 lg:h-20' : 'h-8 lg:h-12'}`}
         onClick={(e) => {
           if (!e.target.closest('button')) {
             onLayerSelect && onLayerSelect('highlight');
@@ -125,7 +125,7 @@ export function OverlayTimeline({
       isPlaying={isPlaying}
     >
       {/* Highlight Layer */}
-      <div className="mt-1">
+      <div className="mt-0.5 lg:mt-1">
         <HighlightLayer
           keyframes={highlightKeyframes}
           duration={duration}

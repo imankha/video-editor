@@ -42,7 +42,7 @@ export function AnnotateTimeline({
     <>
       {/* Video Timeline Label - click to select playhead layer */}
       <div
-        className={`h-12 flex items-center justify-center border-r rounded-tl-lg cursor-pointer transition-colors ${
+        className={`h-8 lg:h-12 flex items-center justify-center border-r rounded-tl-lg cursor-pointer transition-colors ${
           selectedLayer === 'playhead'
             ? 'bg-blue-900/50 border-blue-500 ring-1 ring-inset ring-blue-500'
             : 'border-gray-700 bg-gray-900 hover:bg-gray-800'
@@ -55,7 +55,7 @@ export function AnnotateTimeline({
 
       {/* Clips Layer Label - click to select clips layer */}
       <div
-        className={`mt-1 h-12 flex items-center justify-center border-r rounded-bl-lg cursor-pointer transition-colors ${
+        className={`mt-0.5 lg:mt-1 h-8 lg:h-12 flex items-center justify-center border-r rounded-bl-lg cursor-pointer transition-colors ${
           selectedLayer === 'clips'
             ? 'bg-green-900/50 border-green-500 ring-1 ring-inset ring-green-500'
             : 'border-gray-700/50 bg-gray-900 hover:bg-gray-800'

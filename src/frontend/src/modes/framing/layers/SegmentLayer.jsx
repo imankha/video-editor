@@ -115,7 +115,7 @@ export default function SegmentLayer({
       {/* Segments track */}
       <div
         ref={segmentTrackRef}
-        className="segment-track absolute inset-x-0 top-0 h-12 cursor-pointer overflow-visible rounded-r-lg"
+        className="segment-track absolute inset-x-0 top-0 h-8 lg:h-12 cursor-pointer overflow-visible rounded-r-lg"
         onClick={handleTrackClick}
       >
         {/* Background track */}
@@ -126,7 +126,7 @@ export default function SegmentLayer({
         {/* Placeholder text when no segments */}
         {segments.length === 1 && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Split Segments to trim or control speed</span>
+            <span className="text-gray-400 text-sm hidden lg:inline">Split Segments to trim or control speed</span>
           </div>
         )}
 
@@ -143,7 +143,7 @@ export default function SegmentLayer({
           >
             {/* Segment background */}
             <div
-              className={`h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
+              className={`h-8 lg:h-12 transition-all ${hoveredSegmentIndex === segment.index ? 'bg-purple-500 bg-opacity-30' : ''}`}
               title={`Segment ${segment.index + 1}: ${segment.speed}x (${segment.actualDuration.toFixed(1)}s → ${segment.visualDuration.toFixed(1)}s)`}
             >
               {/* Speed indicator (show if speed != 1) */}

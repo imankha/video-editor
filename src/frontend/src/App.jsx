@@ -7,6 +7,7 @@ import { DownloadsPanel } from './components/DownloadsPanel';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { QuestPanel } from './components/QuestPanel';
+import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
@@ -621,6 +622,10 @@ function App() {
             />
           {/* Quest panel — static, flows after project content (T1600) */}
           <QuestPanel inline />
+          {/* Report button — mobile only (desktop has floating global button in main.jsx) */}
+          <div className="sm:hidden text-center py-4">
+            <ReportProblemButton />
+          </div>
           {/* T1740: Legal footer */}
           <footer className="text-center py-6 text-xs text-gray-500 space-x-3">
             <a href="/privacy" className="hover:text-gray-300 transition-colors">Privacy Policy</a>
@@ -733,8 +738,10 @@ function App() {
         }}
       />
 
-      {/* Quest Panel (T540) */}
-      <QuestPanel />
+      {/* Quest Panel (T540) — hidden on mobile (shown inline on Home screen instead) */}
+      <div className="hidden lg:block">
+        <QuestPanel />
+      </div>
 
       {/* Mode Switch Confirmation Dialog */}
       <ConfirmationDialog

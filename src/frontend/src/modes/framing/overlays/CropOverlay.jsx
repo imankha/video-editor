@@ -16,7 +16,8 @@ export default function CropOverlay({
   panOffset = { x: 0, y: 0 },
   selectedKeyframeIndex = null,
   isFullscreen = false,
-  dimOpacity = 0.2
+  dimOpacity = 0.2,
+  interactive = true
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -464,7 +465,7 @@ export default function CropOverlay({
 
       {/* Crop rectangle */}
       <div
-        className={`absolute border-2 cursor-move pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-white'}`}
+        className={`absolute border-2 ${interactive ? 'cursor-move pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-white'}`}
         style={{
           left: `${screenCrop.x}px`,
           top: `${screenCrop.y}px`,
@@ -512,7 +513,7 @@ export default function CropOverlay({
         {handles.map(handle => (
           <div
             key={handle.name}
-            className={`crop-handle absolute bg-white border-2 pointer-events-auto ${cropTooSmall ? 'border-red-500' : 'border-blue-500'} after:content-[''] after:absolute after:-inset-4 after:block sm:after:inset-0`}
+            className={`crop-handle absolute bg-white border-2 ${interactive ? 'pointer-events-auto' : 'pointer-events-none'} ${cropTooSmall ? 'border-red-500' : 'border-blue-500'} after:content-[''] after:absolute after:-inset-4 after:block sm:after:inset-0`}
             style={{
               width: '12px',
               height: '12px',

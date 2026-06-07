@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { Play, Share2, ArrowLeft } from 'lucide-react';
+import { Play, Share2, ArrowLeft, Minimize } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -7,6 +7,9 @@ import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
 import { formatFileSize } from '../utils/fileValidation';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { useFullscreenControls } from '../hooks/useFullscreenControls';
+import { Button } from '../components/shared';
 
 /**
  * AnnotateModeView - Complete view for Annotate mode
@@ -105,6 +108,9 @@ export function AnnotateModeView({
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
   const isPlaybackMode = playback?.isPlaybackMode;
+  const isMobile = useIsMobile();
+  const fsControls = useFullscreenControls({ isPlaying });
+  const mobileFs = annotateFullscreen && isMobile;
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -288,7 +294,7 @@ export function AnnotateModeView({
     <>
       {/* Video Metadata - Annotate mode (hidden on mobile) */}
       {annotateVideoMetadata && !annotateFullscreen && (
-        <div className="hidden sm:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 sm:p-4 border border-white/20">
+        <div className="hidden lg:block mb-4 bg-white/10 backdrop-blur-lg rounded-lg p-3 lg:p-4 border border-white/20">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-300">
             {annotateVideoMetadata.resolution && (
               <span>
@@ -316,7 +322,7 @@ export function AnnotateModeView({
       <div className={`${annotateFullscreen ? '' : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'}`}>
         {/* Controls Bar - hidden in fullscreen and on mobile */}
         {annotateVideoUrl && !annotateFullscreen && (
-          <div className="hidden sm:flex mb-6 gap-4 items-center">
+          <div className="hidden lg:flex mb-6 gap-4 items-center">
             <div className="ml-auto">
               <ZoomControls
                 zoom={zoom}
@@ -333,13 +339,22 @@ export function AnnotateModeView({
         {/* Fullscreen container - uses fixed positioning for fullscreen */}
         <div
           ref={annotateContainerRef}
-          className={`${annotateFullscreen ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col' : ''}`}
+          className={`${annotateFullscreen ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
+          onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
+          onTouchStart={mobileFs ? fsControls.handleInteraction : undefined}
         >
           {/* Video Player with annotate overlays */}
-          <div className={`relative bg-gray-900 ${annotateFullscreen ? 'flex-1 min-h-0 flex flex-col' : 'rounded-lg'}`}>
+          <div
+            className={`relative bg-gray-900 ${
+              annotateFullscreen
+                ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0 flex flex-col'
+                : 'rounded-lg'
+            }`}
+            onClick={mobileFs && !showAnnotateOverlay ? fsControls.handleTapVideo : undefined}
+          >
             {/* In fullscreen: flex-1 fills remaining space after controls/timeline */}
             <div
-              className={annotateFullscreen ? 'flex-1 min-h-0 relative' : 'contents'}
+              className={annotateFullscreen ? (mobileFs ? 'absolute inset-0' : 'flex-1 min-h-0 relative') : 'contents'}
             >
               {multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
@@ -485,46 +500,110 @@ export function AnnotateModeView({
               />
             )}
 
-            {/* Controls - in flow for both modes, right below video */}
-            <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
-              <AnnotateControls
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={duration || annotateVideoMetadata?.duration || 0}
-                onTogglePlay={togglePlay}
-                onStepForward={stepForward}
-                onStepBackward={stepBackward}
-                onSeekBackward={seekBackward}
-                onRestart={restart}
-                playbackSpeed={annotatePlaybackSpeed}
-                onSpeedChange={onSpeedChange}
-                isFullscreen={annotateFullscreen}
-                onToggleFullscreen={onToggleFullscreen}
-                onAddClip={onAddClip}
-                isEditMode={isEditMode}
-                videoController={videoController}
-              />
-            </div>
-
-            {/* Fullscreen timeline - right below controls */}
-            {annotateFullscreen && (
-              <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-4 py-1">
-                <AnnotateMode
-                  currentTime={currentTime}
-                  duration={duration || annotateVideoMetadata?.duration || 0}
-                  isPlaying={isPlaying}
-                  onSeek={onTimelineSeek || seek}
-                  regions={annotateRegionsWithLayout}
-                  selectedRegionId={annotateSelectedRegionId}
-                  onSelectRegion={onSelectRegion}
-                  onDeleteRegion={onDeleteRegion}
-                  selectedLayer={annotateSelectedLayer}
-                  onLayerSelect={onLayerSelect}
-                  boundaryOffsets={boundaryOffsets}
-                />
-              </div>
+            {/* Controls + timeline inside video container for desktop fullscreen & non-fullscreen */}
+            {!mobileFs && (
+              <>
+                <div className={annotateFullscreen ? 'w-full shrink-0' : ''}>
+                  <AnnotateControls
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration || annotateVideoMetadata?.duration || 0}
+                    onTogglePlay={togglePlay}
+                    onStepForward={stepForward}
+                    onStepBackward={stepBackward}
+                    onSeekBackward={seekBackward}
+                    onRestart={restart}
+                    playbackSpeed={annotatePlaybackSpeed}
+                    onSpeedChange={onSpeedChange}
+                    isFullscreen={annotateFullscreen}
+                    onToggleFullscreen={onToggleFullscreen}
+                    onAddClip={onAddClip}
+                    isEditMode={isEditMode}
+                    videoController={videoController}
+                  />
+                </div>
+                {annotateFullscreen && (
+                  <div className="w-full shrink-0 bg-gray-900/95 border-t border-gray-700 px-2 lg:px-4 py-0.5">
+                    <AnnotateMode
+                      currentTime={currentTime}
+                      duration={duration || annotateVideoMetadata?.duration || 0}
+                      isPlaying={isPlaying}
+                      onSeek={onTimelineSeek || seek}
+                      regions={annotateRegionsWithLayout}
+                      selectedRegionId={annotateSelectedRegionId}
+                      onSelectRegion={onSelectRegion}
+                      onDeleteRegion={onDeleteRegion}
+                      selectedLayer={annotateSelectedLayer}
+                      onLayerSelect={onLayerSelect}
+                      boundaryOffsets={boundaryOffsets}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
+
+          {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
+          {mobileFs && (
+            <>
+              <div
+                className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
+                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
+                  <AnnotateControls
+                    isPlaying={isPlaying}
+                    currentTime={currentTime}
+                    duration={duration || annotateVideoMetadata?.duration || 0}
+                    onTogglePlay={togglePlay}
+                    onStepForward={stepForward}
+                    onStepBackward={stepBackward}
+                    onSeekBackward={seekBackward}
+                    onRestart={restart}
+                    playbackSpeed={annotatePlaybackSpeed}
+                    onSpeedChange={onSpeedChange}
+                    isFullscreen={annotateFullscreen}
+                    onToggleFullscreen={onToggleFullscreen}
+                    onAddClip={onAddClip}
+                    isEditMode={isEditMode}
+                    videoController={videoController}
+                  />
+                  <div className="bg-gray-900/90 px-2 py-0.5">
+                    <AnnotateMode
+                      currentTime={currentTime}
+                      duration={duration || annotateVideoMetadata?.duration || 0}
+                      isPlaying={isPlaying}
+                      onSeek={onTimelineSeek || seek}
+                      regions={annotateRegionsWithLayout}
+                      selectedRegionId={annotateSelectedRegionId}
+                      onSelectRegion={onSelectRegion}
+                      onDeleteRegion={onDeleteRegion}
+                      selectedLayer={annotateSelectedLayer}
+                      onLayerSelect={onLayerSelect}
+                      boundaryOffsets={boundaryOffsets}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div
+                className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Minimize}
+                  iconOnly
+                  onClick={onToggleFullscreen}
+                  title="Exit fullscreen (Esc)"
+                  className="bg-black/50 hover:bg-black/70"
+                />
+              </div>
+            </>
+          )}
 
           {/* Annotate Mode Timeline - non-fullscreen */}
           {!annotateFullscreen && (

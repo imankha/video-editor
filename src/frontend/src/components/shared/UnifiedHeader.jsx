@@ -1,30 +1,23 @@
-import { Home, ChevronRight } from 'lucide-react';
+import { Home, ChevronRight, ArrowLeft, Scissors, Crop, Sparkles } from 'lucide-react';
 import { Breadcrumb } from './Breadcrumb';
 import { Button } from './Button';
 import { ModeSwitcher } from './ModeSwitcher';
 import { CreditBalance } from '../CreditBalance';
 import { SignInButton } from '../SignInButton';
 import { InstallButton } from '../InstallButton';
+import { useIsMobile } from '../../hooks/useIsMobile';
+
+const MODE_ICONS = {
+  annotate: Scissors,
+  framing: Crop,
+  overlay: Sparkles,
+};
 
 /**
  * UnifiedHeader - Shared header across all editor modes
  *
- * Contains:
- * - Home button + clickable breadcrumb (left)
- * - CreditBalance, SignIn, ModeSwitcher (right)
- *
- * @param {function} onHomeClick - Navigate back to home/projects
- * @param {string} breadcrumbType - "Games" or "Reel Drafts"
- * @param {string} breadcrumbItemName - Current game or project name
- * @param {string} editorMode - Current mode ('annotate' | 'framing' | 'overlay')
- * @param {function} onModeChange - Mode switch handler
- * @param {boolean} hasProject - Whether a project/reel is selected
- * @param {boolean} hasWorkingVideo - Whether working video exists
- * @param {boolean} hasOverlayVideo - Whether overlay video is loaded
- * @param {boolean} framingOutOfSync - Whether framing changed since export
- * @param {boolean} hasAnnotateVideo - Whether annotate video/game is available
- * @param {boolean} isLoadingWorkingVideo - Whether working video is loading
- * @param {React.ReactNode} extraControls - Optional extra controls (e.g., mobile clips toggle)
+ * Desktop: Home button + breadcrumb (left), CreditBalance/SignIn/ModeSwitcher (right)
+ * Mobile: Back arrow + truncated title + mode indicator icon
  */
 export function UnifiedHeader({
   onHomeClick,
@@ -40,9 +33,42 @@ export function UnifiedHeader({
   isLoadingWorkingVideo = false,
   extraControls,
 }) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    const ModeIcon = MODE_ICONS[editorMode] || Scissors;
+    return (
+      <div className="flex items-center gap-2 mb-2 h-10">
+        <button
+          onClick={onHomeClick}
+          className="flex items-center justify-center w-10 h-10 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+          title="Back"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <span className="text-white font-medium text-sm truncate flex-1 min-w-0">
+          {breadcrumbItemName || breadcrumbType}
+        </span>
+        {editorMode === 'framing' && <CreditBalance />}
+        {extraControls}
+        <ModeSwitcher
+          mode={editorMode}
+          onModeChange={onModeChange}
+          hasProject={hasProject}
+          hasWorkingVideo={hasWorkingVideo}
+          hasOverlayVideo={hasOverlayVideo}
+          framingOutOfSync={framingOutOfSync}
+          hasAnnotateVideo={hasAnnotateVideo}
+          isLoadingWorkingVideo={isLoadingWorkingVideo}
+          inline
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col-reverse sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 mb-4 sm:mb-8">
-      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+    <div className="flex flex-row items-center justify-between gap-0 mb-8">
+      <div className="flex items-center gap-4 min-w-0">
         <Button
           variant="ghost"
           icon={Home}
@@ -59,10 +85,10 @@ export function UnifiedHeader({
           />
         </div>
       </div>
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-2">
         {extraControls}
         <InstallButton />
-        <CreditBalance />
+        <div className="hidden lg:block"><CreditBalance /></div>
         <SignInButton />
         <ModeSwitcher
           mode={editorMode}

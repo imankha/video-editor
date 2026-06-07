@@ -18,21 +18,14 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
  * - Framing: moved up above the timeline/scrub bar region
  * - Overlay: same as framing (similar bottom layout)
  */
-const QUEST_PANEL_GAP = 8; // px gap between quest panel bottom and clip details top
-
-function getPositionForMode(editorMode, isSm, clipDetailsBottom) {
+function getPositionForMode(editorMode, isSm) {
   if (!isSm) return { left: 12, bottom: 12 }; // Mobile: always bottom-left, compact
 
   switch (editorMode) {
-    case 'annotate':
-      // Anchor bottom of quest panel to top of clip details (with gap)
-      return { left: 24, bottom: clipDetailsBottom };
     case 'framing':
     case 'overlay':
-      // Bottom-left, raised above the timeline/scrub bar
       return { left: 24, bottom: 220 };
     default:
-      // Home / Project Manager — default bottom-left
       return { left: 24, bottom: 40 };
   }
 }
@@ -67,8 +60,6 @@ export function QuestPanel({ inline = false }) {
   const editorMode = useEditorStore((s) => s.editorMode);
   const isExpanded = expanded;
 
-  // T1030: Measure clip details position for annotate mode anchoring
-  const [clipDetailsBottom, setClipDetailsBottom] = useState(340); // fallback
   const [addClipFormOpen, setAddClipFormOpen] = useState(false);
   useEffect(() => {
     if (editorMode !== 'annotate') {
@@ -77,21 +68,11 @@ export function QuestPanel({ inline = false }) {
     }
     const measure = () => {
       setAddClipFormOpen(!!document.querySelector('[data-add-clip-form]'));
-      const el = document.querySelector('[data-clip-details]');
-      if (el) {
-        const bottom = window.innerHeight - el.getBoundingClientRect().top + QUEST_PANEL_GAP;
-        setClipDetailsBottom(bottom);
-      }
     };
-    // Measure after DOM settles (clip details may not be mounted yet)
     const timer = setTimeout(measure, 100);
-    // Re-measure on resize
-    window.addEventListener('resize', measure);
-    // Re-measure periodically while in annotate mode (clip selection changes layout)
     const interval = setInterval(measure, 500);
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', measure);
       clearInterval(interval);
     };
   }, [editorMode]);
@@ -212,7 +193,7 @@ export function QuestPanel({ inline = false }) {
 
   // T1030: Smart repositioning — pick position per screen mode to avoid overlapping controls
   const isSm = window.innerWidth >= 640;
-  const positionStyle = getPositionForMode(editorMode, isSm, clipDetailsBottom);
+  const positionStyle = getPositionForMode(editorMode, isSm);
 
   // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
   // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.

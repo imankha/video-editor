@@ -32,7 +32,9 @@ export function Controls({
   onToggleFullscreen,
 }) {
   return (
-    <div className="controls-container flex items-center justify-between py-2 px-2 sm:px-4 bg-gray-800 rounded-b-lg">
+    <div className={`controls-container flex items-center justify-between px-2 lg:px-4 ${
+      isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-2 bg-gray-800 rounded-b-lg'
+    }`}>
       {/* Playback controls */}
       <div className="flex items-center gap-1">
         {/* Step backward */}

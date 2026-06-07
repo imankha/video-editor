@@ -100,7 +100,7 @@ export function OverlayMode({
     <>
       {/* Video Timeline Label */}
       <div
-        className={`h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
+        className={`h-8 lg:h-12 flex items-center justify-center border-r border-gray-700 rounded-l-lg transition-colors cursor-pointer ${
           selectedLayer === 'playhead' ? 'bg-blue-900/50' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('playhead')}
@@ -111,7 +111,7 @@ export function OverlayMode({
       {/* Detection Marker Layer Label (only if detection data exists) */}
       {hasDetectionData && (
         <div
-          className="mt-1 h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors"
+          className="mt-0.5 lg:mt-1 h-6 lg:h-8 flex items-center justify-center border-r border-gray-700/50 bg-gray-900 cursor-pointer hover:bg-gray-800 transition-colors"
           title={showPlayerBoxes ? 'Hide player boxes' : 'Show player boxes'}
           onClick={() => onTogglePlayerBoxes && onTogglePlayerBoxes()}
         >
@@ -128,7 +128,7 @@ export function OverlayMode({
 
       {/* Highlight Region Layer Label */}
       <div
-        className={`mt-1 h-20 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
+        className={`mt-0.5 lg:mt-1 h-14 lg:h-20 flex items-center justify-center border-r border-gray-700/50 rounded-bl-lg transition-colors cursor-pointer ${
           selectedLayer === 'highlight' ? 'bg-orange-900/30' : 'bg-gray-900 hover:bg-gray-800'
         }`}
         onClick={() => onLayerSelect && onLayerSelect('highlight')}
@@ -164,7 +164,7 @@ export function OverlayMode({
           >
             {/* Detection Marker Layer (only if detection data exists) */}
             {hasDetectionData && (
-              <div className="mt-1">
+              <div className="mt-0.5 lg:mt-1">
                 <DetectionMarkerLayer
                   regions={highlightRegions}
                   duration={duration}
@@ -179,7 +179,7 @@ export function OverlayMode({
             )}
 
             {/* Highlight Regions Layer - inside TimelineBase for proper alignment */}
-            <div className="mt-1">
+            <div className="mt-0.5 lg:mt-1">
               <RegionLayer
                 mode="highlight"
                 regions={highlightRegions}

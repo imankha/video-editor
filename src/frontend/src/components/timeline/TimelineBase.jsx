@@ -275,9 +275,9 @@ export function TimelineBase({
   const displayDuration = visualDuration || duration;
 
   return (
-    <div className="timeline-container py-4">
+    <div className="timeline-container py-1 lg:py-4">
       {/* Time labels - shows visual duration (after speed/trim adjustments) */}
-      <div className="flex justify-between mb-2 text-xs text-gray-400 pl-20 sm:pl-32">
+      <div className="flex justify-between mb-0.5 lg:mb-2 text-xs text-gray-400 pl-20 lg:pl-32">
         <span>{formatTimeSimple(visualCurrentTime)}</span>
         <div className="flex items-center gap-2">
           {timelineZoom > 100 && (
@@ -292,14 +292,14 @@ export function TimelineBase({
       {/* Timeline with fixed labels and scrollable tracks */}
       <div className="relative">
         {/* Fixed layer labels on the left - provided by mode */}
-        <div className="absolute left-0 top-0 w-20 sm:w-32 z-10">
+        <div className="absolute left-0 top-0 w-20 lg:w-32 z-10">
           {layerLabels}
         </div>
 
         {/* Scrollable timeline tracks container */}
         <div
           ref={scrollContainerRef}
-          className="ml-20 sm:ml-32 overflow-x-auto timeline-scroll-container"
+          className="ml-20 lg:ml-32 overflow-x-auto timeline-scroll-container"
           onScroll={handleScroll}
           style={{
             scrollbarWidth: timelineScale > 1 ? 'auto' : 'none',
@@ -315,7 +315,7 @@ export function TimelineBase({
             {/* Timeline layers container with unified playhead */}
             <div className="relative" ref={layersContainerRef}>
               {/* Video Timeline Track */}
-              <div className={`relative bg-gray-800 h-12 rounded-r-lg transition-all ${
+              <div className={`relative bg-gray-800 h-8 lg:h-12 rounded-r-lg transition-all ${
                 selectedLayer === 'playhead' ? 'ring-2 ring-blue-400 ring-opacity-75' : ''
               }`}>
                 {/* Timeline track */}
@@ -395,7 +395,7 @@ export function TimelineBase({
 
       {/* Zoom hint when playhead layer is selected */}
       {selectedLayer === 'playhead' && (
-        <div className="mt-2 text-xs text-gray-500 text-center">
+        <div className="hidden lg:block mt-1 text-xs text-gray-500 text-center">
           Scroll to zoom timeline (current: {Math.round(timelineZoom)}%)
         </div>
       )}
