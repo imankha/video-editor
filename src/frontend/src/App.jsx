@@ -479,10 +479,9 @@ function App() {
       return;
     }
 
-    // For project-manager, also clear selection and refresh projects
+    // For project-manager, also clear selection
     if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
-      fetchProjects();
     }
 
     // T580: Reset shared video store on mode switch to prevent stale video
@@ -490,6 +489,11 @@ function App() {
     useVideoStore.getState().reset();
 
     setEditorMode(newMode);
+
+    // Refresh projects after mode switch renders to avoid double-render freeze
+    if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
+      requestAnimationFrame(() => fetchProjects());
+    }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(newMode)) {
       apiFetch(`${API_BASE}/api/projects/${selectedProjectId}/state?current_mode=${encodeURIComponent(newMode)}`, {
@@ -542,11 +546,14 @@ function App() {
     // Handle project-manager specific cleanup
     if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
       clearSelection();
-      fetchProjects();
     }
 
     const finalMode = targetMode || EDITOR_MODES.PROJECT_MANAGER;
     setEditorMode(finalMode);
+
+    if (finalMode === EDITOR_MODES.PROJECT_MANAGER) {
+      requestAnimationFrame(() => fetchProjects());
+    }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(finalMode)) {
       apiFetch(`${API_BASE}/api/projects/${selectedProjectId}/state?current_mode=${encodeURIComponent(finalMode)}`, {
