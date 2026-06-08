@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { SECTION_NAMES } from '../config/displayNames';
+import { useFramingStore } from './framingStore';
+import { useProjectDataStore } from './projectDataStore';
+import { useOverlayStore } from './overlayStore';
+import { useProjectsStore } from './projectsStore';
+import { useVideoStore } from './videoStore';
 
 /**
  * Editor Modes - String constants for mode comparisons
@@ -218,3 +223,52 @@ export const useEditorStore = create((set, get) => ({
 }));
 
 export default useEditorStore;
+
+// Popstate handler — registered at module scope (outside React lifecycle) so it
+// survives React StrictMode's mount-cleanup-remount cycle in development.
+// All state reads use getState() at call time so there are no stale closures.
+// On HMR re-evaluation, the old handler is removed and a new one registered
+// so it always references the current store instance.
+function handlePopState() {
+  const pathname = window.location.pathname;
+  const targetMode = PATH_TO_MODE[pathname]
+    || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : undefined);
+  const currentMode = useEditorStore.getState().editorMode;
+  if (!targetMode || targetMode === currentMode) return;
+
+  if (currentMode === EDITOR_MODES.FRAMING
+      && useFramingStore.getState().framingChangedSinceExport
+      && useProjectDataStore.getState().workingVideo?.url) {
+    window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
+    useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
+    return;
+  }
+
+  if (currentMode === EDITOR_MODES.OVERLAY
+      && useOverlayStore.getState().overlayChangedSinceExport
+      && useProjectsStore.getState().selectedProject?.has_final_video) {
+    window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
+    useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.OVERLAY);
+    return;
+  }
+
+  if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
+    useProjectsStore.getState().clearSelection();
+    requestAnimationFrame(() => useProjectsStore.getState().fetchProjects());
+  }
+
+  useVideoStore.getState().reset();
+  useEditorStore.getState().setEditorModeFromPopState(targetMode);
+}
+
+if (window.__popstateHandler) {
+  window.removeEventListener('popstate', window.__popstateHandler);
+} else {
+  window.history.replaceState(
+    { mode: useEditorStore.getState().editorMode },
+    '',
+    MODE_PATHS[useEditorStore.getState().editorMode] || '/home'
+  );
+}
+window.__popstateHandler = handlePopState;
+window.addEventListener('popstate', handlePopState);

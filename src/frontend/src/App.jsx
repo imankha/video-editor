@@ -45,7 +45,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
 import ImpersonationBanner from './components/ImpersonationBanner';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, MODE_PATHS, PATH_TO_MODE } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
@@ -75,7 +75,7 @@ function App() {
   const {
     editorMode,
     setEditorMode,
-    setEditorModeFromPopState,
+    redirectToMode,
     modeSwitchDialog,
     openModeSwitchDialog,
     closeModeSwitchDialog,
@@ -385,49 +385,8 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // Browser/hardware back button support — sync editor mode to URL on popstate
-  useEffect(() => {
-    // Seed the current URL with state so the first back navigation works
-    window.history.replaceState({ mode: editorMode }, '', MODE_PATHS[editorMode] || '/home');
-
-    const handlePopState = () => {
-      const pathname = window.location.pathname;
-      const targetMode = PATH_TO_MODE[pathname]
-        || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : undefined);
-      const currentMode = useEditorStore.getState().editorMode;
-      if (!targetMode || targetMode === currentMode) return;
-
-      // Unsaved framing changes -- restore URL and ask
-      if (currentMode === EDITOR_MODES.FRAMING
-          && useFramingStore.getState().framingChangedSinceExport
-          && useProjectDataStore.getState().workingVideo?.url) {
-        window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
-        useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
-        return;
-      }
-
-      // Unsaved overlay changes -- restore URL and ask
-      if (currentMode === EDITOR_MODES.OVERLAY
-          && useOverlayStore.getState().overlayChangedSinceExport
-          && useProjectsStore.getState().selectedProject?.has_final_video) {
-        window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
-        useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.OVERLAY);
-        return;
-      }
-
-      if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
-        useProjectsStore.getState().clearSelection();
-        requestAnimationFrame(() => useProjectsStore.getState().fetchProjects());
-      }
-
-      useVideoStore.getState().reset();
-      useEditorStore.getState().setEditorModeFromPopState(targetMode);
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Popstate handler lives in editorStore.js (module scope) — immune to React
+  // StrictMode's mount-cleanup-remount cycle that was dropping the listener.
 
   // T540: Record achievement when user enters framing mode
   // T635: Gate on !isCheckingSession to avoid firing before auth completes
@@ -531,11 +490,13 @@ function App() {
     // from the previous mode (e.g., working video from overlay showing in framing)
     useVideoStore.getState().reset();
 
-    setEditorMode(newMode);
-
-    // Refresh projects after mode switch renders to avoid double-render freeze
+    // Going home replaces the current entry (replaceState) to avoid duplicate
+    // /home entries when the user alternates between in-app back and browser back.
     if (newMode === EDITOR_MODES.PROJECT_MANAGER) {
+      redirectToMode(newMode);
       requestAnimationFrame(() => fetchProjects());
+    } else {
+      setEditorMode(newMode);
     }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(newMode)) {
@@ -543,7 +504,7 @@ function App() {
         method: 'PATCH'
       }).catch(e => console.error('[App] Failed to persist mode:', e));
     }
-  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
+  }, [editorMode, hasOverlayVideo, framingChangedSinceExport, overlayChangedSinceExport, selectedProject?.has_final_video, openModeSwitchDialog, setEditorMode, redirectToMode, clearSelection, fetchProjects, handleEditInAnnotate, selectedProjectId]);
 
   // Mode switch dialog handlers
   const handleModeSwitchCancel = useCallback(() => {
@@ -592,10 +553,11 @@ function App() {
     }
 
     const finalMode = targetMode || EDITOR_MODES.PROJECT_MANAGER;
-    setEditorMode(finalMode);
-
     if (finalMode === EDITOR_MODES.PROJECT_MANAGER) {
+      redirectToMode(finalMode);
       requestAnimationFrame(() => fetchProjects());
+    } else {
+      setEditorMode(finalMode);
     }
 
     if (selectedProjectId && ['annotate', 'framing', 'overlay'].includes(finalMode)) {
@@ -603,7 +565,7 @@ function App() {
         method: 'PATCH'
       }).catch(e => console.error('[App] Failed to persist mode:', e));
     }
-  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
+  }, [selectedProjectId, discardUncommittedChanges, closeModeSwitchDialog, setEditorMode, redirectToMode, modeSwitchDialog.pendingMode, modeSwitchDialog.sourceMode, clearSelection, fetchProjects]);
 
   // Backward-compatible wrapper for setExportingProject
   const setExportingProject = useCallback((value) => {
