@@ -194,7 +194,7 @@ export function AnnotateModeView({
         }>
           <div
             className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
-            onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleInteraction(); } : () => playback.togglePlay()}
+            onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleTapVideo(); } : () => playback.togglePlay()}
           >
             <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
               style={isFS ? {
