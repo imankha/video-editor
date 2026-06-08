@@ -542,7 +542,7 @@ export function AnnotateModeView({
             {/* AnnotateFullscreenOverlay - only rendered in fullscreen mode.
                 In non-fullscreen, the form renders in the sidebar (ClipsSidePanel).
                 Rendered outside VideoPlayer to avoid <video> GPU compositing painting over the panel (see T755) */}
-            {showAnnotateOverlay && annotateFullscreen && (
+            {showAnnotateOverlay && annotateFullscreen && !isMobile && (
               <AnnotateFullscreenOverlay
                 isVisible={showAnnotateOverlay}
                 currentTime={currentTime}
@@ -606,50 +606,76 @@ export function AnnotateModeView({
           {/* Mobile fullscreen: YouTube-style overlay controls + timeline */}
           {mobileFs && (
             <>
-              <div
-                className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
-                  isDraggingScrub ? 'opacity-0 pointer-events-none' :
-                  fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-                }`}
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
-                  <AnnotateControls
-                    isPlaying={isPlaying}
+              {showAnnotateOverlay ? (
+                <div
+                  className="absolute inset-x-0 bottom-0 z-20 overflow-y-auto"
+                  style={{ maxHeight: '70vh' }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <AnnotateFullscreenOverlay
+                    isVisible={showAnnotateOverlay}
                     currentTime={currentTime}
-                    duration={duration || annotateVideoMetadata?.duration || 0}
-                    onTogglePlay={togglePlay}
-                    onStepForward={stepForward}
-                    onStepBackward={stepBackward}
-                    onSeekBackward={seekBackward}
-                    onRestart={restart}
-                    playbackSpeed={annotatePlaybackSpeed}
-                    onSpeedChange={onSpeedChange}
-                    isFullscreen={annotateFullscreen}
-                    onToggleFullscreen={onToggleFullscreen}
-                    onAddClip={onAddClip}
-                    isEditMode={isEditMode}
+                    videoDuration={duration || annotateVideoMetadata?.duration || 0}
+                    existingClip={existingClip}
+                    onCreateClip={onFullscreenCreateClip}
+                    onUpdateClip={onFullscreenUpdateClip}
+                    onResume={onOverlayResume}
+                    onClose={onOverlayClose}
+                    onSeek={seek}
                     videoController={videoController}
+                    isFullscreen={false}
+                    layout="inline"
+                    teammateSuggestions={teammateSuggestions}
+                    onScrubDragChange={setIsDraggingScrub}
                   />
-                  <div className="bg-gray-900/90 px-2 py-0.5">
-                    <AnnotateMode
+                </div>
+              ) : (
+                <div
+                  className={`absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
+                    isDraggingScrub ? 'opacity-0 pointer-events-none' :
+                    fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                  }`}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10">
+                    <AnnotateControls
+                      isPlaying={isPlaying}
                       currentTime={currentTime}
                       duration={duration || annotateVideoMetadata?.duration || 0}
-                      isPlaying={isPlaying}
-                      onSeek={onTimelineSeek || seek}
-                      regions={annotateRegionsWithLayout}
-                      selectedRegionId={annotateSelectedRegionId}
-                      onSelectRegion={onSelectRegion}
-                      onDeleteRegion={onDeleteRegion}
-                      selectedLayer={annotateSelectedLayer}
-                      onLayerSelect={onLayerSelect}
-                      boundaryOffsets={boundaryOffsets}
+                      onTogglePlay={togglePlay}
+                      onStepForward={stepForward}
+                      onStepBackward={stepBackward}
+                      onSeekBackward={seekBackward}
+                      onRestart={restart}
+                      playbackSpeed={annotatePlaybackSpeed}
+                      onSpeedChange={onSpeedChange}
+                      isFullscreen={annotateFullscreen}
+                      onToggleFullscreen={onToggleFullscreen}
+                      onAddClip={onAddClip}
+                      isEditMode={isEditMode}
+                      videoController={videoController}
                     />
+                    <div className="bg-gray-900/90 px-2 py-0.5">
+                      <AnnotateMode
+                        currentTime={currentTime}
+                        duration={duration || annotateVideoMetadata?.duration || 0}
+                        isPlaying={isPlaying}
+                        onSeek={onTimelineSeek || seek}
+                        regions={annotateRegionsWithLayout}
+                        selectedRegionId={annotateSelectedRegionId}
+                        onSelectRegion={onSelectRegion}
+                        onDeleteRegion={onDeleteRegion}
+                        selectedLayer={annotateSelectedLayer}
+                        onLayerSelect={onLayerSelect}
+                        boundaryOffsets={boundaryOffsets}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
               <div
                 className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+                  showAnnotateOverlay ? 'opacity-100' :
                   isDraggingScrub ? 'opacity-0 pointer-events-none' :
                   fsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}
