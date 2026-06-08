@@ -5,6 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
 
@@ -76,6 +77,7 @@ export function ClipDetailsEditor({
   onScrubUnlock,
   teammateSuggestions = [],
 }) {
+  const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
   const sport = currentProfile?.sport || 'soccer';
   const tagSet = getTagSet(sport);
@@ -253,74 +255,75 @@ export function ClipDetailsEditor({
           />
         </div>
 
-        {/* Notes Textarea */}
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label className="text-gray-400 text-xs">Notes</label>
-            <span className={`text-xs ${notesLength >= maxNotesLength ? 'text-red-400' : 'text-gray-500'}`}>
-              {notesLength}/{maxNotesLength}
-            </span>
-          </div>
-          <textarea
-            value={region.notes || ''}
-            onChange={handleNotesChange}
-            className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
-            placeholder="Add notes (shown as overlay during playback)"
-            rows={3}
-          />
-        </div>
-
-        {/* Teammates */}
-        <div>
-          <label className="block text-gray-400 text-xs mb-1">Teammates</label>
-          <TeammateTagInput
-            teammates={region.tagged_teammates || []}
-            onChange={handleTeammatesChange}
-            suggestions={teammateSuggestions}
-          />
-        </div>
-
-        {/* My Athlete Toggle */}
-        <div className="flex items-center gap-2">
-          <label className="text-gray-400 text-xs w-16 shrink-0">My Athlete</label>
-          <button
-            type="button"
-            onClick={handleMyAthleteChange}
-            className={`relative w-9 h-5 rounded-full transition-colors ${
-              (region.my_athlete ?? true) ? 'bg-cyan-600' : 'bg-gray-600'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                (region.my_athlete ?? true) ? 'translate-x-4' : 'translate-x-0'
-              }`}
+        {/* Notes Textarea — desktop only */}
+        {!isMobile && (
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="text-gray-400 text-xs">Notes</label>
+              <span className={`text-xs ${notesLength >= maxNotesLength ? 'text-red-400' : 'text-gray-500'}`}>
+                {notesLength}/{maxNotesLength}
+              </span>
+            </div>
+            <textarea
+              value={region.notes || ''}
+              onChange={handleNotesChange}
+              className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500 resize-none"
+              placeholder="Add notes (shown as overlay during playback)"
+              rows={3}
             />
-          </button>
-        </div>
+          </div>
+        )}
 
-        {/* Create Reel Button */}
-        <div className="flex items-center justify-between">
-          <label className="text-gray-400 text-xs">Reel</label>
-          <Button
-            variant={reelCreated ? 'success' : 'cyan'}
-            size="sm"
-            icon={reelCreated ? Check : Plus}
-            disabled={reelCreated}
-            onClick={() => {
-              console.log('[CreateReel] Button clicked', {
-                regionId: region.id,
-                rawClipId: region.rawClipId,
-                autoProjectId: region.autoProjectId,
-                reelCreated,
-                rating: region.rating,
-              });
-              setReelRequested(true);
-              onUpdate({ createProject: true });
-            }}
-          >
-            {reelCreated ? 'Reel Created' : 'Create Reel'}
-          </Button>
-        </div>
+        {/* Teammates — desktop only */}
+        {!isMobile && (
+          <div>
+            <label className="block text-gray-400 text-xs mb-1">Teammates</label>
+            <TeammateTagInput
+              teammates={region.tagged_teammates || []}
+              onChange={handleTeammatesChange}
+              suggestions={teammateSuggestions}
+            />
+          </div>
+        )}
+
+        {/* My Athlete Toggle — desktop only */}
+        {!isMobile && (
+          <div className="flex items-center gap-2">
+            <label className="text-gray-400 text-xs w-16 shrink-0">My Athlete</label>
+            <button
+              type="button"
+              onClick={handleMyAthleteChange}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                (region.my_athlete ?? true) ? 'bg-cyan-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                  (region.my_athlete ?? true) ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        )}
+
+        {/* Create Reel Button — desktop only */}
+        {!isMobile && (
+          <div className="flex items-center justify-between">
+            <label className="text-gray-400 text-xs">Reel</label>
+            <Button
+              variant={reelCreated ? 'success' : 'cyan'}
+              size="sm"
+              icon={reelCreated ? Check : Plus}
+              disabled={reelCreated}
+              onClick={() => {
+                setReelRequested(true);
+                onUpdate({ createProject: true });
+              }}
+            >
+              {reelCreated ? 'Reel Created' : 'Create Reel'}
+            </Button>
+          </div>
+        )}
 
         {/* Delete Button */}
         {showDeleteConfirm ? (

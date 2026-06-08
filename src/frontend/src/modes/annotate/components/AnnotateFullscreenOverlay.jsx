@@ -5,6 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
+import { useIsMobile } from '../../../hooks/useIsMobile';
 import { ClipScrubRegion } from './ClipScrubRegion';
 import { Toggle, Button } from '../../../components/shared/Button';
 import { ConfirmationDialog } from '../../../components/shared/ConfirmationDialog';
@@ -109,6 +110,7 @@ export function AnnotateFullscreenOverlay({
   onScrubDragChange,
 }) {
   const isEditMode = !!existingClip;
+  const isMobile = useIsMobile();
   const currentProfile = useCurrentProfile();
   const sport = currentProfile?.sport || 'soccer';
   const tagSet = getTagSet(sport);
@@ -367,85 +369,93 @@ export function AnnotateFullscreenOverlay({
           />
         </div>
 
-        {/* Notes */}
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
-          <textarea
-            ref={notesRef}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add a note about this clip..."
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
-            rows={2}
-          />
-        </div>
-
-        {/* Teammates */}
-        <div className="mb-4">
-          <label className="block text-gray-400 text-sm mb-2">Teammates</label>
-          <TeammateTagInput
-            teammates={taggedTeammates}
-            onChange={setTaggedTeammates}
-            suggestions={teammateSuggestions}
-          />
-        </div>
-
-        {/* My Athlete Toggle */}
-        <div className="mb-4 flex items-center gap-2">
-          <label className="text-gray-400 text-sm">My Athlete</label>
-          <button
-            type="button"
-            onClick={() => {
-              setMyAthlete(prev => {
-                const next = !prev;
-                if (!createProjectManuallySet) {
-                  setCreateProject(rating === 5 && next);
-                }
-                return next;
-              });
-            }}
-            className={`relative w-9 h-5 rounded-full transition-colors ${
-              myAthlete ? 'bg-cyan-600' : 'bg-gray-600'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
-                myAthlete ? 'translate-x-4' : 'translate-x-0'
-              }`}
+        {/* Notes — desktop only */}
+        {!isMobile && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Notes (optional)</label>
+            <textarea
+              ref={notesRef}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add a note about this clip..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-white text-sm focus:outline-none focus:border-green-500 resize-none"
+              rows={2}
             />
-          </button>
-        </div>
+          </div>
+        )}
 
-        {/* Create Reel — toggle in create mode, button in edit mode */}
-        <div className="mb-4 flex items-center justify-between">
-          <label className="text-gray-400 text-sm">Reel</label>
-          {isEditMode ? (
-            existingClip?.autoProjectId ? (
-              <span className="text-green-400 text-sm">Reel already created</span>
-            ) : (
-              <Button
-                variant="cyan"
-                size="sm"
-                icon={Plus}
-                onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
-              >
-                Create Reel
-              </Button>
-            )
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
-                {createProject ? 'Create Reel' : "Don't Create Reel"}
-              </span>
-              <Toggle
-                checked={createProject}
-                onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
-                size="sm"
-                accent="cyan"
+        {/* Teammates — desktop only */}
+        {!isMobile && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+            <TeammateTagInput
+              teammates={taggedTeammates}
+              onChange={setTaggedTeammates}
+              suggestions={teammateSuggestions}
+            />
+          </div>
+        )}
+
+        {/* My Athlete Toggle — desktop only */}
+        {!isMobile && (
+          <div className="mb-4 flex items-center gap-2">
+            <label className="text-gray-400 text-sm">My Athlete</label>
+            <button
+              type="button"
+              onClick={() => {
+                setMyAthlete(prev => {
+                  const next = !prev;
+                  if (!createProjectManuallySet) {
+                    setCreateProject(rating === 5 && next);
+                  }
+                  return next;
+                });
+              }}
+              className={`relative w-9 h-5 rounded-full transition-colors ${
+                myAthlete ? 'bg-cyan-600' : 'bg-gray-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                  myAthlete ? 'translate-x-4' : 'translate-x-0'
+                }`}
               />
-            </div>
-          )}
-        </div>
+            </button>
+          </div>
+        )}
+
+        {/* Create Reel — desktop only; toggle in create mode, button in edit mode */}
+        {!isMobile && (
+          <div className="mb-4 flex items-center justify-between">
+            <label className="text-gray-400 text-sm">Reel</label>
+            {isEditMode ? (
+              existingClip?.autoProjectId ? (
+                <span className="text-green-400 text-sm">Reel already created</span>
+              ) : (
+                <Button
+                  variant="cyan"
+                  size="sm"
+                  icon={Plus}
+                  onClick={() => onUpdateClip(existingClip.id, { createProject: true })}
+                >
+                  Create Reel
+                </Button>
+              )
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className={`text-sm ${createProject ? 'text-cyan-400' : 'text-gray-500'}`}>
+                  {createProject ? 'Create Reel' : "Don't Create Reel"}
+                </span>
+                <Toggle
+                  checked={createProject}
+                  onChange={(val) => { setCreateProject(val); setCreateProjectManuallySet(true); }}
+                  size="sm"
+                  accent="cyan"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-3">

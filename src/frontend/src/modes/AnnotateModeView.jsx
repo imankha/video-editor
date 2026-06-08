@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Play, Share2, ArrowLeft, Minimize } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
@@ -7,7 +7,7 @@ import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
 import { formatFileSize } from '../utils/fileValidation';
-import { useIsMobile } from '../hooks/useIsMobile';
+import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import { Button } from '../components/shared';
 
@@ -109,9 +109,14 @@ export function AnnotateModeView({
 
   const isPlaybackMode = playback?.isPlaybackMode;
   const isMobile = useIsMobile();
+  const isLandscape = useIsLandscape();
   const fsControls = useFullscreenControls({ isPlaying });
+  const playbackFsControls = useFullscreenControls({ isPlaying: playback?.isPlaying });
   const mobileFs = annotateFullscreen && isMobile;
   const [isDraggingScrub, setIsDraggingScrub] = useState(false);
+
+  // Mobile inline add/edit form: replaces timeline + buttons below video
+  const mobileInlineForm = isMobile && showAnnotateOverlay && !annotateFullscreen;
 
   // Playback fullscreen — independent from annotate fullscreen (CSS fixed positioning)
   const [playbackFullscreen, setPlaybackFullscreen] = useState(false);
@@ -134,6 +139,19 @@ export function AnnotateModeView({
       setTimeout(() => unlockScrub?.(), 500);
     }
   }, [playback, onSelectRegion, lockScrub, unlockScrub]);
+
+  // Auto-enter playback fullscreen on mobile landscape
+  const autoLandscapeFsRef = useRef(false);
+  useEffect(() => {
+    if (isMobile && isLandscape && isPlaybackMode && !playbackFullscreen) {
+      setPlaybackFullscreen(true);
+      autoLandscapeFsRef.current = true;
+    }
+    if (!isLandscape && playbackFullscreen && autoLandscapeFsRef.current) {
+      setPlaybackFullscreen(false);
+      autoLandscapeFsRef.current = false;
+    }
+  }, [isMobile, isLandscape, isPlaybackMode, playbackFullscreen]);
 
   // Escape key exits playback fullscreen
   useEffect(() => {
@@ -158,12 +176,17 @@ export function AnnotateModeView({
     const activeLabel = playback.activeVideoLabel;
     const isFS = playbackFullscreen;
 
+    const mobilePlaybackFs = isFS && isMobile;
+
     return (
       <>
-      <div className={isFS
-        ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
-        : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'
-      }>
+      <div
+        className={isFS
+          ? 'fixed inset-0 z-[100] bg-gray-900 flex flex-col'
+          : 'bg-white/10 backdrop-blur-lg rounded-lg p-2 sm:p-6 border border-white/20'
+        }
+        onMouseMove={mobilePlaybackFs ? playbackFsControls.handleInteraction : undefined}
+      >
         {/* Video container */}
         <div className={isFS
           ? 'flex-1 min-h-0 flex items-center justify-center'
@@ -171,11 +194,11 @@ export function AnnotateModeView({
         }>
           <div
             className={`relative bg-gray-900 ${isFS ? 'w-full' : 'rounded-lg'} overflow-hidden cursor-pointer`}
-            onClick={() => playback.togglePlay()}
+            onClick={mobilePlaybackFs ? () => { playback.togglePlay(); playbackFsControls.handleInteraction(); } : () => playback.togglePlay()}
           >
             <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
               style={isFS ? {
-                maxHeight: 'calc(100vh - 120px)',
+                maxHeight: mobilePlaybackFs ? '100vh' : 'calc(100vh - 120px)',
                 aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
               } : undefined}
             >
@@ -228,6 +251,7 @@ export function AnnotateModeView({
                     rating={activePlaybackClip.rating}
                     isVisible={true}
                     isFullscreen={isFS}
+                    isMobile={isMobile}
                   />
                 ) : null;
               })()}
@@ -235,8 +259,19 @@ export function AnnotateModeView({
           </div>
         </div>
 
-        {/* Controls */}
-        <div className={isFS ? 'shrink-0' : ''}>
+        {/* Controls — YouTube-style auto-hide on mobile fullscreen */}
+        <div
+          className={mobilePlaybackFs
+            ? `absolute inset-x-0 bottom-0 z-20 transition-opacity duration-300 ${
+                playbackFsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`
+            : isFS ? 'shrink-0' : ''
+          }
+          onClick={mobilePlaybackFs ? (e) => e.stopPropagation() : undefined}
+        >
+          {mobilePlaybackFs && (
+            <div className="bg-gradient-to-t from-black/80 via-black/40 to-transparent pt-10" />
+          )}
           <PlaybackControls
             isPlaying={playback.isPlaying}
             virtualTime={playback.virtualTime}
@@ -260,6 +295,25 @@ export function AnnotateModeView({
             videoController={playback.videoController}
           />
         </div>
+        {/* Exit fullscreen button — mobile playback fullscreen */}
+        {mobilePlaybackFs && (
+          <div
+            className={`absolute top-2 right-2 z-30 transition-opacity duration-300 ${
+              playbackFsControls.isVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}
+            onClick={e => e.stopPropagation()}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Minimize}
+              iconOnly
+              onClick={togglePlaybackFullscreen}
+              title="Exit fullscreen"
+              className="bg-black/50 hover:bg-black/70"
+            />
+          </div>
+        )}
       </div>
 
       {/* Back + Share buttons — prominent, below player (not in fullscreen) */}
@@ -523,7 +577,7 @@ export function AnnotateModeView({
                     onSpeedChange={onSpeedChange}
                     isFullscreen={annotateFullscreen}
                     onToggleFullscreen={onToggleFullscreen}
-                    onAddClip={onAddClip}
+                    onAddClip={mobileInlineForm ? undefined : onAddClip}
                     isEditMode={isEditMode}
                     videoController={videoController}
                   />
@@ -614,8 +668,8 @@ export function AnnotateModeView({
             </>
           )}
 
-          {/* Annotate Mode Timeline - non-fullscreen */}
-          {!annotateFullscreen && (
+          {/* Annotate Mode Timeline - non-fullscreen (hidden when mobile inline form is open) */}
+          {!annotateFullscreen && !mobileInlineForm && (
             <div className="mt-6">
               <AnnotateMode
                 currentTime={currentTime}
@@ -634,8 +688,29 @@ export function AnnotateModeView({
           )}
         </div>
 
-        {/* Playback + Share buttons */}
-        {!annotateFullscreen && (
+        {/* Mobile inline add/edit clip form — replaces timeline + buttons */}
+        {mobileInlineForm && (
+          <div className="mt-4">
+            <AnnotateFullscreenOverlay
+              isVisible={showAnnotateOverlay}
+              currentTime={currentTime}
+              videoDuration={duration || annotateVideoMetadata?.duration || 0}
+              existingClip={existingClip}
+              onCreateClip={onFullscreenCreateClip}
+              onUpdateClip={onFullscreenUpdateClip}
+              onResume={onOverlayResume}
+              onClose={onOverlayClose}
+              onSeek={seek}
+              videoController={videoController}
+              isFullscreen={false}
+              layout="inline"
+              teammateSuggestions={teammateSuggestions}
+            />
+          </div>
+        )}
+
+        {/* Playback + Share buttons (hidden when mobile inline form is open) */}
+        {!annotateFullscreen && !mobileInlineForm && (
           <div className="mt-3 sm:mt-6">
             <div className="space-y-2">
               <div className="flex gap-2">
