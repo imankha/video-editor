@@ -134,6 +134,21 @@ export const useEditorStore = create((set, get) => ({
   },
 
   /**
+   * Redirect to a mode, replacing the current history entry (no new pushState).
+   * Use for error/fallback redirects to avoid back-button loops.
+   */
+  redirectToMode: (mode) => {
+    const path = MODE_PATHS[mode];
+    if (path) {
+      window.history.replaceState({ mode }, '', path);
+    }
+    set({
+      editorMode: mode,
+      screen: getScreenByType(mode),
+    });
+  },
+
+  /**
    * Open the mode switch confirmation dialog
    * @param {string} pendingMode - The mode user wants to switch to
    * @param {string} sourceMode - The mode we're leaving ('framing' or 'overlay')

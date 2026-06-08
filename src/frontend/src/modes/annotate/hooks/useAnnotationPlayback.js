@@ -282,6 +282,9 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
     const startSeg = timeline.segments[startSegIndex];
 
+    // Push history entry so browser back exits playback instead of leaving annotate
+    window.history.pushState({ mode: 'annotate', playback: true }, '', '/annotate');
+
     // Show loading state while we prepare
     setIsLoading(true);
     setIsPlaybackMode(true);
@@ -617,6 +620,18 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       rebuildTimeline();
     }
   }, [clips, isPlaybackMode, rebuildTimeline]);
+
+  // Browser back exits playback mode instead of leaving annotate
+  useEffect(() => {
+    if (!isPlaybackMode) return;
+    const handlePopState = (e) => {
+      if (!e.state?.playback) {
+        exitPlaybackMode();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isPlaybackMode, exitPlaybackMode]);
 
   return {
     // Refs for the two video elements (mount in JSX)

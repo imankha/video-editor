@@ -391,7 +391,9 @@ function App() {
     window.history.replaceState({ mode: editorMode }, '', MODE_PATHS[editorMode] || '/home');
 
     const handlePopState = () => {
-      const targetMode = PATH_TO_MODE[window.location.pathname];
+      const pathname = window.location.pathname;
+      const targetMode = PATH_TO_MODE[pathname]
+        || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : undefined);
       const currentMode = useEditorStore.getState().editorMode;
       if (!targetMode || targetMode === currentMode) return;
 

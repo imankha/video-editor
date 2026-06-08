@@ -3,7 +3,7 @@ import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annota
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
-import { useEditorStore } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -390,7 +390,7 @@ export function AnnotateContainer({
         setActiveVideoIndex(0);
       }
 
-      setEditorMode('annotate');
+      setEditorMode(EDITOR_MODES.ANNOTATE);
 
       // Mark that we initiated the upload here (prevents restore effect from firing)
       uploadInitiatedHereRef.current = true;
@@ -622,25 +622,25 @@ export function AnnotateContainer({
         }
       }
 
-      setEditorMode('annotate');
+      setEditorMode(EDITOR_MODES.ANNOTATE);
     } catch (err) {
       console.warn('[AnnotateContainer] Failed to load game:', err.message);
       if (err.message?.includes('not found')) {
         toast.error('Game not found');
-        setEditorMode('projects');
+        useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       } else if (err.message?.includes('401')) {
         useAuthStore.setState({ isAuthenticated: false });
-        setEditorMode('projects');
+        useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
         requireAuth(() => {
           sessionStorage.setItem('pendingGameId', gameId.toString());
           if (pendingClipSeekTime != null) {
             sessionStorage.setItem('pendingClipSeekTime', pendingClipSeekTime.toString());
           }
-          setEditorMode('annotate');
+          setEditorMode(EDITOR_MODES.ANNOTATE);
         });
       } else {
         toast.error('Failed to load game. Please try again.');
-        setEditorMode('projects');
+        useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
       }
     } finally {
       if (PROFILING_ENABLED) {

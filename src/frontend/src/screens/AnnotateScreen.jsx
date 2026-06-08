@@ -9,7 +9,7 @@ import { UnifiedHeader } from '../components/shared/UnifiedHeader';
 import { ConfirmationDialog } from '../components/shared/ConfirmationDialog';
 import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
-import { useEditorStore } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -39,6 +39,7 @@ import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from 
 export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Editor mode (for navigation between screens)
   const setEditorMode = useEditorStore(state => state.setEditorMode);
+  const redirectToMode = useEditorStore(state => state.redirectToMode);
 
   // Games — Zustand store (reactive to profile switches)
   const uploadGameVideo = useGamesDataStore(state => state.uploadGameVideo);
@@ -463,13 +464,14 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // - After importing clips to projects (in handleImportIntoProjects)
   // - When loading a new game (state is reset before loading new data)
 
-  // Redirect to projects if no video and not loading and no active upload to restore
+  // Redirect to home if no video and not loading and no active upload to restore.
+  // Uses redirectToMode (replaceState) to avoid back-button loops.
   useEffect(() => {
     const hasActiveUploadToRestore = activeUpload?.blobUrl;
     if (!annotateVideoUrl && !isLoadingRef.current && !isUploadingGameVideo && !hasActiveUploadToRestore) {
-      setEditorMode('projects');
+      redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
     }
-  }, [annotateVideoUrl, isUploadingGameVideo, setEditorMode, activeUpload]);
+  }, [annotateVideoUrl, isUploadingGameVideo, redirectToMode, activeUpload]);
 
   // If no video loaded but we're loading, render nothing (loading is fast)
   if (!annotateVideoUrl) {
