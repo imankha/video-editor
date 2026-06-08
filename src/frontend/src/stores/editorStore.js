@@ -15,7 +15,7 @@ export const EDITOR_MODES = {
   ADMIN: 'admin',
 };
 
-const MODE_PATHS = {
+export const MODE_PATHS = {
   [EDITOR_MODES.PROJECT_MANAGER]: '/home',
   [EDITOR_MODES.ANNOTATE]: '/annotate',
   [EDITOR_MODES.FRAMING]: '/framing',
@@ -23,10 +23,14 @@ const MODE_PATHS = {
   [EDITOR_MODES.ADMIN]: '/admin',
 };
 
+export const PATH_TO_MODE = Object.fromEntries(
+  Object.entries(MODE_PATHS).map(([mode, path]) => [path, mode])
+);
+
 function updatePath(mode) {
   const path = MODE_PATHS[mode];
   if (path && window.location.pathname !== path) {
-    window.history.replaceState(null, '', path);
+    window.history.pushState({ mode }, '', path);
   }
 }
 
@@ -113,6 +117,16 @@ export const useEditorStore = create((set, get) => ({
    */
   setEditorMode: (mode) => {
     updatePath(mode);
+    set({
+      editorMode: mode,
+      screen: getScreenByType(mode),
+    });
+  },
+
+  /**
+   * Update mode to match browser history (popstate) without pushing a new entry.
+   */
+  setEditorModeFromPopState: (mode) => {
     set({
       editorMode: mode,
       screen: getScreenByType(mode),

@@ -45,7 +45,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
 import ImpersonationBanner from './components/ImpersonationBanner';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, MODE_PATHS, PATH_TO_MODE } from './stores';
 import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
@@ -75,6 +75,7 @@ function App() {
   const {
     editorMode,
     setEditorMode,
+    setEditorModeFromPopState,
     modeSwitchDialog,
     openModeSwitchDialog,
     closeModeSwitchDialog,
@@ -384,8 +385,47 @@ function App() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
 
-  // T525: Payment return is handled inside initSession().then(...) above
-  // so the session cookie is ready before the verify API call.
+  // Browser/hardware back button support — sync editor mode to URL on popstate
+  useEffect(() => {
+    // Seed the current URL with state so the first back navigation works
+    window.history.replaceState({ mode: editorMode }, '', MODE_PATHS[editorMode] || '/home');
+
+    const handlePopState = () => {
+      const targetMode = PATH_TO_MODE[window.location.pathname];
+      const currentMode = useEditorStore.getState().editorMode;
+      if (!targetMode || targetMode === currentMode) return;
+
+      // Unsaved framing changes -- restore URL and ask
+      if (currentMode === EDITOR_MODES.FRAMING
+          && useFramingStore.getState().framingChangedSinceExport
+          && useProjectDataStore.getState().workingVideo?.url) {
+        window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
+        useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.FRAMING);
+        return;
+      }
+
+      // Unsaved overlay changes -- restore URL and ask
+      if (currentMode === EDITOR_MODES.OVERLAY
+          && useOverlayStore.getState().overlayChangedSinceExport
+          && useProjectsStore.getState().selectedProject?.has_final_video) {
+        window.history.pushState({ mode: currentMode }, '', MODE_PATHS[currentMode]);
+        useEditorStore.getState().openModeSwitchDialog(targetMode, EDITOR_MODES.OVERLAY);
+        return;
+      }
+
+      if (targetMode === EDITOR_MODES.PROJECT_MANAGER) {
+        useProjectsStore.getState().clearSelection();
+        requestAnimationFrame(() => useProjectsStore.getState().fetchProjects());
+      }
+
+      useVideoStore.getState().reset();
+      useEditorStore.getState().setEditorModeFromPopState(targetMode);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // T540: Record achievement when user enters framing mode
   // T635: Gate on !isCheckingSession to avoid firing before auth completes
