@@ -1264,10 +1264,18 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
   const daysLeft = getDaysUntil(game.storage_expires_at);
   const isNearExpiry = !isExpired && daysLeft !== null && daysLeft < 14;
 
-  const handleClick = () => {
-    if (isMobile && actionsRevealed) {
-      setActionsRevealed(false);
-      return;
+  const longPressFired = useRef(false);
+
+  const handleClick = (e) => {
+    if (isMobile) {
+      if (longPressFired.current) return;
+      if (actionsRevealed) {
+        const isButton = e.target.closest('button');
+        if (isButton) return;
+        setActionsRevealed(false);
+        setShowDeleteConfirm(false);
+        return;
+      }
     }
     if (isExpired) {
       if (canExtend) {
@@ -1279,8 +1287,6 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
       onLoad();
     }
   };
-
-  const longPressFired = useRef(false);
 
   const handleTouchStart = () => {
     touchMoved.current = false;
@@ -1467,35 +1473,37 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
         </div>
 
         {/* Edit + Share + Delete buttons - hover on desktop, long-press on mobile */}
-        <div className={`flex items-center gap-1 transition-opacity ${isMobile ? (actionsRevealed ? 'opacity-100' : 'opacity-0 pointer-events-none') : ''}`}>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Pencil}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
-            className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
-            title="Edit game details"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Share2}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-            className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
-            title="Share game"
-          />
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            iconOnly
-            onClick={handleDelete}
-            className={isMobile ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
-          />
-        </div>
+        {(!isMobile || actionsRevealed) && (
+          <div className={`flex items-center gap-1 transition-opacity ${isMobile ? 'opacity-100' : ''}`}>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Pencil}
+              iconOnly
+              onClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+              className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+              title="Edit game details"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Share2}
+              iconOnly
+              onClick={(e) => { e.stopPropagation(); onShare?.(); }}
+              className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+              title="Share game"
+            />
+            <Button
+              variant={showDeleteConfirm ? 'danger' : 'ghost'}
+              size="sm"
+              icon={Trash2}
+              iconOnly
+              onClick={handleDelete}
+              className={isMobile ? '' : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
+              title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
+            />
+          </div>
+        )}
       </div>
 
       {isNearExpiry && (

@@ -43,6 +43,7 @@ import { AppStateProvider, ProjectProvider } from './contexts';
 import { AccountSettings } from './components/AccountSettings';
 import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
+import { SignInScreen } from './components/SignInScreen';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
 import { useAuthStore } from './stores/authStore';
@@ -178,7 +179,6 @@ function App() {
 
     initSession().then(async (session) => {
       if (!session.isAuthenticated) {
-        useQuestStore.getState().fetchProgress();
         initialLoadInProgress = false;
         dismissPreloader();
         return;
@@ -334,6 +334,7 @@ function App() {
   }, []);
 
   const isAdmin = useAuthStore(state => state.isAdmin);
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated);
   const isCheckingSession = useAuthStore(state => state.isCheckingSession);
 
   // T2840: Detect /shared/teammate/:token URL for annotation view
@@ -605,6 +606,14 @@ function App() {
   if (teammateShareToken) {
     return <SharedAnnotationView shareToken={teammateShareToken} onClose={handleCloseTeammateShare} />;
   }
+
+  // T1780: Shared video — public route, no auth required
+  if (sharedToken && !isAuthenticated) {
+    return <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />;
+  }
+
+  // Auth wall — unauthenticated users see sign-in screen (public routes handled above)
+  if (!isAuthenticated) return <SignInScreen />;
 
   // T550: Admin panel — rendered regardless of project selection
   if (editorMode === EDITOR_MODES.ADMIN) {
