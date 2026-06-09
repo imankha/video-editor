@@ -80,13 +80,19 @@ export const getScreenByType = (type) => {
  * @see CODE_SMELLS.md #15 for refactoring context
  * @see tasks/PHASE2-ARCHITECTURE-PLAN.md for migration plan
  */
+const initialMode = (() => {
+  const path = window.location.pathname;
+  return PATH_TO_MODE[path]
+    || (path.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
+})();
+
 export const useEditorStore = create((set, get) => ({
   // Current screen object (new typed approach)
-  screen: SCREENS.FRAMING,
+  screen: initialMode ? getScreenByType(initialMode) : SCREENS.FRAMING,
 
   // Editor mode: 'framing' | 'overlay' | 'annotate' | 'project-manager'
   // DEPRECATED: Use screen.type instead. Kept for backward compatibility.
-  editorMode: EDITOR_MODES.FRAMING,
+  editorMode: initialMode || EDITOR_MODES.FRAMING,
 
   // Mode switch confirmation dialog
   modeSwitchDialog: {
