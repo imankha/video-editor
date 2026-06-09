@@ -608,8 +608,8 @@ export function AnnotateModeView({
             <>
               {showAnnotateOverlay ? (
                 <div
-                  className="absolute inset-x-0 bottom-0 z-20 overflow-y-auto"
-                  style={{ maxHeight: '70vh' }}
+                  className="absolute inset-x-0 bottom-0 z-20 overflow-y-auto bg-gray-900/95"
+                  style={{ maxHeight: isLandscape ? '50vh' : '70vh' }}
                   onClick={e => e.stopPropagation()}
                 >
                   <AnnotateFullscreenOverlay
@@ -624,7 +624,7 @@ export function AnnotateModeView({
                     onSeek={seek}
                     videoController={videoController}
                     isFullscreen={false}
-                    layout="inline"
+                    layout={isLandscape ? 'landscape-inline' : 'inline'}
                     teammateSuggestions={teammateSuggestions}
                     onScrubDragChange={setIsDraggingScrub}
                   />

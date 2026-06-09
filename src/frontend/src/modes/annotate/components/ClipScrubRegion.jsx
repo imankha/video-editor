@@ -43,6 +43,7 @@ export function ClipScrubRegion({
   onDragStart,
   onDragEnd,
   videoController,
+  compact,
 }) {
   const trackRef = useRef(null);
   const [dragging, setDragging] = useState(null); // 'start' | 'end' | null
@@ -267,6 +268,84 @@ export function ClipScrubRegion({
   const firstTick = Math.ceil(windowStart / tickInterval) * tickInterval;
   for (let t = firstTick; t <= windowEnd; t += tickInterval) {
     ticks.push(t);
+  }
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="text-xs font-mono whitespace-nowrap">
+          <span className="text-white">{formatTime(startTime)}</span>
+          <span className="text-gray-500 mx-0.5">-</span>
+          <span className="text-white">{formatTime(endTime)}</span>
+        </div>
+        <div
+          ref={trackRef}
+          className="relative flex-1 h-8 bg-gray-800 rounded-lg select-none touch-none"
+          style={{ cursor: dragging ? 'col-resize' : 'default' }}
+        >
+          <div
+            className="absolute top-0 h-full bg-green-500/20 border-y border-green-500/30"
+            style={{ left: `${startPercent}%`, width: `${endPercent - startPercent}%` }}
+          />
+          <div
+            className="absolute top-0 h-full w-px bg-yellow-500/50 pointer-events-none"
+            style={{ left: `${anchorPercent}%` }}
+          />
+          {previewTime !== null && (
+            <div
+              className="absolute top-0 h-full w-0.5 bg-white pointer-events-none z-10"
+              style={{ left: `${timeToPercent(previewTime)}%` }}
+            >
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rounded-full" />
+            </div>
+          )}
+          <div
+            className="absolute top-0 h-full flex items-center"
+            style={{ left: `${startPercent}%`, transform: 'translateX(-50%)' }}
+          >
+            <div
+              onPointerDown={(e) => handlePointerDown('start', e)}
+              className={`w-3 h-full rounded-l cursor-col-resize
+                ${dragging === 'start' ? 'bg-green-400' : 'bg-green-500 hover:bg-green-400'}
+                transition-colors`}
+              style={{ minWidth: '12px', touchAction: 'none' }}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-0.5 h-4 bg-green-900/50 rounded" />
+              </div>
+            </div>
+          </div>
+          <div
+            className="absolute top-0 h-full flex items-center"
+            style={{ left: `${endPercent}%`, transform: 'translateX(-50%)' }}
+          >
+            <div
+              onPointerDown={(e) => handlePointerDown('end', e)}
+              className={`w-3 h-full rounded-r cursor-col-resize
+                ${dragging === 'end' ? 'bg-green-400' : 'bg-green-500 hover:bg-green-400'}
+                transition-colors`}
+              style={{ minWidth: '12px', touchAction: 'none' }}
+            >
+              <div className="w-full h-full flex items-center justify-center">
+                <div className="w-0.5 h-4 bg-green-900/50 rounded" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <span className="text-xs font-mono text-gray-400 whitespace-nowrap">{clipDuration.toFixed(1)}s</span>
+        <button
+          onClick={handlePreviewPlay}
+          className="p-1 rounded hover:bg-gray-700 transition-colors"
+          title={isPreviewing ? 'Stop preview' : 'Preview clip'}
+        >
+          {isPreviewing ? (
+            <Square size={14} className="text-red-400" />
+          ) : (
+            <Play size={14} className="text-green-400" />
+          )}
+        </button>
+      </div>
+    );
   }
 
   return (

@@ -483,6 +483,58 @@ export function AnnotateFullscreenOverlay({
     </>
   );
 
+  if (layout === 'landscape-inline') {
+    return (
+      <div data-add-clip-form className="border-t border-gray-700 px-3 py-2">
+        <ClipScrubRegion
+          currentTime={currentTime}
+          videoDuration={videoDuration}
+          existingClip={existingClip}
+          startTime={scrubStartTime}
+          endTime={scrubEndTime}
+          onStartTimeChange={setScrubStartTime}
+          onEndTimeChange={setScrubEndTime}
+          onSeek={onSeek}
+          onDragStart={() => onScrubDragChange?.(true)}
+          onDragEnd={() => onScrubDragChange?.(false)}
+          videoController={videoController}
+          compact
+        />
+        <div className="flex items-center gap-2 mt-1.5">
+          <StarRating rating={rating} onRatingChange={handleRatingChange} size={20} />
+          <span className="text-xs text-gray-500 w-4 text-center">{RATING_NOTATION[rating]}</span>
+          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
+          <div className="flex-1 overflow-x-auto scrollbar-hide">
+            {tagSet && (
+              <TagSelector
+                positions={getPositions(sport)}
+                tagsByPosition={tagSet.tags}
+                selectedTags={selectedTags}
+                onTagToggle={handleTagToggle}
+                size="sm"
+                flat
+              />
+            )}
+          </div>
+          <div className="h-4 w-px bg-gray-700 flex-shrink-0" />
+          <button
+            onClick={handleSave}
+            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+          >
+            {isEditMode ? 'Update' : 'Save'}
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+            title="Cancel (Esc)"
+          >
+            <X size={18} className="text-gray-400" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (layout === 'inline') {
     return (
       <div data-add-clip-form className="border-t border-gray-700 p-3 overflow-y-auto">

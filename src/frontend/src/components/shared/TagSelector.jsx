@@ -16,8 +16,37 @@ const SIZE_CONFIG = {
  * @param {'sm'|'md'|'lg'} size - Visual size variant (default 'md')
  * @param {boolean} showLabels - Show position group labels (default false)
  */
-export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTagToggle, size = 'md', showLabels = false }) {
+export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTagToggle, size = 'md', showLabels = false, flat = false }) {
   const cfg = SIZE_CONFIG[size] || SIZE_CONFIG.md;
+
+  const renderTag = (tag) => {
+    const isSelected = selectedTags.includes(tag.name);
+    return (
+      <button
+        key={tag.name}
+        onClick={() => onTagToggle(tag.name)}
+        className={`flex items-center gap-1 ${cfg.padding} ${cfg.text} ${cfg.rounded || 'rounded'} transition-colors whitespace-nowrap ${
+          isSelected
+            ? 'bg-green-600 text-white'
+            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+        }`}
+        title={tag.description}
+        type="button"
+      >
+        {isSelected && <Check size={cfg.checkSize} />}
+        {tag.name}
+      </button>
+    );
+  };
+
+  if (flat) {
+    const allTags = positions.flatMap(pos => tagsByPosition[pos.id] || []);
+    return (
+      <div className={`flex flex-nowrap ${cfg.gap}`}>
+        {allTags.map(renderTag)}
+      </div>
+    );
+  }
 
   return (
     <div className={cfg.spacing}>
@@ -31,25 +60,7 @@ export function TagSelector({ positions, tagsByPosition, selectedTags = [], onTa
               </div>
             )}
             <div className={`flex flex-wrap ${cfg.gap}`}>
-              {tags.map((tag) => {
-                const isSelected = selectedTags.includes(tag.name);
-                return (
-                  <button
-                    key={tag.name}
-                    onClick={() => onTagToggle(tag.name)}
-                    className={`flex items-center gap-1 ${cfg.padding} ${cfg.text} ${cfg.rounded || 'rounded'} transition-colors ${
-                      isSelected
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                    }`}
-                    title={tag.description}
-                    type="button"
-                  >
-                    {isSelected && <Check size={cfg.checkSize} />}
-                    {tag.name}
-                  </button>
-                );
-              })}
+              {tags.map(renderTag)}
             </div>
           </div>
         );
