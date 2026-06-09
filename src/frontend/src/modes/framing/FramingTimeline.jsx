@@ -1,6 +1,7 @@
 import React from 'react';
 import { Film, Crop, Split } from 'lucide-react';
 import { TimelineBase, EDGE_PADDING } from '../../components/timeline/TimelineBase';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import CropLayer from './layers/CropLayer';
 import SegmentLayer from './layers/SegmentLayer';
 
@@ -53,16 +54,24 @@ export function FramingTimeline({
   onSegmentSpeedChange,
   onSegmentTrim,
 }) {
-  // Calculate total layer height for playhead line
-  const getTotalLayerHeight = () => {
-    // Base: Video track (h-12=3rem) + gap (mt-1=0.25rem) + Crop layer (h-12=3rem)
-    let height = '6.5rem'; // Default: Video + Crop only
+  const isMobile = useIsMobile();
 
+  const getTotalLayerHeight = () => {
+    if (isMobile) {
+      // Mobile: Video(h-8=2rem) + gap(mt-0.5=0.125rem) + Crop(h-8=2rem)
+      let height = '4.125rem';
+      if (segments.length > 0) {
+        // + gap(0.125rem) + Segment(h-14=3.5rem)
+        height = '7.75rem';
+      }
+      return height;
+    }
+    // Desktop: Video(h-12=3rem) + gap(mt-1=0.25rem) + Crop(h-12=3rem)
+    let height = '6.5rem';
     if (segments.length > 0) {
-      // Add: gap (0.25rem) + Segment layer (h-20=5rem) = 5.25rem more
+      // + gap(0.25rem) + Segment(h-20=5rem)
       height = '11.75rem';
     }
-
     return height;
   };
 

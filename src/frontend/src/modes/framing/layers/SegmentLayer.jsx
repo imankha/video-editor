@@ -111,7 +111,7 @@ export default function SegmentLayer({
   };
 
   return (
-    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-20 pb-2">
+    <div className="relative bg-gray-800/95 border-t border-gray-700/50 overflow-visible rounded-r-lg h-14 lg:h-20 pb-1 lg:pb-2">
       {/* Segments track */}
       <div
         ref={segmentTrackRef}
