@@ -568,22 +568,31 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
   // Buffering event handlers - pause time updates when video is waiting for data
   const handleWaiting = () => {
-    setIsBuffering(true);
     if (videoRef.current) {
       const v = videoRef.current;
       const { ahead, rangeCount, inGap } = getBufferAheadAt(v, v.currentTime);
+      const rate = v.playbackRate || 1;
+      const phantomStall = !inGap && ahead > rate * 5;
+
       console.warn(
         `[VIDEO] Waiting: currentTime=${v.currentTime.toFixed(1)} ` +
         `bufferAhead=${ahead.toFixed(1)}s inGap=${inGap} ranges=${rangeCount} ` +
-        `networkState=${v.networkState} readyState=${v.readyState}`
+        `networkState=${v.networkState} readyState=${v.readyState}` +
+        (phantomStall ? ' (phantom)' : '')
       );
 
-      // Stall watchdog: if still waiting, reload the video.
-      // Scale timeout by playback rate — at 2x, buffer drains twice as fast
-      // so we need to react sooner.
+      // Chrome fires spurious waiting events on long videos despite ample
+      // buffer. Setting isBuffering blocks desync detection and time updates,
+      // causing permanent stalls. Only treat as buffering when buffer is
+      // actually low or we're in a gap.
+      if (!phantomStall) {
+        setIsBuffering(true);
+      }
+
       if (!stallTimerRef.current) {
-        const rate = v.playbackRate || 1;
-        const watchdogMs = Math.max(4000, 10000 / rate);
+        const watchdogMs = phantomStall
+          ? 2000
+          : Math.max(4000, 10000 / rate);
         stallTimerRef.current = setTimeout(() => {
           stallTimerRef.current = null;
           const vv = videoRef.current;
@@ -591,6 +600,23 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
 
           const rr = vv.playbackRate || 1;
           const state = getBufferAheadAt(vv, vv.currentTime);
+
+          // Phantom stall: ample buffer but decoder stuck. Seek-to-self
+          // forces Chrome's decoder to reinitialize.
+          if (!state.inGap && state.ahead > rr * 5) {
+            if (vv.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA) {
+              console.warn(
+                `[VIDEO] Phantom stall recovery: readyState=${vv.readyState} ` +
+                `with ${state.ahead.toFixed(1)}s buffer, nudging decoder`
+              );
+              const ct = vv.currentTime;
+              vv.currentTime = ct;
+              vv.play().catch(() => {});
+            }
+            return;
+          }
+
+          // Real stall: buffer exhausted or in a gap — reload.
           const needsReload = state.ahead < rr
             || vv.readyState <= HTMLMediaElement.HAVE_METADATA;
 
@@ -615,6 +641,8 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           }
         }, watchdogMs);
       }
+    } else {
+      setIsBuffering(true);
     }
   };
 
