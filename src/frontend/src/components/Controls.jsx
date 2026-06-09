@@ -33,7 +33,7 @@ export function Controls({
 }) {
   return (
     <div className={`controls-container flex items-center justify-between px-2 lg:px-4 ${
-      isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-2 bg-gray-800 rounded-b-lg'
+      isFullscreen ? 'py-0.5 bg-gray-900/90' : 'py-1 lg:py-2 bg-gray-800 rounded-b-lg'
     }`}>
       {/* Playback controls */}
       <div className="flex items-center gap-1">

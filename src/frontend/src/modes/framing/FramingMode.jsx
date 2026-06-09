@@ -82,7 +82,7 @@ export function FramingMode({
 
       {/* FramingTimeline */}
       {videoUrl && (
-        <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-2 lg:mt-6'}`}>
+        <div className={`${isFullscreen ? 'bg-gray-900/95 border-t border-gray-700 px-4 py-2' : 'mt-1 lg:mt-6'}`}>
           <FramingTimeline
             currentTime={currentTime}
             duration={duration}

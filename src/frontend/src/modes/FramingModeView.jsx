@@ -417,7 +417,7 @@ export function FramingModeView({
 
           {/* Mobile-only clip title — minimal, under video */}
           {clipTitle && !isFullscreen && !mobileFs && (
-            <div className="lg:hidden px-2 py-1 text-sm text-gray-300 truncate">
+            <div className="lg:hidden px-2 py-0.5 text-sm text-gray-300 truncate">
               <span className="font-medium text-white">{clipTitle}</span>
               {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
             </div>

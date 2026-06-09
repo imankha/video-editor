@@ -275,7 +275,7 @@ export function TimelineBase({
   const displayDuration = visualDuration || duration;
 
   return (
-    <div className="timeline-container py-1 lg:py-4">
+    <div className="timeline-container py-0.5 lg:py-4">
       {/* Time labels - shows visual duration (after speed/trim adjustments) */}
       <div className="flex justify-between mb-0.5 lg:mb-2 text-xs text-gray-400 pl-20 lg:pl-32">
         <span>{formatTimeSimple(visualCurrentTime)}</span>
