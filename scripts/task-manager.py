@@ -104,7 +104,7 @@ def _make_request(url, method='GET', data=None, session_cookie='', timeout=10, r
             if e.code in (401, 403):
                 return None, "Auth required"
             return None, f"HTTP {e.code}"
-        except (urllib.error.URLError, ConnectionResetError) as e:
+        except (urllib.error.URLError, ConnectionResetError, TimeoutError) as e:
             last_err = str(getattr(e, 'reason', e))
             if attempt < retries - 1:
                 time.sleep(1)
@@ -121,7 +121,8 @@ def fetch_remote_bugs(env):
     if not base_url or not session:
         return [], f"No {env} session configured"
     api_url = f"{base_url}/api/admin/bugs?status=new,testing&page=1&page_size=50"
-    result, err = _make_request(api_url, session_cookie=session)
+    # 20s timeout: Fly.io machines cold-start and can take >10s to first byte
+    result, err = _make_request(api_url, session_cookie=session, timeout=20)
     if err:
         return [], err
     return result.get('bugs', []), None
@@ -1343,6 +1344,7 @@ function renderBugMilestones(app) {
   });
 }
 
+let bugLoadRetries = 0;
 async function loadBugs() {
   try {
     const resp = await fetch('/api/bugs');
@@ -1350,8 +1352,24 @@ async function loadBugs() {
       bugData = await resp.json();
       updateConfigStatus();
       render();
+      // Auth/config errors won't fix themselves; connection errors might (cold start)
+      const transientError = ['prod', 'staging'].some(env => {
+        const err = bugData[env] && bugData[env].error;
+        return err && !err.includes('Auth') && !err.includes('configured');
+      });
+      if (transientError && bugLoadRetries < 3) {
+        bugLoadRetries++;
+        setTimeout(loadBugs, 5000 * bugLoadRetries);
+        return;
+      }
+      bugLoadRetries = 0;
     }
-  } catch(e) {}
+  } catch(e) {
+    if (bugLoadRetries < 3) {
+      bugLoadRetries++;
+      setTimeout(loadBugs, 5000 * bugLoadRetries);
+    }
+  }
 }
 
 function updateConfigStatus() {
