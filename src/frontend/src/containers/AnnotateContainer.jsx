@@ -3,6 +3,7 @@ import { useAnnotateState, useAnnotate, useClipSelection } from '../modes/annota
 import { toast } from '../components/shared';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { useExportStore, useAuthStore } from '../stores';
+import { useVideoStore } from '../stores/videoStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
 import { API_BASE } from '../config';
@@ -490,6 +491,10 @@ export function AnnotateContainer({
 
     viewedHighWaterRef.current = new Map();
     persistedViewedDurationRef.current = gameData.viewed_duration || 0;
+    // videoStore.currentTime is global and survives leaving a game. Reset it
+    // in the same batch as setAnnotateGameId, or the high-water effect records
+    // the previous game's playhead as this game's viewed_duration.
+    useVideoStore.getState().setCurrentTime(0);
 
     resetAnnotate();
     setAnnotateVideoFile(null);
