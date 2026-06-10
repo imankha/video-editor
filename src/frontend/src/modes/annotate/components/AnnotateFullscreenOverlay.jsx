@@ -125,14 +125,13 @@ export function AnnotateFullscreenOverlay({
   const [selectedTags, setSelectedTags] = useState([]);
   const [clipName, setClipName] = useState('');
   const [isNameManuallyEdited, setIsNameManuallyEdited] = useState(false);
-  // Capture the currentTime when the overlay first opens so handle resets
-  // don't fight with seek-driven currentTime updates during drag
-  const initialTimeRef = useRef(currentTime);
-  useEffect(() => {
-    if (isVisible) {
-      initialTimeRef.current = currentTime;
-    }
-  }, [isVisible]); // only on visibility change, not on currentTime updates
+  // Mirror currentTime in a ref so the reset effect below reads the playhead
+  // at transition time without re-running on seek-driven updates during drag.
+  // Must NOT be frozen at open time: the overlay can switch edit->create while
+  // staying open (Add Clip pressed while editing), and a stale time would put
+  // the scrub handles outside ClipScrubRegion's window, hiding them.
+  const currentTimeRef = useRef(currentTime);
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
 
   const [scrubStartTime, setScrubStartTime] = useState(
     Math.max(0, currentTime - DEFAULT_CLIP_BEFORE)
@@ -152,7 +151,7 @@ export function AnnotateFullscreenOverlay({
 
   // Reset form when existingClip changes (switching between create/edit mode)
   useEffect(() => {
-    const t = initialTimeRef.current;
+    const t = currentTimeRef.current;
     if (existingClip) {
       setRating(existingClip.rating || DEFAULT_RATING);
       setSelectedTags(existingClip.tags || []);
@@ -283,8 +282,8 @@ export function AnnotateFullscreenOverlay({
     setSelectedTags([]);
     setClipName('');
     setIsNameManuallyEdited(false);
-    setScrubStartTime(Math.max(0, initialTimeRef.current - DEFAULT_CLIP_BEFORE));
-    setScrubEndTime(Math.min(initialTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
+    setScrubStartTime(Math.max(0, currentTimeRef.current - DEFAULT_CLIP_BEFORE));
+    setScrubEndTime(Math.min(currentTimeRef.current + DEFAULT_CLIP_AFTER, videoDuration || Infinity));
     setNotes('');
     setTaggedTeammates([]);
     setMyAthlete(true);
