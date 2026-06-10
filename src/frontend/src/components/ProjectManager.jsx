@@ -1524,6 +1524,15 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
           )}
         </div>
       )}
+
+      {hasBeenViewed && game.video_duration > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-700 rounded-b-lg overflow-hidden">
+          <div
+            className="h-full bg-green-500"
+            style={{ width: `${viewedPercent}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }

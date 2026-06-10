@@ -503,6 +503,11 @@ export function AnnotateContainer({
     }
     if (pendingClipSeekTime != null) {
       playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
+    } else if (!isMultiVideo && gameData.viewed_duration > 0 && gameData.video_duration > 0) {
+      const resumePercent = gameData.viewed_duration / gameData.video_duration;
+      if (resumePercent < 0.95) {
+        playbackUrl = `${playbackUrl}#t=${gameData.viewed_duration}`;
+      }
     }
     setAnnotateVideoUrl(playbackUrl);
     setAnnotateVideoMetadata(videoMetadata);
