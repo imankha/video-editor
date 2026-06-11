@@ -1878,7 +1878,7 @@ async def export_multi_clip(
 
     # T890: Credit reservation — calculate total duration from clips_data
     from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
-    from ...highlight_transform import get_output_duration
+    from ...highlight_transform import get_output_duration, canonicalize_segments_data
 
     total_video_seconds = 0
     for clip_cfg in clips_data:
@@ -1970,10 +1970,16 @@ async def export_multi_clip(
                         ]
                     else:
                         clip_data['cropKeyframes'] = raw_kfs
-                if db_clip['segments_data']:
-                    clip_data['segments'] = decode_data(db_clip['segments_data'])
                 if db_clip['raw_duration']:
                     clip_data['duration'] = db_clip['raw_duration']
+                if db_clip['segments_data']:
+                    # Gesture-saved rows store boundaries as user splits only;
+                    # rebuild the full [0, ...splits, duration] list so
+                    # segmentSpeeds indices line up (Bug 20p)
+                    clip_data['segments'] = canonicalize_segments_data(
+                        decode_data(db_clip['segments_data']),
+                        clip_data.get('duration'),
+                    )
 
                 # Resolve video source
                 if db_clip['game_id']:

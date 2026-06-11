@@ -453,7 +453,12 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 logger.info(f"[Framing Action] Moved keyframe from frame {action.target.frame} to {action.data.frame}")
 
             elif action.action == "split_segment":
-                # Add a new boundary
+                # Add a new boundary.
+                # NOTE: gesture-created rows hold user split times only (no 0,
+                # no duration) — the clip duration is unknown here. The PUT
+                # endpoint saves the full [0, ...splits, duration] list instead.
+                # Consumers must run canonicalize_segments_data (highlight_transform)
+                # before walking boundary pairs, or segmentSpeeds indices misalign.
                 if not action.data or action.data.time is None:
                     raise ValueError("split_segment requires data.time")
 

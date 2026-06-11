@@ -31,7 +31,7 @@ from ...database import get_db_connection
 from ...queries import latest_working_clips_subquery
 from ...storage import generate_presigned_url, generate_presigned_url_global, upload_bytes_to_r2, download_from_r2
 from ...services.ffmpeg_service import get_video_duration, get_video_info
-from ...highlight_transform import get_output_duration
+from ...highlight_transform import get_output_duration, canonicalize_segments_data
 from .multi_clip import ClipExportData, BytesFile, _export_clips
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
 from pydantic import BaseModel
@@ -448,7 +448,12 @@ async def render_project(request: RenderRequest, http_request: Request):
     segments_raw = None
     if clip['segments_data']:
         try:
-            segments_raw = decode_data(clip['segments_data'])
+            # Gesture-saved rows store boundaries as user splits only; rebuild
+            # the full [0, ...splits, duration] list so segmentSpeeds indices
+            # line up (Bug 20p)
+            segments_raw = canonicalize_segments_data(
+                decode_data(clip['segments_data']), source_duration
+            )
         except Exception:
             pass
     video_seconds = get_output_duration(segments_raw, source_duration) if source_duration else source_duration

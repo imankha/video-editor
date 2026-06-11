@@ -84,6 +84,53 @@ def get_segment_speed(segments_data: Optional[Dict], segment_index: int) -> floa
     return speeds.get(str(segment_index), 1.0)
 
 
+def canonicalize_segments_data(
+    segments_data: Optional[Dict],
+    source_duration: Optional[float],
+) -> Optional[Dict]:
+    """
+    Normalize segments_data['boundaries'] to the full-boundary format.
+
+    Two writers persist segments_data with different boundary formats:
+    - PUT /clips (saveCurrentClipState) saves the frontend's derived list:
+      [0, ...userSplits, duration]
+    - POST /clips/{id}/actions split_segment saves only the user split times:
+      [split1, split2, ...] (no 0, no duration)
+
+    segmentSpeeds is ALWAYS keyed by interval index over the FULL list, so any
+    consumer that walks boundary pairs (export, duration calc, time mapping)
+    must use the full format — otherwise every speed shifts one interval over
+    (Bug 20p: slow-mo and realtime segments swapped in exported reels).
+
+    Full-format rows (first boundary at 0) pass through unchanged. Splits-only
+    rows are rebuilt as [0, ...splits, source_duration]. The frontend never
+    creates a user split below 0.01s or within 0.01s of the duration, so the
+    first element distinguishes the two formats unambiguously.
+    """
+    if not segments_data:
+        return segments_data
+
+    boundaries = segments_data.get('boundaries')
+    if not boundaries:
+        return segments_data
+
+    if boundaries[0] <= 0.01:
+        # Already full format
+        return segments_data
+
+    if not source_duration:
+        logger.warning(
+            "canonicalize_segments_data: splits-only boundaries %s but no "
+            "source_duration — segment speeds may misalign", boundaries
+        )
+        return segments_data
+
+    splits = [b for b in sorted(boundaries) if 0.01 < b < source_duration - 0.01]
+    result = dict(segments_data)
+    result['boundaries'] = [0.0] + splits + [float(source_duration)]
+    return result
+
+
 def get_output_duration(segments_data: Optional[Dict], source_duration: float = None) -> float:
     """
     Calculate the effective output duration accounting for trim and speed changes.
