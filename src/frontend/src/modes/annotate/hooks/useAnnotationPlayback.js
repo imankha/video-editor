@@ -14,6 +14,13 @@ const DEFAULT_PLAYBACK_RATE = 1;
 const PRELOAD_AHEAD_SECONDS = 1.0;
 
 /**
+ * How long currentTime may stay frozen during playback before the stall
+ * watchdog nudges the decoder (seek-to-self + play). Matches the phantom
+ * stall watchdog interval in useVideo.
+ */
+const STALL_RECOVERY_MS = 2000;
+
+/**
  * useAnnotationPlayback — Dual-video ping-pong playback controller.
  *
  * Two <video> elements alternate: one plays the current segment while the other
@@ -48,6 +55,7 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   const hasPreloadedNextRef = useRef(false);
   const playbackRateRef = useRef(DEFAULT_PLAYBACK_RATE);
   const hasRecordedPlaybackAchievementRef = useRef(false);
+  const stallWatchRef = useRef({ lastTime: null, lastAdvanceAt: 0 });
 
   // Keep ref in sync with state for use in RAF loop
   useEffect(() => {
@@ -124,6 +132,40 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
   }, []);
 
   /**
+   * Wait for a video element to be ready (seeked + enough data).
+   * Returns a promise that resolves when the video can play from currentTime.
+   */
+  const waitForVideoReady = useCallback((video, timeoutMs = 5000) => {
+    return new Promise((resolve) => {
+      // Already ready?
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        resolve();
+        return;
+      }
+
+      const cleanup = () => {
+        video.removeEventListener('canplay', onReady);
+        video.removeEventListener('seeked', onReady);
+        clearTimeout(timer);
+      };
+      const onReady = () => {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+          cleanup();
+          resolve();
+        }
+      };
+      // Timeout fallback — don't block forever
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(); // proceed anyway
+      }, timeoutMs);
+
+      video.addEventListener('canplay', onReady);
+      video.addEventListener('seeked', onReady);
+    });
+  }, []);
+
+  /**
    * RAF-based time update loop.
    * Updates virtual time and handles segment transitions.
    */
@@ -147,6 +189,27 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
 
       const actualTime = active.currentTime;
       const rate = playbackRateRef.current;
+
+      // Stall watchdog: Chrome's decoder can phantom-stall on long videos
+      // (currentTime frozen despite ample buffer — same failure useVideo's
+      // waiting watchdog recovers from). The playback video elements have no
+      // media event handlers, so detect the freeze by wall clock and nudge
+      // the decoder with a seek-to-self + play().
+      const watch = stallWatchRef.current;
+      const now = performance.now();
+      if (actualTime !== watch.lastTime) {
+        watch.lastTime = actualTime;
+        watch.lastAdvanceAt = now;
+      } else if (now - watch.lastAdvanceAt >= STALL_RECOVERY_MS) {
+        console.warn(
+          `[PLAYBACK] Stall recovery: currentTime=${actualTime.toFixed(1)} ` +
+          `readyState=${active.readyState} frozen ${Math.round(now - watch.lastAdvanceAt)}ms, ` +
+          `nudging decoder`
+        );
+        active.currentTime = actualTime;
+        active.play().catch(() => {});
+        watch.lastAdvanceAt = now; // retry at most once per interval
+      }
 
       // Preload next segment when approaching end.
       // Scale threshold by rate so higher speeds get more lead time.
@@ -183,9 +246,16 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
           inactive.currentTime = nextSeg.startTime;
           inactive.playbackRate = rate;
           inactive.play().catch(() => {
-            // play() failed on new segment — stop playback to prevent desync
-            isPlayingRef.current = false;
-            setIsPlaying(false);
+            // play() failed (preload not ready or load aborted mid-flight) —
+            // wait for data and retry once before giving up
+            waitForVideoReady(inactive).then(() => {
+              if (!isPlayingRef.current) return; // user paused meanwhile
+              inactive.play().catch(() => {
+                console.warn('[PLAYBACK] play() failed twice at segment swap, stopping');
+                isPlayingRef.current = false;
+                setIsPlaying(false);
+              });
+            });
           });
         }
 
@@ -217,8 +287,9 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       rafIdRef.current = requestAnimationFrame(tick);
     };
 
+    stallWatchRef.current = { lastTime: null, lastAdvanceAt: performance.now() };
     rafIdRef.current = requestAnimationFrame(tick);
-  }, [getVideos, preloadNextSegment, swapVideos]);
+  }, [getVideos, preloadNextSegment, swapVideos, waitForVideoReady]);
 
   /**
    * Stop the RAF loop.
@@ -228,40 +299,6 @@ export function useAnnotationPlayback({ clips, gameVideos, videoUrl }) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
     }
-  }, []);
-
-  /**
-   * Wait for a video element to be ready (seeked + enough data).
-   * Returns a promise that resolves when the video can play from currentTime.
-   */
-  const waitForVideoReady = useCallback((video, timeoutMs = 5000) => {
-    return new Promise((resolve) => {
-      // Already ready?
-      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        resolve();
-        return;
-      }
-
-      const cleanup = () => {
-        video.removeEventListener('canplay', onReady);
-        video.removeEventListener('seeked', onReady);
-        clearTimeout(timer);
-      };
-      const onReady = () => {
-        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-          cleanup();
-          resolve();
-        }
-      };
-      // Timeout fallback — don't block forever
-      const timer = setTimeout(() => {
-        cleanup();
-        resolve(); // proceed anyway
-      }, timeoutMs);
-
-      video.addEventListener('canplay', onReady);
-      video.addEventListener('seeked', onReady);
-    });
   }, []);
 
   /**

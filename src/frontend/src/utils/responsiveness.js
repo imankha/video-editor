@@ -12,8 +12,8 @@
  * at app boot.
  */
 
-const WARN_THRESHOLD_MS = 200;  // log as warning at/above this
-const INFO_THRESHOLD_MS = 50;   // long-task spec minimum
+const WARN_THRESHOLD_MS = 500;  // log as warning at/above this
+const INFO_THRESHOLD_MS = 200;  // below this: too common to be actionable
 
 let installed = false;
 

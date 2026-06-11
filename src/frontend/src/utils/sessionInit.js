@@ -60,7 +60,9 @@ async function fetchWithRetry(url, options, { retries = 3, baseDelay = 1000 } = 
  * Install global fetch interceptor that adds X-Profile-ID and X-User-ID
  * to all API requests. Also ensures credentials: 'include' for cookies.
  */
-const SLOW_FETCH_MS = 500;
+// 1s ttfb is baseline R2 sync cost (see T1590), so anything under ~2s is
+// expected behavior, not a signal worth logging.
+const SLOW_FETCH_MS = 2000;
 
 function installFetchInterceptor() {
   if (_fetchPatched) return;
