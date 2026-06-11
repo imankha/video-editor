@@ -823,7 +823,7 @@ async def publish_to_my_reels(project_id: int):
     else:
         logger.warning(f"Failed to archive project {project_id} after publish — working data retained")
 
-    return {"success": True, "final_video_id": row['id']}
+    return {"success": True, "final_video_id": row['id'], "archived": archived}
 
 
 @router.get("/count")

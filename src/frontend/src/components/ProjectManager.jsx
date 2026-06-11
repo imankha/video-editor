@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, Play, Crop, Layers, Share2, Target, Zap } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, EyeOff, Play, Crop, Layers, Share2, Target, Zap } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
@@ -1759,8 +1759,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
   const renameProject = useProjectsStore(state => state.renameProject);
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
 
-  const handlePublishToMyReels = async (e) => {
-    e.stopPropagation();
+  const publishProject = async ({ openGallery }) => {
     setIsPublishing(true);
     try {
       const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
@@ -1770,17 +1769,33 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         const error = await response.json();
         throw new Error(error.detail || 'Failed to publish');
       }
+      const result = await response.json();
+      if (!result.archived) {
+        console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
+      }
       useGalleryStore.getState().fetchCount({ force: true });
       fetchProjects({ force: true });
-      // Close first so open() triggers a fresh download fetch (isOpen: false→true)
-      useGalleryStore.getState().close();
-      setTimeout(() => useGalleryStore.getState().open(), 300);
+      if (openGallery) {
+        // Close first so open() triggers a fresh download fetch (isOpen: false→true)
+        useGalleryStore.getState().close();
+        setTimeout(() => useGalleryStore.getState().open(), 300);
+      }
     } catch (error) {
       console.error('[ProjectCard] Publish error:', error);
       alert(`Failed to move to ${SECTION_NAMES.LIBRARY}: ${error.message}`);
     } finally {
       setIsPublishing(false);
     }
+  };
+
+  const handlePublishToMyReels = (e) => {
+    e.stopPropagation();
+    publishProject({ openGallery: true });
+  };
+
+  const handleHideFromDrafts = (e) => {
+    e.stopPropagation();
+    publishProject({ openGallery: false });
   };
 
   const handleStartRename = (e) => {
@@ -2059,36 +2074,36 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         )}
       </div>
 
-      {isReadyToPublish ? (
-        <>
-          {/* Secondary actions row — always visible (no card-level tap action in this state) */}
-          <div className="mt-2 flex items-center justify-center gap-2">
-            {project.final_video_id && (
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={Play}
-                iconOnly
-                onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-                title="Preview video"
-              />
-            )}
+      {isComplete ? (
+        /* Secondary actions row — shown for all Done reels, published or not */
+        <div className="mt-2 flex items-center justify-center gap-2">
+          {project.final_video_id && (
             <Button
               variant="ghost"
               size="sm"
-              icon={Crop}
+              icon={Play}
               iconOnly
-              onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
-              title="Open in Framing"
+              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
+              title="Preview video"
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Layers}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
-              title="Open in Overlay"
-            />
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Crop}
+            iconOnly
+            onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
+            title="Open in Framing"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Layers}
+            iconOnly
+            onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
+            title="Open in Overlay"
+          />
+          {isReadyToPublish ? (
             <Button
               variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"
@@ -2097,18 +2112,16 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               onClick={handleDelete}
               title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
             />
-          </div>
-        </>
-      ) : isComplete ? (
-        <div className="mt-3 flex items-center gap-2">
-          {project.final_video_id && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-              className={`p-1.5 rounded-full ${REEL.bgMuted} hover:bg-cyan-800/60 transition-colors`}
-              title="Preview video"
-            >
-              <Play size={16} className={REEL.accent} />
-            </button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={EyeOff}
+              iconOnly
+              loading={isPublishing}
+              onClick={handleHideFromDrafts}
+              title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`}
+            />
           )}
         </div>
       ) : (
