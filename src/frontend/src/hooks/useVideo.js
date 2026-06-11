@@ -6,7 +6,7 @@ import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
-import { checkRangeFallback } from '../utils/videoLoadWatchdog';
+import { checkRangeFallback, getTotalBufferedSec } from '../utils/videoLoadWatchdog';
 import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute';
 import { track } from '../utils/analytics';
 
@@ -297,9 +297,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       watchdogTimerRef.current = null;
       const v = videoRef.current;
       if (!v) return;
-      const bufferedSec = v.buffered?.length
-        ? v.buffered.end(v.buffered.length - 1)
-        : 0;
+      const bufferedSec = getTotalBufferedSec(v.buffered);
       const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
         bufferedSec,
         clipDurationSec: clipDurationForLoadRef.current,
@@ -543,6 +541,38 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     return { ahead: 0, rangeCount, inGap: true };
   };
 
+  // Load-phase phantom stall: during a cold load, Chrome can leave readyState
+  // stuck below HAVE_FUTURE_DATA despite ample buffer at the seek target
+  // (observed: 61s to playable with 53s buffered ahead). The playback stall
+  // watchdog only arms from `waiting`, which never fires while loading, so
+  // nothing recovered it. Same seek-to-self nudge as 863d56b1 / 5ff1a296.
+  const loadNudgeTimerRef = useRef(null);
+  const loadNudgeCountRef = useRef(0);
+  const MAX_LOAD_NUDGES = 3;
+
+  const maybeNudgeStalledLoad = () => {
+    if (!useVideoStore.getState().isVideoElementLoading) return;
+    if (loadNudgeTimerRef.current) return;
+    if (loadNudgeCountRef.current >= MAX_LOAD_NUDGES) return;
+    loadNudgeTimerRef.current = setTimeout(() => {
+      loadNudgeTimerRef.current = null;
+      const v = videoRef.current;
+      if (!v || !useVideoStore.getState().isVideoElementLoading) return;
+      if (v.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+      const { ahead, inGap } = getBufferAheadAt(v, v.currentTime);
+      // Real network stall (nothing buffered at the target) — a nudge can't
+      // help; let the load continue or error out.
+      if (inGap || ahead < 5) return;
+      loadNudgeCountRef.current += 1;
+      console.warn(
+        `[VIDEO_LOAD] load_stall_nudge id=${loadIdRef.current} attempt=${loadNudgeCountRef.current} ` +
+        `readyState=${v.readyState} bufferAhead=${ahead.toFixed(1)}s`
+      );
+      const ct = v.currentTime;
+      v.currentTime = ct; // seek-to-self reinitializes the decoder
+    }, 2000);
+  };
+
   const handleStalled = () => {
     if (!videoRef.current) return;
     const v = videoRef.current;
@@ -553,6 +583,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       `networkState=${v.networkState} readyState=${v.readyState} ` +
       `src=${v.src?.substring(0, 80)}`
     );
+    maybeNudgeStalledLoad();
   };
 
   const handleSuspend = () => {
@@ -564,6 +595,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       `bufferAhead=${ahead.toFixed(1)}s inGap=${inGap} ranges=${rangeCount} ` +
       `networkState=${v.networkState} readyState=${v.readyState}`
     );
+    maybeNudgeStalledLoad();
   };
 
   // Buffering event handlers - pause time updates when video is waiting for data
@@ -833,6 +865,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       console.log(`[VIDEO] Loading: ${urlPreview}`);
       console.log(`[VIDEO] Mode: ${loadMode}`);
       console.log(`[VIDEO] networkState: ${video.networkState}, readyState: ${video.readyState}`);
+      // New src — reset load-phase stall nudge state.
+      if (loadNudgeTimerRef.current) {
+        clearTimeout(loadNudgeTimerRef.current);
+        loadNudgeTimerRef.current = null;
+      }
+      loadNudgeCountRef.current = 0;
       // T1380: one-shot moov-position probe so logs confirm whether the
       // currently-playing URL is faststart-ordered. Blob URLs skipped.
       if (!isBlob && video.src) {
@@ -878,9 +916,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       // more than the clip needs (T1430). ignoreReadyState=true because
       // the video is by definition playable at this point.
       if (loadStartRef.current) {
-        const bufferedSec = video.buffered?.length
-          ? video.buffered.end(video.buffered.length - 1)
-          : 0;
+        const bufferedSec = getTotalBufferedSec(video.buffered);
         console.log(`[VIDEO_LOAD] playable id=${loadIdRef.current} elapsedMs=${elapsed} readyState=${video.readyState} bufferedSec=${bufferedSec.toFixed(1)}`);
         const verdict = isProxyLoadRef.current ? null : checkRangeFallback({
           bufferedSec,
@@ -898,6 +934,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (watchdogTimerRef.current) {
         clearTimeout(watchdogTimerRef.current);
         watchdogTimerRef.current = null;
+      }
+      // Load completed — no load-phase stall to nudge.
+      if (loadNudgeTimerRef.current) {
+        clearTimeout(loadNudgeTimerRef.current);
+        loadNudgeTimerRef.current = null;
       }
       // T1410: foreground video is now playable — let the warmer resume.
       clearForegroundActive();
@@ -1212,6 +1253,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
+      }
+      if (loadNudgeTimerRef.current) {
+        clearTimeout(loadNudgeTimerRef.current);
+        loadNudgeTimerRef.current = null;
       }
       if (seekBufferingTimerRef.current) {
         clearTimeout(seekBufferingTimerRef.current);

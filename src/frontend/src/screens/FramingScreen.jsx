@@ -370,38 +370,54 @@ export function FramingScreen({
   const lastLoadedUrlRef = useRef(null);
   const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops
 
+  // Dedupe playback-url fetches: the mount effects (useLayoutEffect + the
+  // clips/metadata-keyed effect) each call getClipVideoConfig before the
+  // lastLoadedUrlRef guard can run, firing several identical requests per
+  // clip. Cache the in-flight promise per clip id with a short TTL (presigned
+  // URLs are valid 4h; 60s just absorbs the mount burst).
+  const clipVideoConfigCacheRef = useRef(new Map()); // clipId -> { promise, ts }
+  const CLIP_CONFIG_CACHE_TTL_MS = 60000;
+
   /**
    * Get the video URL and clip range for a clip.
    * Game clips use the game video URL with a clip offset; uploaded/extracted clips use file_url directly.
    */
   const getClipVideoConfig = useCallback(async (clip) => {
     if (clip.game_video_url && clip.start_time != null && clip.end_time != null) {
-      try {
-        const res = await apiFetch(
-          `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/playback-url`
-        );
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = await res.json();
-        return {
-          url: data.url,
-          gameUrl: null,
-          clipRange: {
-            clipOffset: data.start_time,
-            clipDuration: data.end_time - data.start_time,
-          },
-        };
-      } catch (err) {
-        console.warn('[Framing] Presigned URL fetch failed, falling back to proxy:', err.message);
-        const proxyUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`;
-        return {
-          url: proxyUrl,
-          gameUrl: null,
-          clipRange: {
-            clipOffset: clip.start_time,
-            clipDuration: clip.end_time - clip.start_time,
-          },
-        };
+      const cached = clipVideoConfigCacheRef.current.get(clip.id);
+      if (cached && performance.now() - cached.ts < CLIP_CONFIG_CACHE_TTL_MS) {
+        return cached.promise;
       }
+      const promise = (async () => {
+        try {
+          const res = await apiFetch(
+            `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/playback-url`
+          );
+          if (!res.ok) throw new Error(`${res.status}`);
+          const data = await res.json();
+          return {
+            url: data.url,
+            gameUrl: null,
+            clipRange: {
+              clipOffset: data.start_time,
+              clipDuration: data.end_time - data.start_time,
+            },
+          };
+        } catch (err) {
+          console.warn('[Framing] Presigned URL fetch failed, falling back to proxy:', err.message);
+          const proxyUrl = `${API_BASE}/api/clips/projects/${projectId}/clips/${clip.id}/stream`;
+          return {
+            url: proxyUrl,
+            gameUrl: null,
+            clipRange: {
+              clipOffset: clip.start_time,
+              clipDuration: clip.end_time - clip.start_time,
+            },
+          };
+        }
+      })();
+      clipVideoConfigCacheRef.current.set(clip.id, { promise, ts: performance.now() });
+      return promise;
     }
     // Uploaded/extracted clip: use file_url directly (no offset)
     const url = getClipFileUrlSelector(clip, projectId);
