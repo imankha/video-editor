@@ -118,6 +118,13 @@ export function FramingContainer({
   // Ref to track if user has made edits (for clip switching save decision)
   const clipHasUserEditsRef = useRef(false);
 
+  // Latest selected clip id, readable inside async handlers after an await.
+  // Closure-captured selectedClipId goes stale when the user switches clips
+  // while a backend call is in flight — rollbacks must not touch hook state
+  // that now belongs to a different clip.
+  const latestSelectedClipIdRef = useRef(selectedClipId);
+  latestSelectedClipIdRef.current = selectedClipId;
+
   // DERIVED STATE: Current crop state at playhead
   const currentCropState = useMemo(() => {
     if (!metadata) return null;
@@ -328,18 +335,22 @@ export function FramingContainer({
         height: cropData.height,
         origin: 'user'
       });
-      if (!result.success && selectedClipId === callerClipId) {
-        // Rollback: restore previous keyframe or remove the new one
-        if (previousKf && previousKfData) {
-          addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
-        } else {
-          removeKeyframe(currentTime, duration);
-        }
+      if (!result.success) {
+        // Store rollback is keyed by clip id — always safe
         if (callerClipId) {
           updateClipData(callerClipId, { crop_data: previousStoreKfs });
         }
-        clipHasUserEditsRef.current = false;
-        setFramingChangedSinceExport?.(false);
+        // Hook rollback only if the user is still on the same clip — the hook
+        // now holds the new clip's keyframes after a switch
+        if (latestSelectedClipIdRef.current === callerClipId) {
+          if (previousKf && previousKfData) {
+            addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
+          } else {
+            removeKeyframe(currentTime, duration);
+          }
+          clipHasUserEditsRef.current = false;
+          setFramingChangedSinceExport?.(false);
+        }
         toast.error('Failed to save crop keyframe', { message: result.error });
       }
     }
@@ -785,6 +796,14 @@ export function FramingContainer({
    * Handle keyframe delete
    */
   const handleKeyframeDelete = useCallback(async (time) => {
+    // Enforce the 2-keyframe minimum up front. The keyframe reducer and the
+    // backend both refuse the delete, so attempting it only desyncs the
+    // optimistic store update from hook/DB state (bug 19p).
+    if (keyframes.length <= 2) {
+      toast.error('Cannot delete keyframe', { message: 'A clip needs at least 2 keyframes' });
+      return;
+    }
+
     const frame = Math.round(time * framerate);
     const callerClipId = selectedClipId;
 
@@ -810,16 +829,20 @@ export function FramingContainer({
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, frame);
-      if (!result.success && selectedClipId === callerClipId) {
-        // Rollback: re-add the keyframe
-        if (deletedCropData) {
-          addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
-        }
+      if (!result.success) {
+        // Store rollback is keyed by clip id — always safe
         if (callerClipId) {
           updateClipData(callerClipId, { crop_data: previousStoreKfs });
         }
-        clipHasUserEditsRef.current = false;
-        setFramingChangedSinceExport?.(false);
+        // Hook rollback only if the user is still on the same clip — the hook
+        // now holds the new clip's keyframes after a switch
+        if (latestSelectedClipIdRef.current === callerClipId) {
+          if (deletedCropData) {
+            addOrUpdateKeyframe(time, deletedCropData, duration, deletedOrigin);
+          }
+          clipHasUserEditsRef.current = false;
+          setFramingChangedSinceExport?.(false);
+        }
         toast.error('Failed to delete keyframe', { message: result.error });
       }
     }
@@ -869,18 +892,22 @@ export function FramingContainer({
           height: copiedCrop.height,
           origin: 'user'
         });
-        if (!result.success && selectedClipId === callerClipId) {
-          // Rollback: restore previous keyframe or remove the pasted one
-          if (previousKf && previousKfData) {
-            addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
-          } else {
-            removeKeyframe(time, duration);
-          }
+        if (!result.success) {
+          // Store rollback is keyed by clip id — always safe
           if (callerClipId) {
             updateClipData(callerClipId, { crop_data: previousStoreKfs });
           }
-          clipHasUserEditsRef.current = false;
-          setFramingChangedSinceExport?.(false);
+          // Hook rollback only if the user is still on the same clip — the hook
+          // now holds the new clip's keyframes after a switch
+          if (latestSelectedClipIdRef.current === callerClipId) {
+            if (previousKf && previousKfData) {
+              addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
+            } else {
+              removeKeyframe(time, duration);
+            }
+            clipHasUserEditsRef.current = false;
+            setFramingChangedSinceExport?.(false);
+          }
           toast.error('Failed to paste crop keyframe', { message: result.error });
         }
       }

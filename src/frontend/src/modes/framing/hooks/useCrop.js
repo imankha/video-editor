@@ -165,12 +165,17 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * Restore saved keyframes when they change (new clip selected)
    * useLayoutEffect ensures keyframes are set before paint, so the crop
    * rectangle is visible on first render (avoids flash of no-crop state).
+   *
+   * Also re-restores when the controller is uninitialized (after a reset)
+   * even if the dedupe key matches: resetKeyframes() wipes the hook, and
+   * without this the crop would stay empty (no reticule) when returning to
+   * a clip whose keyframes were already restored earlier in the session.
    */
   useLayoutEffect(() => {
     if (savedKeyframes && savedKeyframes.length > 0) {
       const keyframesKey = JSON.stringify(savedKeyframes.map(k => ({ frame: k.frame, x: k.x, y: k.y })));
 
-      if (keyframesKey !== lastSavedKeyframesRef.current) {
+      if (keyframesKey !== lastSavedKeyframesRef.current || machineState === 'uninitialized') {
         const frameKeyframes = normalizeToFrameKeyframes(savedKeyframes, framerate);
 
         if (validateFrameKeyframes(frameKeyframes)) {
@@ -179,7 +184,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
         }
       }
     }
-  }, [savedKeyframes, framerate, restoreKeyframes]);
+  }, [savedKeyframes, framerate, restoreKeyframes, machineState]);
 
   // Phase 2: Adjust keyframe boundaries when trimRange/duration loads after restore.
   // Saved keyframes may span the full video (e.g., endFrame=599) while the clip is
@@ -216,15 +221,19 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
 
       // Check if we need to initialize:
       // - Only if state is UNINITIALIZED (no keyframes, or after resetCrop)
-      // - Skip if trimRange is set (trim operations handle their own keyframes)
       // - Skip if savedKeyframes were provided (use those instead)
       // NOTE: Uses machineState (in deps) instead of keyframesRef to properly
       // detect post-reset state. The clip-switch effect calls resetCrop() AFTER
       // this effect runs, so keyframesRef would still have stale previous-clip data.
+      // NOTE: trimRange does NOT suppress initialization. A clip can have a trim
+      // saved with no crop keyframes (trim/speed gestures persist surgically,
+      // crop_data stays empty until a crop gesture) — it still needs default
+      // keyframes or the crop reticule never renders. Live trim operations are
+      // safe because the controller is not 'uninitialized' while editing.
       const isUninitialized = machineState === 'uninitialized';
       const hasSavedKeyframes = savedKeyframes && savedKeyframes.length > 0;
 
-      let shouldInitialize = !trimRange && !hasSavedKeyframes && isUninitialized;
+      let shouldInitialize = !hasSavedKeyframes && isUninitialized;
 
       // Additional check: if keyframes exist but have wrong orientation (portrait vs landscape),
       // force re-initialization. This handles aspect ratio changes.
