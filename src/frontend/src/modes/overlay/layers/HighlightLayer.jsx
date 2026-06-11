@@ -40,6 +40,26 @@ export default function HighlightLayer({
 
   const timelineDuration = visualDuration || duration;
 
+  // Calculate effective start/end based on trimRange
+  // After trimming, keyframes are reconstituted at trim boundaries
+  // For highlight, the effective end is the minimum of highlightDuration and trimRange.end
+  const effectiveStartTime = trimRange?.start ?? 0;
+  const effectiveEndTime = trimRange ? Math.min(highlightDuration, trimRange.end) : highlightDuration;
+  const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
+  const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
+
+  // Tolerance of 1 frame for boundary checks (floating point precision)
+  const FRAME_TOLERANCE = 1;
+
+  // Keyframes before the trim start are model scaffolding (the controller
+  // always keeps a permanent keyframe at frame 0, even when a front trim
+  // makes it invisible). They map to the same visual position as the trim
+  // boundary keyframe, so rendering them shows a phantom double marker.
+  // Keep original indexes — selectedKeyframeIndex indexes the full array.
+  const visibleKeyframes = keyframes
+    .map((keyframe, index) => ({ keyframe, index }))
+    .filter(({ keyframe }) => keyframe.frame >= effectiveStartFrame - FRAME_TOLERANCE);
+
   /**
    * Convert frame number to visual pixel position on timeline
    */
@@ -172,29 +192,19 @@ export default function HighlightLayer({
             </div>
           )}
 
-          {isEnabled && keyframes.length === 2 && !isEndKeyframeExplicit && (
+          {isEnabled && visibleKeyframes.length === 2 && !isEndKeyframeExplicit && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span className="text-gray-400 text-sm">Drag the highlight ellipse on the video to add keyframes</span>
             </div>
           )}
 
           {/* Keyframe indicators (only show when enabled) */}
-          {isEnabled && keyframes.map((keyframe, index) => {
+          {isEnabled && visibleKeyframes.map(({ keyframe, index }) => {
             const position = frameToPixel(keyframe.frame);
             const keyframeTime = frameToTime(keyframe.frame, framerate);
             const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
 
-            // Calculate effective start/end based on trimRange
-            // After trimming, keyframes are reconstituted at trim boundaries
-            // For highlight, the effective end is the minimum of highlightDuration and trimRange.end
-            const effectiveStartTime = trimRange?.start ?? 0;
-            const effectiveEndTime = trimRange ? Math.min(highlightDuration, trimRange.end) : highlightDuration;
-            const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
-            const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
-
             // Check if this is a boundary keyframe (at effective start or end)
-            // Use tolerance of 1 frame to handle floating point precision issues
-            const FRAME_TOLERANCE = 1;
             const isStartKeyframe = Math.abs(keyframe.frame - effectiveStartFrame) <= FRAME_TOLERANCE;
             const isEndKeyframe = Math.abs(keyframe.frame - effectiveEndFrame) <= FRAME_TOLERANCE;
             // Also consider the last keyframe in the array as the end keyframe (fallback for edge cases)
@@ -225,13 +235,13 @@ export default function HighlightLayer({
                 isEndKeyframe={isEffectiveEndKeyframe}
                 onClick={() => onKeyframeClick(keyframeTime, index)}
                 onCopy={onKeyframeCopy ? () => onKeyframeCopy(keyframeTime) : undefined}
-                onDelete={keyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+                onDelete={visibleKeyframes.length > 2 && !isPermanent ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
                 tooltip={`Highlight keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                   isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
                 }${isSelected ? ' [SELECTED]' : ''}`}
                 edgePadding={edgePadding}
                 showCopyButton={!!onKeyframeCopy}
-                showDeleteButton={keyframes.length > 2 && !isPermanent}
+                showDeleteButton={visibleKeyframes.length > 2 && !isPermanent}
               />
             );
           })}

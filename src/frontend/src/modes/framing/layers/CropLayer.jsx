@@ -36,6 +36,25 @@ export default function CropLayer({
   // Use visual duration if provided, otherwise fall back to source duration
   const timelineDuration = visualDuration || duration;
 
+  // Calculate effective start/end based on trimRange
+  // After trimming, keyframes are reconstituted at trim boundaries
+  const effectiveStartTime = trimRange?.start ?? 0;
+  const effectiveEndTime = trimRange?.end ?? duration;
+  const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
+  const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
+
+  // Tolerance of 1 frame for boundary checks (floating point precision)
+  const FRAME_TOLERANCE = 1;
+
+  // Keyframes before the trim start are model scaffolding (the controller
+  // always keeps a permanent keyframe at frame 0, even when a front trim
+  // makes it invisible). They map to the same visual position as the trim
+  // boundary keyframe, so rendering them shows a phantom double marker.
+  // Keep original indexes — selectedKeyframeIndex indexes the full array.
+  const visibleKeyframes = keyframes
+    .map((keyframe, index) => ({ keyframe, index }))
+    .filter(({ keyframe }) => keyframe.frame >= effectiveStartFrame - FRAME_TOLERANCE);
+
   /**
    * Convert frame number to visual pixel position on timeline
    * Frame -> Source Time -> Visual Time -> Percentage
@@ -59,22 +78,23 @@ export default function CropLayer({
     }
 
     // Select boundary keyframe if clicking in the edge zones
-    if (keyframes.length >= 2 && trackRef.current && onKeyframeClick) {
+    if (visibleKeyframes.length >= 2 && trackRef.current && onKeyframeClick) {
       const rect = trackRef.current.getBoundingClientRect();
       const usableWidth = rect.width - (edgePadding * 2);
       const x = e.clientX - rect.left - edgePadding;
       const clickPercent = (x / usableWidth) * 100;
 
-      const firstPosition = frameToPixel(keyframes[0].frame);
-      const lastPosition = frameToPixel(keyframes[keyframes.length - 1].frame);
+      const first = visibleKeyframes[0];
+      const last = visibleKeyframes[visibleKeyframes.length - 1];
+      const firstPosition = frameToPixel(first.keyframe.frame);
+      const lastPosition = frameToPixel(last.keyframe.frame);
 
       if (clickPercent <= firstPosition) {
-        const time = frameToTime(keyframes[0].frame, framerate);
-        onKeyframeClick(time, 0);
+        const time = frameToTime(first.keyframe.frame, framerate);
+        onKeyframeClick(time, first.index);
       } else if (clickPercent >= lastPosition) {
-        const lastIndex = keyframes.length - 1;
-        const time = frameToTime(keyframes[lastIndex].frame, framerate);
-        onKeyframeClick(time, lastIndex);
+        const time = frameToTime(last.keyframe.frame, framerate);
+        onKeyframeClick(time, last.index);
       }
     }
   };
@@ -93,29 +113,20 @@ export default function CropLayer({
         <div className="absolute inset-0 bg-blue-900 bg-opacity-10 rounded-r-lg" />
 
         {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
-        {keyframes.length === 2 && !isEndKeyframeExplicit && (
+        {visibleKeyframes.length === 2 && !isEndKeyframeExplicit && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="text-gray-400 text-sm">Set Crop Keyframes to animate crop window</span>
           </div>
         )}
 
         {/* Keyframe indicators */}
-        {keyframes.map((keyframe, index) => {
+        {visibleKeyframes.map(({ keyframe, index }) => {
           // Convert keyframe frame number to visual position
           const position = frameToPixel(keyframe.frame);
           const keyframeTime = frameToTime(keyframe.frame, framerate);
           const isAtCurrentTime = Math.abs(keyframeTime - currentTime) < 0.01;
 
-          // Calculate effective start/end based on trimRange
-          // After trimming, keyframes are reconstituted at trim boundaries
-          const effectiveStartTime = trimRange?.start ?? 0;
-          const effectiveEndTime = trimRange?.end ?? duration;
-          const effectiveStartFrame = Math.round(effectiveStartTime * framerate);
-          const effectiveEndFrame = Math.round(effectiveEndTime * framerate);
-
           // Check if this is a boundary keyframe (at effective start or end)
-          // Use tolerance of 1 frame to handle floating point precision issues
-          const FRAME_TOLERANCE = 1;
           const isStartKeyframe = Math.abs(keyframe.frame - effectiveStartFrame) <= FRAME_TOLERANCE;
           const isEndKeyframe = Math.abs(keyframe.frame - effectiveEndFrame) <= FRAME_TOLERANCE;
           // Also consider the last keyframe in the array as the end keyframe (fallback for edge cases)
@@ -148,13 +159,13 @@ export default function CropLayer({
               isStartKeyframe={isStartKeyframe}
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
-              onDelete={keyframes.length > 2 && !isBoundaryKeyframe ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+              onDelete={visibleKeyframes.length > 2 && !isBoundaryKeyframe ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
               tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
                 isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
               }${isSelected ? ' [SELECTED]' : ''}`}
               edgePadding={edgePadding}
               showCopyButton={false}
-              showDeleteButton={keyframes.length > 2 && !isBoundaryKeyframe}
+              showDeleteButton={visibleKeyframes.length > 2 && !isBoundaryKeyframe}
             />
           );
         })}

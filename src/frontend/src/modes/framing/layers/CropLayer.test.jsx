@@ -1,0 +1,77 @@
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import CropLayer from './CropLayer';
+import { CropProvider } from '../contexts/CropContext';
+
+/**
+ * Regression test for the double-keyframe-at-start bug:
+ * After a front trim, the controller keeps the permanent frame-0 keyframe
+ * (model scaffolding — keyframes span the full source timeline) plus the
+ * reconstituted boundary keyframe at the trim start. Both map to visual
+ * position 0, so the timeline showed two stacked markers at the start.
+ * Keyframes outside the visible trim range must not render.
+ */
+
+const FRAMERATE = 29.97002997002997;
+const DURATION = 10.438660096879175;
+
+// Mirrors prod data from the bug report: front trim at 1.4001s (frame 42)
+const KEYFRAMES = [
+  { frame: 0, x: 792.403, y: 0, width: 607.499, height: 1079.999, origin: 'permanent' },
+  { frame: 42, x: 520.629, y: 0, width: 607.499, height: 1079.999, origin: 'permanent' },
+  { frame: 129, x: 830.655, y: 0, width: 607.499, height: 1079.999, origin: 'user' },
+  { frame: 313, x: 248.238, y: 0, width: 607.499, height: 1079.999, origin: 'permanent' },
+];
+
+const TRIM_RANGE = { start: 1.4001073392641956, end: DURATION };
+
+function renderCropLayer(props = {}) {
+  return render(
+    <CropProvider value={{ isEndKeyframeExplicit: true }}>
+      <CropLayer
+        keyframes={KEYFRAMES}
+        duration={DURATION}
+        visualDuration={DURATION - TRIM_RANGE.start}
+        currentTime={TRIM_RANGE.start}
+        framerate={FRAMERATE}
+        isActive
+        onKeyframeClick={vi.fn()}
+        onKeyframeDelete={vi.fn()}
+        trimRange={TRIM_RANGE}
+        {...props}
+      />
+    </CropProvider>
+  );
+}
+
+function getMarkerTooltips() {
+  return Array.from(document.querySelectorAll('[title^="Keyframe at frame"]'))
+    .map(el => el.getAttribute('title'));
+}
+
+describe('CropLayer trim range rendering', () => {
+  it('hides keyframes before the trim start (no double marker at visible start)', () => {
+    renderCropLayer();
+
+    const tooltips = getMarkerTooltips();
+    expect(tooltips).toHaveLength(3);
+    expect(tooltips.some(t => t.startsWith('Keyframe at frame 0 '))).toBe(false);
+    expect(tooltips.some(t => t.startsWith('Keyframe at frame 42 '))).toBe(true);
+  });
+
+  it('renders all keyframes when there is no trim', () => {
+    renderCropLayer({ trimRange: null, visualDuration: DURATION, currentTime: 0 });
+
+    expect(getMarkerTooltips()).toHaveLength(4);
+  });
+
+  it('keeps the trim-boundary keyframe non-deletable and start-flagged', () => {
+    renderCropLayer();
+
+    // Boundary keyframe at frame 42 must not expose a delete button.
+    // Out-of-range frame 0 is hidden, so no marker should be deletable here
+    // except genuine middle keyframes (frame 129).
+    const deleteButtons = screen.queryAllByTitle('Delete keyframe');
+    expect(deleteButtons).toHaveLength(1); // only frame 129
+  });
+});
