@@ -642,7 +642,7 @@ export function ProjectManager({
                     {' · '}
                     {recentItems.recentProject.has_final_video ? 'Complete' :
                      recentItems.recentProject.has_working_video ? 'In Overlay' :
-                     recentItems.recentProject.clips_in_progress > 0 ? 'Editing' : 'Not Started'}
+                     recentItems.recentProject.clips_in_progress > 0 ? 'Framing started' : 'Not Started'}
                   </div>
                 </div>
                 <ChevronRight size={16} className="text-gray-500 flex-shrink-0" />
@@ -858,7 +858,7 @@ export function ProjectManager({
                         { value: 'all', label: 'All' },
                         // T66: 'complete' and 'uncompleted' removed - completed projects are archived
                         { value: 'overlay', label: 'In Overlay', color: 'blue' },
-                        { value: 'editing', label: 'Editing', color: 'blue' },
+                        { value: 'editing', label: 'Framing Started', color: 'blue' },
                         { value: 'exported', label: 'Exported', color: 'purple' },
                         { value: 'not_started', label: 'Not Started', color: 'gray' }
                       ].map(opt => {
@@ -1545,9 +1545,9 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
  * Scales from 1 to 100+ clips by adjusting segment widths.
  *
  * Colors:
- * - Green (✓): Done/Complete
+ * - Green (✓): Done/Complete (solid fill is reserved for done)
  * - Yellow/Amber: Exporting (actively rendering)
- * - Blue (◐): Editing (has edits, not exported)
+ * - Blue half-fill over gray: Started (has edits, not exported)
  * - Light Blue: Ready (for overlay - working video exists)
  * - Gray (○): Not started
  *
@@ -1558,7 +1558,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
  * @param {Object} project - Project data
  * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
  */
-function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null }) {
+export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null }) {
   const {
     clip_count,
     clips_exported,
@@ -1631,12 +1631,14 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
   const gapWidth = 2;
 
   // Status to color mapping
+  // in_progress gets a gray track with a blue bottom half-fill (rendered below) so
+  // "started" reads as unfinished by shape, not just hue - solid fill means done (T3540)
   const statusColors = {
     done: 'bg-green-500',
     exporting: 'bg-amber-500',
     export_failed: 'bg-orange-500',
     disconnected: 'bg-gray-400',
-    in_progress: 'bg-blue-500',
+    in_progress: 'bg-gray-600',
     ready: 'bg-blue-300',
     pending: 'bg-gray-600'
   };
@@ -1699,11 +1701,13 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
             }
           };
 
+          const isInProgress = segment.status === 'in_progress';
+
           return (
             <div
               key={index}
               onClick={handleClick}
-              className={`${statusColors[segment.status]} transition-all cursor-pointer hover:brightness-110 ${
+              className={`${statusColors[segment.status]} ${isInProgress ? 'relative overflow-hidden' : ''} transition-all cursor-pointer hover:brightness-110 ${
                 isLast ? 'rounded-r' : ''
               } ${index === 0 ? 'rounded-l' : ''}`}
               style={{
@@ -1714,11 +1718,15 @@ function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExport
                 segment.status === 'done' ? 'Complete' :
                 segment.status === 'disconnected' ? 'Not Connected' :
                 segment.status === 'exporting' ? 'Exporting...' :
-                segment.status === 'in_progress' ? 'Editing' :
+                segment.status === 'in_progress' ? (isOverlay ? 'Started - export to complete' : 'Started - export framing to complete') :
                 segment.status === 'ready' ? 'Ready' :
                 'Not Started'
               } (click to open)`}
-            />
+            >
+              {isInProgress && (
+                <div className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500 pointer-events-none" />
+              )}
+            </div>
           );
         })}
       </div>
@@ -2013,7 +2021,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
                   ) :
                   project.has_working_video ? 'In Overlay' :
                   project.clips_in_progress > 0 ? (
-                    <span className="text-blue-400">Editing</span>
+                    <span className="text-blue-400">Framing started</span>
                   ) :
                   project.clips_exported > 0 ? 'Exported' : 'Not Started'}
                 </span>

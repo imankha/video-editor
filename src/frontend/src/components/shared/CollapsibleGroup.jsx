@@ -83,7 +83,9 @@ export function CollapsibleGroup({
             )}
             {showInProgressHeader && (
               <span className="flex items-center gap-1 text-xs text-blue-400">
-                <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
+                <span className="w-2 h-2 rounded-sm bg-gray-600 relative overflow-hidden">
+                  <span className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500"></span>
+                </span>
                 {statusCounts.inProgress}
               </span>
             )}
@@ -115,7 +117,9 @@ export function CollapsibleGroup({
               )}
               {showInProgressLegend && (
                 <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-sm bg-blue-500"></span>
+                  <span className="w-2 h-2 rounded-sm bg-gray-600 relative overflow-hidden">
+                    <span className="absolute bottom-0 inset-x-0 h-1/2 bg-blue-500"></span>
+                  </span>
                   In Progress
                 </span>
               )}
