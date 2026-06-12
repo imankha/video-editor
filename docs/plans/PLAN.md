@@ -2,7 +2,7 @@
 
 ## Current Focus
 
-**Phase: Bug fix** — Fixing server availability and archive reliability issues from alpha tester reports.
+**Phase: Feature** — Season Highlights & Collections epic: My Reels becomes the curation home (annotate → publish → rank → share). Spec: [season-highlights-spec.md](season-highlights-spec.md) · Tech notes: [season-highlights-tech-notes.md](season-highlights-tech-notes.md)
 
 **Landing Page:** Already live at `reelballers.com`
 
@@ -61,7 +61,24 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 | T1880 | [Video Load Error Diagnostics](tasks/T1880-video-load-error-diagnostics.md) | 5 | 3 | P2 | DONE | [ ] | "Video format not supported" error logs raw code but not HTTP status/content-type/body — can't distinguish server error page from actual codec issue |
 | T1890 | [Multi-Clip Cache Warming](tasks/T1890-multiclip-cache-warming.md) | 7 | 4 | P1 | DONE | [ ] | FOREGROUND_ACTIVE latch kills warming worker before clips 2-5 are warmed; switching clips in multi-clip project causes 10-48s cold loads |
 
-### Milestone: Performance (NEXT UP)
+### Milestone: Season Highlights & Collections (NEXT UP)
+
+Curation paradigm: collections = (scope, filter, ratio) evaluated live; one global rank; Season Highlights flagship with unlock moment. Tasks in strict dependency order (epic rule: do not start N+1 before N). T3630–T3660 ship together as the paradigm release.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+|  | **[Season Highlights & Collections](tasks/season-highlights/EPIC.md)** | 9 | 6 | 1.5 |  |  | My Reels becomes the home of all end-product actions: game/season/smart collections, live share links, ranking, stitched MP4s. Spec + tech notes in docs/plans/. |
+| T3600 | ↳ [Freeze Collection Metadata at Export](tasks/season-highlights/T3600-freeze-collection-metadata.md) | 7 | 4 | 1.8 | TODO | [x] | Stamp duration/aspect_ratio/tags on final_videos at export-finalize (publish archives working data). profile_db v007 + backfill reads R2 archives for already-published reels. Foundation for every other task. |
+| T3610 | ↳ [Collections Tab + Game Collections](tasks/season-highlights/T3610-collections-tab-game-collections.md) | 8 | 6 | 1.3 | TODO | [ ] | My Reels default tab groups reels by game: CollectionHeader (ratio pills, verbs slot), story player with auto-advance (RecapPlayerModal blueprint), Mixes & compilations bucket. |
+| T3620 | ↳ [Collection Share Links + Public Viewer](tasks/season-highlights/T3620-collection-share-links.md) | 8 | 6 | 1.3 | TODO | [x] | share_type='collection' + definition JSONB (postgres v016); live evaluation against sharer profile DB (new R2-download fallback helper); /shared/collection/{token} viewer reusing CollectionPlayer. |
+| T3630 | ↳ [Reel Ranking Model + Insertion UX](tasks/season-highlights/T3630-reel-ranking.md) | 8 | 5 | 1.6 | TODO | [x] | season_rank sparse REAL + collection_settings (profile_db v008); surgical rank endpoint; insertion-at-publish prompt, batch swipe-through, drag repair list. Rank-where-set, quality-score-where-not ordering everywhere. |
+| T3640 | ↳ [Season Highlights + Unlock Moment](tasks/season-highlights/T3640-season-highlights-unlock.md) | 9 | 5 | 1.8 | TODO | [ ] | Season collection with time-budget slider (30s–5min/Max, greedy-with-skip); "Season Highlights Unlocked" modal (fanfare, opt in/out at 30s published) with pref.seasonHighlightsChoice. |
+| T3650 | ↳ [Custom Mix Demotion + Rename](tasks/season-highlights/T3650-custom-mix-demotion.md) | 5 | 1 | 5.0 | TODO | [ ] | Remove primary "New Reel" CTA; quiet "+ Custom Mix" header-row entry. Display-only rename (DB source_type unchanged). Ships with T3640. |
+| T3660 | ↳ [Quest 4 Rework: Season Highlights Funnel](tasks/season-highlights/T3660-quest-rework.md) | 6 | 3 | 2.0 | TODO | [ ] | New User Flow: replace multi-clip quest 4 with publish-30s → unlock → rank → share steps (same 45cr). Rewrite e2e new-user-flow quest-4 segment. Ships with T3640. |
+| T3670 | ↳ [Smart Collections: Top Goals/Assists/Dribbles](tasks/season-highlights/T3670-smart-collections.md) | 7 | 3 | 2.3 | TODO | [ ] | Per-(tag,ratio) collections, 30s eligibility, locked near-miss progress rows, 120s cap. Pure derivation from stamped tags + rank. |
+| T3680 | ↳ [Stitched Collection Videos](tasks/season-highlights/T3680-stitched-collection-videos.md) | 8 | 7 | 1.1 | TODO | [x] | 'stitch' export job (CPU concat: stream-copy or normalize+encode), free, pinned artifact card with staleness badge (profile_db v009 collection_ref). Unhides the "Video" verb. |
+
+### Milestone: Performance
 
 Ordered: instrumentation first so we can measure what we fix; then the two user-visible stalls we already traced; then the structural infra wins.
 
@@ -495,5 +512,6 @@ IDs use gaps of 10 to allow insertions:
 - `T3430` - Parallelize Game Load (4 sequential requests -> 1 game bootstrap endpoint)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 - `T3540` - Framing "In Progress" Visual Ambiguity (progress strip half-fill + wording)
+- `T3600-T3680` - Season Highlights & Collections epic (metadata freeze, collections tab, live shares, ranking, unlock, custom mix rename, quest rework, smart collections, stitch)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
