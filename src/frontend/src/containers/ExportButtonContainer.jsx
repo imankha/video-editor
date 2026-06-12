@@ -344,7 +344,10 @@ export function ExportButtonContainer({
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
         if (onExportComplete) {
-          await onExportComplete();
+          // Pass which export finished: closure values capture the mode and
+          // project this export was started from, even if the user has since
+          // navigated elsewhere.
+          await onExportComplete({ projectId, mode: editorMode });
         }
       },
       onError: (serverError) => {
@@ -408,7 +411,7 @@ export function ExportButtonContainer({
           overlayTransitionFiredRef.current = true;
           await onProceedToOverlay(null, clips ? buildClipMetadata(clips) : null, projectId);
         }
-        if (onExportComplete) await onExportComplete();
+        if (onExportComplete) await onExportComplete({ projectId, mode: editorMode });
       } else if (status === 'error' || modal_status === 'error') {
         disconnectedRef.current = false;
         setDisconnected(false);
@@ -713,7 +716,7 @@ export function ExportButtonContainer({
             onProceedToOverlay(null, buildClipMetadata(clips), projectId);
           }
           if (onExportComplete) {
-            onExportComplete();
+            onExportComplete({ projectId, mode: editorMode });
           }
 
           setIsExporting(false);
@@ -746,7 +749,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Overlay render complete:', renderResponse.data);
 
           if (onExportComplete) {
-            onExportComplete();
+            onExportComplete({ projectId, mode: editorMode });
           }
 
           handleExportEnd();
@@ -821,7 +824,7 @@ export function ExportButtonContainer({
           console.log('[ExportButtonContainer] Framing export complete:', result);
 
           if (onExportComplete) {
-            onExportComplete();
+            onExportComplete({ projectId, mode: editorMode });
           }
 
           setLocalProgress(100);
@@ -879,7 +882,7 @@ export function ExportButtonContainer({
             console.log('[ExportButtonContainer] Saved final video to DB:', saveResponse.data);
 
             if (onExportComplete) {
-              onExportComplete();
+              onExportComplete({ projectId, mode: editorMode });
             }
           } catch (saveErr) {
             console.error('[ExportButtonContainer] Failed to save final video to DB:', saveErr);

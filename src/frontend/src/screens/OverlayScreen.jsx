@@ -963,12 +963,12 @@ export function OverlayScreen({
     setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
   }, [setEditorMode]);
 
-  const handleExportComplete = useCallback(() => {
+  const handleExportComplete = useCallback((completed) => {
     refreshProject();
     // Reset the "changed since export" flag since we just exported
     setOverlayChangedSinceExport(false);
     if (onExportComplete) {
-      onExportComplete();
+      onExportComplete(completed);
     }
   }, [refreshProject, setOverlayChangedSinceExport, onExportComplete]);
 
