@@ -53,6 +53,7 @@ import { useCreditStore } from './stores/creditStore';
 import { toast } from './components/shared';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
+import { setPendingGame } from './utils/pendingNavigation';
 
 /**
  * App.jsx - Main application shell
@@ -245,7 +246,7 @@ function App() {
               : games.find(g => g.name === authReturnGameName);
             if (game) {
               clearInterval(waitForGames);
-              sessionStorage.setItem('pendingGameId', game.id.toString());
+              setPendingGame(game.id);
               useEditorStore.getState().setEditorMode('annotate');
             }
           }, 100);
@@ -421,7 +422,7 @@ function App() {
   const handleLoadGame = useCallback((gameId) => {
     console.log('[App] Loading game - setting pendingGameId in sessionStorage:', gameId);
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
-    sessionStorage.setItem('pendingGameId', gameId.toString());
+    setPendingGame(gameId);
     setEditorMode(EDITOR_MODES.ANNOTATE);
   }, [setEditorMode]);
 
@@ -436,11 +437,7 @@ function App() {
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
 
     // Store navigation intent for AnnotateScreen to pick up
-    sessionStorage.setItem('pendingGameId', gameId.toString());
-    const startTime = selectedClipForAnnotate?.start_time;
-    if (startTime != null) {
-      sessionStorage.setItem('pendingClipSeekTime', startTime.toString());
-    }
+    setPendingGame(gameId, selectedClipForAnnotate?.start_time);
 
     // Reset video store to clear stale clipOffset/clipDuration from framing mode
     useVideoStore.getState().reset();

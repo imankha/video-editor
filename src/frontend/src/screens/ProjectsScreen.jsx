@@ -4,7 +4,7 @@ import { DownloadsPanel } from '../components/DownloadsPanel';
 import { InsufficientCreditsModal } from '../components/InsufficientCreditsModal';
 import { useGameUpload } from '../hooks/useGameUpload';
 import { useProjectLoader } from '../hooks/useProjectLoader';
-import { useEditorStore } from '../stores/editorStore';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useExportStore } from '../stores/exportStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { useProjectsStore } from '../stores/projectsStore';
@@ -14,6 +14,7 @@ import { AppStateProvider } from '../contexts';
 import exportWebSocketManager from '../services/ExportWebSocketManager';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
+import { setPendingProject, clearPendingProject, consumePendingProject } from '../utils/pendingNavigation';
 
 // Module-level variable to pass File object and game details to AnnotateScreen
 // (File objects can't be serialized to sessionStorage)
@@ -39,6 +40,11 @@ export function getPendingGameDetails() {
 export function clearPendingGameFile() {
   pendingGameData = null;
 }
+
+// One-shot guard for the navigation-resume effect. Module scope so React
+// StrictMode's double effect invocation can't trigger a duplicate load
+// (the resume handler re-sets the breadcrumb it just consumed).
+let navigationResumeAttempted = false;
 
 /**
  * ProjectsScreen - Self-contained screen for Project Manager
@@ -141,6 +147,9 @@ export function ProjectsScreen({
     console.log('[ProjectsScreen] Selecting project:', projectId);
     if (PROFILING_ENABLED) performance.mark('gesture:open-project:start');
     setLoadingProjectId(projectId);
+    // Breadcrumb so the selection survives a lazyWithReload page reload
+    // (post-deploy stale chunk hash); cleared in finally once the load settles
+    setPendingProject(projectId);
 
     try {
       // Clear App.jsx state before loading new project
@@ -166,6 +175,7 @@ export function ProjectsScreen({
     } catch (err) {
       console.error('[ProjectsScreen] Failed to select project:', err);
     } finally {
+      clearPendingProject();
       if (PROFILING_ENABLED) {
         performance.mark('gesture:open-project:end');
         try {
@@ -184,6 +194,9 @@ export function ProjectsScreen({
   const handleSelectProjectWithMode = useCallback(async (projectId, options = {}) => {
     console.log('[ProjectsScreen] Selecting project with mode:', projectId, options);
     setLoadingProjectId(projectId);
+    // Breadcrumb so the selection survives a lazyWithReload page reload
+    // (post-deploy stale chunk hash); cleared in finally once the load settles
+    setPendingProject(projectId, options);
 
     try {
       // Clear App.jsx state before loading new project
@@ -216,9 +229,32 @@ export function ProjectsScreen({
     } catch (err) {
       console.error('[ProjectsScreen] Failed to select project:', err);
     } finally {
+      clearPendingProject();
       setLoadingProjectId(null);
     }
   }, [selectProject, loadProject, setEditorMode, onStateReset]);
+
+  // Resume a project navigation interrupted by a full page reload (chunk
+  // reload after a deploy, see lazyWithReload in App.jsx). editorStore already
+  // restored the mode from the URL; the breadcrumb restores which project was
+  // clicked. Games recover the same way via pendingGameId in AnnotateScreen.
+  useEffect(() => {
+    if (navigationResumeAttempted) return;
+    navigationResumeAttempted = true;
+    const pending = consumePendingProject();
+    if (!pending) return;
+    const mode = useEditorStore.getState().editorMode;
+    if (mode !== EDITOR_MODES.FRAMING && mode !== EDITOR_MODES.OVERLAY) return;
+    console.log('[ProjectsScreen] Resuming interrupted project navigation:', pending);
+    if (pending.mode) {
+      handleSelectProjectWithMode(pending.projectId, {
+        mode: pending.mode,
+        clipIndex: pending.clipIndex ?? undefined,
+      });
+    } else {
+      handleSelectProject(pending.projectId);
+    }
+  }, [handleSelectProject, handleSelectProjectWithMode]);
 
   // Handle game loading (navigate to annotate)
   const handleLoadGame = useCallback((gameId) => {

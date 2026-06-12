@@ -14,6 +14,7 @@ import { useUploadStore } from '../stores/uploadStore';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useProjectsStore } from '../stores/projectsStore';
 import { getPendingGameFile, getPendingGameDetails, clearPendingGameFile } from './ProjectsScreen';
+import { hasPendingGame, consumePendingGame } from '../utils/pendingNavigation';
 
 /**
  * AnnotateScreen - Self-contained screen for Annotate mode
@@ -75,7 +76,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   useState(() => {
     const pendingDetails = getPendingGameDetails();
     const hasMultiVideo = pendingDetails?.files?.length > 0;
-    if (sessionStorage.getItem('pendingGameId') || getPendingGameFile() || hasMultiVideo || useUploadStore.getState().activeUpload?.blobUrl) {
+    if (hasPendingGame() || getPendingGameFile() || hasMultiVideo || useUploadStore.getState().activeUpload?.blobUrl) {
       isLoadingRef.current = true;
     }
   });
@@ -340,18 +341,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {
-    const pendingGameId = sessionStorage.getItem('pendingGameId');
-    const pendingClipSeekTime = sessionStorage.getItem('pendingClipSeekTime');
-    if (pendingGameId && !annotateVideoUrl) {
+    if (annotateVideoUrl) return;
+    const pending = consumePendingGame();
+    if (pending) {
       // T1410: AbortController so StrictMode's synthetic unmount short-circuits
       // the first mount's load chain. handleLoadGame is async and touches the
       // store; bailing early on aborted signal prevents duplicate work.
       const controller = new AbortController();
       isLoadingRef.current = true;
-      sessionStorage.removeItem('pendingGameId');
-      sessionStorage.removeItem('pendingClipSeekTime');
 
-      handleLoadGame(parseInt(pendingGameId), pendingClipSeekTime ? parseFloat(pendingClipSeekTime) : null);
+      handleLoadGame(pending.gameId, pending.seekTime);
       return () => controller.abort();
     }
   }, [handleLoadGame, annotateVideoUrl]);

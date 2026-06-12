@@ -10,6 +10,7 @@ import { useEditorStore } from '../stores';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { shareInvite } from '../utils/inviteEmail';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 export function SharedAnnotationView({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
@@ -221,12 +222,9 @@ function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
   if (sharerEmail) {
     sessionStorage.setItem('shareAttribution', sharerEmail);
   }
-  if (firstClipStart != null) {
-    sessionStorage.setItem('pendingClipSeekTime', firstClipStart.toString());
-  }
 
   if (game) {
-    sessionStorage.setItem('pendingGameId', game.id.toString());
+    setPendingGame(game.id, firstClipStart);
     useEditorStore.getState().setEditorMode('annotate');
     onClose();
   } else {
@@ -234,7 +232,7 @@ function navigateToGame(blake3Hash, sharerEmail, firstClipStart, onClose) {
       const refreshed = useGamesDataStore.getState().games;
       const found = blake3Hash ? refreshed.find(g => g.blake3_hash === blake3Hash) : null;
       if (found) {
-        sessionStorage.setItem('pendingGameId', found.id.toString());
+        setPendingGame(found.id, firstClipStart);
         useEditorStore.getState().setEditorMode('annotate');
       }
       onClose();

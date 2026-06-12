@@ -18,6 +18,7 @@ import { VideoMode, GameType } from '../constants/gameConstants';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
+import { setPendingGame } from '../utils/pendingNavigation';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -642,10 +643,7 @@ export function AnnotateContainer({
         useAuthStore.setState({ isAuthenticated: false });
         useEditorStore.getState().redirectToMode(EDITOR_MODES.PROJECT_MANAGER);
         requireAuth(() => {
-          sessionStorage.setItem('pendingGameId', gameId.toString());
-          if (pendingClipSeekTime != null) {
-            sessionStorage.setItem('pendingClipSeekTime', pendingClipSeekTime.toString());
-          }
+          setPendingGame(gameId, pendingClipSeekTime);
           setEditorMode(EDITOR_MODES.ANNOTATE);
         });
       } else {
