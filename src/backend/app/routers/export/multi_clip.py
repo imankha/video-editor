@@ -1234,8 +1234,13 @@ async def _export_clips(
                 # Upload to R2 temp folder
                 source_key = f"temp/multi_clip_{export_id}/source_{clip_index}.mp4"
                 _t0 = time_module.monotonic()
-                await asyncio.to_thread(upload_bytes_to_r2, user_id, source_key, content)
+                uploaded = await asyncio.to_thread(upload_bytes_to_r2, user_id, source_key, content)
                 logger.info(f"[T1110] upload_bytes_to_r2 clip {clip_index} took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                if not uploaded:
+                    # Fail here with a clear message instead of letting Modal
+                    # fail downstream with "Scratch extraction failed" when
+                    # the source object is missing.
+                    raise RuntimeError(f"network error uploading source clip {clip_index + 1} to cloud storage")
                 source_keys.append(source_key)
                 logger.info(f"[Multi-Clip Export] Uploaded source clip {clip_index} to R2: {source_key}")
 
