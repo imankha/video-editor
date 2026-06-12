@@ -35,6 +35,7 @@ Frozen `title` follows the explicit-names-after-archive convention; everything e
 
 - Route: regex `/^\/shared\/collection\/([a-f0-9-]+)$/` in App.jsx init (same pattern as existing share routes at ~341-348); mounts new `SharedCollectionView`.
 - `SharedCollectionView`: header (frozen title, context line, ratio chip) + **CollectionPlayer from T3610** fed presigned URLs. 9:16 story layout, 16:9 filmstrip.
+- **Mobile-PRIMARY** (EPIC decision #14): recipients open these links almost exclusively on phones. Design at 360-428px first -- full-screen player, tap/swipe navigation, no hover-dependent affordances; desktop is the scale-up. Include a native re-share button via `navigator.share` (pattern: `useWebShare`).
 - Share creation UI: "Share" verb on T3610's CollectionHeader opens ShareModal generalized to collection mode (same contacts/public-toggle/copy-link/revoke flows; existing-share dedup: re-sharing the same definition surfaces the existing link). Copy line for live links: "this link always shows the current reels for this game".
 
 ## Context
@@ -79,6 +80,7 @@ Frozen `title` follows the explicit-names-after-archive convention; everything e
 
 - [ ] Game header Share verb creates/copies a live public link; email path works
 - [ ] Public viewer plays current members with story/filmstrip layout per ratio
+- [ ] Viewer is fully usable at 360px (tap/swipe navigation, no overflow, native re-share); E2E runs at a mobile viewport
 - [ ] Publishing a new reel for the game appears on the next link visit (live membership proven in a test)
 - [ ] Revoked links show 410 state; private links enforce recipient email
 - [ ] Resolver works after the sharer's DB is evicted locally (R2 fallback test)

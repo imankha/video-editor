@@ -17,13 +17,13 @@ Season Highlights collection (scope = current season, per-ratio) + time-budget s
 
 - Uses T3610's CollectionHeader; scope = current season via the existing season helper ([downloads.py:65-72](../../../../src/backend/app/routers/downloads.py), e.g. "Spring 2026"); one collection per ratio with content; single-game reels only (EPIC decision #11).
 - Membership: reels in rank order (T3630 comparator), greedy-with-skip until the time budget is spent; "Max" = no cap. Playback = rank order.
-- **Slider**: detents 30s / 1m / 2m / 3m / 5m / Max; `<input type="range">` styled per VideoControls track convention. Value persists to `collection_settings.season_target_duration` (table from T3630's v008) via a small surgical endpoint -- written on slider release gesture only.
+- **Slider**: detents 30s / 1m / 2m / 3m / 5m / Max; `<input type="range">` styled per VideoControls track convention, thumb touch target >= 44px with snap-to-detent (EPIC decision #14). Value persists to `collection_settings.season_target_duration` (table from T3630's v008) via a small surgical endpoint -- written on slider release gesture only.
 - Past seasons: collapsed "Past seasons" group; their collections (and live links) stay reachable and naturally stop changing.
 - Share verb passes `{scope: {type:'season', season_label}, ratio}` through T3620's pipeline -- zero new share plumbing.
 
 ### Unlock moment
 
-- **Trigger**: active profile's `SUM(duration) WHERE published_at IS NOT NULL` crosses 30s. Checked (a) after each publish success, (b) once post-bootstrap on app load ([App.jsx:163-225](../../../../src/frontend/src/App.jsx), after stores hydrate, before preloader dismissal) so existing over-threshold users get it on their first session after release. Shown only when `pref.seasonHighlightsChoice` is unset. Threshold sum can ride the bootstrap/downloads payload -- derive, don't store.
+- **Trigger**: active profile's `SUM(duration) WHERE published_at IS NOT NULL` crosses 30s. Checked (a) after each publish success, (b) once post-bootstrap on app load ([App.jsx:163-225](../../../../src/frontend/src/App.jsx), after stores hydrate, before preloader dismissal) so existing over-threshold users get it on their first session after release. Shown only when `pref.seasonHighlightsChoice` is unset. Threshold sum comes from T3610's summary endpoint season totals (EPIC decision #13) -- derive, don't store, don't reduce over the full reel list client-side.
 - **Modal**: full-screen, standard pattern, **no backdrop close**; fanfare + celebration glow. Extract `playSound` from [QuestPanel.jsx:81-113](../../../../src/frontend/src/components/QuestPanel.jsx) into shared `utils/sounds.js` (QuestPanel consumes the util -- no behavior change there); reuse `quest-celebrate` CSS. **Autoplay rule**: publish-triggered opens may play fanfare immediately (recent gesture); load-triggered opens play it on the accept click.
 - **Accept** -> `pref.seasonHighlightsChoice='enabled'` (settingsStore -> PUT /api/settings), record achievement `season_highlights_optin` (questStore.recordAchievement), open Collections with Season Highlights expanded, run T3630's batch swipe-through seeded by quality order.
 - **Not now** -> `'declined'`: no prompts, no ranking UI; quiet locked "Season Highlights -- Enable" card stays at the top of Collections (one click re-opens the modal flow).
@@ -73,4 +73,5 @@ Season Highlights collection (scope = current season, per-ratio) + time-budget s
 - [ ] Slider changes membership live and persists per profile on release gesture
 - [ ] Season Highlights membership identical in panel and share link (shared budget function test)
 - [ ] Fanfare plays on publish-triggered opens; on accept-click for load-triggered opens
+- [ ] Unlock modal and slider fully usable at 360px (modal is full-screen on mobile; detent snap works by touch)
 - [ ] Tests pass

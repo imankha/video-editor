@@ -25,6 +25,8 @@ Implementation facts (sync, msgpack, migrations, pipeline, sharing, frontend): [
 10. **"New Reel" becomes "Custom Mix"** -- demoted to a quiet entry point, never removed. DB `source_type` values unchanged (display-only rename).
 11. **Multi-game reels** (clips from >1 game) live in a "Mixes & compilations" group and are excluded from game collections and Season Highlights.
 12. **Release grouping**: T3600 -> T3610 -> T3620 ship independently. T3630 + T3640 + T3650 + T3660 ship together (the paradigm release). T3670 fast-follows. T3680 last; the "Video" verb stays hidden until it ships.
+13. **Summary-first gallery data (scale pattern).** Design target is 150-300 published reels per season, 500+ across seasons. The Collections tab reads a server-side aggregate endpoint (one SQL GROUP BY; response is O(games), not O(reels)); group members are fetched on expand. The All tab is the ONLY full-list consumer. Client code never derives aggregates (group counts, durations, eligibility sums) by reducing over the full reel list. Pagination/virtualization/tags-junction-table are known escape hatches, deliberately deferred until profiling demands them.
+14. **Mobile parity is required, and public pages are mobile-PRIMARY.** Every surface in this epic works at 360-428px (see `.claude/skills/responsiveness`): touch targets >= 44px, story players use tap zones + swipe, the rank prompt is a bottom sheet on mobile, drag interactions always have button fallbacks. Share recipients (grandparents, teammates) open links almost exclusively on phones -- the public collection viewer is designed for mobile first and merely scales up to desktop.
 
 ## Tasks (dependency order -- do not start N+1 before N is complete)
 

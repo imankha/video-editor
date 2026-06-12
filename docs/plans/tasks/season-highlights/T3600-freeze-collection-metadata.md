@@ -28,6 +28,10 @@ Stamp all three columns at **export-finalize time** (working data still exists t
 3. Rows that still resolve to nothing: leave NULL, log one visible line per row (`[T3600] final_video {id} backfill incomplete`). No silent fallback; downstream features exclude NULL rows from math but still render them.
 4. Follow the v004 msgpack-migration pattern (validate before re-pack); migration registered in `migrations/profile_db/__init__.py`; canonical schema in `database.py::ensure_database()` updated in the same PR (fresh DBs skip migrations -- PRAGMA pre-set).
 
+### Indexes (same migration -- EPIC decision #13 groundwork)
+
+`CREATE INDEX IF NOT EXISTS idx_final_videos_published_ratio ON final_videos(published_at, aspect_ratio)` in both v007 and `ensure_database()`. Powers T3610's summary GROUP BY, T3640's 30s gate sum, and T3620's resolver scans without full-table walks.
+
 ### Verification edge case (resolve during implementation)
 
 `auto_export.py` hardcodes `source_type='brilliant_clip'` while downloads.py also handles `'annotated_game'`. Locate the `'annotated_game'` insert site (if any remains live) and stamp it too. Document the finding in this file's Progress Log.
@@ -60,7 +64,7 @@ Stamp all three columns at **export-finalize time** (working data still exists t
 2. [ ] Extract shared metadata-computation helper (duration chain + aspect lookup + tag aggregation)
 3. [ ] Stamp in `_finalize_overlay_export` and auto_export insert paths
 4. [ ] Locate/stamp the annotated_game insert site (or document that it is auto_export)
-5. [ ] Write v007 migration with archive-aware backfill; register it
+5. [ ] Write v007 migration with archive-aware backfill + published/ratio index; register it
 6. [ ] Surface new fields in GET /api/downloads response model
 7. [ ] Backend tests: stamping on export, backfill with live data, backfill from archive, NULL-resilience
 

@@ -15,7 +15,7 @@ SMART COLLECTIONS section in the Collections tab between SEASON and GAMES. See [
 
 ### Eligibility + content (pure functions, no stored state)
 
-- Candidate tags: data-driven from the profile's stamped `final_videos.tags` (msgpack arrays), intersected with a curated display config (icon + "Top {Tag}" naming) for the initial set: Goal, Assist, Dribble. Config-extensible -- adding a tag is one entry.
+- Candidate tags: from T3610's summary endpoint per-tag duration sums (EPIC decision #13 -- do NOT reduce over the full reel list client-side), intersected with a curated display config (icon + "Top {Tag}" naming) for the initial set: Goal, Assist, Dribble. Config-extensible -- adding a tag is one entry.
 - Per (tag, ratio): **exists** when matching published reels total >= 30s of stamped duration. Single-game and multi-game reels both count (tag theme transcends games) -- decided here, differs deliberately from Season Highlights (EPIC #11); note the difference in code comments via the comparison below.
 - **Locked near-miss**: 15s <= total < 30s renders a locked row with progress ("Top Assists - 0:22 / 0:30 - almost!") using T3640's locked-card pattern. Below 15s: hidden (avoid a wall of empty locks).
 - Ordering: T3630 comparator (rank, then quality). Content capped at ~2min (greedy-with-skip via T3640's shared budget function with a fixed 120s budget).
@@ -37,7 +37,8 @@ SMART COLLECTIONS section in the Collections tab between SEASON and GAMES. See [
 ### Relevant Files (REQUIRED)
 - `src/frontend/src/components/collections/SmartCollectionsSection.jsx` - NEW
 - `src/frontend/src/config/smartCollections.js` - NEW tag display config
-- `src/frontend/src/hooks/useDownloads.js` - eligibility/membership selectors (tags decoded server-side into the API payload by T3600)
+- `src/backend/app/routers/collections.py` - per-tag sums already shaped in T3610's summary; membership = list endpoint with tag filter
+- `src/frontend/src/hooks/useDownloads.js` - eligibility from summary fields; lazy member fetch on expand (same pattern as game groups)
 - `src/frontend/src/components/collections/CollectionHeader.jsx` - reuse
 - `src/backend/app/routers/shares.py` - resolver already evaluates tag filters if T3620 implemented filter support; otherwise extend evaluation to `filter.tags` here
 - `src/backend/app/routers/downloads.py` - ensure tags arrive decoded in list payload
@@ -47,14 +48,14 @@ SMART COLLECTIONS section in the Collections tab between SEASON and GAMES. See [
 - Blocks: nothing (T3680 consumes any collection definition generically)
 
 ### Technical Notes
-- Eligibility computed client-side from the downloads payload (already loaded) -- no new endpoints unless T3620 deferred tag-filter evaluation, in which case add it to the resolver here.
+- Eligibility reads summary-endpoint per-tag sums (server-side GROUP BY; tags decoded once per row there). If T3620 deferred tag-filter evaluation in the share resolver, add it here.
 - Gated behind `pref.seasonHighlightsChoice === 'enabled'`? **No** -- smart collections render regardless (they don't require ranking); only the ordering improves with rank. Locked Season card and smart sections coexist for declined users.
 - Tags display: tag strings come from the sport tag registry; display names should pass through existing tag-label helpers if present (check `tagRegistry.js` from T1620).
 
 ## Implementation
 
 ### Steps
-1. [ ] Tag display config + eligibility/membership selectors (unit-tested: thresholds 14s/15s/29s/30s, per-ratio independence)
+1. [ ] Tag display config + eligibility from summary sums (unit-tested: thresholds 14s/15s/29s/30s, per-ratio independence)
 2. [ ] SmartCollectionsSection with locked-progress rows
 3. [ ] Share verb wiring with tag-filter definitions (+ resolver filter evaluation if not done in T3620)
 4. [ ] Vitest: selectors; E2E: publish tagged reels past 30s -> section appears -> share link plays

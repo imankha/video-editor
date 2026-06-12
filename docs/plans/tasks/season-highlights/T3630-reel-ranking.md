@@ -32,9 +32,9 @@ One shared comparator -- backend (SQL ORDER BY fragment) and frontend (JS select
 
 ### Insertion UX (only when `pref.seasonHighlightsChoice === 'enabled'`; T3640 ships the flag -- build behind it, coordinate so the paradigm release flips both)
 
-1. **Single publish**: after `publishProject()` success ([ProjectManager.jsx:1762-1799](../../../../src/frontend/src/components/ProjectManager.jsx)), before gallery navigation, show insertion prompt: new reel slotted at suggested position (quality-score comparator) with 1-2 neighbors visible, up/down nudges, "Looks right" confirm. **Suggested position is memory-only; only confirm/nudge POSTs the rank.** Dismiss = stays unranked.
-2. **Batch guard**: >= 3 publishes in one session -> suppress per-reel prompts; offer one "Rank your N new reels" swipe-through (same prompt component iterated).
-3. **Repair tool**: "Edit ranking" drag list (full reordering, drag gesture -> rank POST per drop) reachable from the Season Highlights header (T3640 wires the entry point; component lives here).
+1. **Single publish**: after `publishProject()` success ([ProjectManager.jsx:1762-1799](../../../../src/frontend/src/components/ProjectManager.jsx)), before gallery navigation, show insertion prompt: new reel slotted at suggested position (quality-score comparator) with 1-2 neighbors visible, up/down nudges, "Looks right" confirm. **Suggested position is memory-only; only confirm/nudge POSTs the rank.** Dismiss = stays unranked. On mobile widths the prompt renders as a bottom sheet (EPIC decision #14).
+2. **Batch guard**: >= 3 publishes in one session -> suppress per-reel prompts; offer one "Rank your N new reels" swipe-through (same prompt component iterated; swipe is the native gesture on mobile).
+3. **Repair tool**: "Edit ranking" list reachable from the Season Highlights header (T3640 wires the entry point; component lives here). **Scoped to the top ~50 by current order** (EPIC decision #13: only the top of the order ever appears in any time-budgeted collection -- ranking reel #212 against #213 has no product value) **plus search-to-place** for the tail: search any reel by name, see it slotted, confirm. Reordering: drag on desktop, AND per-row up/down nudge buttons everywhere (touch drag-and-drop is unreliable on mobile -- buttons are the guaranteed path; drag gesture or button press -> rank POST per change).
 
 ## Context
 
@@ -66,10 +66,10 @@ One shared comparator -- backend (SQL ORDER BY fragment) and frontend (JS select
 1. [ ] v008 migration + schema update
 2. [ ] Rank endpoint + backend ordering helper; adopt in downloads list + collection resolver
 3. [ ] Frontend ordering selector + optimistic update
-4. [ ] RankInsertionPrompt (single + batch) behind the opt-in flag
-5. [ ] RankEditList drag repair tool
+4. [ ] RankInsertionPrompt (single + batch; bottom sheet on mobile) behind the opt-in flag
+5. [ ] RankEditList: top-50 + search-to-place; drag (desktop) + nudge buttons (all widths)
 6. [ ] Publish-success hook with batch detection
-7. [ ] Tests: endpoint (preconditions, null rank), comparator (rank/unranked interleave), Vitest prompt logic, E2E publish->confirm->order changes in Collections
+7. [ ] Tests: endpoint (preconditions, null rank), comparator (rank/unranked interleave), Vitest prompt logic + search-to-place, E2E publish->confirm->order changes in Collections (desktop + 390px viewport)
 
 ### Progress Log
 
@@ -78,6 +78,7 @@ One shared comparator -- backend (SQL ORDER BY fragment) and frontend (JS select
 - [ ] Confirming an insertion persists rank; reload preserves order
 - [ ] Unranked reels order by quality score below ranked ones, everywhere (panel, share viewer)
 - [ ] Batch publish (>= 3) shows one swipe-through, not N prompts
-- [ ] Drag repair list reorders with surgical writes per drop
+- [ ] Repair list shows top ~50 with search-to-place for the rest; reorders via drag or nudge buttons with surgical writes per change
+- [ ] All ranking UI usable at 360px (bottom-sheet prompt, button-based reordering)
 - [ ] No rank write occurs without a user gesture (code-reviewed against decision #5)
 - [ ] Tests pass
