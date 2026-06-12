@@ -160,7 +160,9 @@ export function OverlayScreen({
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {
-    if (!effectiveOverlayVideoUrl && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
+    // Gate on project: before project data loads, having no video source is
+    // the normal mount state, not an anomaly worth warning about.
+    if (project && !effectiveOverlayVideoUrl && !isLoadingWorkingVideo && !shouldWaitForWorkingVideo) {
       console.warn('[OverlayScreen] No video source available', {
         workingVideo: !!workingVideo,
         workingVideoUrl: workingVideo?.url?.substring(0, 50),
@@ -172,7 +174,7 @@ export function OverlayScreen({
         clipsCount: clips?.length,
       });
     }
-  }, [effectiveOverlayVideoUrl, workingVideo, project?.working_video_url, project?.working_video_id, isLoadingWorkingVideo, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
+  }, [effectiveOverlayVideoUrl, workingVideo, project, isLoadingWorkingVideo, shouldWaitForWorkingVideo, framingVideoUrl, clips?.length]);
 
   // =========================================
   // VIDEO HOOK - Without segment awareness for overlay mode
@@ -378,15 +380,15 @@ export function OverlayScreen({
         console.warn('[OverlayScreen] Working video URL still missing after refresh — clearing loading state');
         setIsLoadingWorkingVideo(false);
       }
-    } else if (!workingVideo && !project?.working_video_url && !isLoadingWorkingVideo) {
-      // No working video URL available at all — log why
+    } else if (project && !workingVideo && !project.working_video_url && !isLoadingWorkingVideo) {
+      // Project loaded but has no working video URL at all — log why.
+      // (Before project data loads, this state is normal — stay quiet.)
       console.warn('[OverlayScreen] No working video URL in project data', {
         projectId,
-        workingVideoId: project?.working_video_id,
-        hasProject: !!project,
+        workingVideoId: project.working_video_id,
       });
     }
-  }, [workingVideo, project?.working_video_url, project?.working_video_id, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
+  }, [workingVideo, project, projectId, isLoadingWorkingVideo, setIsLoadingWorkingVideo, setWorkingVideo, refreshProject]);
 
   // Load video into useVideo hook when effectiveOverlayVideoUrl is available
   // Uses a ref to track the source URL to prevent infinite loops (blob URLs are always unique)
@@ -963,12 +965,12 @@ export function OverlayScreen({
     setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
   }, [setEditorMode]);
 
-  const handleExportComplete = useCallback(() => {
+  const handleExportComplete = useCallback((completed) => {
     refreshProject();
     // Reset the "changed since export" flag since we just exported
     setOverlayChangedSinceExport(false);
     if (onExportComplete) {
-      onExportComplete();
+      onExportComplete(completed);
     }
   }, [refreshProject, setOverlayChangedSinceExport, onExportComplete]);
 

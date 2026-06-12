@@ -403,19 +403,31 @@ function App() {
   const exportButtonRef = useRef(null);
 
 
-  // Export completion callback - used by Screen components to refresh data
-  const handleExportComplete = useCallback(async () => {
+  // Export completion callback - used by Screen components to refresh data.
+  // `completed` identifies which export finished: { projectId, mode }.
+  const handleExportComplete = useCallback(async (completed) => {
     await fetchProjects({ force: true });
     // Downloads count is auto-refreshed by DownloadsPanel via galleryStore
     // T540: Refresh quest progress after any export completes
     useQuestStore.getState().fetchProgress();
-    // T770: Navigate home after overlay export completes
-    if (editorMode === EDITOR_MODES.OVERLAY) {
+    // T770: Navigate home after an overlay export completes — but only when
+    // the user is still in the Overlay editor for the project that exported.
+    // If they moved on to editing another project, stay put; the
+    // GlobalExportIndicator toast announces the completion instead.
+    // Read mode/project fresh from stores: the export WebSocket manager holds
+    // this callback from export start, so closure values can be stale.
+    const currentMode = useEditorStore.getState().editorMode;
+    const currentProjectId = useProjectsStore.getState().selectedProjectId;
+    if (
+      completed?.mode === EDITOR_MODES.OVERLAY &&
+      currentMode === EDITOR_MODES.OVERLAY &&
+      completed.projectId === currentProjectId
+    ) {
       clearSelection();
       useVideoStore.getState().reset();
       setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
     }
-  }, [fetchProjects, editorMode, clearSelection, setEditorMode]);
+  }, [fetchProjects, clearSelection, setEditorMode]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
