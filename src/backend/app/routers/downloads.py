@@ -821,7 +821,12 @@ async def publish_to_my_reels(project_id: int):
         from app.routers.auth import mark_user_archived
         mark_user_archived(user_id)
     else:
-        logger.warning(f"Failed to archive project {project_id} after publish — working data retained")
+        logger.warning(
+            f"Failed to archive project {project_id} after publish "
+            f"(user={user_id}, final_video_id={row['id']}) - working data retained, "
+            f"card stays in Drafts with In My Reels badge; see preceding archive/R2 "
+            f"errors for root cause"
+        )
 
     return {"success": True, "final_video_id": row['id'], "archived": archived}
 

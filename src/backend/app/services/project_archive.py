@@ -105,7 +105,11 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
                 # 6. Upload to R2
                 r2_path = _get_archive_r2_key(project_id)
                 if not upload_bytes_to_r2(user_id, r2_path, archive_bytes, fast=True):
-                    logger.error(f"Failed to upload archive to R2 for project {project_id}")
+                    logger.error(
+                        f"Failed to upload archive to R2 for project {project_id}: "
+                        f"user={user_id} key={r2_path} size={len(archive_bytes)} bytes "
+                        f"({len(working_clips_data)} clips, {len(working_videos_data)} videos)"
+                    )
                     return False
 
                 logger.info(f"Uploaded archive to R2: {user_id}/{r2_path} ({len(archive_bytes)} bytes)")
@@ -136,7 +140,10 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
             return True
 
     except Exception as e:
-        logger.error(f"Failed to archive project {project_id}: {e}", exc_info=True)
+        logger.error(
+            f"Failed to archive project {project_id} (user={user_id}): "
+            f"{type(e).__name__}: {e}", exc_info=True,
+        )
         return False
 
 

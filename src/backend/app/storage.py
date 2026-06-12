@@ -534,6 +534,7 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: b
 
     client = get_r2_sync_client() if fast else get_r2_client()
     if not client:
+        logger.error(f"R2 client unavailable (fast={fast}) - cannot upload bytes to {relative_path}")
         return False
 
     key = r2_key(user_id, relative_path)
@@ -580,7 +581,10 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: b
         logger.debug(f"Uploaded bytes to R2: {key} ({len(data)} bytes)")
         return True
     except Exception as e:
-        logger.error(f"Failed to upload bytes to R2: {key} - {e}")
+        logger.error(
+            f"Failed to upload bytes to R2: {key} ({len(data)} bytes, fast={fast}) - "
+            f"{type(e).__name__}: {e}", exc_info=True,
+        )
         return False
 
 
