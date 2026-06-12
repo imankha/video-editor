@@ -806,6 +806,16 @@ export function ExportButtonContainer({
       useQuestStore.getState().fetchProgress({ force: true });
 
       if (editorMode === EDITOR_MODES.FRAMING) {
+        renderRequestAccepted = true;
+
+        // T760: 202 = background processing, completion comes via WebSocket
+        if (response.status === 202) {
+          console.log('[ExportButtonContainer] Multi-clip export accepted (202), waiting for WebSocket completion');
+          backgroundExportRef.current = true;
+          setProgressMessage('Processing...');
+          return;
+        }
+
         try {
           const result = response.data;
           console.log('[ExportButtonContainer] Framing export complete:', result);

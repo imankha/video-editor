@@ -327,6 +327,46 @@ def get_project_info(project_id: int) -> dict:
 
 
 # =============================================================================
+# Background Task R2 Sync
+# =============================================================================
+
+def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> None:
+    """
+    Explicit R2 sync for background export tasks (T940 pattern).
+
+    Background tasks run outside the request middleware, so their DB writes
+    (working_videos/final_videos rows, export_jobs status, credit refunds)
+    are never synced automatically. Call this after the background pipeline
+    completes or fails. On failure, marks sync pending so the next write
+    request retries via the middleware recovery path.
+    """
+    from app.database import (
+        sync_db_to_r2_explicit,
+        sync_user_db_to_r2_explicit,
+        mark_sync_pending,
+    )
+
+    ok = True
+    if profile_id:
+        try:
+            ok = sync_db_to_r2_explicit(user_id, profile_id) and ok
+        except Exception as e:
+            logger.error(f"[Export] Background profile DB sync failed for user={user_id}: {e}")
+            ok = False
+    try:
+        ok = sync_user_db_to_r2_explicit(user_id) and ok
+    except Exception as e:
+        logger.error(f"[Export] Background user DB sync failed for user={user_id}: {e}")
+        ok = False
+
+    if ok:
+        logger.info(f"[Export] Background R2 sync complete for user={user_id}")
+    else:
+        mark_sync_pending(user_id)
+        logger.warning(f"[Export] Background R2 sync incomplete for user={user_id} - marked pending for retry")
+
+
+# =============================================================================
 # Cleanup Utilities
 # =============================================================================
 

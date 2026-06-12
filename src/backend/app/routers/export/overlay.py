@@ -37,6 +37,7 @@ from ...database import get_db_connection, get_final_videos_path, get_highlights
 from ...services.ffmpeg_service import get_encoding_command_parts
 from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
 from ...user_context import get_current_user_id
+from ...profile_context import get_current_profile_id
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
@@ -1691,6 +1692,7 @@ async def _run_overlay_export_background(
     project_id: int,
     project_name: str,
     user_id: str,
+    profile_id: str,
     working_filename: str,
     highlight_regions: list,
     effect_type: str,
@@ -1795,6 +1797,11 @@ async def _run_overlay_export_background(
         )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
+    finally:
+        # Background tasks run outside the request middleware, so DB writes
+        # (final_videos, export_jobs) must be synced explicitly.
+        from app.services.export_helpers import sync_export_db_to_r2
+        await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
 
 
 @router.post("/render-overlay")
@@ -1824,6 +1831,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     effect_type = request.effect_type
 
     user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
 
     logger.info(f"[Overlay Render] Starting for project {project_id}, user: {user_id}, Modal: {modal_enabled()}")
 
@@ -2049,6 +2057,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             project_id=project_id,
             project_name=project_name,
             user_id=user_id,
+            profile_id=profile_id,
             working_filename=working_filename,
             highlight_regions=highlight_regions,
             effect_type=effect_type,

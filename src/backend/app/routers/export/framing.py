@@ -477,7 +477,53 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
 
-    # Pre-extract clip source + convert frame→time keyframes, then delegate to _export_clips
+    # T760: Run the pipeline in background so the per-user write lock is
+    # released immediately. Holding it for the full render blocked every
+    # other write request from this user for minutes. Completion and errors
+    # are reported via WebSocket (same pattern as /render-overlay).
+    asyncio.create_task(_run_render_background(
+        export_id=export_id,
+        project_id=project_id,
+        project_name=project_name,
+        aspect_ratio=project['aspect_ratio'] or '9:16',
+        clip=dict(clip),
+        segments_raw=segments_raw,
+        include_audio=request.include_audio,
+        target_fps=request.target_fps,
+        export_mode=request.export_mode,
+        user_id=captured_user_id,
+        profile_id=captured_profile_id,
+        credits_deducted=credits_deducted,
+        video_seconds=video_seconds,
+        is_test_mode=is_test_mode,
+    ))
+    return JSONResponse(
+        status_code=202,
+        content={"status": "accepted", "export_id": export_id}
+    )
+
+
+async def _run_render_background(
+    export_id: str,
+    project_id: int,
+    project_name: str,
+    aspect_ratio: str,
+    clip: dict,
+    segments_raw: list | None,
+    include_audio: bool,
+    target_fps: int,
+    export_mode: str,
+    user_id: str,
+    profile_id: str,
+    credits_deducted: int,
+    video_seconds: float,
+    is_test_mode: bool,
+):
+    """Pre-extract clip source + convert frame→time keyframes, then delegate
+    to _export_clips. Runs via asyncio.create_task after /render returns 202;
+    all progress and errors are reported via WebSocket."""
+    from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
+
     temp_dir = tempfile.mkdtemp()
     pipeline_entered = False
     try:
@@ -489,7 +535,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             if clip['game_id']:
                 source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
             else:
-                source_url = generate_presigned_url(captured_user_id, f"raw_clips/{clip['raw_filename']}")
+                source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
             if source_url:
                 _t0 = time_module.monotonic()
                 source_info = await asyncio.to_thread(get_video_info, source_url)
@@ -507,9 +553,8 @@ async def render_project(request: RenderRequest, http_request: Request):
         # Extract clip source video
         if clip['game_id']:
             if not clip['game_blake3_hash']:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Clip references game_id={clip['game_id']} but game_videos has no row for (game_id, video_sequence={clip.get('video_sequence')})",
+                raise RuntimeError(
+                    f"Clip references game_id={clip['game_id']} but game_videos has no row for (game_id, video_sequence={clip.get('video_sequence')})",
                 )
             source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
             clip_path = Path(temp_dir) / "clip_0.mp4"
@@ -534,8 +579,8 @@ async def render_project(request: RenderRequest, http_request: Request):
             clip_path = Path(temp_dir) / "clip_0.mp4"
             logger.info(f"[Render] Downloading raw clip: {r2_key}")
             _t0 = time_module.monotonic()
-            if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
-                raise HTTPException(status_code=500, detail="Failed to download source clip from R2")
+            if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
+                raise RuntimeError("Failed to download source clip from R2")
             logger.info(f"[Render] download_from_r2 took {time_module.monotonic() - _t0:.2f}s")
 
             with open(clip_path, 'rb') as f:
@@ -553,38 +598,50 @@ async def render_project(request: RenderRequest, http_request: Request):
             clip_name=clip['clip_name'],
         )
 
-        logger.info(f"[Render] Delegating to _export_clips: aspect={project['aspect_ratio'] or '9:16'}, test_mode={is_test_mode}")
+        logger.info(f"[Render] Delegating to _export_clips: aspect={aspect_ratio}, test_mode={is_test_mode}")
 
         pipeline_entered = True
-        return await _export_clips(
+        await _export_clips(
             export_id=export_id,
             clips=[clip_export],
-            aspect_ratio=project['aspect_ratio'] or '9:16',
+            aspect_ratio=aspect_ratio,
             transition={'type': 'cut', 'duration': 0},
-            include_audio=request.include_audio,
-            target_fps=request.target_fps,
-            export_mode=request.export_mode,
+            include_audio=include_audio,
+            target_fps=target_fps,
+            export_mode=export_mode,
             project_id=project_id,
             project_name=project_name,
-            user_id=captured_user_id,
-            profile_id=captured_profile_id,
+            user_id=user_id,
+            profile_id=profile_id,
             credits_deducted=credits_deducted,
             total_video_seconds=video_seconds,
             is_test_mode=is_test_mode,
         )
 
-    except HTTPException:
-        if not pipeline_entered and credits_deducted > 0:
-            from ...services.user_db import refund_credits
-            refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
-            logger.info(f"[Render] Refunded {credits_deducted} credits (pre-pipeline failure)")
-        raise
     except Exception as e:
+        # _export_clips refunds credits itself once entered; only pre-pipeline
+        # failures need a refund here.
         if not pipeline_entered and credits_deducted > 0:
             from ...services.user_db import refund_credits
-            refund_credits(captured_user_id, credits_deducted, export_id, video_seconds)
+            refund_credits(user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render] Refunded {credits_deducted} credits (pre-pipeline failure)")
-        logger.error(f"[Render] Failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Render failed: {str(e)}")
+        logger.error(f"[Render] Background render failed: {e}", exc_info=True)
+
+        fail_export_job(export_id, str(e))
+
+        # _export_clips' generic error path already sent a WS error; cover the
+        # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
+        if export_progress.get(export_id, {}).get('status') != 'error':
+            from app.websocket import make_progress_data
+            error_data = make_progress_data(
+                current=0, total=100, phase='error',
+                message=f"Export failed: {e}",
+                export_type='framing', project_id=project_id, project_name=project_name,
+            )
+            export_progress[export_id] = error_data
+            await manager.send_progress(export_id, error_data)
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
+        # Background tasks run outside the request middleware, so DB writes
+        # (working_videos, export_jobs, refunds) must be synced explicitly.
+        await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)

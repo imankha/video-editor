@@ -1848,13 +1848,15 @@ async def export_multi_clip(
     # Parse form data to get video files
     form = await request.form()
 
-    # Extract video files (video_0, video_1, etc.)
-    video_files: Dict[int, UploadFile] = {}
+    # Extract video files (video_0, video_1, etc.). Read into memory now —
+    # UploadFile spools are closed when the request ends, but the pipeline
+    # runs in a background task that outlives the request.
+    video_files: Dict[int, Any] = {}
     for key, value in form.items():
         if key.startswith('video_'):
             try:
                 index = int(key.split('_')[1])
-                video_files[index] = value
+                video_files[index] = BytesFile(await value.read())
                 logger.info(f"[Multi-Clip Export] Found video file: {key}")
             except (ValueError, IndexError):
                 continue
@@ -1913,219 +1915,17 @@ async def export_multi_clip(
             raise
         credits_deducted = credits_required
 
-    # DB-resolved mode: when project_id is provided and no video files uploaded,
-    # resolve clip sources from the database (supports game-video clips without standalone files)
-    if project_id and len(video_files) == 0 and len(clips_data) > 0:
-        logger.info(f"[Multi-Clip Export] No video files uploaded, resolving {len(clips_data)} clips from DB")
-
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(f"""
-                SELECT
-                    wc.id, wc.raw_clip_id, wc.uploaded_filename,
-                    wc.crop_data, wc.segments_data, wc.sort_order,
-                    rc.filename as raw_filename, rc.name as clip_name,
-                    rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
-                    rc.end_time as raw_end_time,
-                    (rc.end_time - rc.start_time) as raw_duration,
-                    COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
-                FROM working_clips wc
-                LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                LEFT JOIN games g ON rc.game_id = g.id
-                LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
-                WHERE wc.project_id = ?
-                AND wc.id IN ({latest_working_clips_subquery()})
-                ORDER BY wc.sort_order
-            """, (project_id, project_id))
-            db_clips = cursor.fetchall()
-
-        if not db_clips:
-            raise HTTPException(status_code=400, detail="No clips found in project")
-
-        # Build lookup by working_clip_id
-        db_clips_by_id = {clip['id']: clip for clip in db_clips}
-
-        resolve_temp_dir = tempfile.mkdtemp()
-        resolve_total = len(clips_data)
-        try:
-            for i, clip_data in enumerate(clips_data):
-                wc_id = clip_data.get('workingClipId')
-                if wc_id and wc_id in db_clips_by_id:
-                    db_clip = db_clips_by_id[wc_id]
-                elif i < len(db_clips):
-                    # Fallback: match by sort order
-                    db_clip = db_clips[i]
-                else:
-                    raise HTTPException(status_code=400, detail=f"Cannot resolve clip {i}: no matching DB clip")
-
-                # Use DB-authoritative crop/segments data
-                # DB stores frame-based keyframes; pipeline expects time-based
-                if db_clip['crop_data']:
-                    raw_kfs = decode_data(db_clip['crop_data'])
-                    framerate = 30  # Default; matches single-clip export fallback
-                    if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
-                        clip_data['cropKeyframes'] = [
-                            {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
-                            for kf in raw_kfs
-                        ]
-                    else:
-                        clip_data['cropKeyframes'] = raw_kfs
-                if db_clip['raw_duration']:
-                    clip_data['duration'] = db_clip['raw_duration']
-                if db_clip['segments_data']:
-                    # Gesture-saved rows store boundaries as user splits only;
-                    # rebuild the full [0, ...splits, duration] list so
-                    # segmentSpeeds indices line up (Bug 20p)
-                    clip_data['segments'] = canonicalize_segments_data(
-                        decode_data(db_clip['segments_data']),
-                        clip_data.get('duration'),
-                    )
-
-                # Resolve video source
-                if db_clip['game_id']:
-                    if not db_clip['game_blake3_hash']:
-                        raise RuntimeError(
-                            f"Clip references game_id={db_clip['game_id']} but game_videos has no row "
-                            f"for (game_id, video_sequence={db_clip['video_sequence']})"
-                        )
-                    # Game clip: stream clip range from R2 via presigned URL (no full download)
-                    extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
-                    progress_data = {
-                        "progress": extract_progress,
-                        "message": f"Extracting clip {i + 1}/{resolve_total}...",
-                        "status": "processing",
-                        "projectId": project_id,
-                        "projectName": project_name,
-                        "type": "multi_clip"
-                    }
-                    export_progress[export_id] = progress_data
-                    await manager.send_progress(export_id, progress_data)
-
-                    source_url = generate_presigned_url_global(f"games/{db_clip['game_blake3_hash']}.mp4")
-                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                    start_time = db_clip['raw_start_time']
-                    end_time = db_clip['raw_end_time']
-                    logger.info(f"[Multi-Clip Export] Streaming clip {i} range: {start_time}s - {end_time}s")
-
-                    try:
-                        def _extract_clip():
-                            (
-                                ffmpeg
-                                .input(source_url, ss=start_time, to=end_time)
-                                .output(str(clip_path), c='copy')
-                                .overwrite_output()
-                                .run(quiet=True)
-                            )
-                        _t0 = time_module.monotonic()
-                        await asyncio.to_thread(_extract_clip)
-                        logger.info(f"[T1110] ffmpeg extract clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                    except ffmpeg.Error as e:
-                        raise HTTPException(status_code=500, detail=f"Failed to extract clip {i} range: {e}")
-
-                    with open(clip_path, 'rb') as f:
-                        video_files[i] = BytesFile(f.read())
-
-                elif db_clip['uploaded_filename']:
-                    # Uploaded clip: download from user's R2 storage
-                    dl_progress = 5 + int((i / resolve_total) * 5)
-                    progress_data = {
-                        "progress": dl_progress,
-                        "message": f"Downloading clip {i + 1}/{resolve_total}...",
-                        "status": "processing",
-                        "projectId": project_id,
-                        "projectName": project_name,
-                        "type": "multi_clip"
-                    }
-                    export_progress[export_id] = progress_data
-                    await manager.send_progress(export_id, progress_data)
-
-                    r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
-                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                    logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
-                    _t0 = time_module.monotonic()
-                    if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
-                        raise HTTPException(status_code=500, detail=f"Failed to download uploaded clip {i}")
-                    logger.info(f"[T1110] download_from_r2 uploaded clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                    with open(clip_path, 'rb') as f:
-                        video_files[i] = BytesFile(f.read())
-
-                elif db_clip['raw_filename']:
-                    # Extracted clip: download from user's R2 storage
-                    dl_progress = 5 + int((i / resolve_total) * 5)
-                    progress_data = {
-                        "progress": dl_progress,
-                        "message": f"Downloading clip {i + 1}/{resolve_total}...",
-                        "status": "processing",
-                        "projectId": project_id,
-                        "projectName": project_name,
-                        "type": "multi_clip"
-                    }
-                    export_progress[export_id] = progress_data
-                    await manager.send_progress(export_id, progress_data)
-
-                    r2_key = f"raw_clips/{db_clip['raw_filename']}"
-                    clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                    logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
-                    _t0 = time_module.monotonic()
-                    if not await asyncio.to_thread(download_from_r2, captured_user_id, r2_key, clip_path):
-                        raise HTTPException(status_code=500, detail=f"Failed to download raw clip {i}")
-                    logger.info(f"[T1110] download_from_r2 raw clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                    with open(clip_path, 'rb') as f:
-                        video_files[i] = BytesFile(f.read())
-
-                else:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Clip {i} has no video source (no game_id, uploaded_filename, or raw_filename)"
-                    )
-
-            logger.info(f"[Multi-Clip Export] Resolved {len(video_files)} clips from DB")
-        finally:
-            # Clean up temp files (video content is now in memory via BytesFile)
-            shutil.rmtree(resolve_temp_dir, ignore_errors=True)
-
-    # Validate video files match clip data
-    if len(video_files) != len(clips_data):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
-        )
-
-    # Validate all clips have framing data (crop keyframes)
-    clips_missing_framing = []
-    for i, clip in enumerate(clips_data):
-        crop_keyframes = clip.get('cropKeyframes', [])
-        if not crop_keyframes or len(crop_keyframes) == 0:
-            clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
-            clips_missing_framing.append(clip_name)
-
-    if clips_missing_framing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
-        )
-
-    # Build ClipExportData list for the shared pipeline
-    clip_export_list = []
-    for i, cd in enumerate(clips_data):
-        clip_index = cd.get('clipIndex', i)
-        clip_export_list.append(ClipExportData(
-            clip_index=clip_index,
-            crop_keyframes=cd.get('cropKeyframes', []),
-            segments=cd.get('segments'),
-            duration=cd.get('duration', 0),
-            video_file=video_files.get(clip_index),
-            clip_name=cd.get('clipName') or cd.get('fileName'),
-        ))
-
     is_test_mode = request.headers.get('X-Test-Mode', '').lower() == 'true'
 
-    logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
-
-    return await _export_clips(
+    # T760: Run resolution + pipeline in background so the per-user write lock
+    # is released immediately. Holding it for the full export blocked every
+    # other write request from this user for minutes. Completion and errors
+    # are reported via WebSocket (same pattern as /render-overlay).
+    asyncio.create_task(_run_multi_clip_background(
         export_id=export_id,
-        clips=clip_export_list,
-        aspect_ratio=global_aspect_ratio,
+        clips_data=clips_data,
+        video_files=video_files,
+        global_aspect_ratio=global_aspect_ratio,
         transition=transition,
         include_audio=include_audio_bool,
         target_fps=target_fps,
@@ -2137,7 +1937,288 @@ async def export_multi_clip(
         credits_deducted=credits_deducted,
         total_video_seconds=total_video_seconds,
         is_test_mode=is_test_mode,
+    ))
+    return JSONResponse(
+        status_code=202,
+        content={"status": "accepted", "export_id": export_id}
     )
+
+
+async def _run_multi_clip_background(
+    export_id: str,
+    clips_data: list,
+    video_files: Dict[int, Any],
+    global_aspect_ratio: str,
+    transition: dict,
+    include_audio: bool,
+    target_fps: int,
+    export_mode: str,
+    project_id: int | None,
+    project_name: str | None,
+    user_id: str,
+    profile_id: int,
+    credits_deducted: int,
+    total_video_seconds: float,
+    is_test_mode: bool,
+):
+    """Resolve clip sources from the DB, then run the shared export pipeline.
+    Runs via asyncio.create_task after /multi-clip returns 202; all progress
+    and errors are reported via WebSocket."""
+    from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
+
+    pipeline_entered = False
+    try:
+        # DB-resolved mode: when project_id is provided and no video files uploaded,
+        # resolve clip sources from the database (supports game-video clips without standalone files)
+        if project_id and len(video_files) == 0 and len(clips_data) > 0:
+            logger.info(f"[Multi-Clip Export] No video files uploaded, resolving {len(clips_data)} clips from DB")
+
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(f"""
+                    SELECT
+                        wc.id, wc.raw_clip_id, wc.uploaded_filename,
+                        wc.crop_data, wc.segments_data, wc.sort_order,
+                        rc.filename as raw_filename, rc.name as clip_name,
+                        rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
+                        rc.end_time as raw_end_time,
+                        (rc.end_time - rc.start_time) as raw_duration,
+                        COALESCE(gv.blake3_hash, g.blake3_hash) as game_blake3_hash
+                    FROM working_clips wc
+                    LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+                    LEFT JOIN games g ON rc.game_id = g.id
+                    LEFT JOIN game_videos gv ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
+                    WHERE wc.project_id = ?
+                    AND wc.id IN ({latest_working_clips_subquery()})
+                    ORDER BY wc.sort_order
+                """, (project_id, project_id))
+                db_clips = cursor.fetchall()
+
+            if not db_clips:
+                raise RuntimeError("No clips found in project")
+
+            # Build lookup by working_clip_id
+            db_clips_by_id = {clip['id']: clip for clip in db_clips}
+
+            resolve_temp_dir = tempfile.mkdtemp()
+            resolve_total = len(clips_data)
+            try:
+                for i, clip_data in enumerate(clips_data):
+                    wc_id = clip_data.get('workingClipId')
+                    if wc_id and wc_id in db_clips_by_id:
+                        db_clip = db_clips_by_id[wc_id]
+                    elif i < len(db_clips):
+                        # Fallback: match by sort order
+                        db_clip = db_clips[i]
+                    else:
+                        raise RuntimeError(f"Cannot resolve clip {i}: no matching DB clip")
+
+                    # Use DB-authoritative crop/segments data
+                    # DB stores frame-based keyframes; pipeline expects time-based
+                    if db_clip['crop_data']:
+                        raw_kfs = decode_data(db_clip['crop_data'])
+                        framerate = 30  # Default; matches single-clip export fallback
+                        if raw_kfs and 'frame' in raw_kfs[0] and 'time' not in raw_kfs[0]:
+                            clip_data['cropKeyframes'] = [
+                                {'time': kf['frame'] / framerate, 'x': kf['x'], 'y': kf['y'], 'width': kf['width'], 'height': kf['height']}
+                                for kf in raw_kfs
+                            ]
+                        else:
+                            clip_data['cropKeyframes'] = raw_kfs
+                    if db_clip['raw_duration']:
+                        clip_data['duration'] = db_clip['raw_duration']
+                    if db_clip['segments_data']:
+                        # Gesture-saved rows store boundaries as user splits only;
+                        # rebuild the full [0, ...splits, duration] list so
+                        # segmentSpeeds indices line up (Bug 20p)
+                        clip_data['segments'] = canonicalize_segments_data(
+                            decode_data(db_clip['segments_data']),
+                            clip_data.get('duration'),
+                        )
+
+                    # Resolve video source
+                    if db_clip['game_id']:
+                        if not db_clip['game_blake3_hash']:
+                            raise RuntimeError(
+                                f"Clip references game_id={db_clip['game_id']} but game_videos has no row "
+                                f"for (game_id, video_sequence={db_clip['video_sequence']})"
+                            )
+                        # Game clip: stream clip range from R2 via presigned URL (no full download)
+                        extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
+                        progress_data = {
+                            "progress": extract_progress,
+                            "message": f"Extracting clip {i + 1}/{resolve_total}...",
+                            "status": "processing",
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "type": "multi_clip"
+                        }
+                        export_progress[export_id] = progress_data
+                        await manager.send_progress(export_id, progress_data)
+
+                        source_url = generate_presigned_url_global(f"games/{db_clip['game_blake3_hash']}.mp4")
+                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                        start_time = db_clip['raw_start_time']
+                        end_time = db_clip['raw_end_time']
+                        logger.info(f"[Multi-Clip Export] Streaming clip {i} range: {start_time}s - {end_time}s")
+
+                        try:
+                            def _extract_clip():
+                                (
+                                    ffmpeg
+                                    .input(source_url, ss=start_time, to=end_time)
+                                    .output(str(clip_path), c='copy')
+                                    .overwrite_output()
+                                    .run(quiet=True)
+                                )
+                            _t0 = time_module.monotonic()
+                            await asyncio.to_thread(_extract_clip)
+                            logger.info(f"[T1110] ffmpeg extract clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                        except ffmpeg.Error as e:
+                            raise RuntimeError(f"Failed to extract clip {i} range: {e}")
+
+                        with open(clip_path, 'rb') as f:
+                            video_files[i] = BytesFile(f.read())
+
+                    elif db_clip['uploaded_filename']:
+                        # Uploaded clip: download from user's R2 storage
+                        dl_progress = 5 + int((i / resolve_total) * 5)
+                        progress_data = {
+                            "progress": dl_progress,
+                            "message": f"Downloading clip {i + 1}/{resolve_total}...",
+                            "status": "processing",
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "type": "multi_clip"
+                        }
+                        export_progress[export_id] = progress_data
+                        await manager.send_progress(export_id, progress_data)
+
+                        r2_key = f"raw_clips/{db_clip['uploaded_filename']}"
+                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                        logger.info(f"[Multi-Clip Export] Downloading uploaded clip: {r2_key}")
+                        _t0 = time_module.monotonic()
+                        if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
+                            raise RuntimeError(f"Failed to download uploaded clip {i}")
+                        logger.info(f"[T1110] download_from_r2 uploaded clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                        with open(clip_path, 'rb') as f:
+                            video_files[i] = BytesFile(f.read())
+
+                    elif db_clip['raw_filename']:
+                        # Extracted clip: download from user's R2 storage
+                        dl_progress = 5 + int((i / resolve_total) * 5)
+                        progress_data = {
+                            "progress": dl_progress,
+                            "message": f"Downloading clip {i + 1}/{resolve_total}...",
+                            "status": "processing",
+                            "projectId": project_id,
+                            "projectName": project_name,
+                            "type": "multi_clip"
+                        }
+                        export_progress[export_id] = progress_data
+                        await manager.send_progress(export_id, progress_data)
+
+                        r2_key = f"raw_clips/{db_clip['raw_filename']}"
+                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
+                        logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
+                        _t0 = time_module.monotonic()
+                        if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
+                            raise RuntimeError(f"Failed to download raw clip {i}")
+                        logger.info(f"[T1110] download_from_r2 raw clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
+                        with open(clip_path, 'rb') as f:
+                            video_files[i] = BytesFile(f.read())
+
+                    else:
+                        raise RuntimeError(
+                            f"Clip {i} has no video source (no game_id, uploaded_filename, or raw_filename)"
+                        )
+
+                logger.info(f"[Multi-Clip Export] Resolved {len(video_files)} clips from DB")
+            finally:
+                # Clean up temp files (video content is now in memory via BytesFile)
+                shutil.rmtree(resolve_temp_dir, ignore_errors=True)
+
+        # Validate video files match clip data
+        if len(video_files) != len(clips_data):
+            raise RuntimeError(
+                f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
+            )
+
+        # Validate all clips have framing data (crop keyframes)
+        clips_missing_framing = []
+        for i, clip in enumerate(clips_data):
+            crop_keyframes = clip.get('cropKeyframes', [])
+            if not crop_keyframes or len(crop_keyframes) == 0:
+                clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
+                clips_missing_framing.append(clip_name)
+
+        if clips_missing_framing:
+            raise RuntimeError(
+                f"Cannot export: {len(clips_missing_framing)} clip(s) missing framing data: {', '.join(clips_missing_framing)}. Please add crop keyframes to all clips before exporting."
+            )
+
+        # Build ClipExportData list for the shared pipeline
+        clip_export_list = []
+        for i, cd in enumerate(clips_data):
+            clip_index = cd.get('clipIndex', i)
+            clip_export_list.append(ClipExportData(
+                clip_index=clip_index,
+                crop_keyframes=cd.get('cropKeyframes', []),
+                segments=cd.get('segments'),
+                duration=cd.get('duration', 0),
+                video_file=video_files.get(clip_index),
+                clip_name=cd.get('clipName') or cd.get('fileName'),
+            ))
+
+        logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
+
+        pipeline_entered = True
+        await _export_clips(
+            export_id=export_id,
+            clips=clip_export_list,
+            aspect_ratio=global_aspect_ratio,
+            transition=transition,
+            include_audio=include_audio,
+            target_fps=target_fps,
+            export_mode=export_mode,
+            project_id=project_id,
+            project_name=project_name,
+            user_id=user_id,
+            profile_id=profile_id,
+            credits_deducted=credits_deducted,
+            total_video_seconds=total_video_seconds,
+            is_test_mode=is_test_mode,
+        )
+
+    except Exception as e:
+        # _export_clips refunds credits itself once entered; only pre-pipeline
+        # failures need a refund here.
+        if not pipeline_entered and credits_deducted > 0:
+            from ...services.user_db import refund_credits
+            refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
+            logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits (pre-pipeline failure)")
+        logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)
+
+        fail_export_job(export_id, str(e))
+
+        # _export_clips' generic error path already sent a WS error; cover the
+        # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
+        if export_progress.get(export_id, {}).get('status') != 'error':
+            error_data = {
+                "progress": 0,
+                "message": f"Export failed: {e}",
+                "error": f"Export failed: {e}",
+                "status": "error",
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "multi_clip",
+            }
+            export_progress[export_id] = error_data
+            await manager.send_progress(export_id, error_data)
+    finally:
+        # Background tasks run outside the request middleware, so DB writes
+        # (working_videos, export_jobs, refunds) must be synced explicitly.
+        await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
 
 
 @router.post("/chapters")
