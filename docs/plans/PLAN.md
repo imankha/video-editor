@@ -24,6 +24,7 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
+| T3540 | [Framing "In Progress" Visual Ambiguity](tasks/T3540-framing-in-progress-visual-ambiguity.md) | 5 | 2 | 2.5 | TODO | [ ] | Reel draft card renders any framing edit as a fully-filled solid blue bar - indistinguishable from complete except by hue. One accidental crop nudge reads as "framed, ready for overlay". Fix: half-fill treatment for in-progress segments + "Editing" -> "Framing started" wording. Frontend-only, SegmentedProgressStrip. |
 | T3090 | [Multi-Video Controller Abstraction](tasks/T3090-multi-video-controller-abstraction.md) | 7 | 5 | P1 | DONE | [ ] | Multi-video mode leaks dual-element implementation to consumers via raw videoARef. Components directly manipulate the wrong DOM element when video B is active. Fix: seal the abstraction behind a unified videoController interface. Bugs: 10p, 11p. |
 |  | **[Video Proxy Layer](tasks/VIDEO-PROXY-EPIC.md)** | 9 | 8 | P1 |  |  | DRY consolidation: eliminate duplicated video element management. T3120 dropped (different timeline model, risk > benefit). T3150 merged into T3140. |
 | T3100 | ↳ [Extract useVideoProxy](tasks/VIDEO-PROXY-EPIC.md#t3100-extract-usevideoproxy-from-usemultivideoscrub) | 9 | 5 | P1 | DONE | [ ] | Create useVideoProxy hook: video-element management, ping-pong swap, cross-boundary seek, error handling, videoController interface. |
@@ -493,5 +494,6 @@ IDs use gaps of 10 to allow insertions:
 - `T3420` - Profile Critical-Path Endpoints (375ms per-request baseline, auth/me 1774ms, bootstrap 741ms)
 - `T3430` - Parallelize Game Load (4 sequential requests -> 1 game bootstrap endpoint)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
+- `T3540` - Framing "In Progress" Visual Ambiguity (progress strip half-fill + wording)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
