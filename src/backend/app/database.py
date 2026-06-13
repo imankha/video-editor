@@ -658,9 +658,10 @@ def ensure_database():
         """)
 
         # Final videos - output from Overlay mode
-        # duration/aspect_ratio/tags are frozen at export-finalize (T3600):
-        # publish archives + deletes working data, so they cannot be derived
-        # later. tags is a msgpack array of distinct tag strings.
+        # duration/aspect_ratio/tags are frozen at export-finalize (T3600);
+        # game_ids is frozen too (T3605): publish archives + deletes working
+        # data, so they cannot be derived later. tags + game_ids are msgpack
+        # arrays (distinct tag strings / sorted distinct game ids).
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS final_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -677,16 +678,18 @@ def ensure_database():
                 published_at TIMESTAMP,
                 aspect_ratio TEXT,
                 tags BLOB,
+                game_ids BLOB,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
 
-        # T3600 temporary shim (remove once v007 has run on staging + prod,
-        # like the prior in-place fixups T1583/T2870/T2847): existing DBs
-        # need the new columns at deploy time because GET /api/downloads
-        # selects them, and migrations only run via POST /api/admin/migrate.
-        # Columns only — v007 remains the canonical migration + backfill.
-        for _col in ("aspect_ratio TEXT", "tags BLOB"):
+        # T3600/T3605 temporary shim (remove once v007 + v008 have run on
+        # staging + prod, like the prior in-place fixups T1583/T2870/T2847):
+        # existing DBs need the new columns at deploy time because exports
+        # INSERT them and GET /api/downloads selects them, while migrations
+        # only run via POST /api/admin/migrate. Columns only — v007/v008
+        # remain the canonical migrations + backfills.
+        for _col in ("aspect_ratio TEXT", "tags BLOB", "game_ids BLOB"):
             try:
                 cursor.execute(f"ALTER TABLE final_videos ADD COLUMN {_col}")
             except sqlite3.OperationalError:

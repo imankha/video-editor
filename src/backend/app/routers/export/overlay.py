@@ -48,7 +48,7 @@ from ...services.image_extractor import (
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ...services.collection_metadata import compute_project_metadata
+from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids
 from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
@@ -87,15 +87,16 @@ def _finalize_overlay_export(
         fv_name = project_row['name'] if project_row else f"Video {project_id}"
 
         # T3600: freeze collection metadata while working data still exists
-        # (publish archives + deletes it)
+        # (publish archives + deletes it). T3605: freeze game_ids too.
         duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
+        game_ids_blob = compute_project_game_ids(cursor, project_id)
 
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                duration, aspect_ratio, tags, game_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob))
+              duration, aspect_ratio, tags_blob, game_ids_blob))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1137,16 +1138,18 @@ async def export_final(
         project_row = cursor.fetchone()
         fv_name = project_row['name'] if project_row else f"Video {project_id}"
 
-        # T3600: freeze collection metadata while working data still exists
+        # T3600: freeze collection metadata while working data still exists.
+        # T3605: freeze game_ids too.
         duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
+        game_ids_blob = compute_project_game_ids(cursor, project_id)
 
         # Create new final video entry with version number and source_type
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                duration, aspect_ratio, tags, game_ids)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob))
+              duration, aspect_ratio, tags_blob, game_ids_blob))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 

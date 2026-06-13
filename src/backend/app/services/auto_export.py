@@ -20,7 +20,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from .collection_metadata import compute_project_metadata
+from .collection_metadata import compute_project_metadata, encode_game_ids
 from ..storage import delete_from_r2, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
@@ -205,13 +205,15 @@ def _export_brilliant_clip(
                    WHERE source_type = 'brilliant_clip' AND project_id = ?""",
                 (clip['auto_project_id'],),
             )
+        # T3605: brilliant clip belongs to exactly one game -> [game_id]
+        game_ids_blob = encode_game_ids([game_id])
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, version, source_type, game_id, name,
-                published_at, duration, aspect_ratio, tags)
-               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)""",
+                published_at, duration, aspect_ratio, tags, game_ids)
+               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?)""",
             (clip['auto_project_id'], filename, game_id, clip_name, duration,
-             aspect_ratio, tags_blob),
+             aspect_ratio, tags_blob, game_ids_blob),
         )
         conn.commit()
 
