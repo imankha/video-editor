@@ -59,11 +59,12 @@ export function useCollections(isActive = false) {
 
   /**
    * Lazy member fetch, cached per group key. No-op if already loading/ready.
-   * @param {{ gameId?: number, mixes?: boolean }} opts
+   * @param {{ key: string, query?: string }} opts - cache key + URL query string
+   *   (no leading '?'); empty query => GET /api/downloads (the full list, used by
+   *   the Top Plays smart collection).
    * @returns {Promise<DownloadItem[]>} the cached/fetched members for the key
    */
-  const fetchMembers = useCallback(async ({ gameId = null, mixes = false } = {}) => {
-    const key = mixes ? 'mixes' : `game:${gameId}`;
+  const fetchMembers = useCallback(async ({ key, query = '' } = {}) => {
     const state = memberStates[key];
     if (state === 'loading' || state === 'ready') {
       return members[key] || [];
@@ -75,10 +76,10 @@ export function useCollections(isActive = false) {
 
     setMemberStates((prev) => ({ ...prev, [key]: 'loading' }));
     try {
-      const query = mixes ? 'mixes=true' : `game_id=${gameId}`;
-      const res = await apiFetch(`${API_BASE_URL}/downloads?${query}`, {
-        signal: controller.signal,
-      });
+      const url = query
+        ? `${API_BASE_URL}/downloads?${query}`
+        : `${API_BASE_URL}/downloads`;
+      const res = await apiFetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error('Failed to fetch members');
       const data = await res.json();
       const items = data.downloads || [];
@@ -94,6 +95,27 @@ export function useCollections(isActive = false) {
       return [];
     }
   }, [members, memberStates]);
+
+  // Member-card mutation sync (T3610 §0B.6): keep cached member lists honest when
+  // a reel is renamed / watched / deleted from a card. The summary is the source
+  // of truth for aggregates, so deletes also refetch it (counts/eligibility move).
+  const removeMember = useCallback((id) => {
+    setMembers((prev) => {
+      const next = {};
+      for (const k of Object.keys(prev)) next[k] = prev[k].filter((m) => m.id !== id);
+      return next;
+    });
+  }, []);
+
+  const patchMember = useCallback((id, patch) => {
+    setMembers((prev) => {
+      const next = {};
+      for (const k of Object.keys(prev)) {
+        next[k] = prev[k].map((m) => (m.id === id ? { ...m, ...patch } : m));
+      }
+      return next;
+    });
+  }, []);
 
   // Clear all collections state on profile switch (useState, not Zustand).
   // Declared BEFORE the fetch effect so on mount the reset runs first and does
@@ -124,7 +146,10 @@ export function useCollections(isActive = false) {
     };
   }, []);
 
-  return { summary, summaryState, members, memberStates, fetchSummary, fetchMembers };
+  return {
+    summary, summaryState, members, memberStates,
+    fetchSummary, fetchMembers, removeMember, patchMember,
+  };
 }
 
 export default useCollections;

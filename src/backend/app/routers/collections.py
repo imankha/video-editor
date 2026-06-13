@@ -89,6 +89,7 @@ class TagTotal(BaseModel):                 # raw per-tag feed (other consumers)
 class SmartCollection(RatioBucketed):      # T3670: Top Plays / Goals & Assists / Dribbles
     key: str
     name: str
+    tags: Optional[List[str]]              # member fetch: ?tags=...; None => all reels
 
 
 class CollectionsSummaryResponse(BaseModel):
@@ -319,8 +320,11 @@ async def collections_summary():
 
     # Smart collections in defined order; omit empties (a group with no matching reels).
     smart_collections = [
-        SmartCollection(key=sc["key"], name=sc["name"],
-                        **_finalize_bucket(smart_buckets[sc["key"]]))
+        SmartCollection(
+            key=sc["key"], name=sc["name"],
+            tags=(sorted(sc["tags"]) if sc["tags"] else None),
+            **_finalize_bucket(smart_buckets[sc["key"]]),
+        )
         for sc in SMART_COLLECTIONS
         if smart_buckets[sc["key"]]["reel_count"] > 0
     ]

@@ -6,6 +6,7 @@ import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
+import { useCollections } from '../hooks/useCollections';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
@@ -48,14 +49,13 @@ export function DownloadsPanel({
   const isOpen = useGalleryStore((state) => state.isOpen);
   const close = useGalleryStore((state) => state.close);
   const setCount = useGalleryStore((state) => state.setCount);
-  // Header chip count: galleryStore is the source of truth across tabs (the All
-  // list isn't fetched on the Collections tab). Badge unchanged (T3610 §0.6).
+  // Header chip count: galleryStore is the source of truth (the full reel list is
+  // no longer fetched on open). Badge unchanged (T3610 §0.6).
   const galleryCount = useGalleryStore((state) => state.count);
 
-  // Active tab (transient; Collections default). The All-tab full-list fetch
-  // only fires when the All tab is selected (T3610 §3.7).
-  const [activeTab, setActiveTab] = useState(TABS.COLLECTIONS);
-
+  // useDownloads supplies the per-reel action helpers + formatters. The full-list
+  // fetch is disabled (false) — the single view sources members from
+  // useCollections, not this list (T3610 §0B.1). `downloads` stays [].
   const {
     downloads,
     loadState,
@@ -74,7 +74,11 @@ export function DownloadsPanel({
     formatDuration,
     formatDate,
     setFilter
-  } = useDownloads(isOpen && activeTab === TABS.ALL);
+  } = useDownloads(false);
+
+  // Collections data, lifted here so per-reel mutations can keep the member
+  // lists honest (T3610 §0B.6).
+  const collections = useCollections(isOpen);
 
   const setUnwatchedCount = useGalleryStore((state) => state.setUnwatchedCount);
 
@@ -133,7 +137,10 @@ export function DownloadsPanel({
     e.stopPropagation();
     if (window.confirm(`Delete "${download.filename}"?`)) {
       await deleteDownload(download.id, true);
-      // Count will auto-update via the useEffect when downloads changes
+      // Keep the collection member lists + aggregates honest (T3610 §0B.6):
+      // drop the card now, refetch the summary (counts/eligibility change).
+      collections.removeMember(download.id);
+      collections.fetchSummary();
     }
   };
 
@@ -149,7 +156,10 @@ export function DownloadsPanel({
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     setPlayingVideo(download);
     close();
-    if (!download.watched_at) markWatched(download.id);
+    if (!download.watched_at) {
+      markWatched(download.id);
+      collections.patchMember(download.id, { watched_at: new Date().toISOString() });
+    }
     // T540: Record achievements for viewing gallery video
     useQuestStore.getState().recordAchievement('viewed_gallery_video');
     // Custom project video gets a separate achievement for Quest 3
@@ -323,6 +333,7 @@ export function DownloadsPanel({
                     const trimmed = editingName.trim();
                     if (trimmed && trimmed !== download.project_name) {
                       renameDownload(download.id, trimmed);
+                      collections.patchMember(download.id, { project_name: trimmed });
                     }
                     setEditingId(null);
                   } else if (e.key === 'Escape') {
@@ -333,6 +344,7 @@ export function DownloadsPanel({
                   const trimmed = editingName.trim();
                   if (trimmed && trimmed !== download.project_name) {
                     renameDownload(download.id, trimmed);
+                    collections.patchMember(download.id, { project_name: trimmed });
                   }
                   setEditingId(null);
                 }}
@@ -655,63 +667,9 @@ export function DownloadsPanel({
           />
         </div>
 
-        {/* Collections | All tab bar */}
-        <div className="flex border-b border-gray-700 bg-gray-800/50">
-          {[
-            { key: TABS.COLLECTIONS, label: 'Collections' },
-            { key: TABS.ALL, label: 'All' },
-          ].map(({ key, label }) => {
-            const isActive = activeTab === key;
-            return (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`flex-1 min-h-11 text-sm font-medium transition-colors ${
-                  isActive
-                    ? `${REEL.accent} border-b-2 border-cyan-400`
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Source-type filter pills — All tab only */}
-        {activeTab === TABS.ALL && (
-          <div className="flex gap-2 p-2 border-b border-gray-700 bg-gray-800/50">
-            {FILTER_OPTIONS.map((option) => {
-              const isActive = filter === option.value;
-              const Icon = option.icon;
-              return (
-                <button
-                  key={option.value ?? 'all'}
-                  onClick={() => setFilter(option.value)}
-                  title={option.label}
-                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors ${
-                    isActive
-                      ? `${REEL.bg} text-white`
-                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                  }`}
-                >
-                  <Icon size={20} className={isActive ? 'text-white' : option.color} />
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Content */}
+        {/* Content — single My Reels view (T3610 §0B.1) */}
         <div className="flex-1 overflow-y-auto p-4">
-          {activeTab === TABS.ALL ? (
-            renderContent()
-          ) : (
-            <CollectionsTab
-              isActive={isOpen && activeTab === TABS.COLLECTIONS}
-              renderCard={renderDownloadCard}
-            />
-          )}
+          <CollectionsTab collections={collections} renderCard={renderDownloadCard} />
         </div>
       </div>
 

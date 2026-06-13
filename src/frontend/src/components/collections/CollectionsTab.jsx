@@ -3,8 +3,10 @@ import { Loader, AlertCircle, FolderOpen } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { REEL } from '../../config/themeColors';
 import { API_BASE } from '../../config';
-import { useCollections } from '../../hooks/useCollections';
+import { RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
+import { CollectionCard } from './CollectionCard';
+import { SmartLockedCard } from './SmartLockedCard';
 import { CollectionPlayer } from './CollectionPlayer';
 
 const MIXES_NAME = 'Mixes & compilations';
@@ -22,25 +24,28 @@ function toPlayerReels(items) {
 }
 
 /**
- * CollectionsTab - Screen for the Collections tab (T3610).
+ * CollectionsTab - the single My Reels view (T3610 §0B). Smart collections on
+ * top, then game-by-game, then multi-game mixes. Aggregates come from the lifted
+ * useCollections summary (passed in as `collections`); members load lazily.
  *
- * Guards summary readiness, owns the single CollectionPlayer instance, and
- * renders one GameCollectionGroup per game plus the Mixes group. Aggregates come
- * from the summary endpoint; members load lazily per group on expand.
- *
- * @param {boolean}  isActive   - panel open AND this tab selected
- * @param {Function} renderCard - (download) => ReactNode (the panel's card)
+ * @param {Object}   collections - the lifted useCollections() value
+ * @param {Function} renderCard  - (download) => ReactNode (the panel's reel card)
  */
-export function CollectionsTab({ isActive, renderCard }) {
-  const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } =
-    useCollections(isActive);
+export function CollectionsTab({ collections, renderCard }) {
+  const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
   const [player, setPlayer] = useState(null); // { reels, title }
 
-  const playRatio = async (scope, ratio, title) => {
-    const items = await fetchMembers(scope);
-    const reels = toPlayerReels(items.filter((m) => m.aspect_ratio === ratio));
+  const onPlay = (items, title) => {
+    const reels = toPlayerReels(items);
     if (reels.length) setPlayer({ reels, title });
   };
+
+  const reqGame = (id) => () => fetchMembers({ key: `game:${id}`, query: `game_id=${id}` });
+  const reqMixes = () => fetchMembers({ key: 'mixes', query: 'mixes=true' });
+  const reqSmart = (sc) => () => fetchMembers({
+    key: `smart:${sc.key}`,
+    query: sc.tags ? `tags=${sc.tags.join(',')}` : '', // top_plays -> full list
+  });
 
   if (summaryState === 'idle' || summaryState === 'loading') {
     return (
@@ -54,21 +59,22 @@ export function CollectionsTab({ isActive, renderCard }) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <AlertCircle size={32} className="text-red-400 mb-3" />
-        <p className="text-gray-400 mb-4">Failed to load collections</p>
+        <p className="text-gray-400 mb-4">Failed to load reels</p>
         <Button variant="secondary" onClick={() => fetchSummary()}>Retry</Button>
       </div>
     );
   }
 
+  const smart = summary?.smart_collections || [];
   const games = summary?.games || [];
   const mixes = summary?.mixes;
   const hasMixes = !!mixes && mixes.reel_count > 0;
 
-  if (games.length === 0 && !hasMixes) {
+  if (smart.length === 0 && games.length === 0 && !hasMixes) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <FolderOpen size={48} className="text-gray-600 mb-4" />
-        <p className="text-gray-400">No collections yet</p>
+        <p className="text-gray-400">No reels yet</p>
         <p className="text-sm text-gray-500 mt-1">
           Publish reels to see them grouped by game here
         </p>
@@ -78,6 +84,40 @@ export function CollectionsTab({ isActive, renderCard }) {
 
   return (
     <>
+      {/* Smart collections */}
+      {smart.map((sc) => (
+        <div key={`smart:${sc.key}`} className="mb-3">
+          {RATIO_ORDER.map((ratio) => {
+            if (sc.ratio_eligible?.[ratio]) {
+              return (
+                <CollectionCard
+                  key={ratio}
+                  name={`${sc.name} - ${ratioLabel(ratio)}`}
+                  ratio={ratio}
+                  reelCount={sc.ratio_counts[ratio]}
+                  ratioDuration={sc.ratio_durations[ratio]}
+                  hasNullDurations={sc.has_null_durations}
+                  requestMembers={reqSmart(sc)}
+                  onPlay={onPlay}
+                />
+              );
+            }
+            if ((sc.ratio_counts?.[ratio] || 0) > 0) {
+              return (
+                <SmartLockedCard
+                  key={ratio}
+                  name={sc.name}
+                  ratio={ratio}
+                  currentSec={sc.ratio_durations?.[ratio]}
+                />
+              );
+            }
+            return null;
+          })}
+        </div>
+      ))}
+
+      {/* Game by game */}
       {games.map((g, i) => {
         const key = `game:${g.game_id}`;
         return (
@@ -89,13 +129,14 @@ export function CollectionsTab({ isActive, renderCard }) {
             defaultExpanded={i === 0}
             members={members[key]}
             memberState={memberStates[key]}
-            onExpand={() => fetchMembers({ gameId: g.game_id })}
-            onPlayRatio={(ratio, title) => playRatio({ gameId: g.game_id }, ratio, title)}
+            requestMembers={reqGame(g.game_id)}
+            onPlay={onPlay}
             renderCard={renderCard}
           />
         );
       })}
 
+      {/* Multi-game mixes */}
       {hasMixes && (
         <GameCollectionGroup
           key="mixes"
@@ -104,8 +145,8 @@ export function CollectionsTab({ isActive, renderCard }) {
           defaultExpanded={games.length === 0}
           members={members.mixes}
           memberState={memberStates.mixes}
-          onExpand={() => fetchMembers({ mixes: true })}
-          onPlayRatio={(ratio, title) => playRatio({ mixes: true }, ratio, title)}
+          requestMembers={reqMixes}
+          onPlay={onPlay}
           renderCard={renderCard}
         />
       )}

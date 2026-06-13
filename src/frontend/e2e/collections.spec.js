@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 /**
  * Collections tab E2E (T3610).
  *
- * Covers the tab SHELL behavior + mobile responsiveness (data-independent):
- *   - Collections is the default tab; the source-type filter pills are All-tab only
+ * Covers the single-view shell + mobile responsiveness (data-independent):
+ *   - One My Reels view: no Collections/All switcher, no source-type filter pills
  *   - No horizontal overflow at 360px
  *
  * The data-dependent assertions (game attribution, ratio-as-identity eligibility,
@@ -38,7 +38,7 @@ async function openGallery(page) {
   // Click the real button so the app's own store instance opens the panel
   // (a page.evaluate import would resolve a separate Zustand module instance).
   await page.getByRole('button', { name: 'My Reels' }).click();
-  await expect(page.getByRole('button', { name: 'Collections', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My Reels' })).toBeVisible();
 }
 
 test.afterEach(async ({ request }) => {
@@ -47,22 +47,16 @@ test.afterEach(async ({ request }) => {
   } catch { /* best-effort cleanup */ }
 });
 
-test.describe('Collections tab shell', () => {
-  test('Collections is the default tab; filter pills are All-tab only', async ({ page }) => {
+test.describe('My Reels single view', () => {
+  test('one view: no Collections/All switcher, no source-type filter pills', async ({ page }) => {
     await setupAndAuth(page);
     await openGallery(page);
 
-    // Collections is the default tab -> the source-type filter pills (e.g.
-    // "Custom Reels", which only exist on the All tab) are not present.
+    // No tab switcher and no source-type filter pills (the single-view restructure).
+    await expect(page.getByRole('button', { name: 'All', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Collections', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Custom Reels' })).toHaveCount(0);
-
-    // Switch to All -> the filter pills appear.
-    await page.getByRole('button', { name: 'All', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Custom Reels' })).toBeVisible();
-
-    // Back to Collections -> pills gone again.
-    await page.getByRole('button', { name: 'Collections', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Custom Reels' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Brilliant Clips' })).toHaveCount(0);
   });
 
   test('No horizontal overflow at 360px with the panel open', async ({ page }) => {

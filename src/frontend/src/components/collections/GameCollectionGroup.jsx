@@ -1,36 +1,27 @@
 import React, { useEffect } from 'react';
 import { Loader } from 'lucide-react';
 import { CollapsibleGroup } from '../shared/CollapsibleGroup';
-import { CollectionHeader } from './CollectionHeader';
+import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
-import {
-  RATIO_ORDER,
-  COLLECTION_MIN_DURATION_SEC,
-  ratioLabel,
-} from '../../constants/aspectRatios';
-
-const UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
+import { RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
 
 /**
- * GameCollectionGroup - Container for one scope's collections (T3610).
+ * GameCollectionGroup - Container for one scope's collections (T3610 §0B).
  *
- * Works for both a game bucket and the Mixes bucket (the parent passes name +
- * callbacks; this component is scope-agnostic). Renders ONE CollectionHeader per
- * eligible ratio (ratio is identity, no toggle), each followed by that ratio's
- * browsable member cards; sub-threshold ratios render as RatioUnlockGroups with
- * an unlock progress bar. Aggregates come from the summary; member cards are
- * fetched lazily on first expand.
+ * Works for a game bucket and the Mixes bucket (parent passes name + callbacks).
+ * Renders one CollectionCard per eligible ratio (budget slider + Play-all),
+ * each followed by that ratio's browsable clips; sub-30s ratios render as
+ * RatioUnlockGroups. Members load lazily on first expand.
  *
- * @param {string}   name          - scope name (game name / "Mixes & compilations")
- * @param {string=}  subtitle      - secondary line (game date); omitted for mixes
- * @param {Object}   collection     - RatioBucketed: reel_count, ratio_counts,
- *                                    ratio_durations, ratio_eligible, has_null_durations
+ * @param {string}   name           - scope name (game name / "Mixes & compilations")
+ * @param {string=}  subtitle       - game date; omitted for mixes
+ * @param {Object}   collection     - RatioBucketed bucket from the summary
  * @param {boolean}  defaultExpanded
  * @param {Array=}   members        - cached member cards for this group (or undefined)
  * @param {string=}  memberState    - idle|loading|ready|error
- * @param {Function} onExpand       - trigger lazy member fetch
- * @param {Function} onPlayRatio    - (ratio, title) => void
+ * @param {Function} requestMembers - () => Promise<member[]> (cached fetch; also Play-all source)
+ * @param {Function} onPlay         - (members[], title) => void
  * @param {Function} renderCard     - (download) => ReactNode
  */
 export function GameCollectionGroup({
@@ -40,8 +31,8 @@ export function GameCollectionGroup({
   defaultExpanded = false,
   members,
   memberState,
-  onExpand,
-  onPlayRatio,
+  requestMembers,
+  onPlay,
   renderCard,
 }) {
   const ratioCounts = collection.ratio_counts || {};
@@ -54,17 +45,14 @@ export function GameCollectionGroup({
   );
 
   // The default-expanded group never fires onToggle for its initial open state,
-  // so trigger its first member fetch on mount (a fetch, not persistence).
+  // so trigger its first member fetch on mount.
   useEffect(() => {
-    if (defaultExpanded) onExpand();
+    if (defaultExpanded) requestMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const membersFor = (ratio) =>
-    (members || []).filter((m) => m.aspect_ratio === ratio);
-
-  const loadingMembers = memberState === 'loading' || (memberState === undefined);
-
+  const membersFor = (ratio) => (members || []).filter((m) => m.aspect_ratio === ratio);
+  const loadingMembers = memberState === 'loading' || memberState === undefined;
   const titleFor = (ratio) => `${name} - ${ratioLabel(ratio)}`;
 
   return (
@@ -72,18 +60,19 @@ export function GameCollectionGroup({
       title={name}
       count={collection.reel_count}
       defaultExpanded={defaultExpanded}
-      onToggle={(open) => { if (open) onExpand(); }}
+      onToggle={(open) => { if (open) requestMembers(); }}
     >
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="mb-2">
-          <CollectionHeader
+          <CollectionCard
             name={titleFor(ratio)}
             subtitle={subtitle}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
-            duration={ratioDurations[ratio]}
+            ratioDuration={ratioDurations[ratio]}
             hasNullDurations={collection.has_null_durations}
-            onPlayAll={() => onPlayRatio(ratio, titleFor(ratio))}
+            requestMembers={requestMembers}
+            onPlay={onPlay}
           />
           <div className="space-y-2">
             {members
@@ -101,8 +90,7 @@ export function GameCollectionGroup({
         <RatioUnlockGroup
           key={`sub-${ratio}`}
           ratio={ratio}
-          progressPct={(ratioDurations[ratio] || 0) / COLLECTION_MIN_DURATION_SEC * 100}
-          captionText={UNLOCK_CAPTION}
+          currentSec={ratioDurations[ratio]}
           reels={members ? membersFor(ratio) : []}
           renderCard={renderCard}
         />

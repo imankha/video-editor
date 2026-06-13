@@ -51,14 +51,18 @@ describe('useCollections', () => {
     const { result } = renderHook(() => useCollections(true));
     await waitFor(() => expect(result.current.summaryState).toBe('ready'));
 
-    await act(async () => { await result.current.fetchMembers({ gameId: 12 }); });
+    await act(async () => {
+      await result.current.fetchMembers({ key: 'game:12', query: 'game_id=12' });
+    });
     const memberCalls = () => apiFetch.mock.calls.filter(([url]) =>
       url.includes('game_id=12'));
     expect(memberCalls()).toHaveLength(1);
     expect(result.current.members['game:12']).toHaveLength(2);
 
     // Second expand of the same group: no additional request (cache).
-    await act(async () => { await result.current.fetchMembers({ gameId: 12 }); });
+    await act(async () => {
+      await result.current.fetchMembers({ key: 'game:12', query: 'game_id=12' });
+    });
     expect(memberCalls()).toHaveLength(1);
   });
 
@@ -70,9 +74,29 @@ describe('useCollections', () => {
     const { result } = renderHook(() => useCollections(true));
     await waitFor(() => expect(result.current.summaryState).toBe('ready'));
 
-    await act(async () => { await result.current.fetchMembers({ mixes: true }); });
+    await act(async () => {
+      await result.current.fetchMembers({ key: 'mixes', query: 'mixes=true' });
+    });
     expect(apiFetch.mock.calls.some(([url]) => url.includes('mixes=true'))).toBe(true);
     expect(result.current.members.mixes).toHaveLength(1);
+  });
+
+  it('patchMember and removeMember update cached lists', async () => {
+    apiFetch.mockImplementation((url) => {
+      if (url.includes('/collections/summary')) return Promise.resolve(jsonRes(SUMMARY));
+      return Promise.resolve(jsonRes({ downloads: [{ id: 1, project_name: 'a' }, { id: 2 }] }));
+    });
+    const { result } = renderHook(() => useCollections(true));
+    await waitFor(() => expect(result.current.summaryState).toBe('ready'));
+    await act(async () => {
+      await result.current.fetchMembers({ key: 'game:5', query: 'game_id=5' });
+    });
+
+    act(() => { result.current.patchMember(1, { project_name: 'renamed' }); });
+    expect(result.current.members['game:5'].find((m) => m.id === 1).project_name).toBe('renamed');
+
+    act(() => { result.current.removeMember(2); });
+    expect(result.current.members['game:5'].some((m) => m.id === 2)).toBe(false);
   });
 
   it('resets all state on profile switch', async () => {
