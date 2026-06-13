@@ -19,16 +19,6 @@ import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 
-// Filter options for gallery source types (icon-only with tooltips)
-const FILTER_OPTIONS = [
-  { value: null, label: 'All', icon: LayoutGrid, color: 'text-gray-400' },
-  { value: SourceType.BRILLIANT_CLIP, label: 'Brilliant Clips', icon: Star, color: 'text-yellow-400' },
-  { value: SourceType.CUSTOM_PROJECT, label: 'Custom Reels', icon: Folder, color: REEL.accent },
-];
-
-// Panel tabs (T3610). Collections is the default; transient, resets each mount.
-const TABS = { COLLECTIONS: 'collections', ALL: 'all' };
-
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
  *
@@ -48,7 +38,6 @@ export function DownloadsPanel({
   // Gallery state from store
   const isOpen = useGalleryStore((state) => state.isOpen);
   const close = useGalleryStore((state) => state.close);
-  const setCount = useGalleryStore((state) => state.setCount);
   // Header chip count: galleryStore is the source of truth (the full reel list is
   // no longer fetched on open). Badge unchanged (T3610 §0.6).
   const galleryCount = useGalleryStore((state) => state.count);
@@ -58,11 +47,6 @@ export function DownloadsPanel({
   // useCollections, not this list (T3610 §0B.1). `downloads` stays [].
   const {
     downloads,
-    loadState,
-    error,
-    filter,
-    hasDownloads,
-    groupedDownloads,
     deleteDownload,
     downloadFile,
     downloadingId,
@@ -73,22 +57,11 @@ export function DownloadsPanel({
     formatFileSize,
     formatDuration,
     formatDate,
-    setFilter
   } = useDownloads(false);
 
   // Collections data, lifted here so per-reel mutations can keep the member
   // lists honest (T3610 §0B.6).
   const collections = useCollections(isOpen);
-
-  const setUnwatchedCount = useGalleryStore((state) => state.setUnwatchedCount);
-
-  // Sync download count to gallery store
-  useEffect(() => {
-    if (loadState === 'ready') {
-      setCount(downloads.length);
-      setUnwatchedCount(downloads.filter(d => !d.watched_at).length);
-    }
-  }, [downloads, loadState, setCount, setUnwatchedCount]);
 
   // State for video preview modal
   const [playingVideo, setPlayingVideo] = useState(null);
@@ -130,8 +103,6 @@ export function DownloadsPanel({
   }, [overflowMenuId]);
 
   if (!isOpen && !playingVideo) return null;
-
-  const groups = isOpen ? groupedDownloads() : [];
 
   const handleDelete = async (e, download) => {
     e.stopPropagation();
@@ -538,102 +509,6 @@ export function DownloadsPanel({
         </div>
     </div>
   );
-  };
-
-  // Group items by game within a date group
-  const groupByGame = (items) => {
-    const gameGroups = {};
-    const ungrouped = [];
-
-    items.forEach(item => {
-      const key = item.group_key;
-      if (key) {
-        if (!gameGroups[key]) {
-          gameGroups[key] = [];
-        }
-        gameGroups[key].push(item);
-      } else {
-        ungrouped.push(item);
-      }
-    });
-
-    return { gameGroups, ungrouped, sortedKeys: Object.keys(gameGroups).sort() };
-  };
-
-  const renderGroup = (title, items) => {
-    if (items.length === 0) return null;
-
-    const { gameGroups, ungrouped, sortedKeys } = groupByGame(items);
-
-    return (
-      <div key={title} className="mb-6">
-        <h3 className="text-sm font-medium text-gray-400 mb-2 px-1">{title}</h3>
-        <div className="space-y-2">
-          {/* Ungrouped items first */}
-          {ungrouped.map(download => renderDownloadCard(download))}
-
-          {/* Grouped items by game - latest export's group expanded by default */}
-          {sortedKeys.map(groupKey => (
-            <CollapsibleGroup
-              key={groupKey}
-              title={groupKey}
-              count={gameGroups[groupKey].length}
-              defaultExpanded={gameGroups[groupKey].some(d => d.id === latestDownloadId)}
-            >
-              <div className="space-y-2">
-                {gameGroups[groupKey].map(download => renderDownloadCard(download))}
-              </div>
-            </CollapsibleGroup>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderContent = () => {
-    if (loadState === 'loading') {
-      return (
-        <div className="flex items-center justify-center py-12">
-          <Loader size={24} className={`${REEL.accent} animate-spin`} />
-        </div>
-      );
-    }
-
-    if (loadState === 'error') {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <AlertCircle size={32} className="text-red-400 mb-3" />
-          <p className="text-gray-400 mb-4">{error || 'Failed to load downloads'}</p>
-          <Button
-            variant="secondary"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </Button>
-        </div>
-      );
-    }
-
-    if (!hasDownloads) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Video size={48} className="text-gray-600 mb-4" />
-          <p className="text-gray-400">No videos yet</p>
-          <p className="text-sm text-gray-500 mt-1">
-            Export from Overlay mode to see videos here
-          </p>
-        </div>
-      );
-    }
-
-    return (
-      <>
-        {renderGroup('Today', groups.today)}
-        {renderGroup('Yesterday', groups.yesterday)}
-        {renderGroup('Last 7 Days', groups.lastWeek)}
-        {renderGroup('Older', groups.older)}
-      </>
-    );
   };
 
   return (
