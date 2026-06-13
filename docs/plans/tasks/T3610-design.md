@@ -225,6 +225,81 @@ ratio sub-30s shows only the per-ratio unlock sub-lists (no cards). New presenta
 `RatioUnlockGroup` (progress bar + caption + `renderCard` list), beside `GameCollectionGroup`;
 the bar uses the REEL palette per the UI style guide.
 
+## 0B. Restructure amendment (AUTHORITATIVE, 2026-06-13)
+
+User direction after reviewing the two-tab build: collapse to a single view and pull the
+smart-collection + time-budget mechanics forward. Supersedes the tab-bar / All-tab parts of
+§0.7, §3.7, §3.8. All earlier §0 decisions (frozen game_ids read path, JSON, ratio-as-identity
+>=30s, no unknown bucket, silent mixes, badge) still hold.
+
+### 0B.1 Single view, no switcher, "Collection" never surfaced
+Remove the Collections|All tab bar AND the source-type filter pills. "My Reels" is one
+scrollable view. The All-tab full-list path (`useDownloads` fetch on open, date grouping,
+`renderGroup`) is removed from the open flow; `renderDownloadCard` + its handlers stay (reused
+for in-place reel cards). Every published reel remains reachable: under its game (eligible-ratio
+card list or sub-30s unlock list) or under Mixes. Smart collections are additional lenses on top.
+
+### 0B.2 Section order (top -> bottom)
+1. **Smart collections** — Top Plays / Top Goals & Assists / Top Dribbles. Card-only (header +
+   budget slider + verbs); no inline clip list (their reels live in the game sections below).
+2. **Game by game** — per game: per-ratio highlights collection(s) + that game's clips, plus
+   sub-30s unlock groups (unchanged from §0.7/§0.10).
+3. **Multi-game mixes** — the silent Mixes group (also holds game-less reels).
+
+### 0B.3 Smart collections (pulls T3670 forward; data already in summary)
+Server-defined groups (a constant in `collections.py`):
+`top_plays` (tags=None -> all reels), `top_goals_assists` (tags={Goal, Assist}),
+`top_dribbles` (tags={Dribble}). The summary gains `smart_collections: List[SmartCollection]`
+(a RatioBucketed + key + name), computed in the SAME Python pass: each reel joins a group iff
+`group.tags is None OR reel.tags ∩ group.tags` — membership is a per-reel boolean, so a
+Goal+Assist reel is counted ONCE (dedup is automatic). Per (group, ratio): reel_count,
+ratio_durations, `ratio_eligible` (>=30s), has_null_durations. Below-30s smart ratios render as
+LOCKED progress cards (EPIC #6 near-miss), not browsable lists. `season_totals`/`tag_totals`
+remain in the response (other potential consumers); the UI now reads `smart_collections`.
+
+### 0B.4 Smart member fetch (`?tags=` filter on /api/downloads)
+New `tags` query param (comma-separated, OR semantics, decode-and-filter in Python over the
+frozen `tags` BLOB; a reel matches if it has ANY listed tag — deduped by construction). Member
+keys: `smart:top_plays` -> `GET /api/downloads` (no filter, all reels); `smart:top_goals_assists`
+-> `?tags=Goal,Assist`; `smart:top_dribbles` -> `?tags=Dribble`. Same parity discipline as
+game_id/mixes: the member count for a smart group equals its summary reel_count.
+
+### 0B.5 Duration budget slider (pulls T3640's time-budget mechanic forward; EPIC #7)
+Every ELIGIBLE collection (smart, game, mixes — anything with a >=30s ratio) gets a per-card
+duration slider:
+- **Range:** `30s` -> `min(collection ratio_durations[ratio], 300s)`. Both ends come from the
+  summary (no member fetch needed to render the slider).
+- **Detents:** 30s / 1m / 2m / 3m / 5m / Max (EPIC #7), filtered to the range; "Max" = the cap.
+- **Default:** `min(60s, cap)` (1 minute, or the cap when shorter). User decision 2026-06-13.
+- **Membership:** the reels that fit the budget, **greedy-with-skip** over members ordered by the
+  canonical rule. Until T3630 ranking exists, order = `published_at DESC` (recency); becomes true
+  rank order when T3630 lands. NULL-duration members can't be budgeted -> excluded from the
+  Play-all subset (still browsable in the clip list).
+- **State:** transient per-collection `useState` (no persistence, EPIC #5). The subset is computed
+  client-side over the already-loaded member list (durations are on each member); displayed
+  aggregates still come from the server summary (EPIC #13 intact — this is playback selection,
+  not an aggregate derivation).
+- **Play all** plays exactly the budgeted subset, in order.
+
+### 0B.6 Member-card mutation sync (single-view correctness)
+With the only view sourcing member lists from `useCollections` (not `useDownloads`), per-reel
+mutations must update the right store. `useCollections` is lifted to `DownloadsPanel` (Screen owns
+data) and exposes member-aware updates:
+- **delete** -> remove the reel from any cached member list, then refetch the summary (counts +
+  eligibility change) and invalidate affected member keys.
+- **rename / mark-watched** -> optimistic patch of the reel in the cached member lists.
+`renderDownloadCard`'s handlers call these (in addition to the existing backend calls).
+
+### 0B.7 Deferred (unchanged)
+Collection-level **Share / Copy link** = T3620 (share backend + public viewer + Postgres v016).
+Collection-level **Download** (stitched mp4) = T3680. **Ranking** for true "Top"/budget order =
+T3630. Per-REEL share/copy-link/download remain on each card now.
+
+### 0B.8 Task-tracking note
+This push absorbs T3610's restructure + **T3670's smart-collection UI** + **T3640's time-budget
+mechanic** (minus T3640's unlock modal/season scope and minus T3630 ranking). PLAN.md/EPIC.md
+should be updated to reflect the pull-forward (user applies status changes).
+
 ## 1. Current State Analysis
 
 ### 1.1 Data flow today
