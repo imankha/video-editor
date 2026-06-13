@@ -658,6 +658,9 @@ def ensure_database():
         """)
 
         # Final videos - output from Overlay mode
+        # duration/aspect_ratio/tags are frozen at export-finalize (T3600):
+        # publish archives + deletes working data, so they cannot be derived
+        # later. tags is a msgpack array of distinct tag strings.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS final_videos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -672,8 +675,26 @@ def ensure_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 watched_at TIMESTAMP,
                 published_at TIMESTAMP,
+                aspect_ratio TEXT,
+                tags BLOB,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
+        """)
+
+        # T3600 temporary shim (remove once v007 has run on staging + prod,
+        # like the prior in-place fixups T1583/T2870/T2847): existing DBs
+        # need the new columns at deploy time because GET /api/downloads
+        # selects them, and migrations only run via POST /api/admin/migrate.
+        # Columns only — v007 remains the canonical migration + backfill.
+        for _col in ("aspect_ratio TEXT", "tags BLOB"):
+            try:
+                cursor.execute(f"ALTER TABLE final_videos ADD COLUMN {_col}")
+            except sqlite3.OperationalError:
+                pass
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_final_videos_published_ratio
+            ON final_videos(published_at, aspect_ratio)
         """)
 
         # Games - store annotated game footage

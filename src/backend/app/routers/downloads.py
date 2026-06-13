@@ -186,7 +186,9 @@ class DownloadItem(BaseModel):
     file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
     file_size: Optional[int]  # Size in bytes
-    duration: Optional[float] = None  # Duration in seconds (T56)
+    duration: Optional[float] = None  # Frozen at export-finalize (T3600); NULL until v007 backfill
+    aspect_ratio: Optional[str] = None  # Frozen at export-finalize (T3600), e.g. '9:16'
+    tags: List[str] = []  # Distinct clip tags frozen at export-finalize (T3600)
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
@@ -232,6 +234,8 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.rating_counts,
                 fv.watched_at,
                 fv.duration as fv_duration,
+                fv.aspect_ratio,
+                fv.tags,
                 fv.name as fv_name
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
@@ -339,48 +343,6 @@ async def list_downloads(source_type: Optional[str] = None):
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
-        # T56: Batch fetch durations from working_videos (latest version per project)
-        project_durations = {}
-        if project_ids_to_fetch:
-            placeholders = ','.join(['?' for _ in project_ids_to_fetch])
-            cursor.execute(f"""
-                SELECT project_id, duration FROM (
-                    SELECT project_id, duration, ROW_NUMBER() OVER (
-                        PARTITION BY project_id ORDER BY version DESC
-                    ) as rn
-                    FROM working_videos
-                    WHERE project_id IN ({placeholders}) AND duration IS NOT NULL
-                ) WHERE rn = 1
-            """, list(project_ids_to_fetch))
-            for dur_row in cursor.fetchall():
-                project_durations[dur_row['project_id']] = dur_row['duration']
-
-            # Fallback: for brilliant clips without working_videos, get from raw_clips.auto_project_id
-            missing_ids = [pid for pid in project_ids_to_fetch if pid not in project_durations]
-            if missing_ids:
-                placeholders = ','.join(['?' for _ in missing_ids])
-                cursor.execute(f"""
-                    SELECT auto_project_id, (end_time - start_time) as duration
-                    FROM raw_clips
-                    WHERE auto_project_id IN ({placeholders})
-                """, missing_ids)
-                for dur_row in cursor.fetchall():
-                    if dur_row['auto_project_id'] not in project_durations:
-                        project_durations[dur_row['auto_project_id']] = dur_row['duration']
-
-        # T56: Batch fetch durations for annotated game exports (sum of rated clip durations)
-        game_durations = {}
-        if game_ids_to_fetch:
-            placeholders = ','.join(['?' for _ in game_ids_to_fetch])
-            cursor.execute(f"""
-                SELECT game_id, SUM(end_time - start_time) as total_duration
-                FROM raw_clips
-                WHERE game_id IN ({placeholders}) AND rating >= 3
-                GROUP BY game_id
-            """, list(game_ids_to_fetch))
-            for dur_row in cursor.fetchall():
-                game_durations[dur_row['game_id']] = dur_row['total_duration']
-
         downloads = []
         for row in rows:
             # Get file size if file exists
@@ -459,15 +421,11 @@ async def list_downloads(source_type: Optional[str] = None):
                 )
                 display_name = f"Video {row['id']}"
 
-            # T56: Calculate duration on the fly (not stored - derivable data)
-            if row['source_type'] == SourceType.ANNOTATED_GAME.value and row['game_id']:
-                # Annotated game: sum of rated clip durations
-                duration = game_durations.get(row['game_id'])
-            elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
-                duration = project_durations.get(row['project_id']) or row['fv_duration']
-            else:
-                # Project: duration from working_video
-                duration = project_durations.get(row['project_id'])
+            # T3600: duration/aspect_ratio/tags are frozen at export-finalize.
+            # NULL means the row predates v007 and could not be backfilled —
+            # render it anyway, downstream excludes NULLs from math.
+            duration = row['fv_duration']
+            tag_list = decode_data(row['tags']) or []
 
             # Append 'Z' to indicate UTC so JavaScript parses correctly
             # SQLite stores as 'YYYY-MM-DD HH:MM:SS' but JS needs timezone info
@@ -485,6 +443,8 @@ async def list_downloads(source_type: Optional[str] = None):
                 created_at=created_at_utc,
                 file_size=file_size,
                 duration=duration,
+                aspect_ratio=row['aspect_ratio'],
+                tags=tag_list,
                 source_type=row['source_type'],
                 game_id=row['game_id'],
                 rating_counts=rating_counts,
