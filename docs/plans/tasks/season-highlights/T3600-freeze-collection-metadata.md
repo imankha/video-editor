@@ -87,13 +87,26 @@ Stamp all three columns at **export-finalize time** (working data still exists t
 - **Archive reads:** extracted `load_archive()` from `restore_project()` in
   `project_archive.py`; both restore and the backfill share it. raw_clips survive archival,
   so tags resolve through live raw_clips even for archived projects.
-- **Index gotcha:** `idx_final_videos_published_ratio` is created in `ensure_database()`
-  only inside the `is_fresh_db` branch — creating it unconditionally would crash existing
-  pre-v007 DBs (no aspect_ratio column) between deploy and `POST /api/admin/migrate`.
-  Existing DBs get the index from v007.
+- **Deploy-window shim (Reviewer MAJOR 1):** `GET /api/downloads` selects the new columns,
+  which would have 500'd every existing user's gallery between deploy and
+  `POST /api/admin/migrate`. Fix: temporary idempotent `ALTER TABLE` shim in
+  `ensure_database()` (same precedent as the removed T1583/T2870/T2847 in-place fixups) —
+  columns exist at deploy time, v007 remains the canonical migration + backfill.
+  **Remove the shim once v007 has run on staging + prod.** The
+  `idx_final_videos_published_ratio` index is created unconditionally (safe because the
+  shim guarantees the columns) and also in v007.
 - **downloads.py:** the per-request duration fallback chain (T56) is removed; duration now
   reads from the frozen column. `DownloadItem` gains `aspect_ratio` and `tags`.
-- **Tests:** `tests/test_collection_metadata.py` (14 tests: helper, all stamping paths,
+- **Review round (Reviewer + Migration agents):** Migration agent passed v007 on all 5
+  convention checks. Reviewer raised 2 MAJOR (deploy-window 500s -> shim above;
+  annotated_game rows losing resolvable duration -> backfill now computes rated-clip sums
+  via `compute_annotated_game_metadata`) and 2 MINOR (archive consult condition includes
+  aspect_ratio; auto_export uses the shared helper instead of a bespoke block). All four
+  accepted and implemented.
+- **Full suite:** 1287 passed; 28 failures + 12 errors are pre-existing on master
+  (verified by running the same subset on master), 1 Stripe test is order-dependent
+  flaky (passes in isolation). Zero T3600 regressions.
+- **Tests:** `tests/test_collection_metadata.py` (16 tests: helper, all stamping paths,
   v007 columns/index/backfill live+archive/NULL-resilience/per-row isolation, downloads
   response). Also updated `test_auto_export.py` fixture (projects table + new columns) and
   stale version counts in `test_migrations.py` (profile_db 6→7; postgres 13→15 was already
