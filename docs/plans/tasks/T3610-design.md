@@ -3,50 +3,227 @@
 **Status:** NEEDS RE-APPROVAL (data layer reshaped by the T3605 prerequisite + user decisions)
 **Task:** [T3610](tasks/season-highlights/T3610-collections-tab-game-collections.md) | **Epic:** [Season Highlights & Collections](tasks/season-highlights/EPIC.md)
 
-## 0. Design Amendments (AUTHORITATIVE — supersede any conflicting text in sections 1-8)
+## 0. Design Amendments (AUTHORITATIVE)
 
-The original design (sections 1-8) was written before the T3605 prerequisite shipped and
-before the user resolved the open questions. These amendments are the source of truth; the
-sections below are kept for rationale but their data-layer specifics (the resolution CTE,
-working-clips fallback, `unknown` ratio, dominant-ratio default) are **obsolete**. The
-implementing agent should re-run the architect pass against these amendments.
+This section is the single source of truth for T3610. It fully supersedes any conflicting
+text in sections 1-8. Sections 1-8 are retained ONLY for rationale; wherever their
+data-layer (resolution CTE, working-clips join, `unknown` ratio bucket) or rendering
+specifics (dominant-ratio default, ratio-toggle pills) contradict this section, THIS
+section wins. The obsolete-subsection map at §0.9 lists exactly which subsections are dead
+and what replaces them.
 
-1. **game_ids is now a frozen column** (T3605, shipped + migrated on dev/staging/prod).
-   `final_videos.game_ids` is a msgpack BLOB of sorted distinct game ids. The summary endpoint
-   and the member filter read it **directly** — DELETE the `resolved_final_videos_cte`, the
-   `project_games` CTE, the working_clips join, and all live resolution. Decode with
-   `utils/encoding.decode_data`. `len==1` -> that game; `len>1` -> mixes; NULL/`[]` -> mixes
-   (game-less). Verified: 100% coverage on prod, custom_project reels correctly attributed.
+### 0.1 game_ids is a frozen column — read it directly, NO resolution CTE
+`final_videos.game_ids` is a msgpack BLOB of sorted distinct game ids, frozen at
+export-finalize and backfilled by v008 (T3605, shipped + migrated dev/staging/prod).
+See `database.py:681` (column) and `v008_freeze_game_ids.py` (backfill incl. R2 archive
+recovery). The summary endpoint and the member filters read this column **directly** via
+`utils/encoding.decode_data`:
 
-2. **No legacy data, no legacy code** (user decision #4). Every published reel has non-NULL
-   `aspect_ratio` and frozen `game_ids` after migration. DELETE the `RATIO_UNKNOWN`/`unknown`
-   bucket and any "Other" ratio pill. If a NULL aspect_ratio or NULL game_ids is ever read for
-   a published reel, that is a bug to surface (log), NOT a case to handle defensively.
+- `decode_data(fv.game_ids)` -> list of game ids.
+- `len == 1` -> that single game (a Game collection candidate).
+- `len > 1` -> Mixes & compilations (multi-game; EPIC #11).
+- `NULL` or `[]` -> Mixes (game-less). For a PUBLISHED reel this should not normally be
+  empty post-backfill; if it is, it is still routed to Mixes but see §0.4 (no silent
+  coercion of NULL aspect_ratio; game_ids `[]` is a legitimate mixes signal, not a bug).
 
-3. **Ratio is collection identity, gated at >=30s** (user decision #3, EPIC #2/#6). Do NOT pick
-   a "dominant ratio" default. A game yields a **Portrait collection iff >=30s portrait content**
-   AND a **Landscape collection iff >=30s landscape content** — independently. Each qualifying
-   (game, ratio) is its own collection (own CollectionHeader + verbs + share/play scope).
-   Eligibility = `ratio_durations[ratio] >= 30` (a threshold compare on a server-provided sum,
-   not a client aggregate derivation — allowed). The summary returns `ratio_durations` per game;
-   surface a per-(game,ratio) `eligible` boolean server-side to keep the client dumb. Below-30s
-   ratios still list their reels under the game (browsable/individually playable) but get no
-   collection-level Play-all/Share/Video. A game with no qualifying ratio still appears if it has
-   reels (browsable); confirm exact empty-state UX during implementation.
+**DELETE entirely** from the design: the `resolved_final_videos_cte`, the `project_games`
+CTE, the `working_clips JOIN raw_clips JOIN games` resolution, and all live game
+resolution. There is no live working_clips resolution anymore — working data is deleted at
+publish (`project_archive.py`), which is exactly why T3605 froze `game_ids`. The
+"single resolution truth" is now a tiny Python helper that decodes one BLOB, NOT a SQL CTE.
 
-4. **msgpack over the wire** (user preference). The summary endpoint returns a msgpack body, not
-   JSON. There is currently NO msgpack-over-HTTP infra (verified): all endpoints use JSON, the
-   frontend `utils/apiFetch.js` does `res.json()`, and `@msgpack/msgpack` is not a frontend dep.
-   OPEN SCOPE QUESTION for the user before implementing (see section 8): apply msgpack-over-wire
-   **globally** (content negotiation in apiFetch + a backend response helper, larger blast radius)
-   or **only to the new collections endpoints** (localized: one `Response(content=packb(...),
-   media_type="application/x-msgpack")` + a targeted decode in the collections fetch). On-disk
-   msgpack (game_ids/tags) is already done.
+### 0.2 JSON over the wire (msgpack-over-HTTP REJECTED)
+The summary endpoint returns a normal Pydantic JSON response, like every other data
+endpoint. Re-verified: `utils/apiFetch.js` is a bare `fetch` passthrough, `@msgpack/msgpack`
+is not a frontend dep, and the backend emits zero `application/x-msgpack` responses. So:
+no content negotiation, no `apiFetch` change, no new frontend dependency. On-disk msgpack
+(`final_videos.game_ids` / `tags` BLOBs) is DB STORAGE, decoded in Python — unaffected by
+this transport decision. This applies to ALL remaining epic tasks (T3640 season_totals,
+T3670 tag_totals): JSON over the wire. (User decision, 2026-06-12; reverses handoff #4.)
 
-5. **Mixes group: silent** (user decision #2). No explanatory subtitle.
+### 0.3 Ratio is collection IDENTITY, gated at >= COLLECTION_MIN_DURATION_SEC (30s)
+A `(game, ratio)` pair is its own independent collection **iff** that ratio's total
+duration within the game is `>= COLLECTION_MIN_DURATION_SEC`. There is NO "dominant ratio"
+default and NO ratio-toggle pill that re-scopes a single header (that model is dead).
 
-6. **Badge unchanged** (user decision #5). Gallery count stays sourced from
-   `galleryStore.fetchCount`; the summary fetch does not feed the badge.
+- A game with 40s portrait + 10s landscape -> ONE collection (Portrait). The landscape
+  reels still appear, browsable + individually playable, but get NO collection-level verbs.
+- A game with 40s portrait + 35s landscape -> TWO independent collection cards, each with
+  its own `CollectionHeader`, its own Play-all / Share / Video verbs, its own play/share
+  scope.
+- Ratio appears in the name as glyph + word ("Vs Carlsbad Dec 6 - Portrait"), never "9:16"
+  (EPIC #2).
+
+**Eligibility is computed SERVER-SIDE** so the client stays dumb. Define a named server
+constant `COLLECTION_MIN_DURATION_SEC = 30` (in `collections.py`). The summary surfaces,
+per game / mixes bucket (and per season_totals / tag_totals bucket for T3640/T3670), a
+`ratio_eligible` map: `{"9:16": true, "16:9": false}` — `true` when that ratio's
+NULL-excluded duration sum `>= COLLECTION_MIN_DURATION_SEC`. This is a threshold compare on
+a server-provided sum (allowed under EPIC #13 — NOT a client aggregate derivation). The
+client renders one collection card per ratio whose `ratio_eligible[ratio] === true`, and
+lists the remaining (sub-30s) reels as a plain browsable group under the game with no verbs.
+
+### 0.4 No `unknown` ratio bucket, no "Other" pill, no legacy buckets
+Every published reel has non-NULL `aspect_ratio` and frozen `game_ids` post-migration.
+There is NO `RATIO_UNKNOWN` / `"unknown"` ratio bucket and NO "Other" ratio pill anywhere
+(backend or frontend). The only valid ratios are `9:16` (Portrait) and `16:9` (Landscape).
+If a published reel ever reads NULL `aspect_ratio`, that is a BUG: log it
+(`logger.warning`) and surface it — do NOT add a defensive `unknown` branch or coerce it.
+This deletes every `RATIO_UNKNOWN` / `"unknown"` / "Other" reference in §2.3, §3.2, §3.9,
+§3.10, §3.12, and the §6 test that asserts an `unknown` bucket.
+
+### 0.5 Mixes group: silent (EPIC #11, user decision #2)
+The Mixes & compilations group renders with no explanatory subtitle.
+
+### 0.6 Badge unchanged (user decision #5)
+The gallery count badge stays sourced from `galleryStore.fetchCount` (bootstrap +
+export-complete WS). The summary fetch does NOT feed the badge. No new count write path.
+
+### 0.7 Component tree (one card per eligible ratio; sub-30s reels browsable)
+MVC, Screen -> Container -> View. The change from the old §2.5 is that the CONTAINER
+renders N CollectionHeaders (one per eligible ratio) instead of one header with a toggle.
+
+```
+DownloadsPanel (existing; gains TabBar)
+  TAB = { COLLECTIONS: 'collections', ALL: 'all' } (typed const)
+  activeTab === ALL         -> existing pills + renderContent() (unchanged)
+  activeTab === COLLECTIONS -> <CollectionsTab renderCard={renderDownloadCard} ... />
+
+CollectionsTab (Screen — guards readiness)
+  { summary, summaryState, members, fetchMembers } = useCollections(isOpen && active)
+  loading -> spinner; error -> retry; empty -> empty state
+  owns player state; renders ONE <CollectionPlayer/> instance
+  summary.games.map(g => <GameCollectionGroup collection={g} .../>) + mixes group
+
+GameCollectionGroup (Container — owns expand + play state)
+  eligibleRatios = RATIO_ORDER.filter(r => collection.ratio_eligible[r])  // server truth
+  // one card per eligible ratio:
+  eligibleRatios.map(ratio =>
+    <CollectionHeader name={`${collection.game_name} - ${label(ratio)}`}
+        ratio={ratio} reelCount={ratio_counts[ratio]}
+        duration={ratio_durations[ratio]} hasNullDurations={...}
+        onPlayAll={() => playRatio(ratio)} actions={null} />)
+  // sub-30s ratios: ONE labeled sub-list per ratio, with an unlock progress bar (see §0.10):
+  RATIO_ORDER.filter(r => !collection.ratio_eligible[r] && collection.ratio_counts[r] > 0)
+    .map(ratio =>
+      <RatioUnlockGroup label={label(ratio)}              // "Portrait" / "Landscape"
+          progressPct={min(100, ratio_durations[ratio] / COLLECTION_MIN_DURATION_SEC * 100)}
+          captionText="Build more reels to unlock game highlights"
+          reels={membersForRatio(ratio)} renderCard={renderCard} />)   // browsable, no verbs
+  // members fetched lazily on first expand (CollapsibleGroup onToggle); cards filtered
+  // by ratio client-side from the single cached member list (cards are members, NOT
+  // aggregates — counts/durations always come from summary).
+
+CollectionHeader (View — presentational, props only; STABLE contract for T3640/T3670)
+CollectionPlayer (View — presentational, props only; STABLE contract for T3620)
+```
+
+A "collection" in the UI is now a `(game, ratio)` pair; Play/Share scope is that single
+ratio. The container maps `eligibleRatios -> one card each`; it never renders a ratio
+toggle. The only `CollectionHeader` contract delta: it is fed a single fixed `ratio` prop
+instead of `selectedRatio` + `onSelectRatio` (drop those two). Response stays O(games),
+summary-first, one DB pass + one Python pass.
+
+### 0.8 Response contract (JSON; ratio_eligible + ratio-scoped shape)
+
+```jsonc
+GET /api/collections/summary  ->  200 application/json
+{
+  "games": [
+    {
+      "game_id": 12,
+      "game_name": "Vs Carlsbad Dec 6",        // _generate_game_display_name (server)
+      "game_date": "2025-12-06",
+      "reel_count": 7,
+      "ratio_counts":    { "9:16": 5, "16:9": 2 },          // keys only 9:16 / 16:9
+      "ratio_durations": { "9:16": 312.5, "16:9": 22.0 },   // NULL-excluded sums
+      "ratio_eligible":  { "9:16": true, "16:9": false },   // SERVER: sum >= 30s
+      "total_duration": 334.5,                              // NULL-excluded
+      "has_null_durations": false,
+      "latest_published_at": "2026-06-10T18:22:01Z"
+    }
+  ],                                            // sorted latest_published_at DESC
+  "mixes": {                                    // same shape minus game_* fields
+    "reel_count": 0,
+    "ratio_counts": {}, "ratio_durations": {}, "ratio_eligible": {},
+    "total_duration": 0.0, "has_null_durations": false,
+    "latest_published_at": null
+  },                                            // always present, may be reel_count: 0
+  "season_totals": [                            // T3640 consumer
+    { "season": "Fall 2025", "ratio": "9:16", "reel_count": 12,
+      "total_duration": 700.0, "has_null_durations": true, "eligible": true }
+  ],
+  "tag_totals": [                               // T3670 consumer
+    { "tag": "Goal", "ratio": "9:16", "reel_count": 9,
+      "total_duration": 520.0, "has_null_durations": false, "eligible": true }
+  ],
+  "total_reel_count": 23                        // == list_downloads().total_count
+}
+
+GET /api/downloads?game_id=12          -> members of game 12 (game_ids decode, len==1, ==12)
+GET /api/downloads?mixes=true          -> game_ids len>1 OR [] / NULL members
+GET /api/downloads?game_id=12&aspect_ratio=9:16  -> ratio-scoped members (server filter
+                                                    on fv.aspect_ratio; index-backed)
+GET /api/downloads                      -> unchanged (All tab, its ONLY consumer)
+```
+
+Notes on the contract:
+- `ratio_eligible` (per game + mixes) and `eligible` (per season_total / tag_total row,
+  which are already ratio-scoped) are the SAME server threshold compare against
+  `COLLECTION_MIN_DURATION_SEC`. The client never recomputes them.
+- No `"unknown"` ever appears as a ratio key (§0.4).
+- **Member-count parity invariant:** the game/mixes routing in the summary and in the
+  `/api/downloads` filters MUST share ONE decode-and-route helper over `game_ids`, so
+  `len(GET /api/downloads?game_id=12)` always equals `games[12].reel_count`, and the
+  ratio-scoped member fetch count equals `ratio_counts[ratio]`.
+
+### 0.9 Obsolete-subsection map (sections 1-8)
+
+| Subsection | Verdict | What changes |
+|---|---|---|
+| §1.2 Load-bearing fact (custom reels can't resolve) | DELETE | Obsolete since T3605 froze `game_ids`. No archival-deletion attribution gap; frozen BLOB is the source. Keep only a one-line pointer to §0.1. |
+| §1.3 item 4 (`clip.duration \|\| 0` smell) | KEEP | Still valid rationale for the new `useStoryPlayback` (no silent fallback on NULL frozen durations). |
+| §2.1 Principles | REPLACE | Drop "NULL `aspect_ratio` -> explicit `unknown` bucket"; replace "single resolution truth = SQL helper" with "single decode-and-route helper over frozen `game_ids`". Keep summary-first, MVC, presentational-player, transient-UI-state. |
+| §2.2 Target data flow (mermaid) | REPLACE | Remove the `resolved_final_videos_cte`/`Q` resolution node; summary + filters read `game_ids` directly. Container renders N ratio cards, not a toggle group. |
+| §2.3 Summary endpoint pseudo (SQL CTE + Python pass) | REPLACE | DELETE the `project_games` + `resolved` CTEs. New SQL = single SELECT of latest published `final_videos` (`latest_final_videos_subquery()` + `published_at IS NOT NULL`) incl. `game_ids`/`aspect_ratio`/`duration`/`tags`. Python pass: `decode_data(game_ids)` -> route game (len==1)/mixes; `ratio = row.aspect_ratio` (NO `or RATIO_UNKNOWN`); accumulate `ratio_durations`; compute `ratio_eligible[r] = sum >= COLLECTION_MIN_DURATION_SEC`. Season/tag aggregation shape unchanged, now also stamping `eligible`. |
+| §2.4 Response contract | REPLACE | Superseded by §0.8 (`ratio_eligible` on game+mixes, `eligible` on season/tag; remove the `'unknown'`-key comment). |
+| §2.5 Frontend component pseudo | REPLACE | Superseded by §0.7. Container maps `eligibleRatios -> one CollectionHeader each` (no `selectedRatio`/`dominantRatio`/toggle); sub-30s reels = browsable no-verb list. |
+| §3.1 `queries.py` resolved_final_videos_cte() | DELETE | No CTE. Replace with a small Python decode-and-route helper (e.g. `route_game_ids(blob) -> game_id \| None`) shared by `collections.py` and the `/api/downloads` `game_id`/`mixes` filters for count parity. |
+| §3.2 `collections.py` (NEW) | REPLACE | Keep router placement + Pydantic models + helper imports. DELETE `RATIO_UNKNOWN`. ADD `COLLECTION_MIN_DURATION_SEC = 30`, `ratio_eligible: dict[str,bool]` on `RatioBucketed`, `eligible: bool` on `SeasonTotal`/`TagTotal`. No SQL CTE call; one plain SELECT + Python pass. |
+| §3.3 `list_downloads` filters | REPLACE | `game_id`/`mixes`/`aspect_ratio` params stay, resolution via the shared `game_ids` decode helper (NOT a CTE wrap). `aspect_ratio` -> direct `AND fv.aspect_ratio = ?` (index-backed). `game_id`+`mixes` -> 400. |
+| §3.4 `main.py` register router | KEEP | Unchanged. |
+| §3.5 `useCollections.js` (NEW) | KEEP | Unchanged. Confirm it does NOT request `aspect_ratio` for lists; Play-all for a ratio uses cached members filtered by ratio (no extra fetch). |
+| §3.6 `CollapsibleGroup onToggle` | KEEP | Unchanged. |
+| §3.7 `DownloadsPanel` tab bar | KEEP | Unchanged. |
+| §3.8 `CollectionsTab` (Screen) | KEEP | Unchanged in role; guards + owns single `CollectionPlayer`. |
+| §3.9 `GameCollectionGroup` (Container) | REPLACE | DELETE `dominantRatio` + `selectedRatio` state + "Other" pill. Map `ratio_eligible` true-ratios -> one `CollectionHeader` card each; sub-30s reels = browsable no-verb list. |
+| §3.10 `CollectionHeader` (View) | REPLACE (contract delta) | Mostly STABLE. DROP `selectedRatio` + `onSelectRatio` props and the scope-switching pill row; ADD a single fixed `ratio` prop. Keep `name`/`subtitle`/`reelCount`/`ratioDurations`/`hasNullDurations`/`onPlayAll`/`actions`. Remove `'unknown'` from JSDoc. |
+| §3.11 `useStoryPlayback.js` | KEEP | Unchanged (progress from video element metadata). |
+| §3.12 `CollectionPlayer` (View) | REPLACE (minor) | Contract STABLE for T3620. Remove `unknown -> 16:9` branch; layout branches only on `9:16` vs `16:9`. Player scope = a single ratio's reels (all reels in one player share a ratio). |
+| `constants/aspectRatios.js` (NEW, §3.10/§3.12) | REPLACE | `RATIO = { PORTRAIT:'9:16', LANDSCAPE:'16:9' }` only (drop `UNKNOWN`). Add `RATIO_ORDER = ['9:16','16:9']` (portrait-first) + label/glyph map. |
+| §4 Decision table | REPLACE rows 1,5; KEEP 2,3,6,7,8,9 | Row 1 -> "read frozen `game_ids` BLOB, route in Python; shared decode helper for parity". Row 5 -> note `selectedRatio`/toggle removal + `ratio` prop add; contracts otherwise frozen. Decision 3 (tags in Python) KEEP. |
+| §6 `unknown` ratio test | DELETE | Remove the `unknown`-bucket assertion. Replace: NULL `aspect_ratio` on a published reel is logged as a bug, not bucketed. |
+| §6 ratio eligibility tests | ADD | (a) 40s portrait + 10s landscape -> `ratio_eligible={9:16:true,16:9:false}`, one Portrait card, landscape sub-list with progress; (b) both >=30s -> two cards; (c) parity: member fetch count == `ratio_counts[ratio]` == `reel_count`; (d) progress pct = `min(100, dur/30*100)`. |
+
+### 0.10 Sub-30s ratio presentation (unlock progress, per-ratio labeled sub-lists)
+(User decisions, 2026-06-12.) A ratio within a game that has reels but `< COLLECTION_MIN_DURATION_SEC`
+of content produces NO collection card. Instead, under the game, render ONE labeled sub-list
+**per sub-30s ratio**, in `RATIO_ORDER` (Portrait before Landscape):
+
+- **Label:** the ratio word ("Portrait" / "Landscape") — never "9:16".
+- **Progress bar:** `progressPct = min(100, ratio_durations[ratio] / COLLECTION_MIN_DURATION_SEC * 100)`.
+  A display computation off a server-provided sum (`ratio_durations[ratio]`) + the server
+  constant — allowed (not a client aggregate derivation; the sum comes from the summary). Show
+  the percentage on/near the bar.
+- **Caption:** the exact copy **"Build more reels to unlock game highlights"**.
+- **Reels:** the ratio's members, browsable + individually playable via `renderCard`. NO
+  collection-level Play-all / Share / Video verbs.
+
+A single game can therefore show, top to bottom: a Portrait collection card (if `>=30s`), then a
+Landscape sub-list with a progress bar (if `<30s`) — or any mix. A game with reels but EVERY
+ratio sub-30s shows only the per-ratio unlock sub-lists (no cards). New presentational component
+`RatioUnlockGroup` (progress bar + caption + `renderCard` list), beside `GameCollectionGroup`;
+the bar uses the REEL palette per the UI style guide.
 
 ## 1. Current State Analysis
 
@@ -570,6 +747,9 @@ useStoryPlayback(videoRef, reels, { onAllEnded, onReelChange }) =>
 5. **Badge source** — RESOLVED: stays `galleryStore.fetchCount`.
 
 ### Still open (needs user answer before T3610 implementation)
-- **msgpack-over-wire scope** (section 0 #4): global content-negotiation in `apiFetch` vs
-  collections-endpoints-only. Recommendation: start collections-only (localized, lower risk);
-  generalize later if other endpoints want it. Confirm with the user.
+- **(none)** — all open questions resolved.
+
+### Resolved (by user, 2026-06-12, cont.)
+6. **msgpack-over-wire scope** (was section 0 #4) — RESOLVED: **rejected entirely; keep JSON.**
+   Verified every endpoint is JSON today; user chose to keep it that way. Summary endpoint returns
+   plain JSON. On-disk msgpack (game_ids/tags) unaffected. See section 0 #4.
