@@ -5,6 +5,7 @@ from .v003_fix_shared_clip_athletes import V003FixSharedClipAthletes
 from .v004_overlay_tuning import V004OverlayTuning
 from .v005_highlight_shape import V005HighlightShape
 from .v006_backfill_current_mode import V006BackfillCurrentMode
+from .v007_collection_metadata import V007CollectionMetadata
 
 MIGRATIONS = [
     V001Baseline(),
@@ -13,6 +14,7 @@ MIGRATIONS = [
     V004OverlayTuning(),
     V005HighlightShape(),
     V006BackfillCurrentMode(),
+    V007CollectionMetadata(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

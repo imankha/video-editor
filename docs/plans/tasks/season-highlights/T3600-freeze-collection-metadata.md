@@ -60,15 +60,57 @@ Stamp all three columns at **export-finalize time** (working data still exists t
 ## Implementation
 
 ### Steps
-1. [ ] Add columns to `ensure_database()` schema
-2. [ ] Extract shared metadata-computation helper (duration chain + aspect lookup + tag aggregation)
-3. [ ] Stamp in `_finalize_overlay_export` and auto_export insert paths
-4. [ ] Locate/stamp the annotated_game insert site (or document that it is auto_export)
-5. [ ] Write v007 migration with archive-aware backfill + published/ratio index; register it
-6. [ ] Surface new fields in GET /api/downloads response model
-7. [ ] Backend tests: stamping on export, backfill with live data, backfill from archive, NULL-resilience
+1. [x] Add columns to `ensure_database()` schema
+2. [x] Extract shared metadata-computation helper (duration chain + aspect lookup + tag aggregation)
+3. [x] Stamp in `_finalize_overlay_export` and auto_export insert paths (+ third site: `export_final`)
+4. [x] Locate/stamp the annotated_game insert site (documented: no live insert site exists — legacy-only)
+5. [x] Write v007 migration with archive-aware backfill + published/ratio index; register it
+6. [x] Surface new fields in GET /api/downloads response model
+7. [x] Backend tests: stamping on export, backfill with live data, backfill from archive, NULL-resilience
 
 ### Progress Log
+
+**2026-06-12 — Implementation complete (feature/T3600-freeze-collection-metadata)**
+
+- **annotated_game finding (verification edge case resolved):** `source_type='annotated_game'`
+  has NO live insert site. It exists only in `constants.py` (`SourceType.ANNOTATED_GAME` enum)
+  and read-side handling in `downloads.py`. The feature was planned but never implemented;
+  any such rows are legacy-only. The v007 backfill handles them via the generic path (they
+  have `project_id IS NULL`, so they log `[T3600] final_video {id} backfill incomplete
+  (no project_id)` and stay NULL). No stamping needed.
+- **Third insert site found and stamped:** the task file listed two insert paths, but
+  `export_final` (POST /final, overlay.py ~line 1140) is a third live `INSERT INTO
+  final_videos`. All three now stamp duration/aspect_ratio/tags.
+- **Shared helper:** `app/services/collection_metadata.py` — `compute_project_metadata`
+  (live rows), `compute_archive_metadata` (R2 archive dicts), `encode_distinct_tags`.
+  Used by both stamping paths and the v007 backfill.
+- **Archive reads:** extracted `load_archive()` from `restore_project()` in
+  `project_archive.py`; both restore and the backfill share it. raw_clips survive archival,
+  so tags resolve through live raw_clips even for archived projects.
+- **Deploy-window shim (Reviewer MAJOR 1):** `GET /api/downloads` selects the new columns,
+  which would have 500'd every existing user's gallery between deploy and
+  `POST /api/admin/migrate`. Fix: temporary idempotent `ALTER TABLE` shim in
+  `ensure_database()` (same precedent as the removed T1583/T2870/T2847 in-place fixups) —
+  columns exist at deploy time, v007 remains the canonical migration + backfill.
+  **Remove the shim once v007 has run on staging + prod.** The
+  `idx_final_videos_published_ratio` index is created unconditionally (safe because the
+  shim guarantees the columns) and also in v007.
+- **downloads.py:** the per-request duration fallback chain (T56) is removed; duration now
+  reads from the frozen column. `DownloadItem` gains `aspect_ratio` and `tags`.
+- **Review round (Reviewer + Migration agents):** Migration agent passed v007 on all 5
+  convention checks. Reviewer raised 2 MAJOR (deploy-window 500s -> shim above;
+  annotated_game rows losing resolvable duration -> backfill now computes rated-clip sums
+  via `compute_annotated_game_metadata`) and 2 MINOR (archive consult condition includes
+  aspect_ratio; auto_export uses the shared helper instead of a bespoke block). All four
+  accepted and implemented.
+- **Full suite:** 1287 passed; 28 failures + 12 errors are pre-existing on master
+  (verified by running the same subset on master), 1 Stripe test is order-dependent
+  flaky (passes in isolation). Zero T3600 regressions.
+- **Tests:** `tests/test_collection_metadata.py` (16 tests: helper, all stamping paths,
+  v007 columns/index/backfill live+archive/NULL-resilience/per-row isolation, downloads
+  response). Also updated `test_auto_export.py` fixture (projects table + new columns) and
+  stale version counts in `test_migrations.py` (profile_db 6→7; postgres 13→15 was already
+  stale on master).
 
 ## Acceptance Criteria
 

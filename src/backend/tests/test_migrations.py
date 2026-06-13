@@ -119,19 +119,19 @@ class TestTrackImports:
 
     def test_profile_db_track(self):
         from app.migrations.profile_db import RUNNER, MIGRATIONS
-        assert len(MIGRATIONS) == 6
+        assert len(MIGRATIONS) == 7
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 6
+        assert RUNNER.latest_version == 7
 
     def test_postgres_track(self):
         from app.migrations.postgres import RUNNER, MIGRATIONS
-        assert len(MIGRATIONS) == 13
+        assert len(MIGRATIONS) == 15
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 13
+        assert RUNNER.latest_version == 15
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status
         status = get_migration_status()
         assert status["user_db"]["latest_version"] == 4
-        assert status["profile_db"]["latest_version"] == 6
-        assert status["postgres"]["latest_version"] == 13
+        assert status["profile_db"]["latest_version"] == 7
+        assert status["postgres"]["latest_version"] == 15

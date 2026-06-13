@@ -93,6 +93,28 @@ def isolated_profile_db(tmp_path):
             duration REAL,
             UNIQUE(game_id, sequence)
         );
+        CREATE TABLE projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            aspect_ratio TEXT NOT NULL,
+            is_auto_created INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE working_clips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            raw_clip_id INTEGER,
+            uploaded_filename TEXT,
+            sort_order INTEGER DEFAULT 0,
+            version INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE TABLE working_videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL,
+            filename TEXT NOT NULL,
+            version INTEGER NOT NULL DEFAULT 1,
+            duration REAL
+        );
         CREATE TABLE final_videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id INTEGER,
@@ -103,6 +125,8 @@ def isolated_profile_db(tmp_path):
             game_id INTEGER,
             name TEXT,
             published_at TIMESTAMP,
+            aspect_ratio TEXT,
+            tags BLOB,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)

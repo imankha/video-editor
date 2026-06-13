@@ -147,6 +147,49 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
         return False
 
 
+def load_archive(project_id: int, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Download and decode a project's msgpack archive from R2.
+
+    Shared by restore_project and the v007 collection-metadata backfill.
+
+    Args:
+        project_id: ID of the archived project
+        user_id: User ID (defaults to current user from context)
+
+    Returns:
+        The decoded archive dict, or None if R2 is disabled, the archive
+        doesn't exist, or the download/decode fails.
+    """
+    if not R2_ENABLED:
+        return None
+
+    if user_id is None:
+        user_id = get_current_user_id()
+
+    client = get_r2_client()
+    if not client:
+        logger.error("R2 client not available for archive download")
+        return None
+
+    r2_path = _get_archive_r2_key(project_id)
+    full_key = r2_key(user_id, r2_path)
+
+    try:
+        response = client.get_object(Bucket=R2_BUCKET, Key=full_key)
+        archive_bytes = response['Body'].read()
+        archive = msgpack.unpackb(archive_bytes, raw=False)
+    except client.exceptions.NoSuchKey:
+        logger.warning(f"Archive not found in R2 for project {project_id}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to download archive from R2: {e}")
+        return None
+
+    logger.info(f"Downloaded archive from R2: {full_key} ({len(archive_bytes)} bytes)")
+    return archive
+
+
 def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
     """
     Restore a project from R2 archive back to the database.
@@ -170,26 +213,9 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
     try:
         # 1. Download archive from R2
-        client = get_r2_client()
-        if not client:
-            logger.error("R2 client not available for restore")
+        archive = load_archive(project_id, user_id)
+        if archive is None:
             return False
-
-        r2_path = _get_archive_r2_key(project_id)
-        full_key = r2_key(user_id, r2_path)
-
-        try:
-            response = client.get_object(Bucket=R2_BUCKET, Key=full_key)
-            archive_bytes = response['Body'].read()
-            archive = msgpack.unpackb(archive_bytes, raw=False)
-        except client.exceptions.NoSuchKey:
-            logger.warning(f"Archive not found in R2 for project {project_id}")
-            return False
-        except Exception as e:
-            logger.error(f"Failed to download archive from R2: {e}")
-            return False
-
-        logger.info(f"Downloaded archive from R2: {full_key} ({len(archive_bytes)} bytes)")
 
         # 2. Insert data back into DB
         with get_db_connection() as conn:

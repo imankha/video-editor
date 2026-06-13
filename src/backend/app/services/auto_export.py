@@ -20,6 +20,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
+from .collection_metadata import compute_project_metadata
 from ..storage import delete_from_r2, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
@@ -176,6 +177,16 @@ def _export_brilliant_clip(
     clip_name = clip['name'] or f"Clip {clip['id']}"
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # T3600: freeze collection metadata. duration stays the clip range
+        # computed above (the exported artifact IS the raw clip extract);
+        # aspect_ratio + tags come from the shared helper.
+        _, aspect_ratio, tags_blob = compute_project_metadata(
+            cursor, clip['auto_project_id'])
+        if aspect_ratio is None:
+            logger.warning(
+                f"[AutoExport] Auto project {clip['auto_project_id']} missing for "
+                f"clip {clip['id']} — aspect_ratio stays NULL"
+            )
         # Replace existing export for this clip (re-export scenario)
         cursor.execute(
             """SELECT filename FROM final_videos
@@ -197,9 +208,10 @@ def _export_brilliant_clip(
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, version, source_type, game_id, name,
-                published_at, duration)
-               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?)""",
-            (clip['auto_project_id'], filename, game_id, clip_name, duration),
+                published_at, duration, aspect_ratio, tags)
+               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)""",
+            (clip['auto_project_id'], filename, game_id, clip_name, duration,
+             aspect_ratio, tags_blob),
         )
         conn.commit()
 
