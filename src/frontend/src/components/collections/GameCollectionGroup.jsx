@@ -60,7 +60,7 @@ export function GameCollectionGroup({
       onToggle={(open) => { if (open) requestMembers(); }}
     >
       {eligibleRatios.map((ratio) => (
-        <div key={`elig-${ratio}`} className="mb-2">
+        <div key={`elig-${ratio}`} className="space-y-2 mb-2">
           <CollectionCard
             title="Highlights"
             playTitle={`${name} Highlights`}
@@ -71,15 +71,13 @@ export function GameCollectionGroup({
             requestMembers={requestMembers}
             onPlay={onPlay}
           />
-          <div className="space-y-2">
-            {members
-              ? membersFor(ratio).map((d) => renderCard(d))
-              : loadingMembers && (
-                  <div className="flex justify-center py-3">
-                    <Loader size={16} className={`${REEL.accent} animate-spin`} />
-                  </div>
-                )}
-          </div>
+          {members
+            ? membersFor(ratio).map((d) => renderCard(d))
+            : loadingMembers && (
+                <div className="flex justify-center py-3">
+                  <Loader size={16} className={`${REEL.accent} animate-spin`} />
+                </div>
+              )}
         </div>
       ))}
 
