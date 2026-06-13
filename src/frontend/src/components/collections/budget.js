@@ -3,41 +3,35 @@ import { COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 /**
  * Duration-budget mechanics for collection Play-all (T3610 §0B.5, EPIC #7).
  *
- * A collection's slider runs 30s -> min(total ratio duration, 5m). Membership is
- * the reels that fit the budget, greedy-with-skip over the members in order
- * (newest-first until T3630 ranking lands).
+ * A collection defaults to ALL of its clips; "Set Duration" trims it down. The
+ * slider runs 30s -> the collection's full ratio duration (no 5m cap, so "all
+ * clips" is always reachable) and snaps to 15s steps. Membership is the reels
+ * that fit the budget, greedy-with-skip over the members in order (newest-first
+ * until T3630 ranking lands).
  */
 
-export const BUDGET_MAX_SEC = 300; // 5m cap
-const DETENTS = [30, 60, 120, 180, 300]; // 30s / 1m / 2m / 3m / 5m (EPIC #7)
+const SNAP_STEP_SEC = 15;
 
-/** Slider cap for a collection = min(total ratio duration, 5m), >= 30s. */
+/** Slider cap for a collection = its full ratio duration (>= 30s). */
 export function budgetCap(totalRatioDurationSec) {
-  return Math.max(
-    COLLECTION_MIN_DURATION_SEC,
-    Math.min(Math.round(totalRatioDurationSec || 0), BUDGET_MAX_SEC),
-  );
+  return Math.max(COLLECTION_MIN_DURATION_SEC, Math.round(totalRatioDurationSec || 0));
 }
 
-/** Detent stops within [30s, cap]; the top stop ("Max") is always the cap. */
-export function detentsForCap(cap) {
-  const stops = DETENTS.filter((d) => d <= cap);
-  if (stops[stops.length - 1] !== cap) stops.push(cap);
-  return stops;
-}
-
-/** Default slider position: 1 minute, or the cap when the collection is shorter. */
+/** Default slider position: the full collection (all clips). */
 export function defaultBudget(cap) {
-  return Math.min(60, cap);
+  return cap;
 }
 
-/** Snap an arbitrary slider value to the nearest detent. */
-export function snapToDetent(value, cap) {
-  const stops = detentsForCap(cap);
-  return stops.reduce(
-    (best, d) => (Math.abs(d - value) < Math.abs(best - value) ? d : best),
-    stops[0],
-  );
+/** Snap a slider value to 15s steps within [30s, cap]; the cap is always reachable. */
+export function snapToStep(value, cap) {
+  if (value >= cap) return cap;
+  const snapped = Math.round(value / SNAP_STEP_SEC) * SNAP_STEP_SEC;
+  return Math.min(cap, Math.max(COLLECTION_MIN_DURATION_SEC, snapped));
+}
+
+/** Sum of member durations (NULLs treated as 0). */
+export function sumDuration(members) {
+  return members.reduce((s, m) => s + (m.duration || 0), 0);
 }
 
 /**

@@ -264,21 +264,29 @@ keys: `smart:top_plays` -> `GET /api/downloads` (no filter, all reels); `smart:t
 -> `?tags=Goal,Assist`; `smart:top_dribbles` -> `?tags=Dribble`. Same parity discipline as
 game_id/mixes: the member count for a smart group equals its summary reel_count.
 
-### 0B.5 Duration budget slider (pulls T3640's time-budget mechanic forward; EPIC #7)
-Every ELIGIBLE collection (smart, game, mixes — anything with a >=30s ratio) gets a per-card
-duration slider:
-- **Range:** `30s` -> `min(collection ratio_durations[ratio], 300s)`. Both ends come from the
-  summary (no member fetch needed to render the slider).
-- **Detents:** 30s / 1m / 2m / 3m / 5m / Max (EPIC #7), filtered to the range; "Max" = the cap.
-- **Default:** `min(60s, cap)` (1 minute, or the cap when shorter). User decision 2026-06-13.
+### 0B.5 Collection actions + duration budget (pulls T3640's time-budget forward; EPIC #7)
+Revised 2026-06-13 (user, after review). Every ELIGIBLE collection card (smart, game, mixes) has:
+- **Play all** (primary button) + a **"..." overflow menu**: `Play all`, `Set Duration`, then
+  `Share` / `Copy link` / `Download` shown **disabled with a "Coming soon" tooltip** until T3620
+  (share/copy link) and T3680 (download) ship (§0B.7). This is the "all the options" affordance.
+- **Set Duration** reveals the budget slider (hidden by default — not always-on).
+
+Duration budget:
+- **Default = ALL clips** (the full collection). The card shows the **actual selected duration**,
+  which equals the full ratio duration by default and updates to the real summed length of the
+  selected clips once trimmed.
+- **Range:** `30s` -> the collection's **full ratio duration** (NO 5m cap — "all clips" must always
+  be reachable). Cap + default come from the summary (`ratio_durations[ratio]`); no member fetch to
+  render the card.
+- **Precision:** snaps to **15s steps**; the cap (full) is always reachable at the top.
+  (Overrides EPIC #7's 30s/1m/2m/3m/5m detents.)
 - **Membership:** the reels that fit the budget, **greedy-with-skip** over members ordered by the
-  canonical rule. Until T3630 ranking exists, order = `published_at DESC` (recency); becomes true
-  rank order when T3630 lands. NULL-duration members can't be budgeted -> excluded from the
-  Play-all subset (still browsable in the clip list).
-- **State:** transient per-collection `useState` (no persistence, EPIC #5). The subset is computed
-  client-side over the already-loaded member list (durations are on each member); displayed
-  aggregates still come from the server summary (EPIC #13 intact — this is playback selection,
-  not an aggregate derivation).
+  canonical rule. Until T3630 ranking exists, order = member-list order (recency); becomes true
+  rank order when T3630 lands. NULL-duration members can't be budgeted -> excluded from the subset.
+- **State:** transient per-collection `useState` (no persistence, EPIC #5). The subset + actual
+  duration are computed client-side over the lazily-loaded member list (fetched when Set Duration
+  opens / budget changes / Play all); displayed aggregates still come from the server summary
+  (EPIC #13 intact — playback selection, not an aggregate derivation).
 - **Play all** plays exactly the budgeted subset, in order.
 
 ### 0B.6 Member-card mutation sync (single-view correctness)
