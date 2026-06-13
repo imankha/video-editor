@@ -9,7 +9,8 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * playable length of the selected clips. Owns the transient budget + slider
  * state and computes the budgeted Play-all subset (greedy-with-skip).
  *
- * @param {string}   title           - display title (e.g. "Top Plays", "{game} Highlights")
+ * @param {string}   title           - card title (e.g. "Top Plays", "Highlights")
+ * @param {string=}  playTitle       - story-player title (defaults to title)
  * @param {string}   ratio           - identity ratio (shown as a glyph)
  * @param {number}   reelCount
  * @param {number}   ratioDuration   - this ratio's full duration (cap + default)
@@ -19,6 +20,7 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  */
 export function CollectionCard({
   title,
+  playTitle,
   ratio,
   reelCount,
   ratioDuration,
@@ -61,7 +63,7 @@ export function CollectionCard({
     try {
       const members = await ensureMembers();
       const sel = selectWithinBudget(members, budget);
-      if (sel.length) onPlay(sel, title);
+      if (sel.length) onPlay(sel, playTitle || title);
     } finally {
       setPlayLoading(false);
     }

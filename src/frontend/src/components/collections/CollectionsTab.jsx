@@ -124,7 +124,6 @@ export function CollectionsTab({ collections, renderCard }) {
           <GameCollectionGroup
             key={key}
             name={g.game_name}
-            collectionTitle={`${g.game_name} Highlights`}
             collection={g}
             defaultExpanded={i === 0}
             members={members[key]}
@@ -141,7 +140,6 @@ export function CollectionsTab({ collections, renderCard }) {
         <GameCollectionGroup
           key="mixes"
           name={MIXES_NAME}
-          collectionTitle={MIXES_NAME}
           collection={mixes}
           defaultExpanded={games.length === 0}
           members={members.mixes}

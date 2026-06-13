@@ -15,7 +15,6 @@ import { RATIO_ORDER } from '../../constants/aspectRatios';
  * RatioUnlockGroups. Members load lazily on first expand.
  *
  * @param {string}   name           - group header name (game name / "Mixes & compilations")
- * @param {string}   collectionTitle - card title for each ratio (e.g. "{game} Highlights")
  * @param {Object}   collection     - RatioBucketed bucket from the summary
  * @param {boolean}  defaultExpanded
  * @param {Array=}   members        - cached member cards for this group (or undefined)
@@ -26,7 +25,6 @@ import { RATIO_ORDER } from '../../constants/aspectRatios';
  */
 export function GameCollectionGroup({
   name,
-  collectionTitle,
   collection,
   defaultExpanded = false,
   members,
@@ -64,7 +62,8 @@ export function GameCollectionGroup({
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="mb-2">
           <CollectionCard
-            title={collectionTitle}
+            title="Highlights"
+            playTitle={`${name} Highlights`}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
             ratioDuration={ratioDurations[ratio]}

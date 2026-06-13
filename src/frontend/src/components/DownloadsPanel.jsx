@@ -281,7 +281,7 @@ export function DownloadsPanel({
             : 'border-gray-600 hover:border-gray-500'
         }`}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex items-center gap-3">
           {/* Video icon with unwatched dot */}
           <div className={`relative w-10 h-10 rounded flex items-center justify-center flex-shrink-0 ${
             isUnwatched ? 'bg-cyan-900/40' : REEL.bgMuted
@@ -337,17 +337,17 @@ export function DownloadsPanel({
               </div>
             )}
             </div>
-            {(showFilename || showSourceType) && (
-              <div className="text-sm text-gray-400 truncate">
-                {showFilename ? download.filename : sourceTypeLabel}
-              </div>
-            )}
-            <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
-              <span>{formatDate(download.created_at)}</span>
-              {formatDuration(download.duration) && <span>{formatDuration(download.duration)}</span>}
+            <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 min-w-0">
+              {(showFilename || showSourceType) && (
+                <span className="truncate">{showFilename ? download.filename : sourceTypeLabel}</span>
+              )}
+              {(showFilename || showSourceType) && <span aria-hidden>·</span>}
+              <span className="shrink-0">{formatDate(download.created_at)}</span>
+              {formatDuration(download.duration) && <span aria-hidden>·</span>}
+              {formatDuration(download.duration) && <span className="shrink-0">{formatDuration(download.duration)}</span>}
             </div>
-            <div className="flex items-center mt-2">
-              <div className="flex items-center gap-4 ml-auto flex-shrink-0">
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={(e) => handlePlay(e, download)}
                   className={`min-w-[44px] min-h-[44px] flex items-center justify-center hover:${REEL.bgMuted} rounded-lg transition-colors`}
@@ -511,8 +511,6 @@ export function DownloadsPanel({
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
           </div>
         </div>
     </div>
