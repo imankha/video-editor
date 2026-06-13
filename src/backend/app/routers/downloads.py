@@ -212,6 +212,7 @@ async def list_downloads(
     game_id: Optional[int] = None,
     aspect_ratio: Optional[str] = None,
     mixes: bool = False,
+    tags: Optional[str] = None,
 ):
     """
     List all final videos with metadata.
@@ -224,7 +225,9 @@ async def list_downloads(
         aspect_ratio: Restrict to a single ratio ('9:16' / '16:9'); index-backed.
         mixes: Restrict to reels that route to the Mixes bucket (multi-game or
                game-less). Mutually exclusive with `game_id`.
-        If no filter is provided, returns all published videos (the All tab).
+        tags: Comma-separated tag names; returns reels carrying ANY of them
+              (OR, deduped) — the smart-collection member fetch (T3670).
+        If no filter is provided, returns all published videos.
     """
     if game_id is not None and mixes:
         raise HTTPException(
@@ -280,6 +283,14 @@ async def list_downloads(
             rows = [r for r in rows if route_game_ids(r["game_ids"]) == game_id]
         elif mixes:
             rows = [r for r in rows if route_game_ids(r["game_ids"]) is None]
+
+        # tags filter (OR semantics) on the frozen tags BLOB — smart-collection
+        # member fetch. Deduped by construction (one row in/out).
+        if tags:
+            wanted = {t.strip() for t in tags.split(",") if t.strip()}
+            if wanted:
+                rows = [r for r in rows
+                        if wanted & set(decode_data(r["tags"]) or [])]
 
         # Collect unique game_ids and project_ids for batch lookups
         game_ids_to_fetch = set()

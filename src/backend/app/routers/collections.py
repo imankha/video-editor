@@ -35,6 +35,18 @@ router = APIRouter(prefix="/api/collections", tags=["collections"])
 # content. Server-computed so clients never derive eligibility (EPIC #13).
 COLLECTION_MIN_DURATION_SEC = 30
 
+# Smart collections (T3670, pulled forward). A reel joins a group iff the group
+# is tag-less (top_plays = all) or the reel carries ANY of the group's tags;
+# membership is a per-reel boolean, so a Goal+Assist reel is counted once.
+# Member fetch: top_plays -> GET /api/downloads (no filter); the others ->
+# GET /api/downloads?tags=<comma list>.
+SMART_COLLECTIONS = [
+    {"key": "top_plays", "name": "Top Plays", "tags": None},
+    {"key": "top_goals_assists", "name": "Top Goals & Assists",
+     "tags": frozenset({"Goal", "Assist"})},
+    {"key": "top_dribbles", "name": "Top Dribbles", "tags": frozenset({"Dribble"})},
+]
+
 
 # ---------------------------------------------------------------------------
 # Response models
@@ -65,7 +77,7 @@ class SeasonTotal(BaseModel):              # T3640 consumer (already ratio-scope
     eligible: bool
 
 
-class TagTotal(BaseModel):                 # T3670 consumer (already ratio-scoped)
+class TagTotal(BaseModel):                 # raw per-tag feed (other consumers)
     tag: str
     ratio: str
     reel_count: int
@@ -74,7 +86,13 @@ class TagTotal(BaseModel):                 # T3670 consumer (already ratio-scope
     eligible: bool
 
 
+class SmartCollection(RatioBucketed):      # T3670: Top Plays / Goals & Assists / Dribbles
+    key: str
+    name: str
+
+
 class CollectionsSummaryResponse(BaseModel):
+    smart_collections: List[SmartCollection]  # SMART_COLLECTIONS order, reel_count > 0 only
     games: List[GameCollection]            # sorted latest_published_at DESC
     mixes: RatioBucketed                   # always present, may be reel_count 0
     season_totals: List[SeasonTotal]
@@ -241,11 +259,12 @@ async def collections_summary():
                     "date": g["game_date"] or None,
                 }
 
-        # Pass 2: build buckets + season/tag totals.
+        # Pass 2: build buckets + season/tag totals + smart-collection buckets.
         game_buckets: Dict[int, dict] = {}
         mixes = _new_bucket()
         season_acc: dict = {}
         tag_acc: dict = {}
+        smart_buckets = {sc["key"]: _new_bucket() for sc in SMART_COLLECTIONS}
 
         for p in parsed:
             ratio, duration, gid = p["ratio"], p["duration"], p["game_id"]
@@ -260,8 +279,15 @@ async def collections_summary():
             if skey:
                 _add_total(season_acc, (skey, ratio), duration)
 
-            for tag in p["tags"]:
+            reel_tags = set(p["tags"])
+            for tag in reel_tags:
                 _add_total(tag_acc, (tag, ratio), duration)
+
+            # Smart collections: per-reel membership (tag-less group = all),
+            # so a multi-tag reel is counted once per matching group.
+            for sc in SMART_COLLECTIONS:
+                if sc["tags"] is None or (reel_tags & sc["tags"]):
+                    _add_reel(smart_buckets[sc["key"]], ratio, duration, p["published_at"])
 
     games = [
         GameCollection(
@@ -291,7 +317,16 @@ async def collections_summary():
     season_totals = [SeasonTotal(**t) for t in _totals(season_acc, "season")]
     tag_totals = [TagTotal(**t) for t in _totals(tag_acc, "tag")]
 
+    # Smart collections in defined order; omit empties (a group with no matching reels).
+    smart_collections = [
+        SmartCollection(key=sc["key"], name=sc["name"],
+                        **_finalize_bucket(smart_buckets[sc["key"]]))
+        for sc in SMART_COLLECTIONS
+        if smart_buckets[sc["key"]]["reel_count"] > 0
+    ]
+
     return CollectionsSummaryResponse(
+        smart_collections=smart_collections,
         games=games,
         mixes=RatioBucketed(**_finalize_bucket(mixes)),
         season_totals=season_totals,

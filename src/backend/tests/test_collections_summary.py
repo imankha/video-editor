@@ -355,3 +355,80 @@ class TestDownloadsFilters:
         with pytest.raises(HTTPException) as exc:
             _downloads(game_id=7, mixes=True)
         assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Smart collections (Top Plays / Goals & Assists / Dribbles)
+# ---------------------------------------------------------------------------
+
+class TestSmartCollections:
+    def _seed_tagged(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        # Two goal reels (one also tagged Assist) + one dribble reel, all portrait.
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=20.0, tags=["Goal"])
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=15.0, tags=["Goal", "Assist"])
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=12.0, tags=["Dribble"])
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=5.0, tags=["Pass"])  # untagged-for-smart
+        conn.commit(); conn.close()
+
+    def test_groups_present_and_deduped(self, db):
+        self._seed_tagged(db)
+        s = _summary()
+        smart = {sc.key: sc for sc in s.smart_collections}
+
+        # top_plays = all 4 reels
+        assert smart["top_plays"].reel_count == 4
+        assert smart["top_plays"].ratio_durations == {"9:16": 52.0}
+
+        # goals & assists = the 2 goal reels (the Goal+Assist reel counted ONCE)
+        assert smart["top_goals_assists"].reel_count == 2
+        assert smart["top_goals_assists"].ratio_durations == {"9:16": 35.0}
+
+        # dribbles = 1 reel
+        assert smart["top_dribbles"].reel_count == 1
+
+    def test_order_is_canonical(self, db):
+        self._seed_tagged(db)
+        s = _summary()
+        assert [sc.key for sc in s.smart_collections] == \
+            ["top_plays", "top_goals_assists", "top_dribbles"]
+
+    def test_empty_group_omitted(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=20.0, tags=["Goal"])
+        conn.commit(); conn.close()
+
+        s = _summary()
+        keys = {sc.key for sc in s.smart_collections}
+        assert "top_plays" in keys and "top_goals_assists" in keys
+        assert "top_dribbles" not in keys  # no dribble reels
+
+    def test_smart_ratio_eligibility(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=["Goal"])  # >=30
+        _insert_fv(cur, game_ids=[7], ratio="16:9", duration=10.0, tags=["Goal"])  # <30
+        conn.commit(); conn.close()
+
+        ga = next(sc for sc in _summary().smart_collections if sc.key == "top_goals_assists")
+        assert ga.ratio_eligible == {"9:16": True, "16:9": False}
+
+    def test_tags_member_filter_parity(self, db):
+        self._seed_tagged(db)
+        s = _summary()
+        ga = next(sc for sc in s.smart_collections if sc.key == "top_goals_assists")
+
+        members = _downloads(tags="Goal,Assist")
+        assert members.total_count == ga.reel_count == 2  # deduped
+
+        dribble = _downloads(tags="Dribble")
+        assert dribble.total_count == 1
+
+        # top_plays member fetch is the unfiltered list
+        plays = next(sc for sc in s.smart_collections if sc.key == "top_plays")
+        assert _downloads().total_count == plays.reel_count == 4
