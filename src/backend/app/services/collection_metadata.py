@@ -41,6 +41,16 @@ def encode_game_ids(game_ids) -> bytes | None:
     return encode_data(distinct) if distinct else None
 
 
+def route_game_ids(blob) -> int | None:
+    """Route a frozen final_videos.game_ids BLOB to a single game id or None
+    (mixes). len==1 -> that game id (game collection); len>1 -> None (multi-game
+    mix); NULL/[] -> None (game-less mix). This is the SINGLE read path shared by
+    GET /api/collections/summary and the game_id/mixes filters on
+    GET /api/downloads, so member counts always equal summary counts (T3610)."""
+    ids = decode_data(blob) or []
+    return ids[0] if len(ids) == 1 else None
+
+
 def compute_project_game_ids(cursor, project_id: int) -> bytes | None:
     """Distinct game ids of a project's constituent clips: latest-version
     working_clips -> raw_clips.game_id, plus the auto-project clip link.

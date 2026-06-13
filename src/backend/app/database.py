@@ -683,18 +683,6 @@ def ensure_database():
             )
         """)
 
-        # T3600/T3605 temporary shim (remove once v007 + v008 have run on
-        # staging + prod, like the prior in-place fixups T1583/T2870/T2847):
-        # existing DBs need the new columns at deploy time because exports
-        # INSERT them and GET /api/downloads selects them, while migrations
-        # only run via POST /api/admin/migrate. Columns only — v007/v008
-        # remain the canonical migrations + backfills.
-        for _col in ("aspect_ratio TEXT", "tags BLOB", "game_ids BLOB"):
-            try:
-                cursor.execute(f"ALTER TABLE final_videos ADD COLUMN {_col}")
-            except sqlite3.OperationalError:
-                pass
-
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_final_videos_published_ratio
             ON final_videos(published_at, aspect_ratio)

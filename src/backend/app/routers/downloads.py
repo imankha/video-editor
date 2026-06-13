@@ -22,6 +22,7 @@ from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import archive_project, restore_project, is_project_archived
 from app.constants import SourceType
 from app.utils.encoding import decode_data
+from app.services.collection_metadata import route_game_ids
 
 logger = logging.getLogger(__name__)
 
@@ -206,22 +207,47 @@ class DownloadListResponse(BaseModel):
 
 
 @router.get("", response_model=DownloadListResponse)
-async def list_downloads(source_type: Optional[str] = None):
+async def list_downloads(
+    source_type: Optional[str] = None,
+    game_id: Optional[int] = None,
+    aspect_ratio: Optional[str] = None,
+    mixes: bool = False,
+):
     """
     List all final videos with metadata.
     Returns videos grouped with project information.
 
     Args:
-        source_type: Filter by source type ('brilliant_clip', 'custom_project', 'annotated_game')
-                    If not provided, returns all videos.
+        source_type: Filter by source type ('brilliant_clip', 'custom_project', 'annotated_game').
+        game_id: Restrict to reels whose frozen game_ids route to this single game
+                 (Collections member fetch). Mutually exclusive with `mixes`.
+        aspect_ratio: Restrict to a single ratio ('9:16' / '16:9'); index-backed.
+        mixes: Restrict to reels that route to the Mixes bucket (multi-game or
+               game-less). Mutually exclusive with `game_id`.
+        If no filter is provided, returns all published videos (the All tab).
     """
+    if game_id is not None and mixes:
+        raise HTTPException(
+            status_code=400,
+            detail="game_id and mixes are mutually exclusive",
+        )
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Build query with optional source_type filter
-        # LEFT JOIN to handle annotated exports (project_id IS NULL, no real project)
-        # rating_counts is stored as JSON snapshot at export time (frozen, not live)
-        # COALESCE uses fv.name for annotated exports, p.name for project exports
+        # rating_counts is a JSON snapshot frozen at export time (not live).
+        # game_ids is the frozen msgpack BLOB used for game_id/mixes routing.
+        conditions = []
+        params: list = []
+        if source_type:
+            conditions.append("fv.source_type = ?")
+            params.append(source_type)
+        if aspect_ratio:
+            # Index-backed (idx_final_videos_published_ratio).
+            conditions.append("fv.aspect_ratio = ?")
+            params.append(aspect_ratio)
+        extra = (" AND " + " AND ".join(conditions)) if conditions else ""
+
         base_query = f"""
             SELECT
                 fv.id,
@@ -231,6 +257,7 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.version,
                 fv.source_type,
                 fv.game_id,
+                fv.game_ids,
                 fv.rating_counts,
                 fv.watched_at,
                 fv.duration as fv_duration,
@@ -239,18 +266,20 @@ async def list_downloads(source_type: Optional[str] = None):
                 fv.name as fv_name
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
-            AND fv.published_at IS NOT NULL
+            AND fv.published_at IS NOT NULL{extra}
+            ORDER BY fv.created_at DESC
         """
-
-        if source_type:
-            base_query += " AND fv.source_type = ?"
-            base_query += " ORDER BY fv.created_at DESC"
-            cursor.execute(base_query, (source_type,))
-        else:
-            base_query += " ORDER BY fv.created_at DESC"
-            cursor.execute(base_query)
-
+        cursor.execute(base_query, params)
         rows = cursor.fetchall()
+
+        # game_id / mixes filter on the FROZEN game_ids BLOB via the shared
+        # router helper -- the SAME routing as GET /api/collections/summary, so
+        # member counts always equal summary counts (no SQL on the BLOB; the
+        # published set is small, <= ~500 rows).
+        if game_id is not None:
+            rows = [r for r in rows if route_game_ids(r["game_ids"]) == game_id]
+        elif mixes:
+            rows = [r for r in rows if route_game_ids(r["game_ids"]) is None]
 
         # Collect unique game_ids and project_ids for batch lookups
         game_ids_to_fetch = set()

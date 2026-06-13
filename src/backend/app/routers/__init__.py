@@ -22,6 +22,7 @@ from .clips import router as clips_router
 from .games import router as games_router
 from .games_upload import router as games_upload_router
 from .downloads import router as downloads_router
+from .collections import router as collections_router
 from .auth import router as auth_router
 from .storage import router as storage_router
 from .settings import router as settings_router
@@ -34,4 +35,4 @@ from .shares import gallery_shares_router, shared_router
 from .users import router as users_router
 from .bootstrap import router as bootstrap_router
 
-__all__ = ['health_router', 'export_router', 'detection_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router', 'quests_router', 'admin_router', 'payments_router', 'gallery_shares_router', 'shared_router', 'users_router', 'bootstrap_router']
+__all__ = ['health_router', 'export_router', 'detection_router', 'projects_router', 'clips_router', 'games_router', 'games_upload_router', 'downloads_router', 'collections_router', 'auth_router', 'storage_router', 'settings_router', 'profiles_router', 'credits_router', 'quests_router', 'admin_router', 'payments_router', 'gallery_shares_router', 'shared_router', 'users_router', 'bootstrap_router']

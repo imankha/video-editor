@@ -499,49 +499,6 @@ class TestV007Migration:
 
 
 # ---------------------------------------------------------------------------
-# Deploy-window safety: ensure_database adds the columns to EXISTING DBs
-# ---------------------------------------------------------------------------
-
-class TestEnsureDatabaseShim:
-    def test_existing_db_gains_columns_and_index(self, tmp_path):
-        """Pre-v007 DBs must get the new columns at first access after deploy
-        (GET /api/downloads selects them; migrations only run via the admin
-        endpoint, so without the shim every gallery load would 500)."""
-        from app.user_context import set_current_user_id
-        from app.profile_context import set_current_profile_id
-
-        set_current_user_id(USER_ID)
-        set_current_profile_id(PROFILE_ID)
-
-        db_dir = tmp_path / USER_ID / "profiles" / PROFILE_ID
-        db_dir.mkdir(parents=True)
-        db_path = db_dir / "profile.sqlite"
-        conn = sqlite3.connect(str(db_path))
-        conn.executescript(OLD_SCHEMA)
-        conn.commit()
-        conn.close()
-
-        with patch("app.database.USER_DATA_BASE", tmp_path), \
-             patch("app.database._initialized_users", set()), \
-             patch("app.database.R2_ENABLED", False):
-            from app.database import ensure_database
-            ensure_database()
-
-        conn = _connect(db_path)
-        cols = {r["name"] for r in conn.execute("PRAGMA table_info(final_videos)")}
-        idx = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='index' "
-            "AND name='idx_final_videos_published_ratio'").fetchone()
-        version = conn.execute("PRAGMA user_version").fetchone()[0]
-        conn.close()
-
-        assert "aspect_ratio" in cols
-        assert "tags" in cols
-        assert idx is not None
-        assert version == 0  # NOT fresh: v007 must still run for the backfill
-
-
-# ---------------------------------------------------------------------------
 # GET /api/downloads exposes the frozen columns
 # ---------------------------------------------------------------------------
 
