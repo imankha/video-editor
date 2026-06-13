@@ -3,6 +3,7 @@ import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Imag
 import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
+import { CollectionsTab } from './collections/CollectionsTab';
 import { MediaPlayer } from './MediaPlayer';
 import { useDownloads } from '../hooks/useDownloads';
 import { useWebShare } from '../hooks/useWebShare';
@@ -24,6 +25,9 @@ const FILTER_OPTIONS = [
   { value: SourceType.CUSTOM_PROJECT, label: 'Custom Reels', icon: Folder, color: REEL.accent },
 ];
 
+// Panel tabs (T3610). Collections is the default; transient, resets each mount.
+const TABS = { COLLECTIONS: 'collections', ALL: 'all' };
+
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
  *
@@ -44,6 +48,13 @@ export function DownloadsPanel({
   const isOpen = useGalleryStore((state) => state.isOpen);
   const close = useGalleryStore((state) => state.close);
   const setCount = useGalleryStore((state) => state.setCount);
+  // Header chip count: galleryStore is the source of truth across tabs (the All
+  // list isn't fetched on the Collections tab). Badge unchanged (T3610 §0.6).
+  const galleryCount = useGalleryStore((state) => state.count);
+
+  // Active tab (transient; Collections default). The All-tab full-list fetch
+  // only fires when the All tab is selected (T3610 §3.7).
+  const [activeTab, setActiveTab] = useState(TABS.COLLECTIONS);
 
   const {
     downloads,
@@ -63,7 +74,7 @@ export function DownloadsPanel({
     formatDuration,
     formatDate,
     setFilter
-  } = useDownloads(isOpen);
+  } = useDownloads(isOpen && activeTab === TABS.ALL);
 
   const setUnwatchedCount = useGalleryStore((state) => state.setUnwatchedCount);
 
@@ -629,9 +640,9 @@ export function DownloadsPanel({
           <div className="flex items-center gap-3">
             <Image size={20} className={REEL.accent} />
             <h2 className="text-lg font-bold text-white">{SECTION_NAMES.LIBRARY}</h2>
-            {hasDownloads && (
+            {galleryCount > 0 && (
               <span className={`px-2 py-0.5 ${REEL.bg} text-white text-xs font-medium rounded-full`}>
-                {downloads.length}
+                {galleryCount}
               </span>
             )}
           </div>
@@ -644,31 +655,63 @@ export function DownloadsPanel({
           />
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex gap-2 p-2 border-b border-gray-700 bg-gray-800/50">
-          {FILTER_OPTIONS.map((option) => {
-            const isActive = filter === option.value;
-            const Icon = option.icon;
+        {/* Collections | All tab bar */}
+        <div className="flex border-b border-gray-700 bg-gray-800/50">
+          {[
+            { key: TABS.COLLECTIONS, label: 'Collections' },
+            { key: TABS.ALL, label: 'All' },
+          ].map(({ key, label }) => {
+            const isActive = activeTab === key;
             return (
               <button
-                key={option.value ?? 'all'}
-                onClick={() => setFilter(option.value)}
-                title={option.label}
-                className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors ${
+                key={key}
+                onClick={() => setActiveTab(key)}
+                className={`flex-1 min-h-11 text-sm font-medium transition-colors ${
                   isActive
-                    ? `${REEL.bg} text-white`
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                    ? `${REEL.accent} border-b-2 border-cyan-400`
+                    : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <Icon size={20} className={isActive ? 'text-white' : option.color} />
+                {label}
               </button>
             );
           })}
         </div>
 
+        {/* Source-type filter pills — All tab only */}
+        {activeTab === TABS.ALL && (
+          <div className="flex gap-2 p-2 border-b border-gray-700 bg-gray-800/50">
+            {FILTER_OPTIONS.map((option) => {
+              const isActive = filter === option.value;
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.value ?? 'all'}
+                  onClick={() => setFilter(option.value)}
+                  title={option.label}
+                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors ${
+                    isActive
+                      ? `${REEL.bg} text-white`
+                      : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                  }`}
+                >
+                  <Icon size={20} className={isActive ? 'text-white' : option.color} />
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          {renderContent()}
+          {activeTab === TABS.ALL ? (
+            renderContent()
+          ) : (
+            <CollectionsTab
+              isActive={isOpen && activeTab === TABS.COLLECTIONS}
+              renderCard={renderDownloadCard}
+            />
+          )}
         </div>
       </div>
 

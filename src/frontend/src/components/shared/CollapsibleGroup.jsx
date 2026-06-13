@@ -12,6 +12,8 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
  * @param {boolean} defaultExpanded - Initial expanded state (default: false)
  * @param {React.ReactNode} children - Items to display when expanded
  * @param {string} className - Additional CSS classes
+ * @param {Function} onToggle - Optional (isExpanded) => void notification, fired
+ *   on each user toggle. Used for lazy member fetch (T3610). Stays uncontrolled.
  *
  * @example
  * <CollapsibleGroup title="Vs Carlsbad Dec 6" count={3} statusCounts={{ done: 1, notStarted: 2 }}>
@@ -25,6 +27,7 @@ export function CollapsibleGroup({
   defaultExpanded = false,
   children,
   className = '',
+  onToggle,
 }) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
@@ -53,9 +56,13 @@ export function CollapsibleGroup({
     <div className={`mb-2 ${className}`}>
       {/* Group Header */}
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => {
+          const next = !isExpanded;
+          setIsExpanded(next);
+          onToggle?.(next);
+        }}
         className={[
-          'w-full flex items-center gap-2 px-3 py-2',
+          'w-full flex items-center gap-2 px-3 py-2 min-h-11',
           'bg-gray-800/50 hover:bg-gray-800',
           'rounded-lg transition-colors',
           'text-left cursor-pointer',
