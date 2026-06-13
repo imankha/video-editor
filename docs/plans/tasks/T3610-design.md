@@ -1,7 +1,52 @@
 # T3610 Design: Collections Tab + Game Collections in My Reels
 
-**Status:** AWAITING APPROVAL
+**Status:** NEEDS RE-APPROVAL (data layer reshaped by the T3605 prerequisite + user decisions)
 **Task:** [T3610](tasks/season-highlights/T3610-collections-tab-game-collections.md) | **Epic:** [Season Highlights & Collections](tasks/season-highlights/EPIC.md)
+
+## 0. Design Amendments (AUTHORITATIVE — supersede any conflicting text in sections 1-8)
+
+The original design (sections 1-8) was written before the T3605 prerequisite shipped and
+before the user resolved the open questions. These amendments are the source of truth; the
+sections below are kept for rationale but their data-layer specifics (the resolution CTE,
+working-clips fallback, `unknown` ratio, dominant-ratio default) are **obsolete**. The
+implementing agent should re-run the architect pass against these amendments.
+
+1. **game_ids is now a frozen column** (T3605, shipped + migrated on dev/staging/prod).
+   `final_videos.game_ids` is a msgpack BLOB of sorted distinct game ids. The summary endpoint
+   and the member filter read it **directly** — DELETE the `resolved_final_videos_cte`, the
+   `project_games` CTE, the working_clips join, and all live resolution. Decode with
+   `utils/encoding.decode_data`. `len==1` -> that game; `len>1` -> mixes; NULL/`[]` -> mixes
+   (game-less). Verified: 100% coverage on prod, custom_project reels correctly attributed.
+
+2. **No legacy data, no legacy code** (user decision #4). Every published reel has non-NULL
+   `aspect_ratio` and frozen `game_ids` after migration. DELETE the `RATIO_UNKNOWN`/`unknown`
+   bucket and any "Other" ratio pill. If a NULL aspect_ratio or NULL game_ids is ever read for
+   a published reel, that is a bug to surface (log), NOT a case to handle defensively.
+
+3. **Ratio is collection identity, gated at >=30s** (user decision #3, EPIC #2/#6). Do NOT pick
+   a "dominant ratio" default. A game yields a **Portrait collection iff >=30s portrait content**
+   AND a **Landscape collection iff >=30s landscape content** — independently. Each qualifying
+   (game, ratio) is its own collection (own CollectionHeader + verbs + share/play scope).
+   Eligibility = `ratio_durations[ratio] >= 30` (a threshold compare on a server-provided sum,
+   not a client aggregate derivation — allowed). The summary returns `ratio_durations` per game;
+   surface a per-(game,ratio) `eligible` boolean server-side to keep the client dumb. Below-30s
+   ratios still list their reels under the game (browsable/individually playable) but get no
+   collection-level Play-all/Share/Video. A game with no qualifying ratio still appears if it has
+   reels (browsable); confirm exact empty-state UX during implementation.
+
+4. **msgpack over the wire** (user preference). The summary endpoint returns a msgpack body, not
+   JSON. There is currently NO msgpack-over-HTTP infra (verified): all endpoints use JSON, the
+   frontend `utils/apiFetch.js` does `res.json()`, and `@msgpack/msgpack` is not a frontend dep.
+   OPEN SCOPE QUESTION for the user before implementing (see section 8): apply msgpack-over-wire
+   **globally** (content negotiation in apiFetch + a backend response helper, larger blast radius)
+   or **only to the new collections endpoints** (localized: one `Response(content=packb(...),
+   media_type="application/x-msgpack")` + a targeted decode in the collections fetch). On-disk
+   msgpack (game_ids/tags) is already done.
+
+5. **Mixes group: silent** (user decision #2). No explanatory subtitle.
+
+6. **Badge unchanged** (user decision #5). Gallery count stays sourced from
+   `galleryStore.fetchCount`; the summary fetch does not feed the badge.
 
 ## 1. Current State Analysis
 
@@ -512,10 +557,19 @@ useStoryPlayback(videoRef, reels, { onAllEnded, onReelChange }) =>
 7. `CollectionsTab` + `GameCollectionGroup`; `DownloadsPanel` tab bar + render-prop card reuse.
 8. Mobile pass (360/390/428/1280 per responsiveness skill) + Playwright e2e.
 
-## 8. Open Questions (for the user)
+## 8. Open Questions
 
-1. **Game attribution for already-published custom reels (the big one):** because publish archives and deletes working_clips, most existing single-game custom reels will land in "Mixes & compilations". Should we schedule a follow-up task (T3600-style) that (a) freezes `game_ids` onto `final_videos` at export-finalize and (b) backfills from R2 archives in a v008 migration? This design's resolution CTE would then read the frozen column first with the working-clips path as the pre-freeze fallback — no API contract change. Recommended: yes, before T3640 (season headers inherit the same gap).
-2. **"Mixes & compilations" membership for game-less reels:** includes unresolvable (archived) reels per the spec's "game-less" clause — should the group get a subtitle hinting "includes reels we couldn't link to a game" until Q1 lands, or stay silent?
-3. **Dominant-ratio tie-break** (equal portrait/landscape counts): design says portrait wins. Confirm.
-4. **`unknown` ratio pill label**: "Other" pill shown only when legacy NULL-ratio reels exist in a group. Acceptable, or hide those reels from Collections entirely (they'd still show in All)?
-5. **Badge count source while Collections is default**: design keeps `galleryStore.fetchCount` as badge truth (no change visible to users). Confirm no requirement for the badge to update from the summary fetch.
+### Resolved (by user, 2026-06-12 — see section 0)
+1. **Game attribution for already-published custom reels** — RESOLVED. Shipped as the **T3605**
+   prerequisite (freeze `game_ids` at export + v008 archive-recovery backfill), deployed and
+   migrated on dev/staging/prod. The summary reads the frozen column; no CTE/fallback.
+2. **Mixes subtitle** — RESOLVED: silent.
+3. **Dominant-ratio tie-break** — OBSOLETE: replaced by ratio-as-identity with a >=30s gate
+   (section 0 #3). No single default ratio; qualifying ratios are independent collections.
+4. **`unknown` ratio handling** — RESOLVED: no legacy data, no legacy code (section 0 #2).
+5. **Badge source** — RESOLVED: stays `galleryStore.fetchCount`.
+
+### Still open (needs user answer before T3610 implementation)
+- **msgpack-over-wire scope** (section 0 #4): global content-negotiation in `apiFetch` vs
+  collections-endpoints-only. Recommendation: start collections-only (localized, lower risk);
+  generalize later if other endpoints want it. Confirm with the user.

@@ -32,7 +32,8 @@ Implementation facts (sync, msgpack, migrations, pipeline, sharing, frontend): [
 
 | ID | Task | Status |
 |----|------|--------|
-| T3600 | [Freeze Collection Metadata at Export](T3600-freeze-collection-metadata.md) | TODO |
+| T3600 | [Freeze Collection Metadata at Export](T3600-freeze-collection-metadata.md) | DONE (migrated dev/staging/prod) |
+| T3605 | [Freeze game_ids (Collections prerequisite)](T3605-freeze-game-ids.md) | DONE (migrated dev/staging/prod) |
 | T3610 | [Collections Tab + Game Collections](T3610-collections-tab-game-collections.md) | TODO |
 | T3620 | [Collection Share Links + Public Viewer](T3620-collection-share-links.md) | TODO |
 | T3630 | [Reel Ranking Model + Insertion UX](T3630-reel-ranking.md) | TODO |
@@ -46,9 +47,10 @@ Implementation facts (sync, msgpack, migrations, pipeline, sharing, frontend): [
 
 | Task | Track | Version | What |
 |------|-------|---------|------|
-| T3600 | profile_db | v007 | `final_videos` + duration/aspect_ratio/tags columns + backfill (incl. R2 archive reads) |
+| T3600 | profile_db | v007 | `final_videos` + duration/aspect_ratio/tags columns + backfill (incl. R2 archive reads) -- DONE |
+| T3605 | profile_db | v008 | `final_videos.game_ids` msgpack BLOB + backfill (incl. R2 archive recovery) -- DONE |
 | T3620 | postgres | v016 | shares.share_type CHECK adds 'collection'; `collection_definition JSONB` column; `_SCHEMA_DDL` update |
-| T3630 | profile_db | v008 | `final_videos.season_rank REAL NULL` + `collection_settings` table |
+| T3630 | profile_db | **v009** | `final_videos.season_rank REAL NULL` + `collection_settings` table (was v008; T3605 took v008) |
 
 Deploy checklist for each: merge -> staging auto-deploy -> `POST /api/admin/migrate` on staging -> verify -> prod deploy -> `POST /api/admin/migrate` on prod.
 
