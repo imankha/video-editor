@@ -92,7 +92,7 @@ export function CollectionsTab({ collections, renderCard }) {
               return (
                 <CollectionCard
                   key={ratio}
-                  name={sc.name}
+                  title={sc.name}
                   ratio={ratio}
                   reelCount={sc.ratio_counts[ratio]}
                   ratioDuration={sc.ratio_durations[ratio]}
@@ -124,7 +124,7 @@ export function CollectionsTab({ collections, renderCard }) {
           <GameCollectionGroup
             key={key}
             name={g.game_name}
-            subtitle={g.game_date || undefined}
+            collectionTitle={`${g.game_name} Highlights`}
             collection={g}
             defaultExpanded={i === 0}
             members={members[key]}
@@ -141,6 +141,7 @@ export function CollectionsTab({ collections, renderCard }) {
         <GameCollectionGroup
           key="mixes"
           name={MIXES_NAME}
+          collectionTitle={MIXES_NAME}
           collection={mixes}
           defaultExpanded={games.length === 0}
           members={members.mixes}

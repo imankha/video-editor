@@ -1,6 +1,6 @@
 import React from 'react';
 import { REEL } from '../../config/themeColors';
-import { ratioDisplay, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
+import { ratioGlyph, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { formatDuration } from './format';
 
 /**
@@ -21,7 +21,7 @@ export function UnlockProgress({ ratio, currentSec, caption }) {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className="text-xs font-medium text-gray-300">{ratioDisplay(ratio)}</span>
+        <span className={`text-base leading-none ${REEL.accent}`} title={ratioLabel(ratio)}>{ratioGlyph(ratio)}</span>
         <span className="text-xs text-gray-500">
           {formatDuration(currentSec) || '0:00'} / {formatDuration(COLLECTION_MIN_DURATION_SEC)}
         </span>

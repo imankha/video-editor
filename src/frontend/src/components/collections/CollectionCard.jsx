@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { CollectionHeader } from './CollectionHeader';
-import { ratioLabel } from '../../constants/aspectRatios';
 import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './budget';
 
 /**
@@ -10,9 +9,8 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * playable length of the selected clips. Owns the transient budget + slider
  * state and computes the budgeted Play-all subset (greedy-with-skip).
  *
- * @param {string}   name            - base name (the ratio is shown as a glyph chip)
- * @param {string=}  subtitle
- * @param {string}   ratio           - identity ratio
+ * @param {string}   title           - display title (e.g. "Top Plays", "{game} Highlights")
+ * @param {string}   ratio           - identity ratio (shown as a glyph)
  * @param {number}   reelCount
  * @param {number}   ratioDuration   - this ratio's full duration (cap + default)
  * @param {boolean}  hasNullDurations
@@ -20,8 +18,7 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {Function} onPlay          - (members[], title) => void
  */
 export function CollectionCard({
-  name,
-  subtitle,
+  title,
   ratio,
   reelCount,
   ratioDuration,
@@ -64,8 +61,7 @@ export function CollectionCard({
     try {
       const members = await ensureMembers();
       const sel = selectWithinBudget(members, budget);
-      // Player title carries the ratio word; the card shows it as a glyph chip.
-      if (sel.length) onPlay(sel, `${name} - ${ratioLabel(ratio)}`);
+      if (sel.length) onPlay(sel, title);
     } finally {
       setPlayLoading(false);
     }
@@ -73,8 +69,7 @@ export function CollectionCard({
 
   return (
     <CollectionHeader
-      name={name}
-      subtitle={subtitle}
+      title={title}
       ratio={ratio}
       reelCount={reelCount}
       duration={displayedDuration}

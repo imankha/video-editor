@@ -18,6 +18,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
+import { ratioGlyph, ratioLabel } from '../constants/aspectRatios';
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -293,6 +294,12 @@ export function DownloadsPanel({
 
           {/* Info + actions */}
           <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+            {download.aspect_ratio && (
+              <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(download.aspect_ratio)}>
+                {ratioGlyph(download.aspect_ratio)}
+              </span>
+            )}
             {editingId === download.id ? (
               <input
                 autoFocus
@@ -329,6 +336,7 @@ export function DownloadsPanel({
                 {download.project_name}
               </div>
             )}
+            </div>
             {(showFilename || showSourceType) && (
               <div className="text-sm text-gray-400 truncate">
                 {showFilename ? download.filename : sourceTypeLabel}

@@ -1,6 +1,5 @@
 import React from 'react';
 import { UnlockProgress } from './UnlockProgress';
-import { ratioLabel } from '../../constants/aspectRatios';
 
 /**
  * SmartLockedCard - A sub-30s smart collection rendered as a locked near-miss
@@ -14,9 +13,7 @@ import { ratioLabel } from '../../constants/aspectRatios';
 export function SmartLockedCard({ name, ratio, currentSec }) {
   return (
     <div className="rounded-lg bg-gray-800/40 px-3 py-2 mb-2">
-      <h3 className="text-sm font-semibold text-gray-300 truncate mb-1">
-        {name} - {ratioLabel(ratio)}
-      </h3>
+      <h3 className="text-sm font-semibold text-gray-300 truncate mb-1">{name}</h3>
       <UnlockProgress ratio={ratio} currentSec={currentSec} caption="Almost there!" />
     </div>
   );
