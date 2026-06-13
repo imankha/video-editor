@@ -3,7 +3,7 @@ import { Loader, AlertCircle, FolderOpen } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { REEL } from '../../config/themeColors';
 import { API_BASE } from '../../config';
-import { RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
+import { RATIO_ORDER } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
 import { CollectionCard } from './CollectionCard';
 import { SmartLockedCard } from './SmartLockedCard';
@@ -92,7 +92,7 @@ export function CollectionsTab({ collections, renderCard }) {
               return (
                 <CollectionCard
                   key={ratio}
-                  name={`${sc.name} - ${ratioLabel(ratio)}`}
+                  name={sc.name}
                   ratio={ratio}
                   reelCount={sc.ratio_counts[ratio]}
                   ratioDuration={sc.ratio_durations[ratio]}

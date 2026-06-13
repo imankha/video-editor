@@ -4,7 +4,7 @@ import { CollapsibleGroup } from '../shared/CollapsibleGroup';
 import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
-import { RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
+import { RATIO_ORDER } from '../../constants/aspectRatios';
 
 /**
  * GameCollectionGroup - Container for one scope's collections (T3610 §0B).
@@ -53,7 +53,6 @@ export function GameCollectionGroup({
 
   const membersFor = (ratio) => (members || []).filter((m) => m.aspect_ratio === ratio);
   const loadingMembers = memberState === 'loading' || memberState === undefined;
-  const titleFor = (ratio) => `${name} - ${ratioLabel(ratio)}`;
 
   return (
     <CollapsibleGroup
@@ -65,7 +64,7 @@ export function GameCollectionGroup({
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="mb-2">
           <CollectionCard
-            name={titleFor(ratio)}
+            name={name}
             subtitle={subtitle}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
