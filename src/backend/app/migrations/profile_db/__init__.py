@@ -6,6 +6,7 @@ from .v004_overlay_tuning import V004OverlayTuning
 from .v005_highlight_shape import V005HighlightShape
 from .v006_backfill_current_mode import V006BackfillCurrentMode
 from .v007_collection_metadata import V007CollectionMetadata
+from .v008_freeze_game_ids import V008FreezeGameIds
 
 MIGRATIONS = [
     V001Baseline(),
@@ -15,6 +16,7 @@ MIGRATIONS = [
     V005HighlightShape(),
     V006BackfillCurrentMode(),
     V007CollectionMetadata(),
+    V008FreezeGameIds(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

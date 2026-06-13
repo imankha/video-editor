@@ -34,6 +34,55 @@ def encode_distinct_tags(tag_blobs) -> bytes | None:
     return encode_data(tags) if tags else None
 
 
+def encode_game_ids(game_ids) -> bytes | None:
+    """msgpack array of sorted distinct game ids, or None when empty.
+    len==1 -> game collection; len>1 -> mixes; None -> game-less (T3605)."""
+    distinct = sorted({g for g in game_ids if g is not None})
+    return encode_data(distinct) if distinct else None
+
+
+def compute_project_game_ids(cursor, project_id: int) -> bytes | None:
+    """Distinct game ids of a project's constituent clips: latest-version
+    working_clips -> raw_clips.game_id, plus the auto-project clip link.
+    Mirrors the live resolution in downloads.py (working_clips -> raw_clips).
+    Returns a msgpack BLOB or None when nothing resolves."""
+    cursor.execute(
+        f"""
+        SELECT DISTINCT rc.game_id
+        FROM raw_clips rc
+        WHERE (rc.auto_project_id = ?
+           OR rc.id IN (
+                SELECT wc.raw_clip_id FROM working_clips wc
+                WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+                AND wc.id IN ({latest_working_clips_subquery()})
+           ))
+           AND rc.game_id IS NOT NULL
+        """,
+        (project_id, project_id, project_id),
+    )
+    return encode_game_ids(r[0] for r in cursor.fetchall())
+
+
+def compute_archive_game_ids(cursor, archive: dict) -> bytes | None:
+    """Distinct game ids for an archived project: archived working_clips'
+    raw_clip_id -> live raw_clips.game_id (raw_clips survive archival, only
+    working_clips/working_videos are deleted at publish)."""
+    raw_clip_ids = sorted({
+        wc["raw_clip_id"]
+        for wc in archive.get("working_clips") or []
+        if wc.get("raw_clip_id")
+    })
+    if not raw_clip_ids:
+        return None
+    placeholders = ",".join("?" for _ in raw_clip_ids)
+    cursor.execute(
+        f"SELECT DISTINCT game_id FROM raw_clips WHERE id IN ({placeholders}) "
+        "AND game_id IS NOT NULL",
+        raw_clip_ids,
+    )
+    return encode_game_ids(r[0] for r in cursor.fetchall())
+
+
 def _duration_from_raw_clips(cursor, project_id: int):
     """Auto-projects have no working_videos; their export duration is the
     raw clip's time range (matches auto_export's stamped value)."""
