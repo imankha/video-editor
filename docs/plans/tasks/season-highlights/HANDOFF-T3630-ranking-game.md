@@ -11,6 +11,18 @@ foundation committed.
 ```
 Implement T3630: Reel Ranking GAME (pairwise comparison + Glicko).
 
+## Getting started (repo state)
+- Work on the EXISTING local branch: `git checkout feature/T3630-reel-ranking`
+  (it is committed locally but NOT pushed; do not branch off master).
+- The data foundation is already on it at commits 6a103eaa + 7c11f3f7 (and docs at 6b4ca42d).
+  Read them for the exact committed code: `git show 6a103eaa 7c11f3f7 --stat` then the diffs.
+- Backend runs from src/backend with its venv: `cd src/backend && .venv/Scripts/python.exe ...`.
+  After backend edits: `.venv/Scripts/python.exe -c "from app.main import app"`.
+  Backend tests: `.venv/Scripts/python.exe -m pytest tests/test_reel_ranking.py -q`
+  (Postgres-touching suites need local dev Postgres up; see CLAUDE.md).
+  Frontend: `cd src/frontend && npm test -- --run` and `npm run build`.
+- This is NOT for deploy until all ranking UI is in (UI may still move the schema).
+
 ## Epic context
 Task 5 of 9 in the Season Highlights & Collections epic. Read, in order:
 - docs/plans/tasks/T3630-ranking-game-spec.md   <- AUTHORITATIVE (UI + engine)

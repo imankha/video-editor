@@ -39,6 +39,59 @@ rises → collections sharpen → repeat.**
 
 ## 3. UX surfaces
 
+### 3.0 Mockups (ASCII reference)
+
+**Gallery banner (mid state):**
+```
++----------------------------------------------+
+| (T) Collection Confidence    ( 72%          |
+|     31 of 47 clips ranked                    |
+|     Winners lead every highlight collection. |
+|                            [ Rank reels -> ] |
++----------------------------------------------+
+```
+Early (~8%): "Your highlights are picking themselves. Play a few rounds to take control."
+Caught up (~96%): "Dialed in. New clips will ask for a few matchups when you publish them."
+
+**Matchup — Mobile (stacked, Portrait only):**
+```
++-----------------------------+
+|  Which is better?     ( 73% |   <- live confidence meter
+| --------------------------- |
+| +-------------------------+ |
+| |   [ > tap to play ]     | |   CLIP A
+| |  Brilliant Dribble      | |
+| |  vs Carlsbad - Dec 6    | |
+| |  33'     #Dribble #Goal | |
+| |  [       PICK A       ] | |   (or tap the card)
+| +-------------------------+ |
+|             V S             |
+| +-------------------------+ |
+| |   [ > tap to play ]     | |   CLIP B
+| |  Amazing Maradona       | |
+| |  vs Rebels - Dec 13     | |
+| |  12'     #Dribble       | |
+| |  [       PICK B       ] | |
+| +-------------------------+ |
+|   no skip - always choose   |
++-----------------------------+
+```
+
+**Matchup — Desktop (side-by-side, Portrait | Landscape tab):**
+```
++--------------------------------------------------------------+
+|  Which is better?   [ Portrait | Landscape ]      ( 73%      |
+| ------------------------------------------------------------ |
+|  +---------------------+        +---------------------+        |
+|  |   [ > play/replay ] |        |   [ > play/replay ] |        |
+|  |  Brilliant Dribble  |   VS   |  Amazing Maradona   |        |
+|  |  vs Carlsbad - Dec6 |        |  vs Rebels - Dec13  |        |
+|  |  33'  #Dribble #Goal|        |  12'  #Dribble      |        |
+|  |  [     PICK A     ] |        |  [     PICK B     ] |        |
+|  +---------------------+        +---------------------+        |
++--------------------------------------------------------------+
+```
+
 ### 3.1 Gallery banner (top of My Reels)
 `ConfidenceBanner` — trophy, **Collection Confidence** meter (ring/bar), "N of M clips ranked",
 subtext "Winners lead every highlight collection.", primary **Rank reels →**. Three tones:
@@ -74,9 +127,17 @@ twins share one value (§4.4).
 - **Seed:** `rating = 1500 + (star - 3) * 40` (5★≈1580, 3★≈1500, 1★≈1420); `rd = RD_MAX (350)`;
   `match_count = 0`. (star = frozen `quality_score`; if NULL, rating=1500.)
 - **On a result** (treat each pick as a one-game rating period): standard Glicko-1 update of the
-  winner (score 1) and loser (score 0) — both `rating` move, both `rd` shrink toward `RD_MIN (~50)`;
-  increment both `match_count`. (Formulas: Glickman's Glicko-1; constants `q=0.0057565`,
-  `RD_MAX=350`, `RD_MIN=50`. No time-based RD inflation in v1.)
+  winner (score s=1) and loser (s=0) — both `rating` move, both `rd` shrink toward `RD_MIN`;
+  increment both `match_count`. Apply to each player using the **opponent's pre-update** rating/RD:
+  ```
+  q   = ln(10)/400 = 0.0057565
+  g(RD)       = 1 / sqrt(1 + 3*q^2*RD^2 / pi^2)
+  E(r,rj,RDj) = 1 / (1 + 10^(-g(RDj)*(r - rj)/400))
+  d^2         = 1 / (q^2 * g(RDj)^2 * E * (1-E))
+  rd'         = max(RD_MIN, sqrt(1 / (1/RD^2 + 1/d^2)))
+  r'          = r + (q / (1/RD^2 + 1/d^2)) * g(RDj) * (s - E)
+  ```
+  Constants: `RD_MAX=350`, `RD_MIN=50`. No time-based RD inflation in v1 (RD only shrinks on play).
 
 ### 4.2 Confidence
 - Per clip: `c_i = clamp(1 - (rd_i - RD_MIN)/(RD_MAX - RD_MIN), 0, 1)`.
