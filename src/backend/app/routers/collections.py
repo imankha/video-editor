@@ -439,7 +439,7 @@ def select_within_budget(members: List[dict], budget_sec: float) -> List[dict]:
 
 def evaluate_collection_members(conn, definition: dict) -> List[dict]:
     """Return the live members of a collection definition against an open profile
-    DB connection, ordered by the canonical comparator (season_rank, quality_score,
+    DB connection, ordered by the canonical comparator (rating, quality_score,
     recency -- T3630 ORDER_BY_RANK). Each: {id, name, duration, filename}.
 
     Same filter chain as GET /api/downloads so member counts match the summary:
@@ -454,7 +454,7 @@ def evaluate_collection_members(conn, definition: dict) -> List[dict]:
     cur.execute(
         f"""
         SELECT fv.id, fv.name AS fv_name, fv.duration, fv.filename,
-               fv.game_ids, fv.tags, fv.created_at, fv.season_rank,
+               fv.game_ids, fv.tags, fv.created_at, fv.rating,
                fv.quality_score, fv.clip_count
         FROM final_videos fv
         WHERE fv.id IN ({latest_final_videos_subquery()})

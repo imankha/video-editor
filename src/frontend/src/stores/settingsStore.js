@@ -34,6 +34,9 @@ const DEFAULT_SETTINGS = {
   overlay: {
     highlightEffectType: HighlightEffect.DARK_OVERLAY,
   },
+  ranking: {
+    rankSoundEnabled: true, // T3630: ranking-game pick sound on by default
+  },
 };
 
 export const useSettingsStore = create((set, get) => ({
@@ -142,6 +145,11 @@ export const useSettingsStore = create((set, get) => ({
     get().saveSettings({ overlay: { highlightEffectType: value } });
   },
 
+  // Ranking setters (T3630)
+  setRankSoundEnabled: (value) => {
+    get().saveSettings({ ranking: { rankSoundEnabled: value } });
+  },
+
   // Reset on profile switch — clears to defaults and forces re-fetch
   reset: () => {
     _loadPromise = null;
@@ -187,5 +195,6 @@ function deepMerge(base, updates) {
 export const useProjectFilters = () => useSettingsStore(state => state.settings.projectFilters);
 export const useFramingSettings = () => useSettingsStore(state => state.settings.framing);
 export const useOverlaySettings = () => useSettingsStore(state => state.settings.overlay);
+export const useRankingSettings = () => useSettingsStore(state => state.settings.ranking);
 export const useSettingsLoading = () => useSettingsStore(state => state.isLoading);
 export const useSettingsInitialized = () => useSettingsStore(state => state.isInitialized);

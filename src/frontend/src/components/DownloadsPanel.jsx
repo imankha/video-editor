@@ -6,6 +6,8 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { CollectionsTab } from './collections/CollectionsTab';
 import { CollectionPlayer } from './collections/CollectionPlayer';
+import { ConfidenceBanner } from './ranking/ConfidenceBanner';
+import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
 import { CardMedia, CardIconButton } from './shared/MediaCard';
 import { useDownloads } from '../hooks/useDownloads';
@@ -91,6 +93,17 @@ export function DownloadsPanel({
 
   // T3620: collection share modal ({ definition, title }) + one-tap copy link.
   const [sharingCollection, setSharingCollection] = useState(null);
+
+  // T3630: ranking game (pairwise Glicko). Opened from the ConfidenceBanner.
+  // On close we bump a key so the banner refetches and re-sort cached members
+  // into the new rating order (read-only; the writes happened via the game).
+  const [showRankingGame, setShowRankingGame] = useState(false);
+  const [rankRefreshKey, setRankRefreshKey] = useState(0);
+  const closeRankingGame = () => {
+    setShowRankingGame(false);
+    setRankRefreshKey((k) => k + 1);
+    collections.resortMembers();
+  };
 
   const onShareCollection = (definition, title) => setSharingCollection({ definition, title });
 
@@ -588,6 +601,10 @@ export function DownloadsPanel({
 
         {/* Content — single My Reels view (T3610 §0B.1) */}
         <div className="flex-1 overflow-y-auto p-4">
+          <ConfidenceBanner
+            onRank={() => setShowRankingGame(true)}
+            refreshKey={rankRefreshKey}
+          />
           <CollectionsTab
             collections={collections}
             renderCard={renderDownloadCard}
@@ -631,6 +648,9 @@ export function DownloadsPanel({
           onClose={() => setSharingCollection(null)}
         />
       )}
+
+      {/* Ranking game (T3630) — full-screen, opened from the ConfidenceBanner. */}
+      {showRankingGame && <RankingGame onClose={closeRankingGame} />}
 
       {/* Shared story player — single reels AND collections play here, at the
           panel top level so it fills the viewport (T3610). */}

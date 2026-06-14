@@ -41,13 +41,16 @@ def encode_game_ids(game_ids) -> bytes | None:
     return encode_data(distinct) if distinct else None
 
 
-# T3630: the ONE canonical collection ordering. SQLite has no NULLS LAST, so the
-# `(col IS NULL)` prefixes push unranked / unscored reels to the bottom. All three
-# collection read-paths (list_downloads, collections_summary, the T3620 resolver)
-# use this; the frontend mirrors it in utils/reelOrder.js. Columns are `fv.`-qualified
-# because every consumer selects `FROM final_videos fv`.
+# T3630: the ONE canonical collection ordering. Glicko `rating` is primary (it is
+# seeded from the frozen star at export, so it is sane even before any matchup);
+# `quality_score` is a secondary tiebreaker, then recency. SQLite has no NULLS
+# LAST, so the `(col IS NULL)` prefixes push reels with a missing value to the
+# bottom (0 sorts before 1). All three collection read-paths (list_downloads,
+# collections_summary, the T3620 resolver) use this; the frontend mirrors it in
+# utils/reelOrder.js. Columns are `fv.`-qualified because every consumer selects
+# `FROM final_videos fv`.
 ORDER_BY_RANK = (
-    "(fv.season_rank IS NULL), fv.season_rank ASC, "
+    "(fv.rating IS NULL), fv.rating DESC, "
     "(fv.quality_score IS NULL), fv.quality_score DESC, "
     "fv.created_at DESC"
 )
@@ -196,6 +199,70 @@ def compute_archive_clip_stats(cursor, archive: dict):
     row = cursor.fetchone()
     quality = float(row[0]) if row and row[0] is not None else None
     return count, quality
+
+
+def compute_project_ranking_freeze(cursor, project_id: int):
+    """All T3630 ranking columns frozen at a live project export:
+    (clip_count, quality_score, rating, rd, source_clip_id, clip_start_time).
+
+    rating/rd/source_clip_id/clip_start_time are set ONLY for single-clip reels
+    (clip_count == 1, the ranking pool); a multi-clip reel gets its count + NULLs
+    (it routes to Mixes and never ranks). rating is seeded from the frozen star
+    (quality_score) so ordering is sane before any matchup. Shared by all three
+    export-finalize sites so the freeze can never drift between them."""
+    from app.services.glicko import seed_rating, RD_MAX
+    count, quality = compute_project_clip_stats(cursor, project_id)
+    if count == 1:
+        source_clip_id, clip_start_time = compute_project_clip_identity(
+            cursor, project_id)
+        return count, quality, seed_rating(quality), RD_MAX, source_clip_id, clip_start_time
+    return count, quality, None, None, None, None
+
+
+def compute_project_clip_identity(cursor, project_id: int):
+    """Frozen (source_clip_id, clip_start_time) for a SINGLE-clip project reel
+    (T3630). source_clip_id is the lone constituent raw_clip id -- it keys the
+    Glicko rating so Portrait/Landscape ratio twins (which share one source clip)
+    share one rating (spec §4.4). clip_start_time is that clip's in-match start in
+    seconds, frozen for the `33'` soccer-notation card timestamp. Returns
+    (None, None) when the reel is multi-clip (only meaningful when
+    compute_project_clip_stats returns count==1). Resolves the SAME clip set."""
+    cursor.execute(
+        f"""
+        SELECT DISTINCT rc.id, rc.start_time
+        FROM raw_clips rc
+        WHERE rc.auto_project_id = ?
+           OR rc.id IN (
+                SELECT wc.raw_clip_id FROM working_clips wc
+                WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+                AND wc.id IN ({latest_working_clips_subquery()})
+           )
+        """,
+        (project_id, project_id, project_id),
+    )
+    rows = cursor.fetchall()
+    if len(rows) != 1:
+        return None, None
+    return rows[0][0], rows[0][1]
+
+
+def compute_archive_clip_identity(cursor, archive: dict):
+    """compute_project_clip_identity for an archived project: the lone archived
+    working_clip raw_clip_id (its start_time read from the live raw_clips row,
+    which survives archival). (None, None) when not single-clip."""
+    raw_clip_ids = sorted({
+        wc["raw_clip_id"]
+        for wc in archive.get("working_clips") or []
+        if wc.get("raw_clip_id")
+    })
+    if len(raw_clip_ids) != 1:
+        return None, None
+    cursor.execute(
+        "SELECT start_time FROM raw_clips WHERE id = ?", (raw_clip_ids[0],)
+    )
+    row = cursor.fetchone()
+    start_time = row[0] if row else None
+    return raw_clip_ids[0], start_time
 
 
 def compute_project_metadata(cursor, project_id: int):

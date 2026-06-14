@@ -207,15 +207,21 @@ def _export_brilliant_clip(
             )
         # T3605: brilliant clip belongs to exactly one game -> [game_id]
         game_ids_blob = encode_game_ids([game_id])
-        # T3630: a brilliant clip IS a single clip -> clip_count=1, quality=its rating
+        # T3630: a brilliant clip IS a single clip -> clip_count=1, quality=its
+        # rating, rating seeded from the star, rd=RD_MAX, source_clip_id = the
+        # clip itself (links ratio twins), clip_start_time = its in-match start.
+        from .glicko import seed_rating, RD_MAX
         quality_score = float(clip['rating']) if clip['rating'] is not None else None
+        rating = seed_rating(quality_score)
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, version, source_type, game_id, name,
-                published_at, duration, aspect_ratio, tags, game_ids, clip_count, quality_score)
-               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, 1, ?)""",
+                published_at, duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
+                rating, rd, match_count, source_clip_id, clip_start_time)
+               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?)""",
             (clip['auto_project_id'], filename, game_id, clip_name, duration,
-             aspect_ratio, tags_blob, game_ids_blob, quality_score),
+             aspect_ratio, tags_blob, game_ids_blob, quality_score,
+             rating, RD_MAX, clip['id'], clip['start_time']),
         )
         conn.commit()
 

@@ -193,8 +193,8 @@ class DownloadItem(BaseModel):
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
-    season_rank: Optional[float] = None  # Sparse user rank (T3630); NULL = unranked
-    quality_score: Optional[float] = None  # Frozen single-clip rating (T3630); ordering
+    rating: Optional[float] = None  # Glicko rating (T3630); primary ordering key, NULL until seeded
+    quality_score: Optional[float] = None  # Frozen single-clip star (T3630); seed + secondary ordering
     clip_count: Optional[int] = None  # Distinct constituent clips (T3630); 1 = collection-eligible
     # Game grouping info
     watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
@@ -270,7 +270,7 @@ async def list_downloads(
                 fv.aspect_ratio,
                 fv.tags,
                 fv.name as fv_name,
-                fv.season_rank,
+                fv.rating,
                 fv.quality_score,
                 fv.clip_count
             FROM final_videos fv
@@ -495,7 +495,7 @@ async def list_downloads(
                 source_type=row['source_type'],
                 game_id=row['game_id'],
                 rating_counts=rating_counts,
-                season_rank=row['season_rank'],
+                rating=row['rating'],
                 quality_score=row['quality_score'],
                 clip_count=row['clip_count'],
                 watched_at=row['watched_at'],
@@ -794,77 +794,6 @@ async def rename_download(download_id: int, body: dict):
             raise HTTPException(status_code=404, detail="Download not found")
         conn.commit()
         return {"success": True, "name": name}
-
-
-class RankRequest(BaseModel):
-    rank: Optional[float] = None       # explicit value, or null to unrank
-    prev_id: Optional[int] = None      # ranked reel directly ABOVE the slot (smaller rank)
-    next_id: Optional[int] = None      # ranked reel directly BELOW the slot (larger rank)
-
-
-_RANK_STEP = 1.0
-_RANK_MIN_GAP = 1e-6
-
-
-def _rank_of(cursor, fid):
-    if fid is None:
-        return None
-    row = cursor.execute(
-        "SELECT season_rank FROM final_videos WHERE id = ?", (fid,)
-    ).fetchone()
-    return row["season_rank"] if row else None
-
-
-def _renumber_ranks(cursor):
-    """Lazy integer renumber of all ranked reels by current rank order. Guards
-    fractional exhaustion (repeated midpoint insertion); theoretical at user scale."""
-    rows = cursor.execute(
-        "SELECT id FROM final_videos WHERE season_rank IS NOT NULL "
-        "AND published_at IS NOT NULL ORDER BY season_rank ASC"
-    ).fetchall()
-    for i, r in enumerate(rows, start=1):
-        cursor.execute(
-            "UPDATE final_videos SET season_rank = ? WHERE id = ?", (float(i), r["id"])
-        )
-
-
-def _insertion_rank(cursor, prev_id, next_id):
-    """Midpoint rank between two ranked neighbors (either may be None for an end).
-    season_rank is a global per-profile order; ranked reels sort above unranked."""
-    prev = _rank_of(cursor, prev_id)
-    nxt = _rank_of(cursor, next_id)
-    if prev is None and nxt is None:
-        return _RANK_STEP                 # first ranked reel
-    if prev is None:
-        return nxt - _RANK_STEP           # insert at the top
-    if nxt is None:
-        return prev + _RANK_STEP          # insert at the bottom of the ranked block
-    if nxt - prev < _RANK_MIN_GAP:        # gap exhausted -> renumber, re-read
-        _renumber_ranks(cursor)
-        prev = _rank_of(cursor, prev_id)
-        nxt = _rank_of(cursor, next_id)
-    return (prev + nxt) / 2.0
-
-
-@router.post("/{download_id}/rank")
-async def set_rank(download_id: int, body: RankRequest):
-    """Set or clear a reel's season_rank (T3630). GESTURE-ONLY (confirm / nudge /
-    drag) -- never reactive (EPIC #5). Either an explicit `rank` (or null to
-    unrank), or `prev_id`/`next_id` neighbors to insert at the midpoint."""
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        if body.prev_id is not None or body.next_id is not None:
-            rank = _insertion_rank(cursor, body.prev_id, body.next_id)
-        else:
-            rank = body.rank
-        cursor.execute(
-            "UPDATE final_videos SET season_rank = ? WHERE id = ? AND published_at IS NOT NULL",
-            (rank, download_id),
-        )
-        if cursor.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Download not found")
-        conn.commit()
-        return {"success": True, "rank": rank}
 
 
 @router.post("/publish/{project_id}")

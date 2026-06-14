@@ -679,9 +679,13 @@ def ensure_database():
                 aspect_ratio TEXT,
                 tags BLOB,
                 game_ids BLOB,
-                season_rank REAL,
                 clip_count INTEGER,
                 quality_score REAL,
+                rating REAL,
+                rd REAL,
+                match_count INTEGER DEFAULT 0,
+                source_clip_id INTEGER,
+                clip_start_time REAL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

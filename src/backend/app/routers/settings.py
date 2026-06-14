@@ -28,6 +28,7 @@ DEFAULTS = {
     "defaultAspectRatio": "9:16",
     "defaultTransition": "cut",
     "highlightEffectType": DEFAULT_HIGHLIGHT_EFFECT.value,
+    "rankSoundEnabled": "true",  # T3630: ranking-game pick sound on by default (mute pref)
 }
 
 # Map from nested frontend shape to flat keys
@@ -35,6 +36,7 @@ _SECTION_KEYS = {
     "projectFilters": ["statusFilter", "aspectFilter", "creationFilter"],
     "framing": ["includeAudio", "defaultAspectRatio", "defaultTransition"],
     "overlay": ["highlightEffectType"],
+    "ranking": ["rankSoundEnabled"],
 }
 
 
@@ -73,6 +75,7 @@ class SettingsUpdate(BaseModel):
     projectFilters: Optional[Dict[str, Any]] = None
     framing: Optional[Dict[str, Any]] = None
     overlay: Optional[Dict[str, Any]] = None
+    ranking: Optional[Dict[str, Any]] = None
 
 
 @router.get("")

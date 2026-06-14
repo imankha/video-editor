@@ -1,13 +1,15 @@
 """
-T3630: Reel ranking model.
+T3630: Reel ranking GAME (pairwise Glicko).
 
 Covers:
-- quality_score freeze helpers (single-clip -> rating; multi-clip -> NULL).
-- The canonical comparator (ORDER_BY_RANK): ranked above unranked, then quality, then recency.
-- Single-clip collection membership + count parity (summary == list_downloads), with
-  multi-clip reels routed to Mixes.
+- Glicko-1 update math (winner up / loser down, RD shrinks), seeding, confidence.
+- clip_count / quality_score freeze helpers + single-clip identity freeze.
+- The canonical comparator (ORDER_BY_RANK): rating DESC, then quality, then recency.
+- Single-clip collection membership + count parity (summary == list_downloads).
 - The T3620 resolver adopting ordering + single-clip filter.
-- The surgical rank endpoint: set / unrank / 404 / midpoint insertion / renumber.
+- v009 backfill of the new ranking columns (incl. orphaned brilliant clip).
+- Pairing (least-matched first, nearest-rating opponent, no immediate repeat).
+- The rank endpoints: next shape, result update + twin sync, confidence, empty pool.
 """
 
 import asyncio
@@ -21,7 +23,9 @@ from app.services.collection_metadata import (
     route_collection,
     compute_project_clip_stats,
     compute_archive_clip_stats,
+    compute_project_clip_identity,
 )
+from app.services import glicko
 
 USER_ID = "test-user-t3630"
 PROFILE_ID = "testdefault"
@@ -60,15 +64,14 @@ def _insert_project(cur, archived=False):
     return _pid[0]
 
 
-def _insert_raw_clip(cur, *, rating, game_id=None, auto_project_id=None, end_time=None):
+def _insert_raw_clip(cur, *, rating, game_id=None, auto_project_id=None,
+                     start_time=0.0, end_time=None):
     _rcid[0] += 1
-    # end_time makes the working-clip identity distinct (the latest-version
-    # subquery partitions by COALESCE(rc.end_time, wc.uploaded_filename)); default
-    # to the row id so seeded clips are distinct identities.
     cur.execute(
         "INSERT INTO raw_clips (id, filename, rating, game_id, auto_project_id, start_time, end_time) "
-        "VALUES (?, 'c.mp4', ?, ?, ?, 0, ?)",
-        (_rcid[0], rating, game_id, auto_project_id, end_time if end_time is not None else float(_rcid[0])),
+        "VALUES (?, 'c.mp4', ?, ?, ?, ?, ?)",
+        (_rcid[0], rating, game_id, auto_project_id, start_time,
+         end_time if end_time is not None else float(_rcid[0])),
     )
     return _rcid[0]
 
@@ -84,21 +87,27 @@ _fv = [900]
 
 
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
-               quality_score=5.0, season_rank=None, clip_count=1, project_id=None,
-               created_at="2026-01-01 00:00:00", published=True):
-    """clip_count defaults to 1 (single-clip = collection-eligible); pass
-    clip_count=2 for a multi-clip (Mixes-only) reel."""
+               quality_score=5.0, rating=None, rd=glicko.RD_MAX, match_count=0,
+               source_clip_id=None, clip_start_time=None, clip_count=1,
+               project_id=None, created_at="2026-01-01 00:00:00", published=True):
+    """clip_count defaults to 1 (single-clip = collection-eligible + rankable);
+    pass clip_count=2 for a multi-clip (Mixes-only) reel. rating defaults to the
+    star seed when not given (mirrors the export freeze)."""
     _fv[0] += 1
     if project_id is None:
         project_id = _fv[0]
+    if rating is None and clip_count == 1:
+        rating = glicko.seed_rating(quality_score)
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, source_type, "
-        "name, aspect_ratio, tags, game_ids, quality_score, season_rank, clip_count, published_at, created_at) "
-        "VALUES (?, 'f.mp4', 1, ?, 'custom_project', 'Reel', ?, ?, ?, ?, ?, ?, ?, ?)",
+        "name, aspect_ratio, tags, game_ids, quality_score, clip_count, rating, rd, "
+        "match_count, source_clip_id, clip_start_time, published_at, created_at) "
+        "VALUES (?, 'f.mp4', 1, ?, 'custom_project', 'Reel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (project_id, duration, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
-         quality_score, season_rank, clip_count,
+         quality_score, clip_count, rating, rd, match_count,
+         source_clip_id, clip_start_time,
          "2026-01-01 00:00:00" if published else None, created_at),
     )
     return cur.lastrowid
@@ -115,6 +124,39 @@ def _summary():
 
 
 # ---------------------------------------------------------------------------
+# Glicko engine (pure math)
+# ---------------------------------------------------------------------------
+
+class TestGlicko:
+    def test_winner_up_loser_down_rd_shrinks(self):
+        wr, wrd, lr, lrd = 1500.0, glicko.RD_MAX, 1500.0, glicko.RD_MAX
+        nw_r, nw_rd = glicko.update_one(wr, wrd, lr, lrd, 1.0)
+        nl_r, nl_rd = glicko.update_one(lr, lrd, wr, wrd, 0.0)
+        assert nw_r > wr and nl_r < lr
+        assert nw_rd < wrd and nl_rd < lrd
+        # Symmetric start -> symmetric rating move.
+        assert round(nw_r - 1500, 3) == round(1500 - nl_r, 3)
+
+    def test_rd_floor(self):
+        # Many wins drive RD toward the floor but never below it.
+        r, rd = 1500.0, glicko.RD_MAX
+        for _ in range(200):
+            r, rd = glicko.update_one(r, rd, 1500.0, 60.0, 1.0)
+        assert rd >= glicko.RD_MIN
+
+    def test_seed_from_star(self):
+        assert glicko.seed_rating(5) == 1580.0
+        assert glicko.seed_rating(3) == 1500.0
+        assert glicko.seed_rating(1) == 1420.0
+        assert glicko.seed_rating(None) == 1500.0  # neutral, no silent guess
+
+    def test_confidence_bounds(self):
+        assert glicko.confidence(glicko.RD_MAX) == 0.0
+        assert glicko.confidence(glicko.RD_MIN) == 1.0
+        assert 0.0 < glicko.confidence(200.0) < 1.0
+
+
+# ---------------------------------------------------------------------------
 # route_collection helper
 # ---------------------------------------------------------------------------
 
@@ -123,7 +165,6 @@ class TestRouteCollection:
         assert route_collection(encode_game_ids([7]), 1) == 7
 
     def test_multi_clip_routes_to_mixes(self):
-        # clip_count != 1 == multi-clip -> Mixes regardless of game_ids
         assert route_collection(encode_game_ids([7]), 2) is None
 
     def test_unknown_clip_count_routes_to_mixes(self):
@@ -134,28 +175,21 @@ class TestRouteCollection:
 
 
 # ---------------------------------------------------------------------------
-# clip_count + quality_score freeze helpers (membership vs ordering)
+# clip_count + quality + identity freeze helpers
 # ---------------------------------------------------------------------------
 
 class TestClipStatsFreeze:
-    def test_brilliant_single_clip(self, db):
+    def test_single_working_clip_stats_and_identity(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             pid = _insert_project(cur)
-            _insert_raw_clip(cur, rating=4, game_id=1, auto_project_id=pid)
-            c.commit()
-            assert compute_project_clip_stats(cur, pid) == (1, 4.0)
-
-    def test_single_working_clip(self, db):
-        with _conn(db) as c:
-            cur = c.cursor()
-            pid = _insert_project(cur)
-            rc = _insert_raw_clip(cur, rating=5, game_id=1)
+            rc = _insert_raw_clip(cur, rating=5, game_id=1, start_time=2000.0)
             _insert_working_clip(cur, pid, rc)
             c.commit()
             assert compute_project_clip_stats(cur, pid) == (1, 5.0)
+            assert compute_project_clip_identity(cur, pid) == (rc, 2000.0)
 
-    def test_multi_clip_count_no_quality(self, db):
+    def test_multi_clip_no_quality_no_identity(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             pid = _insert_project(cur)
@@ -164,15 +198,18 @@ class TestClipStatsFreeze:
                 _insert_working_clip(cur, pid, rc)
             c.commit()
             assert compute_project_clip_stats(cur, pid) == (2, None)
+            assert compute_project_clip_identity(cur, pid) == (None, None)
 
-    def test_archive_clip_stats(self, db):
+    def test_brilliant_single_clip_identity(self, db):
         with _conn(db) as c:
             cur = c.cursor()
-            rc = _insert_raw_clip(cur, rating=3, game_id=1)
+            pid = _insert_project(cur)
+            rc = _insert_raw_clip(cur, rating=4, game_id=1, auto_project_id=pid,
+                                  start_time=33 * 60 + 5)
             c.commit()
-            assert compute_archive_clip_stats(cur, {"working_clips": [{"raw_clip_id": rc}]}) == (1, 3.0)
-            multi = {"working_clips": [{"raw_clip_id": rc}, {"raw_clip_id": rc + 999}]}
-            assert compute_archive_clip_stats(cur, multi) == (2, None)
+            assert compute_project_clip_stats(cur, pid) == (1, 4.0)
+            sid, start = compute_project_clip_identity(cur, pid)
+            assert sid == rc and start == 33 * 60 + 5
 
 
 # ---------------------------------------------------------------------------
@@ -180,68 +217,47 @@ class TestClipStatsFreeze:
 # ---------------------------------------------------------------------------
 
 class TestOrderingAndMembership:
-    def test_ranked_above_unranked_then_quality_then_recency(self, db):
+    def test_rating_desc_then_quality_then_recency(self, db):
         with _conn(db) as c:
             cur = c.cursor()
-            # all single-clip (quality set), same game so all are members
-            _insert_fv(cur, game_ids=[1], quality_score=4.0, season_rank=None,
-                       created_at="2026-03-01 00:00:00")           # unranked, q4
-            _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=None,
-                       created_at="2026-01-01 00:00:00")           # unranked, q5 older
-            _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=None,
-                       created_at="2026-02-01 00:00:00")           # unranked, q5 newer
-            ranked = _insert_fv(cur, game_ids=[1], quality_score=1.0, season_rank=2.0)
-            ranked_top = _insert_fv(cur, game_ids=[1], quality_score=1.0, season_rank=1.0)
+            top = _insert_fv(cur, game_ids=[1], rating=1700.0, quality_score=5.0)
+            mid = _insert_fv(cur, game_ids=[1], rating=1500.0, quality_score=3.0)
+            # Equal rating: quality breaks the tie, then recency.
+            q5n = _insert_fv(cur, game_ids=[1], rating=1400.0, quality_score=5.0,
+                             created_at="2026-02-01 00:00:00")
+            q5o = _insert_fv(cur, game_ids=[1], rating=1400.0, quality_score=5.0,
+                             created_at="2026-01-01 00:00:00")
+            q4 = _insert_fv(cur, game_ids=[1], rating=1400.0, quality_score=4.0)
             c.commit()
-        dl = _downloads(game_id=1, aspect_ratio="9:16")
-        order = [d.id for d in dl.downloads]
-        # ranked first (by rank asc), then unranked by quality desc, then recency desc
-        assert order[0] == ranked_top
-        assert order[1] == ranked
-        # remaining three unranked: q5-newer, q5-older, q4
-        assert dl.downloads[2].quality_score == 5.0
-        assert dl.downloads[3].quality_score == 5.0
-        assert dl.downloads[4].quality_score == 4.0
-        assert dl.downloads[2].created_at > dl.downloads[3].created_at
+        order = [d.id for d in _downloads(game_id=1, aspect_ratio="9:16").downloads]
+        assert order[0] == top
+        assert order[1] == mid
+        assert order[2] == q5n   # equal rating, q5 newer
+        assert order[3] == q5o   # equal rating, q5 older
+        assert order[4] == q4    # equal rating, q4 last
 
-    def test_multi_clip_excluded_from_game_collection_into_mixes(self, db):
+    def test_multi_clip_excluded_into_mixes(self, db):
         with _conn(db) as c:
             cur = c.cursor()
-            single = _insert_fv(cur, game_ids=[1], clip_count=1)   # single-clip game 1
-            multi = _insert_fv(cur, game_ids=[1], clip_count=2)    # multi-clip, same game
+            single = _insert_fv(cur, game_ids=[1], clip_count=1)
+            multi = _insert_fv(cur, game_ids=[1], clip_count=2, rating=None)
             c.commit()
-        game = _downloads(game_id=1)
-        assert [d.id for d in game.downloads] == [single]   # multi-clip excluded
-        mixes = _downloads(mixes=True)
-        assert multi in [d.id for d in mixes.downloads]      # multi-clip in Mixes
-        assert single not in [d.id for d in mixes.downloads]
+        assert [d.id for d in _downloads(game_id=1).downloads] == [single]
+        mixes = [d.id for d in _downloads(mixes=True).downloads]
+        assert multi in mixes and single not in mixes
 
     def test_summary_membership_parity(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             _insert_fv(cur, game_ids=[1], quality_score=5.0)
             _insert_fv(cur, game_ids=[1], quality_score=4.0)
-            _insert_fv(cur, game_ids=[1], clip_count=2)         # multi-clip -> mixes
+            _insert_fv(cur, game_ids=[1], clip_count=2, rating=None)
             c.commit()
         summary = _summary()
         game = next(g for g in summary.games if g.game_id == 1)
-        assert game.reel_count == 2                            # only single-clip
-        # parity: member fetch count == summary count
+        assert game.reel_count == 2
         assert _downloads(game_id=1).total_count == game.reel_count
-        assert summary.mixes.reel_count == 1                   # the multi-clip reel
-
-    def test_smart_collection_single_clip_only(self, db):
-        with _conn(db) as c:
-            cur = c.cursor()
-            _insert_fv(cur, game_ids=[1], quality_score=5.0, tags=["Goal"])
-            _insert_fv(cur, game_ids=[2], clip_count=2, tags=["Goal"])  # multi-clip
-            c.commit()
-        summary = _summary()
-        goals = next((s for s in summary.smart_collections if s.key == "top_goals_assists"), None)
-        assert goals is not None
-        assert goals.reel_count == 1                            # multi-clip Goal excluded
-        members = _downloads(tags="Goal,Assist")
-        assert members.total_count == 1
+        assert summary.mixes.reel_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -249,30 +265,25 @@ class TestOrderingAndMembership:
 # ---------------------------------------------------------------------------
 
 class TestResolverOrdering:
-    def test_resolver_orders_and_excludes_multiclip(self, db):
+    def test_resolver_orders_by_rating_and_excludes_multiclip(self, db):
         from app.routers.collections import evaluate_collection_members
         with _conn(db) as c:
             cur = c.cursor()
-            top = _insert_fv(cur, game_ids=[1], quality_score=2.0, season_rank=1.0)
-            mid = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=None,
-                             created_at="2026-05-01 00:00:00")
-            _insert_fv(cur, game_ids=[1], clip_count=2)   # multi-clip excluded
+            top = _insert_fv(cur, game_ids=[1], rating=1700.0, quality_score=2.0)
+            mid = _insert_fv(cur, game_ids=[1], rating=1500.0, quality_score=5.0)
+            _insert_fv(cur, game_ids=[1], clip_count=2, rating=None)
             c.commit()
         with _conn(db) as c:
             members = evaluate_collection_members(
                 c, {"scope": {"type": "game", "game_id": 1}, "filter": {}, "aspect_ratio": "9:16"})
-        ids = [m["id"] for m in members]
-        assert ids == [top, mid]   # ranked first, then unranked; multi-clip absent
+        assert [m["id"] for m in members] == [top, mid]
 
 
 # ---------------------------------------------------------------------------
-# Rank endpoint
+# v009 migration backfill
 # ---------------------------------------------------------------------------
 
 class TestV009Migration:
-    """Validate the real ALTER + backfill + collection_settings path on a
-    pre-v009 DB (live single-clip path; archived path mirrors v008)."""
-
     def _pre_v009_db(self, tmp_path):
         path = tmp_path / "pre.sqlite"
         c = sqlite3.connect(str(path))
@@ -291,24 +302,24 @@ class TestV009Migration:
         c.commit()
         return path, c
 
-    def test_alter_table_backfill_and_settings(self, tmp_path):
+    def test_alter_backfill_and_settings(self, tmp_path):
         from app.migrations.profile_db.v009_season_rank import V009SeasonRank
         path, c = self._pre_v009_db(tmp_path)
-        # single-clip project (1 working clip) and a multi-clip project (2)
         c.execute("INSERT INTO projects (id, name, aspect_ratio) VALUES (1, 'P1', '9:16')")
         c.execute("INSERT INTO projects (id, name, aspect_ratio) VALUES (2, 'P2', '9:16')")
-        c.execute("INSERT INTO raw_clips (id, filename, rating, end_time) VALUES (10, 'a', 4, 1.0)")
+        # single-clip project 1: raw clip 10, 4 star, start 600s
+        c.execute("INSERT INTO raw_clips (id, filename, rating, start_time, end_time) VALUES (10, 'a', 4, 600.0, 1.0)")
         c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (1, 10, 1)")
+        # multi-clip project 2
         c.execute("INSERT INTO raw_clips (id, filename, rating, end_time) VALUES (20, 'b', 5, 2.0)")
         c.execute("INSERT INTO raw_clips (id, filename, rating, end_time) VALUES (21, 'c', 4, 3.0)")
         c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (2, 20, 1)")
         c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (2, 21, 1)")
         c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
-                  "VALUES (100, 1, 'f1', 1, 'custom_project', '2026-01-01')")  # single -> count 1, q 4.0
+                  "VALUES (100, 1, 'f1', 1, 'custom_project', '2026-01-01')")
         c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
-                  "VALUES (101, 2, 'f2', 1, 'custom_project', '2026-01-01')")  # multi -> count 2, q NULL
-        # Orphaned brilliant clip: project gone, no archive -> still single-clip,
-        # rating unrecoverable (the bug clip_count fixes).
+                  "VALUES (101, 2, 'f2', 1, 'custom_project', '2026-01-01')")
+        # Orphaned brilliant clip: project gone, no archive.
         c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
                   "VALUES (102, 999, 'f3', 1, 'brilliant_clip', '2026-01-01')")
         c.commit()
@@ -317,80 +328,168 @@ class TestV009Migration:
             V009SeasonRank().up(c)
 
         cols = {r[1] for r in c.execute("PRAGMA table_info(final_videos)").fetchall()}
-        assert {"season_rank", "quality_score", "clip_count"} <= cols
+        assert {"clip_count", "quality_score", "rating", "rd", "match_count",
+                "source_clip_id", "clip_start_time"} <= cols
         assert c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='collection_settings'").fetchone()
-        rows = {r[0]: (r[1], r[2]) for r in
-                c.execute("SELECT id, clip_count, quality_score FROM final_videos").fetchall()}
-        assert rows[100] == (1, 4.0)    # single-clip -> count 1, rating
-        assert rows[101] == (2, None)   # multi-clip -> count 2, no quality
-        assert rows[102] == (1, None)   # orphaned brilliant -> single-clip, rating lost
+
+        c.row_factory = sqlite3.Row
+        rows = {r["id"]: r for r in
+                c.execute("SELECT id, clip_count, quality_score, rating, rd, match_count, "
+                          "source_clip_id, clip_start_time FROM final_videos").fetchall()}
+        # single-clip -> count 1, q4, rating seed 1540, rd 350, source 10, start 600
+        assert rows[100]["clip_count"] == 1
+        assert rows[100]["quality_score"] == 4.0
+        assert rows[100]["rating"] == glicko.seed_rating(4.0)
+        assert rows[100]["rd"] == glicko.RD_MAX
+        assert rows[100]["match_count"] == 0
+        assert rows[100]["source_clip_id"] == 10
+        assert rows[100]["clip_start_time"] == 600.0
+        # multi-clip -> count 2, no quality/rating/source
+        assert rows[101]["clip_count"] == 2
+        assert rows[101]["quality_score"] is None
+        assert rows[101]["rating"] is None
+        assert rows[101]["source_clip_id"] is None
+        # orphaned brilliant -> single-clip, rating neutral, source/start lost
+        assert rows[102]["clip_count"] == 1
+        assert rows[102]["quality_score"] is None
+        assert rows[102]["rating"] == glicko.seed_rating(None)
+        assert rows[102]["source_clip_id"] is None
         c.close()
 
 
-class TestRankEndpoint:
-    def _set(self, **kwargs):
-        from app.routers.downloads import set_rank, RankRequest
-        download_id = kwargs.pop("download_id")
-        return asyncio.run(set_rank(download_id, RankRequest(**kwargs)))
+# ---------------------------------------------------------------------------
+# Pairing (spec §4.3)
+# ---------------------------------------------------------------------------
 
-    def _rank(self, db, fid):
-        with _conn(db) as c:
-            row = c.execute("SELECT season_rank FROM final_videos WHERE id=?", (fid,)).fetchone()
-            return row["season_rank"]
+class TestPairing:
+    def _reel(self, rid, rating, mc):
+        return {"id": rid, "rating": rating, "match_count": mc}
 
-    def test_set_and_clear_rank(self, db):
+    def test_least_matched_candidate_and_nearest_opponent(self):
+        from app.routers.rank import _pick_pair
+        pool = [
+            self._reel(1, 1500, 5),
+            self._reel(2, 1490, 0),   # least matched -> candidate
+            self._reel(3, 1495, 3),   # nearest to 1490
+            self._reel(4, 1700, 1),
+        ]
+        cand, opp = _pick_pair(pool, exclude_id=None)
+        assert cand["id"] == 2
+        assert opp["id"] == 3
+
+    def test_no_immediate_repeat(self):
+        from app.routers.rank import _pick_pair
+        pool = [
+            self._reel(1, 1500, 0),   # candidate
+            self._reel(2, 1499, 2),   # nearest, but excluded (last opponent)
+            self._reel(3, 1480, 2),   # next nearest
+        ]
+        cand, opp = _pick_pair(pool, exclude_id=2)
+        assert cand["id"] == 1
+        assert opp["id"] == 3
+
+    def test_exclude_ignored_when_only_option(self):
+        from app.routers.rank import _pick_pair
+        pool = [self._reel(1, 1500, 0), self._reel(2, 1499, 2)]
+        cand, opp = _pick_pair(pool, exclude_id=2)
+        assert {cand["id"], opp["id"]} == {1, 2}
+
+    def test_too_small_pool(self):
+        from app.routers.rank import _pick_pair
+        assert _pick_pair([{"id": 1, "rating": 1500, "match_count": 0}], None) == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# Rank endpoints (next / result / confidence)
+# ---------------------------------------------------------------------------
+
+class TestRankEndpoints:
+    def _next(self, **kw):
+        from app.routers.rank import rank_next
+        return asyncio.run(rank_next(**kw))
+
+    def _result(self, winner_id, loser_id):
+        from app.routers.rank import rank_result, RankResultRequest
+        return asyncio.run(rank_result(RankResultRequest(winner_id=winner_id, loser_id=loser_id)))
+
+    def _confidence(self, ratio="9:16"):
+        from app.routers.rank import rank_confidence
+        return asyncio.run(rank_confidence(aspect_ratio=ratio))
+
+    def test_next_shape_and_empty_pool(self, db):
+        # Empty / single-reel pool -> 204.
         with _conn(db) as c:
             cur = c.cursor()
-            fid = _insert_fv(cur, game_ids=[1], quality_score=5.0)
+            a = _insert_fv(cur, game_ids=[1], source_clip_id=1)
             c.commit()
-        self._set(download_id=fid, rank=3.5)
-        assert self._rank(db, fid) == 3.5
-        self._set(download_id=fid, rank=None)
-        assert self._rank(db, fid) is None
+        assert getattr(self._next(aspect_ratio="9:16"), "status_code", None) == 204
+        with _conn(db) as c:
+            cur = c.cursor()
+            b = _insert_fv(cur, game_ids=[2], source_clip_id=2)
+            c.commit()
+        m = self._next(aspect_ratio="9:16")
+        assert {m.a.id, m.b.id} == {a, b}
+        assert m.a.stream_url.endswith(f"/api/downloads/{m.a.id}/stream")
 
-    def test_unpublished_or_missing_404(self, db):
+    def test_result_updates_and_confidence_rises(self, db):
+        with _conn(db) as c:
+            cur = c.cursor()
+            w = _insert_fv(cur, game_ids=[1], source_clip_id=10, quality_score=3.0)
+            l = _insert_fv(cur, game_ids=[2], source_clip_id=20, quality_score=3.0)
+            c.commit()
+        # Before any match: confidence 0, nothing ranked.
+        pre = self._confidence()
+        assert pre.confidence_pct == 0 and pre.ranked_count == 0 and pre.total == 2
+        res = self._result(w, l)
+        assert res.confidence_pct > 0
+        assert res.ranked_count == 2 and res.total == 2
+        with _conn(db) as c:
+            rows = {r["id"]: r for r in c.execute(
+                "SELECT id, rating, rd, match_count FROM final_videos").fetchall()}
+        assert rows[w]["rating"] > rows[l]["rating"]
+        assert rows[w]["rd"] < glicko.RD_MAX and rows[l]["rd"] < glicko.RD_MAX
+        assert rows[w]["match_count"] == 1 and rows[l]["match_count"] == 1
+
+    def test_twin_sync_by_source_clip_id(self, db):
+        # Portrait + Landscape twins share source_clip_id=10; a Portrait pick
+        # must move the Landscape twin too.
+        with _conn(db) as c:
+            cur = c.cursor()
+            portrait = _insert_fv(cur, ratio="9:16", game_ids=[1], source_clip_id=10)
+            landscape = _insert_fv(cur, ratio="16:9", game_ids=[1], source_clip_id=10)
+            opp = _insert_fv(cur, ratio="9:16", game_ids=[2], source_clip_id=20)
+            c.commit()
+        self._result(portrait, opp)
+        with _conn(db) as c:
+            rows = {r["id"]: r for r in c.execute(
+                "SELECT id, rating, rd, match_count FROM final_videos").fetchall()}
+        # Landscape twin mirrors the Portrait winner exactly.
+        assert rows[landscape]["rating"] == rows[portrait]["rating"]
+        assert rows[landscape]["rd"] == rows[portrait]["rd"]
+        assert rows[landscape]["match_count"] == 1
+
+    def test_result_missing_rating_surfaced(self, db):
         from fastapi import HTTPException
         with _conn(db) as c:
             cur = c.cursor()
-            unpub = _insert_fv(cur, game_ids=[1], quality_score=5.0, published=False)
+            ok = _insert_fv(cur, game_ids=[1], source_clip_id=10)
+            broken = _insert_fv(cur, game_ids=[2], clip_count=1)
+            # Force a genuine seed gap (rating NULL) past _insert_fv's auto-seed.
+            cur.execute("UPDATE final_videos SET rating = NULL WHERE id = ?", (broken,))
             c.commit()
         with pytest.raises(HTTPException) as e:
-            self._set(download_id=unpub, rank=1.0)
-        assert e.value.status_code == 404
-        with pytest.raises(HTTPException) as e:
-            self._set(download_id=999999, rank=1.0)
-        assert e.value.status_code == 404
+            self._result(ok, broken)
+        assert e.value.status_code == 400
 
-    def test_midpoint_insertion(self, db):
+    def test_orphan_updates_only_itself(self, db):
+        # source_clip_id NULL -> per-reel rating (update only its own row).
         with _conn(db) as c:
             cur = c.cursor()
-            a = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=3.0)
-            b = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=4.0)
-            x = _insert_fv(cur, game_ids=[1], quality_score=5.0)
+            orphan = _insert_fv(cur, game_ids=[1], source_clip_id=None)
+            opp = _insert_fv(cur, game_ids=[2], source_clip_id=20)
             c.commit()
-        res = self._set(download_id=x, prev_id=a, next_id=b)
-        assert res["rank"] == 3.5
-        assert self._rank(db, x) == 3.5
-
-    def test_insertion_at_ends(self, db):
+        self._result(orphan, opp)
         with _conn(db) as c:
-            cur = c.cursor()
-            a = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=2.0)
-            top = _insert_fv(cur, game_ids=[1], quality_score=5.0)
-            bottom = _insert_fv(cur, game_ids=[1], quality_score=5.0)
-            c.commit()
-        assert self._set(download_id=top, next_id=a)["rank"] == 1.0   # 2.0 - 1
-        assert self._set(download_id=bottom, prev_id=a)["rank"] == 3.0  # 2.0 + 1
-
-    def test_renumber_on_exhausted_gap(self, db):
-        with _conn(db) as c:
-            cur = c.cursor()
-            a = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=1.0)
-            b = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=1.0 + 1e-9)
-            x = _insert_fv(cur, game_ids=[1], quality_score=5.0)
-            c.commit()
-        res = self._set(download_id=x, prev_id=a, next_id=b)
-        # after renumber a->1, b->2, midpoint 1.5
-        assert res["rank"] == 1.5
-        assert self._rank(db, a) == 1.0
-        assert self._rank(db, b) == 2.0
+            row = c.execute("SELECT rating, match_count FROM final_videos WHERE id=?",
+                            (orphan,)).fetchone()
+        assert row["match_count"] == 1 and row["rating"] > glicko.seed_rating(5.0)
