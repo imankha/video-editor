@@ -194,7 +194,8 @@ class DownloadItem(BaseModel):
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
     season_rank: Optional[float] = None  # Sparse user rank (T3630); NULL = unranked
-    quality_score: Optional[float] = None  # Frozen single-clip rating (T3630); NULL = multi-clip
+    quality_score: Optional[float] = None  # Frozen single-clip rating (T3630); ordering
+    clip_count: Optional[int] = None  # Distinct constituent clips (T3630); 1 = collection-eligible
     # Game grouping info
     watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
     game_ids: List[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -270,7 +271,8 @@ async def list_downloads(
                 fv.tags,
                 fv.name as fv_name,
                 fv.season_rank,
-                fv.quality_score
+                fv.quality_score,
+                fv.clip_count
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -284,17 +286,17 @@ async def list_downloads(
         # Mixes). SAME routing as GET /api/collections/summary, so member counts
         # always equal summary counts (small published set, <= ~500 rows).
         if game_id is not None:
-            rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) == game_id]
+            rows = [r for r in rows if route_collection(r["game_ids"], r["clip_count"]) == game_id]
         elif mixes:
-            rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) is None]
+            rows = [r for r in rows if route_collection(r["game_ids"], r["clip_count"]) is None]
 
         # tags filter (OR semantics) on the frozen tags BLOB — smart-collection
-        # member fetch. Smart collections are single-clip only (quality_score set).
+        # member fetch. Smart collections are single-clip only (clip_count == 1).
         if tags:
             wanted = {t.strip() for t in tags.split(",") if t.strip()}
             if wanted:
                 rows = [r for r in rows
-                        if r["quality_score"] is not None
+                        if r["clip_count"] == 1
                         and (wanted & set(decode_data(r["tags"]) or []))]
 
         # Collect unique game_ids and project_ids for batch lookups
@@ -495,6 +497,7 @@ async def list_downloads(
                 rating_counts=rating_counts,
                 season_rank=row['season_rank'],
                 quality_score=row['quality_score'],
+                clip_count=row['clip_count'],
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,

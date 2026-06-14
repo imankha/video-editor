@@ -48,7 +48,7 @@ from ...services.image_extractor import (
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids, compute_project_quality_score
+from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids, compute_project_clip_stats
 from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
@@ -90,14 +90,14 @@ def _finalize_overlay_export(
         # (publish archives + deletes it). T3605: freeze game_ids too.
         duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
         game_ids_blob = compute_project_game_ids(cursor, project_id)
-        quality_score = compute_project_quality_score(cursor, project_id)  # T3630: single-clip only
+        clip_count, quality_score = compute_project_clip_stats(cursor, project_id)  # T3630
 
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags, game_ids, quality_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                duration, aspect_ratio, tags, game_ids, clip_count, quality_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob, game_ids_blob, quality_score))
+              duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1143,15 +1143,15 @@ async def export_final(
         # T3605: freeze game_ids too.
         duration, aspect_ratio, tags_blob = compute_project_metadata(cursor, project_id)
         game_ids_blob = compute_project_game_ids(cursor, project_id)
-        quality_score = compute_project_quality_score(cursor, project_id)  # T3630: single-clip only
+        clip_count, quality_score = compute_project_clip_stats(cursor, project_id)  # T3630
 
         # Create new final video entry with version number and source_type
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
-                duration, aspect_ratio, tags, game_ids, quality_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                duration, aspect_ratio, tags, game_ids, clip_count, quality_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
-              duration, aspect_ratio, tags_blob, game_ids_blob, quality_score))
+              duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 

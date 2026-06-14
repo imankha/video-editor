@@ -46,18 +46,18 @@ def _insert_game(cur, game_id, opponent="Carlsbad", date="2025-12-06"):
 
 def _insert_reel(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
                  name="Reel", published_at="2026-01-01 00:00:00",
-                 created_at="2026-01-01 00:00:00", quality_score=5.0):
-    # quality_score defaults to single-clip (T3630: collections are single-clip
-    # only); pass quality_score=None to seed a multi-clip (Mixes-only) reel.
+                 created_at="2026-01-01 00:00:00", quality_score=5.0, clip_count=1):
+    # clip_count defaults to 1 (T3630: collections are single-clip only); pass
+    # clip_count=2 to seed a multi-clip (Mixes-only) reel.
     _next_project[0] += 1
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, "
-        "source_type, name, aspect_ratio, tags, game_ids, quality_score, published_at, created_at) "
-        "VALUES (?, ?, 1, ?, 'custom_project', ?, ?, ?, ?, ?, ?, ?)",
+        "source_type, name, aspect_ratio, tags, game_ids, quality_score, clip_count, published_at, created_at) "
+        "VALUES (?, ?, 1, ?, 'custom_project', ?, ?, ?, ?, ?, ?, ?, ?)",
         (_next_project[0], f"reel{_next_project[0]}.mp4", duration, name, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
-         quality_score, published_at, created_at),
+         quality_score, clip_count, published_at, created_at),
     )
     return cur.lastrowid
 

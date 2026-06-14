@@ -53,17 +53,20 @@ ORDER_BY_RANK = (
 )
 
 
-def route_collection(game_ids_blob, quality_score) -> int | None:
+def route_collection(game_ids_blob, clip_count) -> int | None:
     """Route a published reel to its collection bucket (T3630). Collections are
-    SINGLE-CLIP reels only: a multi-clip reel (quality_score IS NULL) is never
-    collection-eligible and always falls to Mixes. A single-clip reel routes by
-    its frozen game_ids: its single game id (game collection), or None (game-less
-    -> Mixes). Returns the game id for a single-clip single-game reel, else None.
+    SINGLE-CLIP reels only: a reel with clip_count != 1 (multi-clip, or unknown)
+    is never collection-eligible and always falls to Mixes. A single-clip reel
+    routes by its frozen game_ids: its single game id (game collection), or None
+    (game-less -> Mixes). Returns the game id for a single-clip single-game reel,
+    else None.
 
-    Shared by collections_summary, the /api/downloads game_id/mixes filters, and
-    the T3620 resolver so member counts stay in lockstep (count-parity)."""
-    if quality_score is None:
-        return None  # multi-clip -> Mixes
+    clip_count (NOT quality_score) is the membership signal so a single-clip reel
+    whose rating is unrecoverable still belongs to its collection. Shared by
+    collections_summary, the /api/downloads filters, and the T3620 resolver so
+    member counts stay in lockstep (count-parity)."""
+    if clip_count != 1:
+        return None  # multi-clip / unknown -> Mixes
     return route_game_ids(game_ids_blob)
 
 
@@ -152,12 +155,13 @@ def _tags_for_project(cursor, project_id: int) -> bytes | None:
     return encode_distinct_tags(row[1] for row in cursor.fetchall())
 
 
-def compute_project_quality_score(cursor, project_id: int) -> float | None:
-    """Frozen quality score for a SINGLE-CLIP reel (T3630): the lone constituent
-    clip's rating (1-5). Returns None when the reel has != 1 distinct constituent
-    clip -- multi-clip reels are not collection-eligible and carry no quality
-    score (NULL doubles as the single-clip marker). Resolves the SAME clip set as
-    compute_project_game_ids (latest working_clips -> raw_clips + auto link)."""
+def compute_project_clip_stats(cursor, project_id: int):
+    """Frozen (clip_count, quality_score) for a project reel (T3630). clip_count =
+    distinct constituent clips; quality_score = the lone clip's rating (1-5) when
+    clip_count == 1, else None. clip_count is the SINGLE-CLIP membership signal
+    (== 1 -> collection-eligible); quality_score is ordering only and is kept
+    SEPARATE so a single-clip reel with an unrecoverable rating still counts as
+    single-clip. Resolves the SAME clip set as compute_project_game_ids."""
     cursor.execute(
         f"""
         SELECT DISTINCT rc.id, rc.rating
@@ -172,26 +176,26 @@ def compute_project_quality_score(cursor, project_id: int) -> float | None:
         (project_id, project_id, project_id),
     )
     rows = cursor.fetchall()
-    if len(rows) != 1 or rows[0][1] is None:
-        return None
-    return float(rows[0][1])
+    count = len(rows)
+    quality = float(rows[0][1]) if count == 1 and rows[0][1] is not None else None
+    return count, quality
 
 
-def compute_archive_quality_score(cursor, archive: dict) -> float | None:
-    """compute_project_quality_score for an archived project: the lone archived
-    working_clip's raw_clip_id -> live raw_clips.rating. None unless exactly one."""
+def compute_archive_clip_stats(cursor, archive: dict):
+    """compute_project_clip_stats for an archived project: distinct archived
+    working_clip raw_clip_ids -> count; the lone one's live rating when count==1."""
     raw_clip_ids = sorted({
         wc["raw_clip_id"]
         for wc in archive.get("working_clips") or []
         if wc.get("raw_clip_id")
     })
-    if len(raw_clip_ids) != 1:
-        return None
+    count = len(raw_clip_ids)
+    if count != 1:
+        return count, None
     cursor.execute("SELECT rating FROM raw_clips WHERE id = ?", (raw_clip_ids[0],))
     row = cursor.fetchone()
-    if not row or row[0] is None:
-        return None
-    return float(row[0])
+    quality = float(row[0]) if row and row[0] is not None else None
+    return count, quality
 
 
 def compute_project_metadata(cursor, project_id: int):

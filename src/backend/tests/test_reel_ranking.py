@@ -19,8 +19,8 @@ from app.utils.encoding import encode_data
 from app.services.collection_metadata import (
     encode_game_ids,
     route_collection,
-    compute_project_quality_score,
-    compute_archive_quality_score,
+    compute_project_clip_stats,
+    compute_archive_clip_stats,
 )
 
 USER_ID = "test-user-t3630"
@@ -84,19 +84,21 @@ _fv = [900]
 
 
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
-               quality_score=None, season_rank=None, project_id=None,
+               quality_score=5.0, season_rank=None, clip_count=1, project_id=None,
                created_at="2026-01-01 00:00:00", published=True):
+    """clip_count defaults to 1 (single-clip = collection-eligible); pass
+    clip_count=2 for a multi-clip (Mixes-only) reel."""
     _fv[0] += 1
     if project_id is None:
         project_id = _fv[0]
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, source_type, "
-        "name, aspect_ratio, tags, game_ids, quality_score, season_rank, published_at, created_at) "
-        "VALUES (?, 'f.mp4', 1, ?, 'custom_project', 'Reel', ?, ?, ?, ?, ?, ?, ?)",
+        "name, aspect_ratio, tags, game_ids, quality_score, season_rank, clip_count, published_at, created_at) "
+        "VALUES (?, 'f.mp4', 1, ?, 'custom_project', 'Reel', ?, ?, ?, ?, ?, ?, ?, ?)",
         (project_id, duration, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
-         quality_score, season_rank,
+         quality_score, season_rank, clip_count,
          "2026-01-01 00:00:00" if published else None, created_at),
     )
     return cur.lastrowid
@@ -118,39 +120,42 @@ def _summary():
 
 class TestRouteCollection:
     def test_single_clip_single_game_routes_to_game(self):
-        assert route_collection(encode_game_ids([7]), 5.0) == 7
+        assert route_collection(encode_game_ids([7]), 1) == 7
 
     def test_multi_clip_routes_to_mixes(self):
-        # quality_score NULL == multi-clip -> Mixes regardless of game_ids
+        # clip_count != 1 == multi-clip -> Mixes regardless of game_ids
+        assert route_collection(encode_game_ids([7]), 2) is None
+
+    def test_unknown_clip_count_routes_to_mixes(self):
         assert route_collection(encode_game_ids([7]), None) is None
 
     def test_single_clip_game_less_routes_to_mixes(self):
-        assert route_collection(None, 4.0) is None
+        assert route_collection(None, 1) is None
 
 
 # ---------------------------------------------------------------------------
-# quality_score freeze helpers
+# clip_count + quality_score freeze helpers (membership vs ordering)
 # ---------------------------------------------------------------------------
 
-class TestQualityScoreFreeze:
-    def test_brilliant_single_clip_returns_rating(self, db):
+class TestClipStatsFreeze:
+    def test_brilliant_single_clip(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             pid = _insert_project(cur)
             _insert_raw_clip(cur, rating=4, game_id=1, auto_project_id=pid)
             c.commit()
-            assert compute_project_quality_score(cur, pid) == 4.0
+            assert compute_project_clip_stats(cur, pid) == (1, 4.0)
 
-    def test_single_working_clip_returns_rating(self, db):
+    def test_single_working_clip(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             pid = _insert_project(cur)
             rc = _insert_raw_clip(cur, rating=5, game_id=1)
             _insert_working_clip(cur, pid, rc)
             c.commit()
-            assert compute_project_quality_score(cur, pid) == 5.0
+            assert compute_project_clip_stats(cur, pid) == (1, 5.0)
 
-    def test_multi_clip_returns_none(self, db):
+    def test_multi_clip_count_no_quality(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             pid = _insert_project(cur)
@@ -158,17 +163,16 @@ class TestQualityScoreFreeze:
                 rc = _insert_raw_clip(cur, rating=r, game_id=1)
                 _insert_working_clip(cur, pid, rc)
             c.commit()
-            assert compute_project_quality_score(cur, pid) is None
+            assert compute_project_clip_stats(cur, pid) == (2, None)
 
-    def test_archive_single_clip(self, db):
+    def test_archive_clip_stats(self, db):
         with _conn(db) as c:
             cur = c.cursor()
             rc = _insert_raw_clip(cur, rating=3, game_id=1)
             c.commit()
-            archive = {"working_clips": [{"raw_clip_id": rc}]}
-            assert compute_archive_quality_score(cur, archive) == 3.0
+            assert compute_archive_clip_stats(cur, {"working_clips": [{"raw_clip_id": rc}]}) == (1, 3.0)
             multi = {"working_clips": [{"raw_clip_id": rc}, {"raw_clip_id": rc + 999}]}
-            assert compute_archive_quality_score(cur, multi) is None
+            assert compute_archive_clip_stats(cur, multi) == (2, None)
 
 
 # ---------------------------------------------------------------------------
@@ -203,8 +207,8 @@ class TestOrderingAndMembership:
     def test_multi_clip_excluded_from_game_collection_into_mixes(self, db):
         with _conn(db) as c:
             cur = c.cursor()
-            single = _insert_fv(cur, game_ids=[1], quality_score=5.0)   # single-clip game 1
-            multi = _insert_fv(cur, game_ids=[1], quality_score=None)   # multi-clip, same game
+            single = _insert_fv(cur, game_ids=[1], clip_count=1)   # single-clip game 1
+            multi = _insert_fv(cur, game_ids=[1], clip_count=2)    # multi-clip, same game
             c.commit()
         game = _downloads(game_id=1)
         assert [d.id for d in game.downloads] == [single]   # multi-clip excluded
@@ -217,7 +221,7 @@ class TestOrderingAndMembership:
             cur = c.cursor()
             _insert_fv(cur, game_ids=[1], quality_score=5.0)
             _insert_fv(cur, game_ids=[1], quality_score=4.0)
-            _insert_fv(cur, game_ids=[1], quality_score=None)   # multi-clip -> mixes
+            _insert_fv(cur, game_ids=[1], clip_count=2)         # multi-clip -> mixes
             c.commit()
         summary = _summary()
         game = next(g for g in summary.games if g.game_id == 1)
@@ -230,7 +234,7 @@ class TestOrderingAndMembership:
         with _conn(db) as c:
             cur = c.cursor()
             _insert_fv(cur, game_ids=[1], quality_score=5.0, tags=["Goal"])
-            _insert_fv(cur, game_ids=[2], quality_score=None, tags=["Goal"])  # multi-clip
+            _insert_fv(cur, game_ids=[2], clip_count=2, tags=["Goal"])  # multi-clip
             c.commit()
         summary = _summary()
         goals = next((s for s in summary.smart_collections if s.key == "top_goals_assists"), None)
@@ -252,7 +256,7 @@ class TestResolverOrdering:
             top = _insert_fv(cur, game_ids=[1], quality_score=2.0, season_rank=1.0)
             mid = _insert_fv(cur, game_ids=[1], quality_score=5.0, season_rank=None,
                              created_at="2026-05-01 00:00:00")
-            _insert_fv(cur, game_ids=[1], quality_score=None)   # multi-clip excluded
+            _insert_fv(cur, game_ids=[1], clip_count=2)   # multi-clip excluded
             c.commit()
         with _conn(db) as c:
             members = evaluate_collection_members(
@@ -299,20 +303,27 @@ class TestV009Migration:
         c.execute("INSERT INTO raw_clips (id, filename, rating, end_time) VALUES (21, 'c', 4, 3.0)")
         c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (2, 20, 1)")
         c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (2, 21, 1)")
-        c.execute("INSERT INTO final_videos (id, project_id, filename, version, published_at) "
-                  "VALUES (100, 1, 'f1', 1, '2026-01-01')")  # single-clip -> 4.0
-        c.execute("INSERT INTO final_videos (id, project_id, filename, version, published_at) "
-                  "VALUES (101, 2, 'f2', 1, '2026-01-01')")  # multi-clip -> NULL
+        c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
+                  "VALUES (100, 1, 'f1', 1, 'custom_project', '2026-01-01')")  # single -> count 1, q 4.0
+        c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
+                  "VALUES (101, 2, 'f2', 1, 'custom_project', '2026-01-01')")  # multi -> count 2, q NULL
+        # Orphaned brilliant clip: project gone, no archive -> still single-clip,
+        # rating unrecoverable (the bug clip_count fixes).
+        c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, published_at) "
+                  "VALUES (102, 999, 'f3', 1, 'brilliant_clip', '2026-01-01')")
         c.commit()
 
-        V009SeasonRank().up(c)
+        with patch("app.services.project_archive.load_archive", return_value=None):
+            V009SeasonRank().up(c)
 
         cols = {r[1] for r in c.execute("PRAGMA table_info(final_videos)").fetchall()}
-        assert {"season_rank", "quality_score"} <= cols
+        assert {"season_rank", "quality_score", "clip_count"} <= cols
         assert c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='collection_settings'").fetchone()
-        q = dict(c.execute("SELECT id, quality_score FROM final_videos").fetchall())
-        assert q[100] == 4.0   # single-clip backfilled to its rating
-        assert q[101] is None  # multi-clip stays NULL
+        rows = {r[0]: (r[1], r[2]) for r in
+                c.execute("SELECT id, clip_count, quality_score FROM final_videos").fetchall()}
+        assert rows[100] == (1, 4.0)    # single-clip -> count 1, rating
+        assert rows[101] == (2, None)   # multi-clip -> count 2, no quality
+        assert rows[102] == (1, None)   # orphaned brilliant -> single-clip, rating lost
         c.close()
 
 

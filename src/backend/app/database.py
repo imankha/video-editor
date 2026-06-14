@@ -680,6 +680,7 @@ def ensure_database():
                 tags BLOB,
                 game_ids BLOB,
                 season_rank REAL,
+                clip_count INTEGER,
                 quality_score REAL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
