@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { X } from 'lucide-react';
+import { X, Download, Loader } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
@@ -22,6 +22,8 @@ const SWIPE_THRESHOLD_PX = 48;
  * @param {Function} onClose        - REQUIRED. X button only.
  * @param {Function=} onReelChange  - (index, reel) — T3620 hooks watched/analytics
  * @param {Function=} onEnded       - all reels finished
+ * @param {Function=} onDownload    - (activeReel) => void; shows a Download button when set
+ * @param {boolean=}  downloadLoading
  */
 export function CollectionPlayer({
   reels,
@@ -30,6 +32,8 @@ export function CollectionPlayer({
   onClose,
   onReelChange,
   onEnded,
+  onDownload,
+  downloadLoading,
 }) {
   const videoRef = useRef(null);
   const pointerStart = useRef(null);
@@ -111,7 +115,21 @@ export function CollectionPlayer({
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-3 py-2">
         <h3 className="text-white text-sm font-medium truncate min-w-0">{title}</h3>
-        <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} />
+        <div className="flex items-center gap-2 shrink-0">
+          {onDownload && (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={downloadLoading ? Loader : Download}
+              disabled={downloadLoading}
+              onClick={() => onDownload(activeReel)}
+              className={downloadLoading ? '[&_svg]:animate-spin' : ''}
+            >
+              {downloadLoading ? 'Downloading...' : 'Download'}
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} />
+        </div>
       </div>
 
       {/* Video + tap/swipe zones */}

@@ -1,43 +1,31 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Loader, AlertCircle, FolderOpen } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { REEL } from '../../config/themeColors';
-import { API_BASE } from '../../config';
 import { RATIO_ORDER } from '../../constants/aspectRatios';
 import { GameCollectionGroup } from './GameCollectionGroup';
 import { CollectionCard } from './CollectionCard';
 import { SmartLockedCard } from './SmartLockedCard';
-import { CollectionPlayer } from './CollectionPlayer';
+import { toPlayerReels } from './playerReels';
 
 const MIXES_NAME = 'Mixes & compilations';
-
-/** Map download items to presentational player reels. T3620 swaps in presigned
- *  URLs; here we use the same-origin stream proxy. */
-function toPlayerReels(items) {
-  return items.map((d) => ({
-    id: d.id,
-    name: d.project_name,
-    streamUrl: `${API_BASE}/api/downloads/${d.id}/stream`,
-    aspect_ratio: d.aspect_ratio,
-    duration: d.duration, // may be null; player never relies on it
-  }));
-}
 
 /**
  * CollectionsTab - the single My Reels view (T3610 §0B). Smart collections on
  * top, then game-by-game, then multi-game mixes. Aggregates come from the lifted
  * useCollections summary (passed in as `collections`); members load lazily.
+ * Playback is delegated up to the panel so reels + collections share ONE player.
  *
- * @param {Object}   collections - the lifted useCollections() value
- * @param {Function} renderCard  - (download) => ReactNode (the panel's reel card)
+ * @param {Object}   collections     - the lifted useCollections() value
+ * @param {Function} renderCard      - (download) => ReactNode (the panel's reel card)
+ * @param {Function} onPlayCollection - (reels[], title) => void (opens the shared player)
  */
-export function CollectionsTab({ collections, renderCard }) {
+export function CollectionsTab({ collections, renderCard, onPlayCollection }) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
-  const [player, setPlayer] = useState(null); // { reels, title }
 
   const onPlay = (items, title) => {
     const reels = toPlayerReels(items);
-    if (reels.length) setPlayer({ reels, title });
+    if (reels.length) onPlayCollection(reels, title);
   };
 
   const reqGame = (id) => () => fetchMembers({ key: `game:${id}`, query: `game_id=${id}` });
@@ -147,14 +135,6 @@ export function CollectionsTab({ collections, renderCard }) {
           requestMembers={reqMixes}
           onPlay={onPlay}
           renderCard={renderCard}
-        />
-      )}
-
-      {player && (
-        <CollectionPlayer
-          reels={player.reels}
-          title={player.title}
-          onClose={() => setPlayer(null)}
         />
       )}
     </>

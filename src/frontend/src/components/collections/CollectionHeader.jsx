@@ -4,12 +4,12 @@ import { REEL } from '../../config/themeColors';
 import { ratioGlyph, ratioLabel } from '../../constants/aspectRatios';
 import { formatDuration } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
+import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 
-// Collection-level actions that need T3620 (share/copy link) / T3680 (download).
-// Shown disabled until those ship (T3610 §0B.7).
-const DEFERRED_ACTIONS = [
+// Collection-level overflow actions that need T3620 / T3680. Disabled until then
+// (Copy link is also surfaced as a standalone button, like the reel cards).
+const DEFERRED_MENU_ACTIONS = [
   { key: 'share', icon: Share2, label: 'Share' },
-  { key: 'copy', icon: Link2, label: 'Copy link' },
   { key: 'download', icon: Download, label: 'Download' },
 ];
 
@@ -32,13 +32,12 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
 }
 
 /**
- * CollectionHeader - One (scope, ratio) collection, styled like a reel card but
- * compact (single row: icon | text | actions, T3610 §0B). Same Play icon + card
- * chrome as the reel cards; a "..." menu adds Set Duration now and Share / Copy
- * link / Download (disabled until T3620/T3680). The slider is hidden until
- * "Set Duration" is chosen.
+ * CollectionHeader - One (scope, ratio) collection, rendered with the SAME shared
+ * card shell as the reel cards (MediaCard/CardIconButton, T3610 §0B). Play +
+ * disabled Copy link + a "..." menu (Set Duration now; Share/Download disabled
+ * until T3620/T3680). The duration slider is hidden until "Set Duration".
  *
- * @param {string}    title            - bold title (e.g. "Top Plays", "{game} Highlights")
+ * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
  * @param {number}    reelCount
  * @param {number|null} duration       - ACTUAL selected duration (defaults to all clips)
@@ -82,80 +81,66 @@ export function CollectionHeader({
     };
   }, [menuOpen]);
 
-  return (
-    <div className="p-3 bg-gray-700 rounded-lg border border-gray-600 hover:border-gray-500 transition-colors">
-      <div className="flex items-center gap-3">
-        {/* Icon box (mirrors the reel card; Film glyph marks a collection) */}
-        <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 ${REEL.bgMuted}`}>
-          <Film size={20} className={REEL.accent} />
-        </div>
-
-        {/* Text block */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(ratio)}>
-              {ratioGlyph(ratio)}
-            </span>
-            <h3 className="text-white font-medium truncate">{title}</h3>
+  const actions = (
+    <>
+      <CardIconButton
+        icon={playLoading ? Loader : Play}
+        spinning={playLoading}
+        disabled={playLoading}
+        onClick={onPlayAll}
+        title="Play all"
+        iconClassName={`${REEL.accent} hover:text-cyan-300`}
+        hoverClassName={`hover:${REEL.bgMuted}`}
+      />
+      <CardIconButton icon={Link2} disabled title="Copy link (coming soon)" />
+      <div className="relative" ref={menuRef}>
+        <CardIconButton icon={MoreVertical} onClick={() => setMenuOpen((o) => !o)} title="More actions" />
+        {menuOpen && (
+          <div className="absolute right-0 mt-1 z-10 w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1">
+            <MenuItem icon={Play} label="Play all"
+              onClick={() => { setMenuOpen(false); onPlayAll(); }} />
+            <MenuItem icon={Clock} label="Set Duration"
+              onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
+            <div className="my-1 border-t border-gray-600" />
+            {DEFERRED_MENU_ACTIONS.map((a) => (
+              <MenuItem key={a.key} icon={a.icon} label={a.label} disabled title="Coming soon" />
+            ))}
           </div>
-          <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
-            <span>{reelCount} {reelCount === 1 ? 'reel' : 'reels'}</span>
-            {durationStr && (
-              <>
-                <span aria-hidden>·</span>
-                <span title={hasNullDurations ? 'Some reels have no recorded duration' : undefined}>
-                  {hasNullDurations ? '~' : ''}{durationStr}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Actions (inline, vertically centered — keeps the card compact) */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={onPlayAll}
-            disabled={playLoading}
-            className={`min-w-[44px] min-h-[44px] flex items-center justify-center hover:${REEL.bgMuted} rounded-lg transition-colors`}
-            title="Play all"
-          >
-            {playLoading
-              ? <Loader size={20} className={`${REEL.accent} animate-spin`} />
-              : <Play size={20} className={`${REEL.accent} hover:text-cyan-300`} />}
-          </button>
-
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen((o) => !o)}
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
-              title="More actions"
-              aria-label="More actions"
-            >
-              <MoreVertical size={20} className="text-gray-400 hover:text-cyan-400" />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 mt-1 z-10 w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1">
-                <MenuItem icon={Play} label="Play all"
-                  onClick={() => { setMenuOpen(false); onPlayAll(); }} />
-                <MenuItem icon={Clock} label="Set Duration"
-                  onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
-                <div className="my-1 border-t border-gray-600" />
-                {DEFERRED_ACTIONS.map((a) => (
-                  <MenuItem key={a.key} icon={a.icon} label={a.label} disabled title="Coming soon" />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
+    </>
+  );
 
-      {/* Set Duration slider (hidden until chosen) */}
-      {sliderOpen && (
-        <div className="mt-2">
-          <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />
-        </div>
-      )}
+  const footer = sliderOpen ? (
+    <div className="mt-2">
+      <DurationBudgetSlider cap={budgetCap} value={budget} onChange={onBudgetChange} />
     </div>
+  ) : null;
+
+  return (
+    <MediaCard
+      media={<CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />}
+      actions={actions}
+      footer={footer}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(ratio)}>
+          {ratioGlyph(ratio)}
+        </span>
+        <h3 className="text-white font-medium truncate">{title}</h3>
+      </div>
+      <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
+        <span>{reelCount} {reelCount === 1 ? 'reel' : 'reels'}</span>
+        {durationStr && (
+          <>
+            <span aria-hidden>·</span>
+            <span title={hasNullDurations ? 'Some reels have no recorded duration' : undefined}>
+              {hasNullDurations ? '~' : ''}{durationStr}
+            </span>
+          </>
+        )}
+      </div>
+    </MediaCard>
   );
 }
 

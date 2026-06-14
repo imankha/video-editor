@@ -4,7 +4,9 @@ import { ShareModal } from './ShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { CollectionsTab } from './collections/CollectionsTab';
-import { MediaPlayer } from './MediaPlayer';
+import { CollectionPlayer } from './collections/CollectionPlayer';
+import { toPlayerReel } from './collections/playerReels';
+import { CardMedia, CardIconButton } from './shared/MediaCard';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useWebShare } from '../hooks/useWebShare';
@@ -64,9 +66,14 @@ export function DownloadsPanel({
   // lists honest (T3610 §0B.6).
   const collections = useCollections(isOpen);
 
-  // State for video preview modal
-  const [playingVideo, setPlayingVideo] = useState(null);
+  // Shared story player — one player for both single reels and collections
+  // (T3610). { reels, title, downloadId? }. Rendered at the panel top level so
+  // it fills the viewport (the drawer's transform would otherwise confine it).
+  const [storyPlayer, setStoryPlayer] = useState(null);
   const watchTimerRef = useRef(null);
+
+  const onPlayCollection = (reels, title) => setStoryPlayer({ reels, title });
+  const closeStoryPlayer = () => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); };
 
   // State for inline rename
   const [editingId, setEditingId] = useState(null);
@@ -103,7 +110,7 @@ export function DownloadsPanel({
     };
   }, [overflowMenuId]);
 
-  if (!isOpen && !playingVideo) return null;
+  if (!isOpen && !storyPlayer) return null;
 
   const handleDelete = async (e, download) => {
     e.stopPropagation();
@@ -126,7 +133,12 @@ export function DownloadsPanel({
   const handlePlay = (e, download) => {
     e.stopPropagation();
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
-    setPlayingVideo(download);
+    // Single reel = a one-reel story, played through the SAME player as collections.
+    setStoryPlayer({
+      reels: [toPlayerReel(download)],
+      title: download.project_name,
+      downloadId: download.id,
+    });
     close();
     if (!download.watched_at) {
       markWatched(download.id);
@@ -148,11 +160,6 @@ export function DownloadsPanel({
         useQuestStore.getState().recordAchievement('watched_gallery_video_after_2_overlays');
       }
     }, 1000);
-  };
-
-  const closeVideo = () => {
-    clearTimeout(watchTimerRef.current);
-    setPlayingVideo(null);
   };
 
   const handleOpenProject = async (e, download) => {
@@ -282,15 +289,16 @@ export function DownloadsPanel({
         }`}
       >
         <div className="flex items-center gap-3">
-          {/* Video icon with unwatched dot */}
-          <div className={`relative w-10 h-10 rounded flex items-center justify-center flex-shrink-0 ${
-            isUnwatched ? 'bg-cyan-900/40' : REEL.bgMuted
-          }`}>
-            <Video size={20} className={isUnwatched ? 'text-cyan-400' : REEL.accent} />
+          {/* Video icon with unwatched dot (shared CardMedia) */}
+          <CardMedia
+            icon={Video}
+            wrapClassName={isUnwatched ? 'bg-cyan-900/40' : REEL.bgMuted}
+            iconClassName={isUnwatched ? 'text-cyan-400' : REEL.accent}
+          >
             {isUnwatched && (
               <span className={`absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full ${style.dot} ring-2 ring-gray-700`} />
             )}
-          </div>
+          </CardMedia>
 
           {/* Info + actions */}
           <div className="flex-1 min-w-0">
@@ -348,15 +356,17 @@ export function DownloadsPanel({
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-                <button
+                <CardIconButton
+                  icon={Play}
                   onClick={(e) => handlePlay(e, download)}
-                  className={`min-w-[44px] min-h-[44px] flex items-center justify-center hover:${REEL.bgMuted} rounded-lg transition-colors`}
                   title="Play video"
-                >
-                  <Play size={20} className={`${REEL.accent} hover:text-cyan-300`} />
-                </button>
+                  iconClassName={`${REEL.accent} hover:text-cyan-300`}
+                  hoverClassName={`hover:${REEL.bgMuted}`}
+                />
                 {isMobile ? (
-                  <button
+                  <CardIconButton
+                    icon={Share2}
+                    title="Share video"
                     onClick={async (e) => {
                       e.stopPropagation();
                       try {
@@ -376,13 +386,11 @@ export function DownloadsPanel({
                         setSharingDownload(download);
                       }
                     }}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
-                    title="Share video"
-                  >
-                    <Share2 size={20} className="text-gray-400 hover:text-cyan-400" />
-                  </button>
+                  />
                 ) : (
-                  <button
+                  <CardIconButton
+                    icon={Link2}
+                    title="Copy link"
                     onClick={async (e) => {
                       e.stopPropagation();
                       try {
@@ -394,24 +402,18 @@ export function DownloadsPanel({
                         setSharingDownload(download);
                       }
                     }}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
-                    title="Copy link"
-                  >
-                    <Link2 size={20} className="text-gray-400 hover:text-cyan-400" />
-                  </button>
+                  />
                 )}
                 {/* Overflow menu */}
                 <div className="relative" ref={overflowMenuId === download.id ? overflowMenuRef : undefined}>
-                  <button
+                  <CardIconButton
+                    icon={MoreVertical}
+                    title="More actions"
                     onClick={(e) => {
                       e.stopPropagation();
                       setOverflowMenuId(overflowMenuId === download.id ? null : download.id);
                     }}
-                    className="min-w-[44px] min-h-[44px] flex items-center justify-center hover:bg-gray-600 rounded-lg transition-colors"
-                    title="More actions"
-                  >
-                    <MoreVertical size={20} className="text-gray-400" />
-                  </button>
+                  />
                   {overflowMenuId === download.id && (
                     <div className="absolute right-0 bottom-full mb-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[180px] py-1">
                       <button
@@ -550,7 +552,11 @@ export function DownloadsPanel({
 
         {/* Content — single My Reels view (T3610 §0B.1) */}
         <div className="flex-1 overflow-y-auto p-4">
-          <CollectionsTab collections={collections} renderCard={renderDownloadCard} />
+          <CollectionsTab
+            collections={collections}
+            renderCard={renderDownloadCard}
+            onPlayCollection={onPlayCollection}
+          />
         </div>
       </div>
 
@@ -579,73 +585,16 @@ export function DownloadsPanel({
         />
       )}
 
-      {/* Video Preview Modal */}
-      {playingVideo && (
-        <>
-          {/* Modal Backdrop */}
-          <div
-            className="fixed inset-0 bg-black z-[60]"
-            onClick={() => closeVideo()}
-          />
-
-          {/* Modal Content */}
-          <div className="fixed inset-0 md:inset-12 lg:inset-20 z-[70] flex flex-col bg-black overflow-hidden md:rounded-xl md:bg-gray-900 md:shadow-2xl">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-3 py-2 md:p-4 border-b border-gray-700 bg-gray-800">
-              <div className="flex items-center gap-2 md:gap-3 min-w-0">
-                <Video size={18} className={`${REEL.accent} shrink-0`} />
-                <div className="min-w-0">
-                  <h3 className="text-white text-sm md:text-base font-medium truncate">{playingVideo.project_name}</h3>
-                  {(() => {
-                    const showFilename = !isUuidFilename(playingVideo.filename);
-                    const projectNameLower = (playingVideo.project_name || '').toLowerCase();
-                    const sourceTypeLabel = getSourceTypeLabel(playingVideo.source_type);
-                    const showSourceType = sourceTypeLabel &&
-                      !projectNameLower.includes('annotated') &&
-                      !projectNameLower.includes('brilliant');
-                    if (showFilename) {
-                      return <p className="text-sm text-gray-400">{playingVideo.filename}</p>;
-                    } else if (showSourceType) {
-                      return <p className="text-sm text-gray-400">{sourceTypeLabel}</p>;
-                    }
-                    return null;
-                  })()}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  icon={downloadingId === playingVideo.id ? Loader : Download}
-                  disabled={downloadingId === playingVideo.id}
-                  onClick={() => {
-                    console.log('[DownloadsPanel] Modal download:', { id: playingVideo.id, project_name: playingVideo.project_name });
-                    downloadFile(playingVideo.id);
-                  }}
-                  className={downloadingId === playingVideo.id ? '[&_svg]:animate-spin' : ''}
-                >
-                  {downloadingId === playingVideo.id ? 'Downloading...' : 'Download'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={X}
-                  iconOnly
-                  onClick={() => closeVideo()}
-                />
-              </div>
-            </div>
-
-            {/* Video Player */}
-            <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
-              <MediaPlayer
-                src={getStreamingUrl(playingVideo.id, playingVideo)}
-                autoPlay
-                onClose={() => closeVideo()}
-              />
-            </div>
-          </div>
-        </>
+      {/* Shared story player — single reels AND collections play here, at the
+          panel top level so it fills the viewport (T3610). */}
+      {storyPlayer && (
+        <CollectionPlayer
+          reels={storyPlayer.reels}
+          title={storyPlayer.title}
+          onClose={closeStoryPlayer}
+          onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId) : undefined}
+          downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
+        />
       )}
     </>
   );
