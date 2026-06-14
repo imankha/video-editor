@@ -8,6 +8,7 @@ from .v006_backfill_current_mode import V006BackfillCurrentMode
 from .v007_collection_metadata import V007CollectionMetadata
 from .v008_freeze_game_ids import V008FreezeGameIds
 from .v009_season_rank import V009SeasonRank
+from .v010_ranking_columns import V010RankingColumns
 
 MIGRATIONS = [
     V001Baseline(),
@@ -19,6 +20,7 @@ MIGRATIONS = [
     V007CollectionMetadata(),
     V008FreezeGameIds(),
     V009SeasonRank(),
+    V010RankingColumns(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

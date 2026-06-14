@@ -50,7 +50,7 @@ Implementation facts (sync, msgpack, migrations, pipeline, sharing, frontend): [
 | T3600 | profile_db | v007 | `final_videos` + duration/aspect_ratio/tags columns + backfill (incl. R2 archive reads) -- DONE |
 | T3605 | profile_db | v008 | `final_videos.game_ids` msgpack BLOB + backfill (incl. R2 archive recovery) -- DONE |
 | T3620 | postgres | v016 | shares.share_type CHECK adds 'collection'; `collection_definition JSONB` column; `_SCHEMA_DDL` update |
-| T3630 | profile_db | **v009** | `final_videos.season_rank REAL NULL` + `collection_settings` table (was v008; T3605 took v008) |
+| T3630 | profile_db | **v009 + v010** | v009: `final_videos` clip_count/quality_score/rating/rd/match_count/source_clip_id/clip_start_time (Glicko ranking) + `collection_settings`. v010: re-adds the 5 ranking columns + seeds rating for DBs already stamped v9 by the earlier v009 draft (version-gating means revised v009 can't re-run on them). |
 
 Deploy checklist for each: merge -> staging auto-deploy -> `POST /api/admin/migrate` on staging -> verify -> prod deploy -> `POST /api/admin/migrate` on prod.
 

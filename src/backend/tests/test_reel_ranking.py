@@ -356,6 +356,42 @@ class TestV009Migration:
         assert rows[102]["source_clip_id"] is None
         c.close()
 
+    def test_v010_seeds_rating_on_a_v9_draft_db(self, tmp_path):
+        """A DB stamped by the v009 DRAFT (season_rank/clip_count/quality_score, NO
+        rating) -> v010 adds the ranking columns and seeds rating from quality."""
+        from app.migrations.profile_db.v010_ranking_columns import V010RankingColumns
+        path, c = self._pre_v009_db(tmp_path)
+        # Simulate the draft outcome: clip_count/quality_score present, no rating.
+        c.execute("ALTER TABLE final_videos ADD COLUMN season_rank REAL")
+        c.execute("ALTER TABLE final_videos ADD COLUMN clip_count INTEGER")
+        c.execute("ALTER TABLE final_videos ADD COLUMN quality_score REAL")
+        c.execute("INSERT INTO projects (id, name, aspect_ratio) VALUES (1, 'P1', '9:16')")
+        c.execute("INSERT INTO raw_clips (id, filename, rating, start_time, end_time) VALUES (10, 'a', 4, 600.0, 1.0)")
+        c.execute("INSERT INTO working_clips (project_id, raw_clip_id, version) VALUES (1, 10, 1)")
+        # single-clip reel (already backfilled by the draft), and a multi-clip reel.
+        c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, "
+                  "published_at, clip_count, quality_score) "
+                  "VALUES (200, 1, 'f', 1, 'custom_project', '2026-01-01', 1, 4.0)")
+        c.execute("INSERT INTO final_videos (id, project_id, filename, version, source_type, "
+                  "published_at, clip_count, quality_score) "
+                  "VALUES (201, NULL, 'g', 1, 'custom_project', '2026-01-01', 2, NULL)")
+        c.commit()
+
+        with patch("app.services.project_archive.load_archive", return_value=None):
+            V010RankingColumns().up(c)
+
+        c.row_factory = sqlite3.Row
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(final_videos)").fetchall()}
+        assert {"rating", "rd", "match_count", "source_clip_id", "clip_start_time"} <= cols
+        rows = {r["id"]: r for r in c.execute(
+            "SELECT id, rating, rd, source_clip_id, clip_start_time FROM final_videos").fetchall()}
+        assert rows[200]["rating"] == glicko.seed_rating(4.0)
+        assert rows[200]["rd"] == glicko.RD_MAX
+        assert rows[200]["source_clip_id"] == 10
+        assert rows[200]["clip_start_time"] == 600.0
+        assert rows[201]["rating"] is None  # multi-clip stays unranked
+        c.close()
+
 
 # ---------------------------------------------------------------------------
 # Pairing (spec §4.3)
