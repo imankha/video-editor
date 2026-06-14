@@ -32,6 +32,15 @@ export const PATH_TO_MODE = Object.fromEntries(
   Object.entries(MODE_PATHS).map(([mode, path]) => [path, mode])
 );
 
+// Public routes render OUTSIDE the editor (share links, legal pages). The store
+// must never normalize/rewrite their URL — doing so at module load clobbers the
+// deep link before App reads it, so e.g. /shared/collection/{token} would bounce
+// to /framing and force a sign-in. App.jsx owns these routes.
+const PUBLIC_ROUTE_PREFIXES = ['/shared/', '/privacy', '/terms', '/legal'];
+export function isPublicRoute(pathname = window.location.pathname) {
+  return PUBLIC_ROUTE_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
+}
+
 function updatePath(mode) {
   const path = MODE_PATHS[mode];
   if (path && window.location.pathname !== path) {
@@ -269,7 +278,9 @@ function handlePopState() {
 
 if (window.__popstateHandler) {
   window.removeEventListener('popstate', window.__popstateHandler);
-} else {
+} else if (!isPublicRoute()) {
+  // Seed history.state with the mode + normalize '/' -> a mode path, but NEVER on
+  // public routes (share links / legal pages) — that would discard the deep link.
   window.history.replaceState(
     { mode: useEditorStore.getState().editorMode },
     '',

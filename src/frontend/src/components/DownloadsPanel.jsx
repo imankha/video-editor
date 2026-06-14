@@ -116,7 +116,9 @@ export function DownloadsPanel({
         document.execCommand('copy');
         document.body.removeChild(input);
       }
-      toast.success('Link copied');
+      toast.success('Public link copied', {
+        message: 'Anyone with the link can watch these highlights.',
+      });
     } catch {
       toast.error('Could not create link');
     }
