@@ -59,20 +59,23 @@ def _insert_game(cur, game_id, opponent="Carlsbad", date="2025-12-06"):
 
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
                published_at="2026-01-01 00:00:00", created_at="2026-01-01 00:00:00",
-               source_type="custom_project", version=1, project_id=None):
+               source_type="custom_project", version=1, project_id=None,
+               quality_score=5.0):
     """Insert one final_video with frozen columns. Each reel gets a distinct
-    project_id by default so latest_final_videos_subquery keeps them all."""
+    project_id by default so latest_final_videos_subquery keeps them all.
+    quality_score defaults to a single-clip value (T3630: collections are
+    single-clip only); pass quality_score=None to seed a multi-clip reel."""
     if project_id is None:
         _next_project[0] += 1
         project_id = _next_project[0]
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, "
-        "source_type, name, aspect_ratio, tags, game_ids, published_at, created_at) "
-        "VALUES (?, 'f.mp4', ?, ?, ?, 'Reel', ?, ?, ?, ?, ?)",
+        "source_type, name, aspect_ratio, tags, game_ids, quality_score, published_at, created_at) "
+        "VALUES (?, 'f.mp4', ?, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?)",
         (project_id, version, duration, source_type, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
-         published_at, created_at),
+         quality_score, published_at, created_at),
     )
     return cur.lastrowid, project_id
 

@@ -41,6 +41,32 @@ def encode_game_ids(game_ids) -> bytes | None:
     return encode_data(distinct) if distinct else None
 
 
+# T3630: the ONE canonical collection ordering. SQLite has no NULLS LAST, so the
+# `(col IS NULL)` prefixes push unranked / unscored reels to the bottom. All three
+# collection read-paths (list_downloads, collections_summary, the T3620 resolver)
+# use this; the frontend mirrors it in utils/reelOrder.js. Columns are `fv.`-qualified
+# because every consumer selects `FROM final_videos fv`.
+ORDER_BY_RANK = (
+    "(fv.season_rank IS NULL), fv.season_rank ASC, "
+    "(fv.quality_score IS NULL), fv.quality_score DESC, "
+    "fv.created_at DESC"
+)
+
+
+def route_collection(game_ids_blob, quality_score) -> int | None:
+    """Route a published reel to its collection bucket (T3630). Collections are
+    SINGLE-CLIP reels only: a multi-clip reel (quality_score IS NULL) is never
+    collection-eligible and always falls to Mixes. A single-clip reel routes by
+    its frozen game_ids: its single game id (game collection), or None (game-less
+    -> Mixes). Returns the game id for a single-clip single-game reel, else None.
+
+    Shared by collections_summary, the /api/downloads game_id/mixes filters, and
+    the T3620 resolver so member counts stay in lockstep (count-parity)."""
+    if quality_score is None:
+        return None  # multi-clip -> Mixes
+    return route_game_ids(game_ids_blob)
+
+
 def route_game_ids(blob) -> int | None:
     """Route a frozen final_videos.game_ids BLOB to a single game id or None
     (mixes). len==1 -> that game id (game collection); len>1 -> None (multi-game
@@ -124,6 +150,48 @@ def _tags_for_project(cursor, project_id: int) -> bytes | None:
         (project_id, project_id, project_id),
     )
     return encode_distinct_tags(row[1] for row in cursor.fetchall())
+
+
+def compute_project_quality_score(cursor, project_id: int) -> float | None:
+    """Frozen quality score for a SINGLE-CLIP reel (T3630): the lone constituent
+    clip's rating (1-5). Returns None when the reel has != 1 distinct constituent
+    clip -- multi-clip reels are not collection-eligible and carry no quality
+    score (NULL doubles as the single-clip marker). Resolves the SAME clip set as
+    compute_project_game_ids (latest working_clips -> raw_clips + auto link)."""
+    cursor.execute(
+        f"""
+        SELECT DISTINCT rc.id, rc.rating
+        FROM raw_clips rc
+        WHERE rc.auto_project_id = ?
+           OR rc.id IN (
+                SELECT wc.raw_clip_id FROM working_clips wc
+                WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
+                AND wc.id IN ({latest_working_clips_subquery()})
+           )
+        """,
+        (project_id, project_id, project_id),
+    )
+    rows = cursor.fetchall()
+    if len(rows) != 1 or rows[0][1] is None:
+        return None
+    return float(rows[0][1])
+
+
+def compute_archive_quality_score(cursor, archive: dict) -> float | None:
+    """compute_project_quality_score for an archived project: the lone archived
+    working_clip's raw_clip_id -> live raw_clips.rating. None unless exactly one."""
+    raw_clip_ids = sorted({
+        wc["raw_clip_id"]
+        for wc in archive.get("working_clips") or []
+        if wc.get("raw_clip_id")
+    })
+    if len(raw_clip_ids) != 1:
+        return None
+    cursor.execute("SELECT rating FROM raw_clips WHERE id = ?", (raw_clip_ids[0],))
+    row = cursor.fetchone()
+    if not row or row[0] is None:
+        return None
+    return float(row[0])
 
 
 def compute_project_metadata(cursor, project_id: int):

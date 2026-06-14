@@ -22,7 +22,7 @@ from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import archive_project, restore_project, is_project_archived
 from app.constants import SourceType
 from app.utils.encoding import decode_data
-from app.services.collection_metadata import route_game_ids
+from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
 
 logger = logging.getLogger(__name__)
 
@@ -193,6 +193,8 @@ class DownloadItem(BaseModel):
     source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
     game_id: Optional[int]  # For annotated_game exports, the source game ID
     rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
+    season_rank: Optional[float] = None  # Sparse user rank (T3630); NULL = unranked
+    quality_score: Optional[float] = None  # Frozen single-clip rating (T3630); NULL = multi-clip
     # Game grouping info
     watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
     game_ids: List[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -266,31 +268,34 @@ async def list_downloads(
                 fv.duration as fv_duration,
                 fv.aspect_ratio,
                 fv.tags,
-                fv.name as fv_name
+                fv.name as fv_name,
+                fv.season_rank,
+                fv.quality_score
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
-            ORDER BY fv.created_at DESC
+            ORDER BY {ORDER_BY_RANK}
         """
         cursor.execute(base_query, params)
         rows = cursor.fetchall()
 
-        # game_id / mixes filter on the FROZEN game_ids BLOB via the shared
-        # router helper -- the SAME routing as GET /api/collections/summary, so
-        # member counts always equal summary counts (no SQL on the BLOB; the
-        # published set is small, <= ~500 rows).
+        # game_id / mixes filter via the shared router helper (T3630: collections
+        # are SINGLE-CLIP reels only -- route_collection sends multi-clip reels to
+        # Mixes). SAME routing as GET /api/collections/summary, so member counts
+        # always equal summary counts (small published set, <= ~500 rows).
         if game_id is not None:
-            rows = [r for r in rows if route_game_ids(r["game_ids"]) == game_id]
+            rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) == game_id]
         elif mixes:
-            rows = [r for r in rows if route_game_ids(r["game_ids"]) is None]
+            rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) is None]
 
         # tags filter (OR semantics) on the frozen tags BLOB — smart-collection
-        # member fetch. Deduped by construction (one row in/out).
+        # member fetch. Smart collections are single-clip only (quality_score set).
         if tags:
             wanted = {t.strip() for t in tags.split(",") if t.strip()}
             if wanted:
                 rows = [r for r in rows
-                        if wanted & set(decode_data(r["tags"]) or [])]
+                        if r["quality_score"] is not None
+                        and (wanted & set(decode_data(r["tags"]) or []))]
 
         # Collect unique game_ids and project_ids for batch lookups
         game_ids_to_fetch = set()
@@ -488,6 +493,8 @@ async def list_downloads(
                 source_type=row['source_type'],
                 game_id=row['game_id'],
                 rating_counts=rating_counts,
+                season_rank=row['season_rank'],
+                quality_score=row['quality_score'],
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,
@@ -784,6 +791,77 @@ async def rename_download(download_id: int, body: dict):
             raise HTTPException(status_code=404, detail="Download not found")
         conn.commit()
         return {"success": True, "name": name}
+
+
+class RankRequest(BaseModel):
+    rank: Optional[float] = None       # explicit value, or null to unrank
+    prev_id: Optional[int] = None      # ranked reel directly ABOVE the slot (smaller rank)
+    next_id: Optional[int] = None      # ranked reel directly BELOW the slot (larger rank)
+
+
+_RANK_STEP = 1.0
+_RANK_MIN_GAP = 1e-6
+
+
+def _rank_of(cursor, fid):
+    if fid is None:
+        return None
+    row = cursor.execute(
+        "SELECT season_rank FROM final_videos WHERE id = ?", (fid,)
+    ).fetchone()
+    return row["season_rank"] if row else None
+
+
+def _renumber_ranks(cursor):
+    """Lazy integer renumber of all ranked reels by current rank order. Guards
+    fractional exhaustion (repeated midpoint insertion); theoretical at user scale."""
+    rows = cursor.execute(
+        "SELECT id FROM final_videos WHERE season_rank IS NOT NULL "
+        "AND published_at IS NOT NULL ORDER BY season_rank ASC"
+    ).fetchall()
+    for i, r in enumerate(rows, start=1):
+        cursor.execute(
+            "UPDATE final_videos SET season_rank = ? WHERE id = ?", (float(i), r["id"])
+        )
+
+
+def _insertion_rank(cursor, prev_id, next_id):
+    """Midpoint rank between two ranked neighbors (either may be None for an end).
+    season_rank is a global per-profile order; ranked reels sort above unranked."""
+    prev = _rank_of(cursor, prev_id)
+    nxt = _rank_of(cursor, next_id)
+    if prev is None and nxt is None:
+        return _RANK_STEP                 # first ranked reel
+    if prev is None:
+        return nxt - _RANK_STEP           # insert at the top
+    if nxt is None:
+        return prev + _RANK_STEP          # insert at the bottom of the ranked block
+    if nxt - prev < _RANK_MIN_GAP:        # gap exhausted -> renumber, re-read
+        _renumber_ranks(cursor)
+        prev = _rank_of(cursor, prev_id)
+        nxt = _rank_of(cursor, next_id)
+    return (prev + nxt) / 2.0
+
+
+@router.post("/{download_id}/rank")
+async def set_rank(download_id: int, body: RankRequest):
+    """Set or clear a reel's season_rank (T3630). GESTURE-ONLY (confirm / nudge /
+    drag) -- never reactive (EPIC #5). Either an explicit `rank` (or null to
+    unrank), or `prev_id`/`next_id` neighbors to insert at the midpoint."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        if body.prev_id is not None or body.next_id is not None:
+            rank = _insertion_rank(cursor, body.prev_id, body.next_id)
+        else:
+            rank = body.rank
+        cursor.execute(
+            "UPDATE final_videos SET season_rank = ? WHERE id = ? AND published_at IS NOT NULL",
+            (rank, download_id),
+        )
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Download not found")
+        conn.commit()
+        return {"success": True, "rank": rank}
 
 
 @router.post("/publish/{project_id}")

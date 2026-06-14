@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
+import { sortReels } from '../utils/reelOrder';
 
 const API_BASE_URL = `${API_BASE}/api`;
 
@@ -117,6 +118,38 @@ export function useCollections(isActive = false) {
     });
   }, []);
 
+  // Rank a reel (T3630). GESTURE-ONLY (confirm / nudge / drag) — never reactive.
+  // Optimistically patches season_rank in the cached member lists and re-sorts
+  // them (compareReels), then POSTs; reconciles with the server-computed rank.
+  // `body` = { rank } | { prev_id, next_id }; optimisticRank is the predicted value.
+  const rankMember = useCallback(async (id, body, optimisticRank) => {
+    const apply = (rank) => setMembers((prev) => {
+      const next = {};
+      for (const k of Object.keys(prev)) {
+        next[k] = sortReels(
+          prev[k].map((m) => (m.id === id ? { ...m, season_rank: rank } : m)),
+        );
+      }
+      return next;
+    });
+    if (optimisticRank !== undefined) apply(optimisticRank);
+    try {
+      const res = await apiFetch(`${API_BASE_URL}/downloads/${id}/rank`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Failed to rank');
+      const data = await res.json();
+      if (data.rank !== optimisticRank) apply(data.rank);
+      return data.rank;
+    } catch (err) {
+      console.error('[useCollections] rankMember error:', err);
+      fetchSummary();  // recover ordering from the server on failure
+      return null;
+    }
+  }, [fetchSummary]);
+
   // Clear all collections state on profile switch (useState, not Zustand).
   // Declared BEFORE the fetch effect so on mount the reset runs first and does
   // not abort the summary fetch the next effect starts (mirrors useDownloads).
@@ -148,7 +181,7 @@ export function useCollections(isActive = false) {
 
   return {
     summary, summaryState, members, memberStates,
-    fetchSummary, fetchMembers, removeMember, patchMember,
+    fetchSummary, fetchMembers, removeMember, patchMember, rankMember,
   };
 }
 

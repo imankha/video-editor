@@ -679,6 +679,8 @@ def ensure_database():
                 aspect_ratio TEXT,
                 tags BLOB,
                 game_ids BLOB,
+                season_rank REAL,
+                quality_score REAL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
@@ -873,6 +875,15 @@ def ensure_database():
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 settings_json TEXT NOT NULL DEFAULT '{}',
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Collection settings (T3630) - per-profile key/value knobs for the
+        # Season Highlights epic (T3640's season_target_duration is the first user).
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS collection_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
             )
         """)
 

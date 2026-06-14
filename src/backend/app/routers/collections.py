@@ -27,7 +27,7 @@ from app.analytics import record_milestone
 from app.database import get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import latest_final_videos_subquery
-from app.services.collection_metadata import route_game_ids
+from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
     create_collection_share,
@@ -217,7 +217,7 @@ async def collections_summary():
         cursor.execute(
             f"""
             SELECT fv.id, fv.game_ids, fv.aspect_ratio, fv.duration,
-                   fv.tags, fv.created_at, fv.published_at
+                   fv.tags, fv.created_at, fv.published_at, fv.quality_score
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
               AND fv.published_at IS NOT NULL
@@ -239,7 +239,11 @@ async def collections_summary():
                     f"aspect_ratio -- excluded from summary (data bug)."
                 )
                 continue
-            game_id = route_game_ids(row["game_ids"])
+            # T3630: collections are single-clip reels only. route_collection
+            # sends multi-clip reels (quality_score IS NULL) to Mixes; only
+            # single-clip reels resolve to a game / smart / season bucket.
+            single_clip = row["quality_score"] is not None
+            game_id = route_collection(row["game_ids"], row["quality_score"])
             if game_id is not None:
                 resolved_game_ids.add(game_id)
             parsed.append({
@@ -248,6 +252,7 @@ async def collections_summary():
                 "published_at": _utc(row["published_at"]),
                 "created_at": row["created_at"],
                 "game_id": game_id,
+                "single_clip": single_clip,
                 "tags": decode_data(row["tags"]) or [],
             })
 
@@ -283,6 +288,13 @@ async def collections_summary():
 
         for p in parsed:
             ratio, duration, gid = p["ratio"], p["duration"], p["game_id"]
+
+            # Multi-clip reels are NOT collection-eligible (T3630): they only
+            # count toward Mixes, never game/smart/season.
+            if not p["single_clip"]:
+                _add_reel(mixes, ratio, duration, p["published_at"])
+                continue
+
             bucket = (game_buckets.setdefault(gid, _new_bucket())
                       if gid is not None else mixes)
             _add_reel(bucket, ratio, duration, p["published_at"])
@@ -427,13 +439,13 @@ def select_within_budget(members: List[dict], budget_sec: float) -> List[dict]:
 
 def evaluate_collection_members(conn, definition: dict) -> List[dict]:
     """Return the live members of a collection definition against an open profile
-    DB connection, ordered by recency (created_at DESC -- the same order as
-    list_downloads; T3630 swaps in rank). Each: {id, name, duration, filename}.
+    DB connection, ordered by the canonical comparator (season_rank, quality_score,
+    recency -- T3630 ORDER_BY_RANK). Each: {id, name, duration, filename}.
 
     Same filter chain as GET /api/downloads so member counts match the summary:
-    aspect_ratio (SQL, indexed) + scope routing on the frozen game_ids BLOB
-    (game -> ==game_id; mixes -> None; all -> no game filter) + optional tag
-    OR-filter on the frozen tags BLOB."""
+    aspect_ratio (SQL, indexed) + single-clip-only collection routing on the frozen
+    game_ids BLOB + quality_score (game -> route_collection==game_id; mixes ->
+    route_collection None; all -> single-clip) + optional tag OR-filter."""
     scope = definition["scope"]
     stype = scope["type"]
     ratio = definition["aspect_ratio"]
@@ -442,12 +454,12 @@ def evaluate_collection_members(conn, definition: dict) -> List[dict]:
     cur.execute(
         f"""
         SELECT fv.id, fv.name AS fv_name, fv.duration, fv.filename,
-               fv.game_ids, fv.tags, fv.created_at
+               fv.game_ids, fv.tags, fv.created_at, fv.season_rank, fv.quality_score
         FROM final_videos fv
         WHERE fv.id IN ({latest_final_videos_subquery()})
           AND fv.published_at IS NOT NULL
           AND fv.aspect_ratio = ?
-        ORDER BY fv.created_at DESC
+        ORDER BY {ORDER_BY_RANK}
         """,
         (ratio,),
     )
@@ -455,10 +467,11 @@ def evaluate_collection_members(conn, definition: dict) -> List[dict]:
 
     if stype == "game":
         gid = scope.get("game_id")
-        rows = [r for r in rows if route_game_ids(r["game_ids"]) == gid]
+        rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) == gid]
     elif stype == "mixes":
-        rows = [r for r in rows if route_game_ids(r["game_ids"]) is None]
-    # stype == "all": no game filter.
+        rows = [r for r in rows if route_collection(r["game_ids"], r["quality_score"]) is None]
+    else:  # "all" (smart / season scope): collections are single-clip only
+        rows = [r for r in rows if r["quality_score"] is not None]
 
     tags = (definition.get("filter") or {}).get("tags")
     if tags:
