@@ -33,23 +33,23 @@ for path in dbs:
             totals["migrated"] += 1
         else:
             totals["already"] += 1
-        # Inspect final_videos quality_score / season_rank
+        # Inspect final_videos quality_score / rating (T3630 ranking model)
         has_fv = conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='final_videos'"
         ).fetchone()
         if has_fv:
             rows = conn.execute(
-                "SELECT quality_score, season_rank FROM final_videos WHERE published_at IS NOT NULL"
+                "SELECT quality_score, rating, match_count FROM final_videos WHERE published_at IS NOT NULL"
             ).fetchall()
             qset = sum(1 for r in rows if r[0] is not None)
             qnull = sum(1 for r in rows if r[0] is None)
-            rranked = sum(1 for r in rows if r[1] is not None)
+            rranked = sum(1 for r in rows if (r[2] or 0) > 0)
             totals["fv_total"] += len(rows)
             totals["q_set"] += qset
             totals["q_null"] += qnull
             if rows:
                 print(f"  {user_id[:8]}/{profile_id[:8]}  v{before}->{after}  "
-                      f"published={len(rows):3d}  quality_set={qset:3d}  quality_null(multi-clip)={qnull:3d}  ranked={rranked}")
+                      f"published={len(rows):3d}  quality_set={qset:3d}  quality_null(multi-clip)={qnull:3d}  matched={rranked}")
             else:
                 totals["no_fv"] += 1
         conn.commit()
