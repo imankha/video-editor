@@ -14,6 +14,7 @@ from .v012_session_duration import V012SessionDuration
 from .v013_analytics_indexes import V013AnalyticsIndexes
 from .v014_platform_tracking import V014PlatformTracking
 from .v015_platform_normalize import V015PlatformNormalize
+from .v016_collection_shares import V016CollectionShares
 
 MIGRATIONS = [
     V001Baseline(),
@@ -31,6 +32,7 @@ MIGRATIONS = [
     V013AnalyticsIndexes(),
     V014PlatformTracking(),
     V015PlatformNormalize(),
+    V016CollectionShares(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

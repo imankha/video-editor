@@ -6,12 +6,8 @@ import { formatDuration } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 
-// Collection-level overflow actions that need T3620 / T3680. Disabled until then
-// (Copy link is also surfaced as a standalone button, like the reel cards).
-const DEFERRED_MENU_ACTIONS = [
-  { key: 'share', icon: Share2, label: 'Share' },
-  { key: 'download', icon: Download, label: 'Download' },
-];
+// Collection-level Download (stitched mp4) is still deferred to T3680.
+// Share / Copy link are wired in T3620 (onShare / onCopyLink props).
 
 function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
   return (
@@ -34,8 +30,9 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
 /**
  * CollectionHeader - One (scope, ratio) collection, rendered with the SAME shared
  * card shell as the reel cards (MediaCard/CardIconButton, T3610 §0B). Play +
- * disabled Copy link + a "..." menu (Set Duration now; Share/Download disabled
- * until T3620/T3680). The duration slider is hidden until "Set Duration".
+ * Copy link + a "..." menu (Play all, Set Duration, Share). Share/Copy-link are
+ * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
+ * duration slider is hidden until "Set Duration".
  *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
@@ -49,6 +46,8 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
  * @param {Function}  onToggleSlider
  * @param {Function}  onPlayAll
  * @param {boolean=}  playLoading
+ * @param {Function=} onShare        - open the share modal (T3620); omitted => disabled
+ * @param {Function=} onCopyLink     - create + copy a public link (T3620); omitted => disabled
  */
 export function CollectionHeader({
   title,
@@ -63,6 +62,8 @@ export function CollectionHeader({
   onToggleSlider,
   onPlayAll,
   playLoading,
+  onShare,
+  onCopyLink,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -92,7 +93,12 @@ export function CollectionHeader({
         iconClassName={`${REEL.accent} hover:text-cyan-300`}
         hoverClassName={`hover:${REEL.bgMuted}`}
       />
-      <CardIconButton icon={Link2} disabled title="Copy link (coming soon)" />
+      <CardIconButton
+        icon={Link2}
+        disabled={!onCopyLink}
+        onClick={onCopyLink}
+        title={onCopyLink ? 'Copy link' : 'Copy link (coming soon)'}
+      />
       <div className="relative" ref={menuRef}>
         <CardIconButton icon={MoreVertical} onClick={() => setMenuOpen((o) => !o)} title="More actions" />
         {menuOpen && (
@@ -102,9 +108,10 @@ export function CollectionHeader({
             <MenuItem icon={Clock} label="Set Duration"
               onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
             <div className="my-1 border-t border-gray-600" />
-            {DEFERRED_MENU_ACTIONS.map((a) => (
-              <MenuItem key={a.key} icon={a.icon} label={a.label} disabled title="Coming soon" />
-            ))}
+            <MenuItem icon={Share2} label="Share"
+              disabled={!onShare} title={onShare ? undefined : 'Coming soon'}
+              onClick={onShare ? () => { setMenuOpen(false); onShare(); } : undefined} />
+            <MenuItem icon={Download} label="Download" disabled title="Coming soon" />
           </div>
         )}
       </div>

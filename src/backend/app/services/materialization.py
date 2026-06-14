@@ -35,6 +35,59 @@ def _open_profile_db(user_id: str, profile_id: str) -> Optional[sqlite3.Connecti
     return conn
 
 
+def ensure_profile_db_local(user_id: str, profile_id: str) -> Optional[Path]:
+    """Guarantee a profile's SQLite DB is present in the local cache, downloading
+    it from R2 if missing/stale, then return its path (or None if R2 has none).
+
+    READ-ONLY w.r.t. the owner's data: it only populates the local cache and the
+    local db_version bookkeeping; it never writes the owner's authoritative data
+    and never uploads / bumps the R2 sync version. Used to resolve a public
+    collection share against the SHARER's profile DB on a request that carries no
+    (or a different) profile context.
+
+    The R2 helpers (sync_database_from_r2_if_newer -> download_from_r2 / r2_key)
+    derive the profile from the profile_context ContextVar, so we temporarily set
+    it to the sharer's profile_id and restore it in a finally (same pattern the
+    background workers use: auto_export, modal_queue, sweep_scheduler).
+    """
+    from app.database import get_local_db_version, set_local_db_version
+    from app.profile_context import set_current_profile_id, reset_profile_id_token
+    from app.storage import sync_database_from_r2_if_newer
+
+    db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+    token = set_current_profile_id(profile_id)
+    try:
+        local_version = get_local_db_version(user_id, profile_id)
+        downloaded, new_version, was_error = sync_database_from_r2_if_newer(
+            user_id, db_path, local_version
+        )
+        if downloaded and new_version is not None:
+            # Cache bookkeeping only (db_version table); not owner data.
+            set_local_db_version(user_id, profile_id, new_version)
+        if was_error and not db_path.exists():
+            logger.warning(
+                f"[collection-share] R2 error and no local DB for "
+                f"user={user_id} profile={profile_id}"
+            )
+            return None
+    finally:
+        reset_profile_id_token(token)
+
+    return db_path if db_path.exists() else None
+
+
+def open_profile_db_readonly(user_id: str, profile_id: str) -> Optional[sqlite3.Connection]:
+    """Ensure the sharer's profile DB is local (R2 fallback) and open it read-only.
+    Returns None if the DB cannot be obtained. Caller must close the connection."""
+    path = ensure_profile_db_local(user_id, profile_id)
+    if path is None:
+        return None
+    # mode=ro: a public resolve must never mutate the sharer's DB.
+    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def _collect_video_hashes(conn: sqlite3.Connection, game_id: int) -> list[str]:
     """Get all blake3 hashes for a game (single-video or multi-video)."""
     cur = conn.cursor()

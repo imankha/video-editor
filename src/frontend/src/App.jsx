@@ -6,6 +6,7 @@ import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
 import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
+import { SharedCollectionView } from './components/SharedCollectionView';
 import { QuestPanel } from './components/QuestPanel';
 import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
@@ -352,6 +353,12 @@ function App() {
     return match ? match[1] : null;
   });
 
+  // T3620: Detect /shared/collection/:token URL and render the public viewer
+  const [collectionShareToken] = useState(() => {
+    const match = window.location.pathname.match(/^\/shared\/collection\/([a-f0-9-]+)$/i);
+    return match ? match[1] : null;
+  });
+
   // T1740: Detect /privacy and /terms URLs for public legal pages
   const [legalPage] = useState(() => {
     const path = window.location.pathname;
@@ -618,6 +625,11 @@ function App() {
   // T2840: Shared annotation view — after session check so auth state is known
   if (teammateShareToken) {
     return <SharedAnnotationView shareToken={teammateShareToken} onClose={handleCloseTeammateShare} />;
+  }
+
+  // T3620: Public collection viewer — mobile-primary share link, no auth required
+  if (collectionShareToken) {
+    return <SharedCollectionView token={collectionShareToken} />;
   }
 
   // T1780: Shared video — public route, no auth required

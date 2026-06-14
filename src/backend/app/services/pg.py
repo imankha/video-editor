@@ -98,12 +98,14 @@ CREATE TABLE IF NOT EXISTS r2_grace_deletions (
 CREATE TABLE IF NOT EXISTS shares (
     id SERIAL PRIMARY KEY,
     share_token TEXT UNIQUE NOT NULL,
-    share_type TEXT NOT NULL CHECK (share_type IN ('video', 'game', 'annotation_playback')),
+    share_type TEXT NOT NULL CHECK (share_type IN ('video', 'game', 'annotation_playback', 'collection')),
     sharer_user_id TEXT NOT NULL REFERENCES users(user_id),
     sharer_profile_id TEXT NOT NULL,
     recipient_email TEXT NOT NULL,
     shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    revoked_at TIMESTAMPTZ
+    revoked_at TIMESTAMPTZ,
+    collection_definition JSONB,
+    collection_is_public BOOLEAN NOT NULL DEFAULT false
 );
 CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_shares_sharer ON shares(sharer_user_id);

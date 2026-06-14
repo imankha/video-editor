@@ -19,8 +19,16 @@ const MIXES_NAME = 'Mixes & compilations';
  * @param {Object}   collections     - the lifted useCollections() value
  * @param {Function} renderCard      - (download) => ReactNode (the panel's reel card)
  * @param {Function} onPlayCollection - (reels[], title) => void (opens the shared player)
+ * @param {Function=} onShareCollection - (definition, title) => void (T3620)
+ * @param {Function=} onCopyCollectionLink - (definition) => void (T3620)
  */
-export function CollectionsTab({ collections, renderCard, onPlayCollection }) {
+export function CollectionsTab({
+  collections,
+  renderCard,
+  onPlayCollection,
+  onShareCollection,
+  onCopyCollectionLink,
+}) {
   const { summary, summaryState, members, memberStates, fetchSummary, fetchMembers } = collections;
 
   const onPlay = (items, title) => {
@@ -87,6 +95,13 @@ export function CollectionsTab({ collections, renderCard, onPlayCollection }) {
                   hasNullDurations={sc.has_null_durations}
                   requestMembers={reqSmart(sc)}
                   onPlay={onPlay}
+                  shareDefinition={{
+                    scope: { type: 'all' },
+                    filter: sc.tags ? { tags: sc.tags } : {},
+                    aspect_ratio: ratio,
+                  }}
+                  onShare={onShareCollection}
+                  onCopyLink={onCopyCollectionLink}
                 />
               );
             }
@@ -119,6 +134,9 @@ export function CollectionsTab({ collections, renderCard, onPlayCollection }) {
             requestMembers={reqGame(g.game_id)}
             onPlay={onPlay}
             renderCard={renderCard}
+            shareScope={{ type: 'game', game_id: g.game_id }}
+            onShare={onShareCollection}
+            onCopyLink={onCopyCollectionLink}
           />
         );
       })}
@@ -135,6 +153,9 @@ export function CollectionsTab({ collections, renderCard, onPlayCollection }) {
           requestMembers={reqMixes}
           onPlay={onPlay}
           renderCard={renderCard}
+          shareScope={{ type: 'mixes' }}
+          onShare={onShareCollection}
+          onCopyLink={onCopyCollectionLink}
         />
       )}
     </>

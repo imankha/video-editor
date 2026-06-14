@@ -135,6 +135,78 @@ def revoke_share(token: str, sharer_user_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Collection share CRUD (T3620) -- a (scope, filter, ratio) definition stored
+# in shares.collection_definition (JSONB) + collection_is_public, evaluated live
+# against the sharer's profile DB at view time. No detail table.
+# ---------------------------------------------------------------------------
+
+def create_collection_share(
+    sharer_user_id: str,
+    sharer_profile_id: str,
+    recipient_email: str,
+    definition: dict,
+    is_public: bool,
+) -> str:
+    """Insert one collection share row, return its token. `definition` must
+    already be canonicalized (see routers/collections.py)."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        token = str(uuid.uuid4())
+        cur.execute(
+            """INSERT INTO shares
+               (share_token, share_type, sharer_user_id, sharer_profile_id,
+                recipient_email, collection_definition, collection_is_public)
+               VALUES (%s, 'collection', %s, %s, %s, %s, %s)""",
+            (token, sharer_user_id, sharer_profile_id,
+             recipient_email.lower().strip(), json.dumps(definition), is_public),
+        )
+    return token
+
+
+def find_collection_share(
+    sharer_user_id: str,
+    recipient_email: str,
+    definition: dict,
+    is_public: bool,
+) -> Optional[str]:
+    """Return the token of an existing, non-revoked collection share with the
+    same canonicalized definition + visibility + recipient for this sharer, or
+    None. Lets re-sharing the same card surface the existing link."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT share_token FROM shares
+               WHERE share_type = 'collection'
+                 AND sharer_user_id = %s
+                 AND recipient_email = %s
+                 AND collection_is_public = %s
+                 AND collection_definition = %s::jsonb
+                 AND revoked_at IS NULL
+               ORDER BY shared_at DESC
+               LIMIT 1""",
+            (sharer_user_id, recipient_email.lower().strip(), is_public,
+             json.dumps(definition)),
+        )
+        row = cur.fetchone()
+        return row["share_token"] if row else None
+
+
+def get_collection_share_by_token(token: str) -> Optional[dict]:
+    """Fetch a collection share row (definition + visibility + sharer ids)."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT id, share_token, share_type, sharer_user_id,
+                      sharer_profile_id, recipient_email, shared_at, revoked_at,
+                      collection_definition, collection_is_public
+               FROM shares
+               WHERE share_token = %s AND share_type = 'collection'""",
+            (token,),
+        )
+        return cur.fetchone()
+
+
+# ---------------------------------------------------------------------------
 # Game share CRUD (tables populated by T2830)
 # ---------------------------------------------------------------------------
 
@@ -354,6 +426,7 @@ SHARE_TYPE_TO_CHANNEL = {
     "video": "reel_share",
     "game": "game_share",
     "annotation_playback": "annotation_share",
+    "collection": "collection_share",
 }
 
 

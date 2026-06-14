@@ -472,7 +472,79 @@ def _get_share_url(share_token: str, share_type: str = "video") -> str:
     scheme = "http" if "localhost" in domain else "https"
     if share_type == "game":
         return f"{scheme}://{domain}/shared/teammate/{share_token}"
+    if share_type == "collection":
+        return f"{scheme}://{domain}/shared/collection/{share_token}"
     return f"{scheme}://{domain}/shared/{share_token}"
+
+
+async def send_collection_share_email(
+    recipient_email: str,
+    sharer_email: str,
+    share_token: str,
+    collection_title: str,
+    sender_name: str = "",
+    is_first_touch: bool = True,
+) -> bool:
+    """Send a collection share link (T3620). Models send_share_email; the link
+    is a LIVE collection that always shows the sharer's current reels."""
+    api_key = os.getenv("RESEND_API_KEY")
+    share_url = _get_share_url(share_token, share_type="collection")
+
+    if not api_key:
+        logger.warning(
+            f"[Email] DEV MODE -- collection share email to {recipient_email} "
+            f"for '{collection_title}'. Share URL: {share_url}"
+        )
+        return True
+
+    display_name = sender_name or sharer_email
+    safe_title = collection_title or "Highlights"
+
+    if is_first_touch:
+        subject = f"{display_name} shared a highlight collection with you"
+        heading = f"{display_name} shared {safe_title}"
+        preheader = f"Watch now -- always the latest reels from {display_name}."
+    else:
+        subject = f"New shared collection: {safe_title}"
+        heading = f"{display_name} shared {safe_title}"
+        preheader = safe_title
+
+    from_address = f"{_sanitize_from_name(display_name)} via Reel Ballers <noreply@reelballers.com>"
+
+    html_body = _build_share_email(
+        heading=heading,
+        game_name=safe_title,
+        cta_url=share_url,
+        cta_text="Watch Highlights",
+        footer_reason=f"{display_name} shared a collection with you",
+        is_first_touch=is_first_touch,
+        preheader=preheader,
+        secondary_cta_url=share_url if not is_first_touch else None,
+    )
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": from_address,
+                        "to": [recipient_email],
+                        "subject": subject,
+                        "html": html_body,
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_collection_share", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Collection share email failed: {resp.status_code} {resp.text}")
+            return False
+        logger.info(f"[Email] Collection share email sent to {recipient_email}")
+        return True
+    except Exception as e:
+        logger.error(f"[Email] Collection share email to {recipient_email} failed: {e}")
+        return False
 
 
 async def send_share_email(

@@ -22,6 +22,9 @@ import { RATIO_ORDER } from '../../constants/aspectRatios';
  * @param {Function} requestMembers - () => Promise<member[]> (cached fetch; also Play-all source)
  * @param {Function} onPlay         - (members[], title) => void
  * @param {Function} renderCard     - (download) => ReactNode
+ * @param {Object=}  shareScope     - {type:'game', game_id} | {type:'mixes'} for share links (T3620)
+ * @param {Function=} onShare       - (definition, title) => void
+ * @param {Function=} onCopyLink    - (definition) => void
  */
 export function GameCollectionGroup({
   name,
@@ -32,6 +35,9 @@ export function GameCollectionGroup({
   requestMembers,
   onPlay,
   renderCard,
+  shareScope,
+  onShare,
+  onCopyLink,
 }) {
   const ratioCounts = collection.ratio_counts || {};
   const ratioDurations = collection.ratio_durations || {};
@@ -70,6 +76,9 @@ export function GameCollectionGroup({
             hasNullDurations={collection.has_null_durations}
             requestMembers={requestMembers}
             onPlay={onPlay}
+            shareDefinition={shareScope ? { scope: shareScope, filter: {}, aspect_ratio: ratio } : undefined}
+            onShare={onShare}
+            onCopyLink={onCopyLink}
           />
           {members
             ? membersFor(ratio).map((d) => renderCard(d))

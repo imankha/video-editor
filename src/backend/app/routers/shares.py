@@ -28,6 +28,7 @@ from ..storage import APP_ENV, generate_presigned_url_global
 from ..services.sharing_db import (
     create_shares,
     get_share_by_token,
+    get_collection_share_by_token,
     get_game_share_by_token,
     get_pending_shares_for_email,
     list_contacts_for_user,
@@ -301,6 +302,33 @@ async def get_shared_teammate(share_token: str, request: Request):
         "clip_names": clip_names,
         "video_warm_url": video_warm_url,
     }
+
+
+@shared_router.get("/collection/{share_token}")
+async def get_shared_collection(share_token: str, request: Request):
+    """Public resolver for a collection share (T3620). Revoked -> 410; private ->
+    recipient-email gate (403); otherwise evaluate the stored definition LIVE
+    against the sharer's profile DB and return presigned members. Empty / DB
+    evicted -> 200 with empty members (a 'no highlights yet' state, not 404)."""
+    share = get_collection_share_by_token(share_token)
+    if not share:
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        raise HTTPException(410, "This share has been revoked")
+
+    if not share["collection_is_public"]:
+        email = _get_email_from_request(request)
+        if not email or email.lower() != share["recipient_email"].lower():
+            raise HTTPException(403, "Access denied")
+
+    record_milestone(share["sharer_user_id"], "share_viewed", {
+        "share_token": share_token,
+        "sharer_user_id": share["sharer_user_id"],
+        "share_type": "collection",
+    })
+
+    from .collections import resolve_collection_share
+    return resolve_collection_share(share)
 
 
 @shared_router.get("/{share_token}", response_model=ShareDetailResponse)

@@ -15,21 +15,35 @@ JSON over the wire like every other endpoint (no msgpack transport; the
 game_ids/tags BLOBs are on-disk storage only, decoded in Python here).
 """
 
+import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
 
+from app.analytics import record_milestone
 from app.database import get_db_connection
+from app.profile_context import get_current_profile_id
 from app.queries import latest_final_videos_subquery
 from app.services.collection_metadata import route_game_ids
+from app.services.materialization import open_profile_db_readonly
+from app.services.sharing_db import (
+    create_collection_share,
+    find_collection_share,
+)
+from app.storage import APP_ENV, generate_presigned_url_global
+from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/collections", tags=["collections"])
+
+# Ratio word for frozen share titles (glyph-only in the app, but a share title is
+# a human-readable string -- EPIC #2: glyph + word in names, never "9:16").
+RATIO_WORD = {"9:16": "Portrait", "16:9": "Landscape"}
 
 # A (scope, ratio) becomes a collection only at or above this much published
 # content. Server-computed so clients never derive eligibility (EPIC #13).
@@ -336,4 +350,324 @@ async def collections_summary():
         season_totals=season_totals,
         tag_totals=tag_totals,
         total_reel_count=len(parsed),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Collection share links (T3620)
+#
+# A share is a stored (scope, filter, aspect_ratio[, budget_sec]) DEFINITION,
+# evaluated LIVE against the sharer's profile DB at view time. Only the display
+# `title` is frozen (explicit-names-after-archive convention). The membership
+# read path reuses the SAME filter chain as GET /api/downloads (route_game_ids /
+# tag decode / aspect_ratio), so a link and the in-app card never disagree.
+#
+# Scope types: 'game' (single game), 'all' (all-time -- smart collections), and
+# 'mixes' (multi-game OR game-less). No 'season' yet (added in T3640).
+# ---------------------------------------------------------------------------
+
+class CollectionScope(BaseModel):
+    type: Literal["game", "all", "mixes"]
+    game_id: Optional[int] = None
+
+
+class CollectionFilter(BaseModel):
+    tags: Optional[List[str]] = None
+    min_rating: Optional[int] = None   # accepted but inert until a rating filter exists
+
+
+class CollectionDefinition(BaseModel):
+    scope: CollectionScope
+    filter: CollectionFilter = Field(default_factory=CollectionFilter)
+    aspect_ratio: Literal["9:16", "16:9"]
+    budget_sec: Optional[float] = None
+    title: Optional[str] = None          # server overwrites with a frozen title
+
+
+class CollectionShareRequest(BaseModel):
+    definition: CollectionDefinition
+    recipient_emails: List[str] = []
+    is_public: bool = False
+
+
+class CollectionShareRecipient(BaseModel):
+    share_token: str
+    recipient_email: str
+    is_existing_link: bool               # surfaced an existing link (dedup)
+    email_sent: Optional[bool] = None
+
+
+class CollectionShareResponse(BaseModel):
+    shares: List[CollectionShareRecipient]
+    title: str
+
+
+# ---- membership evaluation (shared by resolve; reuses list_downloads' chain) --
+
+def select_within_budget(members: List[dict], budget_sec: float) -> List[dict]:
+    """Greedy-with-skip selection of members that fit the budget, in order
+    (Python port of frontend budget.js::selectWithinBudget). NULL-duration
+    members can't be budgeted; guarantees at least one member when any has a
+    duration so a shared link is never empty for a non-empty collection."""
+    out: List[dict] = []
+    used = 0.0
+    for m in members:
+        d = m["duration"]
+        if d is None:
+            continue
+        if used + d <= budget_sec + 1e-6:
+            out.append(m)
+            used += d
+    if not out:
+        first = next((m for m in members if m["duration"] is not None), None)
+        if first:
+            out.append(first)
+    return out
+
+
+def evaluate_collection_members(conn, definition: dict) -> List[dict]:
+    """Return the live members of a collection definition against an open profile
+    DB connection, ordered by recency (created_at DESC -- the same order as
+    list_downloads; T3630 swaps in rank). Each: {id, name, duration, filename}.
+
+    Same filter chain as GET /api/downloads so member counts match the summary:
+    aspect_ratio (SQL, indexed) + scope routing on the frozen game_ids BLOB
+    (game -> ==game_id; mixes -> None; all -> no game filter) + optional tag
+    OR-filter on the frozen tags BLOB."""
+    scope = definition["scope"]
+    stype = scope["type"]
+    ratio = definition["aspect_ratio"]
+
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT fv.id, fv.name AS fv_name, fv.duration, fv.filename,
+               fv.game_ids, fv.tags, fv.created_at
+        FROM final_videos fv
+        WHERE fv.id IN ({latest_final_videos_subquery()})
+          AND fv.published_at IS NOT NULL
+          AND fv.aspect_ratio = ?
+        ORDER BY fv.created_at DESC
+        """,
+        (ratio,),
+    )
+    rows = cur.fetchall()
+
+    if stype == "game":
+        gid = scope.get("game_id")
+        rows = [r for r in rows if route_game_ids(r["game_ids"]) == gid]
+    elif stype == "mixes":
+        rows = [r for r in rows if route_game_ids(r["game_ids"]) is None]
+    # stype == "all": no game filter.
+
+    tags = (definition.get("filter") or {}).get("tags")
+    if tags:
+        wanted = set(tags)
+        rows = [r for r in rows if wanted & set(decode_data(r["tags"]) or [])]
+
+    return [
+        {"id": r["id"], "name": r["fv_name"], "duration": r["duration"],
+         "filename": r["filename"]}
+        for r in rows
+    ]
+
+
+def _context_line(definition: dict) -> str:
+    if definition["scope"]["type"] == "game":
+        return "This link always shows the current reels for this game."
+    return "This link always shows the current top reels."
+
+
+def resolve_collection_share(share: dict) -> dict:
+    """Evaluate a stored collection share against the sharer's profile DB (with
+    R2 fallback) and presign each member. Read-only: never writes the sharer DB.
+    Empty / DB-evicted membership -> still 200 with empty members + the title."""
+    definition = share["collection_definition"]
+    if isinstance(definition, str):
+        definition = json.loads(definition)
+
+    title = definition.get("title") or "Highlights"
+    base = {
+        "title": title,
+        "context_line": _context_line(definition),
+        "aspect_ratio": definition["aspect_ratio"],
+    }
+
+    conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
+    if conn is None:
+        logger.warning(
+            f"[collection-share] sharer DB unavailable for token={share['share_token']}"
+        )
+        return {**base, "members": []}
+    try:
+        members = evaluate_collection_members(conn, definition)
+    finally:
+        conn.close()
+
+    budget = definition.get("budget_sec")
+    if budget:
+        members = select_within_budget(members, budget)
+
+    uid, pid = share["sharer_user_id"], share["sharer_profile_id"]
+    out_members = []
+    for m in members:
+        key = f"{APP_ENV}/users/{uid}/profiles/{pid}/final_videos/{m['filename']}"
+        out_members.append({
+            "id": m["id"],
+            "name": m["name"],
+            "duration": m["duration"],
+            "presigned_url": generate_presigned_url_global(key),
+        })
+    return {**base, "members": out_members}
+
+
+# ---- create endpoint (authenticated sharer) -------------------------------
+
+def _format_budget(sec: float) -> str:
+    s = int(round(sec))
+    return f"{s // 60}:{s % 60:02d}"
+
+
+def _smart_base_name(tags: List[str]) -> str:
+    fs = frozenset(tags)
+    for sc in SMART_COLLECTIONS:
+        if sc["tags"] and sc["tags"] == fs:
+            return sc["name"]
+    return "Top " + " & ".join(sorted(tags))
+
+
+def _build_collection_title(conn, d: CollectionDefinition) -> str:
+    """Build the frozen share title server-side (don't trust the client title)."""
+    ratio_word = RATIO_WORD.get(d.aspect_ratio, d.aspect_ratio)
+    if d.scope.type == "game":
+        from app.routers.downloads import _generate_game_display_name
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, game_date, opponent_name, game_type, tournament_name "
+            "FROM games WHERE id = ?",
+            (d.scope.game_id,),
+        )
+        g = cur.fetchone()
+        base = (
+            _generate_game_display_name(
+                g["opponent_name"], g["game_date"], g["game_type"],
+                g["tournament_name"], g["name"] or f"Game {d.scope.game_id}",
+            )
+            if g else f"Game {d.scope.game_id}"
+        )
+    elif d.scope.type == "mixes":
+        base = "Mixes"
+    else:  # all
+        base = _smart_base_name(d.filter.tags) if d.filter.tags else "Top Plays"
+
+    title = f"{base} - {ratio_word}"
+    if d.budget_sec is not None:
+        title += f" ({_format_budget(d.budget_sec)})"
+    return title
+
+
+def _canonical_definition(d: CollectionDefinition, title: str) -> dict:
+    """Canonical (dedup-stable) JSONB definition: sorted tags, omitted None
+    fields, title + budget folded in (both are part of link identity)."""
+    scope: dict = {"type": d.scope.type}
+    if d.scope.type == "game":
+        scope["game_id"] = d.scope.game_id
+
+    filt: dict = {}
+    if d.filter.tags:
+        filt["tags"] = sorted(set(d.filter.tags))
+    if d.filter.min_rating is not None:
+        filt["min_rating"] = d.filter.min_rating
+
+    out: dict = {"scope": scope, "filter": filt,
+                 "aspect_ratio": d.aspect_ratio, "title": title}
+    if d.budget_sec is not None:
+        out["budget_sec"] = round(float(d.budget_sec), 3)
+    return out
+
+
+@router.post("/share", response_model=CollectionShareResponse)
+async def create_collection_share_endpoint(body: CollectionShareRequest):
+    from app.services.auth_db import get_user_by_id
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    d = body.definition
+
+    if d.scope.type == "game" and d.scope.game_id is None:
+        raise HTTPException(400, "game scope requires game_id")
+
+    with get_db_connection() as conn:
+        title = _build_collection_title(conn, d)
+    definition = _canonical_definition(d, title)
+
+    recipient_emails = body.recipient_emails
+    if not recipient_emails:
+        if not body.is_public:
+            raise HTTPException(400, "At least one recipient email is required")
+        sharer = get_user_by_id(user_id)
+        recipient_emails = [sharer["email"] if sharer else user_id]
+
+    is_self_share = not body.recipient_emails and body.is_public
+
+    sharer = get_user_by_id(user_id)
+    sharer_email = sharer["email"] if sharer else user_id
+
+    results = []
+    for email in recipient_emails:
+        existing = find_collection_share(user_id, email, definition, body.is_public)
+        token = existing or create_collection_share(
+            user_id, profile_id, email, definition, body.is_public
+        )
+        results.append({
+            "share_token": token,
+            "recipient_email": email.lower().strip(),
+            "is_existing_link": existing is not None,
+        })
+
+    record_milestone(user_id, "share_completed", {
+        "recipient_count": len(recipient_emails),
+        "share_type": "collection_public" if body.is_public else "collection_direct",
+    })
+
+    email_results: dict = {}
+    if not is_self_share:
+        import asyncio
+        from app.services.email import (
+            send_collection_share_email, _resolve_sender_name, _is_existing_user,
+        )
+        sender_name = _resolve_sender_name(sharer_email)
+        tasks = {}
+        for r in results:
+            if r["is_existing_link"]:
+                continue   # don't re-email an already-shared link
+            if r["recipient_email"].lower() == sharer_email.lower():
+                continue
+            tasks[r["recipient_email"]] = send_collection_share_email(
+                recipient_email=r["recipient_email"],
+                sharer_email=sharer_email,
+                share_token=r["share_token"],
+                collection_title=title,
+                sender_name=sender_name,
+                is_first_touch=not _is_existing_user(r["recipient_email"]),
+            )
+        if tasks:
+            sent = await asyncio.gather(*tasks.values())
+            email_results = dict(zip(tasks.keys(), sent))
+            for email in tasks:
+                record_milestone(user_id, "invite_sent", {
+                    "recipient_email": email, "share_type": "collection",
+                })
+
+    return CollectionShareResponse(
+        title=title,
+        shares=[
+            CollectionShareRecipient(
+                share_token=r["share_token"],
+                recipient_email=r["recipient_email"],
+                is_existing_link=r["is_existing_link"],
+                email_sent=email_results.get(r["recipient_email"]),
+            )
+            for r in results
+        ],
     )

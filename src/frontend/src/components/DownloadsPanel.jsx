@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical } from 'lucide-react';
 import { ShareModal } from './ShareModal';
+import { CollectionShareModal } from './CollectionShareModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { CollectionsTab } from './collections/CollectionsTab';
@@ -87,6 +88,39 @@ export function DownloadsPanel({
 
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
+
+  // T3620: collection share modal ({ definition, title }) + one-tap copy link.
+  const [sharingCollection, setSharingCollection] = useState(null);
+
+  const onShareCollection = (definition, title) => setSharingCollection({ definition, title });
+
+  const onCopyCollectionLink = async (definition) => {
+    try {
+      const resp = await apiFetch(`${API_BASE}/api/collections/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ definition, recipient_emails: [], is_public: true }),
+      });
+      if (!resp.ok) throw new Error(`Failed (${resp.status})`);
+      const data = await resp.json();
+      const token = data.shares?.[0]?.share_token;
+      if (!token) throw new Error('No link returned');
+      const url = `${window.location.origin}/shared/collection/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      toast.success('Link copied');
+    } catch {
+      toast.error('Could not create link');
+    }
+  };
 
   // State for overflow menu on reel cards
   const [overflowMenuId, setOverflowMenuId] = useState(null);
@@ -556,6 +590,8 @@ export function DownloadsPanel({
             collections={collections}
             renderCard={renderDownloadCard}
             onPlayCollection={onPlayCollection}
+            onShareCollection={onShareCollection}
+            onCopyCollectionLink={onCopyCollectionLink}
           />
         </div>
       </div>
@@ -582,6 +618,15 @@ export function DownloadsPanel({
           videoId={sharingDownload.id}
           videoName={sharingDownload.project_name}
           onClose={() => setSharingDownload(null)}
+        />
+      )}
+
+      {/* Collection Share Modal (T3620) */}
+      {sharingCollection && (
+        <CollectionShareModal
+          definition={sharingCollection.definition}
+          title={sharingCollection.title}
+          onClose={() => setSharingCollection(null)}
         />
       )}
 

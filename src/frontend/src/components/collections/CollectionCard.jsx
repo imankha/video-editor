@@ -17,6 +17,9 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
  * @param {boolean}  hasNullDurations
  * @param {Function} requestMembers  - () => Promise<member[]> (cached group fetch)
  * @param {Function} onPlay          - (members[], title) => void
+ * @param {Object=}  shareDefinition - base {scope, filter, aspect_ratio} for share links (T3620)
+ * @param {Function=} onShare        - (definition, title) => void
+ * @param {Function=} onCopyLink     - (definition) => void
  */
 export function CollectionCard({
   title,
@@ -27,6 +30,9 @@ export function CollectionCard({
   hasNullDurations,
   requestMembers,
   onPlay,
+  shareDefinition,
+  onShare,
+  onCopyLink,
 }) {
   const cap = budgetCap(ratioDuration);
   const [budget, setBudget] = useState(() => defaultBudget(cap)); // all clips
@@ -69,6 +75,14 @@ export function CollectionCard({
     }
   };
 
+  // Fold the user's chosen budget into the shared definition only when they've
+  // trimmed below the full collection (Set Duration with budget < cap). The
+  // server re-freezes the title; the client never sends one.
+  const buildDefinition = () => {
+    const trimmed = sliderOpen && budget < cap;
+    return trimmed ? { ...shareDefinition, budget_sec: budget } : { ...shareDefinition };
+  };
+
   return (
     <CollectionHeader
       title={title}
@@ -83,6 +97,8 @@ export function CollectionCard({
       onToggleSlider={handleToggleSlider}
       onPlayAll={handlePlayAll}
       playLoading={playLoading}
+      onShare={onShare && shareDefinition ? () => onShare(buildDefinition(), playTitle || title) : undefined}
+      onCopyLink={onCopyLink && shareDefinition ? () => onCopyLink(buildDefinition()) : undefined}
     />
   );
 }

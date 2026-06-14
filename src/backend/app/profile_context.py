@@ -15,7 +15,7 @@ Usage:
     - database.py reads it via get_current_profile_id() to construct local paths
 """
 
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Optional
 
 # Context variable for current profile ID
@@ -41,9 +41,23 @@ def get_current_profile_id() -> str:
     return value
 
 
-def set_current_profile_id(profile_id: str) -> None:
-    """Set the current profile ID for this request context."""
-    _current_profile_id.set(profile_id)
+def set_current_profile_id(profile_id: str) -> Token:
+    """Set the current profile ID for this request context.
+
+    Returns the ContextVar Token so a caller that temporarily overrides the
+    profile (e.g. resolving another user's share against their profile DB) can
+    restore the prior value with reset_profile_id_token() in a finally block.
+    Existing callers that set-and-forget can ignore the return value.
+    """
+    return _current_profile_id.set(profile_id)
+
+
+def reset_profile_id_token(token: Token) -> None:
+    """Restore the profile ID to the value captured before set_current_profile_id().
+
+    ContextVars are task-local, so this never leaks across requests; the token
+    restores whatever the prior value was (another profile, or unset/None)."""
+    _current_profile_id.reset(token)
 
 
 def reset_profile_id() -> None:
