@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Volume2, VolumeX, Trophy } from 'lucide-react';
 import { API_BASE } from '../../config';
+import apiFetch from '../../utils/apiFetch';
 import { Button } from '../shared/Button';
 import { RATIO, RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
@@ -9,21 +10,6 @@ import { useRanking } from '../../hooks/useRanking';
 import { playPop } from '../../utils/rankSound';
 import { ReelMatchCard } from './ReelMatchCard';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
-
-const DESKTOP_QUERY = '(min-width: 768px)';
-
-function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia(DESKTOP_QUERY).matches,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia(DESKTOP_QUERY);
-    const onChange = (e) => setIsDesktop(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return isDesktop;
-}
 
 /** Map a matchup side to a presentational player reel for tap-to-replay. */
 function toReplayReel(side) {
@@ -39,20 +25,42 @@ function toReplayReel(side) {
 /**
  * RankingGame - the pairwise "which is better?" game screen (T3630).
  *
- * Device rule (decision #4): phone = Portrait pool only; desktop = Portrait OR
- * Landscape via a tab. No skip — every round is a choice (decision #5). Each pick
+ * Both ratios are playable on every device (mobile + desktop) via a tab; the tab
+ * only offers a ratio that actually has rankable reels, and is hidden entirely
+ * when only one ratio qualifies. No skip - every round is a choice. Each pick
  * fires POST /api/rank/result (the sole rating write) with an endorphin cue
  * (sparkle/scale + pop + live meter tick), then loads the next pair.
  *
  * @param {Function} onClose - REQUIRED. X button only (no backdrop close).
  */
 export function RankingGame({ onClose }) {
-  const isDesktop = useIsDesktop();
-  // Phone is portrait-locked; desktop may toggle.
+  // Which ratios have rankable reels (total > 0). null = still determining.
+  const [ratios, setRatios] = useState(null);
   const [ratio, setRatio] = useState(RATIO.PORTRAIT);
-  useEffect(() => { if (!isDesktop) setRatio(RATIO.PORTRAIT); }, [isDesktop]);
 
-  const { pair, status, confidence, pick } = useRanking(ratio);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const avail = [];
+      for (const r of RATIO_ORDER) {
+        try {
+          const res = await apiFetch(`${API_BASE}/api/rank/confidence?aspect_ratio=${encodeURIComponent(r)}`);
+          if (res.ok) {
+            const d = await res.json();
+            if (d.total > 0) avail.push(r);
+          }
+        } catch { /* ignore; ratio just won't be offered */ }
+      }
+      if (cancelled) return;
+      setRatios(avail);
+      if (avail.length) setRatio(avail[0]);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const ready = ratios !== null;
+  const hasPool = ready && ratios.length > 0;
+  const { pair, status, confidence, pick } = useRanking(ratio, hasPool);
 
   const rankingSettings = useRankingSettings();
   const soundEnabled = rankingSettings?.rankSoundEnabled ?? true;
@@ -64,7 +72,6 @@ export function RankingGame({ onClose }) {
   const handlePick = useCallback((winner, loser) => {
     playPop(soundEnabled);
     setWonId(winner.id);
-    // Let the sparkle/scale play briefly, then advance.
     setTimeout(() => setWonId(null), 260);
     pick(winner.id, loser.id);
   }, [pick, soundEnabled]);
@@ -78,13 +85,14 @@ export function RankingGame({ onClose }) {
         Which is better?
       </h2>
       <div className="flex items-center gap-2">
-        {isDesktop && (
+        {/* Ratio tab: only ratios with reels, hidden when a single ratio qualifies. */}
+        {ratios && ratios.length > 1 && (
           <div className="flex rounded-lg overflow-hidden border border-gray-700">
-            {RATIO_ORDER.map((r) => (
+            {ratios.map((r) => (
               <button
                 key={r}
                 onClick={() => setRatio(r)}
-                className={`px-3 min-h-[36px] text-sm transition-colors ${
+                className={`px-3 min-h-[44px] text-sm transition-colors ${
                   r === ratio ? `${REEL.bg} text-white` : 'bg-gray-800 text-gray-400 hover:text-white'
                 }`}
               >
@@ -122,48 +130,44 @@ export function RankingGame({ onClose }) {
     </div>
   );
 
+  const caughtUp = (
+    <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2">
+      <Trophy size={40} className={REEL.accent} />
+      <p className="text-white font-semibold">You're caught up for now.</p>
+      <p className="text-sm text-gray-400">
+        New clips will ask for a few matchups when you publish them.
+      </p>
+      <Button variant="primary" size="md" onClick={onClose} className="mt-2">Done</Button>
+    </div>
+  );
+
   let body;
-  if (status === 'loading') {
+  if (!ready || (hasPool && status === 'loading')) {
     body = <div className="flex-1 flex items-center justify-center text-gray-400">Loading matchup…</div>;
-  } else if (status === 'exhausted' || !pair) {
-    body = (
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2">
-        <Trophy size={40} className={REEL.accent} />
-        <p className="text-white font-semibold">You're caught up for now.</p>
-        <p className="text-sm text-gray-400">
-          New clips will ask for a few matchups when you publish them.
-        </p>
-        <Button variant="primary" size="md" onClick={onClose} className="mt-2">Done</Button>
-      </div>
-    );
+  } else if (!hasPool || status === 'exhausted' || !pair) {
+    body = caughtUp;
   } else {
-    const cards = (
-      <>
-        <ReelMatchCard
-          side={pair.a}
-          pickLabel="Pick A"
-          won={wonId === pair.a.id}
-          onPick={() => handlePick(pair.a, pair.b)}
-          onReplay={() => setReplayReel(toReplayReel(pair.a))}
-        />
-        <div className="flex items-center justify-center font-bold text-gray-500 md:flex-col">
-          VS
-        </div>
-        <ReelMatchCard
-          side={pair.b}
-          pickLabel="Pick B"
-          won={wonId === pair.b.id}
-          onPick={() => handlePick(pair.b, pair.a)}
-          onReplay={() => setReplayReel(toReplayReel(pair.b))}
-        />
-      </>
-    );
     body = (
       <div className="flex-1 overflow-y-auto px-4 pb-4">
         <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
-          {cards}
+          <ReelMatchCard
+            side={pair.a}
+            pickLabel="Pick A"
+            won={wonId === pair.a.id}
+            onPick={() => handlePick(pair.a, pair.b)}
+            onReplay={() => setReplayReel(toReplayReel(pair.a))}
+          />
+          <div className="flex items-center justify-center font-bold text-gray-500 md:flex-col">
+            VS
+          </div>
+          <ReelMatchCard
+            side={pair.b}
+            pickLabel="Pick B"
+            won={wonId === pair.b.id}
+            onPick={() => handlePick(pair.b, pair.a)}
+            onReplay={() => setReplayReel(toReplayReel(pair.b))}
+          />
         </div>
-        <p className="text-center text-xs text-gray-500 mt-3">no skip — always choose</p>
       </div>
     );
   }

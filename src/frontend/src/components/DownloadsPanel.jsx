@@ -571,11 +571,9 @@ export function DownloadsPanel({
   return (
     <>
       {isOpen && <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40"
-        onClick={close}
-      />
+      {/* Backdrop — visual only. No click-to-close (misclicks must not dismiss
+          My Reels); the X button is the only way to close. */}
+      <div className="fixed inset-0 bg-black/50 z-40" />
 
       {/* Panel */}
       <div className="fixed right-0 top-0 h-full w-full max-w-md bg-gray-800 shadow-xl z-50 flex flex-col border-l border-gray-700 animate-slide-in-right">
