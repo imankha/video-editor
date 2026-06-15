@@ -8,8 +8,10 @@ import {
 } from '../budget';
 
 describe('budget', () => {
-  it('cap is the full duration, floored at 30s (no 5m cap)', () => {
-    expect(budgetCap(270)).toBe(270);
+  it('cap rounds the full duration UP to a 15s step, floored at 30s', () => {
+    expect(budgetCap(270)).toBe(270); // already a 15s multiple
+    expect(budgetCap(121)).toBe(135); // 2:01 -> 2:15 (clean increment, all clips reachable)
+    expect(budgetCap(125)).toBe(135);
     expect(budgetCap(600)).toBe(600); // > 5m still reachable
     expect(budgetCap(10)).toBe(30);   // eligible floor
   });

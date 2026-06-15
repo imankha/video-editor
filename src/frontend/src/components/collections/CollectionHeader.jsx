@@ -30,9 +30,9 @@ function MenuItem({ icon: Icon, label, onClick, disabled, title }) {
 /**
  * CollectionHeader - One (scope, ratio) collection, rendered with the SAME shared
  * card shell as the reel cards (MediaCard/CardIconButton, T3610 §0B). Play +
- * Copy link + a "..." menu (Play all, Set Duration, Share). Share/Copy-link are
+ * Copy link + a "..." menu (Play all, Max Duration, Share). Share/Copy-link are
  * wired in T3620 (onShare/onCopyLink); Download stays disabled until T3680. The
- * duration slider is hidden until "Set Duration".
+ * max-duration slider is hidden until "Max Duration".
  *
  * @param {string}    title            - bold title (e.g. "Top Plays", "Highlights")
  * @param {string}    ratio            - '9:16' | '16:9' (shown as a glyph, no word)
@@ -105,7 +105,7 @@ export function CollectionHeader({
           <div className="absolute right-0 mt-1 z-10 w-44 rounded-lg bg-gray-700 border border-gray-600 shadow-xl py-1">
             <MenuItem icon={Play} label="Play all"
               onClick={() => { setMenuOpen(false); onPlayAll(); }} />
-            <MenuItem icon={Clock} label="Set Duration"
+            <MenuItem icon={Clock} label="Max Duration"
               onClick={() => { setMenuOpen(false); onToggleSlider(); }} />
             <div className="my-1 border-t border-gray-600" />
             <MenuItem icon={Share2} label="Share"
