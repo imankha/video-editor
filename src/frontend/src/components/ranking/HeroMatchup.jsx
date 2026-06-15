@@ -84,8 +84,9 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+      {/* No remount key: reuse the element across swaps (src just changes) so
+          decoders don't churn -- see ClipVideo lifecycle notes. */}
       <ClipVideo
-        key={cur.id}
         streamUrl={cur.stream_url}
         active
         muted={muted}
@@ -100,7 +101,7 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
         title={`Switch to ${other.name}`}
         className="absolute top-2 left-2 z-20 w-12 rounded-lg overflow-hidden border-2 border-cyan-400 bg-black/60"
       >
-        <div className="relative h-20"><ClipVideo streamUrl={other.stream_url} active={false} /></div>
+        <div className="relative h-20"><ClipVideo streamUrl={other.stream_url} active={false} blur={false} /></div>
         <div className="flex items-center justify-center gap-1 px-1 py-0.5 text-[9px] leading-tight text-gray-100 bg-black/75 truncate">
           <ArrowLeftRight size={9} className="shrink-0" />
           <span className="truncate">{other.name}</span>

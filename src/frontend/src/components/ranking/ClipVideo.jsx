@@ -6,33 +6,41 @@ import { API_BASE } from '../../config';
  *
  * Two stacked layers fill the parent (which must be `relative`):
  *  - blur layer: the same clip, `object-cover` + blurred + scaled, so it always
- *    fills the box edge-to-edge.
- *  - sharp layer: `object-contain` at the clip's true aspect on top. Wherever the
- *    sharp clip is letterboxed, the gap is transparent and the blur shows
- *    through -- so a portrait clip in a wide slot (or vice-versa) reads
- *    full-bleed, never black.
+ *    fills the box edge-to-edge. Skipped when `blur` is false (e.g. tiny
+ *    thumbnails) -- one fewer video decoder.
+ *  - sharp layer: the clip on top (object-contain with blur, object-cover
+ *    without). Where it's letterboxed, the blur shows through -- full-bleed,
+ *    never black.
  *
- * Both layers share one URL so the browser cache serves the second from the
- * first (no duplicate fetch). The box has a dark gradient backing so it is never
- * pure black while the first frame loads.
+ * Lifecycle matters: browsers cap concurrent video decoders, so we RELEASE both
+ * <video> elements on unmount and reload on a clip change -- otherwise decoders
+ * pile up across matchups and playback stalls. Callers should also AVOID a
+ * remount key so swaps reuse the element instead of churning new ones.
  *
- * @param {string}   streamUrl - same-origin stream path (e.g. /api/downloads/ID/stream)
+ * @param {string}   streamUrl - same-origin stream path
  * @param {boolean}  active    - autoplay the sharp layer (the visible clip)
- * @param {boolean}  muted     - mute the sharp layer (set via ref -- the React
- *                               `muted` attribute is unreliable). Blur is always
- *                               muted. Falls back to muted if the browser blocks
- *                               autoplay-with-sound.
- * @param {boolean}  loop      - loop the sharp layer (false -> fires onEnded once)
- * @param {Function} onEnded   - sharp layer reached the end (used for auto-swap)
+ * @param {boolean}  muted     - mute the sharp layer (set via ref); falls back
+ *                               to muted if the browser blocks sound autoplay
+ * @param {boolean}  loop      - loop the sharp layer (false -> fires onEnded)
+ * @param {Function} onEnded   - sharp layer reached the end (auto-swap)
+ * @param {boolean}  blur      - render the blur fill layer (default true)
  */
-export function ClipVideo({ streamUrl, active = true, muted = true, loop = true, onEnded }) {
+export function ClipVideo({ streamUrl, active = true, muted = true, loop = true, onEnded, blur = true }) {
   const url = `${API_BASE}${streamUrl}`;
-  const ref = useRef(null);
+  const sharpRef = useRef(null);
+  const blurRef = useRef(null);
 
-  // Enforce muted via the DOM property (React's `muted` attr doesn't reflect),
-  // and start playback -- falling back to muted if sound autoplay is blocked.
+  // Reload sources when the clip changes -> releases the old media (no decoder /
+  // buffer pile-up) and starts the new one from the top.
   useEffect(() => {
-    const v = ref.current;
+    blurRef.current?.load();
+    sharpRef.current?.load();
+  }, [url]);
+
+  // Play + mute control. `muted` is set via the DOM property (React's attribute
+  // is unreliable) with a fallback to muted if sound autoplay is blocked.
+  useEffect(() => {
+    const v = sharpRef.current;
     if (!v) return;
     v.muted = muted;
     if (!active) return;
@@ -42,19 +50,30 @@ export function ClipVideo({ streamUrl, active = true, muted = true, loop = true,
     }
   }, [active, muted, url]);
 
+  // Free both <video> resources on unmount so decoders/buffers don't accumulate.
+  useEffect(() => () => {
+    for (const v of [sharpRef.current, blurRef.current]) {
+      if (!v) continue;
+      try { v.pause(); v.removeAttribute('src'); v.load(); } catch { /* ignore */ }
+    }
+  }, []);
+
   return (
     <div className="absolute inset-0 overflow-hidden bg-gradient-to-br from-gray-800 to-gray-900">
+      {blur && (
+        <video
+          ref={blurRef}
+          src={url}
+          muted playsInline preload="metadata" aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-70 pointer-events-none"
+        />
+      )}
       <video
-        src={url}
-        muted playsInline preload="metadata" aria-hidden="true"
-        className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-70 pointer-events-none"
-      />
-      <video
-        ref={ref}
+        ref={sharpRef}
         src={url}
         muted={muted} loop={loop} playsInline preload="metadata"
         autoPlay={active} onEnded={onEnded}
-        className="absolute inset-0 z-[1] w-full h-full object-contain"
+        className={`absolute inset-0 z-[1] w-full h-full ${blur ? 'object-contain' : 'object-cover'}`}
       />
     </div>
   );
