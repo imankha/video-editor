@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Volume2, VolumeX, Trophy } from 'lucide-react';
+import { X, Volume2, VolumeX, Trophy, Undo2 } from 'lucide-react';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
 import { Button } from '../shared/Button';
@@ -69,7 +69,7 @@ export function RankingGame({ onClose }) {
 
   const ready = ratios !== null;
   const hasPool = ready && ratios.length > 0;
-  const { pair, status, confidence, pick } = useRanking(ratio, hasPool);
+  const { pair, status, confidence, pick, undo, canUndo } = useRanking(ratio, hasPool);
 
   const rankingSettings = useRankingSettings();
   const soundEnabled = rankingSettings?.rankSoundEnabled ?? true;
@@ -123,6 +123,17 @@ export function RankingGame({ onClose }) {
         <span className="text-[10px] text-gray-500 mt-0.5 leading-none">Ranking Progress</span>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        {/* Rematch: go back to the previous matchup and re-pick (overrides it). */}
+        {canUndo && (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Undo2}
+            iconOnly
+            title="Rematch -- undo your last pick"
+            onClick={undo}
+          />
+        )}
         {ratios && ratios.length > 1 && (
           <div className="flex rounded-lg overflow-hidden border border-gray-700">
             {ratios.map((r) => (

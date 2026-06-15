@@ -69,6 +69,25 @@ class RankResultRequest(BaseModel):
     loser_id: int
 
 
+class UndoInfo(BaseModel):
+    """Pre-pick snapshot so a result can be reverted (rematch). The client holds
+    the last one and POSTs it back to /restore to undo an accidental pick."""
+    winner_id: int
+    loser_id: int
+    winner_source_clip_id: Optional[int] = None
+    loser_source_clip_id: Optional[int] = None
+    winner_rating: float
+    winner_rd: float
+    winner_match_count: int
+    loser_rating: float
+    loser_rd: float
+    loser_match_count: int
+
+
+class RankResultResponse(ConfidenceResponse):
+    undo: UndoInfo  # revert payload for the just-applied pick
+
+
 # ---------------------------------------------------------------------------
 # Pool + identity helpers
 # ---------------------------------------------------------------------------
@@ -273,12 +292,13 @@ async def rank_next(aspect_ratio: str, exclude_id: Optional[int] = None):
         return MatchupResponse(a=sides[0], b=sides[1])
 
 
-@router.post("/result", response_model=ConfidenceResponse)
+@router.post("/result", response_model=RankResultResponse)
 async def rank_result(body: RankResultRequest):
     """Apply a pick: Glicko-1 update of winner (s=1) and loser (s=0), then TWIN
     SYNC -- write the new rating/rd + match_count+1 to EVERY published row sharing
     each reel's source_clip_id (ratio twins). Returns the winner ratio's banner
-    numbers. GESTURE-ONLY: this is the sole rating write path (spec §5.3)."""
+    numbers PLUS an `undo` snapshot (pre-pick rating/rd/match_count) so the client
+    can revert this pick via /restore. GESTURE-ONLY: the sole rating write path."""
     if body.winner_id == body.loser_id:
         raise HTTPException(status_code=400, detail="winner_id and loser_id must differ")
 
@@ -287,7 +307,7 @@ async def rank_result(body: RankResultRequest):
 
         def _load(fid):
             cursor.execute(
-                "SELECT id, rating, rd, source_clip_id, aspect_ratio, clip_count "
+                "SELECT id, rating, rd, match_count, source_clip_id, aspect_ratio, clip_count "
                 "FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
                 (fid,),
             )
@@ -306,9 +326,11 @@ async def rank_result(body: RankResultRequest):
             )
 
         # Snapshot BOTH pre-update values; each player updates against the other's
-        # pre-update rating/RD (Glicko is symmetric within a rating period).
+        # pre-update rating/RD (Glicko is symmetric within a rating period). The
+        # snapshot also feeds the undo payload below.
         wr, wrd = winner["rating"], winner["rd"] if winner["rd"] is not None else RD_MAX
         lr, lrd = loser["rating"], loser["rd"] if loser["rd"] is not None else RD_MAX
+        w_mc, l_mc = winner["match_count"] or 0, loser["match_count"] or 0
         new_wr, new_wrd = update_one(wr, wrd, lr, lrd, 1.0)
         new_lr, new_lrd = update_one(lr, lrd, wr, wrd, 0.0)
 
@@ -316,7 +338,54 @@ async def rank_result(body: RankResultRequest):
         _apply_twin_sync(cursor, loser, new_lr, new_lrd)
         conn.commit()
 
-        return _confidence_stats(cursor, winner["aspect_ratio"])
+        undo = UndoInfo(
+            winner_id=winner["id"], loser_id=loser["id"],
+            winner_source_clip_id=winner["source_clip_id"],
+            loser_source_clip_id=loser["source_clip_id"],
+            winner_rating=wr, winner_rd=wrd, winner_match_count=w_mc,
+            loser_rating=lr, loser_rd=lrd, loser_match_count=l_mc,
+        )
+        conf = _confidence_stats(cursor, winner["aspect_ratio"])
+        return RankResultResponse(**conf.model_dump(), undo=undo)
+
+
+def _restore_reel(cursor, reel_id, source_clip_id, rating, rd, match_count) -> None:
+    """SET (not increment) rating/rd/match_count back to a snapshot, across twins
+    (rows sharing source_clip_id), or just the reel itself when orphaned. Used to
+    revert a pick (rematch)."""
+    if source_clip_id is not None:
+        cursor.execute(
+            "UPDATE final_videos SET rating = ?, rd = ?, match_count = ? "
+            "WHERE source_clip_id = ? AND published_at IS NOT NULL",
+            (rating, rd, match_count, source_clip_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE final_videos SET rating = ?, rd = ?, match_count = ? WHERE id = ?",
+            (rating, rd, match_count, reel_id),
+        )
+
+
+@router.post("/restore", response_model=ConfidenceResponse)
+async def rank_restore(body: UndoInfo):
+    """Revert the last pick (rematch): write the pre-pick rating/rd/match_count
+    snapshot back to both reels (and their twins), so re-judging the same matchup
+    OVERRIDES the accidental pick instead of stacking on top of it."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT aspect_ratio FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
+            (body.winner_id,),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Reel not found")
+        _restore_reel(cursor, body.winner_id, body.winner_source_clip_id,
+                      body.winner_rating, body.winner_rd, body.winner_match_count)
+        _restore_reel(cursor, body.loser_id, body.loser_source_clip_id,
+                      body.loser_rating, body.loser_rd, body.loser_match_count)
+        conn.commit()
+        return _confidence_stats(cursor, row["aspect_ratio"])
 
 
 def _apply_twin_sync(cursor, reel, new_rating: float, new_rd: float) -> None:

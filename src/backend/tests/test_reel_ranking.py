@@ -452,6 +452,10 @@ class TestRankEndpoints:
         from app.routers.rank import rank_confidence
         return asyncio.run(rank_confidence(aspect_ratio=ratio))
 
+    def _restore(self, undo):
+        from app.routers.rank import rank_restore
+        return asyncio.run(rank_restore(undo))
+
     def test_next_shape_and_empty_pool(self, db):
         # Empty / single-reel pool -> 204.
         with _conn(db) as c:
@@ -485,6 +489,28 @@ class TestRankEndpoints:
         assert rows[w]["rating"] > rows[l]["rating"]
         assert rows[w]["rd"] < glicko.RD_MAX and rows[l]["rd"] < glicko.RD_MAX
         assert rows[w]["match_count"] == 1 and rows[l]["match_count"] == 1
+
+    def test_undo_restores_pre_pick_state(self, db):
+        # A pick moves ratings + match_count; /restore (rematch) reverts both
+        # reels (and twins) exactly to the pre-pick snapshot.
+        with _conn(db) as c:
+            cur = c.cursor()
+            w = _insert_fv(cur, game_ids=[1], source_clip_id=10, quality_score=3.0)
+            l = _insert_fv(cur, game_ids=[2], source_clip_id=20, quality_score=3.0)
+            tw = _insert_fv(cur, ratio="16:9", game_ids=[1], source_clip_id=10, quality_score=3.0)  # winner's twin (same seed)
+            c.commit()
+        snap = lambda: {r["id"]: (r["rating"], r["rd"], r["match_count"]) for r in
+                        _conn(db).execute("SELECT id, rating, rd, match_count FROM final_videos")}
+        pre = snap()
+        res = self._result(w, l)
+        assert res.undo is not None
+        post = snap()
+        assert post[w][2] == 1 and post[l][2] == 1 and post[tw][2] == 1  # match_count bumped (twin too)
+        assert post[w] != pre[w]
+        # Rematch: restore reverts everything, including the winner's twin.
+        self._restore(res.undo)
+        back = snap()
+        assert back[w] == pre[w] and back[l] == pre[l] and back[tw] == pre[tw]
 
     def test_twin_sync_by_source_clip_id(self, db):
         # Portrait + Landscape twins share source_clip_id=10; a Portrait pick
