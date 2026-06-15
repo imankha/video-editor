@@ -69,11 +69,23 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   const { pct } = state;
   const active = state.kind === 'active';
+  const low = pct < 50; // matches the gauge's amber threshold
 
-  let subtext;
-  if (!active) subtext = "You're dialed in. New clips will ask for a few matchups when you publish them.";
-  else if (pct < 50) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
-  else subtext = 'Sort more clips to improve highlights';
+  // A qualitative level so the words ALWAYS agree with the needle -- no "dialed
+  // in" while the gauge sits near empty. "Caught up" (nothing left to rank) is a
+  // separate idea from "confident" (the ranking order is certain), so the level
+  // tracks the gauge, not the queue.
+  const tier = pct >= 80 ? 'Dialed in' : pct >= 50 ? 'Getting confident' : 'Just getting started';
+  const tierColor = low ? 'text-amber-400' : REEL.accent;
+
+  // One plain-language line that says WHAT the meter means and WHAT raises it.
+  let explain;
+  if (!active)
+    explain = "You've sorted every clip available for now. Confidence climbs as you publish more clips to compare.";
+  else if (low)
+    explain = 'We sort your clips head-to-head so your best ones rise to the top. Play a few rounds to get going.';
+  else
+    explain = 'Your best clips are rising to the top. Keep sorting to lock in the order.';
 
   const Tag = active ? 'button' : 'div';
   return (
@@ -86,11 +98,12 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
       <div className="flex items-center gap-3">
         <ConfidenceGauge pct={pct} width={120} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Trophy size={16} className={`${REEL.accent} shrink-0`} />
             <span className="text-white font-semibold text-sm">Collection Confidence</span>
+            <span className={`text-xs font-semibold ${tierColor}`}>{tier}</span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">{subtext}</div>
+          <div className="text-xs text-gray-400 mt-1 leading-snug">{explain}</div>
           {active && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
               Rank reels <ChevronRight size={16} />
