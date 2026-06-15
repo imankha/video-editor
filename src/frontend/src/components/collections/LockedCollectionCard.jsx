@@ -2,6 +2,7 @@ import React from 'react';
 import { Lock } from 'lucide-react';
 import { ratioGlyph, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { formatDuration } from './format';
+import { CardStack } from '../shared/MediaCard';
 
 /**
  * LockedCollectionCard - the shared "not ready yet" card chrome (T3610/T3630).
@@ -16,7 +17,7 @@ import { formatDuration } from './format';
  * @param {number}   currentSec - duration so far
  * @param {Function} onClick    - open the locked-reason popup
  */
-export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClick }) {
+export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClick, stacked = true }) {
   const pct = Math.max(
     0,
     Math.min(100, Math.round(((currentSec || 0) / COLLECTION_MIN_DURATION_SEC) * 100)),
@@ -27,12 +28,12 @@ export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClic
     ? 'hover:bg-amber-900/20 hover:border-amber-500/50 transition-colors'
     : '';
 
-  return (
+  const inner = (
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       title={onClick ? 'Why is this locked?' : undefined}
-      className={`w-full text-left p-3 bg-amber-900/10 rounded-lg border border-amber-500/30 mb-2 ${interactive}`}
+      className={`w-full text-left p-3 bg-amber-900/10 rounded-lg border border-amber-500/30 ${interactive}`}
     >
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 bg-amber-900/30">
@@ -60,6 +61,11 @@ export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClic
       </div>
     </Tag>
   );
+
+  // Collections get the stacked-paper cue; the (single) ranking launcher doesn't.
+  return stacked
+    ? <CardStack className="mb-2" layerClassName="border-amber-500/30 bg-amber-900/20">{inner}</CardStack>
+    : <div className="mb-2">{inner}</div>;
 }
 
 export default LockedCollectionCard;

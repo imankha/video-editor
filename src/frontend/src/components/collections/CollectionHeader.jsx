@@ -129,6 +129,7 @@ export function CollectionHeader({
       media={<CardMedia icon={Film} iconClassName={REEL.accent} wrapClassName={REEL.bgMuted} />}
       actions={actions}
       footer={footer}
+      stacked
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(ratio)}>

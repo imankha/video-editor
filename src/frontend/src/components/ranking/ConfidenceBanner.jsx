@@ -87,6 +87,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
         name="Rank reels"
         subtitle="Build more highlights to unlock ranking"
         currentSec={state.contentSec}
+        stacked={false}
       />
     );
   }

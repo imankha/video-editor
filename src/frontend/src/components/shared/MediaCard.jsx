@@ -43,19 +43,39 @@ export function CardMedia({ icon: Icon, iconClassName, wrapClassName = '', child
 }
 
 /**
+ * CardStack - wraps a card with two diagonally-offset "sheets" behind it so it
+ * reads as a STACK of clips (a collection), not a single clip. Purely a visual
+ * indicator; the sheets are inert (pointer-events-none).
+ *
+ * @param {React.ReactNode} children      - the card to stack
+ * @param {string=} layerClassName        - border/bg of the sheets (match the card tone)
+ * @param {string=} className             - extra classes on the wrapper (e.g. margin)
+ */
+export function CardStack({ children, layerClassName = 'border-gray-600 bg-gray-700', className = '' }) {
+  return (
+    <div className={`relative ${className}`}>
+      <span aria-hidden="true" className={`pointer-events-none absolute inset-0 rounded-lg border ${layerClassName} translate-x-[6px] translate-y-[6px]`} />
+      <span aria-hidden="true" className={`pointer-events-none absolute inset-0 rounded-lg border ${layerClassName} translate-x-[3px] translate-y-[3px]`} />
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+/**
  * MediaCard - the shared card shell for reel + collection cards (T3610). Compact
  * single row: media (icon box) | content | inline actions, with an optional
- * footer (e.g. the Set Duration slider). Keeps the two card paths visually
- * identical by construction.
+ * footer (e.g. the Max Duration slider). Keeps the two card paths visually
+ * identical by construction. `stacked` adds the stacked-paper collection cue.
  *
  * @param {React.ReactNode} media    - left icon box (use CardMedia)
  * @param {React.ReactNode} children - the text content (title row + meta)
  * @param {React.ReactNode=} actions - inline action buttons (use CardIconButton)
  * @param {React.ReactNode=} footer  - full-width content below the row
  * @param {string=} className        - overrides the default border (e.g. unwatched/locked)
+ * @param {boolean=} stacked         - render the stacked-paper "collection" cue
  */
-export function MediaCard({ media, children, actions, footer, className = '' }) {
-  return (
+export function MediaCard({ media, children, actions, footer, className = '', stacked = false }) {
+  const card = (
     <div className={`p-3 bg-gray-700 rounded-lg border transition-colors ${className || 'border-gray-600 hover:border-gray-500'}`}>
       <div className="flex items-center gap-3">
         {media}
@@ -65,6 +85,7 @@ export function MediaCard({ media, children, actions, footer, className = '' }) 
       {footer}
     </div>
   );
+  return stacked ? <CardStack>{card}</CardStack> : card;
 }
 
 export default MediaCard;
