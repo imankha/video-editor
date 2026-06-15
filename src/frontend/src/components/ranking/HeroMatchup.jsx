@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Maximize2, Check, ArrowLeftRight } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
 import { ClipVideo } from './ClipVideo';
+import { HeroIntroModal } from './HeroIntroModal';
+
+const PICK_GATE_SEC = 3; // disable Pick this long after a clip appears (watch first)
 
 /**
  * HeroMatchup - the mobile-portrait layout (T3630). A 9:16 clip is ~ the phone's
@@ -30,11 +33,29 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
   const sides = [pair.a, pair.b];
   const [active, setActive] = useState(0);
   const [userControlled, setUserControlled] = useState(false);
+  const [introSeen, setIntroSeen] = useState(false); // first-time explainer
   // New matchup -> first clip, auto-cycle again.
   useEffect(() => { setActive(0); setUserControlled(false); }, [pair.a.id, pair.b.id]);
 
   const cur = sides[active];
   const other = sides[active ^ 1];
+
+  // Pick gate: disable "Pick" for the first few seconds of each clip so the user
+  // can't pick before seeing it. Counts down once the intro is dismissed and
+  // restarts whenever the shown clip changes (swap / auto-swap).
+  const [pickGate, setPickGate] = useState(PICK_GATE_SEC);
+  useEffect(() => {
+    if (!introSeen) { setPickGate(PICK_GATE_SEC); return; }
+    setPickGate(PICK_GATE_SEC);
+    let n = PICK_GATE_SEC;
+    const iv = setInterval(() => {
+      n -= 1;
+      setPickGate(n);
+      if (n <= 0) clearInterval(iv);
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [introSeen, cur.id]);
+  const canPick = introSeen && pickGate <= 0;
 
   // onEnded while hands-off: advance to the other clip (does NOT take control).
   const autoAdvance = useCallback(() => setActive((i) => i ^ 1), []);
@@ -121,10 +142,12 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
         <button
           type="button"
           onClick={() => onPick(cur, other)}
+          disabled={!canPick}
           className={`mt-2 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl
-            font-bold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
+            font-bold text-white ${REEL.bgCta} transition-colors
+            ${canPick ? REEL.bgCtaHover : 'opacity-50 cursor-not-allowed'}`}
         >
-          <Check size={18} /> Pick
+          <Check size={18} /> {canPick ? 'Pick' : `Pick in ${pickGate}s`}
         </button>
       </div>
 
@@ -133,6 +156,8 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
           ✨
         </span>
       )}
+
+      {!introSeen && <HeroIntroModal a={pair.a} b={pair.b} onClose={() => setIntroSeen(true)} />}
     </div>
   );
 }
