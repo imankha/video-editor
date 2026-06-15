@@ -4,7 +4,7 @@ import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
 import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
-import { LockedCollectionCard } from '../collections/LockedCollectionCard';
+import { formatDurationHuman } from '../collections/format';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
 // The first sentence always explains the purpose; the second is tailored to the
@@ -81,14 +81,36 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   if (!state) return null;
 
+  // Locked: same ranking-launcher chrome as the active state (cyan gauge banner,
+  // NOT the amber collection card), so it clearly reads as the ranking feature
+  // in a "not unlocked yet" state -- with an unlock progress bar in place of the
+  // "Rank reels" link.
   if (state.kind === 'locked') {
+    const unlockPct = Math.max(0, Math.min(100, Math.round((state.contentSec / COLLECTION_MIN_DURATION_SEC) * 100)));
     return (
-      <LockedCollectionCard
-        name="Rank reels"
-        subtitle="Build more highlights to unlock ranking"
-        currentSec={state.contentSec}
-        stacked={false}
-      />
+      <div className={`w-full rounded-xl border ${REEL.borderSubtle} ${REEL.bgSubtle} p-3 mb-3`}>
+        <div className="flex items-center gap-3">
+          <ConfidenceGauge pct={0} width={120} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Trophy size={16} className={`${REEL.accent} shrink-0`} />
+              <span className="text-white font-semibold text-sm">Ranking Progress</span>
+              <span className="text-xs font-semibold text-amber-400">Locked</span>
+            </div>
+            <div className="text-xs text-gray-400 mt-1 leading-snug">
+              {SORT_PURPOSE} Add a bit more to unlock.
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1.5 flex-1 rounded-full bg-gray-700 overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${unlockPct}%` }} />
+              </div>
+              <span className="text-xs text-amber-300/80 shrink-0 tabular-nums">
+                {formatDurationHuman(state.contentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
