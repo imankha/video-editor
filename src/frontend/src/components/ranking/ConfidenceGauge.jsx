@@ -1,16 +1,24 @@
 import React from 'react';
 
+// Below this, the gauge reads "low" and goes amber to nudge the user to rank.
+const LOW_CONFIDENCE_PCT = 50;
+const COLOR_LOW = '#f59e0b';   // amber-500 (needs love)
+const COLOR_OK = '#22d3ee';    // cyan-400
+
 /**
  * ConfidenceGauge - a fuel-gauge-style confidence meter (T3630). A semicircular
- * track from E (empty) to F (full) with a needle at `pct` and the % in the
- * center. Purely presentational SVG; the needle animates via CSS transition.
+ * track from E (empty) to F (full) with a needle at `pct`. The arc/needle go
+ * amber under 50% (nudge to rank) and cyan at/above. Purely presentational SVG;
+ * the needle animates via CSS transition.
  *
  * @param {number}  pct    - 0..100
- * @param {string=} color  - arc/needle stroke (default cyan)
+ * @param {string=} color  - override the auto (amber<50 / cyan>=50) stroke
  * @param {number=} width  - px (default 132)
  */
-export function ConfidenceGauge({ pct, color = '#22d3ee', width = 132 }) {
-  const p = Math.max(0, Math.min(100, pct || 0)) / 100;
+export function ConfidenceGauge({ pct, color, width = 132 }) {
+  const clamped = Math.max(0, Math.min(100, pct || 0));
+  const p = clamped / 100;
+  const stroke = color || (clamped < LOW_CONFIDENCE_PCT ? COLOR_LOW : COLOR_OK);
   const cx = 60, cy = 60, r = 50;
   // theta: pi (left/E) -> 0 (right/F)
   const theta = Math.PI * (1 - p);
@@ -27,20 +35,16 @@ export function ConfidenceGauge({ pct, color = '#22d3ee', width = 132 }) {
             strokeWidth="8" strokeLinecap="round" />
       {/* Value arc */}
       <path d={`M10 60 A 50 50 0 0 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`} fill="none"
-            stroke={color} strokeWidth="8" strokeLinecap="round"
+            stroke={stroke} strokeWidth="8" strokeLinecap="round"
             style={{ transition: 'all 0.5s ease' }} />
       {/* Needle */}
       <line x1={cx} y1={cy} x2={nx.toFixed(2)} y2={ny.toFixed(2)}
-            stroke={color} strokeWidth="2.5" strokeLinecap="round"
+            stroke={stroke} strokeWidth="2.5" strokeLinecap="round"
             style={{ transition: 'all 0.5s ease' }} />
-      <circle cx={cx} cy={cy} r="4" fill={color} />
+      <circle cx={cx} cy={cy} r="4" fill={stroke} />
       {/* E / F labels */}
-      <text x="8" y="74" fontSize="10" fill="#9ca3af" textAnchor="middle">E</text>
-      <text x="112" y="74" fontSize="10" fill="#9ca3af" textAnchor="middle">F</text>
-      {/* Percentage */}
-      <text x="60" y="52" fontSize="20" fontWeight="700" fill={color} textAnchor="middle">
-        {Math.round(pct || 0)}%
-      </text>
+      <text x="8" y="74" fontSize="11" fill="#9ca3af" textAnchor="middle">E</text>
+      <text x="112" y="74" fontSize="11" fill="#9ca3af" textAnchor="middle">F</text>
     </svg>
   );
 }

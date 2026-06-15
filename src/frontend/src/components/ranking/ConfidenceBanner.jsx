@@ -72,9 +72,8 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   let subtext;
   if (!active) subtext = "You're dialed in. New clips will ask for a few matchups when you publish them.";
-  else if (pct < 20) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
-  else if (pct >= 90) subtext = 'Dialed in. New clips will ask for a few matchups when you publish them.';
-  else subtext = 'Winners lead every highlight collection.';
+  else if (pct < 50) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
+  else subtext = 'Sort more clips to improve highlights';
 
   const Tag = active ? 'button' : 'div';
   return (
