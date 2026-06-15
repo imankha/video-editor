@@ -129,11 +129,16 @@ export function RankingGame({ onClose }) {
     </div>
   );
 
-  // Live confidence meter (fuel gauge; the needle ticks up on every pick).
+  // Live confidence meter (fuel gauge; the needle ticks up on every pick). On
+  // desktop it grows to fill the empty band above the matchup (capped so it
+  // stays tasteful); the narrow/mobile panel keeps its compact size so nothing
+  // else shifts.
   const meter = (
-    <div className="flex flex-col items-center pt-2 pb-1">
-      <ConfidenceGauge pct={pct} width={120} />
-      <span className="text-xs text-gray-400 -mt-1">Collection Confidence</span>
+    <div className="flex flex-col items-center justify-center gap-1 px-4 pt-2 pb-1 md:flex-1 md:min-h-0">
+      <div className="flex w-full items-center justify-center md:flex-1 md:min-h-0 md:py-3">
+        <ConfidenceGauge pct={pct} fill className="h-[78px] w-auto md:h-full md:max-h-[440px]" />
+      </div>
+      <span className="text-xs text-gray-400">Collection Confidence</span>
     </div>
   );
 
@@ -155,7 +160,7 @@ export function RankingGame({ onClose }) {
     body = caughtUp;
   } else {
     body = (
-      <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col items-center justify-center">
+      <div className="flex-1 md:flex-none overflow-y-auto px-4 pb-4 flex flex-col items-center justify-center">
         <div className="w-full max-w-5xl mx-auto flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-stretch md:gap-4">
           <ReelMatchCard
             side={pair.a}
