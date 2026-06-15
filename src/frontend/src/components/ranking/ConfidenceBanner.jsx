@@ -7,6 +7,29 @@ import { REEL } from '../../config/themeColors';
 import { LockedCollectionCard } from '../collections/LockedCollectionCard';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
+// The first sentence always explains the purpose; the second is tailored to the
+// user's progress (per 20% band) to encourage the next step.
+const SORT_PURPOSE = 'Sort your clips head-to-head so the best ones show first.';
+
+/** {tier, explain} for the banner, by sort-coverage % and whether ranking is
+ *  still available (active). 100% / caught-up gets its own done-state copy. */
+function progressMessage(pct, active) {
+  if (!active) {
+    return {
+      tier: 'Fully sorted',
+      explain: 'Every clip in this collection is sorted. New clips will ask for a few matchups when you publish them.',
+    };
+  }
+  let tier, note;
+  if (pct === 0) { tier = 'Not started yet'; note = "You haven't started yet -- but you should, it's fun!"; }
+  else if (pct < 20) { tier = 'Just getting started'; note = "You're just getting started."; }
+  else if (pct < 40) { tier = 'Warming up'; note = "You're warming up -- keep going!"; }
+  else if (pct < 60) { tier = 'Halfway there'; note = "You're about halfway there."; }
+  else if (pct < 80) { tier = 'Most of the way'; note = "You're most of the way there."; }
+  else { tier = 'Almost there'; note = 'Almost there -- just a few more!'; }
+  return { tier, explain: `${SORT_PURPOSE} ${note}` };
+}
+
 /**
  * ConfidenceBanner - "Ranking Progress" + "Rank reels" entry point (T3630).
  *
@@ -70,21 +93,8 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   const { pct } = state;
   const active = state.kind === 'active';
-  const low = pct < 50; // matches the gauge's amber threshold
-
-  // The meter is sort coverage, so 100% == fully sorted == nothing left to rank.
-  // The level word tracks the gauge so the two can never disagree.
-  const tier = pct >= 100 ? 'Fully sorted' : pct >= 50 ? 'Most of the way' : 'Just getting started';
-  const tierColor = low ? 'text-amber-400' : REEL.accent;
-
-  // One plain-language line: what the meter means and what raises it.
-  let explain;
-  if (!active)
-    explain = "Every clip in this collection is sorted. New clips will ask for a few matchups when you publish them.";
-  else if (low)
-    explain = 'Sort your clips head-to-head so the best ones show first. You are just getting started.';
-  else
-    explain = 'Almost there - a few more matchups finishes ranking this collection.';
+  const tierColor = pct < 50 ? 'text-amber-400' : REEL.accent; // matches the gauge's amber threshold
+  const { tier, explain } = progressMessage(pct, active);
 
   const Tag = active ? 'button' : 'div';
   return (
