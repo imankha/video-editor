@@ -17,10 +17,11 @@ import { formatDurationHuman } from './format';
  * @param {number}   currentSec - this ratio's duration so far
  * @param {Function} onClose    - REQUIRED
  */
-export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
+export function LockedReasonModal({ name, ratio, currentSec, onClose, kind = 'collection' }) {
   const cur = currentSec || 0;
   const remaining = Math.max(0, COLLECTION_MIN_DURATION_SEC - cur);
   const pct = Math.max(0, Math.min(100, Math.round((cur / COLLECTION_MIN_DURATION_SEC) * 100)));
+  const isRanking = kind === 'ranking';
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
@@ -35,16 +36,27 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
             </div>
             <div className="min-w-0">
               <h3 className="text-white font-semibold leading-tight truncate">{name}</h3>
-              <p className="text-xs text-gray-400">{ratioDisplay(ratio)} · Locked</p>
+              <p className="text-xs text-gray-400">{ratio ? `${ratioDisplay(ratio)} · ` : ''}Locked</p>
             </div>
           </div>
           <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} />
         </div>
 
         <p className="text-sm text-gray-300">
-          Collections unlock once a ratio has{' '}
-          <span className="font-semibold text-amber-300">{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>{' '}
-          of reels.
+          {isRanking ? (
+            <>
+              Ranking lets you sort your clips head-to-head so your best ones show first.
+              It unlocks once you have{' '}
+              <span className="font-semibold text-amber-300">{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>{' '}
+              of clips to compare.
+            </>
+          ) : (
+            <>
+              Collections unlock once a ratio has{' '}
+              <span className="font-semibold text-amber-300">{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>{' '}
+              of reels.
+            </>
+          )}
         </p>
 
         <div className="my-3">
@@ -59,12 +71,22 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
 
         <p className="text-sm text-gray-300">
           {remaining > 0 ? (
-            <>
-              Add about{' '}
-              <span className="font-semibold text-white">{formatDurationHuman(remaining)}</span>{' '}
-              more {ratioLabel(ratio)} content, then you can play and share{' '}
-              <span className="font-semibold text-white">{name}</span> as one highlight reel.
-            </>
+            isRanking ? (
+              <>
+                Add about{' '}
+                <span className="font-semibold text-white">{formatDurationHuman(remaining)}</span>{' '}
+                more, then you can rank your clips head-to-head to find your best.
+              </>
+            ) : (
+              <>
+                Add about{' '}
+                <span className="font-semibold text-white">{formatDurationHuman(remaining)}</span>{' '}
+                more {ratioLabel(ratio)} content, then you can play and share{' '}
+                <span className="font-semibold text-white">{name}</span> as one highlight reel.
+              </>
+            )
+          ) : isRanking ? (
+            <>You have enough clips — reopen My Reels to start ranking.</>
           ) : (
             <>This collection has enough content — reopen My Reels to play it.</>
           )}

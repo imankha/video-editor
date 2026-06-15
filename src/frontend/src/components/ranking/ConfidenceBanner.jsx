@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Trophy, ChevronRight } from 'lucide-react';
+import { Trophy, ChevronRight, Lock } from 'lucide-react';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
 import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { formatDurationHuman } from '../collections/format';
+import { LockedReasonModal } from '../collections/LockedReasonModal';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
 // The first sentence always explains the purpose; the second is tailored to the
@@ -48,6 +49,7 @@ function progressMessage(pct, active) {
  */
 export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
   const [state, setState] = useState(null); // { kind, pct, contentSec }
+  const [showLockedWhy, setShowLockedWhy] = useState(false); // locked -> "why?" popup
 
   const fetchState = useCallback(async () => {
     try {
@@ -81,36 +83,52 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   if (!state) return null;
 
-  // Locked: same ranking-launcher chrome as the active state (cyan gauge banner,
-  // NOT the amber collection card), so it clearly reads as the ranking feature
-  // in a "not unlocked yet" state -- with an unlock progress bar in place of the
-  // "Rank reels" link.
+  // Locked: an AMBER version of the active ranking-launcher banner (same gauge +
+  // trophy + "Ranking Progress" layout, NOT the collection card), with a lock
+  // icon (consistent with other locked cards), a summary of what it is + why
+  // it's locked, and an unlock progress bar. Tapping opens the "exactly why"
+  // popup (the shared LockedReasonModal, ranking variant).
   if (state.kind === 'locked') {
     const unlockPct = Math.max(0, Math.min(100, Math.round((state.contentSec / COLLECTION_MIN_DURATION_SEC) * 100)));
     return (
-      <div className={`w-full rounded-xl border ${REEL.borderSubtle} ${REEL.bgSubtle} p-3 mb-3`}>
-        <div className="flex items-center gap-3">
-          <ConfidenceGauge pct={0} width={120} />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Trophy size={16} className={`${REEL.accent} shrink-0`} />
-              <span className="text-white font-semibold text-sm">Ranking Progress</span>
-              <span className="text-xs font-semibold text-amber-400">Locked</span>
-            </div>
-            <div className="text-xs text-gray-400 mt-1 leading-snug">
-              {SORT_PURPOSE} Add a bit more to unlock.
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-1.5 flex-1 rounded-full bg-gray-700 overflow-hidden">
-                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${unlockPct}%` }} />
+      <>
+        <button
+          type="button"
+          onClick={() => setShowLockedWhy(true)}
+          title="Why is this locked?"
+          className="w-full text-left rounded-xl border border-amber-500/40 bg-amber-900/10 hover:bg-amber-900/20 transition-colors p-3 mb-3"
+        >
+          <div className="flex items-center gap-3">
+            <ConfidenceGauge pct={0} color="#f59e0b" width={120} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Trophy size={16} className="text-amber-400 shrink-0" />
+                <span className="text-white font-semibold text-sm">Ranking Progress</span>
+                <Lock size={13} className="text-amber-400 shrink-0" />
               </div>
-              <span className="text-xs text-amber-300/80 shrink-0 tabular-nums">
-                {formatDurationHuman(state.contentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
-              </span>
+              <div className="text-xs text-gray-400 mt-1 leading-snug">
+                {SORT_PURPOSE} Locked until you have {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)} of clips.
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 flex-1 rounded-full bg-gray-700 overflow-hidden">
+                  <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${unlockPct}%` }} />
+                </div>
+                <span className="text-xs text-amber-300/80 shrink-0 tabular-nums">
+                  {formatDurationHuman(state.contentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </button>
+        {showLockedWhy && (
+          <LockedReasonModal
+            kind="ranking"
+            name="Ranking Progress"
+            currentSec={state.contentSec}
+            onClose={() => setShowLockedWhy(false)}
+          />
+        )}
+      </>
     );
   }
 
