@@ -24,7 +24,7 @@ function progressMessage(pct, active) {
   if (pct === 0) { tier = 'Not started yet'; note = "You haven't started yet -- but you should, it's fun!"; }
   else if (pct < 20) { tier = 'Just getting started'; note = "You're just getting started."; }
   else if (pct < 40) { tier = 'Warming up'; note = "You're warming up -- keep going!"; }
-  else if (pct < 60) { tier = 'Halfway there'; note = "You're about halfway there."; }
+  else if (pct < 60) { tier = 'Well on your way'; note = "You're well on your way."; }
   else if (pct < 80) { tier = 'Most of the way'; note = "You're most of the way there."; }
   else { tier = 'Almost there'; note = 'Almost there -- just a few more!'; }
   return { tier, explain: `${SORT_PURPOSE} ${note}` };
