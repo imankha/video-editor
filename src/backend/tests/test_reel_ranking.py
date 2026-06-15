@@ -517,6 +517,20 @@ class TestRankEndpoints:
             self._result(ok, broken)
         assert e.value.status_code == 400
 
+    def test_eligibility_requires_30s_unranked(self, db):
+        # 4 single-clip reels x 10s = 40s unranked -> eligible. Rank two of them
+        # (-> 20s unranked) -> below threshold -> no longer eligible.
+        with _conn(db) as c:
+            cur = c.cursor()
+            ids = [_insert_fv(cur, game_ids=[i], source_clip_id=i, duration=10.0)
+                   for i in range(1, 5)]
+            c.commit()
+        pre = self._confidence()
+        assert pre.unranked_sec == 40.0 and pre.eligible is True
+        self._result(ids[0], ids[1])
+        post = self._confidence()
+        assert post.unranked_sec == 20.0 and post.eligible is False
+
     def test_orphan_updates_only_itself(self, db):
         # source_clip_id NULL -> per-reel rating (update only its own row).
         with _conn(db) as c:

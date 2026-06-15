@@ -34,7 +34,9 @@ function toReplayReel(side) {
  * @param {Function} onClose - REQUIRED. X button only (no backdrop close).
  */
 export function RankingGame({ onClose }) {
-  // Which ratios have rankable reels (total > 0). null = still determining.
+  // Which ratios are eligible to rank (>= 30s of unranked content). null = still
+  // determining. The launcher card uses the same gate, so a ratio offered here
+  // is one the user could already see was rankable.
   const [ratios, setRatios] = useState(null);
   const [ratio, setRatio] = useState(RATIO.PORTRAIT);
 
@@ -47,7 +49,7 @@ export function RankingGame({ onClose }) {
           const res = await apiFetch(`${API_BASE}/api/rank/confidence?aspect_ratio=${encodeURIComponent(r)}`);
           if (res.ok) {
             const d = await res.json();
-            if (d.total > 0) avail.push(r);
+            if (d.eligible) avail.push(r);
           }
         } catch { /* ignore; ratio just won't be offered */ }
       }

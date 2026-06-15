@@ -25,6 +25,7 @@ from typing import Optional, List
 
 from app.database import get_db_connection
 from app.queries import latest_final_videos_subquery
+from app.routers.collections import COLLECTION_MIN_DURATION_SEC
 from app.services.collection_metadata import route_collection
 from app.services.glicko import update_one, confidence, RD_MAX
 from app.utils.encoding import decode_data
@@ -57,6 +58,8 @@ class ConfidenceResponse(BaseModel):
     confidence_pct: int
     ranked_count: int    # reels with >= 1 matchup (match_count > 0)
     total: int           # rankable single-clip reels of the ratio
+    unranked_sec: float  # total duration of never-matched reels (NULL-excluded)
+    eligible: bool       # unranked_sec >= COLLECTION_MIN_DURATION_SEC -> ranking is offered
 
 
 class RankResultRequest(BaseModel):
@@ -74,7 +77,8 @@ def _rankable_pool(cursor, aspect_ratio: str) -> list:
     cursor.execute(
         f"""
         SELECT fv.id, fv.name, fv.aspect_ratio, fv.rating, fv.rd, fv.match_count,
-               fv.source_clip_id, fv.clip_start_time, fv.game_ids, fv.tags, fv.clip_count
+               fv.source_clip_id, fv.clip_start_time, fv.game_ids, fv.tags, fv.clip_count,
+               fv.duration
         FROM final_videos fv
         WHERE fv.id IN ({latest_final_videos_subquery()})
           AND fv.published_at IS NOT NULL
@@ -181,13 +185,23 @@ def _confidence_stats(cursor, aspect_ratio: str) -> ConfidenceResponse:
     pool = _rankable_pool(cursor, aspect_ratio)
     total = len(pool)
     if total == 0:
-        return ConfidenceResponse(confidence_pct=0, ranked_count=0, total=0)
+        return ConfidenceResponse(confidence_pct=0, ranked_count=0, total=0,
+                                  unranked_sec=0.0, eligible=False)
     mean_c = sum(confidence(r["rd"] if r["rd"] is not None else RD_MAX) for r in pool) / total
     ranked = sum(1 for r in pool if (r["match_count"] or 0) > 0)
+    # Ranking is only OFFERED once a ratio has >= 30s of not-yet-ranked content
+    # (never-matched single-clip reels). Once you've ranked it down past 30s, the
+    # prompt retires until new publishes accumulate enough unranked material again.
+    unranked_sec = sum(
+        r["duration"] for r in pool
+        if (r["match_count"] or 0) == 0 and r["duration"] is not None
+    )
     return ConfidenceResponse(
         confidence_pct=round(mean_c * 100),
         ranked_count=ranked,
         total=total,
+        unranked_sec=round(unranked_sec, 3),
+        eligible=unranked_sec >= COLLECTION_MIN_DURATION_SEC,
     )
 
 
