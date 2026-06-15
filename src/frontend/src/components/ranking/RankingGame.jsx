@@ -129,16 +129,16 @@ export function RankingGame({ onClose }) {
     </div>
   );
 
-  // Live confidence meter (fuel gauge; the needle ticks up on every pick). On
-  // desktop it grows to fill the empty band above the matchup (capped so it
-  // stays tasteful); the narrow/mobile panel keeps its compact size so nothing
-  // else shifts.
+  // Live ranking-progress meter (sort coverage; the needle ticks up on every
+  // pick and reaches 100% when the collection is fully sorted). On desktop it
+  // grows to fill the empty band above the matchup (capped so it stays
+  // tasteful); the narrow/mobile panel keeps its compact size so nothing shifts.
   const meter = (
     <div className="flex flex-col items-center justify-center gap-1 px-4 pt-2 pb-1 md:flex-1 md:min-h-0">
       <div className="flex w-full items-center justify-center md:flex-1 md:min-h-0 md:py-3">
         <ConfidenceGauge pct={pct} fill className="h-[78px] w-auto md:h-full md:max-h-[440px]" />
       </div>
-      <span className="text-xs text-gray-400">Collection Confidence</span>
+      <span className="text-xs text-gray-400">Ranking Progress</span>
     </div>
   );
 
