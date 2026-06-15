@@ -8,13 +8,14 @@ import { LockedCollectionCard } from '../collections/LockedCollectionCard';
 import { ConfidenceGauge } from './ConfidenceGauge';
 
 /**
- * ConfidenceBanner - "Collection Confidence" + "Rank reels" entry point (T3630).
+ * ConfidenceBanner - "Ranking Progress" + "Rank reels" entry point (T3630).
  *
- * Reads GET /api/rank/confidence for both ratios (read-only) and always renders
- * an explanatory card -- it is never silently hidden when there are reels:
+ * The meter is sort COVERAGE: 0% = nothing sorted, 100% = fully sorted. Reads
+ * GET /api/rank/confidence for both ratios (read-only) and always renders an
+ * explanatory card -- it is never silently hidden when there are reels:
  *
- *  - active   : a ratio has >= 30s unranked content -> fuel-gauge + "Rank reels".
- *  - caught_up: enough content but nothing left to rank now -> "dialed in".
+ *  - active   : rankable AND not fully sorted -> gauge + "Rank reels".
+ *  - caught_up: fully sorted (100%) -> nothing left to rank now.
  *  - locked   : < 30s of content -> amber "build more to unlock ranking" card.
  *
  * Hidden only when there are no rankable single-clip reels at all.
@@ -69,11 +70,21 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   const { pct } = state;
   const active = state.kind === 'active';
+  const low = pct < 50; // matches the gauge's amber threshold
 
-  let subtext;
-  if (!active) subtext = "You're dialed in. New clips will ask for a few matchups when you publish them.";
-  else if (pct < 50) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
-  else subtext = 'Sort more clips to improve highlights';
+  // The meter is sort coverage, so 100% == fully sorted == nothing left to rank.
+  // The level word tracks the gauge so the two can never disagree.
+  const tier = pct >= 100 ? 'Fully sorted' : pct >= 50 ? 'Most of the way' : 'Just getting started';
+  const tierColor = low ? 'text-amber-400' : REEL.accent;
+
+  // One plain-language line: what the meter means and what raises it.
+  let explain;
+  if (!active)
+    explain = "Every clip in this collection is sorted. New clips will ask for a few matchups when you publish them.";
+  else if (low)
+    explain = 'Sort your clips head-to-head so the best ones show first. You are just getting started.';
+  else
+    explain = 'Almost there - a few more matchups finishes ranking this collection.';
 
   const Tag = active ? 'button' : 'div';
   return (
@@ -86,11 +97,12 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
       <div className="flex items-center gap-3">
         <ConfidenceGauge pct={pct} width={120} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Trophy size={16} className={`${REEL.accent} shrink-0`} />
-            <span className="text-white font-semibold text-sm">Collection Confidence</span>
+            <span className="text-white font-semibold text-sm">Ranking Progress</span>
+            <span className={`text-xs font-semibold ${tierColor}`}>{tier}</span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">{subtext}</div>
+          <div className="text-xs text-gray-400 mt-1 leading-snug">{explain}</div>
           {active && (
             <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
               Rank reels <ChevronRight size={16} />

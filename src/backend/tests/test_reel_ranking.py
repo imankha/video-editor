@@ -517,20 +517,46 @@ class TestRankEndpoints:
             self._result(ok, broken)
         assert e.value.status_code == 400
 
-    def test_eligibility_requires_30s_unranked(self, db):
-        # 4 single-clip reels x 10s = 40s unranked -> eligible. Rank two of them
-        # (-> 20s unranked) -> below threshold -> no longer eligible.
+    def test_target_matchups_scales_with_size(self):
+        from app.routers.rank import _target_matchups
+        assert _target_matchups(2) == 3        # floor (clamped up)
+        assert _target_matchups(8) == 3        # ceil(log2 8) = 3
+        assert _target_matchups(9) == 4
+        assert _target_matchups(64) == 6
+        assert _target_matchups(1000) == 8     # cap
+
+    def test_coverage_confidence_and_eligibility(self, db):
+        # 4 single-clip reels x 10s = 40s -> rankable (>= 30s). Target K = 3.
+        with _conn(db) as c:
+            cur = c.cursor()
+            [_insert_fv(cur, game_ids=[i], source_clip_id=i, duration=10.0)
+             for i in range(1, 5)]
+            c.commit()
+        # Nothing sorted -> 0%, but eligible (there's ranking work to do).
+        pre = self._confidence()
+        assert pre.confidence_pct == 0 and pre.total == 4 and pre.eligible is True
+        # Sort every clip to its target -> 100% and NOT eligible (caught up).
+        with _conn(db) as c:
+            c.execute("UPDATE final_videos SET match_count = 3")
+            c.commit()
+        done = self._confidence()
+        assert done.confidence_pct == 100 and done.eligible is False
+        # The sorter exhausts (204) exactly when coverage is complete.
+        assert getattr(self._next(aspect_ratio="9:16"), "status_code", None) == 204
+
+    def test_partial_coverage_under_100_and_still_eligible(self, db):
+        # K = 3 for 4 reels. match_counts 3,3,1,0 -> coverage (1+1+1/3+0)/4 = 58%.
         with _conn(db) as c:
             cur = c.cursor()
             ids = [_insert_fv(cur, game_ids=[i], source_clip_id=i, duration=10.0)
                    for i in range(1, 5)]
             c.commit()
-        pre = self._confidence()
-        assert pre.unranked_sec == 40.0 and pre.total_sec == 40.0 and pre.eligible is True
-        self._result(ids[0], ids[1])
-        post = self._confidence()
-        # total content unchanged; unranked drops as two reels get matched.
-        assert post.total_sec == 40.0 and post.unranked_sec == 20.0 and post.eligible is False
+        with _conn(db) as c:
+            c.execute("UPDATE final_videos SET match_count=3 WHERE id IN (?,?)", (ids[0], ids[1]))
+            c.execute("UPDATE final_videos SET match_count=1 WHERE id=?", (ids[2],))
+            c.commit()
+        r = self._confidence()
+        assert r.confidence_pct == 58 and r.eligible is True  # not 100 while a clip is unsorted
 
     def test_orphan_updates_only_itself(self, db):
         # source_clip_id NULL -> per-reel rating (update only its own row).

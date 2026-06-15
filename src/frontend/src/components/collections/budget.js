@@ -1,20 +1,24 @@
 import { COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 
 /**
- * Duration-budget mechanics for collection Play-all (T3610 §0B.5, EPIC #7).
+ * Max-duration mechanics for collection Play-all (T3610 §0B.5, EPIC #7).
  *
- * A collection defaults to ALL of its clips; "Set Duration" trims it down. The
- * slider runs 30s -> the collection's full ratio duration (no 5m cap, so "all
- * clips" is always reachable) and snaps to 15s steps. Membership is the reels
- * that fit the budget, greedy-with-skip over the members in order (newest-first
- * until T3630 ranking lands).
+ * A collection defaults to ALL of its clips; "Max Duration" caps it. The slider
+ * is a max (a ceiling), not an exact length -- the actual length depends on
+ * which reels fit, and which reels are "top" keeps changing as ranking updates.
+ * It runs 30s -> the collection's full ratio duration ROUNDED UP to a 15s step
+ * (so every stop is a clean 15s increment and "all clips" is always reachable)
+ * and snaps to 15s steps. Membership is the reels that fit the cap,
+ * greedy-with-skip over the members in order.
  */
 
 const SNAP_STEP_SEC = 15;
 
-/** Slider cap for a collection = its full ratio duration (>= 30s). */
+/** Slider cap = full ratio duration rounded UP to a 15s step (>= 30s), so every
+ *  stop is a clean increment and the full collection stays reachable. */
 export function budgetCap(totalRatioDurationSec) {
-  return Math.max(COLLECTION_MIN_DURATION_SEC, Math.round(totalRatioDurationSec || 0));
+  const total = Math.max(COLLECTION_MIN_DURATION_SEC, Math.round(totalRatioDurationSec || 0));
+  return Math.ceil(total / SNAP_STEP_SEC) * SNAP_STEP_SEC;
 }
 
 /** Default slider position: the full collection (all clips). */

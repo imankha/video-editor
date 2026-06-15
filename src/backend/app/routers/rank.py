@@ -17,6 +17,7 @@ multi-clip reels live in Mixes and never rank.
 """
 
 import logging
+import math
 import random
 
 from fastapi import APIRouter, HTTPException
@@ -27,7 +28,7 @@ from app.database import get_db_connection
 from app.queries import latest_final_videos_subquery
 from app.routers.collections import COLLECTION_MIN_DURATION_SEC
 from app.services.collection_metadata import route_collection
-from app.services.glicko import update_one, confidence, RD_MAX
+from app.services.glicko import update_one, RD_MAX
 from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
@@ -55,12 +56,12 @@ class MatchupResponse(BaseModel):
 
 
 class ConfidenceResponse(BaseModel):
-    confidence_pct: int
+    confidence_pct: int  # sort COVERAGE 0..100; 100 IFF fully sorted (see below)
     ranked_count: int    # reels with >= 1 matchup (match_count > 0)
     total: int           # rankable single-clip reels of the ratio
     total_sec: float     # total duration of the rankable pool (NULL-excluded)
     unranked_sec: float  # total duration of never-matched reels (NULL-excluded)
-    eligible: bool       # unranked_sec >= COLLECTION_MIN_DURATION_SEC -> ranking is offered
+    eligible: bool       # big enough to rank AND not fully sorted -> sorter offered
 
 
 class RankResultRequest(BaseModel):
@@ -179,33 +180,71 @@ def _pick_pair(pool: list, exclude_id: Optional[int]):
 
 
 # ---------------------------------------------------------------------------
-# Confidence (spec §4.2)
+# Ranking progress = sort COVERAGE (supersedes the old Glicko-RD confidence)
 # ---------------------------------------------------------------------------
+#
+# What the meter means, in users' terms: "how completely have I sorted this
+# collection." 0% = nothing sorted, 100% = nothing left to sort. We tie the
+# launch gate to the SAME number so they can never disagree (the old RD-based
+# confidence converged far too slowly to ever reach 100 and was decoupled from
+# eligibility, so users got locked out around 40% -- see user feedback).
+#
+# Glicko still produces the ORDER; coverage is a separate progress signal.
+
+COVERAGE_K_MIN = 3   # tiny collections still get a few rounds
+COVERAGE_K_MAX = 8   # huge ones don't demand endless play
+
+
+def _target_matchups(n: int) -> int:
+    """Per-clip comparison target K, scaled to collection size. ~log2(N)
+    comparisons place a clip well in a pairwise sort; clamped to [3, 8]."""
+    if n < 2:
+        return COVERAGE_K_MIN
+    return max(COVERAGE_K_MIN, min(COVERAGE_K_MAX, math.ceil(math.log2(n))))
+
+
+def _fully_sorted(pool: list, k: int) -> bool:
+    """Every clip has met its comparison target -> nothing useful left to sort."""
+    return bool(pool) and all((r["match_count"] or 0) >= k for r in pool)
+
 
 def _confidence_stats(cursor, aspect_ratio: str) -> ConfidenceResponse:
     pool = _rankable_pool(cursor, aspect_ratio)
     total = len(pool)
-    if total == 0:
-        return ConfidenceResponse(confidence_pct=0, ranked_count=0, total=0,
-                                  total_sec=0.0, unranked_sec=0.0, eligible=False)
-    mean_c = sum(confidence(r["rd"] if r["rd"] is not None else RD_MAX) for r in pool) / total
     ranked = sum(1 for r in pool if (r["match_count"] or 0) > 0)
     total_sec = sum(r["duration"] for r in pool if r["duration"] is not None)
-    # Ranking is only OFFERED once a ratio has >= 30s of not-yet-ranked content
-    # (never-matched single-clip reels). Once you've ranked it down past 30s, the
-    # prompt retires until new publishes accumulate enough unranked material again.
-    # total_sec lets the UI tell "not enough content yet" from "caught up".
     unranked_sec = sum(
         r["duration"] for r in pool
         if (r["match_count"] or 0) == 0 and r["duration"] is not None
     )
+
+    # < 2 clips: nothing to compare. A lone clip is trivially "sorted" (100); an
+    # empty pool is 0. Either way the sorter is never offered.
+    if total < 2:
+        return ConfidenceResponse(
+            confidence_pct=100 if total == 1 else 0,
+            ranked_count=ranked, total=total,
+            total_sec=round(total_sec, 3), unranked_sec=round(unranked_sec, 3),
+            eligible=False,
+        )
+
+    k = _target_matchups(total)
+    # Coverage: average per-clip progress toward K matchups (capped at 1 each).
+    coverage = sum(min(1.0, (r["match_count"] or 0) / k) for r in pool) / total
+    done = _fully_sorted(pool, k)
+    # 100 IFF fully sorted; otherwise cap at 99 so "100%" and "nothing left to
+    # sort" mean exactly the same thing.
+    pct = 100 if done else min(99, round(coverage * 100))
+    # Offer the sorter while the collection is big enough to rank AND there's
+    # still ranking work to do.
+    eligible = (total_sec >= COLLECTION_MIN_DURATION_SEC) and not done
     return ConfidenceResponse(
-        confidence_pct=round(mean_c * 100),
+        confidence_pct=pct,
         ranked_count=ranked,
         total=total,
         total_sec=round(total_sec, 3),
         unranked_sec=round(unranked_sec, 3),
-        eligible=unranked_sec >= COLLECTION_MIN_DURATION_SEC,
+        eligible=eligible,
     )
 
 
@@ -220,9 +259,13 @@ async def rank_next(aspect_ratio: str, exclude_id: Optional[int] = None):
     with get_db_connection() as conn:
         cursor = conn.cursor()
         pool = _rankable_pool(cursor, aspect_ratio)
+        from fastapi import Response
+        # Coverage complete (every clip met its target) -> the game is done at
+        # 100%. Stop handing out matchups, matching the confidence/eligibility.
+        if _fully_sorted(pool, _target_matchups(len(pool))):
+            return Response(status_code=204)
         candidate, opponent = _pick_pair(pool, exclude_id)
         if candidate is None:
-            from fastapi import Response
             return Response(status_code=204)
         games_info = _games_info(cursor, [candidate, opponent])
         sides = [_side(candidate, games_info), _side(opponent, games_info)]

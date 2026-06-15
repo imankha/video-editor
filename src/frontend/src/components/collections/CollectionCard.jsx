@@ -4,8 +4,8 @@ import { budgetCap, defaultBudget, selectWithinBudget, sumDuration } from './bud
 
 /**
  * CollectionCard - Container for ONE eligible (scope, ratio) collection (T3610
- * §0B.5). Defaults to ALL clips; "Set Duration" reveals a 15s-precision slider
- * that trims the budget, and the displayed duration updates to the ACTUAL
+ * §0B.5). Defaults to ALL clips; "Max Duration" reveals a 15s-precision slider
+ * that caps the budget, and the displayed duration updates to the ACTUAL
  * playable length of the selected clips. Owns the transient budget + slider
  * state and computes the budgeted Play-all subset (greedy-with-skip).
  *
@@ -76,7 +76,7 @@ export function CollectionCard({
   };
 
   // Fold the user's chosen budget into the shared definition only when they've
-  // trimmed below the full collection (Set Duration with budget < cap). The
+  // capped below the full collection (Max Duration with budget < cap). The
   // server re-freezes the title; the client never sends one.
   const buildDefinition = () => {
     const trimmed = sliderOpen && budget < cap;

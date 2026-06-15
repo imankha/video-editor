@@ -1,77 +1,79 @@
 import React from 'react';
-import { Play } from 'lucide-react';
+import { Maximize2, Check } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
+import { ClipVideo } from './ClipVideo';
 
 /**
- * ReelMatchCard - one side of a ranking matchup (T3630).
+ * ReelMatchCard - one side of a "both clips shown" matchup (stacked or
+ * side-by-side; T3630). Full-bleed clip with the name + info + a "Pick this one"
+ * button overlaid on a bottom gradient (no separate rows). ONLY the Pick button
+ * (or the keyboard shortcut) selects -- tapping the clip does not pick, it just
+ * watches. The expand button opens the full-screen player. Clips are identified
+ * by NAME, never "A/B".
  *
- * Presentational: identity (name, "vs opponent - date", soccer-notation minute,
- * tags) + a tap-to-replay affordance + a PICK button. Tapping anywhere on the
- * card body picks this reel; the small play button replays it (stops propagation
- * so it doesn't count as a pick). All touch targets are >= 44px (EPIC #14).
+ * Sizing is owned by the parent via `className` (e.g. `flex-1 min-h-0 min-w-0`),
+ * so the same card fills a column (side-by-side) or a row (stacked).
  *
- * @param {object}   side       - { id, name, aspect_ratio, opponent_line, minute, tags }
- * @param {Function} onPick     - () => void; this reel won
- * @param {Function} onReplay   - () => void; open the tap-to-replay player
- * @param {string}   pickLabel  - "Pick A" | "Pick B"
- * @param {boolean=} won        - true briefly after selection (sparkle + scale)
+ * @param {object}   side       - { id, name, aspect_ratio, opponent_line, minute, tags, stream_url }
+ * @param {Function} onPick     - () => void; this clip won (Pick button only)
+ * @param {Function} onReplay   - () => void; open the full-screen player
+ * @param {boolean=} won        - true briefly after selection (sparkle + ring)
+ * @param {string=}  hotkeyHint - keycap shown on the Pick button on desktop (e.g. '<-')
+ * @param {string=}  className  - sizing/placement from the parent layout
  */
-export function ReelMatchCard({ side, onPick, onReplay, pickLabel, won }) {
+export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint, className = '' }) {
   const minuteLabel = side.minute != null ? `${side.minute}'` : null;
 
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      className={`group relative w-full text-left rounded-xl border bg-gray-800 overflow-hidden
-        transition-transform duration-200 ${REEL.borderHover}
-        ${won ? 'scale-[1.03] border-cyan-400 reel-match-won' : 'border-gray-700'}`}
+    <div
+      className={`group relative overflow-hidden rounded-xl border bg-black
+        ${won ? 'border-cyan-400 reel-match-won' : 'border-gray-700'} ${className}`}
     >
-      {/* Tap-to-replay area */}
-      <div
-        role="button"
-        tabIndex={-1}
-        onClick={(e) => { e.stopPropagation(); onReplay(); }}
-        className={`flex items-center justify-center gap-2 h-24 ${REEL.bgSubtle} text-cyan-200
-          hover:bg-cyan-900/50 transition-colors`}
-      >
-        <Play size={20} className={REEL.accent} />
-        <span className="text-sm">tap to play</span>
-      </div>
+      <ClipVideo streamUrl={side.stream_url} active />
 
-      {/* Identity */}
-      <div className="p-3 space-y-1">
-        <div className="text-white font-semibold truncate">{side.name}</div>
+      {/* Expand -> full-screen player. */}
+      <button
+        type="button"
+        onClick={onReplay}
+        title="Play full screen"
+        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-black/45 text-cyan-200 hover:bg-black/70 transition-colors"
+      >
+        <Maximize2 size={15} />
+      </button>
+
+      {/* Bottom overlay: name + info + the ONLY pick affordance. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 p-3 pt-9 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+        <div className="text-white font-semibold text-sm truncate">{side.name}</div>
         {side.opponent_line && (
-          <div className="text-xs text-gray-400 truncate">{side.opponent_line}</div>
+          <div className="text-[11px] text-gray-300 truncate">{side.opponent_line}</div>
         )}
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          {minuteLabel && (
-            <span className="font-mono text-cyan-300">{minuteLabel}</span>
-          )}
+        <div className="flex items-center gap-2 flex-wrap text-[11px] mt-0.5">
+          {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
           {(side.tags || []).map((t) => (
-            <span key={t} className="text-gray-400">#{t}</span>
+            <span key={t} className="text-cyan-200/80">#{t}</span>
           ))}
         </div>
-      </div>
-
-      {/* Pick button */}
-      <div className="px-3 pb-3">
-        <span
-          className={`flex items-center justify-center w-full min-h-[44px] rounded-lg font-semibold
-            text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
+        <button
+          type="button"
+          onClick={onPick}
+          className={`mt-2 flex items-center justify-center gap-2 w-full min-h-[44px] rounded-lg
+            font-semibold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
         >
-          {pickLabel}
-        </span>
+          <Check size={16} /> Pick this one
+          {hotkeyHint && (
+            <kbd className="hidden md:inline ml-1 px-1.5 py-0.5 rounded bg-black/25 text-xs font-mono leading-none">
+              {hotkeyHint}
+            </kbd>
+          )}
+        </button>
       </div>
 
-      {/* Sparkle burst on win */}
       {won && (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-3xl reel-sparkle">
+        <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-4xl reel-sparkle">
           ✨
         </span>
       )}
-    </button>
+    </div>
   );
 }
 
