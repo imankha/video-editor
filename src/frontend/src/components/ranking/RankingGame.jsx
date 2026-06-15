@@ -143,7 +143,7 @@ export function RankingGame({ onClose }) {
           size="sm"
           icon={soundEnabled ? Volume2 : VolumeX}
           iconOnly
-          title={soundEnabled ? 'Mute pick sound' : 'Unmute pick sound'}
+          title={soundEnabled ? 'Mute sound' : 'Unmute sound'}
           onClick={() => setRankSoundEnabled(!soundEnabled)}
         />
         <Button variant="ghost" size="sm" icon={X} iconOnly onClick={onClose} />
@@ -168,7 +168,7 @@ export function RankingGame({ onClose }) {
   } else if (!hasPool || status === 'exhausted' || !pair) {
     body = caughtUp;
   } else if (heroMode) {
-    body = <HeroMatchup pair={pair} wonId={wonId} onPick={handlePick} onReplay={openReplay} />;
+    body = <HeroMatchup pair={pair} wonId={wonId} muted={!soundEnabled} onPick={handlePick} onReplay={openReplay} />;
   } else {
     body = (
       <div className="flex-1 min-h-0 flex flex-col">
