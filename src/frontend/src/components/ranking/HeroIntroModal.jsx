@@ -6,15 +6,14 @@ import { REEL } from '../../config/themeColors';
 /**
  * HeroIntroModal - first-time explainer for the mobile hero matchup (T3630).
  *
- * Hero mode shows ONE clip at a time, which isn't obvious, so we name both
- * contestants and explain how to switch before the user can pick the wrong one.
- * Shown once per hero session (no backdrop close -- "Got it" only).
+ * Hero mode shows ONE clip at a time, which isn't obvious, so we explain that
+ * you're comparing the clip that plays first vs the one that plays next, how to
+ * toggle, and that the back button undoes a mistake. Shown once per hero session
+ * (no backdrop close -- "Got it" only).
  *
- * @param {object}   a       - first clip side ({ name, ... })
- * @param {object}   b       - second clip side
  * @param {Function} onClose - REQUIRED
  */
-export function HeroIntroModal({ a, b, onClose }) {
+export function HeroIntroModal({ onClose }) {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" />
@@ -25,18 +24,20 @@ export function HeroIntroModal({ a, b, onClose }) {
         </div>
 
         <p className="text-sm text-gray-300">
-          You're choosing between{' '}
-          <span className="font-semibold text-white">{a.name}</span> and{' '}
-          <span className="font-semibold text-white">{b.name}</span>.
+          You're choosing the best reel between two &mdash; the one that plays first and
+          the one that plays next.
         </p>
 
         <p className="mt-3 text-sm text-gray-300 flex items-start gap-2">
           <ArrowLeftRight size={16} className={`${REEL.accent} mt-0.5 shrink-0`} />
           <span>
-            Only one plays at a time. <span className="font-semibold text-white">Swipe</span> across the
-            video (or tap the small thumbnail / the dots) to switch between them, then tap{' '}
-            <span className="font-semibold text-white">Pick</span> on the better one.
+            Toggle between them by <span className="font-semibold text-white">swiping</span>, or by
+            pressing the small thumbnail in the upper-left corner.
           </span>
+        </p>
+
+        <p className="mt-3 text-sm text-gray-300">
+          If you make a mistake, hit the <span className="font-semibold text-white">back button</span>.
         </p>
 
         <Button variant="primary" size="md" onClick={onClose} className="w-full mt-4">Got it</Button>

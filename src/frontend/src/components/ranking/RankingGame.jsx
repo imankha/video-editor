@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Volume2, VolumeX, Trophy, Undo2 } from 'lucide-react';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
@@ -103,6 +103,36 @@ export function RankingGame({ onClose }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [pair, replayReel, heroMode, handlePick]);
+
+  // Browser/device Back button -> rematch (undo the last pick) if there is one,
+  // otherwise close the game. We keep the SAME URL so the app's editor-mode
+  // popstate handler no-ops (it early-returns when targetMode == currentMode).
+  const canUndoRef = useRef(canUndo);
+  const undoRef = useRef(undo);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    canUndoRef.current = canUndo;
+    undoRef.current = undo;
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const url = window.location.pathname + window.location.search + window.location.hash;
+    window.history.pushState({ rankGuard: true }, '', url);
+    const onPop = () => {
+      if (canUndoRef.current) {
+        undoRef.current();
+        window.history.pushState({ rankGuard: true }, '', url); // re-arm for the next back
+      } else {
+        onCloseRef.current();
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      // Closed via the X (not Back): drop our leftover same-URL history entry.
+      if (window.history.state && window.history.state.rankGuard) window.history.back();
+    };
+  }, []);
 
   const pct = confidence?.confidence_pct ?? 0;
 

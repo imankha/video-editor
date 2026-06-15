@@ -158,7 +158,7 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
         </span>
       )}
 
-      {!introSeen && <HeroIntroModal a={pair.a} b={pair.b} onClose={() => setIntroSeen(true)} />}
+      {!introSeen && <HeroIntroModal onClose={() => setIntroSeen(true)} />}
     </div>
   );
 }
