@@ -58,6 +58,7 @@ class ConfidenceResponse(BaseModel):
     confidence_pct: int
     ranked_count: int    # reels with >= 1 matchup (match_count > 0)
     total: int           # rankable single-clip reels of the ratio
+    total_sec: float     # total duration of the rankable pool (NULL-excluded)
     unranked_sec: float  # total duration of never-matched reels (NULL-excluded)
     eligible: bool       # unranked_sec >= COLLECTION_MIN_DURATION_SEC -> ranking is offered
 
@@ -186,12 +187,14 @@ def _confidence_stats(cursor, aspect_ratio: str) -> ConfidenceResponse:
     total = len(pool)
     if total == 0:
         return ConfidenceResponse(confidence_pct=0, ranked_count=0, total=0,
-                                  unranked_sec=0.0, eligible=False)
+                                  total_sec=0.0, unranked_sec=0.0, eligible=False)
     mean_c = sum(confidence(r["rd"] if r["rd"] is not None else RD_MAX) for r in pool) / total
     ranked = sum(1 for r in pool if (r["match_count"] or 0) > 0)
+    total_sec = sum(r["duration"] for r in pool if r["duration"] is not None)
     # Ranking is only OFFERED once a ratio has >= 30s of not-yet-ranked content
     # (never-matched single-clip reels). Once you've ranked it down past 30s, the
     # prompt retires until new publishes accumulate enough unranked material again.
+    # total_sec lets the UI tell "not enough content yet" from "caught up".
     unranked_sec = sum(
         r["duration"] for r in pool
         if (r["match_count"] or 0) == 0 and r["duration"] is not None
@@ -200,6 +203,7 @@ def _confidence_stats(cursor, aspect_ratio: str) -> ConfidenceResponse:
         confidence_pct=round(mean_c * 100),
         ranked_count=ranked,
         total=total,
+        total_sec=round(total_sec, 3),
         unranked_sec=round(unranked_sec, 3),
         eligible=unranked_sec >= COLLECTION_MIN_DURATION_SEC,
     )

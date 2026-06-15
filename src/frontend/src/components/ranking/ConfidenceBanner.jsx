@@ -2,24 +2,30 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Trophy, ChevronRight } from 'lucide-react';
 import { API_BASE } from '../../config';
 import apiFetch from '../../utils/apiFetch';
-import { RATIO_ORDER } from '../../constants/aspectRatios';
+import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
+import { LockedCollectionCard } from '../collections/LockedCollectionCard';
+import { ConfidenceGauge } from './ConfidenceGauge';
 
 /**
- * ConfidenceBanner - "Collection Confidence" meter + "Rank reels" CTA (T3630).
+ * ConfidenceBanner - "Collection Confidence" + "Rank reels" entry point (T3630).
  *
- * Sits at the top of My Reels. Ranking is only OFFERED once a ratio has >= 30s of
- * unranked content; the banner reads GET /api/rank/confidence for BOTH ratios and
- * renders only when at least one is `eligible`, aggregating the eligible ratios'
- * numbers. Read-only (no writes). Hidden entirely when neither ratio qualifies.
+ * Reads GET /api/rank/confidence for both ratios (read-only) and always renders
+ * an explanatory card -- it is never silently hidden when there are reels:
  *
- * @param {Function} onRank      - open the ranking game
+ *  - active   : a ratio has >= 30s unranked content -> fuel-gauge + "Rank reels".
+ *  - caught_up: enough content but nothing left to rank now -> "dialed in".
+ *  - locked   : < 30s of content -> amber "build more to unlock ranking" card.
+ *
+ * Hidden only when there are no rankable single-clip reels at all.
+ *
+ * @param {Function} onRank      - open the ranking game (active state only)
  * @param {number=}  refreshKey  - bump to refetch (e.g. after a game closes)
  */
 export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
-  const [agg, setAgg] = useState(null); // { confidence_pct, ranked_count, total } | null
+  const [state, setState] = useState(null); // { kind, pct, contentSec }
 
-  const fetchEligibility = useCallback(async () => {
+  const fetchState = useCallback(async () => {
     try {
       const results = await Promise.all(
         RATIO_ORDER.map(async (r) => {
@@ -29,60 +35,71 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
           return res.ok ? res.json() : null;
         }),
       );
-      const eligible = results.filter((d) => d && d.eligible);
-      if (eligible.length === 0) {
-        setAgg(null);
-        return;
-      }
-      // Aggregate across eligible ratios: counts sum, confidence is the
-      // clip-count-weighted mean of the per-ratio percentages.
-      const total = eligible.reduce((s, d) => s + d.total, 0);
-      const ranked = eligible.reduce((s, d) => s + d.ranked_count, 0);
-      const pct = total
-        ? Math.round(eligible.reduce((s, d) => s + d.confidence_pct * d.total, 0) / total)
-        : 0;
-      setAgg({ confidence_pct: pct, ranked_count: ranked, total });
+      const valid = results.filter((d) => d && d.total > 0);
+      if (valid.length === 0) { setState(null); return; } // nothing rankable -> hide
+
+      const totalReels = valid.reduce((s, d) => s + d.total, 0);
+      const pct = Math.round(
+        valid.reduce((s, d) => s + d.confidence_pct * d.total, 0) / totalReels,
+      );
+      const contentSec = Math.max(...valid.map((d) => d.total_sec || 0));
+
+      if (valid.some((d) => d.eligible)) setState({ kind: 'active', pct });
+      else if (valid.some((d) => (d.total_sec || 0) >= COLLECTION_MIN_DURATION_SEC))
+        setState({ kind: 'caught_up', pct });
+      else setState({ kind: 'locked', contentSec });
     } catch {
-      setAgg(null); // non-critical; banner just hides on failure
+      setState(null); // non-critical; banner just hides on failure
     }
   }, []);
 
-  useEffect(() => { fetchEligibility(); }, [fetchEligibility, refreshKey]);
+  useEffect(() => { fetchState(); }, [fetchState, refreshKey]);
 
-  if (!agg) return null;
+  if (!state) return null;
 
-  const pct = agg.confidence_pct;
-  let subtext = 'Winners lead every highlight collection.';
-  if (pct < 20) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
+  if (state.kind === 'locked') {
+    return (
+      <LockedCollectionCard
+        name="Rank reels"
+        subtitle="Build more highlights to unlock ranking"
+        currentSec={state.contentSec}
+      />
+    );
+  }
+
+  const { pct } = state;
+  const active = state.kind === 'active';
+
+  let subtext;
+  if (!active) subtext = "You're dialed in. New clips will ask for a few matchups when you publish them.";
+  else if (pct < 20) subtext = 'Your highlights are picking themselves. Play a few rounds to take control.';
   else if (pct >= 90) subtext = 'Dialed in. New clips will ask for a few matchups when you publish them.';
+  else subtext = 'Winners lead every highlight collection.';
 
+  const Tag = active ? 'button' : 'div';
   return (
-    <button
-      type="button"
-      onClick={onRank}
+    <Tag
+      type={active ? 'button' : undefined}
+      onClick={active ? onRank : undefined}
       className={`w-full text-left rounded-xl border ${REEL.borderSubtle} ${REEL.bgSubtle}
-        hover:bg-cyan-900/40 transition-colors p-3 mb-3`}
+        ${active ? 'hover:bg-cyan-900/40 transition-colors' : ''} p-3 mb-3`}
     >
       <div className="flex items-center gap-3">
-        <Trophy size={22} className={`${REEL.accent} shrink-0`} />
+        <ConfidenceGauge pct={pct} width={120} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Trophy size={16} className={`${REEL.accent} shrink-0`} />
             <span className="text-white font-semibold text-sm">Collection Confidence</span>
-            <span className={`font-bold ${REEL.accent}`}>{pct}%</span>
           </div>
-          <div className="h-2 rounded-full bg-gray-700 overflow-hidden my-1">
-            <div className={`h-full ${REEL.bg} transition-all duration-500`} style={{ width: `${pct}%` }} />
-          </div>
-          <div className="text-xs text-gray-400">
-            {agg.ranked_count} of {agg.total} clips ranked
-          </div>
-          <div className="text-xs text-gray-500 mt-0.5">{subtext}</div>
+          <div className="text-xs text-gray-500 mt-1">{subtext}</div>
+          {active && (
+            <div className={`flex items-center gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
+              Rank reels <ChevronRight size={16} />
+            </div>
+          )}
         </div>
       </div>
-      <div className={`flex items-center justify-end gap-1 mt-2 text-sm font-medium ${REEL.accent}`}>
-        Rank reels <ChevronRight size={16} />
-      </div>
-    </button>
+    </Tag>
   );
 }
 

@@ -9,6 +9,7 @@ import { useRankingSettings, useSettingsStore } from '../../stores/settingsStore
 import { useRanking } from '../../hooks/useRanking';
 import { playPop } from '../../utils/rankSound';
 import { ReelMatchCard } from './ReelMatchCard';
+import { ConfidenceGauge } from './ConfidenceGauge';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
 
 /** Map a matchup side to a presentational player reel for tap-to-replay. */
@@ -116,19 +117,11 @@ export function RankingGame({ onClose }) {
     </div>
   );
 
-  // Live confidence meter.
+  // Live confidence meter (fuel gauge; the needle ticks up on every pick).
   const meter = (
-    <div className="px-4 py-3">
-      <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-        <span>Collection Confidence</span>
-        <span className={`font-semibold ${REEL.accent}`}>{pct}%</span>
-      </div>
-      <div className="h-2 rounded-full bg-gray-700 overflow-hidden">
-        <div
-          className={`h-full ${REEL.bg} transition-all duration-500`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+    <div className="flex flex-col items-center pt-2 pb-1">
+      <ConfidenceGauge pct={pct} width={120} />
+      <span className="text-xs text-gray-400 -mt-1">Collection Confidence</span>
     </div>
   );
 

@@ -526,10 +526,11 @@ class TestRankEndpoints:
                    for i in range(1, 5)]
             c.commit()
         pre = self._confidence()
-        assert pre.unranked_sec == 40.0 and pre.eligible is True
+        assert pre.unranked_sec == 40.0 and pre.total_sec == 40.0 and pre.eligible is True
         self._result(ids[0], ids[1])
         post = self._confidence()
-        assert post.unranked_sec == 20.0 and post.eligible is False
+        # total content unchanged; unranked drops as two reels get matched.
+        assert post.total_sec == 40.0 and post.unranked_sec == 20.0 and post.eligible is False
 
     def test_orphan_updates_only_itself(self, db):
         # source_clip_id NULL -> per-reel rating (update only its own row).

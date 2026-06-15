@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
-import { UnlockProgress } from './UnlockProgress';
+import { LockedCollectionCard } from './LockedCollectionCard';
 import { LockedReasonModal } from './LockedReasonModal';
 
 const GAME_UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
 
 /**
- * RatioUnlockGroup - A game's sub-30s ratio sub-list (T3610, §0.10).
+ * RatioUnlockGroup - a game's sub-30s ratio sub-list (T3610, §0.10). The locked
+ * "game highlights" now render as the shared amber LockedCollectionCard (tap for
+ * the reason), followed by the ratio's individually-playable reels.
  *
- * Below-threshold ratio under a game: lists its reels (browsable + individually
- * playable) with an unlock progress bar. Tapping the progress bar opens a popup
- * explaining exactly why this game's highlights are locked. No collection-level
- * verbs until it unlocks.
- *
- * @param {string}   name        - the group/game name (for the locked-reason popup)
+ * @param {string}   name        - the group/game name (for the card + popup)
  * @param {string}   ratio       - '9:16' | '16:9'
  * @param {number}   currentSec  - this ratio's duration so far
  * @param {Array}    reels       - this ratio's members
@@ -20,24 +17,24 @@ const GAME_UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
  */
 export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard }) {
   const [showReason, setShowReason] = useState(false);
+  const cardName = `${name || 'Game'} highlights`;
 
   return (
     <div className="mt-3">
-      <button
-        type="button"
+      <LockedCollectionCard
+        name={cardName}
+        subtitle={GAME_UNLOCK_CAPTION}
+        ratio={ratio}
+        currentSec={currentSec}
         onClick={() => setShowReason(true)}
-        title="Why is this locked?"
-        className="w-full text-left rounded-lg p-1 -m-1 hover:bg-gray-700/40 transition-colors"
-      >
-        <UnlockProgress ratio={ratio} currentSec={currentSec} caption={GAME_UNLOCK_CAPTION} />
-      </button>
-      <div className="mt-2 space-y-2">
+      />
+      <div className="space-y-2">
         {reels.map((d) => renderCard(d))}
       </div>
 
       {showReason && (
         <LockedReasonModal
-          name={`${name || 'Game'} highlights`}
+          name={cardName}
           ratio={ratio}
           currentSec={currentSec}
           onClose={() => setShowReason(false)}
