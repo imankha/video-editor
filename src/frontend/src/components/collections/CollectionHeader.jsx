@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Play, Loader, MoreVertical, Clock, Share2, Link2, Download, Film } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
 import { ratioGlyph, ratioLabel } from '../../constants/aspectRatios';
-import { formatDuration } from './format';
+import { formatDurationHuman } from './format';
 import { DurationBudgetSlider } from './DurationBudgetSlider';
 import { MediaCard, CardMedia, CardIconButton } from '../shared/MediaCard';
 
@@ -67,7 +67,7 @@ export function CollectionHeader({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
-  const durationStr = formatDuration(duration);
+  const durationStr = formatDurationHuman(duration);
 
   useEffect(() => {
     if (!menuOpen) return;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { REEL } from '../../config/themeColors';
 import { ratioGlyph, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
-import { formatDuration } from './format';
+import { formatDurationHuman } from './format';
 
 /**
  * UnlockProgress - shared progress bar toward the 30s collection threshold
@@ -23,7 +23,7 @@ export function UnlockProgress({ ratio, currentSec, caption }) {
       <div className="flex items-center justify-between gap-2 mb-1">
         <span className={`text-base leading-none ${REEL.accent}`} title={ratioLabel(ratio)}>{ratioGlyph(ratio)}</span>
         <span className="text-xs text-gray-500">
-          {formatDuration(currentSec) || '0:00'} / {formatDuration(COLLECTION_MIN_DURATION_SEC)}
+          {formatDurationHuman(currentSec) || '0s'} / {formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}
         </span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-gray-700 overflow-hidden">

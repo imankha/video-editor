@@ -2,7 +2,7 @@ import React from 'react';
 import { Lock, X } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { ratioDisplay, ratioLabel, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
-import { formatDuration } from './format';
+import { formatDurationHuman } from './format';
 
 /**
  * LockedReasonModal - explains exactly why a collection is locked (T3610/T3630).
@@ -43,7 +43,7 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
 
         <p className="text-sm text-gray-300">
           Collections unlock once a ratio has{' '}
-          <span className="font-semibold text-amber-300">{formatDuration(COLLECTION_MIN_DURATION_SEC)}</span>{' '}
+          <span className="font-semibold text-amber-300">{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>{' '}
           of reels.
         </p>
 
@@ -52,8 +52,8 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
             <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
           <div className="mt-1 flex items-center justify-between text-xs text-amber-300/80 tabular-nums">
-            <span>{formatDuration(cur) || '0:00'} so far</span>
-            <span>{formatDuration(COLLECTION_MIN_DURATION_SEC)}</span>
+            <span>{formatDurationHuman(cur) || '0s'} so far</span>
+            <span>{formatDurationHuman(COLLECTION_MIN_DURATION_SEC)}</span>
           </div>
         </div>
 
@@ -61,7 +61,7 @@ export function LockedReasonModal({ name, ratio, currentSec, onClose }) {
           {remaining > 0 ? (
             <>
               Add about{' '}
-              <span className="font-semibold text-white">{formatDuration(remaining)}</span>{' '}
+              <span className="font-semibold text-white">{formatDurationHuman(remaining)}</span>{' '}
               more {ratioLabel(ratio)} content, then you can play and share{' '}
               <span className="font-semibold text-white">{name}</span> as one highlight reel.
             </>

@@ -12,6 +12,7 @@ import { toPlayerReel } from './collections/playerReels';
 import { CardMedia, CardIconButton } from './shared/MediaCard';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
+import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
 import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
@@ -61,7 +62,6 @@ export function DownloadsPanel({
     renameDownload,
     markWatched,
     formatFileSize,
-    formatDuration,
     formatDate,
   } = useDownloads(false);
 
@@ -400,8 +400,8 @@ export function DownloadsPanel({
               )}
               {(showFilename || showSourceType) && <span aria-hidden>·</span>}
               <span className="shrink-0">{formatDate(download.created_at)}</span>
-              {formatDuration(download.duration) && <span aria-hidden>·</span>}
-              {formatDuration(download.duration) && <span className="shrink-0">{formatDuration(download.duration)}</span>}
+              {formatDurationHuman(download.duration) && <span aria-hidden>·</span>}
+              {formatDurationHuman(download.duration) && <span className="shrink-0">{formatDurationHuman(download.duration)}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
