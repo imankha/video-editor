@@ -631,21 +631,40 @@ async def download_file(download_id: int):
         )
 
 
+# Shared R2 client for streaming proxies -- reused across requests so the TLS /
+# connection handshake is paid ONCE instead of per request (a fresh client per
+# request was a big chunk of the stream TTFB).
+_r2_stream_client = None
+
+
+def _get_r2_stream_client():
+    import httpx
+    global _r2_stream_client
+    if _r2_stream_client is None or _r2_stream_client.is_closed:
+        _r2_stream_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
+        )
+    return _r2_stream_client
+
+
 @router.api_route("/{download_id}/stream", methods=["GET", "HEAD"])
 async def stream_download(download_id: int, request: Request):
     """Same-origin streaming proxy for gallery video playback.
 
-    Same pattern as projects/{id}/working_video/stream — proxies R2
-    through localhost to avoid Chrome's 6-socket-per-origin HTTP/1.1 limit.
+    Proxies R2 through localhost (avoids Chrome's 6-socket-per-origin HTTP/1.1
+    limit). GET forwards the client's Range straight to R2 in a SINGLE round-trip
+    on a pooled connection and passes R2's status / Content-Range / Content-Length
+    back unchanged -- no separate size probe. The old probe + per-request client
+    cost two extra R2 round-trips (with fresh TLS each) on every request, which
+    was most of the ~7s TTFB.
     """
     from fastapi.responses import StreamingResponse, Response
-    import httpx
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
         row = cursor.fetchone()
-
     if not row or not row['filename']:
         raise HTTPException(status_code=404, detail="Download not found")
 
@@ -653,66 +672,50 @@ async def stream_download(download_id: int, request: Request):
     if not presigned_url:
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
-        size_probe = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
-    if size_probe.status_code not in (200, 206):
-        raise HTTPException(status_code=size_probe.status_code, detail=f"R2 probe returned {size_probe.status_code}")
-
-    cr = size_probe.headers.get("content-range")
-    total_size = None
-    if cr:
-        m = cr.rsplit("/", 1)
-        if len(m) == 2 and m[1].isdigit():
-            total_size = int(m[1])
-    if total_size is None:
-        try:
-            total_size = int(size_probe.headers["content-length"])
-        except (KeyError, ValueError):
-            raise HTTPException(status_code=502, detail="R2 probe missing size")
-
+    client = _get_r2_stream_client()
     range_hdr = request.headers.get("range") or request.headers.get("Range")
-    if range_hdr:
-        try:
-            spec = range_hdr.split("=", 1)[1]
-            start_s, end_s = spec.split("-", 1)
-            req_start = int(start_s)
-            req_end = int(end_s) if end_s else total_size - 1
-        except (IndexError, ValueError):
-            raise HTTPException(status_code=400, detail=f"Invalid Range header: {range_hdr}")
-        req_end = min(req_end, total_size - 1)
-        if req_start > req_end:
-            raise HTTPException(status_code=416, detail="Range Not Satisfiable")
-        status_code = 206
-        content_length = req_end - req_start + 1
-        response_headers = {
-            "Content-Range": f"bytes {req_start}-{req_end}/{total_size}",
-            "Content-Length": str(content_length),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
-        }
-        upstream_range = f"bytes={req_start}-{req_end}"
-    else:
-        status_code = 200
-        response_headers = {
-            "Content-Length": str(total_size),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
-        }
-        upstream_range = None
+    # A final-video filename is immutable, so let the browser cache it: repeat
+    # plays and the blur/sharp layers serve from cache instead of re-hitting R2.
+    base_headers = {"Accept-Ranges": "bytes", "Cache-Control": "private, max-age=3600"}
 
     if request.method == "HEAD":
-        return Response(status_code=status_code, headers=response_headers, media_type="video/mp4")
+        probe = await client.get(presigned_url, headers={"Range": "bytes=0-0"})
+        if probe.status_code not in (200, 206):
+            raise HTTPException(status_code=probe.status_code, detail=f"R2 probe returned {probe.status_code}")
+        headers = dict(base_headers)
+        cr = probe.headers.get("content-range")
+        if cr and "/" in cr:
+            tail = cr.rsplit("/", 1)[1]
+            if tail.isdigit():
+                headers["Content-Length"] = tail
+        return Response(status_code=200, headers=headers, media_type="video/mp4")
+
+    upstream_headers = {"Range": range_hdr} if range_hdr else {}
+    r2 = await client.send(
+        client.build_request("GET", presigned_url, headers=upstream_headers),
+        stream=True,
+    )
+    if r2.status_code not in (200, 206):
+        await r2.aclose()
+        raise HTTPException(status_code=r2.status_code, detail=f"R2 returned {r2.status_code}")
+
+    headers = dict(base_headers)
+    for h in ("Content-Range", "Content-Length"):
+        v = r2.headers.get(h.lower())
+        if v:
+            headers[h] = v
+    media_type = r2.headers.get("content-type", "video/mp4")
 
     async def stream_body():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-            stream_headers = {"Range": upstream_range} if upstream_range else {}
-            async with client.stream("GET", presigned_url, headers=stream_headers) as response:
-                if response.status_code not in (200, 206):
-                    raise HTTPException(status_code=response.status_code, detail=f"R2 returned {response.status_code}")
-                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
-                    yield chunk
+        try:
+            async for chunk in r2.aiter_bytes(chunk_size=1024 * 1024):
+                yield chunk
+        finally:
+            await r2.aclose()
 
-    return StreamingResponse(stream_body(), status_code=status_code, media_type="video/mp4", headers=response_headers)
+    return StreamingResponse(
+        stream_body(), status_code=r2.status_code, media_type=media_type, headers=headers,
+    )
 
 
 @router.delete("/{download_id}")

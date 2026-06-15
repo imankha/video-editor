@@ -7,7 +7,7 @@ const COLOR_OK = '#22d3ee';    // cyan-400
 
 /**
  * ConfidenceGauge - a fuel-gauge-style confidence meter (T3630). A semicircular
- * track from E (empty) to F (full) with a needle at `pct`. The arc/needle go
+ * track from 0% (empty) to 100% (full) with a needle at `pct`. The arc/needle go
  * amber under 50% (nudge to rank) and cyan at/above. Purely presentational SVG;
  * the needle animates via CSS transition.
  *
@@ -45,9 +45,9 @@ export function ConfidenceGauge({ pct, color, width = 132, fill = false, classNa
             stroke={stroke} strokeWidth="2.5" strokeLinecap="round"
             style={{ transition: 'all 0.5s ease' }} />
       <circle cx={cx} cy={cy} r="4" fill={stroke} />
-      {/* E / F labels */}
-      <text x="8" y="74" fontSize="11" fill="#9ca3af" textAnchor="middle">E</text>
-      <text x="112" y="74" fontSize="11" fill="#9ca3af" textAnchor="middle">F</text>
+      {/* End labels: empty (0%) -> full (100%) */}
+      <text x="4" y="74" fontSize="10" fill="#9ca3af" textAnchor="start">0%</text>
+      <text x="116" y="74" fontSize="10" fill="#9ca3af" textAnchor="end">100%</text>
     </>
   );
 
