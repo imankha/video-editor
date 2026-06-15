@@ -1,107 +1,66 @@
-import React, { useRef, useCallback } from 'react';
-import { Play, Check } from 'lucide-react';
-import { API_BASE } from '../../config';
+import React from 'react';
+import { Maximize2, Check } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
+import { ClipVideo } from './ClipVideo';
 
 /**
- * ReelMatchCard - one side of a ranking matchup (T3630).
+ * ReelMatchCard - one side of a "both clips shown" matchup (stacked or
+ * side-by-side; T3630). Full-bleed clip with the name + info + a "Pick this one"
+ * CTA overlaid on a bottom gradient (no separate rows). The whole card is the
+ * pick target; the expand button opens the full-screen player. Clips are
+ * identified by NAME, never "A/B".
  *
- * Presentational: a clip preview (first frame + silent hover preview on desktop)
- * + identity (name, "vs opponent - date", soccer-notation minute, tags) + a PICK
- * button. Tapping anywhere on the card body picks this reel; tapping the preview
- * opens the full-screen replay player (stops propagation so it doesn't count as a
- * pick). All touch targets are >= 44px (EPIC #14).
+ * Sizing is owned by the parent via `className` (e.g. `flex-1 min-h-0 min-w-0`),
+ * so the same card fills a column (side-by-side) or a row (stacked).
  *
- * There is no "A"/"B" framing - each card is judged on its own clip, so the pick
- * CTA is content-neutral ("Pick this one"). Server-side A/B order is randomized
- * (rank.py), so position carries no meaning.
- *
- * @param {object}   side        - { id, name, aspect_ratio, opponent_line, minute, tags, stream_url }
- * @param {Function} onPick      - () => void; this reel won
- * @param {Function} onReplay    - () => void; open the full replay player
- * @param {boolean=} won         - true briefly after selection (sparkle + scale)
- * @param {string=}  hotkeyHint  - keycap shown on the CTA on desktop (e.g. '<-')
+ * @param {object}   side       - { id, name, aspect_ratio, opponent_line, minute, tags, stream_url }
+ * @param {Function} onPick     - () => void; this clip won
+ * @param {Function} onReplay   - () => void; open the full-screen player
+ * @param {boolean=} won        - true briefly after selection (sparkle + ring)
+ * @param {string=}  hotkeyHint - keycap shown on the CTA on desktop (e.g. '<-')
+ * @param {string=}  className  - sizing/placement from the parent layout
  */
-export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint }) {
+export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint, className = '' }) {
   const minuteLabel = side.minute != null ? `${side.minute}'` : null;
-  const videoRef = useRef(null);
-  const streamUrl = `${API_BASE}${side.stream_url}`;
-
-  // Desktop nicety: silent inline preview while hovering the card. Tapping the
-  // preview still opens the full player; this just brings the clip to life so the
-  // user can judge without committing a click.
-  const startPreview = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.currentTime = 0;
-    v.play().catch(() => { /* muted autoplay can still be blocked; ignore */ });
-  }, []);
-  const stopPreview = useCallback(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.pause();
-    v.currentTime = 0;
-  }, []);
 
   return (
     <button
       type="button"
       onClick={onPick}
-      onMouseEnter={startPreview}
-      onMouseLeave={stopPreview}
-      className={`group relative w-full text-left rounded-xl border bg-gray-800 overflow-hidden
-        transition-transform duration-200 ${REEL.borderHover}
-        ${won ? 'scale-[1.03] border-cyan-400 reel-match-won' : 'border-gray-700'}`}
+      className={`group relative overflow-hidden rounded-xl border bg-black text-left
+        transition-transform duration-200
+        ${won ? 'border-cyan-400 reel-match-won' : 'border-gray-700'} ${className}`}
     >
-      {/* Clip preview: shows the first frame (poster), previews muted on hover,
-          opens the full player on tap. object-contain keeps both portrait and
-          landscape reels fully visible inside a bounded, equal-height frame. */}
-      <div
+      <ClipVideo streamUrl={side.stream_url} active />
+
+      {/* Expand -> full-screen player (does not count as a pick). */}
+      <span
         role="button"
         tabIndex={-1}
         onClick={(e) => { e.stopPropagation(); onReplay(); }}
-        className="relative w-full h-44 md:h-56 bg-black overflow-hidden"
+        title="Play full screen"
+        className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-black/45 text-cyan-200 hover:bg-black/70 transition-colors"
       >
-        <video
-          ref={videoRef}
-          src={`${streamUrl}#t=0.1`}
-          muted
-          playsInline
-          preload="metadata"
-          className="absolute inset-0 w-full h-full object-contain"
-        />
-        {/* Play affordance: fades out while the hover preview plays. */}
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2
-          text-cyan-100 bg-black/30 opacity-100 group-hover:opacity-0 transition-opacity">
-          <Play size={18} className={REEL.accent} />
-          <span className="text-sm">play</span>
-        </span>
-      </div>
+        <Maximize2 size={15} />
+      </span>
 
-      {/* Identity */}
-      <div className="p-3 space-y-1">
-        <div className="text-white font-semibold truncate">{side.name}</div>
+      {/* Bottom overlay: name + info + Pick CTA. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 p-3 pt-9 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+        <div className="text-white font-semibold text-sm truncate">{side.name}</div>
         {side.opponent_line && (
-          <div className="text-xs text-gray-400 truncate">{side.opponent_line}</div>
+          <div className="text-[11px] text-gray-300 truncate">{side.opponent_line}</div>
         )}
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          {minuteLabel && (
-            <span className="font-mono text-cyan-300">{minuteLabel}</span>
-          )}
+        <div className="flex items-center gap-2 flex-wrap text-[11px] mt-0.5">
+          {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
           {(side.tags || []).map((t) => (
-            <span key={t} className="text-gray-400">#{t}</span>
+            <span key={t} className="text-cyan-200/80">#{t}</span>
           ))}
         </div>
-      </div>
-
-      {/* Pick CTA - content-neutral, no A/B framing. */}
-      <div className="px-3 pb-3">
         <span
-          className={`flex items-center justify-center gap-2 w-full min-h-[44px] rounded-lg
+          className={`mt-2 flex items-center justify-center gap-2 w-full min-h-[40px] rounded-lg
             font-semibold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
         >
-          <Check size={18} />
-          Pick this one
+          <Check size={16} /> Pick this one
           {hotkeyHint && (
             <kbd className="hidden md:inline ml-1 px-1.5 py-0.5 rounded bg-black/25 text-xs font-mono leading-none">
               {hotkeyHint}
@@ -110,9 +69,8 @@ export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint }) {
         </span>
       </div>
 
-      {/* Sparkle burst on win */}
       {won && (
-        <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-3xl reel-sparkle">
+        <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-4xl reel-sparkle">
           ✨
         </span>
       )}
