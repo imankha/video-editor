@@ -93,6 +93,7 @@ export function GameCollectionGroup({
       {subThresholdRatios.map((ratio) => (
         <RatioUnlockGroup
           key={`sub-${ratio}`}
+          name={name}
           ratio={ratio}
           currentSec={ratioDurations[ratio]}
           reels={members ? membersFor(ratio) : []}
