@@ -64,7 +64,7 @@ export function LockedCollectionCard({ name, subtitle, ratio, currentSec, onClic
 
   // Collections get the stacked-paper cue; the (single) ranking launcher doesn't.
   return stacked
-    ? <CardStack className="mb-2" layerClassName="border-amber-500/30 bg-amber-900/20">{inner}</CardStack>
+    ? <CardStack className="mb-2" layerClassName="border-amber-500/30 bg-amber-900/20" baseBg="bg-gray-800">{inner}</CardStack>
     : <div className="mb-2">{inner}</div>;
 }
 

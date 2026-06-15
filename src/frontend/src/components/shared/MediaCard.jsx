@@ -50,13 +50,20 @@ export function CardMedia({ icon: Icon, iconClassName, wrapClassName = '', child
  * @param {React.ReactNode} children      - the card to stack
  * @param {string=} layerClassName        - border/bg of the sheets (match the card tone)
  * @param {string=} className             - extra classes on the wrapper (e.g. margin)
+ * @param {string=} baseBg                - opaque backing behind the card (e.g.
+ *                                          'bg-gray-800') so a TRANSLUCENT card
+ *                                          doesn't reveal the sheets on its top/left
+ *                                          -- only the bottom/right peek shows.
  */
-export function CardStack({ children, layerClassName = 'border-gray-600 bg-gray-700', className = '' }) {
+export function CardStack({ children, layerClassName = 'border-gray-600 bg-gray-700', className = '', baseBg }) {
   return (
     <div className={`relative ${className}`}>
       <span aria-hidden="true" className={`pointer-events-none absolute inset-0 rounded-lg border ${layerClassName} translate-x-[6px] translate-y-[6px]`} />
       <span aria-hidden="true" className={`pointer-events-none absolute inset-0 rounded-lg border ${layerClassName} translate-x-[3px] translate-y-[3px]`} />
-      <div className="relative">{children}</div>
+      <div className="relative">
+        {baseBg && <div className={`pointer-events-none absolute inset-0 rounded-lg ${baseBg}`} />}
+        <div className="relative">{children}</div>
+      </div>
     </div>
   );
 }
