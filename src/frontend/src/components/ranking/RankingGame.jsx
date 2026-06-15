@@ -79,6 +79,18 @@ export function RankingGame({ onClose }) {
     pick(winner.id, loser.id);
   }, [pick, soundEnabled]);
 
+  // Desktop keyboard voting: left/right arrow picks the left/right card. Ignored
+  // while the full replay player is open or there's no live pair.
+  useEffect(() => {
+    if (!pair || replayReel) return;
+    const onKey = (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); handlePick(pair.a, pair.b); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); handlePick(pair.b, pair.a); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pair, replayReel, handlePick]);
+
   const pct = confidence?.confidence_pct ?? 0;
 
   const header = (
@@ -143,11 +155,11 @@ export function RankingGame({ onClose }) {
     body = caughtUp;
   } else {
     body = (
-      <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <div className="flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
+      <div className="flex-1 overflow-y-auto px-4 pb-4 flex flex-col items-center justify-center">
+        <div className="w-full max-w-5xl mx-auto flex flex-col gap-3 md:grid md:grid-cols-[1fr_auto_1fr] md:items-stretch md:gap-4">
           <ReelMatchCard
             side={pair.a}
-            pickLabel="Pick A"
+            hotkeyHint="←"
             won={wonId === pair.a.id}
             onPick={() => handlePick(pair.a, pair.b)}
             onReplay={() => setReplayReel(toReplayReel(pair.a))}
@@ -157,12 +169,15 @@ export function RankingGame({ onClose }) {
           </div>
           <ReelMatchCard
             side={pair.b}
-            pickLabel="Pick B"
+            hotkeyHint="→"
             won={wonId === pair.b.id}
             onPick={() => handlePick(pair.b, pair.a)}
             onReplay={() => setReplayReel(toReplayReel(pair.b))}
           />
         </div>
+        <p className="hidden md:block mt-4 text-xs text-gray-500">
+          Tap a clip to pick it, or use <span className="font-mono text-gray-400">←</span> / <span className="font-mono text-gray-400">→</span>
+        </p>
       </div>
     );
   }
