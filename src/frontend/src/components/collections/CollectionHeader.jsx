@@ -131,13 +131,11 @@ export function CollectionHeader({
       footer={footer}
       stacked
     >
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(ratio)}>
+      <h3 className="text-white text-sm font-medium truncate">{title}</h3>
+      <div className="mt-0.5 flex items-center gap-1.5 text-xs text-gray-500">
+        <span className={`${REEL.accent} text-sm leading-none`} title={ratioLabel(ratio)}>
           {ratioGlyph(ratio)}
         </span>
-        <h3 className="text-white font-medium truncate">{title}</h3>
-      </div>
-      <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500">
         <span>{reelCount} {reelCount === 1 ? 'reel' : 'reels'}</span>
         {durationStr && (
           <>

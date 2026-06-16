@@ -294,6 +294,9 @@ Final pre-alpha polish: source material, analytics review, returning-user experi
 | T3510 | ↳ [Pulse Sparklines](tasks/analytics-power-up/T3510-pulse-sparklines.md) | 6 | 3 | 2.0 | DONE | [ ] | Real daily sparklines + change_pct for Revenue and Viral Conversion pulse cards (currently stubs) |
 | T3520 | ↳ [Fix Migration Counts](tasks/analytics-power-up/T3520-fix-migration-counts.md) | 4 | 1 | 4.0 | DONE | [ ] | Verify and fix migration count assertions in test_migrations.py (off-by-one in postgres track) |
 | T3530 | ↳ [Fix SQLite Activity Tests](tasks/analytics-power-up/T3530-fix-sqlite-activity-tests.md) | 5 | 2 | 2.5 | DONE | [ ] | Fix stale user_activity assertions in test_user_activity_sync.py; add user_action_log dual-write tests |
+|  | **[Analytics: Attribution & Access Visibility](tasks/analytics-attribution-viz/EPIC.md)** | 7 | 5 | 1.4 |  |  | Surface origination & access from existing tables: split games uploaded vs accessible, and a full attribution graph (who invited whom + ad campaign roots). |
+| T3550 | ↳ [Games Uploaded vs Accessible](tasks/analytics-attribution-viz/T3550-games-uploaded-vs-accessible.md) | 6 | 3 | 2.0 | TODO | [ ] | Split admin "Games" into games uploaded vs games accessible (differ due to sharing). Add accessible count via share_games/shares join; show both in UserTable + UserDetailPanel. |
+| T3560 | ↳ [User Attribution Graph](tasks/analytics-attribution-viz/T3560-attribution-graph.md) | 7 | 6 | 1.2 | TODO | [ ] | Node-link attribution graph: users + ad-campaign/origin roots as nodes, referrals as edges, colored by origin. New /attribution-graph endpoint + AttributionGraph.jsx (adds first graph viz lib). |
 | T3290 | [Tune NUF for Returning Users](tasks/T3290-tune-nuf-returning-users.md) | 8 | 4 | 2.0 | TODO | [ ] | Differentiate new user flow for returning users vs first-timers. Conversation needed to scope. |
 |  | **[Landing Page Polish](tasks/landing-page-redesign/EPIC.md)** | 7 | 4 | 1.8 |  |  | Before/after examples from Mehdi footage + tutorial video |
 | T2330 | ↳ [Before/After Examples](tasks/landing-page-redesign/T2330-before-after-section.md) | 10 | 5 | 2.0 | TODO | [ ] | Add more before/after examples to existing section: diverse positions (keepers, defenders), synced loops |
@@ -513,6 +516,7 @@ IDs use gaps of 10 to allow insertions:
 - `T3430` - Parallelize Game Load (4 sequential requests -> 1 game bootstrap endpoint)
 - `T446-T449` - PWA new tasks (Screen Wake Lock, Background Fetch, Share Target, Offline Playback)
 - `T3540` - Framing "In Progress" Visual Ambiguity (progress strip half-fill + wording)
+- `T3550-T3560` - Analytics: Attribution & Access Visibility epic (games uploaded vs accessible, user attribution graph)
 - `T3600-T3680` - Season Highlights & Collections epic (metadata freeze, collections tab, live shares, ranking, unlock, custom mix rename, quest rework, smart collections, stitch)
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.
