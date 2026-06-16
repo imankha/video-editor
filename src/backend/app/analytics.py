@@ -106,6 +106,13 @@ FLOW_EVENTS = {
     "custom_project_viewed":        {"label": "Custom Project Viewed",      "daily_col": None},
     "gallery_watched_1s":           {"label": "Gallery Watched 1s",         "daily_col": None},
     "gallery_watched_after_overlays": {"label": "Gallery Watched (Overlays)", "daily_col": None},
+    # T3700: per-step framing/overlay drop-off events
+    "overlay_opened":               {"label": "Overlay Opened",             "daily_col": None},
+    "crop_adjusted":                {"label": "Crop Adjusted",              "daily_col": None},
+    "speed_segment_created":        {"label": "Slow-mo Added",              "daily_col": None},
+    "overlay_players_assigned":     {"label": "Players Spotlighted",        "daily_col": None},
+    "overlay_color_set":            {"label": "Highlight Color Set",        "daily_col": None},
+    "overlay_shape_set":            {"label": "Highlight Shape Set",        "daily_col": None},
 }
 
 FUNNEL_STEPS = [

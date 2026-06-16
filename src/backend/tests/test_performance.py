@@ -94,8 +94,14 @@ class TestQuestProgressPerformance:
             conn.execute("INSERT INTO export_jobs (type, status) VALUES (?, ?)",
                          (type_, status))
 
-        # Achievements
-        for key in ['played_annotations', 'opened_framing_editor', 'viewed_gallery_video']:
+        # Achievements — includes T3700 per-step framing/overlay events so every
+        # achievement-driven step computes True in test_steps_correctness.
+        for key in [
+            'played_annotations', 'opened_framing_editor', 'opened_overlay_editor',
+            'crop_adjusted', 'speed_segment_created',
+            'overlay_players_assigned', 'overlay_color_set', 'overlay_shape_set',
+            'viewed_gallery_video', 'watched_gallery_video_after_2_overlays',
+        ]:
             conn.execute("INSERT INTO achievements (key) VALUES (?)", (key,))
 
         # 2 auto projects, 1 manual project
@@ -160,24 +166,33 @@ class TestQuestProgressPerformance:
 
         steps = _check_all_steps("test_user", self.conn)
 
-        # Quest 1
+        # Quest 1 — Get Started
         assert steps["upload_game"] is True  # 3 games exist
-        assert steps["annotate_brilliant"] is True  # 2 clips with auto_project_id
+        assert steps["annotate_brilliant"] is True  # 2 clips with auto_project_id (reels >= 1)
         assert steps["playback_annotations"] is True  # achievement exists
 
-        # Quest 2
+        # Quest 2 — Frame Your Highlight
         assert steps["open_framing"] is True  # achievement exists
-        assert steps["export_framing"] is True  # framing exports exist
-        assert steps["wait_for_export"] is True  # completed framing exists
-        assert steps["export_overlay"] is True  # completed overlay exists
+        assert steps["position_crop"] is True  # crop_adjusted achievement
+        assert steps["add_slowmo"] is True  # speed_segment_created achievement
+        assert steps["export_framing"] is True  # framing exports exist (>= 1)
+        assert steps["wait_for_export"] is True  # completed framing exists (>= 1)
+
+        # Quest 3 — Spotlight Your Player
+        assert steps["open_overlay"] is True  # opened_overlay_editor achievement
+        assert steps["select_players"] is True  # overlay_players_assigned achievement
+        assert steps["choose_color"] is True  # overlay_color_set achievement
+        assert steps["choose_shape"] is True  # overlay_shape_set achievement
+        assert steps["export_overlay"] is True  # completed overlay exists (>= 1)
         assert steps["view_gallery_video"] is True  # achievement exists
 
-        # Quest 3
+        # Quest 4 — Make More Highlights
         assert steps["annotate_5_more"] is True  # 10 >= 3
         assert steps["annotate_second_5_star"] is True  # 2 reels >= 2
-        assert steps["export_second_highlight"] is True  # 3 framing >= 2
+        assert steps["frame_second_highlight"] is True  # 3 framing >= 2
         assert steps["wait_for_export_2"] is True  # 2 completed framing >= 2
-        assert steps["overlay_second_highlight"] is True  # 2 completed overlay >= 2
+        assert steps["spotlight_second_highlight"] is True  # 2 completed overlay >= 2
+        assert steps["watch_second_highlight"] is True  # achievement exists
 
 
 # ---------------------------------------------------------------------------

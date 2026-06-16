@@ -175,7 +175,7 @@ export function QuestPanel({ inline = false }) {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        if (questDef.id === 'quest_3') {
+        if (questDef.id === 'quest_4') {
           setShowCompletionModal(true);
         } else {
           toast.success(`You earned ${questDef.reward} credits!`, {
@@ -200,7 +200,7 @@ export function QuestPanel({ inline = false }) {
 
   return (
     <>
-    {/* Quest 3 completion modal — rendered outside quest panel to ensure centering */}
+    {/* Final-quest completion modal — rendered outside quest panel to ensure centering */}
     {showCompletionModal && (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
         <div className="bg-gray-800 border border-gray-600 rounded-2xl p-6 sm:p-12 max-w-2xl mx-4 shadow-2xl">

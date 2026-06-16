@@ -24,17 +24,54 @@ PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
 
 router = APIRouter(prefix="/quests", tags=["quests"])
 
-# Known achievement keys — only these can be recorded
-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s", "watched_gallery_video_after_2_overlays"}
+# Known achievement keys — only these can be recorded.
+# T3700: added the per-step framing/overlay events so quest drop-off is measurable.
+KNOWN_ACHIEVEMENT_KEYS = {
+    "opened_framing_editor",
+    "opened_overlay_editor",
+    "viewed_gallery_video",
+    "viewed_custom_project_video",
+    "played_annotations",
+    "watched_gallery_video_1s",
+    "watched_gallery_video_after_2_overlays",
+    # T3700 framing-step events
+    "crop_adjusted",
+    "speed_segment_created",
+    # T3700 overlay-step events
+    "overlay_players_assigned",
+    "overlay_color_set",
+    "overlay_shape_set",
+}
 
 ACHIEVEMENT_TO_MILESTONE = {
     "opened_framing_editor": "framing_opened",
+    "opened_overlay_editor": "overlay_opened",
     "viewed_gallery_video": "gallery_viewed",
     "played_annotations": "annotations_played",
     "viewed_custom_project_video": "custom_project_viewed",
     "watched_gallery_video_1s": "gallery_watched_1s",
     "watched_gallery_video_after_2_overlays": "gallery_watched_after_overlays",
+    # T3700 framing/overlay step events (bridged to analytics for drop-off funnels)
+    "crop_adjusted": "crop_adjusted",
+    "speed_segment_created": "speed_segment_created",
+    "overlay_players_assigned": "overlay_players_assigned",
+    "overlay_color_set": "overlay_color_set",
+    "overlay_shape_set": "overlay_shape_set",
 }
+
+# All achievement keys consumed by quest-step computation (batched in one query).
+_STEP_ACHIEVEMENT_KEYS = [
+    "played_annotations",
+    "opened_framing_editor",
+    "opened_overlay_editor",
+    "crop_adjusted",
+    "speed_segment_created",
+    "overlay_players_assigned",
+    "overlay_color_set",
+    "overlay_shape_set",
+    "viewed_gallery_video",
+    "watched_gallery_video_after_2_overlays",
+]
 
 # Map step_id -> quest_id for skip lookups
 _STEP_TO_QUEST = {}
@@ -44,134 +81,76 @@ for _q in QUEST_DEFINITIONS:
 
 
 def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
-    """Check all quest steps by querying existing data.
+    """Compute every quest-step boolean from per-profile data.
 
-    When skip_quest_ids is provided, steps for those quests are skipped
-    (they're already completed and will be filled with True by the caller).
+    Steps derive from four cheap, batched sources: the games table, a raw_clips
+    aggregate, an export_jobs aggregate, and the achievements table. Each step
+    completes via exactly one hard trigger (T3700) — a DB condition or a recorded
+    achievement event. No step depends on an optional/skippable state.
+
+    skip_quest_ids is accepted for caller compatibility but all steps are always
+    computed (the work is four queries); the caller overrides steps for already-
+    claimed quests with True.
     """
     cursor = conn.cursor()
-    steps = {}
     if PROFILING_ENABLED:
-        step_times = {}
+        _t = time.perf_counter()
+
+    # --- Achievements (one batched query) ---
+    cursor.execute(
+        f"SELECT key FROM achievements WHERE key IN ({','.join('?' * len(_STEP_ACHIEVEMENT_KEYS))})",
+        _STEP_ACHIEVEMENT_KEYS,
+    )
+    achieved = {row['key'] for row in cursor.fetchall()}
+
+    # --- export_jobs aggregate (one query) ---
+    cursor.execute("SELECT type, status, count(*) as cnt FROM export_jobs GROUP BY type, status")
+    export_counts = {}
+    export_type_totals = {}
+    for row in cursor.fetchall():
+        export_counts[(row['type'], row['status'])] = row['cnt']
+        export_type_totals[row['type']] = export_type_totals.get(row['type'], 0) + row['cnt']
+    framing_total = export_type_totals.get('framing', 0)
+    framing_done = export_counts.get(('framing', 'complete'), 0)
+    overlay_done = export_counts.get(('overlay', 'complete'), 0)
+
+    # --- raw_clips aggregate (one query) ---
+    rc = cursor.execute(
+        "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels FROM raw_clips"
+    ).fetchone()
+
+    steps = {}
 
     # --- Quest 1: Get Started ---
-    if not skip_quest_ids or "quest_1" not in skip_quest_ids:
-        if PROFILING_ENABLED:
-            _t = time.perf_counter()
+    steps["upload_game"] = cursor.execute("SELECT 1 FROM games LIMIT 1").fetchone() is not None
+    steps["annotate_brilliant"] = rc["reels"] >= 1
+    steps["playback_annotations"] = 'played_annotations' in achieved
 
-        steps["upload_game"] = cursor.execute(
-            "SELECT 1 FROM games LIMIT 1"
-        ).fetchone() is not None
+    # --- Quest 2: Frame Your Highlight ---
+    steps["open_framing"] = 'opened_framing_editor' in achieved
+    steps["position_crop"] = 'crop_adjusted' in achieved
+    steps["add_slowmo"] = 'speed_segment_created' in achieved
+    steps["export_framing"] = framing_total >= 1
+    steps["wait_for_export"] = framing_done >= 1
 
-        if PROFILING_ENABLED:
-            step_times["upload_game"] = time.perf_counter() - _t
+    # --- Quest 3: Spotlight Your Player ---
+    steps["open_overlay"] = 'opened_overlay_editor' in achieved
+    steps["select_players"] = 'overlay_players_assigned' in achieved
+    steps["choose_color"] = 'overlay_color_set' in achieved
+    steps["choose_shape"] = 'overlay_shape_set' in achieved
+    steps["export_overlay"] = overlay_done >= 1
+    steps["view_gallery_video"] = 'viewed_gallery_video' in achieved
 
-        # Batch achievement checks — one query for all achievement-based steps
-        if PROFILING_ENABLED:
-            _t = time.perf_counter()
-
-        achievement_keys = ['played_annotations', 'opened_framing_editor', 'viewed_gallery_video',
-                            'watched_gallery_video_after_2_overlays']
-        cursor.execute(
-            f"SELECT key FROM achievements WHERE key IN ({','.join('?' * len(achievement_keys))})",
-            achievement_keys,
-        )
-        achieved = {row['key'] for row in cursor.fetchall()}
-
-        if PROFILING_ENABLED:
-            step_times["achievements_batch"] = time.perf_counter() - _t
-
-        steps["playback_annotations"] = 'played_annotations' in achieved
-        steps["annotate_brilliant"] = cursor.execute(
-            "SELECT 1 FROM raw_clips WHERE auto_project_id IS NOT NULL LIMIT 1"
-        ).fetchone() is not None
-    else:
-        # Still need achievements for other quests — fetch if any non-skipped quest uses them
-        needs_achievements = (
-            (not skip_quest_ids or "quest_2" not in skip_quest_ids) or
-            (not skip_quest_ids or "quest_3" not in skip_quest_ids)
-        )
-        if needs_achievements:
-            if PROFILING_ENABLED:
-                _t = time.perf_counter()
-            achievement_keys = ['played_annotations', 'opened_framing_editor', 'viewed_gallery_video',
-                                'watched_gallery_video_after_2_overlays', 'viewed_custom_project_video']
-            cursor.execute(
-                f"SELECT key FROM achievements WHERE key IN ({','.join('?' * len(achievement_keys))})",
-                achievement_keys,
-            )
-            achieved = {row['key'] for row in cursor.fetchall()}
-            if PROFILING_ENABLED:
-                step_times["achievements_batch"] = time.perf_counter() - _t
-        else:
-            achieved = set()
-
-    # --- Quest 2: Export Highlights ---
-    if not skip_quest_ids or "quest_2" not in skip_quest_ids:
-        steps["open_framing"] = 'opened_framing_editor' in achieved
-        steps["view_gallery_video"] = 'viewed_gallery_video' in achieved
-
-        # Batch export_jobs query — one query replaces 4+ individual queries
-        if PROFILING_ENABLED:
-            _t = time.perf_counter()
-
-        cursor.execute("SELECT type, status, count(*) as cnt FROM export_jobs GROUP BY type, status")
-        export_counts = {}
-        export_type_totals = {}
-        for row in cursor.fetchall():
-            export_counts[(row['type'], row['status'])] = row['cnt']
-            export_type_totals[row['type']] = export_type_totals.get(row['type'], 0) + row['cnt']
-
-        if PROFILING_ENABLED:
-            step_times["export_jobs_batch"] = time.perf_counter() - _t
-
-        steps["export_framing"] = export_type_totals.get('framing', 0) > 0
-        steps["wait_for_export"] = export_counts.get(('framing', 'complete'), 0) > 0
-        steps["export_overlay"] = export_counts.get(('overlay', 'complete'), 0) > 0
-    else:
-        # Still need export data for quest 3 — fetch if quest 3 is not skipped
-        if not skip_quest_ids or "quest_3" not in skip_quest_ids:
-            if PROFILING_ENABLED:
-                _t = time.perf_counter()
-            cursor.execute("SELECT type, status, count(*) as cnt FROM export_jobs GROUP BY type, status")
-            export_counts = {}
-            export_type_totals = {}
-            for row in cursor.fetchall():
-                export_counts[(row['type'], row['status'])] = row['cnt']
-                export_type_totals[row['type']] = export_type_totals.get(row['type'], 0) + row['cnt']
-            if PROFILING_ENABLED:
-                step_times["export_jobs_batch"] = time.perf_counter() - _t
-        else:
-            export_counts = {}
-            export_type_totals = {}
-
-    # --- Quest 3: Annotate More Clips ---
-    if not skip_quest_ids or "quest_3" not in skip_quest_ids:
-        # Batch raw_clips query — one query replaces 3 individual queries
-        if PROFILING_ENABLED:
-            _t = time.perf_counter()
-
-        row = cursor.execute(
-            "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels FROM raw_clips"
-        ).fetchone()
-
-        if PROFILING_ENABLED:
-            step_times["raw_clips_batch"] = time.perf_counter() - _t
-
-        steps["annotate_5_more"] = row["total"] >= 3
-        steps["annotate_second_5_star"] = row["reels"] >= 2
-
-        # Use pre-fetched export data
-        steps["export_second_highlight"] = export_type_totals.get('framing', 0) >= 2
-        steps["wait_for_export_2"] = export_counts.get(('framing', 'complete'), 0) >= 2
-        steps["overlay_second_highlight"] = export_counts.get(('overlay', 'complete'), 0) >= 2
-
-        steps["watch_second_highlight"] = 'watched_gallery_video_after_2_overlays' in achieved
+    # --- Quest 4: Make More Highlights ---
+    steps["annotate_second_5_star"] = rc["reels"] >= 2
+    steps["annotate_5_more"] = rc["total"] >= 3
+    steps["frame_second_highlight"] = framing_total >= 2
+    steps["wait_for_export_2"] = framing_done >= 2
+    steps["spotlight_second_highlight"] = overlay_done >= 2
+    steps["watch_second_highlight"] = 'watched_gallery_video_after_2_overlays' in achieved
 
     if PROFILING_ENABLED:
-        total = sum(step_times.values()) * 1000
-        details = ", ".join(f"{k}: {v*1000:.0f}ms" for k, v in step_times.items() if v > 0.001)
-        logger.info(f"[PROFILE] _check_all_steps: {total:.0f}ms total ({details})")
+        logger.info(f"[PROFILE] _check_all_steps: {(time.perf_counter() - _t) * 1000:.0f}ms")
 
     return steps
 

@@ -5,6 +5,7 @@ import * as framingActions from '../api/framingActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
+import { useQuestStore } from '../stores/questStore';
 
 /**
  * FramingContainer - Encapsulates Framing mode logic and computed state
@@ -315,6 +316,8 @@ export function FramingContainer({
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
     track('crop_keyframe_add', { frame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
+    // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
+    useQuestStore.getState().recordAchievement('crop_adjusted');
 
     // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
     // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
@@ -1025,6 +1028,12 @@ export function FramingContainer({
     setSegmentSpeed(segmentIndex, speed);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
+
+    // T3700: quest_2 "Add a slow-mo moment" — completes ONLY for a genuinely slowed
+    // segment (speed < 1x). A bare split, or a speed-up, must not satisfy it.
+    if (speed < 1) {
+      useQuestStore.getState().recordAchievement('speed_segment_created');
+    }
 
     // Optimistically update store so sidebar framing indicator reflects the change
     // Note: segmentSpeeds won't have the new value yet (React batching), so build it manually

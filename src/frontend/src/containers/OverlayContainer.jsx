@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { EDITOR_MODES } from '../stores';
+import { useQuestStore } from '../stores/questStore';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -348,6 +349,27 @@ export function OverlayContainer({
   }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime, highlightColor]);
 
   /**
+   * T3700: quest_3 "Pick your player" completes when EVERY green-marked region has a
+   * player selection. A region counts as assigned if it has a detection-sourced
+   * keyframe or any user (non-boundary) keyframe; regions with no detections have no
+   * green frame to assign and don't block. `currentRegionId` is the region being
+   * assigned in this same gesture (its new keyframe isn't in `highlightRegions` yet).
+   */
+  const maybeEmitPlayersAssigned = useCallback((currentRegionId) => {
+    if (!highlightRegions?.length) return;
+    const allAssigned = highlightRegions.every(r => {
+      if (r.id === currentRegionId) return true; // assigned in this gesture
+      const kfs = r.keyframes || [];
+      const hasSelection = kfs.some(kf => kf.fromDetection) || kfs.length > 2;
+      const hasGreenFrames = (r.detections || []).length > 0;
+      return hasSelection || !hasGreenFrames;
+    });
+    if (allAssigned) {
+      useQuestStore.getState().recordAchievement('overlay_players_assigned');
+    }
+  }, [highlightRegions]);
+
+  /**
    * Handle player selection from detection overlay
    */
   const handlePlayerSelect = useCallback((playerData) => {
@@ -378,7 +400,8 @@ export function OverlayContainer({
     });
 
     addHighlightRegionKeyframe(currentTime, highlight, duration);
-  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor]);
+    maybeEmitPlayersAssigned(region.id);
+  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned]);
 
   /**
    * Handle highlight changes during drag/resize
@@ -402,7 +425,9 @@ export function OverlayContainer({
 
     addHighlightRegionKeyframe(currentTime, highlightData);
     setDragHighlight(null);
-  }, [currentTime, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe]);
+    const region = getRegionAtTime(currentTime);
+    if (region) maybeEmitPlayersAssigned(region.id);
+  }, [currentTime, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned]);
 
   /**
    * Handle transition from Framing to Overlay mode

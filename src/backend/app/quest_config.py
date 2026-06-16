@@ -1,9 +1,14 @@
 """
-Quest Configuration — single source of truth for quest definitions (T1000).
+Quest Configuration — single source of truth for quest definitions (T1000, T3700).
 
 All quest IDs, step IDs, titles, and rewards live here. Both quests.py and
 admin.py import from this module. The frontend fetches definitions via
 GET /api/quests/definitions.
+
+T3700: Framing and Overlay are split into separate quests and each is decomposed
+into small, individually-triggered steps so per-step drop-off is measurable. Every
+step completes via a hard trigger (a derived DB condition or a recorded achievement
+event); there are no optional/skippable steps.
 """
 
 QUEST_DEFINITIONS = [
@@ -19,26 +24,39 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_2",
-        "title": "Export Highlights",
+        "title": "Frame Your Highlight",
         "reward": 25,
         "step_ids": [
             "open_framing",
+            "position_crop",
+            "add_slowmo",
             "export_framing",
             "wait_for_export",
+        ],
+    },
+    {
+        "id": "quest_3",
+        "title": "Spotlight Your Player",
+        "reward": 25,
+        "step_ids": [
+            "open_overlay",
+            "select_players",
+            "choose_color",
+            "choose_shape",
             "export_overlay",
             "view_gallery_video",
         ],
     },
     {
-        "id": "quest_3",
-        "title": "Annotate More Clips",
+        "id": "quest_4",
+        "title": "Make More Highlights",
         "reward": 40,
         "step_ids": [
             "annotate_second_5_star",
             "annotate_5_more",
-            "export_second_highlight",
+            "frame_second_highlight",
             "wait_for_export_2",
-            "overlay_second_highlight",
+            "spotlight_second_highlight",
             "watch_second_highlight",
         ],
     },

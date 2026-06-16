@@ -203,9 +203,10 @@ export function DownloadsPanel({
     clearTimeout(watchTimerRef.current);
     watchTimerRef.current = setTimeout(() => {
       useQuestStore.getState().recordAchievement('watched_gallery_video_1s');
-      // Quest 3: milestone achievement — only if overlay step already complete
-      const q3 = useQuestStore.getState().quests.find(q => q.id === 'quest_3');
-      if (q3?.steps?.overlay_second_highlight) {
+      // Quest 4 "Move to Library & watch": only after the 2nd overlay is done
+      // (T3700: step renamed overlay_second_highlight -> spotlight_second_highlight, moved to quest_4)
+      const q4 = useQuestStore.getState().quests.find(q => q.id === 'quest_4');
+      if (q4?.steps?.spotlight_second_highlight) {
         useQuestStore.getState().recordAchievement('watched_gallery_video_after_2_overlays');
       }
     }, 1000);

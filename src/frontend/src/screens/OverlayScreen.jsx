@@ -18,6 +18,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useExportStore } from '../stores/exportStore';
+import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
 import { track } from '../utils/analytics';
 
@@ -666,6 +667,8 @@ export function OverlayScreen({
   const wrappedSetHighlightColor = useCallback((color) => {
     track('overlay_settings_change', { field: 'highlightColor', value: color }, { debugOnly: true });
     setHighlightColor(color);
+    // T3700: quest_3 "Pick your highlight color"
+    useQuestStore.getState().recordAchievement('overlay_color_set');
     if (canSyncActions) {
       overlayActions.setHighlightColor(projectId, color)
         .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightColor:', err));
@@ -715,6 +718,8 @@ export function OverlayScreen({
   const wrappedSetHighlightShape = useCallback((val) => {
     track('overlay_settings_change', { field: 'highlightShape', value: val }, { debugOnly: true });
     setHighlightShape(val);
+    // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
+    useQuestStore.getState().recordAchievement('overlay_shape_set');
     if (canSyncActions) {
       overlayActions.setHighlightShape(projectId, val)
         .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightShape:', err));

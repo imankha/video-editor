@@ -406,6 +406,13 @@ function App() {
     }
   }, [editorMode, isCheckingSession, selectedProjectId]);
 
+  // T3700: Record achievement when user enters overlay (spotlight) mode — quest_3 step
+  useEffect(() => {
+    if (!isCheckingSession && editorMode === EDITOR_MODES.OVERLAY && selectedProjectId) {
+      useQuestStore.getState().recordAchievement('opened_overlay_editor');
+    }
+  }, [editorMode, isCheckingSession, selectedProjectId]);
+
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
 
