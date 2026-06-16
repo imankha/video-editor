@@ -512,6 +512,24 @@ class TestRankEndpoints:
         back = snap()
         assert back[w] == pre[w] and back[l] == pre[l] and back[tw] == pre[tw]
 
+    def test_pool_collapses_same_source_clip(self, db):
+        # Two reels from the SAME clip (source_clip_id) collapse to one contestant
+        # so the game never pits a clip against its own duplicate. Orphans stay.
+        from app.routers.rank import _rankable_pool
+        with _conn(db) as c:
+            cur = c.cursor()
+            a = _insert_fv(cur, game_ids=[1], source_clip_id=10)
+            b = _insert_fv(cur, game_ids=[1], source_clip_id=10)   # same clip -> collapsed
+            d = _insert_fv(cur, game_ids=[2], source_clip_id=20)   # different clip
+            o1 = _insert_fv(cur, game_ids=[3], source_clip_id=None)  # orphan (per-reel rating)
+            o2 = _insert_fv(cur, game_ids=[4], source_clip_id=None)  # orphan
+            c.commit()
+        with _conn(db) as c:
+            ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
+        assert len(ids) == 4                       # one of {a,b} + d + o1 + o2
+        assert d in ids and o1 in ids and o2 in ids
+        assert (a in ids) ^ (b in ids)             # exactly one duplicate kept
+
     def test_twin_sync_by_source_clip_id(self, db):
         # Portrait + Landscape twins share source_clip_id=10; a Portrait pick
         # must move the Landscape twin too.

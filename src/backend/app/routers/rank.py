@@ -94,7 +94,13 @@ class RankResultResponse(ConfidenceResponse):
 
 def _rankable_pool(cursor, aspect_ratio: str) -> list:
     """Single-clip, published, latest-version reels of one ratio that carry a
-    rating (the ranking pool). Returns sqlite3.Row list ordered arbitrarily."""
+    rating (the ranking pool), with same-clip duplicates collapsed.
+
+    The rating IS the clip's (twin-synced by source_clip_id), so two reels made
+    from the same source clip are ONE contestant -- otherwise the game can pit a
+    clip against its own duplicate ("pick between the exact same video"). We keep
+    one representative per source_clip_id; orphans (NULL source_clip_id) carry a
+    per-reel rating and stay individual."""
     cursor.execute(
         f"""
         SELECT fv.id, fv.name, fv.aspect_ratio, fv.rating, fv.rd, fv.match_count,
@@ -109,7 +115,15 @@ def _rankable_pool(cursor, aspect_ratio: str) -> list:
         """,
         (aspect_ratio,),
     )
-    return cursor.fetchall()
+    seen, pool = set(), []
+    for r in cursor.fetchall():
+        sc = r["source_clip_id"]
+        if sc is not None:
+            if sc in seen:
+                continue
+            seen.add(sc)
+        pool.append(r)
+    return pool
 
 
 def _games_info(cursor, rows) -> dict:
