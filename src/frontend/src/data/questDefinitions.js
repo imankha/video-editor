@@ -34,18 +34,4 @@ export const QUEST_DEFINITIONS = [
       'watch_second_highlight',
     ],
   },
-  {
-    id: 'quest_4',
-    title: 'Highlight Reel',
-    reward: 45,
-    step_ids: [
-      'upload_game_2',
-      'annotate_game_2',
-      'create_reel',
-      'export_reel',
-      'wait_for_reel',
-      'overlay_reel',
-      'watch_reel',
-    ],
-  },
 ];

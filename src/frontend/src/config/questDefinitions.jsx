@@ -57,17 +57,10 @@ export const STEP_TITLES = {
   view_gallery_video: 'Move to My Reels & Watch',
   annotate_second_5_star: 'Create Another Reel',
   annotate_5_more: 'Annotate More Clips',
-  export_second_highlight: 'Export Another Highlight',
+  export_second_highlight: 'Frame another Video',
   wait_for_export_2: 'Wait For Export',
   overlay_second_highlight: 'Spotlight Your Player',
   watch_second_highlight: 'Move to My Reels & Watch',
-  upload_game_2: 'Add a Second Game',
-  annotate_game_2: 'Annotate a Good or Great Play',
-  create_reel: 'Create a Highlight Reel',
-  export_reel: 'Frame Your Reel',
-  wait_for_reel: 'Wait For Export',
-  overlay_reel: 'Spotlight Your Player',
-  watch_reel: 'Move to My Reels & Watch',
 };
 
 /** Step descriptions keyed by step ID — JSX with inline icons */
@@ -86,11 +79,4 @@ export const STEP_DESCRIPTIONS = {
   wait_for_export_2: 'Wait for the framing export to finish.',
   overlay_second_highlight: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
   watch_second_highlight: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> in the top bar to watch it.</>,
-  upload_game_2: 'Add another game — more highlights, better reel!',
-  annotate_game_2: <>Find a <FilledStar /><FilledStar /><FilledStar /><FilledStar /> or <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> moment in your new game.</>,
-  create_reel: <>Click <QIcon icon={Home} className="text-white" /> Home → {SECTION_NAMES.DRAFTS} → <MiniButton icon={Plus}>New Reel</MiniButton>. Pick your best clips from both games.</>,
-  export_reel: <>Frame your multi-clip highlight reel and click <MiniButton icon={Film}>Frame Video</MiniButton>.</>,
-  wait_for_reel: 'Wait for the export to finish.',
-  overlay_reel: <>Click each <GreenSquare /> green square on the timeline, and for each green square click on your player in the video if you can. If you can't, move the ellipse around your player manually. When done, click <MiniButton>Add Overlay</MiniButton>.</>,
-  watch_reel: <>Your highlight reel is ready! Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your completed reel, then click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> to watch and download it.</>,
 };

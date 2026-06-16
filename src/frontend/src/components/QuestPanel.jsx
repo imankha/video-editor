@@ -116,7 +116,7 @@ export function QuestPanel({ inline = false }) {
   // No need to fetch on mount here — the store is already populated.
 
   // Subscribe to export events to refresh quest progress
-  // Listen for 'progress' (job created → export_reel step) and 'complete' (job done → wait_for_reel step)
+  // Listen for 'progress' (job created → framing-export step) and 'complete' (job done → wait-for-export step)
   useEffect(() => {
     const unsubComplete = exportWebSocketManager.addEventListener('*', 'complete', fetchProgress);
     const unsubProgress = exportWebSocketManager.addEventListener('*', 'progress', fetchProgress);
@@ -175,7 +175,7 @@ export function QuestPanel({ inline = false }) {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        if (questDef.id === 'quest_4') {
+        if (questDef.id === 'quest_3') {
           setShowCompletionModal(true);
         } else {
           toast.success(`You earned ${questDef.reward} credits!`, {

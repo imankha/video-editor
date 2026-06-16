@@ -71,7 +71,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
             _t = time.perf_counter()
 
         achievement_keys = ['played_annotations', 'opened_framing_editor', 'viewed_gallery_video',
-                            'watched_gallery_video_after_2_overlays', 'viewed_custom_project_video']
+                            'watched_gallery_video_after_2_overlays']
         cursor.execute(
             f"SELECT key FROM achievements WHERE key IN ({','.join('?' * len(achievement_keys))})",
             achievement_keys,
@@ -89,8 +89,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
         # Still need achievements for other quests — fetch if any non-skipped quest uses them
         needs_achievements = (
             (not skip_quest_ids or "quest_2" not in skip_quest_ids) or
-            (not skip_quest_ids or "quest_3" not in skip_quest_ids) or
-            (not skip_quest_ids or "quest_4" not in skip_quest_ids)
+            (not skip_quest_ids or "quest_3" not in skip_quest_ids)
         )
         if needs_achievements:
             if PROFILING_ENABLED:
@@ -168,67 +167,6 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
         steps["overlay_second_highlight"] = export_counts.get(('overlay', 'complete'), 0) >= 2
 
         steps["watch_second_highlight"] = 'watched_gallery_video_after_2_overlays' in achieved
-
-    # --- Quest 4: Highlight Reel (second game + custom project) ---
-    if not skip_quest_ids or "quest_4" not in skip_quest_ids:
-        if PROFILING_ENABLED:
-            _t = time.perf_counter()
-
-        # 2+ games
-        row = cursor.execute("SELECT count(*) as cnt FROM games").fetchone()
-        steps["upload_game_2"] = row["cnt"] >= 2
-
-        # 1+ clip rated >=4 on second+ game (exclude first game)
-        steps["annotate_game_2"] = cursor.execute(
-            """SELECT 1 FROM raw_clips
-               WHERE rating >= 4 AND game_id != (SELECT MIN(id) FROM games)
-               LIMIT 1"""
-        ).fetchone() is not None
-
-        # 1+ non-auto project with working_clips from 2+ distinct game_ids
-        steps["create_reel"] = cursor.execute(
-            """SELECT 1 FROM projects p
-               WHERE p.is_auto_created = 0
-               AND (
-                   SELECT COUNT(DISTINCT rc.game_id)
-                   FROM working_clips wc
-                   JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-                   WHERE wc.project_id = p.id
-               ) >= 2
-               LIMIT 1"""
-        ).fetchone() is not None
-
-        # 1+ framing export started on non-auto project
-        steps["export_reel"] = cursor.execute(
-            """SELECT 1 FROM export_jobs ej
-               JOIN projects p ON ej.project_id = p.id
-               WHERE ej.type = 'framing' AND p.is_auto_created = 0
-               LIMIT 1"""
-        ).fetchone() is not None
-
-        # 1+ completed framing export on non-auto project
-        steps["wait_for_reel"] = cursor.execute(
-            """SELECT 1 FROM export_jobs ej
-               JOIN projects p ON ej.project_id = p.id
-               WHERE ej.type = 'framing' AND ej.status = 'complete'
-               AND p.is_auto_created = 0
-               LIMIT 1"""
-        ).fetchone() is not None
-
-        # Overlay export completed on non-auto project
-        steps["overlay_reel"] = cursor.execute(
-            """SELECT 1 FROM export_jobs ej
-               JOIN projects p ON ej.project_id = p.id
-               WHERE ej.type = 'overlay' AND ej.status = 'complete'
-               AND p.is_auto_created = 0
-               LIMIT 1"""
-        ).fetchone() is not None
-
-        # Watched a custom project video from gallery
-        steps["watch_reel"] = 'viewed_custom_project_video' in achieved
-
-        if PROFILING_ENABLED:
-            step_times["quest_4_queries"] = time.perf_counter() - _t
 
     if PROFILING_ENABLED:
         total = sum(step_times.values()) * 1000

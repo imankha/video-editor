@@ -179,11 +179,6 @@ class TestQuestProgressPerformance:
         assert steps["wait_for_export_2"] is True  # 2 completed framing >= 2
         assert steps["overlay_second_highlight"] is True  # 2 completed overlay >= 2
 
-        # Quest 4
-        assert steps["upload_game_2"] is True  # 3 >= 2
-        assert steps["annotate_game_2"] is True  # clips rated >= 4 from non-first game
-        assert steps["create_reel"] is True  # manual project with 2+ game clips
-
 
 # ---------------------------------------------------------------------------
 # T1020: R2 Sync Performance (skip HEAD)

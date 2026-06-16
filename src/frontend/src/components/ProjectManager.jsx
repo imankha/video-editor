@@ -17,7 +17,6 @@ import { ProfileDropdown } from './ProfileDropdown';
 import { CreditBalance } from './CreditBalance';
 import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
-import { useQuestStore } from '../stores/questStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useGalleryStore } from '../stores/galleryStore';
 import { API_BASE } from '../config';
@@ -507,8 +506,6 @@ export function ProjectManager({
     if (onRefreshProjects) {
       await onRefreshProjects();
     }
-    // Refresh quest progress — new project with multi-game clips may complete create_reel step
-    useQuestStore.getState().fetchProgress({ force: true });
   }, [onRefreshProjects]);
 
   return (
