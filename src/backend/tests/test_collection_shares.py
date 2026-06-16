@@ -283,6 +283,7 @@ class TestCreateCollectionShare:
         data = resp.json()
         token = data["shares"][0]["share_token"]
         assert "Portrait" in data["title"]
+        assert "Game Highlights" in data["title"]  # game-scope links read "<game> Game Highlights - <ratio>"
 
         from app.services.sharing_db import get_collection_share_by_token
         row = get_collection_share_by_token(token)

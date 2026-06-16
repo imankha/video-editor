@@ -68,8 +68,8 @@ export function GameCollectionGroup({
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="space-y-2 mb-2">
           <CollectionCard
-            title="Highlights"
-            playTitle={`${name} Highlights`}
+            title="Game Highlights"
+            playTitle={`${name} Game Highlights`}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
             ratioDuration={ratioDurations[ratio]}

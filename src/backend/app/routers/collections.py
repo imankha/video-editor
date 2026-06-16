@@ -569,6 +569,7 @@ def _build_collection_title(conn, d: CollectionDefinition) -> str:
             )
             if g else f"Game {d.scope.game_id}"
         )
+        base = f"{base} Game Highlights"
     elif d.scope.type == "mixes":
         base = "Mixes"
     else:  # all
