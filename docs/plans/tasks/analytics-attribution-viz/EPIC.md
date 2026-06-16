@@ -39,5 +39,6 @@ All the data already exists — `referrals` (who brought whom), `user_segments` 
 
 - [ ] Admin shows games-uploaded and games-accessible as distinct numbers per user
 - [ ] Admin has an attribution graph view: nodes = users (+ campaign/origin roots), edges = invited-by, grouped/colored by origin
+- [ ] The attribution graph lives on its own lazy-loaded page linked from the main analytics page (graph lib + payload do not load until requested; main page load unaffected)
 - [ ] Both built on existing tables — no new tracking events required
 - [ ] Tests pass (backend endpoint tests + frontend unit where applicable)
