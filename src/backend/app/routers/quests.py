@@ -70,7 +70,6 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_color_set",
     "overlay_shape_set",
     "viewed_gallery_video",
-    "watched_gallery_video_after_2_overlays",
 ]
 
 # Map step_id -> quest_id for skip lookups
@@ -140,14 +139,6 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
     steps["choose_shape"] = 'overlay_shape_set' in achieved
     steps["export_overlay"] = overlay_done >= 1
     steps["view_gallery_video"] = 'viewed_gallery_video' in achieved
-
-    # --- Quest 4: Make More Highlights ---
-    steps["annotate_second_5_star"] = rc["reels"] >= 2
-    steps["annotate_5_more"] = rc["total"] >= 3
-    steps["frame_second_highlight"] = framing_total >= 2
-    steps["wait_for_export_2"] = framing_done >= 2
-    steps["spotlight_second_highlight"] = overlay_done >= 2
-    steps["watch_second_highlight"] = 'watched_gallery_video_after_2_overlays' in achieved
 
     if PROFILING_ENABLED:
         logger.info(f"[PROFILE] _check_all_steps: {(time.perf_counter() - _t) * 1000:.0f}ms")

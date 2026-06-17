@@ -175,7 +175,7 @@ export function QuestPanel({ inline = false }) {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        if (questDef.id === 'quest_4') {
+        if (questDef.id === 'quest_3') {
           setShowCompletionModal(true);
         } else {
           toast.success(`You earned ${questDef.reward} credits!`, {

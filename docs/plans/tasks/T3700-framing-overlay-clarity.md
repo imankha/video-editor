@@ -199,18 +199,20 @@ asserts on those literal labels and must update in lockstep. Flagged coordinatio
 
 **2026-06-16 (quest/tutorial half shipped — see PLAN row T3705)**: Implemented the quest-system
 restructure on `feature/T3700-quest-framing-overlay-split`:
-- 4-quest split: Q2 "Frame Your Highlight", Q3 "Spotlight Your Player", Q4 "Make More Highlights",
-  each decomposed into individually-triggered steps (20 steps total). Backend `quest_config.py` +
-  `_check_all_steps`; frontend `questDefinitions.js/.jsx` (outcome-first, jargon-free copy, no
-  "keyframes").
+- 3-quest split: Q1 "Get Started", Q2 "Frame Your Highlight", Q3 "Spotlight Your Player",
+  each decomposed into individually-triggered steps (14 steps total). The old repeat-everything
+  "Make More Highlights" quest was dropped; the Vamos completion modal fires after Q3. Backend
+  `quest_config.py` + `_check_all_steps`; frontend `questDefinitions.js/.jsx` (outcome-first,
+  jargon-free copy, no "keyframes").
 - 6 new achievement events wired in the editors: `crop_adjusted` (FramingContainer),
   `speed_segment_created` (speed < 1x only), `opened_overlay_editor` (App.jsx),
   `overlay_players_assigned` (OverlayContainer, all green regions assigned), `overlay_color_set` +
   `overlay_shape_set` (OverlayScreen). Registered in `KNOWN_ACHIEVEMENT_KEYS` + analytics FLOW_EVENTS.
 - Terminal buttons renamed: "Frame Video" -> "Export Highlight", "Add Overlay" -> "Add Spotlight"
   (ExportButtonView, PaymentResultModal).
-- `v005_quest_restructure` user_db migration rekeys existing users' completed/claimed quest state
-  (old quest_2 -> quest_2+quest_3, old quest_3 -> quest_4). No app-level legacy handling; data is migrated.
+- `v005_quest_restructure` user_db migration reconciles existing users: old quest_2 (bundled
+  framing+overlay) also satisfies the new quest_3 (Spotlight), so it's marked complete. No app-level
+  legacy handling; data is migrated.
 
 Remaining (this task / the new T37xx tasks): the editor-UX behaviors. **P0 default crop is now
 ACCEPTANCE-CRITICAL and UNVERIFIED** — the live Q2 `export_framing` step requires that a user who

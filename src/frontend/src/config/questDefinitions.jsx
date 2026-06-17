@@ -10,7 +10,7 @@
  * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Home, Image, Play, Plus, Star, Film, Crosshair, Gamepad2, Folder } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Film, Crosshair, Folder } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -68,13 +68,6 @@ export const STEP_TITLES = {
   choose_shape: 'Choose the Spotlight Shape',
   export_overlay: 'Add the Spotlight',
   view_gallery_video: 'Move to My Reels and Watch',
-  // Quest 4 — Make More Highlights
-  annotate_second_5_star: 'Create Another Reel',
-  annotate_5_more: 'Annotate More Clips',
-  frame_second_highlight: 'Frame Another Video',
-  wait_for_export_2: 'Wait for the Export',
-  spotlight_second_highlight: 'Spotlight Your Player Again',
-  watch_second_highlight: 'Move to Library & Watch',
 };
 
 /** Step descriptions keyed by step ID — JSX with inline icons */
@@ -96,11 +89,4 @@ export const STEP_DESCRIPTIONS = {
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
   view_gallery_video: <>Preview the video by hitting the play button on the card. If you see an issue, redo the framing or overlay. Once it's perfect, click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to watch and download it.</>,
-  // Quest 4 — Make More Highlights (compressed; the user already learned each sub-step)
-  annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and create another reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player.</>,
-  annotate_5_more: 'Annotate more clips — try to catch every touch that could be a learning or a celebration.',
-  frame_second_highlight: <>Pick a reel, frame your player and click <MiniButton icon={Film}>Export Highlight</MiniButton>.</>,
-  wait_for_export_2: 'Wait for the export to finish.',
-  spotlight_second_highlight: <>Spotlight your player again, then click <MiniButton>Add Spotlight</MiniButton>.</>,
-  watch_second_highlight: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your finished reel, then open {SECTION_NAMES.LIBRARY} to watch it.</>,
 };

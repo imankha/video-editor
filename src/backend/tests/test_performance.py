@@ -186,14 +186,6 @@ class TestQuestProgressPerformance:
         assert steps["export_overlay"] is True  # completed overlay exists (>= 1)
         assert steps["view_gallery_video"] is True  # achievement exists
 
-        # Quest 4 — Make More Highlights
-        assert steps["annotate_5_more"] is True  # 10 >= 3
-        assert steps["annotate_second_5_star"] is True  # 2 reels >= 2
-        assert steps["frame_second_highlight"] is True  # 3 framing >= 2
-        assert steps["wait_for_export_2"] is True  # 2 completed framing >= 2
-        assert steps["spotlight_second_highlight"] is True  # 2 completed overlay >= 2
-        assert steps["watch_second_highlight"] is True  # achievement exists
-
 
 # ---------------------------------------------------------------------------
 # T1020: R2 Sync Performance (skip HEAD)

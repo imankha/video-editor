@@ -34,17 +34,4 @@ export const QUEST_DEFINITIONS = [
       'view_gallery_video',
     ],
   },
-  {
-    id: 'quest_4',
-    title: 'Make More Highlights',
-    reward: 40,
-    step_ids: [
-      'annotate_second_5_star',
-      'annotate_5_more',
-      'frame_second_highlight',
-      'wait_for_export_2',
-      'spotlight_second_highlight',
-      'watch_second_highlight',
-    ],
-  },
 ];
