@@ -21,6 +21,12 @@ export const useGalleryStore = create((set) => ({
   unwatchedCount: 0,
   countLoaded: false,
 
+  // Version signal for the published-reels model. Bumped whenever the set of
+  // published reels changes (publish / unpublish). Views that render the
+  // grouped My Reels list (useCollections) subscribe and re-fetch — model
+  // change -> event -> UI updates, instead of relying on a reopen/refetch race.
+  collectionsVersion: 0,
+
   // Actions
   open: () => {
     setWarmupPriority(WARMUP_PRIORITY.GALLERY);
@@ -30,6 +36,10 @@ export const useGalleryStore = create((set) => ({
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   setCount: (count) => set({ count, countLoaded: true }),
   setUnwatchedCount: (unwatchedCount) => set({ unwatchedCount }),
+
+  // Dispatch a "published reels changed" event. Call after a publish/unpublish
+  // succeeds on the backend (the model change), so subscribed views refresh.
+  notifyCollectionsChanged: () => set((state) => ({ collectionsVersion: state.collectionsVersion + 1 })),
 
   /**
    * Fetch downloads count from backend (for badge).
@@ -63,7 +73,7 @@ export const useGalleryStore = create((set) => ({
   // Reset on profile switch — clears badge count and closes panel
   reset: () => {
     _fetchCountPromise = null;
-    set({ isOpen: false, count: 0, unwatchedCount: 0, countLoaded: false });
+    set({ isOpen: false, count: 0, unwatchedCount: 0, countLoaded: false, collectionsVersion: 0 });
   },
 }));
 

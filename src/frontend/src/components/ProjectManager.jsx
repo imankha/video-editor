@@ -1770,12 +1770,13 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       if (!result.archived) {
         console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
       }
+      // Model changed (a reel was published) -> update count badge + dispatch the
+      // collections-changed event so the My Reels list refreshes itself.
       useGalleryStore.getState().fetchCount({ force: true });
+      useGalleryStore.getState().notifyCollectionsChanged();
       fetchProjects({ force: true });
       if (openGallery) {
-        // Close first so open() triggers a fresh download fetch (isOpen: false→true)
-        useGalleryStore.getState().close();
-        setTimeout(() => useGalleryStore.getState().open(), 300);
+        useGalleryStore.getState().open();
       }
     } catch (error) {
       console.error('[ProjectCard] Publish error:', error);

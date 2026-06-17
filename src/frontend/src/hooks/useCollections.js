@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProfileStore } from '../stores/profileStore';
+import { useGalleryStore } from '../stores/galleryStore';
 import { sortReels } from '../utils/reelOrder';
 
 const API_BASE_URL = `${API_BASE}/api`;
@@ -143,11 +144,7 @@ export function useCollections(isActive = false) {
     memberAbortsRef.current = {};
   }, [currentProfileId]);
 
-  // Fetch the summary every time the tab becomes active (rising edge), plus the
-  // initial/idle case. Refetching on each open keeps the grouped My Reels list
-  // fresh after a publish/rename/delete — the cached summary would otherwise stay
-  // stale until a profile switch or page reload (e.g. a just-published reel never
-  // appearing even though the count badge updated).
+  // Fetch the summary when the tab becomes active (rising edge) or on first/idle.
   const wasActiveRef = useRef(false);
   useEffect(() => {
     const becameActive = isActive && !wasActiveRef.current;
@@ -156,6 +153,17 @@ export function useCollections(isActive = false) {
       fetchSummary();
     }
   }, [isActive, summaryState, fetchSummary]);
+
+  // Event-driven refresh: when the published-reels model changes (publish /
+  // unpublish dispatches notifyCollectionsChanged), re-fetch while the tab is
+  // active so My Reels updates immediately — no reopen/refetch race.
+  const collectionsVersion = useGalleryStore((state) => state.collectionsVersion);
+  const seenVersionRef = useRef(collectionsVersion);
+  useEffect(() => {
+    if (collectionsVersion === seenVersionRef.current) return;
+    seenVersionRef.current = collectionsVersion;
+    if (isActive) fetchSummary();
+  }, [collectionsVersion, isActive, fetchSummary]);
 
   // Abort everything on unmount.
   useEffect(() => {
