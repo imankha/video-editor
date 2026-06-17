@@ -62,7 +62,7 @@ export const STEP_TITLES = {
   export_framing: 'Export Your Highlight',
   wait_for_export: 'Crisp It Up to 1080p',
   // Quest 3 — Spotlight Your Player
-  open_overlay: 'Spotlight Your Player',
+  open_overlay: 'Open in Overlay',
   select_players: 'Pick Your Player',
   choose_color: 'Pick Your Highlight Color',
   choose_shape: 'Choose the Spotlight Shape',
