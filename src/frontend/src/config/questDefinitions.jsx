@@ -10,7 +10,7 @@
  * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Home, Image, Play, Plus, Star, Film, Crosshair, Gamepad2 } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Film, Crosshair, Gamepad2, Folder } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -84,7 +84,7 @@ export const STEP_DESCRIPTIONS = {
   annotate_brilliant: <>You can automatically create a reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player. Click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> and rate it 5 stars with My Athlete on.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
-  open_framing: <>Click <MiniButton variant="cyan"><QIcon icon={Home} className="text-white" />Open your reel</MiniButton> to jump straight into framing.</>,
+  open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
   position_crop: <>Drag the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame later, scrub ahead and move the box again — that's all there is to it.</>,
   add_slowmo: <>Make the big moment shine: tap the timeline to split a section over it, then set that section to <strong>0.5x slow-mo</strong>.</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
