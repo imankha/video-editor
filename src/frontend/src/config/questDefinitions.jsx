@@ -67,7 +67,7 @@ export const STEP_TITLES = {
   choose_color: 'Pick Your Highlight Color',
   choose_shape: 'Choose the Spotlight Shape',
   export_overlay: 'Add the Spotlight',
-  view_gallery_video: 'Move to Library & Watch',
+  view_gallery_video: 'Move to My Reels and Watch',
   // Quest 4 — Make More Highlights
   annotate_second_5_star: 'Create Another Reel',
   annotate_5_more: 'Annotate More Clips',
@@ -95,7 +95,7 @@ export const STEP_DESCRIPTIONS = {
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
-  view_gallery_video: <>Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> on your finished reel, then open <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />{SECTION_NAMES.LIBRARY}</MiniButton> in the top bar to watch it.</>,
+  view_gallery_video: <>Preview the video by hitting the play button on the card. If you see an issue, redo the framing or overlay. Once it's perfect, click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to watch and download it.</>,
   // Quest 4 — Make More Highlights (compressed; the user already learned each sub-step)
   annotate_second_5_star: <>Go to <QIcon icon={Gamepad2} className="text-green-400" /> Games, click into your game and create another reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player.</>,
   annotate_5_more: 'Annotate more clips — try to catch every touch that could be a learning or a celebration.',
