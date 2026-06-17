@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from app.utils.encoding import encode_data
 from app.services.collection_metadata import encode_game_ids, route_game_ids
+from app.routers.collections import CURATED_COMBOS
 
 USER_ID = "test-user-t3610"
 PROFILE_ID = "testdefault"
@@ -480,3 +481,54 @@ class TestSmartCollections:
         # top_plays member fetch is the unfiltered list
         plays = next(sc for sc in s.smart_collections if sc.key == "top_plays")
         assert _downloads().total_count == plays.reel_count == 4
+
+
+# ---------------------------------------------------------------------------
+# Every supported sport: curated combos nudge, per-tag hides until ready
+# ---------------------------------------------------------------------------
+
+class TestMultiSportCollections:
+    @pytest.mark.parametrize("sport", list(CURATED_COMBOS.keys()))
+    def test_each_sport_curated_and_per_tag(self, db, sport):
+        """For each sport: seeding a reel with one of the sport's curated combo
+        tags surfaces (a) Top Plays, (b) the curated combo as a nudge card, and
+        (c) that tag's per-tag collection once it clears 30s."""
+        from app.routers.collections import collections_summary
+
+        combo = CURATED_COMBOS[sport][0]
+        tag = sorted(combo["tags"])[0]
+
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=[tag])  # >=30s
+        conn.commit(); conn.close()
+
+        s = asyncio.run(collections_summary(sport=sport))
+        smart = {sc.key: sc for sc in s.smart_collections}
+
+        # Flagship is always present and nudges.
+        assert smart["top_plays"].nudge_when_locked is True
+        # Curated combo joined the reel (OR membership) and nudges.
+        assert smart[combo["key"]].reel_count == 1
+        assert smart[combo["key"]].nudge_when_locked is True
+        # The seeded tag's per-tag collection is ready (40s) and does NOT nudge.
+        assert smart[f"tag:{tag}"].nudge_when_locked is False
+        assert smart[f"tag:{tag}"].reel_count == 1
+
+    def test_wrong_sport_combo_omitted_but_per_tag_survives(self, db):
+        """Per-tag is sport-agnostic: a volleyball Kill reel viewed with the
+        soccer combo set still yields its per-tag card, just no soccer combo."""
+        from app.routers.collections import collections_summary
+
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=["Kill"])
+        conn.commit(); conn.close()
+
+        s = asyncio.run(collections_summary(sport="soccer"))
+        smart = {sc.key: sc for sc in s.smart_collections}
+        assert "soccer_goals_assists" not in smart   # no Goal/Assist reels
+        assert "vb_kills_aces" not in smart           # soccer combo set in use
+        assert smart["tag:Kill"].nudge_when_locked is False  # per-tag still works
