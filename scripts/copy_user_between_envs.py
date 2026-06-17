@@ -138,6 +138,46 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
                 )
             log.info(f"Copied {len(refs)} game_storage_refs rows")
 
+            # Copy user_segments — the analytics row the admin dashboard INNER JOINs
+            # on (users ⋈ user_segments). Without it the copied account never shows in
+            # the dashboard. referrer_id has a FK to users(user_id); null it if the
+            # referrer isn't present at the destination so the insert can't fail.
+            dst_cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+            src_cur.execute("SELECT * FROM user_segments WHERE user_id = %s", (user_id,))
+            seg = src_cur.fetchone()
+            if seg:
+                seg = dict(seg)
+                ref = seg.get("referrer_id")
+                if ref:
+                    dst_cur.execute("SELECT 1 FROM users WHERE user_id = %s", (ref,))
+                    if not dst_cur.fetchone():
+                        log.info(f"  referrer {ref} not at destination -- nulling referrer_id")
+                        seg["referrer_id"] = None
+                cols = list(seg.keys())
+                placeholders = ", ".join(["%s"] * len(cols))
+                dst_cur.execute(
+                    f"INSERT INTO user_segments ({', '.join(cols)}) VALUES ({placeholders})",
+                    [seg[c] for c in cols],
+                )
+                log.info("Copied user_segments row")
+            else:
+                log.info("No user_segments row at source")
+
+            # Copy user_actions — drives the dashboard's funnel, last-step, session and
+            # usage columns. Clear the destination first for a faithful mirror.
+            dst_cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
+            src_cur.execute("SELECT * FROM user_actions WHERE user_id = %s", (user_id,))
+            action_rows = src_cur.fetchall()
+            for a in action_rows:
+                a = dict(a)
+                cols = list(a.keys())
+                placeholders = ", ".join(["%s"] * len(cols))
+                dst_cur.execute(
+                    f"INSERT INTO user_actions ({', '.join(cols)}) VALUES ({placeholders})",
+                    [a[c] for c in cols],
+                )
+            log.info(f"Copied {len(action_rows)} user_actions rows")
+
             dst_conn.commit()
 
         return user_id
