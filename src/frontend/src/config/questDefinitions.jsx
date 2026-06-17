@@ -85,8 +85,8 @@ export const STEP_DESCRIPTIONS = {
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
-  position_crop: <>Drag the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame later, scrub ahead and move the box again — that's all there is to it.</>,
-  add_slowmo: <>Make the big moment shine: tap the timeline to split a section over it, then set that section to <strong>0.5x slow-mo</strong>.</>,
+  position_crop: <>Drag the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
+  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'Hang tight — we are upscaling your highlight to crisp 1080p.',
   // Quest 3 — Spotlight Your Player
