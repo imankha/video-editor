@@ -126,6 +126,78 @@ class TestUpdateSessionSync:
         assert entries[0]["created_at"] is not None
 
 
+class TestImpersonationSuppression:
+    """T1515: actions taken while an admin impersonates a user must not be
+    attributed to that user's analytics (no PG user_actions, no SQLite
+    action_log, no session timing)."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        create_user("user-a", email="a@test.com")
+        create_user_segment("user-a", "organic", None, "otp")
+
+    @pytest.fixture
+    def _impersonating(self):
+        from app.user_context import set_current_impersonator_id
+        set_current_impersonator_id("admin-007")
+        try:
+            yield
+        finally:
+            set_current_impersonator_id(None)
+
+    def _pg_action_row(self, user_id, action):
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT * FROM user_actions WHERE user_id = %s AND action = %s",
+                (user_id, action),
+            )
+            return cur.fetchone()
+
+    def test_record_milestone_suppressed_during_impersonation(self, pg_conn, _impersonating):
+        record_milestone("user-a", "game_created", {"game_id": 1})
+
+        assert self._pg_action_row("user-a", "game_created") is None
+        assert _get_sqlite_action_log("user-a", "game_created") == []
+
+    def test_update_session_suppressed_during_impersonation(self, pg_conn, _impersonating):
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE user_segments SET last_active_at = now() - INTERVAL '31 minutes', "
+                "current_session_start = NULL WHERE user_id = %s",
+                ("user-a",),
+            )
+
+        update_session("user-a")
+
+        assert _get_sqlite_action_log("user-a", "session_started") == []
+        # session timing untouched: current_session_start stays NULL
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT current_session_start FROM user_segments WHERE user_id = %s",
+                ("user-a",),
+            )
+            assert cur.fetchone()["current_session_start"] is None
+
+    def test_normal_recording_works_after_impersonation_clears(self, pg_conn):
+        from app.user_context import set_current_impersonator_id
+
+        set_current_impersonator_id("admin-007")
+        record_milestone("user-a", "game_created")
+        set_current_impersonator_id(None)
+
+        # After clearing, a real action records normally.
+        record_milestone("user-a", "game_created")
+
+        row = self._pg_action_row("user-a", "game_created")
+        assert row is not None and row["count"] == 1
+        assert len(_get_sqlite_action_log("user-a", "game_created")) == 1
+
+
 class TestBackfillUserActivity:
     @pytest.fixture(autouse=True)
     def _setup(self, pg_conn):

@@ -28,6 +28,23 @@ _current_req_id: ContextVar[str] = ContextVar('current_req_id', default='')
 
 _current_platform: ContextVar[str] = ContextVar('current_platform', default='unknown')
 
+# T1515: when an admin is impersonating a user ("Login as User"), this holds the
+# admin's user_id for the request. Analytics writers check it to skip recording so
+# impersonation leaves no footprint on the impersonated user's activity data.
+_current_impersonator_id: ContextVar[Optional[str]] = ContextVar(
+    'current_impersonator_id', default=None
+)
+
+
+def get_current_impersonator_id() -> Optional[str]:
+    """Return the impersonating admin's user_id, or None if not impersonating."""
+    return _current_impersonator_id.get()
+
+
+def set_current_impersonator_id(impersonator_id: Optional[str]) -> None:
+    """Set (or clear) the impersonator id for this request context."""
+    _current_impersonator_id.set(impersonator_id or None)
+
 
 def get_current_req_id() -> str:
     """Return the request id for the current context, or '' if none set."""

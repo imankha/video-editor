@@ -61,7 +61,12 @@ from ..profile_context import set_current_profile_id, get_current_profile_id
 from ..session_init import user_session_init
 from ..services.auth_db import validate_session
 from ..storage import R2_ENABLED, APP_ENV
-from ..user_context import set_current_user_id, set_current_req_id, set_current_platform
+from ..user_context import (
+    set_current_user_id,
+    set_current_req_id,
+    set_current_platform,
+    set_current_impersonator_id,
+)
 from ..utils.cookies import set_cookie as _set_cookie
 
 logger = logging.getLogger(__name__)
@@ -499,6 +504,10 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         meta["user_id"] = user_id
         set_current_user_id(user_id)
+        # T1515: flag impersonation so analytics writers skip recording. Only the
+        # session-cookie path carries impersonation; header-fallback never does.
+        _session = getattr(request.state, "session", None)
+        set_current_impersonator_id(_session.get("impersonator_user_id") if _session else None)
         init_request_context()
 
         try:

@@ -11,6 +11,7 @@
  *   track('clip_select', { id: 42 }, { debugOnly: true });     // breadcrumb only
  */
 
+import { useAuthStore } from '../stores/authStore.js';
 import { useEditorStore } from '../stores/editorStore.js';
 import { useProjectsStore } from '../stores/projectsStore.js';
 import { useGamesDataStore } from '../stores/gamesDataStore.js';
@@ -49,6 +50,10 @@ export function track(event, props = {}, { debugOnly = false } = {}) {
     ts: new Date().toISOString(),
   });
   while (_buffer.length > MAX_ENTRIES) _buffer.shift();
+
+  // T1515: keep the local breadcrumb (above) for bug reports, but never send an
+  // impersonating admin's actions to analytics as if the impersonated user did them.
+  if (useAuthStore.getState().impersonator) return;
 
   if (debugOnly || !TOKEN) return;
 

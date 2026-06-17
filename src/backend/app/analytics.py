@@ -7,7 +7,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 from app.services.pg import get_pg
-from app.user_context import get_current_platform
+from app.user_context import get_current_platform, get_current_impersonator_id
 
 logger = logging.getLogger(__name__)
 
@@ -223,6 +223,11 @@ def create_user_segment(
 
 
 def record_milestone(user_id: str, event: str, context: dict | None = None):
+    # T1515: don't attribute admin impersonation actions to the user's analytics.
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped milestone %s for %s during impersonation by %s", event, user_id, impersonator)
+        return
     try:
         cfg = FLOW_EVENTS.get(event)
         if not cfg:
@@ -279,6 +284,12 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
 
 
 def update_session(user_id: str, is_pwa: bool = False):
+    # T1515: an impersonating admin's requests must not bump the user's session
+    # timing (last_active_at / current_session_start / total_usage_seconds).
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped session update for %s during impersonation by %s", user_id, impersonator)
+        return
     total_usage_seconds = 0
     try:
         platform = get_current_platform()
@@ -395,6 +406,11 @@ def update_session(user_id: str, is_pwa: bool = False):
 
 def close_session(user_id: str):
     """Close the current session and accumulate usage. Called on logout."""
+    # T1515: a logout during impersonation must not write the user's session timing.
+    impersonator = get_current_impersonator_id()
+    if impersonator:
+        logger.debug("[Analytics] Skipped session close for %s during impersonation by %s", user_id, impersonator)
+        return
     try:
         with get_pg() as conn:
             cur = conn.cursor()
