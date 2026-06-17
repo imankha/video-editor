@@ -38,10 +38,10 @@ export function ProfileSportButton() {
         onClick={() => setShowManageModal(true)}
         title={`${sportLabel} — switch sport or profile`}
         aria-label={`${sportLabel}. Switch sport or profile.`}
-        className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+        className="flex items-center gap-2 h-[38px] px-3 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
         style={{ boxShadow: `inset 0 0 0 1.5px ${color}66` }}
       >
-        <span className="text-lg leading-none" aria-hidden>{sportEmoji(sport)}</span>
+        <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
         {currentProfile?.name && (
           <span className="hidden sm:inline text-sm text-white font-medium max-w-[120px] truncate">
             {currentProfile.name}
