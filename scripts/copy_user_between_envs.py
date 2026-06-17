@@ -122,7 +122,10 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
             )
             log.info(f"Copied users row for {user_id}")
 
-            # Copy game_storage_refs
+            # Copy game_storage_refs. Clear the destination's existing refs for this
+            # user_id first so a re-copy is a faithful mirror -- otherwise refs that
+            # were removed at the source linger (ON CONFLICT DO NOTHING never deletes).
+            dst_cur.execute("DELETE FROM game_storage_refs WHERE user_id = %s", (user_id,))
             src_cur.execute("SELECT * FROM game_storage_refs WHERE user_id = %s", (user_id,))
             refs = src_cur.fetchall()
             for ref in refs:
@@ -144,19 +147,47 @@ def copy_postgres_rows(src_config: dict, dst_config: dict, email: str, dry_run: 
         dst_conn.close()
 
 
+def _list_keys(r2, bucket: str, prefix: str) -> list[str]:
+    paginator = r2.get_paginator("list_objects_v2")
+    keys = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for obj in page.get("Contents", []) or []:
+            keys.append(obj["Key"])
+    return keys
+
+
 def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str, dry_run: bool):
-    """Copy all R2 objects for a user from source prefix to destination prefix."""
+    """Mirror all R2 objects for a user from source prefix to destination prefix.
+
+    Source and destination share the same bucket (only the {env}/ prefix differs),
+    so this is an in-bucket copy. The destination prefix is PURGED first so the
+    result is a faithful mirror -- stale objects left over from a prior account
+    (e.g. an old profile.sqlite that copy_object would never touch) don't survive.
+    """
     r2 = get_r2_client(config)
     bucket = config["R2_BUCKET"]
 
     user_prefix = f"{src_prefix}/users/{user_id}/"
-    paginator = r2.get_paginator("list_objects_v2")
-    src_keys = []
-    for page in paginator.paginate(Bucket=bucket, Prefix=user_prefix):
-        for obj in page.get("Contents", []) or []:
-            src_keys.append(obj["Key"])
-
+    dst_user_prefix = f"{dst_prefix}/users/{user_id}/"
+    src_keys = _list_keys(r2, bucket, user_prefix)
     log.info(f"Found {len(src_keys)} R2 objects to copy")
+
+    # Safety: never purge the destination if the source is empty -- that would
+    # wipe the destination and leave nothing in its place.
+    if not src_keys:
+        log.error(f"Source prefix {user_prefix} is EMPTY -- aborting R2 copy (refusing to wipe destination)")
+        sys.exit(1)
+
+    # Purge destination prefix so removed/renamed objects don't linger.
+    dst_existing = _list_keys(r2, bucket, dst_user_prefix)
+    if dst_existing:
+        if dry_run:
+            log.info(f"  [DRY RUN] Would purge {len(dst_existing)} existing objects under {dst_user_prefix}")
+        else:
+            for i in range(0, len(dst_existing), 1000):
+                batch = [{"Key": k} for k in dst_existing[i:i + 1000]]
+                r2.delete_objects(Bucket=bucket, Delete={"Objects": batch})
+            log.info(f"  Purged {len(dst_existing)} stale objects under {dst_user_prefix}")
 
     copied = 0
     for key in src_keys:
@@ -164,6 +195,8 @@ def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str
         if dry_run:
             log.info(f"  [DRY RUN] {key} -> {dst_key}")
         else:
+            # MetadataDirective defaults to COPY, preserving the db-version metadata
+            # the destination backend uses to decide it must re-download from R2.
             r2.copy_object(
                 Bucket=bucket,
                 Key=dst_key,
@@ -174,6 +207,58 @@ def copy_r2_objects(config: dict, user_id: str, src_prefix: str, dst_prefix: str
             log.info(f"  Copied {copied}/{len(src_keys)}...")
 
     log.info(f"R2 copy complete: {copied} objects from {src_prefix}/ to {dst_prefix}/")
+
+    if not dry_run:
+        verify_r2_copy(r2, bucket, user_id, src_prefix, dst_prefix, src_keys)
+
+
+def _db_version(r2, bucket: str, key: str) -> str:
+    try:
+        head = r2.head_object(Bucket=bucket, Key=key)
+        return head.get("Metadata", {}).get("db-version", "?")
+    except Exception as e:  # noqa: BLE001
+        return f"ERR({e})"
+
+
+def verify_r2_copy(r2, bucket: str, user_id: str, src_prefix: str, dst_prefix: str, src_keys: list[str]):
+    """Fail loudly if the destination doesn't match the source after copy.
+
+    Catches silent partial copies -- the failure mode that left dev/imankh stale.
+    Compares object counts and the db-version metadata of every *.sqlite file.
+    """
+    dst_user_prefix = f"{dst_prefix}/users/{user_id}/"
+    dst_keys = set(_list_keys(r2, bucket, dst_user_prefix))
+    expected = {k.replace(f"{src_prefix}/", f"{dst_prefix}/", 1) for k in src_keys}
+
+    missing = expected - dst_keys
+    extra = dst_keys - expected
+    ok = True
+    if missing:
+        log.error(f"[VERIFY] {len(missing)} expected objects MISSING at destination, e.g. {sorted(missing)[:3]}")
+        ok = False
+    if extra:
+        log.error(f"[VERIFY] {len(extra)} unexpected objects at destination, e.g. {sorted(extra)[:3]}")
+        ok = False
+
+    # Compare db-version metadata on every sqlite file (the real source of truth
+    # for what the backend will load).
+    for src_key in src_keys:
+        if not src_key.endswith(".sqlite"):
+            continue
+        dst_key = src_key.replace(f"{src_prefix}/", f"{dst_prefix}/", 1)
+        sv = _db_version(r2, bucket, src_key)
+        dv = _db_version(r2, bucket, dst_key)
+        rel = src_key[len(f"{src_prefix}/users/{user_id}/"):]
+        if sv != dv:
+            log.error(f"[VERIFY] db-version MISMATCH for {rel}: source={sv} dest={dv}")
+            ok = False
+        else:
+            log.info(f"[VERIFY] {rel}: db-version={dv} OK")
+
+    if not ok:
+        log.error("[VERIFY] R2 copy verification FAILED -- destination is NOT a faithful mirror")
+        sys.exit(1)
+    log.info(f"[VERIFY] OK: {len(expected)} objects mirrored to {dst_user_prefix}")
 
 
 def main():

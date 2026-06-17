@@ -153,6 +153,10 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
             cur.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
 
     if dry_run:
+        cur.execute("SELECT COUNT(*) as cnt FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+        print(f"    would delete {cur.fetchone()['cnt']} rows from referrals")
+        cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE referrer_id = %s", (user_id,))
+        print(f"    would null referrer_id on {cur.fetchone()['cnt']} other user_segments rows")
         cur.execute("SELECT COUNT(*) as cnt FROM user_actions WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from user_actions")
         cur.execute("SELECT COUNT(*) as cnt FROM user_segments WHERE user_id = %s", (user_id,))
@@ -160,6 +164,8 @@ def delete_one(user_id: str, email: str, app_env: str, bucket: str,
         cur.execute("SELECT COUNT(*) as cnt FROM users WHERE user_id = %s", (user_id,))
         print(f"    would delete {cur.fetchone()['cnt']} rows from users")
     else:
+        cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
+        cur.execute("UPDATE user_segments SET referrer_id = NULL WHERE referrer_id = %s", (user_id,))
         cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
         cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
