@@ -62,7 +62,7 @@ export const STEP_TITLES = {
   export_framing: 'Export Your Highlight',
   wait_for_export: 'Crisp It Up to 1080p',
   // Quest 3 — Spotlight Your Player
-  open_overlay: 'Open the Spotlight',
+  open_overlay: 'Spotlight Your Player',
   select_players: 'Pick Your Player',
   choose_color: 'Pick Your Highlight Color',
   choose_shape: 'Choose the Spotlight Shape',
@@ -90,7 +90,7 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: 'Now let us spotlight your player. We open this for you right after your highlight finishes exporting.',
+  open_overlay: 'Open the reel in overlay mode to add a spotlight to your player.',
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
