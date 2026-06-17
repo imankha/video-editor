@@ -123,6 +123,15 @@ Ordered: instrumentation first so we can measure what we fix; then the two user-
 | T3390 | ↳ [Reduce Auth Retry Config](tasks/initial-load-time/T3390-reduce-auth-retry-config.md) | 4 | 1 | P2 | DONE | [ ] | fetchWithRetry uses 3 retries with 1s base delay. Reduce to 2 retries / 500ms for auth/me. Risk reduction after T3310 makes cold starts rare. |
 | T3400 | ↳ [Defer Stripe JS](tasks/initial-load-time/T3400-defer-stripe-js.md) | 4 | 2 | P2 | DONE | [ ] | Stripe SDK chain (5 requests, 78-1453ms) loads on every page load. Defer to payment flow interaction. Frees bandwidth on slow connections. |
 
+#### Video Load Latency (from HAR 2026-06-17)
+
+Traced from `Downloads/localhost.har`: the framing clip takes ~4.3s to appear due to a cold over-fetch from R2. The per-file tag/JS "downloads" the user noticed are a dev-mode Vite artifact (bundled+gzipped in prod) and are NOT a bottleneck — no task created for them.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T3760 | [Framing Clip Cold-Load Over-Fetch](tasks/T3760-framing-clip-cold-load-overfetch.md) | 8 | 5 | 1.6 | TODO | [ ] | Framing plays the clip via the direct R2 presigned URL (T3250, to escape the ~590 KB/s Fly proxy); for a clip ~66% into a 3 GB source the browser issues an open-ended range at byte ~2.0 GB → R2 serves to EOF → over-buffers (HAR: 3.4 MB / 4.3s cold). Bounded `/stream` proxy (T1430) exists but is only the error fallback. Spike→decide: faststart (T2580) + edge range-clamp via CDN Worker (re-opens T2560's "likely skip" — it was skipped on egress cost, but this is latency). Do NOT revert to the Fly proxy. |
+| T3770 | [Confirm StrictMode Duplicate Page-Load Fetches](tasks/T3770-strictmode-duplicate-pageload-fetches.md) | 3 | 2 | 1.5 | TODO | [ ] | HAR shows /api/bootstrap ×2, /api/projects/46 ×3, /api/health ×2 on load. Almost certainly React StrictMode dev double-invoke (harmless, absent in prod). Verify on a prod build; if real, add promise dedup guards (T2500 pattern). |
+
 ---
 
 ## Priority Policy
@@ -242,6 +251,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2900 | ↳ [Invite Button + Email](tasks/invite-referral/T2900-invite-button-email.md) | 8 | 3 | 2.7 | DONE | [ ] | "Invite a Friend" button on home screen. Opens mailto: with crafted pitch + reelballers.com?ref={code}. Landing page passes ref through to app signup. |
 | T2905 | ↳ [Share Annotated Playback](tasks/invite-referral/T2905-share-annotated-playback.md) | 7 | 4 | 1.8 | DONE | [ ] | Share annotated playback via email link. Reuses shares table + SharedAnnotationView. Non-users see playback + signup CTA. Feeds `annotation_share` referral channel. |
 | T2910 | ↳ [Referral Graph](tasks/invite-referral/T2910-referral-graph.md) | 7 | 4 | 1.8 | DONE | [ ] | Postgres `referrals` adjacency table. Attribution on signup from invite codes + share acceptance. Admin queries for leaderboard and channel effectiveness. |
+| T2915 | ↳ [Sport Inheritance Through Invite](tasks/invite-referral/T2915-sport-inheritance-through-invite.md) | 6 | 4 | 1.5 | TODO | [x] | When A invites B, B's default profile inherits A's sport (instead of soccer). New Postgres `users.default_sport` mirror (migration v017) written in the owner's context (invite-code fetch / sport edit); invitee reads it via the referrals graph at first init; falls back to soccer. Needs its own branch (migration). Builds on T2910. |
 |  | **[PWA Quick Wins](tasks/pwa/EPIC.md)** | 6 | 2 | 3.0 |  |  | Installable app + native share sheet + screen wake lock. Foundation for all PWA features. |
 | T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | DONE | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | DONE | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
@@ -518,6 +528,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2880-T2885` - Games List Performance epic
 - `T2890` - Cache Warming Efficiency (standalone, warming system upgrade)
 - `T2900-T2910` - Invite & Referral epic
+- `T2915` - Sport Inheritance Through Invite (users.default_sport mirror + migration v017; needs own branch)
 - `T2920` - Migration System Infrastructure (standalone)
 - `T2930` - Postgres Data Locality Audit (standalone)
 - `T3000-T3020` - Analytics 1 epic (CF Web Analytics + Postgres event log + admin migration)
@@ -541,5 +552,6 @@ IDs use gaps of 10 to allow insertions:
 - `T1515` - Suppress Analytics During Impersonation (follow-up to T1510; record_milestone + track() guards)
 - `T3595` - Share Viewer Opt-In & Viewer Analytics Bucket (consent-based how-to email for opted-in viewers; viewer leads bucketed separately from users)
 - `T3600-T3680` - Season Highlights & Collections epic (metadata freeze, collections tab, live shares, ranking, unlock, custom mix rename, quest rework, smart collections, stitch)
+- `T3760-T3770` - Video Load Latency investigation (HAR 2026-06-17): framing clip cold-load over-fetch (re-opens T2560 clamp on latency grounds) + StrictMode duplicate page-load fetch confirm
 
 See [task-management skill](../../.claude/skills/task-management/SKILL.md) for guidelines.

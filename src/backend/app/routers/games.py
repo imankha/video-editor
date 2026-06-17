@@ -712,6 +712,8 @@ BADGE_TAGS = frozenset({
     'Scoring', 'Dunk',
     'Try',
     'Shot',
+    'Kill', 'Ace',
+    'Home Run',
 })
 
 _EMPTY_ATHLETE_STATS = {

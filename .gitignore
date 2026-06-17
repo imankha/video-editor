@@ -97,3 +97,6 @@ client_secret_*.json
 src/user_data/
 .claude/worktrees/
 src/frontend/dev-dist/registerSW.js
+
+# Stray Playwright MCP screenshot artifacts saved to repo root
+myreels-volleyball.png

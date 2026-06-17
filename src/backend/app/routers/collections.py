@@ -49,17 +49,91 @@ RATIO_WORD = {"9:16": "Portrait", "16:9": "Landscape"}
 # content. Server-computed so clients never derive eligibility (EPIC #13).
 COLLECTION_MIN_DURATION_SEC = 30
 
-# Smart collections (T3670, pulled forward). A reel joins a group iff the group
-# is tag-less (top_plays = all) or the reel carries ANY of the group's tags;
-# membership is a per-reel boolean, so a Goal+Assist reel is counted once.
-# Member fetch: top_plays -> GET /api/downloads (no filter); the others ->
+# Smart collections (T3670, extended for multi-sport). Two kinds, both surfaced
+# in the `smart_collections` response list, distinguished by nudge_when_locked:
+#
+#   1. Curated (Top Plays + per-sport combos) -- nudge_when_locked=True, so the
+#      UI shows an amber "locked" progress card from the first reel to nudge the
+#      user toward the 30s threshold. Tag-less Top Plays = all reels; a combo
+#      joins a reel iff the reel carries ANY of the combo's tags (OR), so a
+#      multi-tag reel is counted once.
+#   2. Per-tag -- nudge_when_locked=False, generated dynamically from whatever
+#      tags are present. These stay HIDDEN until ready (>= 30s in a ratio); the
+#      user is never told about a tag collection that can't play yet.
+#
+# Member fetch: tag-less -> GET /api/downloads (no filter); the rest ->
 # GET /api/downloads?tags=<comma list>.
-SMART_COLLECTIONS = [
-    {"key": "top_plays", "name": "Top Plays", "tags": None},
-    {"key": "top_goals_assists", "name": "Top Goals & Assists",
-     "tags": frozenset({"Goal", "Assist"})},
-    {"key": "top_dribbles", "name": "Top Dribbles", "tags": frozenset({"Dribble"})},
-]
+
+DEFAULT_SPORT = "soccer"
+
+
+def _combo(key: str, name: str, tags: set) -> dict:
+    return {"key": key, "name": name, "tags": frozenset(tags)}
+
+
+# Always-on, sport-agnostic flagship (all single-clip reels).
+TOP_PLAYS = {"key": "top_plays", "name": "Top Plays", "tags": None}
+
+# Per-sport curated highlight combos -- the most entertaining tag groupings.
+# Tag names must match the frontend tag registry EXACTLY (case-sensitive).
+CURATED_COMBOS = {
+    "soccer": [
+        _combo("soccer_goals_assists", "Top Goals & Assists", {"Goal", "Assist"}),
+    ],
+    "basketball": [
+        _combo("basketball_buckets_dunks", "Top Buckets & Dunks", {"Scoring", "Dunk"}),
+        _combo("basketball_scoring_assists", "Top Scoring & Assists", {"Scoring", "Assist"}),
+    ],
+    "american_football": [
+        _combo("af_touchdowns", "Top Touchdowns",
+               {"Touchdown Pass", "Touchdown Catch", "Touchdown Run"}),
+        _combo("af_defense", "Top Defensive Plays",
+               {"Sack", "Interception", "Forced Fumble"}),
+    ],
+    "flag_football": [
+        _combo("ff_touchdowns", "Top Touchdowns", {"Touchdown Pass", "Touchdown Catch"}),
+        _combo("ff_defense", "Top Defensive Plays", {"Sack", "Interception"}),
+    ],
+    "lacrosse": [
+        _combo("lax_goals_assists", "Top Goals & Assists", {"Goal", "Assist"}),
+    ],
+    "rugby": [
+        _combo("rugby_tries_breaks", "Top Tries & Breaks", {"Try", "Line Break"}),
+    ],
+    "volleyball": [
+        _combo("vb_kills_aces", "Top Kills & Aces", {"Kill", "Ace"}),
+        _combo("vb_digs_blocks", "Top Digs & Blocks", {"Dig", "Block"}),
+    ],
+    "hockey": [
+        _combo("hockey_goals_assists", "Top Goals & Assists", {"Goal", "Assist"}),
+        _combo("hockey_goals_saves", "Top Goals & Saves", {"Goal", "Save"}),
+    ],
+    "tennis": [
+        _combo("tennis_aces_winners", "Top Aces & Winners",
+               {"Ace", "Forehand Winner", "Backhand Winner"}),
+    ],
+    "baseball": [
+        _combo("baseball_hits_homers", "Top Hits & Homers", {"Home Run", "Hit"}),
+        _combo("baseball_defense", "Top Defensive Plays", {"Strikeout", "Double Play"}),
+    ],
+}
+
+
+def _curated_for(sport: Optional[str]) -> list:
+    """Top Plays first, then the sport's curated combos (soccer if unknown)."""
+    combos = CURATED_COMBOS.get(sport or DEFAULT_SPORT, CURATED_COMBOS[DEFAULT_SPORT])
+    return [TOP_PLAYS, *combos]
+
+
+def _pluralize(tag: str) -> str:
+    """Best-effort plural for a per-tag collection name ('Dig' -> 'Digs',
+    'Pass' -> 'Passes', 'Rally' -> 'Rallies')."""
+    low = tag.lower()
+    if low.endswith(("s", "x", "z", "ch", "sh")):
+        return tag + "es"
+    if low.endswith("y") and len(tag) > 1 and low[-2] not in "aeiou":
+        return tag[:-1] + "ies"
+    return tag + "s"
 
 
 # ---------------------------------------------------------------------------
@@ -100,14 +174,15 @@ class TagTotal(BaseModel):                 # raw per-tag feed (other consumers)
     eligible: bool
 
 
-class SmartCollection(RatioBucketed):      # T3670: Top Plays / Goals & Assists / Dribbles
+class SmartCollection(RatioBucketed):      # T3670: curated (Top Plays / combos) + per-tag
     key: str
     name: str
     tags: Optional[List[str]]              # member fetch: ?tags=...; None => all reels
+    nudge_when_locked: bool                # True => amber locked card sub-30s; False => hide until ready
 
 
 class CollectionsSummaryResponse(BaseModel):
-    smart_collections: List[SmartCollection]  # SMART_COLLECTIONS order, reel_count > 0 only
+    smart_collections: List[SmartCollection]  # curated (Top Plays + combos) then ready per-tag
     games: List[GameCollection]            # sorted latest_published_at DESC
     mixes: RatioBucketed                   # always present, may be reel_count 0
     season_totals: List[SeasonTotal]
@@ -204,8 +279,14 @@ def _season_key(date_str: Optional[str], season_fn) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 @router.get("/summary", response_model=CollectionsSummaryResponse)
-async def collections_summary():
-    """Per-game / mixes / season / tag aggregates for the Collections tab."""
+async def collections_summary(sport: Optional[str] = None):
+    """Per-game / mixes / season / tag aggregates for the Collections tab.
+
+    `sport` selects the curated combo set (the per-tag and per-game aggregates
+    are sport-agnostic). It only chooses which curated nudge cards to attempt --
+    a combo with no matching reels is omitted -- so eligibility stays fully
+    server-computed regardless of the value passed.
+    """
     # Reuse the downloads helpers (router->router import has precedent here).
     from app.routers.downloads import (
         _generate_game_display_name,
@@ -284,7 +365,9 @@ async def collections_summary():
         mixes = _new_bucket()
         season_acc: dict = {}
         tag_acc: dict = {}
-        smart_buckets = {sc["key"]: _new_bucket() for sc in SMART_COLLECTIONS}
+        curated_defs = _curated_for(sport)
+        curated_buckets = {d["key"]: _new_bucket() for d in curated_defs}
+        tag_buckets: Dict[str, dict] = {}   # per-tag dynamic collections
 
         for p in parsed:
             ratio, duration, gid = p["ratio"], p["duration"], p["game_id"]
@@ -309,12 +392,14 @@ async def collections_summary():
             reel_tags = set(p["tags"])
             for tag in reel_tags:
                 _add_total(tag_acc, (tag, ratio), duration)
+                _add_reel(tag_buckets.setdefault(tag, _new_bucket()),
+                          ratio, duration, p["published_at"])
 
-            # Smart collections: per-reel membership (tag-less group = all),
+            # Curated collections: per-reel membership (tag-less group = all),
             # so a multi-tag reel is counted once per matching group.
-            for sc in SMART_COLLECTIONS:
-                if sc["tags"] is None or (reel_tags & sc["tags"]):
-                    _add_reel(smart_buckets[sc["key"]], ratio, duration, p["published_at"])
+            for d in curated_defs:
+                if d["tags"] is None or (reel_tags & d["tags"]):
+                    _add_reel(curated_buckets[d["key"]], ratio, duration, p["published_at"])
 
     games = [
         GameCollection(
@@ -344,16 +429,35 @@ async def collections_summary():
     season_totals = [SeasonTotal(**t) for t in _totals(season_acc, "season")]
     tag_totals = [TagTotal(**t) for t in _totals(tag_acc, "tag")]
 
-    # Smart collections in defined order; omit empties (a group with no matching reels).
+    # Curated (Top Plays + combos): shown from the first reel (nudge), in
+    # definition order; omit groups with no matching reels.
     smart_collections = [
         SmartCollection(
-            key=sc["key"], name=sc["name"],
-            tags=(sorted(sc["tags"]) if sc["tags"] else None),
-            **_finalize_bucket(smart_buckets[sc["key"]]),
+            key=d["key"], name=d["name"],
+            tags=(sorted(d["tags"]) if d["tags"] else None),
+            nudge_when_locked=True,
+            **_finalize_bucket(curated_buckets[d["key"]]),
         )
-        for sc in SMART_COLLECTIONS
-        if smart_buckets[sc["key"]]["reel_count"] > 0
+        for d in curated_defs
+        if curated_buckets[d["key"]]["reel_count"] > 0
     ]
+
+    # Per-tag: hidden until ready -- include only once a ratio clears the
+    # threshold (the UI never renders a locked card for these). Sorted by the
+    # displayed (pluralized) name for a stable order.
+    ready_tags = []
+    for tag, bucket in tag_buckets.items():
+        fb = _finalize_bucket(bucket)
+        if any(fb["ratio_eligible"].values()):
+            ready_tags.append((tag, fb))
+    ready_tags.sort(key=lambda t: _pluralize(t[0]).lower())
+    smart_collections.extend(
+        SmartCollection(
+            key=f"tag:{tag}", name="Top " + _pluralize(tag),
+            tags=[tag], nudge_when_locked=False, **fb,
+        )
+        for tag, fb in ready_tags
+    )
 
     return CollectionsSummaryResponse(
         smart_collections=smart_collections,
@@ -543,10 +647,16 @@ def _format_budget(sec: float) -> str:
 
 
 def _smart_base_name(tags: List[str]) -> str:
+    """Frozen share title for an all-scope tag filter, kept consistent with the
+    in-app card names: a curated combo's name if the tag set matches one (across
+    any sport), a pluralized single tag ('Top Goals'), else a sorted join."""
     fs = frozenset(tags)
-    for sc in SMART_COLLECTIONS:
-        if sc["tags"] and sc["tags"] == fs:
-            return sc["name"]
+    for combos in CURATED_COMBOS.values():
+        for c in combos:
+            if c["tags"] == fs:
+                return c["name"]
+    if len(tags) == 1:
+        return "Top " + _pluralize(tags[0])
     return "Top " + " & ".join(sorted(tags))
 
 

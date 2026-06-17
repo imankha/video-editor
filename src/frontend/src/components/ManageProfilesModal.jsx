@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { X, Pencil, Trash2, ArrowLeft, Check } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
-import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue } from '../modes/annotate/constants/tagRegistry';
+import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
 
 /**
  * Pre-defined profile colors.
@@ -96,7 +96,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Jordan"
+            placeholder="e.g. Fall Soccer 2025"
             maxLength={30}
             autoFocus
             className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
@@ -165,6 +165,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
   const createProfile = useProfileStore(state => state.createProfile);
   const updateProfile = useProfileStore(state => state.updateProfile);
   const deleteProfile = useProfileStore(state => state.deleteProfile);
+  const switchProfile = useProfileStore(state => state.switchProfile);
 
   const [mode, setMode] = useState('list');
   const [editingProfile, setEditingProfile] = useState(null);
@@ -212,6 +213,14 @@ export function ManageProfilesModal({ isOpen, onClose }) {
     }
   }, [deleteConfirm, deleteProfile]);
 
+  // Switching the active profile (also resets all data stores) lives here now,
+  // so the sport-glyph header button can open this as the one profile manager.
+  const handleSwitch = useCallback(async (p) => {
+    if (p.isCurrent) return;
+    await switchProfile(p.id);
+    onClose();
+  }, [switchProfile, onClose]);
+
   // Names of all profiles (for duplicate checking)
   const allProfileNames = useMemo(
     () => profiles.map(p => p.name).filter(Boolean),
@@ -251,32 +260,46 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               {profiles.map(p => (
                 <div
                   key={p.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                  className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
+                    p.isCurrent ? 'bg-white/10' : 'bg-white/5 hover:bg-white/10'
+                  }`}
                 >
-                  {/* Avatar */}
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                    style={{ backgroundColor: p.color || '#3B82F6' }}
+                  {/* Switch to this profile (the whole identity area is the target) */}
+                  <button
+                    type="button"
+                    onClick={() => handleSwitch(p)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    title={p.isCurrent ? 'Active profile' : 'Switch to this profile'}
                   >
-                    {(p.name || 'D')[0].toUpperCase()}
-                  </div>
+                    {/* Avatar */}
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                      style={{ backgroundColor: p.color || '#3B82F6' }}
+                    >
+                      {(p.name || 'D')[0].toUpperCase()}
+                    </div>
 
-                  {/* Name */}
-                  <div className="flex-1 min-w-0">
-                    <span className="text-white text-sm font-medium truncate block">
-                      {p.name || 'Default'}
-                    </span>
-                    {p.isCurrent && (
-                      <span className="text-xs text-gray-400">Active</span>
-                    )}
-                  </div>
+                    {/* Name + sport */}
+                    <div className="flex-1 min-w-0">
+                      <span className="text-white text-sm font-medium truncate block">
+                        {p.name || 'Default'}
+                      </span>
+                      <span className="text-xs text-gray-400 flex items-center gap-1 truncate">
+                        <span aria-hidden>{sportEmoji(p.sport)}</span>
+                        <span className="truncate">{sportDisplayName(p.sport) || 'No sport set'}</span>
+                        {p.isCurrent && <span className="text-green-400 flex-shrink-0">· Active</span>}
+                      </span>
+                    </div>
+
+                    {p.isCurrent && <Check size={16} className="text-green-400 flex-shrink-0" />}
+                  </button>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => { setEditingProfile(p); setMode('edit'); }}
                       className="p-1.5 text-gray-400 hover:text-white transition-colors rounded"
-                      title="Edit"
+                      title="Edit name, color &amp; sport"
                     >
                       <Pencil size={14} />
                     </button>
@@ -299,6 +322,11 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null}>
                 + Add Profile
               </Button>
+              {profiles.length <= 1 && (
+                <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
+                  Use profiles to keep your videos and reels organized by athlete, team, sport, or season.
+                </p>
+              )}
             </div>
           </>
         )}

@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 from app.utils.encoding import encode_data
 from app.services.collection_metadata import encode_game_ids, route_game_ids
+from app.routers.collections import CURATED_COMBOS
 
 USER_ID = "test-user-t3610"
 PROFILE_ID = "testdefault"
@@ -373,30 +374,40 @@ class TestSmartCollections:
         _insert_fv(cur, game_ids=[7], ratio="9:16", duration=20.0, tags=["Goal"])
         _insert_fv(cur, game_ids=[7], ratio="9:16", duration=15.0, tags=["Goal", "Assist"])
         _insert_fv(cur, game_ids=[7], ratio="9:16", duration=12.0, tags=["Dribble"])
-        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=5.0, tags=["Pass"])  # untagged-for-smart
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=5.0, tags=["Pass"])
         conn.commit(); conn.close()
 
     def test_groups_present_and_deduped(self, db):
         self._seed_tagged(db)
-        s = _summary()
+        s = _summary()  # default sport => soccer
         smart = {sc.key: sc for sc in s.smart_collections}
 
-        # top_plays = all 4 reels
+        # Top Plays = all 4 reels; curated, nudged.
         assert smart["top_plays"].reel_count == 4
         assert smart["top_plays"].ratio_durations == {"9:16": 52.0}
+        assert smart["top_plays"].nudge_when_locked is True
 
-        # goals & assists = the 2 goal reels (the Goal+Assist reel counted ONCE)
-        assert smart["top_goals_assists"].reel_count == 2
-        assert smart["top_goals_assists"].ratio_durations == {"9:16": 35.0}
+        # Curated combo: the 2 goal reels (the Goal+Assist reel counted ONCE).
+        assert smart["soccer_goals_assists"].reel_count == 2
+        assert smart["soccer_goals_assists"].ratio_durations == {"9:16": 35.0}
+        assert smart["soccer_goals_assists"].nudge_when_locked is True
 
-        # dribbles = 1 reel
-        assert smart["top_dribbles"].reel_count == 1
+        # Per-tag Goal is ready (35s >= 30s): surfaced, NOT nudged.
+        assert smart["tag:Goal"].reel_count == 2
+        assert smart["tag:Goal"].name == "Top Goals"
+        assert smart["tag:Goal"].nudge_when_locked is False
+
+        # Sub-30s tags stay hidden until ready (no locked nudge for per-tag).
+        assert "tag:Dribble" not in smart   # 12s
+        assert "tag:Assist" not in smart     # 15s
+        assert "tag:Pass" not in smart       # 5s
 
     def test_order_is_canonical(self, db):
         self._seed_tagged(db)
         s = _summary()
+        # Curated first (Top Plays, then combos), then ready per-tag by name.
         assert [sc.key for sc in s.smart_collections] == \
-            ["top_plays", "top_goals_assists", "top_dribbles"]
+            ["top_plays", "soccer_goals_assists", "tag:Goal"]
 
     def test_empty_group_omitted(self, db):
         conn = _connect(db)
@@ -407,8 +418,43 @@ class TestSmartCollections:
 
         s = _summary()
         keys = {sc.key for sc in s.smart_collections}
-        assert "top_plays" in keys and "top_goals_assists" in keys
-        assert "top_dribbles" not in keys  # no dribble reels
+        # Curated combo shows from the first reel (nudge), even sub-30s.
+        assert "top_plays" in keys and "soccer_goals_assists" in keys
+        # Per-tag Goal hidden: 20s < 30s, not ready yet.
+        assert "tag:Goal" not in keys
+
+    def test_per_tag_appears_only_when_ready(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=25.0, tags=["Pass"])
+        conn.commit(); conn.close()
+        assert "tag:Pass" not in {sc.key for sc in _summary().smart_collections}  # 25s < 30s
+
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=10.0, tags=["Pass"])
+        conn.commit(); conn.close()
+        smart = {sc.key: sc for sc in _summary().smart_collections}
+        assert "tag:Pass" in smart                       # now 35s >= 30s
+        assert smart["tag:Pass"].name == "Top Passes"     # pluralized
+        assert smart["tag:Pass"].nudge_when_locked is False
+
+    def test_curated_combos_are_sport_specific(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=20.0, tags=["Kill"])
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=15.0, tags=["Ace"])
+        conn.commit(); conn.close()
+
+        from app.routers.collections import collections_summary
+        s = asyncio.run(collections_summary(sport="volleyball"))
+        smart = {sc.key: sc for sc in s.smart_collections}
+        # Volleyball combo present (Kill OR Ace), soccer combo absent.
+        assert smart["vb_kills_aces"].reel_count == 2
+        assert smart["vb_kills_aces"].nudge_when_locked is True
+        assert "soccer_goals_assists" not in smart
 
     def test_smart_ratio_eligibility(self, db):
         conn = _connect(db)
@@ -418,13 +464,13 @@ class TestSmartCollections:
         _insert_fv(cur, game_ids=[7], ratio="16:9", duration=10.0, tags=["Goal"])  # <30
         conn.commit(); conn.close()
 
-        ga = next(sc for sc in _summary().smart_collections if sc.key == "top_goals_assists")
+        ga = next(sc for sc in _summary().smart_collections if sc.key == "soccer_goals_assists")
         assert ga.ratio_eligible == {"9:16": True, "16:9": False}
 
     def test_tags_member_filter_parity(self, db):
         self._seed_tagged(db)
         s = _summary()
-        ga = next(sc for sc in s.smart_collections if sc.key == "top_goals_assists")
+        ga = next(sc for sc in s.smart_collections if sc.key == "soccer_goals_assists")
 
         members = _downloads(tags="Goal,Assist")
         assert members.total_count == ga.reel_count == 2  # deduped
@@ -435,3 +481,54 @@ class TestSmartCollections:
         # top_plays member fetch is the unfiltered list
         plays = next(sc for sc in s.smart_collections if sc.key == "top_plays")
         assert _downloads().total_count == plays.reel_count == 4
+
+
+# ---------------------------------------------------------------------------
+# Every supported sport: curated combos nudge, per-tag hides until ready
+# ---------------------------------------------------------------------------
+
+class TestMultiSportCollections:
+    @pytest.mark.parametrize("sport", list(CURATED_COMBOS.keys()))
+    def test_each_sport_curated_and_per_tag(self, db, sport):
+        """For each sport: seeding a reel with one of the sport's curated combo
+        tags surfaces (a) Top Plays, (b) the curated combo as a nudge card, and
+        (c) that tag's per-tag collection once it clears 30s."""
+        from app.routers.collections import collections_summary
+
+        combo = CURATED_COMBOS[sport][0]
+        tag = sorted(combo["tags"])[0]
+
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=[tag])  # >=30s
+        conn.commit(); conn.close()
+
+        s = asyncio.run(collections_summary(sport=sport))
+        smart = {sc.key: sc for sc in s.smart_collections}
+
+        # Flagship is always present and nudges.
+        assert smart["top_plays"].nudge_when_locked is True
+        # Curated combo joined the reel (OR membership) and nudges.
+        assert smart[combo["key"]].reel_count == 1
+        assert smart[combo["key"]].nudge_when_locked is True
+        # The seeded tag's per-tag collection is ready (40s) and does NOT nudge.
+        assert smart[f"tag:{tag}"].nudge_when_locked is False
+        assert smart[f"tag:{tag}"].reel_count == 1
+
+    def test_wrong_sport_combo_omitted_but_per_tag_survives(self, db):
+        """Per-tag is sport-agnostic: a volleyball Kill reel viewed with the
+        soccer combo set still yields its per-tag card, just no soccer combo."""
+        from app.routers.collections import collections_summary
+
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], ratio="9:16", duration=40.0, tags=["Kill"])
+        conn.commit(); conn.close()
+
+        s = asyncio.run(collections_summary(sport="soccer"))
+        smart = {sc.key: sc for sc in s.smart_collections}
+        assert "soccer_goals_assists" not in smart   # no Goal/Assist reels
+        assert "vb_kills_aces" not in smart           # soccer combo set in use
+        assert smart["tag:Kill"].nudge_when_locked is False  # per-tag still works
