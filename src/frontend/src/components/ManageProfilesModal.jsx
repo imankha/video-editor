@@ -322,6 +322,11 @@ export function ManageProfilesModal({ isOpen, onClose }) {
               <Button variant="secondary" fullWidth onClick={() => setMode('add')} icon={null}>
                 + Add Profile
               </Button>
+              {profiles.length <= 1 && (
+                <p className="text-xs text-gray-400 mt-3 text-center leading-relaxed">
+                  Use profiles to keep your videos and reels organized by athlete, team, sport, or season.
+                </p>
+              )}
             </div>
           </>
         )}
