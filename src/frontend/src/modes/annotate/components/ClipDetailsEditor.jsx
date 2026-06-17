@@ -274,18 +274,6 @@ export function ClipDetailsEditor({
           </div>
         )}
 
-        {/* Teammates — desktop only */}
-        {!isMobile && (
-          <div>
-            <label className="block text-gray-400 text-xs mb-1">Teammates</label>
-            <TeammateTagInput
-              teammates={region.tagged_teammates || []}
-              onChange={handleTeammatesChange}
-              suggestions={teammateSuggestions}
-            />
-          </div>
-        )}
-
         {/* My Athlete Toggle — desktop only */}
         {!isMobile && (
           <div className="flex items-center gap-2">
@@ -303,6 +291,18 @@ export function ClipDetailsEditor({
                 }`}
               />
             </button>
+          </div>
+        )}
+
+        {/* Teammates — desktop only */}
+        {!isMobile && (
+          <div>
+            <label className="block text-gray-400 text-xs mb-1">Teammates</label>
+            <TeammateTagInput
+              teammates={region.tagged_teammates || []}
+              onChange={handleTeammatesChange}
+              suggestions={teammateSuggestions}
+            />
           </div>
         )}
 

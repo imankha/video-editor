@@ -383,18 +383,6 @@ export function AnnotateFullscreenOverlay({
           </div>
         )}
 
-        {/* Teammates — desktop only */}
-        {!isMobile && (
-          <div className="mb-4">
-            <label className="block text-gray-400 text-sm mb-2">Teammates</label>
-            <TeammateTagInput
-              teammates={taggedTeammates}
-              onChange={setTaggedTeammates}
-              suggestions={teammateSuggestions}
-            />
-          </div>
-        )}
-
         {/* My Athlete Toggle — desktop only */}
         {!isMobile && (
           <div className="mb-4 flex items-center gap-2">
@@ -420,6 +408,18 @@ export function AnnotateFullscreenOverlay({
                 }`}
               />
             </button>
+          </div>
+        )}
+
+        {/* Teammates — desktop only */}
+        {!isMobile && (
+          <div className="mb-4">
+            <label className="block text-gray-400 text-sm mb-2">Teammates</label>
+            <TeammateTagInput
+              teammates={taggedTeammates}
+              onChange={setTaggedTeammates}
+              suggestions={teammateSuggestions}
+            />
           </div>
         )}
 
