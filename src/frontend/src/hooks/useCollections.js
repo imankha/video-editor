@@ -41,7 +41,13 @@ export function useCollections(isActive = false) {
 
     setSummaryState('loading');
     try {
-      const res = await apiFetch(`${API_BASE_URL}/collections/summary`, {
+      // Sport selects which curated combos the server attempts; per-tag and
+      // per-game aggregates are sport-agnostic. Read at fetch time so a profile
+      // switch (which clears + refetches) picks up the new sport.
+      const { profiles, currentProfileId } = useProfileStore.getState();
+      const sport = profiles.find((p) => p.id === currentProfileId)?.sport;
+      const url = `${API_BASE_URL}/collections/summary${sport ? `?sport=${encodeURIComponent(sport)}` : ''}`;
+      const res = await apiFetch(url, {
         signal: controller.signal,
       });
       if (!res.ok) throw new Error('Failed to fetch collections summary');

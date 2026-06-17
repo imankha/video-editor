@@ -5,9 +5,12 @@ import { useCollections } from '../useCollections';
 const h = vi.hoisted(() => ({ profileId: 'p1' }));
 
 vi.mock('../../utils/apiFetch', () => ({ default: vi.fn() }));
-vi.mock('../../stores/profileStore', () => ({
-  useProfileStore: (selector) => selector({ currentProfileId: h.profileId }),
-}));
+vi.mock('../../stores/profileStore', () => {
+  const state = () => ({ currentProfileId: h.profileId, profiles: [] });
+  return {
+    useProfileStore: Object.assign((selector) => selector(state()), { getState: state }),
+  };
+});
 
 import apiFetch from '../../utils/apiFetch';
 

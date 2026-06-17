@@ -105,7 +105,9 @@ export function CollectionsTab({
                 />
               );
             }
-            if ((sc.ratio_counts?.[ratio] || 0) > 0) {
+            // Per-tag collections (nudge_when_locked=false) stay hidden until
+            // ready; only curated collections show the amber locked nudge card.
+            if (sc.nudge_when_locked && (sc.ratio_counts?.[ratio] || 0) > 0) {
               return (
                 <SmartLockedCard
                   key={ratio}
