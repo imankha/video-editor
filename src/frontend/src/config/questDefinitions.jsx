@@ -10,7 +10,7 @@
  * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Home, Image, Play, Plus, Star, Film, Crosshair, Folder } from 'lucide-react';
+import { Home, Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -39,6 +39,16 @@ function MiniStrip() {
       <span className="relative h-full bg-gray-600" style={{ width: '25%' }}>
         <span className="absolute bottom-0 left-0 w-full bg-blue-400" style={{ height: '50%' }} />
       </span>
+    </span>
+  );
+}
+
+/** Status chip — mirrors the green "Done" badge on a finished Reel Draft card */
+function DoneBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium align-text-bottom mx-0.5 bg-green-600/20 text-green-400 border border-green-500/50">
+      <CheckCircle size={10} />
+      Done
     </span>
   );
 }
@@ -97,7 +107,7 @@ export const STEP_DESCRIPTIONS = {
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
-  position_crop: <>Drag the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
+  position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
@@ -109,6 +119,6 @@ export const STEP_DESCRIPTIONS = {
   // Quest 4 — Publish Your Reel
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
   wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
-  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
+  move_to_my_reels: <>Press play on the <DoneBadge /> Reel Draft to preview your draft reel. Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
   view_gallery_video: <>Hit the play button on the card to watch your finished reel. Once it's perfect, you can download and share it.</>,
 };
