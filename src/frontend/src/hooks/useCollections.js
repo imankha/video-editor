@@ -143,9 +143,16 @@ export function useCollections(isActive = false) {
     memberAbortsRef.current = {};
   }, [currentProfileId]);
 
-  // Fetch the summary when the tab becomes active.
+  // Fetch the summary every time the tab becomes active (rising edge), plus the
+  // initial/idle case. Refetching on each open keeps the grouped My Reels list
+  // fresh after a publish/rename/delete — the cached summary would otherwise stay
+  // stale until a profile switch or page reload (e.g. a just-published reel never
+  // appearing even though the count badge updated).
+  const wasActiveRef = useRef(false);
   useEffect(() => {
-    if (isActive && summaryState === 'idle') {
+    const becameActive = isActive && !wasActiveRef.current;
+    wasActiveRef.current = isActive;
+    if (isActive && (becameActive || summaryState === 'idle')) {
       fetchSummary();
     }
   }, [isActive, summaryState, fetchSummary]);
