@@ -54,7 +54,7 @@ function ColorSelector({ value, onChange, usedColors = [] }) {
 // Profile Form (shared for Add and Edit)
 // ---------------------------------------------------------------------------
 
-function ProfileForm({ title, initialName = '', initialColor, initialSport = 'soccer', usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save' }) {
+function ProfileForm({ title, initialName = '', initialColor, initialSport = 'soccer', usedColors, existingNames = [], onSubmit, onCancel, submitLabel = 'Save', nameRequired = true }) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState(initialColor || getNextColor(usedColors));
   const [sport, setSport] = useState(sportDisplayName(initialSport) || 'Soccer');
@@ -64,7 +64,10 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
   const isDuplicate = trimmedName && existingNames.some(
     n => n && n.toLowerCase() === trimmedName.toLowerCase()
   );
-  const canSubmit = trimmedName && !isDuplicate && !submitting;
+  const canSubmit = (nameRequired ? !!trimmedName : true) && !isDuplicate && !submitting;
+
+  // Placeholder reflects the selected sport so unnamed profiles still get a useful hint.
+  const namePlaceholder = `e.g. Fall ${sport.trim() || 'Soccer'} 2025`;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,7 +99,7 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Fall Soccer 2025"
+            placeholder={namePlaceholder}
             maxLength={30}
             autoFocus
             className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
@@ -353,6 +356,7 @@ export function ManageProfilesModal({ isOpen, onClose }) {
             usedColors={usedColors.filter(c => c !== editingProfile.color)}
             existingNames={existingNamesForEdit}
             submitLabel="Save"
+            nameRequired={false}
             onSubmit={handleEditProfile}
             onCancel={() => { setEditingProfile(null); setMode('list'); }}
           />
