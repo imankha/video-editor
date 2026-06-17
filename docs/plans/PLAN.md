@@ -79,6 +79,20 @@ Curation paradigm: collections = (scope, filter, ratio) evaluated live; one glob
 | T3670 | ↳ [Smart Collections: Top Goals/Assists/Dribbles](tasks/season-highlights/T3670-smart-collections.md) | 7 | 3 | 2.3 | TODO | [ ] | Per-(tag,ratio) collections, 30s eligibility, locked near-miss progress rows, 120s cap. Pure derivation from stamped tags + rank. |
 | T3680 | ↳ [Stitched Collection Videos](tasks/season-highlights/T3680-stitched-collection-videos.md) | 8 | 7 | 1.1 | TODO | [x] | 'stitch' export job (CPU concat: stream-copy or normalize+encode), free, pinned artifact card with staleness badge (profile_db v009 collection_ref). Unhides the "Video" verb. |
 
+### Milestone: Framing/Overlay Clarity
+
+Outcome-first UX pass on the two steps where non-technical parents fall off. P0 guarantees a zero-effort valid export and kills keyframe jargon; P1 fixes button naming, hides pro readouts, makes hints replayable; P2 adds presets + clearer manual affordances. Each phase is independently shippable.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T3705 | [Quest split: Framing/Overlay into separate quests](tasks/T3700-framing-overlay-clarity.md) | 8 | 5 | 1.6 | TESTING | [x] | DONE (commit on feature/T3700-quest-framing-overlay-split): 4-quest restructure (Q2 Frame, Q3 Spotlight, Q4 Make More) with per-step triggers; 6 new achievement events (crop_adjusted, speed_segment_created, opened_overlay_editor, overlay_players_assigned, overlay_color_set, overlay_shape_set) wired in framing/overlay editors; terminal buttons renamed (Export Highlight / Add Spotlight); v005 user_db migration rekeys existing users' completed/claimed quest state. Remaining T3700 editor-UX phases tracked below. |
+| T3700 | [Framing & Overlay Clarity (Outcome-First UX)](tasks/T3700-framing-overlay-clarity.md) | 8 | 5 | 1.6 | TODO | [ ] | Editor-UX phases (quest/tutorial half shipped in T3705). P0: default crop guarantees zero-effort valid export (ACCEPTANCE-CRITICAL — export_framing must be reachable with an untouched crop; unverified) + non-blocking framing hint. P1: hide pixel coords + confidence % behind Advanced, replayable hints, deep-linked "Open your reel"/"Library" nav. P2: Subtle/Bold presets, clearer keyframe affordance. Frontend-only. |
+| T3710 | [Framing Preview (Advance Organizer)](tasks/T3710-framing-preview-advance-organizer.md) | 6 | 4 | 1.5 | TODO | [ ] | Auto-play a 5-8s finished-result preview on entering Framing so parents know what "done" looks like (Ausubel advance organizer). Dismissible + replayable; never blocks export. |
+| T3720 | [Auto-Advance Framing -> Overlay](tasks/T3720-auto-advance-framing-to-overlay.md) | 6 | 3 | 2.0 | TODO | [ ] | On framing-export complete, route the user into Overlay (auto or prominent CTA) so Q3 `open_overlay` starts without hunting. Matches the Q3 hint copy. Navigation only, no write-back. |
+| T3730 | [Dim Non-Selected Detected Players](tasks/T3730-dim-non-selected-players.md) | 5 | 3 | 1.7 | TODO | [ ] | After a player is chosen on `select_players`, dim the other detections (reuse Outside Dim) so the choice is the single visual cue. Display-only. |
+| T3740 | [Single-Control-at-a-Time Step Spotlight](tasks/T3740-single-control-step-spotlight.md) | 6 | 5 | 1.2 | TODO | [ ] | Spotlight only the one control the active quest step needs (crop -> segment layer -> Export; detections -> color -> shape -> Export). Decomposed attention to match decomposed steps. Non-blocking. |
+| T3750 | [Rewrite new-user-flow E2E for 4-Quest Structure](tasks/T3750-rewrite-new-user-flow-e2e.md) | 7 | 4 | 1.8 | TODO | [ ] | new-user-flow.spec.js drives the OLD flow/step-IDs and old button labels; rewrite to the 4-quest flow + new event gestures + Export Highlight/Add Spotlight selectors. Update regression-tests.spec.js label selectors. Coordinate with T3660. |
+
 ### Milestone: Performance
 
 Ordered: instrumentation first so we can measure what we fix; then the two user-visible stalls we already traced; then the structural infra wins.
