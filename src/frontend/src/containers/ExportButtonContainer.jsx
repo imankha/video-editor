@@ -501,7 +501,9 @@ export function ExportButtonContainer({
 
     // Mode-specific validation
     if (editorMode === EDITOR_MODES.FRAMING) {
-      if (!cropKeyframes || cropKeyframes.length === 0) {
+      // T3700 P0: with a project + clips, an empty crop is fine — a centered default
+      // crop is applied on export. Only block when there's no backend-authoritative source.
+      if ((!cropKeyframes || cropKeyframes.length === 0) && !isBackendAuthoritative) {
         setError('No crop keyframes defined. Please add at least one crop keyframe.');
         return;
       }
@@ -1071,15 +1073,18 @@ export function ExportButtonContainer({
   const totalClips = isMultiClipMode ? (clips?.length || 1) : 1;
 
   // Button disabled state
+  // T3700 P0: unframed clips are NO LONGER a hard block — a centered default crop is
+  // applied on export (visible in the editor for opened clips, applied server-side for
+  // never-opened clips), so a zero-effort export always produces a valid job. The
+  // unframed count remains a soft, non-blocking nudge in the button title.
   const isButtonDisabled = disabled ||
     isCurrentlyExporting ||
-    (!videoFile && !projectId) ||
-    (isFramingMode && hasUnframedClips);
+    (!videoFile && !projectId);
 
-  // Button title/tooltip
+  // Button title/tooltip (soft nudge only — does not gate export)
   const framedCount = totalClips - unframedCount;
   const buttonTitle = isFramingMode && hasUnframedClips
-    ? `${framedCount}/${totalClips} clips framed — ${unframedCount} still need${unframedCount === 1 ? 's' : ''} framing`
+    ? `${framedCount}/${totalClips} clips framed — the rest will use a centered default`
     : undefined;
 
   return {

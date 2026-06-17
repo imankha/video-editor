@@ -2149,13 +2149,22 @@ async def _run_multi_clip_background(
                 f"Mismatch: {len(video_files)} video files but {len(clips_data)} clip configs"
             )
 
-        # Validate all clips have framing data (crop keyframes)
+        # Validate all clips have framing data (crop keyframes). T3700 P0: a clip the
+        # user never framed is NOT an error — apply the named centered default crop so a
+        # zero-effort export still succeeds (same default the editor shows for opened clips).
         clips_missing_framing = []
         for i, clip in enumerate(clips_data):
             crop_keyframes = clip.get('cropKeyframes', [])
             if not crop_keyframes or len(crop_keyframes) == 0:
-                clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
-                clips_missing_framing.append(clip_name)
+                vw, vh = clip.get('sourceWidth'), clip.get('sourceHeight')
+                if vw and vh:
+                    from ...services.default_crop import default_crop_keyframes
+                    total_frames = max(1, round((clip.get('duration') or 0) * 30))
+                    clip['cropKeyframes'] = default_crop_keyframes(vw, vh, global_aspect_ratio, total_frames)
+                    logger.info(f"[Multi-Clip Export] clip {i}: no crop set, applied centered default ({global_aspect_ratio}, {vw}x{vh})")
+                else:
+                    clip_name = clip.get('clipName') or clip.get('fileName') or f'Clip {i + 1}'
+                    clips_missing_framing.append(clip_name)
 
         if clips_missing_framing:
             raise RuntimeError(

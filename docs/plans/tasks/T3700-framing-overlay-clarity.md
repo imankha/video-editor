@@ -162,9 +162,21 @@ quest-4 test block.
 ## Implementation
 
 ### Steps
-1. [ ] **P0** — Default crop in `useCrop`; export always yields a valid framing job; verify default persists only on export gesture.
-2. [ ] **P0** — Replace "set crop keyframes" copy with outcome language across Framing.
-3. [ ] **P0** — Convert any blocking framing hint to a non-blocking soft nudge.
+1. [x] **P0** — Zero-effort valid export. **DONE** (commit on feature/T3700-quest-framing-overlay-split):
+   - Root cause: framing-mode export button was hard-disabled by `hasUnframedClips`
+     ([ExportButtonContainer.jsx]) — a 1-clip reel hits `isMultiClipMode` and an untouched
+     clip counts as unframed, so the button never enabled. Plus the single-clip render
+     rejected empty `crop_data` and the multi-clip path rejected payload clips with no
+     `cropKeyframes`.
+   - Fix: (a) frontend de-gates the button (unframed is a soft, non-blocking nudge in the
+     title only); (b) a named, centered default crop is applied on export — a single
+     shared backend helper `app/services/default_crop.py` (mirrors the frontend default:
+     `205x365 @ centered` for 9:16) used by both the single-clip render (`framing.py`) and
+     the multi-clip path (`multi_clip.py`). Opened clips still show/persist the visible
+     useCrop default via the existing export save (gesture-based, not reactive).
+   - Tests: `test_default_crop.py` (5). Backend import + frontend build green.
+2. [ ] **P0** — Replace "set crop keyframes" copy with outcome language across the Framing **editor** surfaces (quest copy already done; the `CropLayer` "Set Crop Keyframes" placeholder + other editor strings remain).
+3. [x] **P0** — Framing export hint is non-blocking (the unframed gate is now a soft nudge, not a wall).
 4. [ ] **P1** — Rename terminal buttons (Framing + Overlay) to unambiguous finish/export verbs.
 5. [ ] **P1** — Gate pixel coordinates (Framing) and confidence % (Overlay) behind "Advanced" / remove.
 6. [ ] **P1** — Make step hints replayable in context (remove one-shot-only behavior).

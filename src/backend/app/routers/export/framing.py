@@ -426,20 +426,19 @@ async def render_project(request: RenderRequest, http_request: Request):
 
     clip = working_clips[0]
 
-    if not clip['crop_data']:
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "missing_crop_data", "message": f"Clip '{clip['clip_name'] or 'Unknown'}' has no framing data. Open clip in Framing mode first.", "clip_id": clip['id']}
-        )
+    # T3700 P0: a clip with no crop_data is NOT an error — the user just didn't
+    # customize the frame. A centered default crop is applied at render time
+    # (see _run_render_background) so a zero-effort export always succeeds.
     if not clip['game_id'] and not clip['raw_filename']:
         raise HTTPException(
             status_code=400,
             detail={"error": "no_source_video", "message": "Clip has no source video (no game_id and no raw_filename)"}
         )
-    try:
-        decode_data(clip['crop_data'])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
+    if clip['crop_data']:
+        try:
+            decode_data(clip['crop_data'])
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
     # Credit reservation
     from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
@@ -527,10 +526,11 @@ async def _run_render_background(
     temp_dir = tempfile.mkdtemp()
     pipeline_entered = False
     try:
-        crop_keyframes = decode_data(clip['crop_data'])
+        crop_keyframes = decode_data(clip['crop_data']) if clip['crop_data'] else []
 
         # ffprobe for actual fps (framing uses real fps, not default 30)
         framerate = 30.0
+        source_info = {}
         try:
             if clip['game_id']:
                 source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
@@ -543,6 +543,18 @@ async def _run_render_background(
                 framerate = source_info.get('fps', 30.0)
         except Exception as e:
             logger.warning(f"[Render] Failed to probe fps, using default 30: {e}")
+
+        # T3700 P0: no crop set -> apply the named centered default so a zero-effort
+        # export still produces a valid framing job (matches the editor's visible default).
+        if not crop_keyframes:
+            vw, vh = source_info.get('width'), source_info.get('height')
+            if vw and vh:
+                from ...services.default_crop import default_crop_keyframes
+                total_frames = max(1, round((clip['raw_duration'] or 0) * framerate))
+                crop_keyframes = default_crop_keyframes(vw, vh, aspect_ratio, total_frames)
+                logger.info(f"[Render] clip {clip['id']}: no crop set, applied centered default ({aspect_ratio}, {vw}x{vh})")
+            else:
+                logger.warning(f"[Render] clip {clip['id']}: no crop and no source dimensions — cannot apply default crop")
 
         if crop_keyframes and 'frame' in crop_keyframes[0] and 'time' not in crop_keyframes[0]:
             crop_keyframes = [
