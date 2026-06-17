@@ -4,6 +4,10 @@ import { footballTags, positions as footballPositions } from './footballTags';
 import { basketballTags, positions as basketballPositions } from './basketballTags';
 import { lacrosseTags, positions as lacrossePositions } from './lacrosseTags';
 import { rugbyTags, positions as rugbyPositions } from './rugbyTags';
+import { volleyballTags, positions as volleyballPositions } from './volleyballTags';
+import { hockeyTags, positions as hockeyPositions } from './hockeyTags';
+import { tennisTags, positions as tennisPositions } from './tennisTags';
+import { baseballTags, positions as baseballPositions } from './baseballTags';
 
 const TAG_SETS = {
   soccer: { positions: soccerPositions, tags: soccerTags },
@@ -12,6 +16,10 @@ const TAG_SETS = {
   basketball: { positions: basketballPositions, tags: basketballTags },
   lacrosse: { positions: lacrossePositions, tags: lacrosseTags },
   rugby: { positions: rugbyPositions, tags: rugbyTags },
+  volleyball: { positions: volleyballPositions, tags: volleyballTags },
+  hockey: { positions: hockeyPositions, tags: hockeyTags },
+  tennis: { positions: tennisPositions, tags: tennisTags },
+  baseball: { positions: baseballPositions, tags: baseballTags },
 };
 
 const DEFAULT_SPORT = 'soccer';
@@ -23,6 +31,10 @@ export const SUPPORTED_SPORTS = [
   { id: 'basketball', name: 'Basketball' },
   { id: 'lacrosse', name: 'Lacrosse' },
   { id: 'rugby', name: 'Rugby' },
+  { id: 'volleyball', name: 'Volleyball' },
+  { id: 'hockey', name: 'Hockey' },
+  { id: 'tennis', name: 'Tennis' },
+  { id: 'baseball', name: 'Baseball' },
 ];
 
 export function sportDisplayName(storedValue) {
