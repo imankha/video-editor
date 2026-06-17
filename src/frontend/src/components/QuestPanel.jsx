@@ -18,8 +18,15 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
  * - Framing: moved up above the timeline/scrub bar region
  * - Overlay: same as framing (similar bottom layout)
  */
-function getPositionForMode(editorMode, isSm) {
+function getPositionForMode(editorMode, isSm, addClipFormOpen) {
   if (!isSm) return { left: 12, bottom: 12 }; // Mobile: always bottom-left, compact
+
+  // Annotate: the Add Clip form opens in the left-docked sidebar (352px wide) and
+  // would cover the default bottom-left panel. Move to the right side (clear of the
+  // form) and lift above the timeline/action-bar instead of hiding the quest.
+  if (editorMode === 'annotate' && addClipFormOpen) {
+    return { right: 24, bottom: 220 };
+  }
 
   switch (editorMode) {
     case 'framing':
@@ -45,6 +52,7 @@ export function QuestPanel({ inline = false }) {
   const loaded = useQuestStore((s) => s.loaded);
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
   const fetchProgress = useQuestStore((s) => s.fetchProgress);
+  const detectionAssignProgress = useQuestStore((s) => s.detectionAssignProgress);
 
   const claimReward = useQuestStore((s) => s.claimReward);
 
@@ -158,7 +166,11 @@ export function QuestPanel({ inline = false }) {
 
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || !definitions || !questDef || addClipFormOpen || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
+  // On mobile the Add Clip form is a full-screen takeover, so hide the quest there.
+  // On desktop the form is a left-docked sidebar — keep the quest visible and
+  // reposition it (see getPositionForMode) instead of hiding it.
+  const hideForAddClipForm = addClipFormOpen && window.innerWidth < 640;
+  if ((hidden || !loaded || !definitions || !questDef || hideForAddClipForm || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
@@ -175,7 +187,7 @@ export function QuestPanel({ inline = false }) {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        if (questDef.id === 'quest_3') {
+        if (questDef.id === 'quest_4') {
           setShowCompletionModal(true);
         } else {
           toast.success(`You earned ${questDef.reward} credits!`, {
@@ -193,7 +205,7 @@ export function QuestPanel({ inline = false }) {
 
   // T1030: Smart repositioning — pick position per screen mode to avoid overlapping controls
   const isSm = window.innerWidth >= 640;
-  const positionStyle = getPositionForMode(editorMode, isSm);
+  const positionStyle = getPositionForMode(editorMode, isSm, addClipFormOpen);
 
   // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
   // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.
@@ -226,7 +238,7 @@ export function QuestPanel({ inline = false }) {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay ${inline ? 'relative mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
@@ -310,6 +322,25 @@ export function QuestPanel({ inline = false }) {
                         <p className="quest-step-description text-sm mt-1 leading-snug">
                           {STEP_DESCRIPTIONS[stepId]}
                         </p>
+                      )}
+                      {/* Per-detection progress: one box per detected frame, ordered left-to-right
+                          to match the timeline markers so a gap shows which one was missed. */}
+                      {isCurrent && stepId === 'select_players' && detectionAssignProgress?.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {detectionAssignProgress.map((filled, i) => (
+                            <div
+                              key={i}
+                              className={`w-5 h-5 rounded flex items-center justify-center border ${
+                                filled ? 'bg-green-500 border-green-300' : 'border-white/20'
+                              }`}
+                            >
+                              {filled && <Check size={12} className="text-white" strokeWidth={3} />}
+                            </div>
+                          ))}
+                          <span className="ml-1 text-xs quest-step-description tabular-nums">
+                            {detectionAssignProgress.filter(Boolean).length}/{detectionAssignProgress.length}
+                          </span>
+                        </div>
                       )}
                     </div>
 

@@ -29,6 +29,20 @@ function GreenSquare() {
   );
 }
 
+/** Inline progress chip — mirrors the card's strip: full green Framing, then an
+ * Overlay segment on a gray track with blue filling only the bottom half (the
+ * "started but not done" shape used on the card) */
+function MiniStrip() {
+  return (
+    <span className="inline-flex align-text-bottom mx-1 w-10 h-2.5 rounded-sm overflow-hidden border border-gray-500">
+      <span className="h-full bg-green-500" style={{ width: '75%' }} />
+      <span className="relative h-full bg-gray-600" style={{ width: '25%' }}>
+        <span className="absolute bottom-0 left-0 w-full bg-blue-400" style={{ height: '50%' }} />
+      </span>
+    </span>
+  );
+}
+
 /** Filled star — matches the yellow rating stars in the clip editor */
 function FilledStar() {
   return <Star size={12} className="inline-block align-text-bottom mx-px" fill="#fbbf24" color="#fbbf24" />;
@@ -53,7 +67,8 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 export const STEP_TITLES = {
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
-  annotate_brilliant: 'Create a Reel',
+  add_clip: 'Find an Amazing Play',
+  annotate_brilliant: 'Rate 5 Stars & Save',
   playback_annotations: 'Watch Your Clips Back',
   // Quest 2 — Frame Your Highlight
   open_framing: 'Open Your Reel',
@@ -61,20 +76,24 @@ export const STEP_TITLES = {
   add_slowmo: 'Add a Slow-Mo Moment',
   export_framing: 'Export Your Highlight',
   wait_for_export: 'Crisp It Up to 1080p',
-  // Quest 3 — Spotlight Your Player
+  // Quest 3 — Configure Your Spotlight
   open_overlay: 'Open in Overlay',
   select_players: 'Pick Your Player',
   choose_color: 'Pick Your Highlight Color',
   choose_shape: 'Choose the Spotlight Shape',
+  // Quest 4 — Publish Your Reel
   export_overlay: 'Add the Spotlight',
-  view_gallery_video: 'Move to My Reels and Watch',
+  wait_for_overlay: 'Render the Spotlight',
+  move_to_my_reels: 'Move to My Reels',
+  view_gallery_video: 'Watch Your Reel',
 };
 
 /** Step descriptions keyed by step ID — JSX with inline icons */
 export const STEP_DESCRIPTIONS = {
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
-  annotate_brilliant: <>You can automatically create a reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player. Click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> and rate it 5 stars with My Athlete on.</>,
+  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,
+  annotate_brilliant: <>Set start time and end time precisely to isolate the action. Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> and tag it, maybe add a note. Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
@@ -83,10 +102,13 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: 'Open the reel in overlay mode to add a spotlight to your player.',
+  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
+  // Quest 4 — Publish Your Reel
   export_overlay: <>Click <MiniButton>Add Spotlight</MiniButton> to render your highlight with the spotlight on your player.</>,
-  view_gallery_video: <>Preview the video by hitting the play button on the card. If you see an issue, redo the framing or overlay. Once it's perfect, click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to watch and download it.</>,
+  wait_for_overlay: 'We are rendering your highlight with the spotlight burned in.',
+  move_to_my_reels: <>Happy with it? Click <MiniButton variant="cyan"><QIcon icon={Image} className="text-white" />Move to {SECTION_NAMES.LIBRARY}</MiniButton> to publish your reel. If you spot an issue, redo the framing or overlay first.</>,
+  view_gallery_video: <>Hit the play button on the card to watch your finished reel. Once it's perfect, you can download and share it.</>,
 };

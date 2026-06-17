@@ -100,6 +100,7 @@ class TestQuestProgressPerformance:
             'played_annotations', 'opened_framing_editor', 'opened_overlay_editor',
             'crop_adjusted', 'speed_segment_created',
             'overlay_players_assigned', 'overlay_color_set', 'overlay_shape_set',
+            'moved_to_my_reels', 'watched_gallery_video_1s',
             'viewed_gallery_video', 'watched_gallery_video_after_2_overlays',
         ]:
             conn.execute("INSERT INTO achievements (key) VALUES (?)", (key,))
@@ -178,13 +179,17 @@ class TestQuestProgressPerformance:
         assert steps["export_framing"] is True  # framing exports exist (>= 1)
         assert steps["wait_for_export"] is True  # completed framing exists (>= 1)
 
-        # Quest 3 — Spotlight Your Player
+        # Quest 3 — Configure Your Spotlight
         assert steps["open_overlay"] is True  # opened_overlay_editor achievement
         assert steps["select_players"] is True  # overlay_players_assigned achievement
         assert steps["choose_color"] is True  # overlay_color_set achievement
         assert steps["choose_shape"] is True  # overlay_shape_set achievement
-        assert steps["export_overlay"] is True  # completed overlay exists (>= 1)
-        assert steps["view_gallery_video"] is True  # achievement exists
+
+        # Quest 4 — Publish Your Reel
+        assert steps["export_overlay"] is True  # overlay export started (total >= 1)
+        assert steps["wait_for_overlay"] is True  # completed overlay exists (>= 1)
+        assert steps["move_to_my_reels"] is True  # moved_to_my_reels achievement
+        assert steps["view_gallery_video"] is True  # watched_gallery_video_1s achievement
 
 
 # ---------------------------------------------------------------------------

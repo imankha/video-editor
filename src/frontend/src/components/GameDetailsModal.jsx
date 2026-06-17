@@ -26,6 +26,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
   const [showBuyCredits, setShowBuyCredits] = useState(false);
   const fileInputRef = useRef(null);
   const creditBalance = useCreditStore(state => state.balance);
+  const creditsLoaded = useCreditStore(state => state.loaded);
   const fetchCredits = useCreditStore(state => state.fetchCredits);
   const halfFileInputRefs = [useRef(null), useRef(null)];
   const tournamentInputRef = useRef(null);
@@ -194,7 +195,10 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
     e.preventDefault();
     if (!isValid) return;
 
-    if (uploadCost !== null && creditBalance < uploadCost) {
+    // Only block optimistically once we actually know the balance. Before
+    // credits load (default 0), defer to the authoritative backend check in
+    // prepare-upload so a slow/cold load can't trigger a false paywall.
+    if (creditsLoaded && uploadCost !== null && creditBalance < uploadCost) {
       setShowBuyCredits(true);
       return;
     }
@@ -508,7 +512,7 @@ export function GameDetailsModal({ isOpen, onClose, onCreateGame }) {
                 <Coins size={14} className="text-yellow-400" />
                 <span>{uploadCost} credit{uploadCost !== 1 ? 's' : ''} for 30 days of storage</span>
               </div>
-              <span className="font-medium text-white">Balance: {creditBalance}</span>
+              <span className="font-medium text-white">Balance: {creditsLoaded ? creditBalance : '…'}</span>
             </div>
           )}
 

@@ -6,6 +6,7 @@ import { useExportStore, useAuthStore } from '../stores';
 import { useVideoStore } from '../stores/videoStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
+import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useRawClipSave } from '../hooks/useRawClipSave';
@@ -716,7 +717,11 @@ export function AnnotateContainer({
     if (selectionState.type === 'SELECTED') {
       editClip(selectionState.clipId);
     } else {
-      requireAuth(() => startCreating());
+      requireAuth(() => {
+        startCreating();
+        // Quest 1 step: completes "Find an Amazing Play" the moment the form opens.
+        useQuestStore.getState().recordAchievement('add_clip_opened');
+      });
     }
   }, [effectivePause, selectionState, editClip, startCreating, requireAuth]);
 

@@ -2,6 +2,7 @@
 import sqlite3
 
 from app.migrations.user_db.v005_quest_restructure import V005QuestRestructure
+from app.migrations.user_db.v006_split_overlay_quest import V006SplitOverlayQuest
 
 
 def _make_db():
@@ -84,4 +85,46 @@ def test_idempotent():
 def test_fresh_user_noop():
     conn = _make_db()
     V005QuestRestructure().up(conn)
+    assert _completed(conn) == set()
+
+
+# --- V006: overlay quest split (quest_3 -> quest_3 Configure + quest_4 Publish) ---
+
+def test_v006_old_overlay_flow_marks_publish():
+    """Completed old quest_2 (bundled overlay) -> new quest_4 (Publish) marked complete."""
+    conn = _make_db()
+    _seed(conn, completed=("quest_1", "quest_2"))
+    V006SplitOverlayQuest().up(conn)
+    assert "quest_4" in _completed(conn)
+
+
+def test_v006_no_quest_2_no_publish():
+    """Without old quest_2, the migration does not fabricate quest_4."""
+    conn = _make_db()
+    _seed(conn, completed=("quest_1",))
+    V006SplitOverlayQuest().up(conn)
+    assert "quest_4" not in _completed(conn)
+
+
+def test_v006_idempotent():
+    conn = _make_db()
+    _seed(conn, completed=("quest_1", "quest_2"))
+    V006SplitOverlayQuest().up(conn)
+    first = _completed(conn)
+    V006SplitOverlayQuest().up(conn)
+    assert _completed(conn) == first
+
+
+def test_v005_then_v006_full_reconcile():
+    """Old quest_2 done -> v005 marks quest_3 (Configure), v006 marks quest_4 (Publish)."""
+    conn = _make_db()
+    _seed(conn, completed=("quest_1", "quest_2"), claimed=("quest_1", "quest_2"))
+    V005QuestRestructure().up(conn)
+    V006SplitOverlayQuest().up(conn)
+    assert _completed(conn) == {"quest_1", "quest_2", "quest_3", "quest_4"}
+
+
+def test_v006_fresh_user_noop():
+    conn = _make_db()
+    V006SplitOverlayQuest().up(conn)
     assert _completed(conn) == set()

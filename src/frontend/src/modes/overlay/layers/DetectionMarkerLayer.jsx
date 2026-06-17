@@ -1,6 +1,7 @@
 import React from 'react';
-import { Crosshair } from 'lucide-react';
+import { Crosshair, Check } from 'lucide-react';
 import { frameToTime } from '../../../utils/videoUtils';
+import { isDetectionAssigned } from '../utils/detectionAssignment';
 
 // Module-level Set to track warned regions - persists across React StrictMode remounts
 const warnedRegions = new Set();
@@ -59,6 +60,7 @@ export default function DetectionMarkerLayer({
             regionId: region.id,
             videoWidth: region.videoWidth,
             videoHeight: region.videoHeight,
+            assigned: isDetectionAssigned(region, detection),  // player picked at this frame?
           });
         }
       });
@@ -99,6 +101,7 @@ export default function DetectionMarkerLayer({
                 onDetectionMarkerClick({
                   regionId: marker.regionId,
                   frame: marker.frame,
+                  timestamp: marker.timestamp,  // exact detection time — used to snap the assignment keyframe (immune to seek imprecision)
                   boxes: marker.boxes,
                   videoWidth: marker.videoWidth,
                   videoHeight: marker.videoHeight,
@@ -119,23 +122,33 @@ export default function DetectionMarkerLayer({
                 }
               }
             }}
-            title={isDisabled ? 'Player tracking disabled' : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to jump`}
+            title={isDisabled
+              ? 'Player tracking disabled'
+              : marker.assigned
+                ? `Player assigned at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to revisit`
+                : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to assign`}
           >
-            {/* Marker with icon - gray when disabled */}
+            {/* Marker with icon - gray when disabled, checked once a player is assigned */}
             <div className={`w-6 h-6 rounded flex items-center justify-center shadow-lg border ${
               isDisabled
                 ? 'bg-gray-600 border-gray-500'
-                : 'bg-green-600 group-hover:bg-green-500 border-green-400'
+                : marker.assigned
+                  ? 'bg-green-500 border-green-300'
+                  : 'bg-green-600 group-hover:bg-green-500 border-green-400'
             }`}>
-              <Crosshair size={14} className="text-white" />
+              {marker.assigned
+                ? <Check size={15} className="text-white" strokeWidth={3} />
+                : <Crosshair size={14} className="text-white" />}
             </div>
-            {/* Player count badge */}
+            {/* Bottom-right badge: detected-player count until assigned, then a check */}
             <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center border ${
               isDisabled
                 ? 'bg-gray-500 border-gray-400'
-                : 'bg-green-500 border-green-300'
+                : marker.assigned
+                  ? 'bg-emerald-400 border-emerald-200'
+                  : 'bg-green-500 border-green-300'
             }`}>
-              {marker.boxCount}
+              {marker.assigned ? <Check size={10} className="text-white" strokeWidth={4} /> : marker.boxCount}
             </div>
           </button>
         ))}

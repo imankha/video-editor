@@ -27,6 +27,7 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 # Known achievement keys — only these can be recorded.
 # T3700: added the per-step framing/overlay events so quest drop-off is measurable.
 KNOWN_ACHIEVEMENT_KEYS = {
+    "add_clip_opened",
     "opened_framing_editor",
     "opened_overlay_editor",
     "viewed_gallery_video",
@@ -41,9 +42,12 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
+    # Publish-quest step event (Move to My Reels button)
+    "moved_to_my_reels",
 }
 
 ACHIEVEMENT_TO_MILESTONE = {
+    "add_clip_opened": "add_clip_opened",
     "opened_framing_editor": "framing_opened",
     "opened_overlay_editor": "overlay_opened",
     "viewed_gallery_video": "gallery_viewed",
@@ -57,10 +61,12 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_players_assigned": "overlay_players_assigned",
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
+    "moved_to_my_reels": "moved_to_my_reels",
 }
 
 # All achievement keys consumed by quest-step computation (batched in one query).
 _STEP_ACHIEVEMENT_KEYS = [
+    "add_clip_opened",
     "played_annotations",
     "opened_framing_editor",
     "opened_overlay_editor",
@@ -69,7 +75,8 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
-    "viewed_gallery_video",
+    "moved_to_my_reels",
+    "watched_gallery_video_1s",
 ]
 
 # Map step_id -> quest_id for skip lookups
@@ -111,6 +118,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
         export_type_totals[row['type']] = export_type_totals.get(row['type'], 0) + row['cnt']
     framing_total = export_type_totals.get('framing', 0)
     framing_done = export_counts.get(('framing', 'complete'), 0)
+    overlay_total = export_type_totals.get('overlay', 0)
     overlay_done = export_counts.get(('overlay', 'complete'), 0)
 
     # --- raw_clips aggregate (one query) ---
@@ -122,6 +130,10 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
 
     # --- Quest 1: Get Started ---
     steps["upload_game"] = cursor.execute("SELECT 1 FROM games LIMIT 1").fetchone() is not None
+    # add_clip: completed when the user opens the Add Clip form (achievement). Backfilled
+    # by "any clip exists" so it auto-completes on save and for users who clipped before
+    # this step existed (you can't have a clip without having opened the form).
+    steps["add_clip"] = 'add_clip_opened' in achieved or rc["total"] >= 1
     steps["annotate_brilliant"] = rc["reels"] >= 1
     steps["playback_annotations"] = 'played_annotations' in achieved
 
@@ -132,13 +144,19 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
     steps["export_framing"] = framing_total >= 1
     steps["wait_for_export"] = framing_done >= 1
 
-    # --- Quest 3: Spotlight Your Player ---
+    # --- Quest 3: Configure Your Spotlight ---
     steps["open_overlay"] = 'opened_overlay_editor' in achieved
     steps["select_players"] = 'overlay_players_assigned' in achieved
     steps["choose_color"] = 'overlay_color_set' in achieved
     steps["choose_shape"] = 'overlay_shape_set' in achieved
-    steps["export_overlay"] = overlay_done >= 1
-    steps["view_gallery_video"] = 'viewed_gallery_video' in achieved
+
+    # --- Quest 4: Publish Your Reel ---
+    # Mirrors the framing split: "Add the Spotlight" completes when the render
+    # STARTS (job created), the wait step when it COMPLETES.
+    steps["export_overlay"] = overlay_total >= 1
+    steps["wait_for_overlay"] = overlay_done >= 1
+    steps["move_to_my_reels"] = 'moved_to_my_reels' in achieved
+    steps["view_gallery_video"] = 'watched_gallery_video_1s' in achieved
 
     if PROFILING_ENABLED:
         logger.info(f"[PROFILE] _check_all_steps: {(time.perf_counter() - _t) * 1000:.0f}ms")
