@@ -4,6 +4,7 @@ import {
   getTagSet,
   getPositions,
   getAllTagNames,
+  sportEmoji,
 } from '../tagRegistry';
 
 // Mirror of the backend's CURATED_COMBOS tag names
@@ -49,6 +50,18 @@ describe('tag registry — all supported sports', () => {
       const names = flat.map((t) => t.name);
       expect(names.length, `sport "${id}" has duplicate tag names`).toBe(new Set(names).size);
     }
+  });
+
+  it('maps every supported sport to a glyph, with a fallback for custom sports', () => {
+    expect(sportEmoji('soccer')).toBe('⚽');
+    expect(sportEmoji('volleyball')).toBe('🏐');
+    expect(sportEmoji('baseball')).toBe('⚾');
+    for (const { id } of SUPPORTED_SPORTS) {
+      expect(sportEmoji(id).length, `sport "${id}" has no glyph`).toBeGreaterThan(0);
+    }
+    // custom ("Other") sports and missing values fall back to the medal
+    expect(sportEmoji('cricket')).toBe('🏅');
+    expect(sportEmoji(undefined)).toBe('🏅');
   });
 
   it('every backend curated-combo tag exists in the sport (cross-language guard)', () => {

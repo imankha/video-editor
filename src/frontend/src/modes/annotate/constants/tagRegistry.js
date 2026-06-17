@@ -49,6 +49,26 @@ export function sportStoredValue(displayName) {
   return match ? match.id : displayName;
 }
 
+// Emoji glyph per sport — lucide-react lacks ball icons for most sports, so a
+// literal ball reads far better as the "current sport" indicator in the header.
+// Keyed by stored sport id; custom ("Other") sports fall back to the medal.
+const SPORT_EMOJI = {
+  soccer: '⚽',            // ⚽
+  flag_football: '🏈', // 🏈
+  american_football: '🏈', // 🏈
+  basketball: '🏀', // 🏀
+  lacrosse: '🥍',   // 🥍
+  rugby: '🏉',      // 🏉
+  volleyball: '🏐', // 🏐
+  hockey: '🏒',     // 🏒
+  tennis: '🎾',     // 🎾
+  baseball: '⚾',         // ⚾
+};
+
+export function sportEmoji(sport) {
+  return SPORT_EMOJI[sport] || '🏅'; // 🏅 fallback for custom sports
+}
+
 export function getTagSet(sport) {
   return TAG_SETS[sport] || null;
 }
