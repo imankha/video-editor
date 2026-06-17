@@ -462,7 +462,7 @@ export function AnnotateFullscreenOverlay({
             onClick={handleSave}
             className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
           >
-            {isEditMode ? 'Update & Continue (Enter)' : 'Save & Continue (Enter)'}
+            {isEditMode ? 'Update' : 'Save'}
           </button>
           <button
             onClick={onClose}

@@ -37,14 +37,23 @@ QUEST_DEFINITIONS = [
     },
     {
         "id": "quest_3",
-        "title": "Spotlight Your Player",
+        "title": "Configure Your Spotlight",
         "reward": 25,
         "step_ids": [
             "open_overlay",
             "select_players",
             "choose_color",
             "choose_shape",
+        ],
+    },
+    {
+        "id": "quest_4",
+        "title": "Publish Your Reel",
+        "reward": 15,
+        "step_ids": [
             "export_overlay",
+            "wait_for_overlay",
+            "move_to_my_reels",
             "view_gallery_video",
         ],
     },

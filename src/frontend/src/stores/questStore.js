@@ -31,6 +31,12 @@ export const useQuestStore = create((set, get) => ({
 
   activeQuestId: null,
 
+  // Ephemeral UI-only: per-detection assignment state for the select_players
+  // step — a boolean[] in timeline order (or null). Pushed by OverlayContainer,
+  // read by QuestPanel to render one checkbox per detection. Never persisted.
+  detectionAssignProgress: null,
+  setDetectionAssignProgress: (progress) => set({ detectionAssignProgress: progress }),
+
   fetchDefinitions: () => {},
 
   setFromBootstrap: (questsProgress) => {
@@ -40,9 +46,11 @@ export const useQuestStore = create((set, get) => ({
     }
     const q1 = questsProgress.find(q => q.id === 'quest_1');
     const q2 = questsProgress.find(q => q.id === 'quest_2');
+    const q3 = questsProgress.find(q => q.id === 'quest_3');
     let activeQuestId = 'quest_1';
     if (q1?.reward_claimed) activeQuestId = 'quest_2';
     if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+    if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
     set({ quests: questsProgress, loaded: true, totalCompleted, activeQuestId });
   },
 
@@ -81,9 +89,11 @@ export const useQuestStore = create((set, get) => ({
         // Progressive disclosure: show first unclaimed quest
         const q1 = data.quests.find(q => q.id === 'quest_1');
         const q2 = data.quests.find(q => q.id === 'quest_2');
+        const q3 = data.quests.find(q => q.id === 'quest_3');
         let activeQuestId = 'quest_1';
         if (q1?.reward_claimed) activeQuestId = 'quest_2';
         if (q1?.reward_claimed && q2?.reward_claimed) activeQuestId = 'quest_3';
+        if (q1?.reward_claimed && q2?.reward_claimed && q3?.reward_claimed) activeQuestId = 'quest_4';
 
         set({
           quests: data.quests,
@@ -153,6 +163,7 @@ export const useQuestStore = create((set, get) => ({
       totalCompleted: 0,
       totalSteps: _totalSteps,
       activeQuestId: null,
+      detectionAssignProgress: null,
     });
   },
 }));

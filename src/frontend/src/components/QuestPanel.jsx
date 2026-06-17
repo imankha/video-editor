@@ -52,6 +52,7 @@ export function QuestPanel({ inline = false }) {
   const loaded = useQuestStore((s) => s.loaded);
   const activeQuestId = useQuestStore((s) => s.activeQuestId);
   const fetchProgress = useQuestStore((s) => s.fetchProgress);
+  const detectionAssignProgress = useQuestStore((s) => s.detectionAssignProgress);
 
   const claimReward = useQuestStore((s) => s.claimReward);
 
@@ -186,7 +187,7 @@ export function QuestPanel({ inline = false }) {
       const result = await claimReward(questDef.id);
       if (!result.already_claimed) {
         playSound('fanfare');
-        if (questDef.id === 'quest_3') {
+        if (questDef.id === 'quest_4') {
           setShowCompletionModal(true);
         } else {
           toast.success(`You earned ${questDef.reward} credits!`, {
@@ -237,7 +238,7 @@ export function QuestPanel({ inline = false }) {
     {!allQuestsDone && (
     <div
       ref={panelRef}
-      className={`quest-overlay ${inline ? 'static mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
+      className={`quest-overlay ${inline ? 'relative mx-3 pt-6 pb-6' : 'fixed'} z-50 quest-fade-in transition-all duration-300 ${isExpanded ? 'sm:w-[340px] sm:max-w-[calc(100vw-2rem)]' : ''}`}
       style={positionStyle}
     >
       <div className={`quest-card rounded-2xl overflow-hidden ${celebrating ? 'quest-celebrate' : ''}`}>
@@ -321,6 +322,25 @@ export function QuestPanel({ inline = false }) {
                         <p className="quest-step-description text-sm mt-1 leading-snug">
                           {STEP_DESCRIPTIONS[stepId]}
                         </p>
+                      )}
+                      {/* Per-detection progress: one box per detected frame, ordered left-to-right
+                          to match the timeline markers so a gap shows which one was missed. */}
+                      {isCurrent && stepId === 'select_players' && detectionAssignProgress?.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                          {detectionAssignProgress.map((filled, i) => (
+                            <div
+                              key={i}
+                              className={`w-5 h-5 rounded flex items-center justify-center border ${
+                                filled ? 'bg-green-500 border-green-300' : 'border-white/20'
+                              }`}
+                            >
+                              {filled && <Check size={12} className="text-white" strokeWidth={3} />}
+                            </div>
+                          ))}
+                          <span className="ml-1 text-xs quest-step-description tabular-nums">
+                            {detectionAssignProgress.filter(Boolean).length}/{detectionAssignProgress.length}
+                          </span>
+                        </div>
                       )}
                     </div>
 

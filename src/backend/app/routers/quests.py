@@ -42,6 +42,8 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
+    # Publish-quest step event (Move to My Reels button)
+    "moved_to_my_reels",
 }
 
 ACHIEVEMENT_TO_MILESTONE = {
@@ -59,6 +61,7 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_players_assigned": "overlay_players_assigned",
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
+    "moved_to_my_reels": "moved_to_my_reels",
 }
 
 # All achievement keys consumed by quest-step computation (batched in one query).
@@ -72,7 +75,8 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_players_assigned",
     "overlay_color_set",
     "overlay_shape_set",
-    "viewed_gallery_video",
+    "moved_to_my_reels",
+    "watched_gallery_video_1s",
 ]
 
 # Map step_id -> quest_id for skip lookups
@@ -114,6 +118,7 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
         export_type_totals[row['type']] = export_type_totals.get(row['type'], 0) + row['cnt']
     framing_total = export_type_totals.get('framing', 0)
     framing_done = export_counts.get(('framing', 'complete'), 0)
+    overlay_total = export_type_totals.get('overlay', 0)
     overlay_done = export_counts.get(('overlay', 'complete'), 0)
 
     # --- raw_clips aggregate (one query) ---
@@ -139,13 +144,19 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
     steps["export_framing"] = framing_total >= 1
     steps["wait_for_export"] = framing_done >= 1
 
-    # --- Quest 3: Spotlight Your Player ---
+    # --- Quest 3: Configure Your Spotlight ---
     steps["open_overlay"] = 'opened_overlay_editor' in achieved
     steps["select_players"] = 'overlay_players_assigned' in achieved
     steps["choose_color"] = 'overlay_color_set' in achieved
     steps["choose_shape"] = 'overlay_shape_set' in achieved
-    steps["export_overlay"] = overlay_done >= 1
-    steps["view_gallery_video"] = 'viewed_gallery_video' in achieved
+
+    # --- Quest 4: Publish Your Reel ---
+    # Mirrors the framing split: "Add the Spotlight" completes when the render
+    # STARTS (job created), the wait step when it COMPLETES.
+    steps["export_overlay"] = overlay_total >= 1
+    steps["wait_for_overlay"] = overlay_done >= 1
+    steps["move_to_my_reels"] = 'moved_to_my_reels' in achieved
+    steps["view_gallery_video"] = 'watched_gallery_video_1s' in achieved
 
     if PROFILING_ENABLED:
         logger.info(f"[PROFILE] _check_all_steps: {(time.perf_counter() - _t) * 1000:.0f}ms")

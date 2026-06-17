@@ -3,6 +3,7 @@ import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { EDITOR_MODES } from '../stores';
 import { useQuestStore } from '../stores/questStore';
+import { countDetectionAssignments, detectionAssignmentStates } from '../modes/overlay/utils/detectionAssignment';
 
 /**
  * OverlayContainer - Encapsulates all Overlay mode logic and UI
@@ -349,33 +350,55 @@ export function OverlayContainer({
   }, [dragHighlight, currentTime, isTimeInEnabledRegion, getRegionHighlightAtTime, highlightColor]);
 
   /**
-   * T3700: quest_3 "Pick your player" completes when EVERY green-marked region has a
-   * player selection. A region counts as assigned if it has a detection-sourced
-   * keyframe or any user (non-boundary) keyframe; regions with no detections have no
-   * green frame to assign and don't block. `currentRegionId` is the region being
-   * assigned in this same gesture (its new keyframe isn't in `highlightRegions` yet).
+   * quest_3 "Pick your player" completes only when EVERY detected frame (every
+   * green marker on the timeline) has a player assigned — not just one marker
+   * per region. A detection frame is assigned when its region has a user
+   * (non-boundary) keyframe at that frame's time. `currentRegionId` + `assignedTime`
+   * describe the assignment made in this same gesture, whose keyframe isn't yet
+   * in `highlightRegions` (setRegions is async).
    */
-  const maybeEmitPlayersAssigned = useCallback((currentRegionId) => {
+  const maybeEmitPlayersAssigned = useCallback((currentRegionId, assignedTime = null) => {
     if (!highlightRegions?.length) return;
-    const allAssigned = highlightRegions.every(r => {
-      if (r.id === currentRegionId) return true; // assigned in this gesture
-      const kfs = r.keyframes || [];
-      const hasSelection = kfs.some(kf => kf.fromDetection) || kfs.length > 2;
-      const hasGreenFrames = (r.detections || []).length > 0;
-      return hasSelection || !hasGreenFrames;
-    });
-    if (allAssigned) {
+    const justAssigned =
+      currentRegionId != null ? { regionId: currentRegionId, time: assignedTime } : null;
+    const { total, assigned } = countDetectionAssignments(highlightRegions, justAssigned);
+    if (total > 0 && assigned >= total) {
       useQuestStore.getState().recordAchievement('overlay_players_assigned');
     }
   }, [highlightRegions]);
 
   /**
+   * Mirror per-detection assignment progress into the quest store so the
+   * select_players step can show one checkbox per detection that fills in as
+   * the user assigns each. This is EPHEMERAL display state only — it is never
+   * persisted (no backend write), so it does not violate the gesture-based
+   * persistence rule. The quest-completion write stays in maybeEmitPlayersAssigned.
+   */
+  useEffect(() => {
+    const setProgress = useQuestStore.getState().setDetectionAssignProgress;
+    if (editorMode !== EDITOR_MODES.OVERLAY) {
+      setProgress(null);
+      return;
+    }
+    const states = detectionAssignmentStates(highlightRegions);
+    setProgress(states.length > 0 ? states : null);
+  }, [editorMode, highlightRegions]);
+
+  // Clear progress when the container unmounts so a stale count never shows elsewhere.
+  useEffect(() => () => useQuestStore.getState().setDetectionAssignProgress(null), []);
+
+  /**
    * Handle player selection from detection overlay
    */
   const handlePlayerSelect = useCallback((playerData) => {
-    const region = getRegionAtTime(currentTime);
+    // When a detection marker is parked, the browser's seek lands NEAR but not
+    // exactly on the detection frame. Anchoring the keyframe to the detection's
+    // exact timestamp (not the imprecise currentTime) guarantees it falls within
+    // ASSIGN_TOLERANCE_S so the marker counts as assigned and quest_3 completes.
+    const assignTime = clickedDetection?.timestamp ?? currentTime;
+    const region = getRegionAtTime(assignTime);
     if (!region) {
-      console.warn('[OverlayContainer] No highlight region at current time');
+      console.warn('[OverlayContainer] No highlight region at assignment time');
       return;
     }
 
@@ -399,9 +422,9 @@ export function OverlayContainer({
       region: { start: region.startTime, end: region.endTime }
     });
 
-    addHighlightRegionKeyframe(currentTime, highlight, duration);
-    maybeEmitPlayersAssigned(region.id);
-  }, [currentTime, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned]);
+    addHighlightRegionKeyframe(assignTime, highlight, duration);
+    maybeEmitPlayersAssigned(region.id, assignTime);
+  }, [currentTime, clickedDetection, duration, currentHighlightState, addHighlightRegionKeyframe, getRegionAtTime, highlightColor, maybeEmitPlayersAssigned]);
 
   /**
    * Handle highlight changes during drag/resize
@@ -414,20 +437,26 @@ export function OverlayContainer({
    * Handle highlight complete (create/update keyframe in enabled region)
    */
   const handleHighlightComplete = useCallback((highlightData) => {
-    if (!isTimeInEnabledRegion(currentTime)) {
+    // Same snap-to-detection rationale as handlePlayerSelect: moving/resizing the
+    // spotlight while parked on a marker must land the keyframe on the detection's
+    // exact frame so it counts as assigning that detection.
+    const assignTime = clickedDetection?.timestamp ?? currentTime;
+    if (!isTimeInEnabledRegion(assignTime)) {
       console.warn('[OverlayContainer] Cannot add highlight keyframe - not in enabled region');
       setDragHighlight(null);
       return;
     }
 
-    const frame = Math.round(currentTime * highlightRegionsFramerate);
-    console.log(`[OverlayContainer] Highlight keyframe at ${currentTime.toFixed(2)}s (frame ${frame})`);
+    const frame = Math.round(assignTime * highlightRegionsFramerate);
+    console.log(`[OverlayContainer] Highlight keyframe at ${assignTime.toFixed(2)}s (frame ${frame})`);
 
-    addHighlightRegionKeyframe(currentTime, highlightData);
+    // Mark as an assignment so it counts even when it lands on a region boundary
+    // keyframe (edge detection frames). See isDetectionAssigned.
+    addHighlightRegionKeyframe(assignTime, { ...highlightData, fromDetection: true });
     setDragHighlight(null);
-    const region = getRegionAtTime(currentTime);
-    if (region) maybeEmitPlayersAssigned(region.id);
-  }, [currentTime, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned]);
+    const region = getRegionAtTime(assignTime);
+    if (region) maybeEmitPlayersAssigned(region.id, assignTime);
+  }, [currentTime, clickedDetection, highlightRegionsFramerate, isTimeInEnabledRegion, addHighlightRegionKeyframe, getRegionAtTime, maybeEmitPlayersAssigned]);
 
   /**
    * Handle transition from Framing to Overlay mode

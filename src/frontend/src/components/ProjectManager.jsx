@@ -19,6 +19,7 @@ import { SignInButton } from './SignInButton';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
 import { useGalleryStore } from '../stores/galleryStore';
+import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
@@ -1775,6 +1776,8 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       useGalleryStore.getState().fetchCount({ force: true });
       useGalleryStore.getState().notifyCollectionsChanged();
       fetchProjects({ force: true });
+      // quest_4 "Move to My Reels" step — the publish gesture completes it.
+      useQuestStore.getState().recordAchievement('moved_to_my_reels');
       if (openGallery) {
         useGalleryStore.getState().open();
       }
