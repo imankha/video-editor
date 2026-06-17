@@ -53,7 +53,8 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 export const STEP_TITLES = {
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
-  annotate_brilliant: 'Create a Reel',
+  add_clip: 'Find an Amazing Play',
+  annotate_brilliant: 'Rate 5 Stars & Save',
   playback_annotations: 'Watch Your Clips Back',
   // Quest 2 — Frame Your Highlight
   open_framing: 'Open Your Reel',
@@ -74,7 +75,8 @@ export const STEP_TITLES = {
 export const STEP_DESCRIPTIONS = {
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
-  annotate_brilliant: <>You can automatically create a reel by annotating a <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> play for your player. Click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> and rate it 5 stars with My Athlete on.</>,
+  add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,
+  annotate_brilliant: <>Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> with My Athlete on, then <strong>Save</strong> — we'll turn it into a reel automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,

@@ -27,6 +27,7 @@ router = APIRouter(prefix="/quests", tags=["quests"])
 # Known achievement keys — only these can be recorded.
 # T3700: added the per-step framing/overlay events so quest drop-off is measurable.
 KNOWN_ACHIEVEMENT_KEYS = {
+    "add_clip_opened",
     "opened_framing_editor",
     "opened_overlay_editor",
     "viewed_gallery_video",
@@ -44,6 +45,7 @@ KNOWN_ACHIEVEMENT_KEYS = {
 }
 
 ACHIEVEMENT_TO_MILESTONE = {
+    "add_clip_opened": "add_clip_opened",
     "opened_framing_editor": "framing_opened",
     "opened_overlay_editor": "overlay_opened",
     "viewed_gallery_video": "gallery_viewed",
@@ -61,6 +63,7 @@ ACHIEVEMENT_TO_MILESTONE = {
 
 # All achievement keys consumed by quest-step computation (batched in one query).
 _STEP_ACHIEVEMENT_KEYS = [
+    "add_clip_opened",
     "played_annotations",
     "opened_framing_editor",
     "opened_overlay_editor",
@@ -122,6 +125,10 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
 
     # --- Quest 1: Get Started ---
     steps["upload_game"] = cursor.execute("SELECT 1 FROM games LIMIT 1").fetchone() is not None
+    # add_clip: completed when the user opens the Add Clip form (achievement). Backfilled
+    # by "any clip exists" so it auto-completes on save and for users who clipped before
+    # this step existed (you can't have a clip without having opened the form).
+    steps["add_clip"] = 'add_clip_opened' in achieved or rc["total"] >= 1
     steps["annotate_brilliant"] = rc["reels"] >= 1
     steps["playback_annotations"] = 'played_annotations' in achieved
 

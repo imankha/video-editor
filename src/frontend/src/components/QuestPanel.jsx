@@ -18,8 +18,15 @@ import exportWebSocketManager from '../services/ExportWebSocketManager';
  * - Framing: moved up above the timeline/scrub bar region
  * - Overlay: same as framing (similar bottom layout)
  */
-function getPositionForMode(editorMode, isSm) {
+function getPositionForMode(editorMode, isSm, addClipFormOpen) {
   if (!isSm) return { left: 12, bottom: 12 }; // Mobile: always bottom-left, compact
+
+  // Annotate: the Add Clip form opens in the left-docked sidebar (352px wide) and
+  // would cover the default bottom-left panel. Move to the right side (clear of the
+  // form) and lift above the timeline/action-bar instead of hiding the quest.
+  if (editorMode === 'annotate' && addClipFormOpen) {
+    return { right: 24, bottom: 220 };
+  }
 
   switch (editorMode) {
     case 'framing':
@@ -158,7 +165,11 @@ export function QuestPanel({ inline = false }) {
 
   // Don't render if hidden, not loaded, definitions not fetched, or all quests done
   const allQuestsDone = loaded && quests.length > 0 && quests.every(q => q.reward_claimed);
-  if ((hidden || !loaded || !definitions || !questDef || addClipFormOpen || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
+  // On mobile the Add Clip form is a full-screen takeover, so hide the quest there.
+  // On desktop the form is a left-docked sidebar — keep the quest visible and
+  // reposition it (see getPositionForMode) instead of hiding it.
+  const hideForAddClipForm = addClipFormOpen && window.innerWidth < 640;
+  if ((hidden || !loaded || !definitions || !questDef || hideForAddClipForm || isSharedAnnotationFlow || (isAuthenticated && allQuestsDone)) && !showCompletionModal) {
     return null;
   }
   const steps = questProgress?.steps || {};
@@ -193,7 +204,7 @@ export function QuestPanel({ inline = false }) {
 
   // T1030: Smart repositioning — pick position per screen mode to avoid overlapping controls
   const isSm = window.innerWidth >= 640;
-  const positionStyle = getPositionForMode(editorMode, isSm);
+  const positionStyle = getPositionForMode(editorMode, isSm, addClipFormOpen);
 
   // T1600: On home screen, make quest panel static (below content) instead of fixed overlay.
   // Static positioning ignores left/bottom inline styles, so positionStyle is harmless.

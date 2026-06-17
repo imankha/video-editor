@@ -5,6 +5,7 @@ export const QUEST_DEFINITIONS = [
     reward: 15,
     step_ids: [
       'upload_game',
+      'add_clip',
       'annotate_brilliant',
       'playback_annotations',
     ],
