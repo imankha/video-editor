@@ -18,6 +18,21 @@ function FeaturePill({ icon, label, color }: { icon: React.ReactNode; label: str
   )
 }
 
+// Mirrors SUPPORTED_SPORTS + SPORT_EMOJI in the editor's tagRegistry. This is a
+// standalone app, so the list is kept in sync by hand rather than cross-imported.
+const SPORTS = [
+  { name: 'Soccer', emoji: '⚽' },
+  { name: 'Flag Football', emoji: '🏈' },
+  { name: 'American Football', emoji: '🏈' },
+  { name: 'Basketball', emoji: '🏀' },
+  { name: 'Lacrosse', emoji: '🥍' },
+  { name: 'Rugby', emoji: '🏉' },
+  { name: 'Volleyball', emoji: '🏐' },
+  { name: 'Hockey', emoji: '🏒' },
+  { name: 'Tennis', emoji: '🎾' },
+  { name: 'Baseball', emoji: '⚾' },
+]
+
 function App() {
   const ctaHref = useMemo(() => {
     const search = window.location.search;
@@ -173,6 +188,32 @@ function App() {
                 <p className="text-purple-400 font-semibold text-sm">— James R., Soccer Dad</p>
                 <p className="text-gray-500 text-xs">Son plays ECNL</p>
               </div>
+            </div>
+          </div>
+
+          {/* Sports We Support */}
+          <div className="mb-16">
+            <h3 className="text-2xl font-bold text-white mb-2">Sports We Support</h3>
+            <p className="text-gray-400 text-sm mb-8">
+              Don't see your sport?{' '}
+              <a
+                href="mailto:hello@reelballers.com?subject=New%20sport%20request"
+                className="text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                Request it
+              </a>{' '}
+              and we'll add it.
+            </p>
+            <div className="flex flex-wrap justify-center gap-3">
+              {SPORTS.map((sport) => (
+                <div
+                  key={sport.name}
+                  className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-2"
+                >
+                  <span className="text-xl leading-none" aria-hidden>{sport.emoji}</span>
+                  <span className="text-gray-300 text-sm font-medium">{sport.name}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
