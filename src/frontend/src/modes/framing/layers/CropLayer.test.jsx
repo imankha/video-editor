@@ -75,3 +75,33 @@ describe('CropLayer trim range rendering', () => {
     expect(deleteButtons).toHaveLength(1); // only frame 129
   });
 });
+
+// T3780: the empty-timeline placeholder used jargon ("Set Crop Keyframes to animate
+// crop window"). Replaced with outcome-first copy a soccer parent understands.
+describe('CropLayer placeholder copy (T3780)', () => {
+  function renderEmpty() {
+    return render(
+      <CropProvider value={{ isEndKeyframeExplicit: false }}>
+        <CropLayer
+          keyframes={[{ frame: 0, origin: 'permanent' }, { frame: 90, origin: 'permanent' }]}
+          duration={3}
+          visualDuration={3}
+          currentTime={0}
+          framerate={30}
+          onKeyframeClick={vi.fn()}
+          onKeyframeDelete={vi.fn()}
+        />
+      </CropProvider>
+    );
+  }
+
+  it('uses outcome-first copy', () => {
+    const { container } = renderEmpty();
+    expect(container.textContent).toContain('Keep your player in frame');
+  });
+
+  it('drops the "Set Crop Keyframes" jargon', () => {
+    const { container } = renderEmpty();
+    expect(container.textContent).not.toMatch(/Set Crop Keyframes/i);
+  });
+});

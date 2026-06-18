@@ -115,7 +115,7 @@ export default function CropLayer({
         {/* Placeholder text when no explicit keyframes (only auto-created start/end) */}
         {visibleKeyframes.length === 2 && !isEndKeyframeExplicit && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <span className="text-gray-400 text-sm">Set Crop Keyframes to animate crop window</span>
+            <span className="text-gray-400 text-sm">Keep your player in frame</span>
           </div>
         )}
 

@@ -10,7 +10,7 @@
  * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Home, Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
+import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -26,6 +26,36 @@ function GreenSquare() {
     <span className="inline-flex items-center justify-center align-text-bottom mx-0.5 w-4 h-4 bg-green-600 rounded border border-green-400">
       <Crosshair size={10} className="text-white" />
     </span>
+  );
+}
+
+/**
+ * "Open your reel" deep link — sends the parent straight to the Reel Drafts
+ * (Home) screen so they can tap their reel, instead of describing the clicks.
+ *
+ * Reuses the app's existing Home navigation: it points the URL at /home and
+ * fires the same popstate handler the browser back-button uses (registered in
+ * editorStore). That handler owns the clearSelection / fetchProjects / video
+ * reset side effects, so we don't duplicate a parallel nav path here.
+ */
+function navigateToReelDrafts() {
+  if (window.location.pathname !== '/home') {
+    window.history.pushState({ mode: 'project-manager' }, '', '/home');
+  }
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/** Clickable "Open your reel" pill — styled like the cyan section buttons */
+function OpenReelLink() {
+  return (
+    <button
+      type="button"
+      onClick={navigateToReelDrafts}
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/10 transition-colors cursor-pointer"
+    >
+      <QIcon icon={Folder} className="text-cyan-400" />
+      Open your reel
+    </button>
   );
 }
 
@@ -106,7 +136,7 @@ export const STEP_DESCRIPTIONS = {
   annotate_brilliant: <>Set start time and end time precisely to isolate the action. Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> and tag it, maybe add a note. Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
-  open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
+  open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
