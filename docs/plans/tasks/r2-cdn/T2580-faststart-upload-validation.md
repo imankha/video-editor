@@ -57,6 +57,11 @@ Include `is_faststart` in game video metadata responses so the frontend can dete
 
 ## Notes
 
+- **T3760 spike confirmation (2026-06-18):** the prod game video for clip 48 (`1c8a48db…b404.mp4`,
+  3.05 GB) was probed directly and is faststart (`ftyp` 0–31, `moov` 32–700421, then `mdat`). This
+  corroborates that T1450 held and that the framing deep-offset reads are clip seeks, not moov hunts.
+  T2580 remains valid as a **regression guard** for new upload paths — it was never the fix for the
+  T3760 "slow load" (which didn't exist). See `../T3760-decision.md`.
 - Spawned from T3250 design review: decided to skip runtime faststart probing (adds 50-150ms latency to every playback-url request) in favor of upload-time validation
 - T1450 already migrated all existing game videos to faststart
 - This task prevents regression: new upload paths must maintain the faststart invariant

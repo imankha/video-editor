@@ -26,6 +26,35 @@ T3250 fixes the throughput bottleneck (Fly.io proxy) but leaves two gaps:
 
 Additionally, HMAC-signed URLs provide tighter auth than presigned URLs (shorter TTLs possible, cache-friendly).
 
+## Measured Learnings (2026-06-18, from T3760 spike)
+
+The T3760 spike measured the real direct-R2 playback path against the actual prod game video
+(clip 48, 3.05 GB, confirmed faststart). The numbers **downgrade this epic's strongest stated
+justification** — the HTTP/1.1 6-socket-cap latency story (`#1` above):
+
+- **R2 TTFB at a 2.0 GB offset = 82–151 ms** (cold). R2 is fast to first byte at deep offsets.
+- **Cold time-to-first-frame after a deep seek = 266 ms** (warm 16 ms); the browser buffers only
+  ~3 seconds and transfers ~1.85 MB cold — not the gigabytes implied by the advertised
+  `Content-Length`.
+- **Seeks resolve in ~300 ms even under deliberate 8-socket saturation** — the socket-contention /
+  multiplexing stall this epic was partly meant to fix **did not reproduce**.
+
+**What survives as justification** (these are real, but none is a *playback-latency* fix):
+
+1. ~~HTTP/2 multiplexing to fix playback latency~~ — **empirically weak**; seeks don't stall, TTFF is
+   already 266 ms. Keep only as a minor robustness nicety, not an impact driver.
+2. **CDN edge caching** for repeat plays of smaller types (working/final/raw clips <512 MB). Cold
+   loads are already handled by the warming system (T2040/T1890/T2890, all DONE).
+3. **Egress cost reduction** — real only at scale (cost table below: CDN wins above ~500 GB/mo).
+   Low urgency at current scale.
+4. **HMAC auth** vs 4 h presigned URLs — security hardening, not urgent.
+
+**Implication:** this epic is **legitimate but low-urgency infra**, not a latency fix. Do **not** let
+any framing/seek "stall" report (e.g. T3760) pull it forward — that report was a HAR mis-read. The
+impact rating that was anchored on latency should drop accordingly. **T2560 (byte-range clamping) is
+resolved KEPT-SKIP** (no latency benefit + free egress — see its file). Full evidence + method:
+[`../T3760-decision.md`](../T3760-decision.md).
+
 ## Architecture
 
 Custom domain `cdn.reelballers.com` -> Cloudflare CDN edge -> Worker (HMAC auth + pass-through) -> R2 binding (internal, zero egress).
@@ -70,14 +99,14 @@ See T3250 for full details and sources.
 |----|------|--------|------------|
 | T3250 | [Direct R2 Video Streaming](../T3250-direct-r2-streaming-fix.md) | TODO | -- |
 | T2550 | [CDN + Auth Worker](T2550-r2-custom-domain-cdn.md) | TODO | T3250 deployed |
-| T2560 | [Edge Byte-Range Clamping](T2560-edge-video-worker.md) | TODO | T2550 + likely skipped |
+| T2560 | [Edge Byte-Range Clamping](T2560-edge-video-worker.md) | KEPT-SKIP (T3760) | — (no latency benefit, free egress) |
 | T2570 | [Remove Fly.io Video Proxy](T2570-remove-flyio-video-proxy.md) | TODO | T2550 stable 2+ weeks |
 | T2580 | [Faststart Upload Validation](T2580-faststart-upload-validation.md) | TODO | T3250 deployed |
 
 **Sequencing rationale:**
 - **T3250** ships first -- fixes playback stalls by switching to presigned R2 URLs. No new infrastructure.
 - **T2550** ships the custom domain, Worker, and HMAC auth. Worker is auth-only (HMAC validation + pass-through to R2 binding). No byte proxying.
-- **T2560** ports 3-window byte-range clamping to Worker. **Likely skipped** -- T3250 drops clamping because game videos are user-owned content and R2 has zero egress fees.
+- **T2560** ports 3-window byte-range clamping to Worker. **Resolved KEPT-SKIP (2026-06-18, T3760)** -- measured TTFF 266 ms cold / seeks ~300 ms even under socket saturation; a `Content-Length` clamp has zero latency benefit and egress is free. See T2560 + `../T3760-decision.md`.
 - **T2570** cleanup after CDN path is stable. Deletes dead proxy code.
 
 ## Completion Criteria

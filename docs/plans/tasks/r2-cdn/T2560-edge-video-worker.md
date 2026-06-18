@@ -15,6 +15,13 @@ T3250 drops bounded-range clamping for video streaming. The clamping was origina
 
 > **Gate condition now MET (2026-06-17).** A prod HAR (`Downloads/app.reelballers.com.har`) shows playback does NOT work smoothly without clamping: the direct-R2 path issues open-ended ranges (`bytes=N-`) that R2 serves to EOF (~1.03 GB offered for an 8s clip), and this **recurs on every seek** (three backward-stepping ranges observed; first streamed 55.8s), producing user-reported stalls. The original "likely skip" rationale was about **egress cost** (free on R2), but the live problem is **latency on cold deep-offset reads** — a different axis. This task should be reconsidered/un-skipped. Tracked from **T3760**, which owns the spike→decide.
 
+> **RESOLVED — KEPT-SKIP (2026-06-18, T3760 spike).** The 2026-06-17 un-skip was based on a **misread HAR**. The T3760 spike reproduced the exact scenario against the real R2 object (clip 48, 3.05 GB, confirmed faststart) and measured every quantity:
+> - **Cold time-to-first-frame after a deep seek = 266 ms** (warm 16 ms). The "~1.03 GB / 55.8s / 4.3s" were HAR **`Content-Length` advertised** (not transferred) and **`receive` = playback-stream duration** (not TTFF). Actual bytes transferred cold ≈ 1.85 MB; the browser **buffers only ~3 seconds**.
+> - **Seeks resolve in ~300 ms even under deliberate 8-socket saturation** (no stall). Read correctly, even the prod HAR's two *seek* ranges completed in 93 ms and 113 ms.
+> - R2 TTFB at the 2.0 GB offset = **82–151 ms**.
+>
+> A `Content-Length` clamp changes *advertised total bytes* — it does **not** move TTFB, throughput, or the ~3s the browser buffers. **No clamp (edge Worker, MSE, or endpoint) can improve a 266 ms TTFF or a 300 ms seek.** The clamp has **no measured latency benefit**, and egress is free on R2 — so both possible justifications are empty. **Keep skipped.** Evidence + method: [`../T3760-decision.md`](../T3760-decision.md). *(Status field left for the user to flip on the board.)*
+
 ## Problem
 
 Without byte-range clamping, the browser can request any byte range from a 2-3GB game video when playing an 8-second clip. While native video players only buffer ahead ~30-60s, this is still more data than the 3-window clamping would serve (moov + clip region + padding).

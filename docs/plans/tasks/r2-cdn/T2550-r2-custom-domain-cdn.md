@@ -7,6 +7,17 @@
 **Status:** TODO
 **Depends on:** T3250 deployed (presigned URL streaming working in prod)
 
+## Re-scope note (2026-06-18, from T3760 spike)
+
+The T3760 spike measured the real direct-R2 path and **weakened gap #1 below** (the HTTP/1.1
+6-socket-cap latency story): R2 TTFB at a 2.0 GB offset is 82–151 ms, cold TTFF after a deep seek
+is **266 ms**, and **seeks do not stall even under deliberate 8-socket saturation**. So this task is
+**not a playback-latency fix** — its surviving justifications are **CDN edge caching** (gap #2,
+repeat plays of smaller types), **egress cost at scale** (gap #3, only above ~500 GB/mo), and
+**HMAC auth**. Treat as **low-urgency infra**; do not pull forward on latency grounds, and drop the
+latency-anchored impact rating. Evidence: [`../T3760-decision.md`](../T3760-decision.md).
+T2560 (the byte-clamp follow-on) is resolved **KEPT-SKIP**.
+
 ## Problem
 
 After T3250, video streams directly from R2 via presigned URLs. Two gaps remain:
