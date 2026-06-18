@@ -1,10 +1,17 @@
 # T3710: Framing Preview (Advance Organizer)
 
-**Status:** TODO
+**Status:** CLOSED (concept dropped; Dim mode serves as the lightweight preview)
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-06-16
-**Updated:** 2026-06-16
+**Updated:** 2026-06-17
+
+## Resolution (2026-06-17)
+
+The auto-playing finished-result "advance organizer" is not being built — rendering a real finished
+preview costs GPU money. **Dim mode** in the Framing editor lets a parent see what the framed/dimmed
+result looks like without a render, and that is accepted as the lightweight "what does done look
+like" affordance. Closing this task; concept dropped.
 
 ## Problem
 

@@ -34,14 +34,16 @@ Implementation facts (sync, msgpack, migrations, pipeline, sharing, frontend): [
 |----|------|--------|
 | T3600 | [Freeze Collection Metadata at Export](T3600-freeze-collection-metadata.md) | DONE (migrated dev/staging/prod) |
 | T3605 | [Freeze game_ids (Collections prerequisite)](T3605-freeze-game-ids.md) | DONE (migrated dev/staging/prod) |
-| T3610 | [Collections Tab + Game Collections](T3610-collections-tab-game-collections.md) | TODO |
-| T3620 | [Collection Share Links + Public Viewer](T3620-collection-share-links.md) | TODO |
-| T3630 | [Reel Ranking Model + Insertion UX](T3630-reel-ranking.md) | TODO |
-| T3640 | [Season Highlights + Unlock Moment](T3640-season-highlights-unlock.md) | TODO |
-| T3650 | [Custom Mix Demotion + Rename](T3650-custom-mix-demotion.md) | TODO |
-| T3660 | [Quest 4 Rework: Season Highlights Funnel](T3660-quest-rework.md) | TODO |
-| T3670 | [Smart Collections: Top Goals / Assists / Dribbles](T3670-smart-collections.md) | TODO |
-| T3680 | [Stitched Collection Videos](T3680-stitched-collection-videos.md) | TODO |
+| T3610 | [Collections Tab + Game Collections](T3610-collections-tab-game-collections.md) | DONE |
+| T3620 | [Collection Share Links + Public Viewer](T3620-collection-share-links.md) | DONE |
+| T3630 | [Reel Ranking Model + Insertion UX](T3630-reel-ranking.md) | DONE |
+| T3640 | [Season Highlights + Unlock Moment](T3640-season-highlights-unlock.md) | DONE (shipped as "Top Plays" collection; unlock-moment modal dropped) |
+| T3670 | [Smart Collections: Top Goals / Assists / Dribbles](T3670-smart-collections.md) | DONE (shipped as dynamic per-tag + curated-per-sport collections) |
+| T3635 | [Reel Order Editor](T3635-reel-order-editor.md) | MOVED to For Alpha - Polish |
+
+**Dropped (won't build):** T3650 (Custom Mix Demotion + Rename), T3660 (Quest 4 Rework), T3680 (Stitched Collection Videos). Task files deleted.
+
+> **Design note:** The epic shipped with a **dynamic collection model** — collections are derived per tag with a few curated combos per sport — rather than the originally-specced hardcoded "Top Goals/Assists/Dribbles" set. The **"Top Plays"** collection serves as the Season Highlights surface (rank-ordered + duration-budgeted), so the separate full-screen "Season Highlights Unlocked" modal and `pref.seasonHighlightsChoice` opt-in were not built. The stitched-MP4 "Video" verb (T3680) was also dropped; its Download button stays disabled ("Coming soon") in the UI.
 
 ## Migration Inventory (explicitly triggered post-deploy, never auto-run)
 
@@ -56,8 +58,14 @@ Deploy checklist for each: merge -> staging auto-deploy -> `POST /api/admin/migr
 
 ## Completion Criteria
 
-- [ ] All 9 tasks complete
-- [ ] A parent can: see reels grouped by game, play a game's reels as a story, share a live game link, rank reels at publish, set a season time budget, share Season Highlights, see Top Goals unlock, download a stitched MP4
-- [ ] New-user flow (quests 1-4) lands users in the curation paradigm end-to-end
-- [ ] All three migrations run on staging + prod
-- [ ] e2e new-user-flow spec updated and green
+Epic considered complete with the dropped scope noted above. Shipped:
+
+- [x] A parent can: see reels grouped by game, play a game's reels as a story, share a live game link, rank reels (pairwise Glicko ranking game), set a per-collection duration budget, share collections via live links, and see "Top Plays" / smart per-tag collections (Top Goals & Assists, Top Dribbles, etc.)
+- [x] Migrations run on staging + prod (profile_db v007/v008/v009/v010, postgres v016)
+
+Not shipped (deliberately dropped):
+
+- [ ] ~~Season time budget + full-screen unlock moment~~ → "Top Plays" collection serves the Season Highlights role; no separate unlock modal (T3640 redefined)
+- [ ] ~~Quest 4 season-highlights funnel~~ → quests restructured separately in T3705 (T3660 dropped)
+- [ ] ~~Stitched MP4 / "Video" verb~~ → dropped (T3680); Download button stays disabled
+- [ ] ~~Custom Mix demotion/rename~~ → dropped (T3650); "New Reel" CTA retained

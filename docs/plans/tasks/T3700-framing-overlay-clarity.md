@@ -1,10 +1,19 @@
 # T3700: Framing & Overlay Clarity (Outcome-First UX)
 
-**Status:** TODO
+**Status:** DONE (P0 shipped; P1 split to T3780; P2 dropped)
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-06-16
-**Updated:** 2026-06-16
+**Updated:** 2026-06-17
+
+## Resolution (2026-06-17)
+
+- **P0 — DONE.** Default crop guarantees a zero-effort valid framing export (`default_crop.py`,
+  `ExportButtonContainer.jsx`), non-blocking amber framing hint, and terminal button renames
+  ("Export Highlight" / "Add Spotlight"). The quest/tutorial restructure shipped as T3705.
+- **P1 — split out to [T3780](T3780-framing-overlay-clarity-p1.md).** Hide confidence % behind
+  Advanced, replayable hints, deep-linked nav, plus stale-copy/jargon cleanups. Still to do.
+- **P2 — DROPPED.** Subtle/Bold presets + keyframe-affordance polish judged not worth doing.
 
 ## Problem
 
