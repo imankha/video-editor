@@ -16,7 +16,7 @@ from app.services.auth_db import create_user
 def _clean_sqlite_activity():
     """Clear SQLite activity tables before each test to avoid cross-test bleed."""
     from app.services.user_db import get_user_db_connection
-    for uid in ("user-a", "user-b"):
+    for uid in ("user-a", "user-b", "target-user"):
         try:
             with get_user_db_connection(uid) as conn:
                 conn.execute("DELETE FROM user_activity")
@@ -196,6 +196,52 @@ class TestImpersonationSuppression:
         row = self._pg_action_row("user-a", "game_created")
         assert row is not None and row["count"] == 1
         assert len(_get_sqlite_action_log("user-a", "game_created")) == 1
+
+
+class TestImpersonationSuppressionIntegration:
+    """T1515 end-to-end: a real impersonation session created by T1510's
+    create_impersonation_session() must surface impersonator_user_id through
+    validate_session() (the exact value the middleware feeds the ContextVar),
+    and that value must suppress analytics writes."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, pg_conn):
+        # target = the impersonated user; admin = the impersonator. Both are in
+        # conftest._TEST_USER_IDS so they're cleaned up; emails avoid the real
+        # imankh@gmail.com dev row that breaks test_impersonation's fixture.
+        create_user("target-user", email="t1515-target@example.com")
+        create_user("other-admin", email="t1515-admin@example.com")
+        create_user_segment("target-user", "organic", None, "google")
+
+    def test_real_impersonation_session_suppresses_analytics(self, pg_conn):
+        from app.services.auth_db import create_impersonation_session, validate_session
+        from app.user_context import set_current_impersonator_id
+
+        sid = create_impersonation_session("target-user", "other-admin")
+        session = validate_session(sid)
+        # The session carries the impersonator the middleware reads from request.state.
+        assert session is not None
+        assert session["user_id"] == "target-user"
+        assert session.get("impersonator_user_id") == "other-admin"
+
+        # Replicate the middleware wiring (db_sync.py): feed that value to the ContextVar.
+        set_current_impersonator_id(session.get("impersonator_user_id"))
+        try:
+            record_milestone("target-user", "annotation_completed", {"game_id": 1})
+            update_session("target-user")
+        finally:
+            set_current_impersonator_id(None)
+
+        # Nothing recorded for the impersonated user.
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT count(*) AS cnt FROM user_actions WHERE user_id = %s",
+                ("target-user",),
+            )
+            assert cur.fetchone()["cnt"] == 0
+        assert _get_sqlite_action_log("target-user") == []
 
 
 class TestBackfillUserActivity:
