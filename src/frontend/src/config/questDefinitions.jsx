@@ -59,6 +59,20 @@ function OpenReelLink() {
   );
 }
 
+/** Inline progress chip — mirrors the card's strip: full green Framing, then an
+ * Overlay segment on a gray track with blue filling only the bottom half (the
+ * "started but not done" shape used on the card) */
+function MiniStrip() {
+  return (
+    <span className="inline-flex align-text-bottom mx-1 w-10 h-2.5 rounded-sm overflow-hidden border border-gray-500">
+      <span className="h-full bg-green-500" style={{ width: '75%' }} />
+      <span className="relative h-full bg-gray-600" style={{ width: '25%' }}>
+        <span className="absolute bottom-0 left-0 w-full bg-blue-400" style={{ height: '50%' }} />
+      </span>
+    </span>
+  );
+}
+
 /** Status chip — mirrors the green "Done" badge on a finished Reel Draft card */
 function DoneBadge() {
   return (
@@ -128,7 +142,7 @@ export const STEP_DESCRIPTIONS = {
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: "You're in Overlay mode now. Add a spotlight so your player pops in the highlight.",
+  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
