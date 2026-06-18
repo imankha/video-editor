@@ -24,6 +24,7 @@ Per-user SQLite+R2 is the correct and cheapest persistence model for user-scoped
 | 2 | T2250 | [Write-Back R2 Sync](T2250-write-back-r2-sync.md) | Requires session pinning. Moves R2 sync from blocking-per-gesture to periodic background + explicit triggers. |
 | 3 | T40 | [Single Active Session Handoff](T40-single-active-session-handoff.md) | Requires session pinning (session invalidation) + write-back sync (sync-before-401). Orchestrates the device handoff: auto-signout, R2 sync, failure handling, frontend UX. |
 | 4 | T2260 | [Data Loss Detection & Recovery](T2260-data-loss-detection-recovery.md) | Fallback for when T40's sync-before-401 fails. Detects version gaps on reconnect, auto-grants credits, notifies user. |
+| 5 | T1537 | [Consolidate Achievement POSTs (fire-and-forget analytics)](T1537-consolidate-achievement-posts.md) | First consumer of the write-back persistence model. Requires T2250 — folding the achievement into the awaited `/actions` POST is only safe once the milestone analytics emit can be fire-and-forget (local SQLite authoritative, R2/Postgres deferred). Moved here from the Quests Latency epic, which proved the fix needs this foundation. |
 
 ## Shared Context
 
@@ -81,3 +82,4 @@ Device B: user signs in
 - [ ] Data loss detected via version comparison on reconnect (T2260)
 - [ ] User notified and credited when data loss occurs (T2260)
 - [ ] Export-specific pinning hack removed (T1190)
+- [ ] Achievement writes fold into the action POST with a fire-and-forget milestone emit; no per-gesture `/quests/achievements` POST (T1537)

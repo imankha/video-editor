@@ -1,7 +1,7 @@
 # T1537 Design — Consolidate Per-Gesture Achievement POSTs (+ fire-and-forget analytics)
 
-**Status:** DEFERRED — blocked on the future single-machine / session-affinity epic.
-**Branch:** `feature/perf-quests-latency` (Phase B, after T1536)
+**Status:** DEFERRED — Session Scaling epic, task 5; blocked on T2250 (Write-Back R2 Sync).
+**Branch:** own `feature/T1537-...` when revived (no longer Phase B of `feature/perf-quests-latency`)
 
 > 🚧 **Deferred 2026-06-18.** This design hinges on making the `record_milestone` emit
 > fire-and-forget — a **persistence-model change**. Per project decision, fire-and-forget /
@@ -11,8 +11,8 @@
 > lands. The contextvar-propagation risk (§Risks #1) should be re-validated then, since
 > single-machine affinity may change the safe approach (e.g. a local queue instead of
 > `create_task`).
-**Task:** [quests-latency/T1537-consolidate-achievement-posts.md](quests-latency/T1537-consolidate-achievement-posts.md)
-**Epic:** [quests-latency/EPIC.md](quests-latency/EPIC.md)
+**Task:** [session-scaling/T1537-consolidate-achievement-posts.md](session-scaling/T1537-consolidate-achievement-posts.md)
+**Epic:** [session-scaling/EPIC.md](session-scaling/EPIC.md) (moved from quests-latency)
 
 ## Decision driving this design (from attribution)
 

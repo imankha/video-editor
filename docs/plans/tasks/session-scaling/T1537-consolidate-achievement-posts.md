@@ -1,36 +1,41 @@
 # T1537: Consolidate Per-Gesture Achievement POSTs into the Action Endpoints
 
-**Status:** BLOCKED (deferred to the future single-machine / session-affinity epic)
+**Status:** BLOCKED — depends on T2250 (Write-Back R2 Sync), Session Scaling epic
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-06-17
 **Updated:** 2026-06-18
 
-> 🚧 **BLOCKED 2026-06-18.** Attribution (see Progress Log) showed the achievement POST's
-> ~610 ms is **synchronous `record_milestone`** (Postgres + user.sqlite), and the POST is
-> already fire-and-forget from the frontend (T1531) so the user feels none of it today.
-> Reducing the request count means folding the achievement into the **awaited** `/actions`
-> POST, which would drag that synchronous analytics latency onto the edit gesture — a
-> regression. The only clean fix is making the milestone emit **fire-and-forget**, which is
-> a **persistence-model change**. Per project decision, fire-and-forget / persistence-model
-> experiments are deferred until sessions are pinned to a single machine (future epic). So
-> T1537 waits for that epic. T1536 (the `user.sqlite` merge) already landed as a standalone
-> correctness cleanup. See [T1537-design.md](../T1537-design.md) (deferred) for the worked-out
-> approach to revive then.
+> 🚧 **BLOCKED 2026-06-18 — moved to the Session Scaling epic.** Attribution (see Progress
+> Log) showed the achievement POST's ~610 ms is **synchronous `record_milestone`** (Postgres
+> + user.sqlite), and the POST is already fire-and-forget from the frontend (T1531) so the
+> user feels none of it today. Reducing the request count means folding the achievement into
+> the **awaited** `/actions` POST, which would drag that synchronous analytics latency onto
+> the edit gesture — a regression. The only clean fix is making the milestone emit
+> **fire-and-forget**, which is a **persistence-model change**. Per project decision
+> ([[project_fire_and_forget_deferred]]), fire-and-forget / persistence experiments wait
+> until sessions are single-machine + write-back. This task therefore moved out of the
+> Quests Latency epic and into the **Session Scaling epic** as the first consumer of the
+> write-back model — it ships **after [T2250](T2250-write-back-r2-sync.md)**. T1536 (the
+> `user.sqlite` merge) already landed standalone as a correctness cleanup. See
+> [T1537-design.md](../T1537-design.md) for the ready-to-revive approach.
 
-## Coordination (Quests Latency epic — perf batch HAR 2026-06-17)
+## Coordination (Session Scaling epic)
 
-Epic task 2 of 2 in the **Quests Latency** epic ([EPIC.md](EPIC.md)). Part of the
-wider 4-task perf batch — see
-[perf-batch-har-2026-06-17.md](../perf-batch-har-2026-06-17.md) for the cross-branch plan.
+Task 5 in the **Session Scaling epic** ([EPIC.md](EPIC.md)) — **depends on
+[T2250](T2250-write-back-r2-sync.md)** (write-back R2 sync). It is the first feature to use
+the write-back persistence model: with local SQLite authoritative and R2/analytics deferred,
+the milestone emit can be fire-and-forget without the user feeling Postgres latency on the
+awaited edit gesture.
 
-- **Branch:** `feature/perf-quests-latency` (shared with T1536).
-- **Conversation:** C1 — this is **Phase B**, done **after T1536** in the same
-  conversation. Stage-2 (design approval required) before coding.
-- **Carry-over from T1536 (Phase A):** preserve T1536's single-`user.sqlite`-open
-  change in `get_progress`; do not reintroduce a second DB open when extracting
-  `record_achievement_internal`. Re-capture the `[PROFILE]` lines + per-gesture
-  request count **after** this task — that's the combined "after" for both.
+- **Branch:** its own `feature/T1537-...` when revived (the original
+  `feature/perf-quests-latency` carried only T1536).
+- **Stage 2 design approval required before coding** — design already drafted in
+  [T1537-design.md](../T1537-design.md); re-validate the contextvar/background-task approach
+  against whatever T2250 establishes (a local sync queue may replace `create_task`).
+- **History:** originally Phase B of the Quests Latency epic (paired with T1536 on
+  `feature/perf-quests-latency`). The HAR re-attribution during T1536 proved the fix needs
+  the write-back foundation, so it was relocated here.
 
 ## Problem
 

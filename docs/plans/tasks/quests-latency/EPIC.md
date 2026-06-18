@@ -3,7 +3,7 @@
 **Created:** 2026-06-18
 **Status:** PARTIAL — T1536 landed (correctness cleanup); T1537 BLOCKED/deferred.
 **Branch:** `feature/perf-quests-latency` (one branch for the whole epic)
-**Tasks:** T1536 (done) → T1537 (deferred to the single-machine / session-affinity epic)
+**Tasks:** T1536 (done) → ~~T1537~~ (moved to the [Session Scaling epic](../session-scaling/EPIC.md), task 5, blocked on T2250)
 
 > 🚧 **Epic outcome 2026-06-18.** Attribution corrected the premise: `/progress` had no
 > recoverable above-baseline server cost (T1536 is a correctness/DRY cleanup, not a latency
