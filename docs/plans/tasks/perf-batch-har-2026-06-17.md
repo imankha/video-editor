@@ -67,6 +67,12 @@ Cloudflare CDN Worker, and **requires user approval of a decision doc before any
 fix is coded**. It needs its own focused context and shares nothing with the
 quest work.
 
+> **OUTCOME (2026-06-18): closed WON'T-FIX after the spike.** Measured cold TTFF
+> = 266 ms (not 4.3s — that was a HAR misread), seeks ~300 ms even under socket
+> saturation, source faststart. No clamp can help; no fix coded. T2560 resolved
+> kept-skip, T2550/epic re-scoped off latency. See [T3760-decision.md](T3760-decision.md).
+> Branch `feature/perf-page-load` now carries docs only for C2.
+
 ### T3770 → its own conversation (C3)
 
 A ~0-LOC verification with a strong prior that it's dev-only React StrictMode
