@@ -4,7 +4,20 @@
 **Impact:** 9
 **Complexity:** 5
 **Created:** 2026-06-17
-**Updated:** 2026-06-17
+**Updated:** 2026-06-18
+
+## Coordination (perf batch — HAR 2026-06-17)
+
+Part of the 4-task perf batch. See
+[perf-batch-har-2026-06-17.md](perf-batch-har-2026-06-17.md) for the full plan.
+
+- **Branch:** `feature/perf-page-load` (shared with T3770; files are disjoint).
+- **Conversation:** C2 — solo. Spike → decide → **implement only after I approve
+  the decision doc**.
+- **Stay out of:** `quests.py`, `framing_action` (clips.py L319), and the four
+  gesture handlers — those belong to the T1536/T1537 conversation. This task lives
+  in `clips.py` L1625+, the `FramingScreen` video path, `games.py`, and possibly
+  the CDN Worker. No information needed from the other conversations.
 
 > **Urgency bumped 2026-06-17 (Impact 8 → 9):** a second HAR captured against **production** (`Downloads/app.reelballers.com.har`) confirms this is a real user-facing prod stall — and shows the over-fetch **recurs on every seek**, not just cold load. The user explicitly reports felt "video playback stalls." This is no longer just wasted bandwidth. See "New evidence (prod HAR)" below.
 
@@ -54,11 +67,42 @@ A **spike → decide → implement** task (don't pre-commit to one fix):
 
 Likely outcome: faststart guarantee (T2580) + edge range-clamping via the CDN Worker (un-skip T2560), making the framing clip appear in <1.5s instead of ~4.3s.
 
+## Measurement & merit gate
+
+**Quantities optimized:** (1) **time-to-first-frame** for the framing clip on cold
+load and after a mid-clip seek; (2) **bytes over-fetched past the clip window** per
+range request (the HAR shows ~1.03 GB to EOF per open-ended range — that's the number
+to crush).
+
+**Most-direct measurement:**
+
+1. **Bytes served per range = the deterministic merit proof.** The fix is a byte
+   clamp; test it as one. Issue a deep open-ended range (`Range: bytes=<deep-offset>-`,
+   like the HAR's `bytes=2021818368-`) against the chosen clamping layer (CDN Worker
+   or endpoint) and assert the response `Content-Length` is bounded to roughly the
+   clip window + padding, **not** N-to-EOF. Run it for a **cold-load offset AND a
+   seek-style offset** so the test proves seeks are clamped too (the prod HAR's whole
+   point). Capture the **before** number (full ~1 GB) and the **after** (bounded MB) in
+   the decision doc and Progress Log.
+2. **Time-to-first-frame = real-world confirmation.** Measure TTFF for the HAR clip
+   (project 46 / clip 48) before and after, same flow, explicit cold cache, via the
+   har-analysis skill on a fresh capture or a Playwright `browser_navigate` +
+   first-frame timing. Target **< 1.5s** (was ~4.3s). Re-measure once more **after a
+   mid-clip scrub** to confirm the seek path improved, not just cold load.
+
+**Merit gate (this task's decision IS a merit judgment):** the decision doc must put
+the measured over-fetch + TTFF numbers next to the complexity/risk of each option
+(faststart-only vs edge clamp vs MSE) and recommend the **lowest-complexity option
+that hits the targets**. Do not implement an edge Worker if faststart-on-upload alone
+gets TTFF under target with less risk — and don't ship anything whose after-capture
+doesn't beat the before-capture on both cold load and seek. A bounded `Content-Length`
+test with no measured TTFF improvement does not pass the gate.
+
 ## Context
 
 ### Relevant Files (REQUIRED)
-- `src/frontend/src/screens/FramingScreen.jsx` — `getClipVideoConfig` (~L385-420): uses the **direct R2 presigned URL as primary**, the bounded `/stream` proxy only as an error fallback.
-- `src/backend/app/routers/clips.py` — `get_clip_playback_url` (~L1624, returns presigned R2 URL); `stream_working_clip_bounded` (~L1665, the existing T1430 3-window MOOV-head/MOOV-tail/clip-window clamp that is now dormant on the happy path).
+- `src/frontend/src/screens/FramingScreen.jsx` — `getClipVideoConfig` (L385, verified 2026-06-18): uses the **direct R2 presigned URL as primary** (`data.url`, L399), the bounded `/stream` proxy only as the catch-block fallback (L408). The existing `clipVideoConfigCacheRef` (L378) dedups the playback-url fetch but does NOT bound the byte range. Don't flip primary/fallback.
+- `src/backend/app/routers/clips.py` — `get_clip_playback_url` (L1625, returns presigned R2 URL); `stream_working_clip_bounded` (L1666, the existing T1430 3-window MOOV-head/MOOV-tail/clip-window clamp that is now dormant on the happy path).
 - `src/backend/app/routers/games.py` — `get_game_video_url`, game `playback-url` / `stream`.
 - `src/frontend/src/utils/cacheWarming.js` — warming system (T2040), relevant to edge warming.
 - `docs/plans/tasks/r2-cdn/T2560-edge-video-worker.md` — the clamping task this re-opens.
@@ -94,7 +138,9 @@ Likely outcome: faststart guarantee (T2580) + edge range-clamping via the CDN Wo
 
 ## Acceptance Criteria
 
-- [ ] Decision doc comparing faststart (T2580) vs edge range-clamp (re-open T2560) vs MSE, citing the measured over-fetch numbers.
-- [ ] Framing clip cold-load measured before/after; target time-to-first-frame < 1.5s for the clip in the HAR.
+- [ ] Decision doc comparing faststart (T2580) vs edge range-clamp (re-open T2560) vs MSE, citing the measured over-fetch numbers, recommending the lowest-complexity option that hits target.
+- [ ] **Deterministic bounded-`Content-Length` test committed** — a deep open-ended range returns clip-window-bounded bytes (not N-to-EOF), verified for both a cold-load offset and a seek-style offset.
+- [ ] Framing clip cold-load measured before/after; target time-to-first-frame < 1.5s for the clip in the HAR (was ~4.3s). Numbers recorded in Progress Log.
+- [ ] Seek path re-measured after a mid-clip scrub; confirmed clamped (not just cold load).
 - [ ] Fix does NOT reintroduce the Fly.io proxy throughput cap (no flipping `/stream` back to primary).
 - [ ] T2560's "likely skipped" status explicitly resolved (kept-skip with rationale, or un-skipped and scoped).

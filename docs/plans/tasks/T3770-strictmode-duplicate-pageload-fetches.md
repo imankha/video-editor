@@ -4,7 +4,21 @@
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-06-17
-**Updated:** 2026-06-17
+**Updated:** 2026-06-18
+
+## Coordination (perf batch — HAR 2026-06-17)
+
+Part of the 4-task perf batch. See
+[perf-batch-har-2026-06-17.md](perf-batch-har-2026-06-17.md) for the full plan.
+
+- **Branch:** `feature/perf-page-load` (shared with T3760; files are disjoint).
+  Run this conversation **before** T3760 if sharing the branch, so the quick
+  verdict commits first. A throwaway solo branch is fine too.
+- **Conversation:** C3 — solo. **Verify against a production build before
+  changing any code.** Expected outcome: a documented no-op verdict.
+- **Stay out of:** `quests.py`, `clips.py`, and `FramingScreen`'s
+  `getClipVideoConfig` — those belong to the other conversations. If a real fix is
+  needed it lives in `App.jsx` / `projectDataStore.js` / `main.jsx`.
 
 ## Problem
 
@@ -21,6 +35,31 @@ This is a verification follow-up to **T2500 (Deduplicate Page-Load Fetches, DONE
 
 1. **Reproduce against a production build** (`npm run build` + preview) or with StrictMode temporarily disabled. If the duplicates vanish, it's StrictMode-only → close as a no-op, documented (the same way T2540 documented "HTTP/2 already active").
 2. **If duplicates persist in the prod build**, trace the call sites for `/api/projects/{id}` and `/api/bootstrap`. Add module-level in-flight promise dedup guards (the same pattern T2500/T2510 used for the store fetches).
+
+## Measurement & merit gate
+
+**Quantity optimized:** requests per resource on page load. HAR (dev) shows
+`/api/bootstrap` ×2, `/api/projects/46` ×3, `/api/health` ×2. Target in a prod build:
+**1 each**.
+
+**Most-direct measurement (the measurement IS the verdict here):**
+Count requests per resource with Playwright `browser_network_requests` (or a HAR),
+**before** = dev/StrictMode build, **after** = production build (`npm run build` +
+preview). Two outcomes:
+
+- **Prod build already shows 1 per resource** → StrictMode-only, harmless. Record the
+  before (dev ×2/×3) and after (prod ×1) counts in the Progress Log and **close as a
+  documented no-op** (like T2540's "HTTP/2 already active"). No code = no risk; the
+  measurement is what justifies doing nothing.
+- **Prod build still shows duplicates** → real wasted fetches. Add the in-flight
+  promise dedup guard (T2500 pattern) and commit a **deterministic test**: fire the
+  two mount paths and assert exactly one in-flight request per resource. Re-capture the
+  prod-build counts as the after-number.
+
+**Merit gate:** if the prod build is clean, the merit of the change is **zero** and the
+risk of adding dedup guards is real — so the correct, merit-respecting outcome is the
+no-op verdict, not a speculative guard. Only the measured persistence of duplicates in a
+prod build justifies touching code.
 
 ## Context
 
@@ -49,5 +88,6 @@ This is a verification follow-up to **T2500 (Deduplicate Page-Load Fetches, DONE
 
 ## Acceptance Criteria
 
+- [ ] **Before/after request-per-resource counts captured** (dev vs prod build) and recorded in the Progress Log — the measurement that backs the verdict.
 - [ ] Documented verdict: StrictMode-only (no-op) OR real duplicate fetch path found.
-- [ ] If real: dedup guard added; prod build shows exactly one request per resource on load.
+- [ ] If real: dedup guard added with a deterministic one-request-per-resource test; prod build shows exactly one request per resource on load.

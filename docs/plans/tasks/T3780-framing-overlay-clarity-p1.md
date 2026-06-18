@@ -1,58 +1,79 @@
-# T3780: Framing/Overlay Clarity P1 - Reduce On-Screen Noise
+# T3780: Framing/Overlay Clarity - Reduce On-Screen Noise
 
 **Status:** TODO
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-06-17
-**Updated:** 2026-06-17
+**Updated:** 2026-06-18
 
 ## Problem
 
-Split out of T3700 (Framing & Overlay Clarity). T3700's P0 shipped (zero-effort default crop ->
-valid export, non-blocking framing hint, "Export Highlight"/"Add Spotlight" button renames) and is
-marked DONE. T3700's P2 (Subtle/Bold presets, keyframe-affordance polish) was dropped as not worth
-doing. This task carries the remaining P1 work: lowering the cognitive load a non-technical parent
-faces in the Framing and Overlay editors.
+The Framing and Overlay editors surface technical readouts and jargon that mean nothing to a
+soccer parent and make the tool feel intimidating. Quest hints also disappear the moment a step
+completes, and one step's wayfinding copy is stale. This task strips the noise and fixes the copy.
 
 ## Solution
 
-### P1 deliverables
-1. **Hide pro readouts behind "Advanced."** The per-detection **confidence %** is shown on every box
-   ([PlayerDetectionOverlay.jsx:246](../../src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx#L246))
-   — a "73%" badge makes the tool look unsure to a parent. Hide it (and any pixel-coordinate
-   readouts, if present) behind an Advanced toggle that defaults off.
-2. **Replayable hints.** Quest step hints are one-shot (only render while the step is active in
-   QuestPanel). Add a "Show again" / replay affordance so a parent can re-read the current step's hint.
-3. **Deep-linked navigation.** Replace the text instruction "Home -> Drafts -> tap your reel" in the
-   `open_framing` step copy with a clickable deep link / "Open your reel" + "Library" nav.
+### 1. Remove the Overlay confidence % readout (frontend-only)
 
-### Related cleanups (cheap, outcome-first copy)
-4. **Stale `open_overlay` quest copy.** It still tells users to "click the card under Drafts to open
-   it in Overlay" ([questDefinitions.jsx](../../src/frontend/src/config/questDefinitions.jsx)), but
-   T3720 now auto-advances them into Overlay on export complete. The copy is misleading — reword to
-   match the auto-advance behavior.
-5. **CropLayer jargon placeholder.** [CropLayer.jsx:118](../../src/frontend/src/modes/framing/CropLayer.jsx#L118)
-   still reads "Set Crop Keyframes to animate crop window" — replace with outcome-first language
-   ("Keep your player in frame") consistent with P0.2.
+The audience is soccer moms and dads. The per-detection **confidence %** — the "73%" badge on
+every player box
+([PlayerDetectionOverlay.jsx:227-247](../../src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx#L227-L247),
+the "Confidence label" `rect` + `text`) — makes the tool look unsure. Remove the badge outright
+(no "Advanced" mode, no toggle, no replacement). The box outline and the "Click to highlight"
+hover hint must keep working.
+
+**Keep, deliberately:**
+- The top-right "N players detected" count badge
+  ([PlayerDetectionOverlay.jsx:279-289](../../src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx#L279-L289))
+  — it reassures the parent we found their players. Leave it as-is.
+- The Framing crop-dimension readout "356x634 @ (647, 170)"
+  ([CropOverlay.jsx:489-499](../../src/frontend/src/modes/framing/overlays/CropOverlay.jsx#L489-L499))
+  — already gated to non-production builds, so a parent never sees it in prod. Leave it as-is.
+
+### 2. Replayable quest hints
+
+Quest step hints are one-shot: [QuestPanel.jsx](../../src/frontend/src/components/QuestPanel.jsx)
+renders the current step's description (`STEP_DESCRIPTIONS[stepId]`) only inside the
+`isCurrent && (...)` block (~L321), so once a step completes the hint is gone. Add a "Show again"
+/ replay affordance scoped to the **current** step so a parent can re-read the active hint.
+
+### 3. Deep-linked navigation in `open_framing`
+
+[questDefinitions.jsx:109](../../src/frontend/src/config/questDefinitions.jsx#L109) — the
+`open_framing` description reads "Click the Home button (top-left), open Drafts, then tap your
+reel to start framing." Replace the text wayfinding with a clickable "Open your reel" / Library
+deep link that takes the parent straight in. `STEP_DESCRIPTIONS` entries are JSX, so an `onClick`
+is viable. Reuse the app's existing reel-open navigation (`editorStore` `setEditorMode` + how
+ProjectsScreen/FramingScreen open a reel) — do not build a parallel nav path.
+
+### 4. Stale `open_overlay` quest copy
+
+[questDefinitions.jsx:115](../../src/frontend/src/config/questDefinitions.jsx#L115) — still says
+"Click the reel's card under Drafts to open it in Overlay mode...", but framing now auto-advances
+the user into Overlay on export complete (T3720). The user is already in Overlay. Reword to tell
+them what to **do** there (add a spotlight to their player), not how to navigate.
+
+### 5. CropLayer jargon placeholder
+
+[CropLayer.jsx:118](../../src/frontend/src/modes/framing/layers/CropLayer.jsx#L118) reads
+"Set Crop Keyframes to animate crop window" — replace with outcome-first language
+("Keep your player in frame"), consistent with the rest of the framing copy.
 
 ## Context
 
 ### Relevant Files
-- `src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx` — confidence % display
+- `src/frontend/src/modes/overlay/overlays/PlayerDetectionOverlay.jsx` — confidence % badge to remove (L227-247); leave the "N players detected" count (L279-289)
 - `src/frontend/src/components/QuestPanel.jsx` — hint rendering (add replay)
-- `src/frontend/src/config/questDefinitions.jsx` — `open_framing` + `open_overlay` step copy
-- `src/frontend/src/modes/framing/CropLayer.jsx` — jargon placeholder
-- `src/frontend/src/components/ExportButtonView.jsx` — where an Advanced toggle would live
-
-### Related Tasks
-- Parent: T3700 (Framing/Overlay Clarity) — P0 done, P2 dropped, this is P1
-- T3720 (Auto-Advance) — shipped; the `open_overlay` copy fix reconciles with it
+- `src/frontend/src/config/questDefinitions.jsx` — `open_framing` (L109) + `open_overlay` (L115) step copy
+- `src/frontend/src/modes/framing/layers/CropLayer.jsx` — jargon placeholder (L118)
 
 ## Acceptance Criteria
 
-- [ ] Confidence % (and any pixel readouts) hidden by default behind an Advanced toggle.
+- [ ] Overlay confidence % badge removed; box outline + "Click to highlight" hover still work.
+- [ ] "N players detected" count and Framing crop-dims readout left unchanged.
 - [ ] Current quest step hint is replayable.
-- [ ] Post-export navigation offers a clickable "Open your reel" / "Library" deep link.
+- [ ] `open_framing` offers a clickable "Open your reel" / "Library" deep link (no text wayfinding).
 - [ ] `open_overlay` quest copy reflects the framing->overlay auto-advance (no "click the card under Drafts").
 - [ ] CropLayer placeholder uses outcome-first language (no "Set Crop Keyframes" jargon).
 - [ ] Frontend-only; no persistence changes.
