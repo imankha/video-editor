@@ -61,6 +61,9 @@ export function QuestPanel({ inline = false }) {
   const [claiming, setClaiming] = useState(false);
   const [celebrating, setCelebrating] = useState(false);  // Quest complete celebration
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  // T3780: the current step's hint can be hidden, then re-surfaced with "Show hint
+  // again". Scoped by step id so a new current step always starts with its hint shown.
+  const [dismissedHintStep, setDismissedHintStep] = useState(null);
   const prevCompletedRef = useRef(null);  // Track step count to detect new completions
   const panelRef = useRef(null);
 
@@ -319,9 +322,28 @@ export function QuestPanel({ inline = false }) {
                         {STEP_TITLES[stepId] || stepId}
                       </p>
                       {isCurrent && (
-                        <p className="quest-step-description text-sm mt-1 leading-snug">
-                          {STEP_DESCRIPTIONS[stepId]}
-                        </p>
+                        dismissedHintStep === stepId ? (
+                          <button
+                            type="button"
+                            onClick={() => setDismissedHintStep(null)}
+                            className="quest-step-description text-xs mt-1 underline decoration-dotted underline-offset-2 hover:text-white transition-colors"
+                          >
+                            Show hint again
+                          </button>
+                        ) : (
+                          <>
+                            <p className="quest-step-description text-sm mt-1 leading-snug">
+                              {STEP_DESCRIPTIONS[stepId]}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => setDismissedHintStep(stepId)}
+                              className="quest-step-description text-xs mt-1 opacity-70 underline decoration-dotted underline-offset-2 hover:opacity-100 hover:text-white transition-all"
+                            >
+                              Hide hint
+                            </button>
+                          </>
+                        )
                       )}
                       {/* Per-detection progress: one box per detected frame, ordered left-to-right
                           to match the timeline markers so a gap shows which one was missed. */}

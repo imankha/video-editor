@@ -180,10 +180,9 @@ export default function PlayerDetectionOverlay({
       >
         {detections.map((detection, index) => {
           // Support both formats:
-          // - Old API format: { bbox: {x, y, width, height}, confidence }
-          // - Region format: { x, y, width, height, confidence }
+          // - Old API format: { bbox: {x, y, width, height} }
+          // - Region format: { x, y, width, height }
           const bbox = detection.bbox || detection;
-          const confidence = detection.confidence;
 
           // Skip if missing required properties
           if (bbox.x === undefined || bbox.y === undefined) {
@@ -203,7 +202,6 @@ export default function PlayerDetectionOverlay({
           // Dimmed styling when layer is disabled
           const boxStroke = isDisabled ? '#6b7280' : (isHovered ? '#3b82f6' : '#22c55e');
           const boxFill = isDisabled ? 'transparent' : (isHovered ? 'rgba(59, 130, 246, 0.2)' : 'transparent');
-          const labelFill = isDisabled ? '#6b7280' : (isHovered ? '#3b82f6' : '#22c55e');
           const boxOpacity = isDisabled ? 0.3 : 1;
 
           return (
@@ -223,28 +221,6 @@ export default function PlayerDetectionOverlay({
                 onMouseLeave={() => !isDisabled && setHoveredIndex(null)}
                 onClick={(e) => !isDisabled && handlePlayerClick(detection, e)}
               />
-
-              {/* Confidence label */}
-              <rect
-                x={screenBox.x}
-                y={screenBox.y - 20}
-                width={50}
-                height={18}
-                fill={labelFill}
-                rx={3}
-                className="pointer-events-none"
-              />
-              <text
-                x={screenBox.x + 25}
-                y={screenBox.y - 7}
-                textAnchor="middle"
-                fill="white"
-                fontSize="11"
-                fontWeight="500"
-                className="pointer-events-none"
-              >
-                {Math.round(confidence * 100)}%
-              </text>
 
               {/* Click hint on hover - only when enabled */}
               {isHovered && !isDisabled && (

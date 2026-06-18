@@ -10,7 +10,7 @@
  * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Home, Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
+import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
@@ -29,17 +29,33 @@ function GreenSquare() {
   );
 }
 
-/** Inline progress chip — mirrors the card's strip: full green Framing, then an
- * Overlay segment on a gray track with blue filling only the bottom half (the
- * "started but not done" shape used on the card) */
-function MiniStrip() {
+/**
+ * "Open your reel" deep link — sends the parent straight to the Reel Drafts
+ * (Home) screen so they can tap their reel, instead of describing the clicks.
+ *
+ * Reuses the app's existing Home navigation: it points the URL at /home and
+ * fires the same popstate handler the browser back-button uses (registered in
+ * editorStore). That handler owns the clearSelection / fetchProjects / video
+ * reset side effects, so we don't duplicate a parallel nav path here.
+ */
+function navigateToReelDrafts() {
+  if (window.location.pathname !== '/home') {
+    window.history.pushState({ mode: 'project-manager' }, '', '/home');
+  }
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/** Clickable "Open your reel" pill — styled like the cyan section buttons */
+function OpenReelLink() {
   return (
-    <span className="inline-flex align-text-bottom mx-1 w-10 h-2.5 rounded-sm overflow-hidden border border-gray-500">
-      <span className="h-full bg-green-500" style={{ width: '75%' }} />
-      <span className="relative h-full bg-gray-600" style={{ width: '25%' }}>
-        <span className="absolute bottom-0 left-0 w-full bg-blue-400" style={{ height: '50%' }} />
-      </span>
-    </span>
+    <button
+      type="button"
+      onClick={navigateToReelDrafts}
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/10 transition-colors cursor-pointer"
+    >
+      <QIcon icon={Folder} className="text-cyan-400" />
+      Open your reel
+    </button>
   );
 }
 
@@ -106,13 +122,13 @@ export const STEP_DESCRIPTIONS = {
   annotate_brilliant: <>Set start time and end time precisely to isolate the action. Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> and tag it, maybe add a note. Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
-  open_framing: <>Click the <QIcon icon={Home} className="text-white" /> Home button (top-left), open <MiniButton variant="cyan"><QIcon icon={Folder} className="text-white" />{SECTION_NAMES.DRAFTS}</MiniButton>, then tap your reel to start framing.</>,
+  open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
   // Quest 3 — Spotlight Your Player
-  open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
+  open_overlay: "You're in Overlay mode now. Add a spotlight so your player pops in the highlight.",
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
   choose_color: 'Pick a highlight color that pops against the jerseys.',
   choose_shape: 'Spotlight around your player, or a glow on the ground? Pick Body or Ground.',
