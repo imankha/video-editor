@@ -174,6 +174,39 @@ guards green.
 
 ### Progress Log
 
+**2026-06-18 (achievement-POST attribution — Phase B start)**: Attributed the ~610 ms
+server `wait` on `POST /quests/achievements/{key}` (HAR: 608 / 612 ms).
+
+- **The cost is synchronous analytics, not DB opens.** `record_achievement`
+  ([quests.py:362](../../../../src/backend/app/routers/quests.py#L362)) calls
+  `record_milestone(...)` **outside** its timed block.
+  `record_milestone` ([analytics.py:225](../../../../src/backend/app/analytics.py#L225))
+  runs on the request thread and does: `get_pg()` + **3–4 Fly Postgres round-trips**
+  (INSERT `user_actions`, UPDATE `user_segments`, SELECT `origin`) **plus a second DB open**
+  `get_user_db_connection` → user.sqlite INSERT `user_action_log` + commit
+  ([analytics.py:273-281](../../../../src/backend/app/analytics.py#L273)).
+- `/progress` is ~280 ms warm (same session) precisely because it does **not** call
+  `record_milestone`. The achievement POST's profile.sqlite INSERT (the only part
+  `[SLOW ACHIEVEMENT]` times) is trivial — **the milestone write is untimed, so the existing
+  instrumentation misses the real cost** (per the performance-optimization skill: fix
+  attribution first).
+- The achievement POST is in `SKIP_SYNC_PATHS`
+  ([db_sync.py:286](../../../../src/backend/app/middleware/db_sync.py#L286)), so it does **not**
+  pay an R2 push — ruling that out. `ensure_database` only restores from R2 on first access
+  ([database.py:498-506](../../../../src/backend/app/database.py#L498)), so warm opens are cheap —
+  ruling cold restore out too.
+
+**⚠️ Design implication for this task (load-bearing):** folding
+`record_achievement_internal` into the action POST is the *request-count* win — but if the
+helper keeps the **synchronous** `record_milestone` emit, we transfer ~300–600 ms of Postgres
++ user.sqlite latency onto the `/actions` POST, **the request the user waits on for the edit
+to apply**. That would be a latency *regression* on the hot path. So the design must take the
+milestone analytics emit **off the request path** (background task / `asyncio.to_thread` /
+fire-and-forget) — or fold only the cheap `INSERT OR IGNORE` achievement row and queue the
+milestone async. The "0 extra DB opens" claim holds only for the achievement INSERT, not for
+`record_milestone`'s own `get_pg()` + user.sqlite open. **This needs to be resolved in the
+Stage-2 design before coding.**
+
 **2026-06-18**: Code re-verified for the perf-batch coordination. Confirmed connection reuse for BOTH handlers (`framing_action` clips.py L346, `overlay_action` overlay.py L285 — same `get_db_connection()` profile.sqlite). **Found the load-bearing gotcha (Finding B):** `questStore.recordAchievement` also triggers `fetchProgress({force:true})` on success, so deleting the four calls without a replacement leaves the quest panel un-refreshed — added the `refreshProgressForGesture` requirement. Assigned to branch `feature/perf-quests-latency`, Phase B after T1536.
 
 **2026-06-17**: Created from prod HAR + code investigation. Mapping confirmed deterministic; action endpoints already carry the needed data. Identified that `framing_action` can write the achievement on its existing profile.sqlite connection (no extra DB open). Lifecycle achievements (`opened_*`, `overlay_players_assigned`, gallery/annotation views) explicitly excluded.
