@@ -1,10 +1,17 @@
 # T3780: Framing/Overlay Clarity - Reduce On-Screen Noise
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-06-17
 **Updated:** 2026-06-18
+
+> **Shipped (deploy 2026-06-18), with one divergence:** criteria 1, 2, 4, 5(partial), 6 met
+> — confidence % badge removed, count/crop readouts left intact, `open_framing` "Open your reel"
+> deep link added, CropLayer placeholder rewritten outcome-first. **Criterion 3 (replayable quest
+> hint) was intentionally dropped** during review (commit `94e03f8a`); QuestPanel reverted to
+> always showing the current step's hint. The `open_overlay` reword (criterion 5) was minimal —
+> the copy still references the Drafts card; accepted as-is.
 
 ## Problem
 

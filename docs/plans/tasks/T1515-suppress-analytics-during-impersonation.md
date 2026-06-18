@@ -1,10 +1,18 @@
 # T1515: Suppress Analytics During Admin Impersonation
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-06-16
-**Updated:** 2026-06-16
+**Updated:** 2026-06-18
+
+> **Shipped (deploy 2026-06-18):** request-path suppression complete — `_current_impersonator_id`
+> ContextVar (user_context.py) set in db_sync middleware, guards `record_milestone()`,
+> `update_session()`, `close_session()`; frontend `track()` early-returns on `authStore.impersonator`;
+> unit + integration tests in `test_user_activity_sync.py`. **Gap (criterion 5):** the export-job
+> background-worker path (`export_completed`/`export_failed` fired outside the request ContextVar)
+> was neither implemented nor documented. Split into **T1516** to stamp an `impersonated` flag on
+> the export job and skip the completion milestone.
 
 ## Problem
 
