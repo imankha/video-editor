@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, Pencil, Trash2, ArrowLeft, Check } from 'lucide-react';
+import { X, Pencil, Trash2, ArrowLeft, Check, ChevronDown } from 'lucide-react';
 import { Button, ConfirmationDialog } from './shared';
 import { useProfileStore } from '../stores';
 import { SUPPORTED_SPORTS, sportDisplayName, sportStoredValue, sportEmoji } from '../modes/annotate/constants/tagRegistry';
@@ -41,26 +41,38 @@ const INLINE_SPORT_OTHER = '__other__';
  */
 function InlineSportSelect({ sport, onChange, onPickOther }) {
   const isKnown = !sport || SUPPORTED_SPORTS.some(s => s.id === sport);
+  const label = isKnown ? (sportDisplayName(sport) || 'Soccer') : sport;
 
   return (
-    <select
-      value={isKnown ? (sport || '') : sport}
-      onChange={(e) => {
-        const next = e.target.value;
-        if (next === INLINE_SPORT_OTHER) onPickOther();
-        else onChange(next);
-      }}
-      onClick={(e) => e.stopPropagation()}
-      className="bg-gray-700 border border-gray-600 rounded-md text-white text-xs px-2 py-1 max-w-[8.5rem] focus:outline-none focus:border-purple-500"
-      title="Change sport"
-    >
-      {/* Custom sport (not in the supported list) stays selectable */}
-      {!isKnown && <option value={sport}>{`${sportEmoji(sport)} ${sport}`}</option>}
-      {SUPPORTED_SPORTS.map(s => (
-        <option key={s.id} value={s.id}>{`${sportEmoji(s.id)} ${s.name}`}</option>
-      ))}
-      <option value={INLINE_SPORT_OTHER}>Other...</option>
-    </select>
+    // A big, tappable pill. The native <select> sits invisibly on top so we get
+    // the OS-native picker on mobile (and full a11y) while styling freely below.
+    <div className="relative flex-shrink-0 group">
+      <div className="flex items-center gap-2 bg-gray-700 group-hover:bg-gray-600 border border-gray-600 group-focus-within:border-purple-500 rounded-xl pl-2.5 pr-2 py-2 transition-colors">
+        <span className="text-2xl leading-none" aria-hidden>{sportEmoji(sport)}</span>
+        {/* Emoji alone carries the meaning on narrow screens; show the name when there's room */}
+        <span className="hidden sm:inline text-sm font-semibold text-white max-w-[6.5rem] truncate">{label}</span>
+        <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />
+      </div>
+      <select
+        value={isKnown ? (sport || '') : sport}
+        onChange={(e) => {
+          const next = e.target.value;
+          if (next === INLINE_SPORT_OTHER) onPickOther();
+          else onChange(next);
+        }}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Change sport"
+        title="Change sport"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+      >
+        {/* Custom sport (not in the supported list) stays selectable */}
+        {!isKnown && <option value={sport}>{`${sportEmoji(sport)} ${sport}`}</option>}
+        {SUPPORTED_SPORTS.map(s => (
+          <option key={s.id} value={s.id}>{`${sportEmoji(s.id)} ${s.name}`}</option>
+        ))}
+        <option value={INLINE_SPORT_OTHER}>Other...</option>
+      </select>
+    </div>
   );
 }
 
