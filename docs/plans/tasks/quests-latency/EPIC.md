@@ -1,9 +1,17 @@
 # EPIC: Quests Latency
 
 **Created:** 2026-06-18
-**Status:** TODO
+**Status:** PARTIAL — T1536 landed (correctness cleanup); T1537 BLOCKED/deferred.
 **Branch:** `feature/perf-quests-latency` (one branch for the whole epic)
-**Tasks:** T1536 → T1537 (in order)
+**Tasks:** T1536 (done) → T1537 (deferred to the single-machine / session-affinity epic)
+
+> 🚧 **Epic outcome 2026-06-18.** Attribution corrected the premise: `/progress` had no
+> recoverable above-baseline server cost (T1536 is a correctness/DRY cleanup, not a latency
+> win), and the real hotspot — the achievement POST's synchronous `record_milestone` — can
+> only be fixed by making analytics **fire-and-forget**, a persistence-model change the
+> project is deferring until sessions are pinned to a single machine. So **T1537 is parked**
+> for that future epic and the combined before/after measurement won't happen here. T1536
+> stands alone.
 
 ## Why this is an epic
 

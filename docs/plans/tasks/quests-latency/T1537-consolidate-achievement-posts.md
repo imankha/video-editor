@@ -1,10 +1,22 @@
 # T1537: Consolidate Per-Gesture Achievement POSTs into the Action Endpoints
 
-**Status:** TODO
+**Status:** BLOCKED (deferred to the future single-machine / session-affinity epic)
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-06-17
 **Updated:** 2026-06-18
+
+> 🚧 **BLOCKED 2026-06-18.** Attribution (see Progress Log) showed the achievement POST's
+> ~610 ms is **synchronous `record_milestone`** (Postgres + user.sqlite), and the POST is
+> already fire-and-forget from the frontend (T1531) so the user feels none of it today.
+> Reducing the request count means folding the achievement into the **awaited** `/actions`
+> POST, which would drag that synchronous analytics latency onto the edit gesture — a
+> regression. The only clean fix is making the milestone emit **fire-and-forget**, which is
+> a **persistence-model change**. Per project decision, fire-and-forget / persistence-model
+> experiments are deferred until sessions are pinned to a single machine (future epic). So
+> T1537 waits for that epic. T1536 (the `user.sqlite` merge) already landed as a standalone
+> correctness cleanup. See [T1537-design.md](../T1537-design.md) (deferred) for the worked-out
+> approach to revive then.
 
 ## Coordination (Quests Latency epic — perf batch HAR 2026-06-17)
 
@@ -173,6 +185,15 @@ guards green.
 5. [ ] Tests: backend asserts each action endpoint writes the achievement row + emits the milestone (and `set_segment_speed` with speed ≥ 1 does NOT), and that an achievement-write failure does not fail the action; frontend asserts each gesture fires exactly ONE POST (the action) and still refreshes quest progress.
 
 ### Progress Log
+
+**2026-06-18 (BLOCKED — deferred to single-machine epic)**: Took the attribution below to
+Stage-2 design ([T1537-design.md](../T1537-design.md)). The viable design requires making the
+`record_milestone` emit **fire-and-forget** (otherwise folding it into the awaited `/actions`
+POST regresses the edit gesture by ~300–600 ms). Per project decision, fire-and-forget /
+persistence-model changes are deferred until sessions are tied to a single machine (future
+epic) — so this task is parked there. Net effect of the Quests Latency epic for now: **T1536
+only** (correctness/DRY cleanup; no measured latency win). Phase B does not ship in this
+conversation.
 
 **2026-06-18 (achievement-POST attribution — Phase B start)**: Attributed the ~610 ms
 server `wait` on `POST /quests/achievements/{key}` (HAR: 608 / 612 ms).
