@@ -23,6 +23,35 @@ wider 4-task perf batch — see
 
 ## Problem
 
+> ⚠️ **CORRECTED 2026-06-18 (HAR re-attribution during implementation).** The original
+> framing below over-attributed the cost to `/progress` and to this task's merge. The
+> real numbers (see Progress Log "HAR re-attribution") are:
+>
+> | `GET /progress` (HAR) | total | `blocked` (client queue) | `wait` (server) |
+> |---|---|---|---|
+> | call A | 229 | 26 | **202** |
+> | call B | 308 | 25 | **282** |
+> | call C (the "699 ms") | **699** | **312** | **386** |
+> | call D | 397 | 29 | **368** |
+>
+> - The headline **699 ms is NOT all server time** — it is **312 ms browser `blocked`
+>   (HTTP/2 connection queueing, because two `/progress` fired back-to-back) + 386 ms
+>   server `wait`**. The original "≈100% wait" read the `total` column, not `wait`.
+> - `/progress` **server** time is ~200–386 ms — i.e. ≈ the accepted ~200 ms R2/session
+>   baseline plus noise. The handler body is 4–6 ms warm. **There is no ~400–500 ms of
+>   above-baseline server cost in `/progress` to recover, and the redundant `user.sqlite`
+>   open was never it** (`ensure_user_database` caches per process → the 2nd open is ~2 ms,
+>   not a 2nd R2 restore).
+> - The genuine server hotspot is the **achievement POST** (`wait` ≈ 608–612 ms, ~400 ms
+>   above baseline) — that is **T1537's** target, not this task's.
+>
+> **This task is therefore a correctness / DRY cleanup (one fewer DB open, de-duplicated
+> double-open in `quests.py` + `bootstrap.py`), NOT a measured latency win.** It is safe
+> to land on those grounds. The latency lever for the quests loop is T1537 (fewer calls →
+> less client `blocked` queueing + fewer ~610 ms achievement writes).
+
+_Original framing (kept for history):_
+
 In a prod HAR (`Downloads/app.reelballers.com.har`, 2026-06-17) the quest endpoints are
 the slowest non-video API calls in the framing/overlay loop — and they fire on nearly
 every gesture:
@@ -192,6 +221,25 @@ drops. If it's within noise, drop Step 3 — the branch adds risk for no gain
 
 ### Progress Log
 
+**2026-06-18 (HAR re-attribution — latency claim retracted)**: Parsed the prod HAR per
+endpoint (`GET /quests/progress` ×4, `POST /achievements` ×2). Findings:
+
+- `GET /progress` totals 229 / 308 / **699** / 397 ms decompose to `blocked` (client
+  HTTP/2 queueing) 26 / 25 / **312** / 29 ms and server `wait` 202 / 282 / **386** / 368 ms.
+  The "699 ms" is **312 ms client blocked + 386 ms server wait**, not 699 ms of server work.
+- `/progress` server `wait` (~200–386 ms) ≈ the accepted ~200 ms baseline + noise; handler
+  body is 4–6 ms warm. **No above-baseline server cost to recover here.**
+- `POST /achievements` server `wait` = **608 / 612 ms** (~400 ms above baseline) — the real
+  quests-loop hotspot, and T1537's target.
+- The 312 ms `blocked` spike came from two `/progress` firing back-to-back → connection
+  queueing; reducing request count (T1537) attacks it directly.
+
+**Conclusion:** T1536's `user.sqlite` merge is a correctness/DRY cleanup (one fewer open,
+de-duplicated in `quests.py` + `bootstrap.py`), **not a measured latency win**. The
+acceptance criterion "above-baseline server time measurably reduced" is **not met and is
+retracted** — there was no ~400–500 ms to recover on `/progress`. Keeping the change on
+correctness grounds; latency work moves to T1537 (achievement POST + request count).
+
 **2026-06-18 (implementation — Step 2 landed)**: Implemented the `user.sqlite`
 merge on branch `feature/perf-quests-latency`.
 
@@ -229,6 +277,6 @@ merge on branch `feature/perf-quests-latency`.
 - [ ] **Deterministic connection-count test committed** (asserts user.sqlite opened exactly once; was 2). This is the merit proof.
 - [ ] Before/after `[PROFILE]` lines captured for `GET /quests/progress` (attribution-first) and recorded in the Progress Log.
 - [ ] `/progress` opens user.sqlite at most once per request.
-- [ ] Above-baseline server time for `/progress` measurably reduced (target: within ~150 ms of the ~200 ms baseline on warm cache). **If not measurably reduced, the conditional Step 3 is dropped, not forced.**
+- [x] ~~Above-baseline server time for `/progress` measurably reduced~~ **RETRACTED after HAR re-attribution (2026-06-18):** there was no ~400–500 ms above-baseline server cost on `/progress` to recover (the 699 ms was 312 ms client `blocked` + 386 ms server `wait` ≈ baseline). Step 3 dropped. Change retained as a correctness/DRY cleanup, not a latency fix.
 - [ ] No change to persistence model or fire-and-forget behavior.
 - [ ] Backend tests pass.

@@ -7,10 +7,25 @@
 
 ## Why this is an epic
 
+> ⚠️ **HAR re-attribution 2026-06-18 (during T1536 implementation).** A per-endpoint read
+> of the HAR corrected the framing below:
+> - `GET /quests/progress` **server `wait`** is ~200–386 ms (≈ baseline + noise). The
+>   "699 ms" was **312 ms client `blocked` (HTTP/2 queueing) + 386 ms server `wait`**, not
+>   699 ms of server work. T1536's `user.sqlite` merge is a **correctness/DRY cleanup, not
+>   a latency win** — there was no above-baseline server cost on `/progress` to recover.
+> - `POST /quests/achievements/{key}` **server `wait` ≈ 608–612 ms** (~400 ms above
+>   baseline) — this is the **real** quests-loop hotspot and **T1537's** measured target.
+> - The client `blocked` queueing came from firing several quest calls back-to-back →
+>   reducing request count (T1537) attacks it directly.
+>
+> Net: the epic's latency value lives in **T1537** (cheaper + fewer achievement writes);
+> T1536 stays as a low-risk structural cleanup that de-duplicates the double-open and
+> gives T1537 a clean single-connection base.
+
 The 2026-06-17 prod HAR (`Downloads/app.reelballers.com.har`) showed the quest
 endpoints are the slowest non-video API calls in the framing/overlay loop and fire on
-nearly every gesture (`GET /quests/progress` up to 699 ms, `POST
-/quests/achievements/{key}` up to 636 ms — ~100% server `wait`). Two changes attack
+nearly every gesture (`GET /quests/progress` up to 699 ms total, `POST
+/quests/achievements/{key}` ~636 ms total). Two changes attack
 this from different angles in the **same subsystem** (`quests.py` + the achievement
 write path), so they ship together on one branch, in one conversation, with one
 combined before/after measurement:
@@ -75,8 +90,9 @@ task's "Measurement & merit gate" section and the batch-wide policy in the
 [coordination doc](../perf-batch-har-2026-06-17.md#measurement-discipline--merit-gate).
 
 - **T1536:** `user.sqlite` opens per `/progress`: **2 → 1** (deterministic connection-count
-  test), confirmed by `[PROFILE]` lines. Step 3 (skip `profile.sqlite`) ships **only** if
-  profiling proves it moves the number.
+  test). **Merit = correctness, not latency** (HAR re-attribution showed no above-baseline
+  server cost on `/progress`). Step 3 (skip `profile.sqlite`) **dropped** — profiling did
+  not show it moving the number.
 - **T1537:** POSTs per gesture **2 → 1** (frontend mock) + **0 extra DB opens** (backend
   spy), confirmed by a HAR/Playwright request count.
 
