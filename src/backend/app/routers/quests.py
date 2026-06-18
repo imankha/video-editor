@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.user_db import grant_credits, get_credit_balance, get_user_db_connection, mark_quest_completed, get_completed_quest_ids
+from ..services.user_db import grant_credits, get_credit_balance, mark_quest_completed, get_completed_and_claimed_quest_ids
 from ..quest_config import QUEST_DEFINITIONS, QUEST_BY_ID
 
 logger = logging.getLogger(__name__)
@@ -164,16 +164,6 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
     return steps
 
 
-def _get_claimed_quest_ids(user_id: str) -> set:
-    """Check which quests have had rewards claimed. Single query instead of N+1."""
-    with get_user_db_connection(user_id) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT reference_id FROM credit_transactions WHERE source = 'quest_reward'"
-        )
-        return {row['reference_id'] for row in cursor.fetchall()}
-
-
 @router.get("/definitions")
 async def get_definitions():
     """Return quest structure for the frontend. No auth required."""
@@ -217,10 +207,12 @@ async def get_progress():
         _t_total = time.perf_counter()
         _t = time.perf_counter()
 
-    completed_quest_ids = get_completed_quest_ids(user_id)
+    # T1536: completed + claimed read on a SINGLE user.sqlite connection (was two
+    # separate opens, each a potential cold R2 restore).
+    completed_quest_ids, claimed_quest_ids = get_completed_and_claimed_quest_ids(user_id)
 
     if PROFILING_ENABLED:
-        _t_completed = time.perf_counter() - _t
+        _t_user_read = time.perf_counter() - _t
 
     with get_db_connection() as conn:
         if PROFILING_ENABLED:
@@ -228,13 +220,6 @@ async def get_progress():
         all_steps = _check_all_steps(user_id, conn, skip_quest_ids=completed_quest_ids)
         if PROFILING_ENABLED:
             _t_check_steps = time.perf_counter() - _t
-
-    # Batch reward claim check — single query instead of N+1
-    if PROFILING_ENABLED:
-        _t = time.perf_counter()
-    claimed_quest_ids = _get_claimed_quest_ids(user_id)
-    if PROFILING_ENABLED:
-        _t_claimed = time.perf_counter() - _t
 
     quests = []
     for qdef in QUEST_DEFINITIONS:
@@ -265,9 +250,8 @@ async def get_progress():
         total_ms = (time.perf_counter() - _t_total) * 1000
         logger.info(
             f"[PROFILE] GET /quests/progress: {total_ms:.0f}ms "
-            f"(completed_ids: {_t_completed*1000:.0f}ms, "
-            f"check_steps: {_t_check_steps*1000:.0f}ms, "
-            f"claimed_rewards: {_t_claimed*1000:.0f}ms [1 batch query])"
+            f"(user_read: {_t_user_read*1000:.0f}ms [completed+claimed, 1 open], "
+            f"check_steps: {_t_check_steps*1000:.0f}ms)"
         )
 
     return {"quests": quests}

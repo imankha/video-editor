@@ -192,6 +192,34 @@ drops. If it's within noise, drop Step 3 — the branch adds risk for no gain
 
 ### Progress Log
 
+**2026-06-18 (implementation — Step 2 landed)**: Implemented the `user.sqlite`
+merge on branch `feature/perf-quests-latency`.
+
+- **Merit proof (deterministic connection-count test):** `tests/test_quests_progress_connections.py`
+  spies on `user_db.get_user_db_connection` and `quests.get_db_connection`. Confirmed
+  **2 user.sqlite opens on baseline** (test failed with `got 2` on unmodified code), then
+  **1 after** the merge. profile.sqlite stays at 1. Test passes.
+- **Step 2:** added `get_completed_and_claimed_quest_ids(user_id) -> (set, set)` in
+  `user_db.py` (one connection, two SELECTs: `completed_quests` + `quest_reward`
+  `credit_transactions`). Rewired `get_progress` (quests.py) and also the identical
+  double-open in `bootstrap.py` (same root cause, hot initial-load endpoint) to the
+  helper. Deleted `_get_claimed_quest_ids` (now unused). `[PROFILE]` block collapsed the
+  two user spans into one `user_read` span.
+- **Attribution / `[PROFILE]` capture (local, R2_ENABLED=true):**
+  - *Before (baseline):* `GET /quests/progress: 1301ms (completed_ids: 986ms, check_steps: 2ms, claimed_rewards: 2ms)` cold; `6ms (completed_ids: 1ms, check_steps: 0ms, claimed_rewards: 2ms)` warm.
+  - *After:* `GET /quests/progress: 1677ms (user_read: 785ms [completed+claimed, 1 open], check_steps: 12ms)` cold; `4ms (user_read: 2ms [completed+claimed, 1 open], check_steps: 0ms)` warm.
+  - The cold first call is dominated by the one-time R2 download (cached in
+    `_initialized_user_dbs` per process), so the redundant second open was paying
+    connection-setup overhead, not a second full restore, within a request. The
+    structural win (one fewer open = strictly less work, and one fewer *potential* cold
+    restore) is proven exactly by the connection-count test; wall-clock here is
+    R2-network-noisy and warm-tiny, which is why the deterministic counter is the merit
+    proof.
+- **Step 3 (conditional skip of profile.sqlite): DROPPED.** The `[PROFILE]` split does
+  not show the cold restore dominating *per request* (it's a one-time per-process cost);
+  skipping `_check_all_steps` for fully-completed users adds a branch for no measurable
+  warm-path gain. Per [[project_t1590_not_worth_risk]], not forced.
+
 **2026-06-18**: Code re-verified for the perf-batch coordination. Confirmed the exact two user.sqlite reads (`completed_quests` + `credit_transactions`) and that both use `get_user_db_connection`; specified the `get_completed_and_claimed_quest_ids` merge helper (Step 2 / Finding A). Assigned to branch `feature/perf-quests-latency`, Phase A before T1537.
 
 **2026-06-17**: Created from prod HAR analysis. Confirmed via code read that `_check_all_steps` computes no dead quests (all 11 achievement keys map to live steps post-T3700); the latency is DB-open/R2-restore overhead, dominated by `/progress` opening user.sqlite twice + profile.sqlite once. Documented the prod log-access gotcha (X-User-ID disabled in prod; rb_session cookie only).

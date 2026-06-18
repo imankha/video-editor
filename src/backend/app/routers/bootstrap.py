@@ -51,13 +51,13 @@ async def bootstrap():
 
     # Quest progress
     from ..quest_config import QUEST_DEFINITIONS
-    from ..services.user_db import get_completed_quest_ids
-    from ..routers.quests import _check_all_steps, _get_claimed_quest_ids
+    from ..services.user_db import get_completed_and_claimed_quest_ids
+    from ..routers.quests import _check_all_steps
 
-    completed_quest_ids = get_completed_quest_ids(user_id)
+    # T1536: single user.sqlite open for completed + claimed (was two).
+    completed_quest_ids, claimed_quest_ids = get_completed_and_claimed_quest_ids(user_id)
     with get_db_connection() as conn:
         all_steps = _check_all_steps(user_id, conn, skip_quest_ids=completed_quest_ids)
-    claimed_quest_ids = _get_claimed_quest_ids(user_id)
 
     quests_progress = []
     for qdef in QUEST_DEFINITIONS:

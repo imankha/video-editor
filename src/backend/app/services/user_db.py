@@ -634,6 +634,32 @@ def get_completed_quest_ids(user_id: str) -> set[str]:
         return {row["quest_id"] for row in rows}
 
 
+def get_completed_and_claimed_quest_ids(user_id: str) -> tuple[set[str], set[str]]:
+    """Return (completed_quest_ids, claimed_quest_ids) in a single user.sqlite open.
+
+    T1536: GET /quests/progress previously opened user.sqlite twice — once for
+    completed_quests and once for the quest_reward credit_transactions. Each open
+    can pay a cold R2 restore (~200ms+), so the two reads are merged onto one
+    connection here.
+
+    - completed: SELECT quest_id FROM completed_quests (was get_completed_quest_ids)
+    - claimed:   SELECT reference_id FROM credit_transactions WHERE source = 'quest_reward'
+                 (was quests._get_claimed_quest_ids)
+    """
+    with get_user_db_connection(user_id) as conn:
+        completed = {
+            row["quest_id"]
+            for row in conn.execute("SELECT quest_id FROM completed_quests").fetchall()
+        }
+        claimed = {
+            row["reference_id"]
+            for row in conn.execute(
+                "SELECT reference_id FROM credit_transactions WHERE source = 'quest_reward'"
+            ).fetchall()
+        }
+        return completed, claimed
+
+
 def backfill_completed_quests(user_id: str) -> int:
     """Backfill completed_quests from credit_transactions quest_reward rows.
 
