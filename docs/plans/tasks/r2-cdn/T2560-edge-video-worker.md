@@ -13,6 +13,8 @@ T3250 drops bounded-range clamping for video streaming. The clamping was origina
 
 **Evaluate T3250 production metrics before starting this task.** If playback works smoothly without clamping and bandwidth usage is acceptable, skip this task entirely.
 
+> **Gate condition now MET (2026-06-17).** A prod HAR (`Downloads/app.reelballers.com.har`) shows playback does NOT work smoothly without clamping: the direct-R2 path issues open-ended ranges (`bytes=N-`) that R2 serves to EOF (~1.03 GB offered for an 8s clip), and this **recurs on every seek** (three backward-stepping ranges observed; first streamed 55.8s), producing user-reported stalls. The original "likely skip" rationale was about **egress cost** (free on R2), but the live problem is **latency on cold deep-offset reads** — a different axis. This task should be reconsidered/un-skipped. Tracked from **T3760**, which owns the spike→decide.
+
 ## Problem
 
 Without byte-range clamping, the browser can request any byte range from a 2-3GB game video when playing an 8-second clip. While native video players only buffer ahead ~30-60s, this is still more data than the 3-window clamping would serve (moov + clip region + padding).
