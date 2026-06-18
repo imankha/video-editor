@@ -28,6 +28,43 @@ function getNextColor(usedColors) {
 }
 
 // ---------------------------------------------------------------------------
+// Inline Sport Select (list row)
+// ---------------------------------------------------------------------------
+
+// Sentinel value: picking it opens the full Edit form for a custom ("Other") sport.
+const INLINE_SPORT_OTHER = '__other__';
+
+/**
+ * Compact sport dropdown shown directly on each profile row, so the most common
+ * edit (changing the sport) needs no extra screen and no profile name.
+ * Custom/unknown sports stay selectable; "Other..." routes to the Edit form.
+ */
+function InlineSportSelect({ sport, onChange, onPickOther }) {
+  const isKnown = !sport || SUPPORTED_SPORTS.some(s => s.id === sport);
+
+  return (
+    <select
+      value={isKnown ? (sport || '') : sport}
+      onChange={(e) => {
+        const next = e.target.value;
+        if (next === INLINE_SPORT_OTHER) onPickOther();
+        else onChange(next);
+      }}
+      onClick={(e) => e.stopPropagation()}
+      className="bg-gray-700 border border-gray-600 rounded-md text-white text-xs px-2 py-1 max-w-[8.5rem] focus:outline-none focus:border-purple-500"
+      title="Change sport"
+    >
+      {/* Custom sport (not in the supported list) stays selectable */}
+      {!isKnown && <option value={sport}>{`${sportEmoji(sport)} ${sport}`}</option>}
+      {SUPPORTED_SPORTS.map(s => (
+        <option key={s.id} value={s.id}>{`${sportEmoji(s.id)} ${s.name}`}</option>
+      ))}
+      <option value={INLINE_SPORT_OTHER}>Other...</option>
+    </select>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Color Selector
 // ---------------------------------------------------------------------------
 
@@ -94,27 +131,6 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
       {/* Body */}
       <div className="p-4 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">Profile Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={namePlaceholder}
-            maxLength={30}
-            autoFocus
-            className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
-              isDuplicate ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-purple-500'
-            }`}
-          />
-          {isDuplicate && (
-            <p className="text-red-400 text-xs mt-1">A profile with this name already exists</p>
-          )}
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
-          <ColorSelector value={color} onChange={setColor} usedColors={usedColors} />
-        </div>
-        <div>
           <label className="block text-sm font-medium text-gray-300 mb-1">Sport</label>
           <select
             value={SUPPORTED_SPORTS.some(s => s.name === sport) ? sport : '__custom__'}
@@ -134,6 +150,29 @@ function ProfileForm({ title, initialName = '', initialColor, initialSport = 'so
               placeholder="Type your sport"
               className="w-full mt-2 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
             />
+          )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Color</label>
+          <ColorSelector value={color} onChange={setColor} usedColors={usedColors} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            Profile Name{!nameRequired && <span className="text-gray-500 font-normal"> (optional)</span>}
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={namePlaceholder}
+            maxLength={30}
+            autoFocus={nameRequired}
+            className={`w-full px-3 py-2 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none ${
+              isDuplicate ? 'border-red-500 focus:border-red-500' : 'border-gray-600 focus:border-purple-500'
+            }`}
+          />
+          {isDuplicate && (
+            <p className="text-red-400 text-xs mt-1">A profile with this name already exists</p>
           )}
         </div>
       </div>
@@ -282,20 +321,25 @@ export function ManageProfilesModal({ isOpen, onClose }) {
                       {(p.name || 'D')[0].toUpperCase()}
                     </div>
 
-                    {/* Name + sport */}
+                    {/* Name */}
                     <div className="flex-1 min-w-0">
                       <span className="text-white text-sm font-medium truncate block">
                         {p.name || 'Default'}
                       </span>
-                      <span className="text-xs text-gray-400 flex items-center gap-1 truncate">
-                        <span aria-hidden>{sportEmoji(p.sport)}</span>
-                        <span className="truncate">{sportDisplayName(p.sport) || 'No sport set'}</span>
-                        {p.isCurrent && <span className="text-green-400 flex-shrink-0">· Active</span>}
-                      </span>
+                      {p.isCurrent && (
+                        <span className="text-xs text-green-400">Active</span>
+                      )}
                     </div>
 
                     {p.isCurrent && <Check size={16} className="text-green-400 flex-shrink-0" />}
                   </button>
+
+                  {/* Inline sport selector — change sport without opening the edit form */}
+                  <InlineSportSelect
+                    sport={p.sport}
+                    onChange={(sportValue) => updateProfile(p.id, { sport: sportValue })}
+                    onPickOther={() => { setEditingProfile(p); setMode('edit'); }}
+                  />
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
