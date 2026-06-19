@@ -58,6 +58,7 @@ async function handleCredential(response) {
     if (raw) {
       const campaign = JSON.parse(raw);
       if (campaign.ref)          authBody.ref = campaign.ref;
+      if (campaign.ref_sport)    authBody.ref_sport = campaign.ref_sport;
       if (campaign.utm_source)   authBody.utm_source = campaign.utm_source;
       if (campaign.utm_medium)   authBody.utm_medium = campaign.utm_medium;
       if (campaign.utm_campaign) authBody.utm_campaign = campaign.utm_campaign;

@@ -29,8 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     picture_url TEXT,
     terms_accepted_at TIMESTAMPTZ,
     terms_version TEXT,
-    invite_code VARCHAR(8),
-    default_sport TEXT
+    invite_code VARCHAR(8)
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -168,6 +167,7 @@ CREATE TABLE IF NOT EXISTS referrals (
     referred_id TEXT NOT NULL REFERENCES users(user_id) UNIQUE,
     channel VARCHAR(20) NOT NULL,
     source_id TEXT,
+    inherited_sport TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);

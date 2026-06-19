@@ -432,21 +432,28 @@ SHARE_TYPE_TO_CHANNEL = {
 
 def record_referral(
     referrer_id: str, referred_id: str, channel: str, source_id: str | None = None,
+    inherited_sport: str | None = None,
 ) -> bool:
-    """Insert a referral row. Returns True if inserted, False if already attributed."""
+    """Insert a referral row. Returns True if inserted, False if already attributed.
+
+    inherited_sport is the snapshot of the inviter's default-profile sport, captured
+    in the inviter's own context at invite-link creation and carried here on the link
+    (T2915). It freezes onto the referral event -- it is never re-read from the inviter.
+    """
     if referrer_id == referred_id:
         return False
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO referrals (referrer_id, referred_id, channel, source_id)
-               VALUES (%s, %s, %s, %s)
+            """INSERT INTO referrals (referrer_id, referred_id, channel, source_id, inherited_sport)
+               VALUES (%s, %s, %s, %s, %s)
                ON CONFLICT (referred_id) DO NOTHING""",
-            (referrer_id, referred_id, channel, source_id),
+            (referrer_id, referred_id, channel, source_id, inherited_sport),
         )
         inserted = cur.rowcount > 0
         if inserted:
-            logger.info(f"[referral] {referrer_id} -> {referred_id} via {channel}")
+            logger.info(f"[referral] {referrer_id} -> {referred_id} via {channel}"
+                        + (f" (sport={inherited_sport})" if inherited_sport else ""))
         return inserted
 
 
@@ -473,40 +480,18 @@ def persist_invite_code(user_id: str, invite_code: str) -> None:
 # Sport inheritance through invite (T2915)
 # ---------------------------------------------------------------------------
 
-def set_user_default_sport(user_id: str, sport: str) -> None:
-    """Mirror a user's default-profile sport onto their Postgres users row."""
-    if not sport:
-        return
-    with get_pg() as conn:
-        conn.cursor().execute(
-            "UPDATE users SET default_sport = %s WHERE user_id = %s", (sport, user_id))
-
-
 def get_inherited_sport(referred_id: str) -> str | None:
-    """The inviter's mirrored default sport for a referred user, or None."""
+    """The sport snapshot captured on a referred user's referral row, or None.
+
+    This is the inviter's default sport as of when they created the invite link
+    (carried on the link, frozen at signup by record_referral). It is read straight
+    off the referral event -- no cross-user lookup, no live mirror."""
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT u.default_sport FROM referrals r
-               JOIN users u ON u.user_id = r.referrer_id
-               WHERE r.referred_id = %s""", (referred_id,))
+            "SELECT inherited_sport FROM referrals WHERE referred_id = %s", (referred_id,))
         row = cur.fetchone()
-        return row["default_sport"] if row and row["default_sport"] else None
-
-
-def mirror_default_sport(user_id: str) -> None:
-    """Read the user's default-profile sport from their LOCAL per-user SQLite and
-    mirror it to Postgres. OWNER context only. Best-effort -- never raise into the caller."""
-    try:
-        from app.services.user_db import get_profiles
-        profiles = get_profiles(user_id)
-        if not profiles:
-            return
-        default = next((p for p in profiles if p.get("is_default")), profiles[0])
-        if default.get("sport"):
-            set_user_default_sport(user_id, default["sport"])
-    except Exception as e:
-        logger.warning(f"[referral] mirror_default_sport failed for {user_id}: {e}")
+        return row["inherited_sport"] if row and row["inherited_sport"] else None
 
 
 def attribute_from_existing_shares(user_id: str, email: str) -> bool:

@@ -153,6 +153,7 @@ export function OtpAuthForm({ resetKey = null }) {
       if (raw) {
         const campaign = JSON.parse(raw);
         if (campaign.ref)          verifyBody.ref = campaign.ref;
+        if (campaign.ref_sport)    verifyBody.ref_sport = campaign.ref_sport;
         if (campaign.utm_source)   verifyBody.utm_source = campaign.utm_source;
         if (campaign.utm_medium)   verifyBody.utm_medium = campaign.utm_medium;
         if (campaign.utm_campaign) verifyBody.utm_campaign = campaign.utm_campaign;

@@ -132,6 +132,7 @@ function App() {
 
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
+    const ref_sport = params.get('sport');  // T2915: inviter's sport snapshot on the invite link
     const utm_source = params.get('utm_source');
     const utm_medium = params.get('utm_medium');
     const utm_campaign = params.get('utm_campaign');
@@ -149,6 +150,7 @@ function App() {
     if (ref || utm_campaign || click_source) {
       const data = {};
       if (ref)          data.ref = ref;
+      if (ref && ref_sport) data.ref_sport = ref_sport;  // only meaningful alongside a referral
       if (utm_source)   data.utm_source = utm_source;
       if (utm_medium)   data.utm_medium = utm_medium;
       if (utm_campaign) data.utm_campaign = utm_campaign;

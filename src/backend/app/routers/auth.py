@@ -214,6 +214,7 @@ async def delete_user():
 class GoogleAuthRequest(BaseModel):
     token: str
     ref: Optional[str] = None
+    ref_sport: Optional[str] = None  # T2915: inviter's sport snapshot carried on the invite link
     utm_source: Optional[str] = None
     utm_medium: Optional[str] = None
     utm_campaign: Optional[str] = None
@@ -261,7 +262,7 @@ async def _verify_google_token(token: str) -> dict:
     return token_data
 
 
-def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None) -> tuple[str, bool]:
+def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str | None = None, ref_sport: str | None = None) -> tuple[str, bool]:
     """Find a user row by email, or create a fresh one with a new UUID.
 
     Returns (user_id, is_new) where is_new indicates a freshly created account.
@@ -293,7 +294,7 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
             from app.services.sharing_db import resolve_invite_code, record_referral
             referrer_id = resolve_invite_code(ref)
             if referrer_id:
-                attributed = record_referral(referrer_id, user_id, "invite_link", ref)
+                attributed = record_referral(referrer_id, user_id, "invite_link", ref, inherited_sport=ref_sport)
         except Exception:
             logger.warning(f"[Auth] referral attribution failed for ref={ref}", exc_info=True)
     else:
@@ -337,7 +338,7 @@ async def google_auth(body: GoogleAuthRequest, request: Request):
     google_id = token_data.get("sub")
     logger.info(f"[Auth] Google token verified: email={email}, req_id={req_id}")
 
-    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, google_id=google_id, ref=body.ref, ref_sport=body.ref_sport)
 
     if is_new:
         origin, referrer_id = _determine_origin(
@@ -484,6 +485,7 @@ class VerifyOtpRequest(BaseModel):
     email: str
     code: str
     ref: Optional[str] = None
+    ref_sport: Optional[str] = None  # T2915: inviter's sport snapshot carried on the invite link
     utm_source: Optional[str] = None
     utm_medium: Optional[str] = None
     utm_campaign: Optional[str] = None
@@ -595,7 +597,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
             (row["id"],),
         )
 
-    user_id, is_new = _find_or_create_user(email, ref=body.ref)
+    user_id, is_new = _find_or_create_user(email, ref=body.ref, ref_sport=body.ref_sport)
     logger.info(f"[Auth] OTP verified for {email}, user_id={user_id}, req_id={req_id}")
 
     if is_new:

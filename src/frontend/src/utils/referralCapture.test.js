@@ -19,6 +19,7 @@ function simulateCampaignCapture(searchString, existingParams = null) {
 
   const params = new URLSearchParams(searchString);
   const ref = params.get('ref');
+  const ref_sport = params.get('sport');
   const utm_source = params.get('utm_source');
   const utm_medium = params.get('utm_medium');
   const utm_campaign = params.get('utm_campaign');
@@ -36,6 +37,7 @@ function simulateCampaignCapture(searchString, existingParams = null) {
   if (ref || utm_campaign || click_source) {
     const data = {};
     if (ref)          data.ref = ref;
+    if (ref && ref_sport) data.ref_sport = ref_sport;
     if (utm_source)   data.utm_source = utm_source;
     if (utm_medium)   data.utm_medium = utm_medium;
     if (utm_campaign) data.utm_campaign = utm_campaign;
@@ -73,6 +75,18 @@ describe('campaign param capture (App.jsx logic)', () => {
     simulateCampaignCapture('?ref=abc12345');
     const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
     expect(stored.ref).toBe('abc12345');
+  });
+
+  it('captures sport snapshot alongside a ref (T2915)', () => {
+    simulateCampaignCapture('?ref=abc12345&sport=basketball');
+    const stored = JSON.parse(sessionStorage.setItem.mock.calls[0][1]);
+    expect(stored.ref).toBe('abc12345');
+    expect(stored.ref_sport).toBe('basketball');
+  });
+
+  it('ignores sport without a ref', () => {
+    simulateCampaignCapture('?sport=basketball');
+    expect(sessionStorage.setItem).not.toHaveBeenCalled();
   });
 
   it('captures full UTM params with ref', () => {
