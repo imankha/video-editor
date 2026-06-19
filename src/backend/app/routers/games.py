@@ -717,6 +717,7 @@ BADGE_TAGS = frozenset({
 })
 
 _EMPTY_ATHLETE_STATS = {
+    'clip_count': 0,
     'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
     'mistake_count': 0, 'blunder_count': 0, 'aggregate_score': 0,
     'tag_badges': {},
@@ -733,17 +734,23 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
 
     from collections import defaultdict
     per_game = defaultdict(lambda: {
+        'clip_count': 0,
         'brilliant_count': 0, 'good_count': 0, 'interesting_count': 0,
         'mistake_count': 0, 'blunder_count': 0,
         'tag_badges': defaultdict(int),
     })
 
     for row in cursor.fetchall():
+        gid = row['game_id']
+        # clip_count is the TOTAL clips in the game (shared clips have my_athlete=0,
+        # so it must be counted before the athlete filter); rating badges stay
+        # my_athlete-filtered below.
+        per_game[gid]['clip_count'] += 1
+
         is_athlete = row['my_athlete'] is None or bool(row['my_athlete'])
         if not is_athlete:
             continue
 
-        gid = row['game_id']
         stats = per_game[gid]
         rating = row['rating'] or 3
         if rating == 5:
@@ -769,6 +776,7 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
         m = stats['mistake_count']
         bl = stats['blunder_count']
         result[gid] = {
+            'clip_count': stats['clip_count'],
             'brilliant_count': b,
             'good_count': g,
             'interesting_count': stats['interesting_count'],
@@ -891,7 +899,7 @@ async def _list_games_impl(skip_presigned_urls=False):
                 'tournament_name': row['tournament_name'],
                 'blake3_hash': blake3,
                 'video_url': video_url,
-                'clip_count': row['clip_count'] or 0,
+                'clip_count': stats['clip_count'],  # derived live from raw_clips, not the stale stored column
                 'brilliant_count': stats['brilliant_count'],
                 'good_count': stats['good_count'],
                 'interesting_count': stats['interesting_count'],

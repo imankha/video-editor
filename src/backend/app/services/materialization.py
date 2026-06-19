@@ -392,21 +392,6 @@ def _materialize_clips(
     return {"inserted": inserted, "merged": merged}
 
 
-def _refresh_game_aggregates(recipient_conn: sqlite3.Connection, game_id: int) -> None:
-    """Recompute the game's stored clip_count + rating aggregates from its raw_clips.
-
-    Materialization inserts clips straight into raw_clips but the game row carries
-    denormalized counts (clip_count, brilliant_count, ...). Without this refresh a
-    freshly shared game shows a stale "0 clips". Reuses the canonical updater so the
-    scoring stays in one place."""
-    from app.routers.games import update_game_aggregates  # local import avoids a circular import
-    rows = recipient_conn.execute(
-        "SELECT rating FROM raw_clips WHERE game_id = ?", (game_id,)
-    ).fetchall()
-    annotations = [{"rating": r["rating"]} for r in rows]
-    update_game_aggregates(recipient_conn.cursor(), game_id, annotations)
-
-
 def _create_storage_refs(
     sharer_user_id: str,
     sharer_profile_id: str,
@@ -514,9 +499,6 @@ def materialize_game_share(
                 recipient_conn, recipient_game_id, clip_data,
                 shared_by=sharer_email, sharer_profile_name=sharer_profile_name,
             )
-        # Refresh the game's denormalized clip_count/rating aggregates so the
-        # materialized game doesn't show a stale "0 clips".
-        _refresh_game_aggregates(recipient_conn, recipient_game_id)
         recipient_conn.commit()
 
         # Create storage refs in Postgres
