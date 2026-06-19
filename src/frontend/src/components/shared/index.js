@@ -9,7 +9,6 @@ export { StarRating } from './StarRating';
 export { TagSelector } from './TagSelector';
 export { ToastContainer, useToast, toast } from './Toast';
 export { UnifiedHeader } from './UnifiedHeader';
-// ServerStatus removed - relying on operation-specific error handling instead
 
 // Re-exports from parent components/ directory for cleaner imports
 export { Controls } from '../Controls';
