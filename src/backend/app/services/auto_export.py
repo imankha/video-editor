@@ -152,6 +152,12 @@ def _export_brilliant_clip(
     video_hash = clip['video_hash']
     start_time = clip['start_time']
     end_time = clip['end_time']
+    if start_time is None or end_time is None or end_time <= start_time:
+        logger.warning(
+            f"[AutoExport] Skipping brilliant clip {clip['id']} — invalid range "
+            f"start={start_time} end={end_time} (end <= start)"
+        )
+        return
     duration = end_time - start_time
     logger.info(f"[AutoExport] Brilliant clip={clip['id']} hash={video_hash[:12]} range={start_time:.1f}-{end_time:.1f}s")
 
@@ -251,6 +257,17 @@ def _generate_recap(
                 continue
 
             for clip in hash_clips:
+                # Skip clips with an invalid range (missing or inverted, i.e.
+                # end <= start). ffmpeg's -ss/-to extracts nothing for these and
+                # raises, which would otherwise fail the whole game's recap (bug 23p).
+                if (clip['start_time'] is None or clip['end_time'] is None
+                        or clip['end_time'] <= clip['start_time']):
+                    logger.warning(
+                        f"[AutoExport] Recap game={game_id} skipping clip {clip['id']}: "
+                        f"invalid range start={clip['start_time']} end={clip['end_time']} "
+                        f"(end <= start) — excluded from recap"
+                    )
+                    continue
                 out_path = Path(temp_dir) / f"clip_{clip['id']}.mp4"
                 (
                     ffmpeg.input(
