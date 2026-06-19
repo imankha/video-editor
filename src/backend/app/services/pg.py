@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS users (
     picture_url TEXT,
     terms_accepted_at TIMESTAMPTZ,
     terms_version TEXT,
-    invite_code VARCHAR(8)
+    invite_code VARCHAR(8),
+    default_sport TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

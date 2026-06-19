@@ -179,6 +179,11 @@ async def update_profile(profile_id: str, request: UpdateProfileRequest):
 
     db_update_profile(user_id, profile_id, name=name, color=color, sport=sport)
 
+    if request.sport is not None and profile["is_default"]:
+        # The default profile's sport changed -- refresh the Postgres mirror (T2915)
+        from app.services.sharing_db import mirror_default_sport
+        mirror_default_sport(user_id)
+
     logger.info(f"Updated profile {profile_id} for user {user_id}")
 
     return {"id": profile_id, "name": name, "color": color, "sport": sport}

@@ -94,9 +94,11 @@ class TestChannelMapping:
         assert SHARE_TYPE_TO_CHANNEL["video"] == "reel_share"
         assert SHARE_TYPE_TO_CHANNEL["game"] == "game_share"
         assert SHARE_TYPE_TO_CHANNEL["annotation_playback"] == "annotation_share"
+        assert SHARE_TYPE_TO_CHANNEL["collection"] == "collection_share"
 
     def test_no_extra_keys(self):
-        assert set(SHARE_TYPE_TO_CHANNEL.keys()) == {"video", "game", "annotation_playback"}
+        assert set(SHARE_TYPE_TO_CHANNEL.keys()) == {
+            "video", "game", "annotation_playback", "collection"}
 
 
 class TestInviteLinkAttribution:

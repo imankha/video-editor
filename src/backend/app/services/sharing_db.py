@@ -469,6 +469,46 @@ def persist_invite_code(user_id: str, invite_code: str) -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# Sport inheritance through invite (T2915)
+# ---------------------------------------------------------------------------
+
+def set_user_default_sport(user_id: str, sport: str) -> None:
+    """Mirror a user's default-profile sport onto their Postgres users row."""
+    if not sport:
+        return
+    with get_pg() as conn:
+        conn.cursor().execute(
+            "UPDATE users SET default_sport = %s WHERE user_id = %s", (sport, user_id))
+
+
+def get_inherited_sport(referred_id: str) -> str | None:
+    """The inviter's mirrored default sport for a referred user, or None."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT u.default_sport FROM referrals r
+               JOIN users u ON u.user_id = r.referrer_id
+               WHERE r.referred_id = %s""", (referred_id,))
+        row = cur.fetchone()
+        return row["default_sport"] if row and row["default_sport"] else None
+
+
+def mirror_default_sport(user_id: str) -> None:
+    """Read the user's default-profile sport from their LOCAL per-user SQLite and
+    mirror it to Postgres. OWNER context only. Best-effort -- never raise into the caller."""
+    try:
+        from app.services.user_db import get_profiles
+        profiles = get_profiles(user_id)
+        if not profiles:
+            return
+        default = next((p for p in profiles if p.get("is_default")), profiles[0])
+        if default.get("sport"):
+            set_user_default_sport(user_id, default["sport"])
+    except Exception as e:
+        logger.warning(f"[referral] mirror_default_sport failed for {user_id}: {e}")
+
+
 def attribute_from_existing_shares(user_id: str, email: str) -> bool:
     """Attribute a new user to their earliest sharer, if any shares exist for their email.
 

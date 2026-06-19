@@ -136,9 +136,22 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     if not profile_id:
         profile_id = uuid4().hex[:8]
         is_new_user = True
-        create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True)
+        inherited_sport = None
+        try:
+            from .services.sharing_db import get_inherited_sport
+            inherited_sport = get_inherited_sport(user_id)
+        except Exception as e:
+            logger.warning(f"Sport inheritance lookup failed for {user_id}: {e}")
+        sport = inherited_sport or "soccer"
+        create_profile(user_id, profile_id, name="", color="#6366f1", is_default=True, sport=sport)
         set_selected_profile_id(user_id, profile_id)
-        logger.info(f"Created new profile {profile_id} for user {user_id}")
+        logger.info(f"Created new profile {profile_id} for user {user_id}"
+                    + (f" (inherited sport={sport})" if inherited_sport else ""))
+        try:
+            from .services.sharing_db import set_user_default_sport
+            set_user_default_sport(user_id, sport)  # so THIS user can pass it on as an inviter
+        except Exception as e:
+            logger.warning(f"Failed to mirror default sport for {user_id}: {e}")
 
         from .services.storage_credits import NEW_ACCOUNT_CREDITS
         from .services.user_db import grant_credits
