@@ -66,34 +66,75 @@ class TestGetInheritedSport:
         assert get_inherited_sport("user-b") is None
 
 
-class TestInviteUrlSnapshot:
-    """get_invite_code bakes the inviter's default sport into the link, read locally."""
+class TestDefaultProfileSport:
+    """The local-SQLite read that snapshots the inviter's sport onto links/shares."""
 
-    def test_default_sport_reads_default_profile(self, monkeypatch):
-        from app.routers import users
-        monkeypatch.setattr(users, "get_profiles", lambda uid: [
+    def test_reads_default_profile(self, monkeypatch):
+        from app.services import user_db
+        monkeypatch.setattr(user_db, "get_profiles", lambda uid: [
             {"id": "p1", "sport": "tennis", "is_default": 0},
             {"id": "p2", "sport": "basketball", "is_default": 1},
         ])
-        assert users._default_sport("user-a") == "basketball"
+        assert user_db.get_default_profile_sport("user-a") == "basketball"
 
-    def test_default_sport_falls_back_to_first(self, monkeypatch):
-        from app.routers import users
-        monkeypatch.setattr(users, "get_profiles", lambda uid: [
+    def test_falls_back_to_first(self, monkeypatch):
+        from app.services import user_db
+        monkeypatch.setattr(user_db, "get_profiles", lambda uid: [
             {"id": "p1", "sport": "golf", "is_default": 0},
         ])
-        assert users._default_sport("user-a") == "golf"
+        assert user_db.get_default_profile_sport("user-a") == "golf"
 
-    def test_default_sport_none_when_no_profiles(self, monkeypatch):
-        from app.routers import users
-        monkeypatch.setattr(users, "get_profiles", lambda uid: [])
-        assert users._default_sport("user-a") is None
+    def test_none_when_no_profiles(self, monkeypatch):
+        from app.services import user_db
+        monkeypatch.setattr(user_db, "get_profiles", lambda uid: [])
+        assert user_db.get_default_profile_sport("user-a") is None
 
-    def test_default_sport_swallows_errors(self, monkeypatch):
-        from app.routers import users
+    def test_swallows_errors(self, monkeypatch):
+        from app.services import user_db
 
         def _boom(uid):
             raise RuntimeError("sqlite unavailable")
 
-        monkeypatch.setattr(users, "get_profiles", _boom)
-        assert users._default_sport("user-a") is None
+        monkeypatch.setattr(user_db, "get_profiles", _boom)
+        assert user_db.get_default_profile_sport("user-a") is None
+
+
+class TestShareChannelInheritance:
+    """Share invites capture the sharer's sport on the share row at creation, and
+    attribution at signup freezes it onto the referral the invitee inherits from."""
+
+    @pytest.fixture(autouse=True)
+    def _create_users(self, pg_conn, monkeypatch):
+        create_user("sharer-user", email="sharer@test.com")
+        create_user("recipient-user", email="recipient@test.com")
+        # sharer's default profile is basketball (read locally at share creation)
+        from app.services import user_db
+        monkeypatch.setattr(user_db, "get_profiles", lambda uid: [
+            {"id": "p1", "sport": "basketball", "is_default": 1},
+        ])
+
+    def test_game_share_snapshots_and_attributes_sport(self, pg_conn):
+        from app.services.sharing_db import create_game_share, attribute_from_existing_shares
+        create_game_share(
+            game_id=1, tag_name="", sharer_user_id="sharer-user",
+            sharer_profile_id="p1", recipient_email="recipient@test.com",
+        )
+        # share row carries the snapshot
+        from app.services.pg import get_pg
+        with get_pg() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT sharer_default_sport FROM shares WHERE sharer_user_id = 'sharer-user'")
+            assert cur.fetchone()["sharer_default_sport"] == "basketball"
+        # attribution at signup freezes it onto the referral
+        assert attribute_from_existing_shares("recipient-user", "recipient@test.com") is True
+        assert get_inherited_sport("recipient-user") == "basketball"
+
+    def test_video_share_snapshots_sport(self, pg_conn):
+        from app.services.sharing_db import create_shares, attribute_from_existing_shares
+        create_shares(
+            video_id=1, sharer_user_id="sharer-user", sharer_profile_id="p1",
+            video_filename="v.mp4", video_name="V", video_duration=1.0,
+            recipient_emails=["recipient@test.com"], is_public=False,
+        )
+        assert attribute_from_existing_shares("recipient-user", "recipient@test.com") is True
+        assert get_inherited_sport("recipient-user") == "basketball"

@@ -699,6 +699,24 @@ def get_profiles(user_id: str) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_default_profile_sport(user_id: str) -> str | None:
+    """The user's default-profile sport, or None if unknown.
+
+    Best-effort: meant to be called in the user's OWN request, where their
+    user.sqlite is local (no R2 download). A missing/unreadable profile just
+    yields None -> the invitee falls back to the generic default. Used to snapshot
+    the inviter's sport onto invite links / share rows for inheritance (T2915)."""
+    try:
+        profiles = get_profiles(user_id)
+        if not profiles:
+            return None
+        default = next((p for p in profiles if p.get("is_default")), profiles[0])
+        return default.get("sport")
+    except Exception as e:
+        logger.warning(f"[UserDB] could not read default sport for {user_id}: {e}")
+        return None
+
+
 def get_selected_profile_id(user_id: str) -> Optional[str]:
     """Return the selected profile ID from user_settings, or None."""
     with get_user_db_connection(user_id) as conn:

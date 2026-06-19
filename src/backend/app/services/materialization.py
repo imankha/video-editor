@@ -513,16 +513,20 @@ def materialize_game_share(
 
         try:
             from app.services.sharing_db import record_referral, SHARE_TYPE_TO_CHANNEL
+            with get_pg() as pg_conn:
+                pg_cur = pg_conn.cursor()
+                pg_cur.execute(
+                    "SELECT share_type, sharer_default_sport FROM shares WHERE id = %s",
+                    (share_id,))
+                share_row = pg_cur.fetchone()
+            inherited_sport = share_row["sharer_default_sport"] if share_row else None
             if tag_name:
                 channel = "teammate_share"
             else:
-                with get_pg() as pg_conn:
-                    pg_cur = pg_conn.cursor()
-                    pg_cur.execute("SELECT share_type FROM shares WHERE id = %s", (share_id,))
-                    share_row = pg_cur.fetchone()
                 channel = SHARE_TYPE_TO_CHANNEL.get(share_row["share_type"]) if share_row else None
             if channel:
-                record_referral(sharer_user_id, recipient_user_id, channel, str(share_id))
+                record_referral(sharer_user_id, recipient_user_id, channel, str(share_id),
+                                inherited_sport=inherited_sport)
         except Exception:
             logger.warning(
                 f"[Materialize] Referral attribution failed for share_id={share_id}",

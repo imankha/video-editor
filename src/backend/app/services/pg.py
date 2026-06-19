@@ -105,7 +105,8 @@ CREATE TABLE IF NOT EXISTS shares (
     shared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     revoked_at TIMESTAMPTZ,
     collection_definition JSONB,
-    collection_is_public BOOLEAN NOT NULL DEFAULT false
+    collection_is_public BOOLEAN NOT NULL DEFAULT false,
+    sharer_default_sport TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_shares_token ON shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_shares_sharer ON shares(sharer_user_id);

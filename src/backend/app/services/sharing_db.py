@@ -25,6 +25,15 @@ def get_sharing_db():
 # Video share CRUD
 # ---------------------------------------------------------------------------
 
+def _sharer_default_sport(sharer_user_id: str) -> str | None:
+    """Snapshot the sharer's default sport at share-creation time (T2915).
+
+    Runs in the sharer's own request, where their user.sqlite is local. Frozen onto
+    the share row so an invitee can inherit it -- no live cross-user read later."""
+    from app.services.user_db import get_default_profile_sport
+    return get_default_profile_sport(sharer_user_id)
+
+
 def create_shares(
     video_id: int,
     sharer_user_id: str,
@@ -36,6 +45,7 @@ def create_shares(
     is_public: bool,
 ) -> list[dict]:
     shares = []
+    sharer_sport = _sharer_default_sport(sharer_user_id)
     with get_sharing_db() as conn:
         cur = conn.cursor()
         for email in recipient_emails:
@@ -43,11 +53,11 @@ def create_shares(
             cur.execute(
                 """INSERT INTO shares
                    (share_token, share_type, sharer_user_id, sharer_profile_id,
-                    recipient_email)
-                   VALUES (%s, 'video', %s, %s, %s)
+                    recipient_email, sharer_default_sport)
+                   VALUES (%s, 'video', %s, %s, %s, %s)
                    RETURNING id""",
                 (token, sharer_user_id, sharer_profile_id,
-                 email.lower().strip()),
+                 email.lower().strip(), sharer_sport),
             )
             share_id = cur.fetchone()["id"]
             cur.execute(
@@ -149,16 +159,19 @@ def create_collection_share(
 ) -> str:
     """Insert one collection share row, return its token. `definition` must
     already be canonicalized (see routers/collections.py)."""
+    sharer_sport = _sharer_default_sport(sharer_user_id)
     with get_sharing_db() as conn:
         cur = conn.cursor()
         token = str(uuid.uuid4())
         cur.execute(
             """INSERT INTO shares
                (share_token, share_type, sharer_user_id, sharer_profile_id,
-                recipient_email, collection_definition, collection_is_public)
-               VALUES (%s, 'collection', %s, %s, %s, %s, %s)""",
+                recipient_email, collection_definition, collection_is_public,
+                sharer_default_sport)
+               VALUES (%s, 'collection', %s, %s, %s, %s, %s, %s)""",
             (token, sharer_user_id, sharer_profile_id,
-             recipient_email.lower().strip(), json.dumps(definition), is_public),
+             recipient_email.lower().strip(), json.dumps(definition), is_public,
+             sharer_sport),
         )
     return token
 
@@ -222,17 +235,18 @@ def create_game_share(
     clip_names: Optional[list[str]] = None,
     share_type: str = "game",
 ) -> dict:
+    sharer_sport = _sharer_default_sport(sharer_user_id)
     with get_sharing_db() as conn:
         cur = conn.cursor()
         token = str(uuid.uuid4())
         cur.execute(
             """INSERT INTO shares
                (share_token, share_type, sharer_user_id, sharer_profile_id,
-                recipient_email)
-               VALUES (%s, %s, %s, %s, %s)
+                recipient_email, sharer_default_sport)
+               VALUES (%s, %s, %s, %s, %s, %s)
                RETURNING id""",
             (token, share_type, sharer_user_id, sharer_profile_id,
-             recipient_email.lower().strip()),
+             recipient_email.lower().strip(), sharer_sport),
         )
         share_id = cur.fetchone()["id"]
         cur.execute(
@@ -503,7 +517,7 @@ def attribute_from_existing_shares(user_id: str, email: str) -> bool:
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
-            """SELECT sharer_user_id, share_type, id
+            """SELECT sharer_user_id, share_type, id, sharer_default_sport
                FROM shares
                WHERE recipient_email = %s
                ORDER BY shared_at ASC
@@ -516,4 +530,5 @@ def attribute_from_existing_shares(user_id: str, email: str) -> bool:
     channel = SHARE_TYPE_TO_CHANNEL.get(row["share_type"])
     if not channel:
         return False
-    return record_referral(row["sharer_user_id"], user_id, channel, str(row["id"]))
+    return record_referral(row["sharer_user_id"], user_id, channel, str(row["id"]),
+                           inherited_sport=row["sharer_default_sport"])
