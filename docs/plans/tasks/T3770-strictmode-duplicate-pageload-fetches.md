@@ -86,8 +86,52 @@ prod build justifies touching code.
 
 **2026-06-17**: Created from HAR analysis. Duplicates seen in dev HAR; suspected StrictMode. Needs prod-build confirmation before any code change.
 
+**2026-06-18 — MEASURED VERDICT (mixed: 2 no-ops + 1 real residual).**
+
+Method: (1) parsed `Downloads/localhost.har` server-side for the dev baseline; (2) reproduced
+the exact page-load flow live (Playwright + e2e auth-bypass, open a project → framing) on the
+running dev server with `<React.StrictMode>` ON; (3) re-measured the same flow with StrictMode
+temporarily removed from `main.jsx` (production-equivalent: React disables mount-effect
+double-invoke in prod builds). `main.jsx` was reverted and the throwaway test project deleted;
+working tree is clean.
+
+| Resource | Dev HAR | Dev live (StrictMode ON) | Prod-equiv (StrictMode OFF) | Verdict |
+|----------|--------:|-------------------------:|----------------------------:|---------|
+| `GET /api/bootstrap`     | ×2 | ×2 | **×1** | **StrictMode-only → NO-OP** |
+| `GET /api/health`        | ×2 | ×2 | **×1** | **StrictMode-only → NO-OP** |
+| `GET /api/projects/{id}` | ×3 | ×3 | **×2** | **1 StrictMode dup collapsed; ×2 residual is REAL** |
+
+Per-resource analysis:
+
+- **`/api/bootstrap` — StrictMode-only (no-op).** Single call site `App.jsx:196` inside
+  `initSession().then(...)` (an effect-driven path). ×2 in dev → ×1 with StrictMode off. No code.
+- **`/api/health` — StrictMode-only (no-op).** Overturns the kickoff prior of "two distinct
+  components." `ServerStatus.jsx` is **dead code** (`components/shared/index.js:12`: "ServerStatus
+  removed") and is mounted nowhere. The sole on-mount health checker is `ConnectionStatus.jsx:46`
+  (single `useEffect`). StrictMode doubled that one effect → ×2 dev → ×1 prod-equiv.
+  (`ExportButtonContainer.jsx:560` is export-only, not page load.) No code.
+- **`/api/projects/{id}` — ×3 → ×2; the residual ×2 is a REAL prod duplicate.** Decomposition
+  (confirmed by HAR timing AND live): 1× `…?_t=<ms>` from `projectsStore.fetchProject` (L86,
+  imperative via `selectProject` → fires once, even under StrictMode) + (dev) 2× bare
+  `/api/projects/{id}` from `ProjectContext.jsx:28` `useEffect([projectId])` (StrictMode-doubled).
+  With StrictMode off the bare fetch is ×1, so projects → **×2 in production**. This residual is
+  genuine **redundant state**: `projectsStore.selectedProject` (fetched with `?_t`) and
+  `ProjectContext.project` (bare) are two independent holders of the same project, each issuing its
+  own fetch on project-open. Not a StrictMode artifact — present in prod on every project open.
+
+Merit gate on the projects residual: the T2500/T2510 in-flight-promise dedup guard does **not**
+apply cleanly — the two requests have different URLs (`?_t` cache-buster vs bare) and come from two
+different modules/consumers, so a URL-keyed promise guard can't dedupe them. The correct fix is
+architectural (have `ProjectContext` consume `projectsStore.selectedProject` instead of
+re-fetching, or remove `ProjectContext` in favor of the store), which touches load-bearing context
+code (`useProject()` consumers, `refresh()` semantics). For an impact-3 task, that refactor's
+regression risk is disproportionate to eliminating one duplicate fetch of a fast endpoint on
+project-open (not even page-load-home). **Recommendation: close bootstrap+health as documented
+no-ops; spin the projects residual into a small dedicated follow-up task rather than a speculative
+guard here.** Awaiting user decision before any code change.
+
 ## Acceptance Criteria
 
-- [ ] **Before/after request-per-resource counts captured** (dev vs prod build) and recorded in the Progress Log — the measurement that backs the verdict.
-- [ ] Documented verdict: StrictMode-only (no-op) OR real duplicate fetch path found.
-- [ ] If real: dedup guard added with a deterministic one-request-per-resource test; prod build shows exactly one request per resource on load.
+- [x] **Before/after request-per-resource counts captured** (dev vs prod build) and recorded in the Progress Log — the measurement that backs the verdict.
+- [x] Documented verdict, per resource: bootstrap = StrictMode-only (no-op); health = StrictMode-only (no-op, single component — ServerStatus is dead code); projects = ×3→×2, **real residual duplicate** (two project-data holders).
+- [ ] If real: dedup guard added with a deterministic one-request-per-resource test. **DEFERRED** — projects residual needs an architectural fix (ProjectContext→store consolidation), not the T2500 promise-guard pattern; recommended as a scoped follow-up. Awaiting user decision.
