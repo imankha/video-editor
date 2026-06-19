@@ -17,8 +17,8 @@ const SORT_PURPOSE = 'Sort your clips head-to-head so the best ones show first.'
 function progressMessage(pct, active) {
   if (!active) {
     return {
-      tier: 'Fully sorted',
-      explain: 'Every clip in this collection is sorted. New clips will ask for a few matchups when you publish them.',
+      tier: 'All Clips Ranked',
+      explain: 'Add more clips to keep comparing.',
     };
   }
   let tier, note;
