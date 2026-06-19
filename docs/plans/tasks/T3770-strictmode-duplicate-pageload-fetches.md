@@ -1,6 +1,6 @@
 # T3770: Confirm/Eliminate StrictMode Duplicate Page-Load Fetches
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-06-17
