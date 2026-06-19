@@ -21,6 +21,7 @@ from app.services.materialization import (
     _find_existing_game_by_hashes,
     _copy_game,
     _materialize_clips,
+    _refresh_game_aggregates,
     _collect_video_hashes,
     materialize_game_share,
     serialize_clip_data,
@@ -400,6 +401,42 @@ class TestCopyGame:
 # ===========================================================================
 # Unit tests: clip materialization with overlap merging
 # ===========================================================================
+
+class TestRefreshGameAggregates:
+    def test_refreshes_clip_count_and_ratings(self, tmp_path):
+        # Regression: a shared game showed "0 clips" because materialization
+        # inserted clips but never refreshed the game's denormalized counts.
+        db_path = tmp_path / "recipient" / "profile.sqlite"
+        conn = _create_profile_db(db_path)
+        game_id = _insert_game(conn)
+
+        incoming = [
+            {"rating": 5, "name": "Goal", "notes": None, "start_time": 0,
+             "end_time": 5, "video_sequence": 0, "tags": None},
+            {"rating": 4, "name": "", "notes": None, "start_time": 10,
+             "end_time": 15, "video_sequence": 0, "tags": None},
+            {"rating": 3, "name": "Pass", "notes": None, "start_time": 20,
+             "end_time": 25, "video_sequence": 0, "tags": None},
+        ]
+        _materialize_clips(conn, game_id, incoming)
+        conn.commit()
+
+        # Stale before refresh
+        assert conn.execute("SELECT clip_count FROM games WHERE id = ?", (game_id,)).fetchone()["clip_count"] == 0
+
+        _refresh_game_aggregates(conn, game_id)
+        conn.commit()
+
+        row = conn.execute(
+            "SELECT clip_count, brilliant_count, good_count, interesting_count FROM games WHERE id = ?",
+            (game_id,),
+        ).fetchone()
+        assert row["clip_count"] == 3            # includes the unnamed clip
+        assert row["brilliant_count"] == 1       # rating 5
+        assert row["good_count"] == 1            # rating 4
+        assert row["interesting_count"] == 1     # rating 3
+        conn.close()
+
 
 class TestMaterializeClips:
     def test_inserts_new_clips(self, tmp_path):
