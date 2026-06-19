@@ -697,21 +697,14 @@ def ensure_database():
 
         # Games - store annotated game footage
         # Videos stored globally in R2 at games/{blake3_hash}.mp4
-        # Aggregate columns cache annotation counts for fast listing
-        # Clip annotations are stored in raw_clips table (linked by game_id)
+        # Game clip counts + rating breakdowns are derived live from raw_clips
+        # (see games._compute_athlete_stats) -- no denormalized columns here.
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 video_filename TEXT,
                 blake3_hash TEXT,
-                clip_count INTEGER DEFAULT 0,
-                brilliant_count INTEGER DEFAULT 0,
-                good_count INTEGER DEFAULT 0,
-                interesting_count INTEGER DEFAULT 0,
-                mistake_count INTEGER DEFAULT 0,
-                blunder_count INTEGER DEFAULT 0,
-                aggregate_score INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 video_duration REAL,

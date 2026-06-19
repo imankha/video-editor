@@ -776,32 +776,6 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     return True
 
 
-def _refresh_game_aggregates(cursor, game_id: int) -> None:
-    """Recalculate and update game aggregate columns from raw_clips."""
-    cursor.execute("""
-        SELECT rating, COUNT(*) as cnt
-        FROM raw_clips WHERE game_id = ?
-        GROUP BY rating
-    """, (game_id,))
-    rating_counts = {row['rating']: row['cnt'] for row in cursor.fetchall()}
-
-    clip_count = sum(rating_counts.values())
-    brilliant = rating_counts.get(5, 0)
-    good = rating_counts.get(4, 0)
-    interesting = rating_counts.get(3, 0)
-    mistake = rating_counts.get(2, 0)
-    blunder = rating_counts.get(1, 0)
-    score = brilliant * 10 + good * 5 + interesting * 2 + mistake * -2 + blunder * -5
-
-    cursor.execute("""
-        UPDATE games SET
-            clip_count = ?, brilliant_count = ?, good_count = ?,
-            interesting_count = ?, mistake_count = ?, blunder_count = ?,
-            aggregate_score = ?
-        WHERE id = ?
-    """, (clip_count, brilliant, good, interesting, mistake, blunder, score, game_id))
-
-
 def _sync_clip_teammates(cursor, clip_id: int, tagged_teammates: list[str] | None):
     """Sync clip_teammates junction table after tagged_teammates change."""
     cursor.execute("DELETE FROM clip_teammates WHERE clip_id = ?", (clip_id,))
@@ -903,7 +877,6 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
                     project_id = _create_auto_project_for_clip(cursor, clip_id, clip_data.name)
                     project_created = True
 
-            _refresh_game_aggregates(cursor, clip_data.game_id)
             conn.commit()
             if clip_data.create_project:
                 logger.info(f"[CreateReel] save_raw_clip EXISTING clip response: project_created={project_created}, project_id={project_id}")
@@ -936,7 +909,6 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
             project_id = _create_auto_project_for_clip(cursor, raw_clip_id, clip_data.name)
             project_created = True
 
-        _refresh_game_aggregates(cursor, clip_data.game_id)
         conn.commit()
         record_milestone(get_current_user_id(), "clip_created", {"clip_id": raw_clip_id, "game_id": clip_data.game_id, "rating": clip_data.rating})
         if clip_data.create_project:
@@ -1062,7 +1034,6 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.tagged_teammates is not None:
             _sync_clip_teammates(cursor, clip_id, update.tagged_teammates)
 
-        _refresh_game_aggregates(cursor, clip['game_id'])
         conn.commit()
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip response: project_created={project_created}, project_id={auto_project_id}")
@@ -1103,10 +1074,6 @@ async def delete_raw_clip(clip_id: int):
 
         # Delete the raw clip record — cascades to working_clips (via raw_clip_id CASCADE)
         cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
-
-        # Update game aggregates after deletion
-        if clip['game_id']:
-            _refresh_game_aggregates(cursor, clip['game_id'])
 
         conn.commit()
 

@@ -167,10 +167,8 @@ def _copy_game(
         """INSERT INTO games
            (name, blake3_hash, video_duration, video_width, video_height,
             video_size, opponent_name, game_date, game_type, tournament_name,
-            video_fps, video_filename, clip_count, brilliant_count, good_count,
-            interesting_count, mistake_count, blunder_count, aggregate_score,
-            viewed_duration, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, 0, 0, 0, 0, 0, 0, 'ready')""",
+            video_fps, video_filename, viewed_duration, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'ready')""",
         (
             game["name"], game["blake3_hash"], game["video_duration"],
             game["video_width"], game["video_height"], game["video_size"],

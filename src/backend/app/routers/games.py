@@ -814,8 +814,6 @@ async def _list_games_impl(skip_presigned_urls=False):
 
         cursor.execute("""
             SELECT g.id, g.name, g.blake3_hash, g.video_filename, g.created_at,
-                   g.clip_count, g.brilliant_count, g.good_count, g.interesting_count,
-                   g.mistake_count, g.blunder_count, g.aggregate_score,
                    g.opponent_name, g.game_date, g.game_type, g.tournament_name,
                    g.video_duration, g.viewed_duration, g.status, g.video_size,
                    g.auto_export_status, g.recap_video_url,
@@ -1413,79 +1411,6 @@ async def get_game_video(game_id: int):
 # Database-backed annotation functions (for Phase 3+ of the refactor)
 # ============================================================================
 
-def calculate_aggregates(annotations: list) -> dict:
-    """
-    Calculate aggregate counts from a list of annotations.
-
-    Returns dict with:
-    - clip_count: total number of annotations
-    - brilliant_count: rating 5
-    - good_count: rating 4
-    - interesting_count: rating 3
-    - mistake_count: rating 2
-    - blunder_count: rating 1
-    - aggregate_score: weighted sum
-    """
-    counts = {
-        'clip_count': len(annotations),
-        'brilliant_count': 0,
-        'good_count': 0,
-        'interesting_count': 0,
-        'mistake_count': 0,
-        'blunder_count': 0,
-    }
-
-    for ann in annotations:
-        rating = ann.get('rating', 3)
-        if rating == 5:
-            counts['brilliant_count'] += 1
-        elif rating == 4:
-            counts['good_count'] += 1
-        elif rating == 3:
-            counts['interesting_count'] += 1
-        elif rating == 2:
-            counts['mistake_count'] += 1
-        elif rating == 1:
-            counts['blunder_count'] += 1
-
-    # Calculate aggregate score
-    # Weighted score that rewards good clips and penalizes bad ones
-    counts['aggregate_score'] = (
-        counts['brilliant_count'] * 10 +
-        counts['good_count'] * 5 +
-        counts['interesting_count'] * 2 +
-        counts['mistake_count'] * -2 +
-        counts['blunder_count'] * -5
-    )
-
-    return counts
-
-
-def update_game_aggregates(cursor, game_id: int, annotations: list) -> None:
-    """Update the aggregate columns on a game based on its annotations."""
-    agg = calculate_aggregates(annotations)
-    cursor.execute("""
-        UPDATE games SET
-            clip_count = ?,
-            brilliant_count = ?,
-            good_count = ?,
-            interesting_count = ?,
-            mistake_count = ?,
-            blunder_count = ?,
-            aggregate_score = ?
-        WHERE id = ?
-    """, (
-        agg['clip_count'],
-        agg['brilliant_count'],
-        agg['good_count'],
-        agg['interesting_count'],
-        agg['mistake_count'],
-        agg['blunder_count'],
-        agg['aggregate_score'],
-        game_id
-    ))
-
-
 def load_annotations_from_db(game_id: int) -> list:
     """Load annotations from raw_clips table for a game."""
     with get_db_connection() as conn:
@@ -1628,9 +1553,6 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     if file_path.exists():
                         os.unlink(file_path)
                         logger.info(f"Deleted clip file: {file_path}")
-
-        # Update aggregates
-        update_game_aggregates(cursor, game_id, annotations)
 
         conn.commit()
 

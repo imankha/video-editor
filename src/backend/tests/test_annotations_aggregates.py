@@ -1,6 +1,7 @@
 """
-Post-refactor tests for annotations aggregate functionality.
-These tests verify the new aggregate columns work correctly.
+Tests for game aggregates exposed by the API. clip_count + rating counts +
+aggregate_score are derived live from raw_clips (no stored columns); these verify
+GET /api/games returns the correct derived values after annotations change.
 Run with: pytest src/backend/tests/test_annotations_aggregates.py -v
 """
 
@@ -103,8 +104,8 @@ class TestGameAggregates:
         assert game["brilliant_count"] == 2
         assert game["good_count"] == 1
         assert game["blunder_count"] == 1
-        # aggregate_score = 2*10 + 1*5 + 0*2 + 0*(-2) + 1*(-5) = 20
-        assert game["aggregate_score"] == 20
+        # aggregate_score (derived): b*3 + g*2 + m*-1 + bl*-2 = 2*3 + 1*2 + 1*-2 = 6
+        assert game["aggregate_score"] == 6
 
     def test_aggregates_update_on_change(self, client, empty_game):
         """Changing annotations should update aggregates."""
@@ -179,12 +180,12 @@ class TestGameAggregates:
         assert game["interesting_count"] == 1
         assert game["mistake_count"] == 1
         assert game["blunder_count"] == 1
-        # aggregate_score = 1*10 + 1*5 + 1*2 + 1*(-2) + 1*(-5) = 10
-        assert game["aggregate_score"] == 10
+        # aggregate_score (derived): b*3 + g*2 + m*-1 + bl*-2 = 3 + 2 - 1 - 2 = 2
+        # (interesting clips carry no weight)
+        assert game["aggregate_score"] == 2
 
     def test_aggregate_score_formula(self, client, empty_game):
-        """Verify the aggregate score formula."""
-        # 3 brilliant (30) + 2 good (10) + 1 mistake (-2) + 1 blunder (-5) = 33
+        """Verify the (derived) aggregate score formula: b*3 + g*2 + m*-1 + bl*-2."""
         annotations = [
             {"start_time": 10, "end_time": 25, "name": "A", "rating": 5, "tags": [], "notes": ""},
             {"start_time": 30, "end_time": 45, "name": "B", "rating": 5, "tags": [], "notes": ""},
@@ -199,12 +200,12 @@ class TestGameAggregates:
         response = client.get("/api/games")
         game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
 
-        # 3*10 + 2*5 + 0*2 + 1*(-2) + 1*(-5) = 30 + 10 - 2 - 5 = 33
-        assert game["aggregate_score"] == 33
+        # b=3, g=2, m=1, bl=1 -> 3*3 + 2*2 + 1*-1 + 1*-2 = 9 + 4 - 1 - 2 = 10
+        assert game["aggregate_score"] == 10
 
 
 class TestListGamesPerformance:
-    """Test that list_games uses cached aggregates."""
+    """list_games derives aggregates live from raw_clips."""
 
     def test_list_games_returns_aggregates(self, client, empty_game):
         """List games should include aggregate fields."""

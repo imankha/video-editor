@@ -43,13 +43,6 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             name TEXT NOT NULL,
             video_filename TEXT,
             blake3_hash TEXT,
-            clip_count INTEGER DEFAULT 0,
-            brilliant_count INTEGER DEFAULT 0,
-            good_count INTEGER DEFAULT 0,
-            interesting_count INTEGER DEFAULT 0,
-            mistake_count INTEGER DEFAULT 0,
-            blunder_count INTEGER DEFAULT 0,
-            aggregate_score INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             video_duration REAL,
@@ -365,7 +358,6 @@ class TestCopyGame:
         assert row["blake3_hash"] == "abc"
         assert row["opponent_name"] == "Rival FC"
         assert row["video_filename"] is None
-        assert row["clip_count"] == 0
         assert row["status"] == "ready"
 
         s_conn.close()

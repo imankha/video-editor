@@ -9,6 +9,7 @@ from .v007_collection_metadata import V007CollectionMetadata
 from .v008_freeze_game_ids import V008FreezeGameIds
 from .v009_season_rank import V009SeasonRank
 from .v010_ranking_columns import V010RankingColumns
+from .v011_drop_game_aggregates import V011DropGameAggregates
 
 MIGRATIONS = [
     V001Baseline(),
@@ -21,6 +22,7 @@ MIGRATIONS = [
     V008FreezeGameIds(),
     V009SeasonRank(),
     V010RankingColumns(),
+    V011DropGameAggregates(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
