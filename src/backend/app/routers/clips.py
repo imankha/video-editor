@@ -2422,20 +2422,42 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
     errors = []
 
     for pending_id in request.pending_ids:
-        # Fetch the pending share and verify it belongs to this user's email
+        # Fetch the pending share (resolved or not) so we can tell "already done"
+        # apart from "genuinely missing".
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute(
                 """SELECT id, share_id, sharer_user_id, sharer_profile_id,
-                          game_id, tag_name, clip_data
+                          game_id, tag_name, clip_data, resolved_at, resolved_profile_id
                    FROM pending_teammate_shares
-                   WHERE id = %s AND resolved_at IS NULL""",
+                   WHERE id = %s""",
                 (pending_id,),
             )
             pending = cur.fetchone()
 
         if not pending:
-            errors.append({"id": pending_id, "error": "not found or already resolved"})
+            logger.warning(
+                f"[resolve-pending-shares] pending_id={pending_id} not found "
+                f"(user={user_id})"
+            )
+            errors.append({"id": pending_id, "error": "not found"})
+            continue
+
+        if pending["resolved_at"] is not None:
+            # Benign race: session-init auto-materialization (T3230) already resolved
+            # this share on signup. Report success so the client navigates instead of
+            # surfacing a spurious "failed to load" error.
+            logger.info(
+                f"[resolve-pending-shares] pending_id={pending_id} already resolved "
+                f"(profile={pending['resolved_profile_id']}) -- treating as success"
+            )
+            materialized.append({
+                "id": pending_id,
+                "game_id": None,
+                "inserted": 0,
+                "merged": 0,
+                "already_resolved": True,
+            })
             continue
 
         try:
@@ -2463,7 +2485,12 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
                 "merged": result.get("merged", 0),
             })
         except Exception as e:
-            logger.error(f"[resolve-pending-shares] Failed for pending_id={pending_id}: {e}")
+            logger.error(f"[resolve-pending-shares] Failed for pending_id={pending_id}: {e}", exc_info=True)
             errors.append({"id": pending_id, "error": str(e)})
 
+    logger.info(
+        f"[resolve-pending-shares] user={user_id} requested={len(request.pending_ids)} "
+        f"materialized={len(materialized)} errors={len(errors)}"
+        + (f" -- errors: {errors}" if errors else "")
+    )
     return {"materialized": materialized, "errors": errors}
