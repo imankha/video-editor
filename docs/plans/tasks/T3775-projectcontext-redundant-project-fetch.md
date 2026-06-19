@@ -1,6 +1,6 @@
 # T3775: Eliminate ProjectContext's Redundant /api/projects/{id} Fetch
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 3
 **Complexity:** 2
 **Created:** 2026-06-18

@@ -1,6 +1,6 @@
 # T3778: Remove Dead ServerStatus Component
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 1
 **Complexity:** 1
 **Created:** 2026-06-18
