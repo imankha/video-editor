@@ -92,6 +92,29 @@ hasWorkingVideo, hasFinalVideo }`) must be preserved — only the two screens ab
 prod-equivalent build (1× `?_t` fetchProject + 1× bare ProjectContext), a real redundant-state
 duplicate. Fix scoped to ProjectContext (2 consumers only).
 
+**2026-06-18 (implemented)**: Rewrote `ProjectContext` as a thin adapter over `projectsStore`
+— reads `selectedProjectId`/`selectedProject` via granular selectors, wires `refresh` to
+`refreshSelectedProject` (preserves the fresh-project return that OverlayScreen relies on),
+derives `aspectRatio`/`hasWorkingVideo`/`hasFinalVideo` from `selectedProject`, and sets
+`loading: false`/`error: null` (neither consumer reads them; avoids surfacing the store's
+shared loading/error). Deleted the local `useState` + `useEffect` fetch. No store changes.
+
+- **Unit test** (`ProjectContext.test.jsx`): asserts exactly **1** `GET /api/projects/{id}` per
+  project-open (failed at ×2 before the fix, passes at ×1 after) + a refresh()-returns-fresh-project
+  test guarding OverlayScreen's recovery path. Both green.
+- **Prod-equivalent measurement** (StrictMode removed in `main.jsx`, dev servers, Playwright
+  e2e auth-bypass, real "Continue Where You Left Off" tile click on project id=3):
+  - **Before** (ProjectContext reverted to HEAD): `GET /api/projects/3?_t=…` **+** bare
+    `GET /api/projects/3` = **×2**.
+  - **After** (fix applied): `GET /api/projects/3?_t=…` only = **×1**. Bare fetch gone.
+  - (The `PATCH /api/projects/3/state` is a separate last-opened update, unchanged.)
+- **Smoke**: framing screen mounts cleanly with StrictMode back on (project name in breadcrumb,
+  aspect ratio rendered, 0 console errors). Full frontend suite: the 26 failures are pre-existing
+  (ShareWithTeammatesModal/InstallButton/uploadManager/etc., confirmed identical on master);
+  the new ProjectContext tests pass.
+- Cleanup: measurement project deleted, `main.jsx` StrictMode reverted — `git status` clean of
+  scaffolding (only `ProjectContext.jsx` + `ProjectContext.test.jsx`).
+
 ## Acceptance Criteria
 
 - [ ] `ProjectContext` no longer issues its own `/api/projects/{id}` fetch; it reads `selectedProject`/`selectedProjectId` from `projectsStore`.
