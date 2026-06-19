@@ -65,13 +65,13 @@ def _insert_project(cur, archived=False):
 
 
 def _insert_raw_clip(cur, *, rating, game_id=None, auto_project_id=None,
-                     start_time=0.0, end_time=None):
+                     start_time=0.0, end_time=None, my_athlete=1):
     _rcid[0] += 1
     cur.execute(
-        "INSERT INTO raw_clips (id, filename, rating, game_id, auto_project_id, start_time, end_time) "
-        "VALUES (?, 'c.mp4', ?, ?, ?, ?, ?)",
+        "INSERT INTO raw_clips (id, filename, rating, game_id, auto_project_id, start_time, end_time, my_athlete) "
+        "VALUES (?, 'c.mp4', ?, ?, ?, ?, ?, ?)",
         (_rcid[0], rating, game_id, auto_project_id, start_time,
-         end_time if end_time is not None else float(_rcid[0])),
+         end_time if end_time is not None else float(_rcid[0]), my_athlete),
     )
     return _rcid[0]
 
@@ -277,6 +277,76 @@ class TestResolverOrdering:
             members = evaluate_collection_members(
                 c, {"scope": {"type": "game", "game_id": 1}, "filter": {}, "aspect_ratio": "9:16"})
         assert [m["id"] for m in members] == [top, mid]
+
+
+# ---------------------------------------------------------------------------
+# Teammate reels excluded from the user's own collections + rankings (bug 22)
+#
+# A single-clip reel's "My Athlete" status IS its source clip's. A reel built
+# from a teammate clip (raw_clips.my_athlete = 0) must NOT appear in the user's
+# own Rankings, Collections gallery, summary, or share resolution. Multi-clip
+# reels (source_clip_id NULL) and reels whose source clip is gone/pre-migration
+# (my_athlete NULL) stay -- their my-athlete status can't be denied.
+# ---------------------------------------------------------------------------
+
+class TestMyAthleteReelExclusion:
+    def _seed(self, db):
+        """Mine (my_athlete=1), teammate (my_athlete=0), pre-migration (NULL),
+        all single-clip reels in game 1; returns (mine_fv, team_fv, null_fv)."""
+        with _conn(db) as c:
+            cur = c.cursor()
+            rc_mine = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=1)
+            rc_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0)
+            rc_null = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=None)
+            mine = _insert_fv(cur, game_ids=[1], source_clip_id=rc_mine)
+            team = _insert_fv(cur, game_ids=[1], source_clip_id=rc_team)
+            nul = _insert_fv(cur, game_ids=[1], source_clip_id=rc_null)
+            c.commit()
+        return mine, team, nul
+
+    def test_rankable_pool_excludes_teammate_reel(self, db):
+        from app.routers.rank import _rankable_pool
+        mine, team, nul = self._seed(db)
+        with _conn(db) as c:
+            ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
+        assert mine in ids and nul in ids
+        assert team not in ids
+
+    def test_downloads_excludes_teammate_reel(self, db):
+        mine, team, nul = self._seed(db)
+        ids = {d.id for d in _downloads(game_id=1).downloads}
+        assert mine in ids and nul in ids
+        assert team not in ids
+
+    def test_summary_excludes_teammate_reel(self, db):
+        mine, team, nul = self._seed(db)
+        summary = _summary()
+        game = next(g for g in summary.games if g.game_id == 1)
+        assert game.reel_count == 2  # mine + null, not teammate
+        assert _downloads(game_id=1).total_count == game.reel_count
+
+    def test_collection_members_exclude_teammate_reel(self, db):
+        from app.routers.collections import evaluate_collection_members
+        mine, team, nul = self._seed(db)
+        with _conn(db) as c:
+            members = evaluate_collection_members(
+                c, {"scope": {"type": "all"}, "filter": {}, "aspect_ratio": "9:16"})
+        ids = {m["id"] for m in members}
+        assert mine in ids and nul in ids
+        assert team not in ids
+
+    def test_orphan_and_multiclip_reels_kept(self, db):
+        # A reel with no source clip (orphan) or pointing at a deleted clip can't
+        # be denied -- it stays rankable. Multi-clip reels are unaffected (Mixes).
+        from app.routers.rank import _rankable_pool
+        with _conn(db) as c:
+            cur = c.cursor()
+            orphan = _insert_fv(cur, game_ids=[1], source_clip_id=None)
+            dangling = _insert_fv(cur, game_ids=[1], source_clip_id=99999)
+            c.commit()
+        with _conn(db) as c:
+            ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
+        assert orphan in ids and dangling in ids
 
 
 # ---------------------------------------------------------------------------

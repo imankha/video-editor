@@ -203,6 +203,32 @@ class TestGameAggregates:
         # b=3, g=2, m=1, bl=1 -> 3*3 + 2*2 + 1*-1 + 1*-2 = 9 + 4 - 1 - 2 = 10
         assert game["aggregate_score"] == 10
 
+    def test_teammate_clips_excluded_from_quality(self, client, empty_game):
+        """A teammate clip (my_athlete=0) counts toward clip_count but must NOT
+        affect the quality calculation (rating badges + aggregate_score)."""
+        from app.database import get_db_connection
+
+        annotations = [
+            {"start_time": 10, "end_time": 25, "name": "Mine", "rating": 5, "tags": [], "notes": ""},
+            {"start_time": 30, "end_time": 45, "name": "Teammate", "rating": 5, "tags": [], "notes": ""},
+        ]
+        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+
+        # Mark the second clip as a teammate clip (my_athlete=0) directly in the DB.
+        with get_db_connection() as conn:
+            conn.execute(
+                "UPDATE raw_clips SET my_athlete = 0 WHERE game_id = ? AND end_time = 45",
+                (empty_game['id'],),
+            )
+            conn.commit()
+
+        response = client.get("/api/games")
+        game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
+
+        assert game["clip_count"] == 2          # teammate clip still counted
+        assert game["brilliant_count"] == 1     # only my-athlete 5-star counts
+        assert game["aggregate_score"] == 3     # b=1 -> 1*3, teammate excluded
+
 
 class TestListGamesPerformance:
     """list_games derives aggregates live from raw_clips."""

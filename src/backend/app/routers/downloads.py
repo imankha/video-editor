@@ -16,7 +16,7 @@ import re
 import logging
 
 from app.database import get_db_connection, get_final_videos_path
-from app.queries import latest_final_videos_subquery
+from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import archive_project, restore_project, is_project_archived
@@ -276,6 +276,7 @@ async def list_downloads(
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
+            {exclude_teammate_reels_clause()}
             ORDER BY {ORDER_BY_RANK}
         """
         cursor.execute(base_query, params)
@@ -861,6 +862,7 @@ async def get_download_count():
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
             AND published_at IS NOT NULL
+            {exclude_teammate_reels_clause("final_videos")}
         """)
         row = cursor.fetchone()
 

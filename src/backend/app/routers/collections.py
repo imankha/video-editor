@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from app.analytics import record_milestone
 from app.database import get_db_connection
 from app.profile_context import get_current_profile_id
-from app.queries import latest_final_videos_subquery
+from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
@@ -302,6 +302,7 @@ async def collections_summary(sport: Optional[str] = None):
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
               AND fv.published_at IS NOT NULL
+              {exclude_teammate_reels_clause()}
             """
         )
         rows = cursor.fetchall()
@@ -564,6 +565,7 @@ def evaluate_collection_members(conn, definition: dict) -> List[dict]:
         WHERE fv.id IN ({latest_final_videos_subquery()})
           AND fv.published_at IS NOT NULL
           AND fv.aspect_ratio = ?
+          {exclude_teammate_reels_clause()}
         ORDER BY {ORDER_BY_RANK}
         """,
         (ratio,),

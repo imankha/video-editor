@@ -129,3 +129,26 @@ def latest_final_videos_subquery() -> str:
             FROM final_videos
         ) WHERE rn = 1
     """.strip()
+
+
+def exclude_teammate_reels_clause(fv_alias: str = "fv") -> str:
+    """AND-prefixed SQL fragment that drops teammate-only single-clip reels from
+    the user's OWN collections + rankings (bug 22).
+
+    A single-clip reel's "My Athlete" status IS its source clip's, derived (not
+    denormalized) via final_videos.source_clip_id -> raw_clips.my_athlete. A reel
+    built from a teammate clip (my_athlete = 0) is excluded everywhere the user's
+    own highlights are surfaced (Rankings, Collections gallery/summary, share
+    resolution). The reel still exists and stays viewable/shareable directly.
+
+    Kept (status can't be denied): multi-clip reels (source_clip_id NULL ->
+    Mixes), orphans / deleted source clips (no raw_clips row), and pre-migration
+    clips (my_athlete NULL). The correlated NOT EXISTS avoids alias collisions
+    with the outer query and latest_final_videos_subquery().
+    """
+    return f"""
+        AND NOT EXISTS (
+            SELECT 1 FROM raw_clips rc
+            WHERE rc.id = {fv_alias}.source_clip_id AND rc.my_athlete = 0
+        )
+    """.strip()
