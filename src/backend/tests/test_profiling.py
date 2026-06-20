@@ -115,6 +115,9 @@ def test_middleware_dumps_profile_on_breach(monkeypatch, caplog, tmp_path):
         url = type("U", (), {"path": "/api/test"})()
         cookies = {}
         headers = {"X-User-ID": "testuser", "origin": "-"}
+        # Real Starlette requests always expose `.state`; the middleware reads
+        # request.state.session for impersonation flagging (db_sync.py:509).
+        state = type("S", (), {})()
 
     mw = RequestContextMiddleware(app=None)
 

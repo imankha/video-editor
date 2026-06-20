@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-from app.analytics import create_user_segment, record_milestone
+from app.analytics import create_user_segment, record_milestone, _counter_buffer
 
 
 from app.services.auth_db import create_user
@@ -68,6 +68,7 @@ class TestDailyCounters:
     def test_create_segment_increments_signups(self, pg_conn):
         create_user("test-user", email="test@test.com")
         create_user_segment("test-user", "organic", None, "otp")
+        _counter_buffer.flush()
 
         from app.services.pg import get_pg
         with get_pg() as conn:
@@ -87,6 +88,7 @@ class TestDailyCounters:
             assert row["signups"] >= 1
 
     def test_record_milestone_increments_counter(self, analytics_setup, pg_conn):
+        _counter_buffer.flush()
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
@@ -148,7 +150,7 @@ class TestChannelsEndpoint:
         assert len(data["channels"]) >= 1
         ch = data["channels"][0]
         assert "origin" in ch
-        assert "signups" in ch
+        assert "users" in ch
         assert "export_pct" in ch
         assert "avg_exports" in ch
         assert "revenue_cents" in ch
@@ -263,6 +265,7 @@ class TestUserActions:
 
     def test_new_event_daily_counter(self, analytics_setup, pg_conn):
         record_milestone("user-a", "annotation_completed")
+        _counter_buffer.flush()
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()

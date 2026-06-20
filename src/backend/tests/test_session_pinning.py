@@ -35,12 +35,19 @@ def isolated_auth_db(pg_conn):
 
 @pytest.fixture()
 def client_on_machine_a(isolated_auth_db, tmp_path):
-    """TestClient where the server thinks it's Machine A."""
+    """TestClient where the server thinks it's Machine A.
+
+    Both machines are registered in _LIVE_MACHINES so the replay liveness
+    gate treats Machine B as a healthy peer (replay fires) rather than a dead
+    machine (circuit-breaker handles locally). The empty live set only happens
+    at startup before the Fly machines API is polled.
+    """
     with patch("app.database.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db.USER_DATA_BASE", tmp_path), \
          patch("app.services.user_db._initialized_user_dbs", set()), \
          patch.dict(os.environ, {"FLY_MACHINE_ID": MACHINE_A}), \
-         patch("app.middleware.db_sync.FLY_MACHINE_ID", MACHINE_A, create=True):
+         patch("app.middleware.db_sync.FLY_MACHINE_ID", MACHINE_A, create=True), \
+         patch("app.middleware.db_sync._LIVE_MACHINES", {MACHINE_A, MACHINE_B}):
         from app.main import app
         yield TestClient(app, raise_server_exceptions=False)
 
@@ -332,7 +339,10 @@ class TestFlyReplayMiddlewareASGI:
 
         scope = _make_ws_scope(cookies={"fly_machine_id": MACHINE_B})
         mw = FlyReplayMiddleware(inner)
-        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A):
+        # Machine B must be in the live set, otherwise the liveness gate treats
+        # the cookie as stale and accepts the WS locally instead of replaying.
+        with patch("app.middleware.fly_replay.FLY_MACHINE_ID", MACHINE_A), \
+             patch("app.middleware.db_sync._LIVE_MACHINES", {MACHINE_A, MACHINE_B}):
             self._run(mw(scope, None, mock_send))
 
         assert not inner_called

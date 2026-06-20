@@ -289,26 +289,52 @@ class TestStorageRefIndependence:
 
         s_conn.close()
 
-    def test_recipient_extend_does_not_affect_sharer(self, pg_conn):
+    def test_recipient_extend_does_not_affect_sharer(self, pg_conn, tmp_path):
+        # Storage refs live in per-profile SQLite (game_storage keyed by hash);
+        # independence comes from sharer and recipient having SEPARATE profile DBs,
+        # not from a user_id column. Route get_db_connection to each user's own DB.
+        sharer_db = _create_profile_db(tmp_path / "sharer" / "profile.sqlite")
+        recipient_db = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        sharer_db.executescript(
+            "CREATE TABLE IF NOT EXISTS game_storage (blake3_hash TEXT PRIMARY KEY, "
+            "game_size_bytes INTEGER, storage_expires_at TEXT, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+        )
+        recipient_db.executescript(
+            "CREATE TABLE IF NOT EXISTS game_storage (blake3_hash TEXT PRIMARY KEY, "
+            "game_size_bytes INTEGER, storage_expires_at TEXT, "
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+        )
+
+        @contextmanager
+        def _conn_for(conn):
+            yield conn
+
         sharer_expiry = (datetime.utcnow() + timedelta(days=5)).isoformat()
-        insert_game_storage_ref("sharer-user", "sharer-profile", "indep_hash",
-                                5_000_000_000, sharer_expiry)
+        with patch("app.database.get_db_connection", lambda: _conn_for(sharer_db)):
+            insert_game_storage_ref("sharer-user", "sharer-profile", "indep_hash",
+                                    5_000_000_000, sharer_expiry)
 
         recipient_expiry = (datetime.utcnow() + timedelta(days=5)).isoformat()
-        insert_game_storage_ref("recipient-user", "recipient-profile", "indep_hash",
-                                5_000_000_000, recipient_expiry)
-
         new_expiry = (datetime.utcnow() + timedelta(days=60)).isoformat()
-        insert_game_storage_ref("recipient-user", "recipient-profile", "indep_hash",
-                                5_000_000_000, new_expiry)
+        with patch("app.database.get_db_connection", lambda: _conn_for(recipient_db)):
+            insert_game_storage_ref("recipient-user", "recipient-profile", "indep_hash",
+                                    5_000_000_000, recipient_expiry)
+            insert_game_storage_ref("recipient-user", "recipient-profile", "indep_hash",
+                                    5_000_000_000, new_expiry)
 
-        sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "indep_hash")
-        recipient_ref = get_game_storage_ref("recipient-user", "recipient-profile", "indep_hash")
+        with patch("app.database.get_db_connection", lambda: _conn_for(sharer_db)):
+            sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "indep_hash")
+        with patch("app.database.get_db_connection", lambda: _conn_for(recipient_db)):
+            recipient_ref = get_game_storage_ref("recipient-user", "recipient-profile", "indep_hash")
 
         sharer_dt = sharer_ref["storage_expires_at"] if isinstance(sharer_ref["storage_expires_at"], datetime) else datetime.fromisoformat(sharer_ref["storage_expires_at"])
         recipient_dt = recipient_ref["storage_expires_at"] if isinstance(recipient_ref["storage_expires_at"], datetime) else datetime.fromisoformat(recipient_ref["storage_expires_at"])
 
         assert recipient_dt > sharer_dt + timedelta(days=30)
+
+        sharer_db.close()
+        recipient_db.close()
 
     def test_get_storage_refs_for_user_is_user_scoped(self, pg_conn):
         insert_game_storage_ref("user-a", "prof-a", "scoped_hash",
@@ -641,19 +667,37 @@ class TestExtendEndpointHandler:
     async def test_extend_does_not_affect_sharer_ref(self, pg_conn, tmp_path):
         from app.routers.games import extend_game_storage, ExtendStorageRequest
 
+        # Storage refs live in per-profile SQLite (game_storage keyed by hash);
+        # sharer/recipient independence comes from separate profile DBs. The endpoint's
+        # ref read/write go through app.database.get_db_connection (via auth_db), so
+        # route that to the recipient DB during the call and to the sharer DB when
+        # reading the sharer's ref afterward.
         r_conn = _create_profile_db(tmp_path / "recipient" / "profile.sqlite")
+        s_conn = _create_profile_db(tmp_path / "sharer" / "profile.sqlite")
+        for c in (r_conn, s_conn):
+            c.executescript(
+                "CREATE TABLE IF NOT EXISTS game_storage (blake3_hash TEXT PRIMARY KEY, "
+                "game_size_bytes INTEGER, storage_expires_at TEXT, "
+                "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+            )
         game_id = _insert_game(r_conn, blake3_hash="isolate_hash",
                                video_size=int(1.0 * 1024 ** 3))
         _insert_game_video(r_conn, game_id, "isolate_hash", sequence=0,
                            video_size=int(1.0 * 1024 ** 3))
 
+        @contextmanager
+        def _conn_for(conn):
+            yield conn
+
         sharer_expiry = (datetime.utcnow() + timedelta(days=15)).isoformat()
-        insert_game_storage_ref("sharer-user", "sharer-profile",
-                                "isolate_hash", int(1.0 * 1024 ** 3), sharer_expiry)
+        with patch("app.database.get_db_connection", lambda: _conn_for(s_conn)):
+            insert_game_storage_ref("sharer-user", "sharer-profile",
+                                    "isolate_hash", int(1.0 * 1024 ** 3), sharer_expiry)
 
         recipient_expiry = (datetime.utcnow() + timedelta(days=3)).isoformat()
-        insert_game_storage_ref("recipient-user", "recipient-profile",
-                                "isolate_hash", int(1.0 * 1024 ** 3), recipient_expiry)
+        with patch("app.database.get_db_connection", lambda: _conn_for(r_conn)):
+            insert_game_storage_ref("recipient-user", "recipient-profile",
+                                    "isolate_hash", int(1.0 * 1024 ** 3), recipient_expiry)
 
         @contextmanager
         def mock_db_conn():
@@ -662,14 +706,17 @@ class TestExtendEndpointHandler:
         with patch("app.routers.games.get_current_user_id", return_value="recipient-user"), \
              patch("app.routers.games.get_current_profile_id", return_value="recipient-profile"), \
              patch("app.routers.games.get_db_connection", mock_db_conn), \
+             patch("app.database.get_db_connection", lambda: _conn_for(r_conn)), \
              patch("app.routers.games.deduct_credits", return_value={"success": True, "balance": 10}):
             await extend_game_storage(game_id, ExtendStorageRequest(days=60))
 
-        sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "isolate_hash")
+        with patch("app.database.get_db_connection", lambda: _conn_for(s_conn)):
+            sharer_ref = get_game_storage_ref("sharer-user", "sharer-profile", "isolate_hash")
         sharer_dt = _parse_ref_dt(sharer_ref)
         assert abs((sharer_dt - _to_naive_utc(sharer_expiry)).total_seconds()) < 2
 
         r_conn.close()
+        s_conn.close()
 
     @pytest.mark.asyncio
     async def test_extend_insufficient_credits_returns_402(self, pg_conn, tmp_path):

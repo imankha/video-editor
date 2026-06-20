@@ -84,7 +84,11 @@ class TestInviteCodeEndpoint:
         uid = "exact-url-user"
         code = hashlib.sha256(uid.encode()).hexdigest()[:8]
         r = client.get("/api/me/invite-code", headers={"X-User-ID": uid})
-        assert r.json()["invite_url"] == f"https://www.reelballers.com?ref={code}"
+        url = r.json()["invite_url"]
+        # Base is always ?ref={code}; an optional &sport={sport} snapshot may
+        # follow (T2915 sport inheritance) when the user has a default sport.
+        base = f"https://www.reelballers.com?ref={code}"
+        assert url == base or re.fullmatch(rf"{re.escape(base)}&sport=[\w%]+", url)
 
     def test_special_chars_in_user_id(self):
         uid = "user-with-special_chars.123@test"

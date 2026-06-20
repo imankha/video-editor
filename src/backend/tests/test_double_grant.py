@@ -182,12 +182,16 @@ class TestStripeConfirmIntentEndpoint:
 
             req = ConfirmIntentRequest(payment_intent_id=pi_id)
 
-            # First call grants credits
-            result1 = asyncio.get_event_loop().run_until_complete(confirm_payment_intent(req))
-            assert result1["status"] == "credits_granted"
-            assert result1["credits"] == 40
+            loop = asyncio.new_event_loop()
+            try:
+                # First call grants credits
+                result1 = loop.run_until_complete(confirm_payment_intent(req))
+                assert result1["status"] == "credits_granted"
+                assert result1["credits"] == 40
 
-            # Second call hits has_processed_payment fast-path (returns already_processed)
-            result2 = asyncio.get_event_loop().run_until_complete(confirm_payment_intent(req))
-            assert result2["status"] == "already_processed"
-            assert result2["balance"] == 40
+                # Second call hits has_processed_payment fast-path (returns already_processed)
+                result2 = loop.run_until_complete(confirm_payment_intent(req))
+                assert result2["status"] == "already_processed"
+                assert result2["balance"] == 40
+            finally:
+                loop.close()

@@ -16,7 +16,8 @@ class TestKeyframeInterpolatorRegionBounds:
         """Create keyframes at given times with dummy positions."""
         return [
             {"time": t, "x": 100 + t * 10, "y": 200 + t * 10,
-             "radiusX": 50, "radiusY": 80, "opacity": 0.15, "color": "#FFFF00"}
+             "radiusX": 50, "radiusY": 80, "strokeOpacity": 0.85,
+             "fillOpacity": 0.15, "color": "#FFFFFF"}
             for t in times
         ]
 
@@ -89,10 +90,10 @@ class TestRenderHighlightKeyframeFiltering:
             "start_time": 1.0,
             "end_time": 2.0,
             "keyframes": [
-                {"time": 0.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
-                {"time": 1.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
-                {"time": 2.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
-                {"time": 3.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
+                {"time": 0.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
+                {"time": 1.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
+                {"time": 2.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
+                {"time": 3.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
             ],
             "enabled": True,
         }
@@ -117,8 +118,8 @@ class TestRenderHighlightKeyframeFiltering:
             "start_time": 5.0,
             "end_time": 6.0,
             "keyframes": [
-                {"time": 0.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
-                {"time": 1.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "opacity": 0.5, "color": "#FFFF00"},
+                {"time": 0.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
+                {"time": 1.0, "x": 50, "y": 50, "radiusX": 10, "radiusY": 10, "strokeOpacity": 0.85, "fillOpacity": 0.5, "color": "#FFFFFF"},
             ],
             "enabled": True,
         }

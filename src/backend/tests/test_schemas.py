@@ -21,6 +21,7 @@ from app.schemas import (
     # Helper functions
     parse_crop_data, parse_timing_data, parse_segments_data, parse_highlights_data,
 )
+from app.utils.encoding import encode_data
 
 
 class TestCropKeyframe:
@@ -188,7 +189,7 @@ class TestHighlightKeyframe:
         assert kf.frame is None
         assert kf.x == 500
         assert kf.opacity == 0.15  # Default
-        assert kf.color == '#FFFF00'  # Default
+        assert kf.color == '#FFFFFF'  # Default
 
     def test_create_with_frame(self):
         """Can create highlight keyframe with frame."""
@@ -327,9 +328,9 @@ class TestParserFunctions:
     """Test the helper parser functions."""
 
     def test_parse_crop_data_valid(self):
-        """parse_crop_data handles valid JSON."""
-        json_str = '[{"frame": 0, "x": 100, "y": 50, "width": 640, "height": 360}]'
-        result = parse_crop_data(json_str)
+        """parse_crop_data handles valid msgpack-encoded data."""
+        raw = encode_data([{"frame": 0, "x": 100, "y": 50, "width": 640, "height": 360}])
+        result = parse_crop_data(raw)
         assert result is not None
         assert len(result.keyframes) == 1
 
@@ -347,9 +348,9 @@ class TestParserFunctions:
         assert parse_crop_data('{"not": "a list"}') is None
 
     def test_parse_timing_data_valid(self):
-        """parse_timing_data handles valid JSON."""
-        json_str = '{"trimRange": [1.5, 8.5]}'
-        result = parse_timing_data(json_str)
+        """parse_timing_data handles valid msgpack-encoded data."""
+        raw = encode_data({"trimRange": [1.5, 8.5]})
+        result = parse_timing_data(raw)
         assert result is not None
         assert result.trimRange == (1.5, 8.5)
 
@@ -358,9 +359,9 @@ class TestParserFunctions:
         assert parse_timing_data(None) is None
 
     def test_parse_segments_data_valid(self):
-        """parse_segments_data handles valid JSON."""
-        json_str = '{"boundaries": [0, 5, 10], "segmentSpeeds": {"0": 1.0}}'
-        result = parse_segments_data(json_str)
+        """parse_segments_data handles valid msgpack-encoded data."""
+        raw = encode_data({"boundaries": [0, 5, 10], "segmentSpeeds": {"0": 1.0}})
+        result = parse_segments_data(raw)
         assert result is not None
         assert result.boundaries == [0, 5, 10]
 
@@ -369,9 +370,9 @@ class TestParserFunctions:
         assert parse_segments_data(None) is None
 
     def test_parse_highlights_data_valid(self):
-        """parse_highlights_data handles valid JSON."""
-        json_str = '[{"id": "r1", "start_time": 0, "end_time": 5, "keyframes": []}]'
-        result = parse_highlights_data(json_str)
+        """parse_highlights_data handles valid msgpack-encoded data."""
+        raw = encode_data([{"id": "r1", "start_time": 0, "end_time": 5, "keyframes": []}])
+        result = parse_highlights_data(raw)
         assert result is not None
         assert len(result.regions) == 1
 

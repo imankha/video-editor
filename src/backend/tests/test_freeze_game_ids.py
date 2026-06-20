@@ -225,7 +225,7 @@ class TestStamping:
             (encode_data(["Goal"]), game_id, project_id))
         conn.commit(); conn.close()
 
-        clip = {"id": 1, "name": "Goal", "video_hash": "abc123",
+        clip = {"id": 1, "name": "Goal", "video_hash": "abc123", "rating": 5,
                 "start_time": 10.0, "end_time": 15.0, "auto_project_id": project_id,
                 "tags": encode_data(["Goal"])}
         _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)

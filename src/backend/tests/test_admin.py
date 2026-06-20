@@ -29,6 +29,11 @@ def isolated_auth_db(pg_conn):
     Uses test-admin@test.local so the email unique constraint doesn't clash
     with real users in the dev database. The admin_users seed (imankh@gmail.com)
     is matched by email, so we insert into admin_users for the test email too.
+
+    The /api/admin/users endpoint INNER JOINs users -> user_segments (T3460:
+    the panel only surfaces users that have onboarded segment data), so we
+    seed a minimal segment row for each test user. Tests that need richer
+    segment/action data layer it via the `milestones_data` fixture.
     """
     from app.services.auth_db import create_user
     from app.services.pg import get_pg
@@ -38,6 +43,11 @@ def isolated_auth_db(pg_conn):
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO admin_users (email) VALUES ('test-admin@test.local') ON CONFLICT DO NOTHING"
+        )
+        cur.execute(
+            """INSERT INTO user_segments (user_id)
+               VALUES ('admin-user'), ('regular-user')
+               ON CONFLICT (user_id) DO NOTHING"""
         )
     yield
 
@@ -53,6 +63,10 @@ def milestones_data(pg_conn):
             VALUES
             ('admin-user', '2026-01-15', 'organic', 'google'),
             ('regular-user', '2026-03-10', 'organic', 'otp')
+            ON CONFLICT (user_id) DO UPDATE SET
+                acquired_at = EXCLUDED.acquired_at,
+                origin = EXCLUDED.origin,
+                signup_method = EXCLUDED.signup_method
         """)
         actions = [
             ("admin-user", "game_created", 10),
@@ -216,8 +230,10 @@ class TestAdminUsers:
         assert regular["origin"] == "organic"
         assert regular["acquired_at"] == "2026-03-10"
 
-    def test_left_join_users_without_segments(self, client):
-        """Users without segment rows still appear with NULL/zero values."""
+    def test_users_with_segments_but_no_actions(self, client):
+        """T3460: the panel INNER JOINs user_segments, so users appear once a
+        segment row exists. Users with only a default segment row (no user_actions)
+        surface with default-origin and zero action counts."""
         resp = client.get("/api/admin/users", headers=_auth_headers("admin-user"))
         assert resp.status_code == 200
         data = resp.json()
@@ -225,7 +241,7 @@ class TestAdminUsers:
         assert "admin-user" in user_ids
         admin = next(u for u in data["users"] if u["user_id"] == "admin-user")
         assert admin["game_created_count"] == 0
-        assert admin["origin"] is None
+        assert admin["origin"] == "organic"
 
     def test_pagination(self, client_with_milestones):
         resp = client_with_milestones.get(

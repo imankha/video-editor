@@ -20,16 +20,26 @@ import pytest
 from fastapi.testclient import TestClient
 
 
+# Dedicated test admin email -- must NOT be a real dev account (e.g. the
+# developer's imankh@gmail.com) or create_user collides on the unique email
+# constraint, since pg_conn intentionally preserves real accounts.
+ADMIN_EMAIL = "testadmin@example.com"
+
+
 @pytest.fixture()
 def isolated_auth_db(pg_conn):
     """Fresh Postgres with one admin and two regulars."""
     from app.services.auth_db import create_user, get_auth_db
-    create_user("admin-user", email="imankh@gmail.com")
+    create_user("admin-user", email=ADMIN_EMAIL)
     create_user("other-admin", email="secondadmin@example.com")
     create_user("target-user", email="target@example.com")
     create_user("other-regular", email="regular@example.com")
     with get_auth_db() as conn:
         cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO admin_users (email) VALUES (%s) ON CONFLICT DO NOTHING",
+            (ADMIN_EMAIL,),
+        )
         cur.execute(
             "INSERT INTO admin_users (email) VALUES (%s) ON CONFLICT DO NOTHING",
             ("secondadmin@example.com",),
@@ -243,7 +253,7 @@ class TestMe:
         assert body["user_id"] == "target-user"
         assert body.get("impersonator") is not None
         assert body["impersonator"]["id"] == "admin-user"
-        assert body["impersonator"]["email"] == "imankh@gmail.com"
+        assert body["impersonator"]["email"] == ADMIN_EMAIL
 
     def test_me_impersonator_is_null_when_not_impersonating(self, client):
         from app.services.auth_db import create_session
