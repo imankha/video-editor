@@ -654,7 +654,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
    */
   const importAnnotations = useCallback((annotations, overrideDuration = null) => {
     if (!annotations || annotations.length === 0) {
-      return 0;
+      return [];
     }
 
     // Use override duration if provided, otherwise use state duration
@@ -665,7 +665,7 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       console.log('[useAnnotate] Duration not available, queueing', annotations.length, 'annotations for later');
       setPendingAnnotations(annotations);
       setIsLoadingAnnotations(true);
-      return 0;
+      return [];
     }
 
     // If we have an override duration, also set it in state for future operations
@@ -710,7 +710,10 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       onSelect?.(newRegions[0].id);
     }
 
-    return newRegions.length;
+    // Return the created regions so callers can map backend saves back to
+    // region ids (e.g. importAnnotationsWithRawClips propagates raw_clip_id
+    // into region state via setRawClipId after the background save lands).
+    return newRegions;
   }, [duration, colorIndex, onSelect]);
 
   /**

@@ -1177,11 +1177,14 @@ export function AnnotateContainer({
    */
   const importAnnotationsWithRawClips = useCallback(async (annotations, overrideDuration = null) => {
     if (!annotations || annotations.length === 0) {
-      return importAnnotations(annotations, overrideDuration);
+      return importAnnotations(annotations, overrideDuration).length;
     }
 
-    // First, import annotations to show clips in UI immediately
-    const count = importAnnotations(annotations, overrideDuration);
+    // First, import annotations to show clips in UI immediately.
+    // importAnnotations returns the created regions in the SAME order as the
+    // input annotations (1:1), so we can map each annotation to its region id.
+    const newRegions = importAnnotations(annotations, overrideDuration);
+    const count = newRegions.length;
 
     // Read gameId from ref to get the latest value (not a stale closure).
     // The upload completion callback sets annotateGameId, but useCallback's closure
@@ -1193,8 +1196,9 @@ export function AnnotateContainer({
 
       // Fire off all saves in parallel (don't await each one sequentially)
       const savePromises = annotations
-        .filter(annotation => !annotation.raw_clip_id && !annotation.rawClipId)
-        .map(async (annotation) => {
+        .map((annotation, index) => ({ annotation, region: newRegions[index] }))
+        .filter(({ annotation }) => !annotation.raw_clip_id && !annotation.rawClipId)
+        .map(async ({ annotation, region }) => {
           try {
             const result = await saveClip(gameId, {
               start_time: annotation.startTime ?? annotation.start_time ?? 0,
@@ -1209,6 +1213,13 @@ export function AnnotateContainer({
             if (result) {
               // Store raw_clip_id for later reference (e.g., when updating clip)
               annotation.raw_clip_id = result.raw_clip_id;
+              // Propagate the backend id into REGION STATE so subsequent gestures
+              // on this clip (rate, Create Reel) take the UPDATE path instead of
+              // re-saving via the SAVE path — which would collide with this very
+              // save under saveClip's pendingSaves dedup guard and silently no-op.
+              if (region?.id) {
+                setRawClipId(region.id, result.raw_clip_id);
+              }
             }
             return result;
           } catch (err) {
@@ -1226,7 +1237,7 @@ export function AnnotateContainer({
     }
 
     return count;
-  }, [importAnnotations, saveClip]);
+  }, [importAnnotations, saveClip, setRawClipId]);
 
   // T2750: No more tab switching or filtered regions. All clips shown unified.
 
