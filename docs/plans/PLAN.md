@@ -43,6 +43,16 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 | T3230 | [Auto-Materialize Pending Shares](tasks/T3230-auto-materialize-pending-shares.md) | 9 | 3 | P0 | DONE | [ ] | Pending teammate shares never resolve unless recipient clicks exact share link. Auto-materialize in user_session_init() for single-profile users on login/signup. |
 | T2600 | [Archive Msgpack Migration](tasks/T2600-archive-msgpack-migration.md) | 7 | 3 | P1 | DONE | [x] | Archives stored as JSON cause lossy roundtrip for binary columns. Switch to msgpack end-to-end + migrate all live user archives. |
 
+### Keyframe Identity Cleanup (follow-ups from crop/overlay duplicate-keyframe fix)
+
+Surfaced while fixing the keyframe-identity divergence (display snaps an edit to a nearby keyframe, but the surgical persistence sent the raw clicked frame/time, so the backend accumulated near-duplicate keyframes that, on delete, stripped a permanent boundary). Root fix + profile_db v015 heal shipped on branch `fix/crop-keyframe-dup-snap`; these are the remaining DRY/UX cleanups.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T3800 | [Shared Keyframe Persist Wrapper](tasks/T3800-shared-keyframe-persist-wrapper.md) | 5 | 4 | 1.3 | TODO | [ ] | Crop (FramingContainer) and overlay (OverlayScreen) hand-roll the same resolve→optimistic-store→surgical-backend→rollback sequence, so the snap-vs-raw bug landed in both. Extract one keyframe-persistence helper that makes the mistake unrepresentable. DRY, no behavior change. |
+| T3810 | [Delete Dead useHighlight Hook](tasks/T3810-delete-dead-usehighlight-hook.md) | 2 | 1 | 2.0 | TODO | [ ] | `useHighlight.js` is exported from overlay/index.js but never instantiated (live system is useHighlightRegions). A third keyframe implementation that adds confusion. Confirm no callers, delete hook + re-export + dead test. |
+| T3820 | [Reconcile Keyframe Snap Directions](tasks/T3820-reconcile-keyframe-snap-directions.md) | 4 | 4 | 1.0 | TODO | [ ] | Crop snaps by KEEPING the old frame (10-frame window); overlay snaps by MOVING to the clicked frame (5-frame window). Opposite UX for the same gesture. Needs a UX decision, then unify direction + window across both modes (guard permanent boundaries). |
+
 ### Prior Bug Fixes (Complete)
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |

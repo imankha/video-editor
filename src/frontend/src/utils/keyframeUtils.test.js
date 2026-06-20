@@ -4,6 +4,7 @@ import {
   findKeyframeAtFrame,
   findKeyframeIndexNearFrame,
   hasKeyframeAtFrame,
+  resolveTargetFrame,
   FRAME_TOLERANCE,
   MIN_KEYFRAME_SPACING
 } from './keyframeUtils';
@@ -134,6 +135,39 @@ describe('keyframeUtils', () => {
   describe('MIN_KEYFRAME_SPACING', () => {
     it('should be 10 (prevents overlapping keyframe diamonds)', () => {
       expect(MIN_KEYFRAME_SPACING).toBe(10);
+    });
+  });
+
+  describe('resolveTargetFrame', () => {
+    it('snaps an edit within tolerance onto the existing keyframe frame', () => {
+      // 33 is within FRAME_TOLERANCE (10) of the keyframe at 30 -> targets 30
+      expect(resolveTargetFrame(sampleKeyframes, 33)).toBe(30);
+      expect(resolveTargetFrame(sampleKeyframes, 35)).toBe(30);
+    });
+
+    it('returns the raw frame when no keyframe is within tolerance', () => {
+      // 45 is 15 frames from both 30 and 60 -> a genuinely new keyframe
+      expect(resolveTargetFrame(sampleKeyframes, 45)).toBe(45);
+    });
+
+    it('returns the same frame on an exact match', () => {
+      expect(resolveTargetFrame(sampleKeyframes, 30)).toBe(30);
+    });
+
+    it('respects a custom tolerance', () => {
+      expect(resolveTargetFrame(sampleKeyframes, 45, 20)).toBe(30);
+      expect(resolveTargetFrame(sampleKeyframes, 45, 5)).toBe(45);
+    });
+
+    it('returns the raw frame for an empty keyframes array', () => {
+      expect(resolveTargetFrame([], 30)).toBe(30);
+    });
+
+    it('is the identity rule the reducer and persistence paths must share', () => {
+      // This is the contract that keeps display/store/backend in agreement:
+      // an edit near frame 95 targets the existing keyframe, never a near-twin.
+      const kfs = [{ frame: 0 }, { frame: 95 }, { frame: 200 }];
+      expect(resolveTargetFrame(kfs, 100)).toBe(95);
     });
   });
 });

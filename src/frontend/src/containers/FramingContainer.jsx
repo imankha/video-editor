@@ -3,6 +3,7 @@ import { FramingMode, CropOverlay } from '../modes/framing';
 import { API_BASE } from '../config';
 import * as framingActions from '../api/framingActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
+import { resolveTargetFrame } from '../utils/keyframeUtils';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { useQuestStore } from '../stores/questStore';
@@ -303,27 +304,34 @@ export function FramingContainer({
    */
   const handleCropComplete = useCallback(async (cropData) => {
     const frame = Math.round(currentTime * framerate);
+    // Resolve identity the same way the reducer does: an edit within snap range
+    // of an existing keyframe targets THAT keyframe, not the raw clicked frame.
+    // Persisting the raw frame here is what made the store/backend append a
+    // near-duplicate the reducer merged — the overlapping-keyframe bug.
+    const targetFrame = resolveTargetFrame(keyframes, frame);
     const callerClipId = selectedClipId;
 
     // Capture pre-existing keyframe for rollback (may be null if no keyframe at this frame)
     const previousKfData = getCropDataAtTime(currentTime);
-    const previousKf = keyframes.find(kf => kf.frame === frame);
+    const previousKf = keyframes.find(kf => kf.frame === targetFrame);
     const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+    // Preserve a permanent boundary's origin when snapping onto it (matches reducer)
+    const origin = previousKf?.origin || 'user';
 
     clipHasUserEditsRef.current = true;
     addOrUpdateKeyframe(currentTime, cropData, duration);
     onCropChange?.(null);
     onUserEdit?.();
     setFramingChangedSinceExport?.(true);
-    track('crop_keyframe_add', { frame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
+    track('crop_keyframe_add', { frame: targetFrame, clipId: selectedClipId, x: cropData.x, y: cropData.y, w: cropData.width, h: cropData.height }, { debugOnly: true });
     // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
     useQuestStore.getState().recordAchievement('crop_adjusted');
 
     // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
     // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
-    const newKf = { frame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin: 'user' };
+    const newKf = { frame: targetFrame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin };
     if (callerClipId) {
-      const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
+      const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== targetFrame), newKf];
       updateClipData(callerClipId, { crop_data: updatedKfs });
     }
 
@@ -331,12 +339,12 @@ export function FramingContainer({
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
       const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
-        frame,
+        frame: targetFrame,
         x: cropData.x,
         y: cropData.y,
         width: cropData.width,
         height: cropData.height,
-        origin: 'user'
+        origin
       });
       if (!result.success) {
         // Store rollback is keyed by clip id — always safe
@@ -866,12 +874,15 @@ export function FramingContainer({
   const handlePasteCrop = useCallback(async (time = currentTime) => {
     if (videoUrl && copiedCrop) {
       const frame = Math.round(time * framerate);
+      // Resolve identity (snap) before persisting — see handleCropComplete.
+      const targetFrame = resolveTargetFrame(keyframes, frame);
       const callerClipId = selectedClipId;
 
       // Capture pre-existing keyframe for rollback
       const previousKfData = getCropDataAtTime(time);
-      const previousKf = keyframes.find(kf => kf.frame === frame);
+      const previousKf = keyframes.find(kf => kf.frame === targetFrame);
       const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+      const origin = previousKf?.origin || 'user';
 
       pasteCropKeyframe(time, duration);
       onUserEdit?.();
@@ -879,8 +890,8 @@ export function FramingContainer({
 
       // Sync to clip store so sidebar indicator updates
       if (callerClipId) {
-        const newKf = { frame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin: 'user' };
-        const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== frame), newKf];
+        const newKf = { frame: targetFrame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin };
+        const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== targetFrame), newKf];
         updateClipData(callerClipId, { crop_data: updatedKfs });
       }
 
@@ -888,12 +899,12 @@ export function FramingContainer({
       const clipId = selectedClip?.id;
       if (selectedProjectId && clipId) {
         const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
-          frame,
+          frame: targetFrame,
           x: copiedCrop.x,
           y: copiedCrop.y,
           width: copiedCrop.width,
           height: copiedCrop.height,
-          origin: 'user'
+          origin
         });
         if (!result.success) {
           // Store rollback is keyed by clip id — always safe

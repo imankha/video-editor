@@ -24,6 +24,7 @@ import {
   findKeyframeIndexNearFrame,
   findKeyframeAtFrame,
   hasKeyframeAtFrame,
+  resolveTargetFrame,
   FRAME_TOLERANCE,
   MIN_KEYFRAME_SPACING
 } from '../utils/keyframeUtils';
@@ -341,7 +342,9 @@ export function keyframeReducer(state, action) {
       // Check if a keyframe exists within tolerance range (snap to existing)
       // This prevents accidentally creating new keyframes when user intends to edit existing ones
       const nearbyIndex = findKeyframeIndexNearFrame(keyframes, frame, FRAME_TOLERANCE);
-      const targetFrame = nearbyIndex >= 0 ? keyframes[nearbyIndex].frame : frame;
+      // Single source of truth for keyframe identity — persistence paths resolve
+      // the same way so display/store/backend never disagree on the target frame.
+      const targetFrame = resolveTargetFrame(keyframes, frame);
 
       // Enforce minimum spacing: reject new keyframes too close to existing ones
       // (snapped updates are fine — this only blocks genuinely new keyframes)

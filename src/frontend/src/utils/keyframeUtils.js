@@ -66,3 +66,25 @@ export function hasKeyframeAtFrame(keyframes, frame) {
  */
 export const FRAME_TOLERANCE = 10;
 export const MIN_KEYFRAME_SPACING = FRAME_TOLERANCE;
+
+/**
+ * Resolve which keyframe an edit at `frame` actually targets.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for keyframe identity. An edit within
+ * `tolerance` of an existing keyframe targets THAT keyframe's frame (snap to
+ * update); otherwise it targets `frame` (new keyframe). The reducer and every
+ * persistence path (store + backend) must resolve identity through this so all
+ * representations agree on which keyframe was touched. If a persist path uses
+ * the raw clicked frame while the reducer snaps, the backend appends a
+ * near-duplicate the reducer refused to create — the root of the overlapping
+ * keyframe / lost-boundary bug.
+ *
+ * @param {Array} keyframes - Array of keyframe objects with 'frame' property
+ * @param {number} frame - The frame the edit was made at
+ * @param {number} tolerance - Snap window in frames (default: FRAME_TOLERANCE)
+ * @returns {number} The frame number the edit targets
+ */
+export function resolveTargetFrame(keyframes, frame, tolerance = FRAME_TOLERANCE) {
+  const i = findKeyframeIndexNearFrame(keyframes, frame, tolerance);
+  return i >= 0 ? keyframes[i].frame : frame;
+}

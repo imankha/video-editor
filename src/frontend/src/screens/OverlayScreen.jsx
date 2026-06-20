@@ -630,17 +630,24 @@ export function OverlayScreen({
 
   // Wrapped handler: Add/update keyframe
   const wrappedAddHighlightRegionKeyframe = useCallback((time, data) => {
-    const success = addHighlightRegionKeyframe(time, data);
-    if (success && canSyncActions) {
-      const region = getRegionAtTime(time);
-      if (region) {
-        overlayActions.addKeyframe(projectId, region.id, { time, ...data })
-          .catch(err => console.error('[OverlayScreen] Failed to sync addKeyframe:', err));
+    const region = getRegionAtTime(time);
+    const result = addHighlightRegionKeyframe(time, data);
+    if (result && canSyncActions && region) {
+      // If the hook moved a nearby keyframe onto this frame, delete the stale
+      // keyframe on the backend first — otherwise the surgical add appends a
+      // near-duplicate and the moved-from keyframe persists as an orphan
+      // (the overlapping-keyframe / lost-boundary bug). Mirror the move.
+      if (result.movedFromFrame != null) {
+        const oldTime = frameToTime(result.movedFromFrame, highlightRegionsFramerate);
+        overlayActions.deleteKeyframe(projectId, region.id, oldTime)
+          .catch(err => console.error('[OverlayScreen] Failed to sync moved keyframe delete:', err));
       }
+      overlayActions.addKeyframe(projectId, region.id, { time, ...data })
+        .catch(err => console.error('[OverlayScreen] Failed to sync addKeyframe:', err));
     }
     setOverlayChangedSinceExport(true);
-    return success;
-  }, [addHighlightRegionKeyframe, projectId, canSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
+    return !!result;
+  }, [addHighlightRegionKeyframe, projectId, canSyncActions, getRegionAtTime, highlightRegionsFramerate, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Remove keyframe
   const wrappedRemoveHighlightRegionKeyframe = useCallback((time) => {

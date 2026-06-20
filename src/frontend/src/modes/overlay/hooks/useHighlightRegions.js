@@ -524,6 +524,20 @@ export default function useHighlightRegions(videoMetadata) {
 
     const targetFrame = timeToFrame(time, framerate);
 
+    // Resolve identity up front so the persistence layer can mirror a MOVE.
+    // When rule 2 fires we move a nearby keyframe onto targetFrame; the caller
+    // must delete the stale keyframe on the backend, otherwise it persists as an
+    // orphan (the overlapping-keyframe / lost-boundary bug). movedFromFrame is
+    // the frame we moved away from, or null for an exact update / brand-new kf.
+    const kfs = region.keyframes || [];
+    const exactIdx = kfs.findIndex(kf => kf.frame === targetFrame);
+    const nearbyIdx = exactIdx >= 0
+      ? -1
+      : kfs.findIndex(kf => Math.abs(kf.frame - targetFrame) <= MIN_KEYFRAME_DISTANCE_FRAMES);
+    const movedFromFrame = (nearbyIdx >= 0 && kfs[nearbyIdx].frame !== targetFrame)
+      ? kfs[nearbyIdx].frame
+      : null;
+
     setRegions(prev => prev.map(r => {
       if (r.id !== region.id) return r;
 
@@ -566,7 +580,7 @@ export default function useHighlightRegions(videoMetadata) {
       };
     }));
 
-    return true;
+    return { movedFromFrame };
   }, [getRegionAtTime, framerate]);
 
   /**
