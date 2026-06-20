@@ -1,5 +1,5 @@
 """
-v015: Collapse near-duplicate crop/highlight keyframes (data heal).
+v014: Collapse near-duplicate crop/highlight keyframes (data heal).
 
 Background: the Framing and Overlay editors snap an edit to a nearby keyframe in
 the display layer (within FRAME_TOLERANCE=10 frames for crop, 5 frames for
@@ -70,8 +70,8 @@ def _collapse(keyframes, pos, min_gap):
     return kept, len(kept) != len(ordered)
 
 
-class V015CollapseDuplicateKeyframes(BaseMigration):
-    version = 15
+class V014CollapseDuplicateKeyframes(BaseMigration):
+    version = 14
     description = "Collapse near-duplicate crop/highlight keyframes"
 
     def up(self, conn) -> None:
@@ -99,7 +99,7 @@ class V015CollapseDuplicateKeyframes(BaseMigration):
                     )
                     fixed += 1
             if fixed:
-                logger.info(f"[v015] collapsed crop keyframe duplicates in {fixed} clips")
+                logger.info(f"[v014] collapsed crop keyframe duplicates in {fixed} clips")
 
         # --- Highlight keyframes: working_videos.highlights_data ---
         # (list of regions; each region has a 'keyframes' list keyed by 'time') ---
@@ -135,5 +135,5 @@ class V015CollapseDuplicateKeyframes(BaseMigration):
                     fixed += 1
             if fixed:
                 logger.info(
-                    f"[v015] collapsed highlight keyframe duplicates in {fixed} working videos"
+                    f"[v014] collapsed highlight keyframe duplicates in {fixed} working videos"
                 )

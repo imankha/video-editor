@@ -12,7 +12,7 @@ from .v010_ranking_columns import V010RankingColumns
 from .v011_drop_game_aggregates import V011DropGameAggregates
 from .v012_flip_inverted_clip_ranges import V012FlipInvertedClipRanges
 from .v013_auto_export_attempts import V013AutoExportAttempts
-from .v015_collapse_duplicate_keyframes import V015CollapseDuplicateKeyframes
+from .v014_collapse_duplicate_keyframes import V014CollapseDuplicateKeyframes
 
 MIGRATIONS = [
     V001Baseline(),
@@ -28,7 +28,7 @@ MIGRATIONS = [
     V011DropGameAggregates(),
     V012FlipInvertedClipRanges(),
     V013AutoExportAttempts(),
-    V015CollapseDuplicateKeyframes(),
+    V014CollapseDuplicateKeyframes(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

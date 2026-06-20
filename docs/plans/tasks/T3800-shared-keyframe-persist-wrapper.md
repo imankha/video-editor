@@ -45,7 +45,7 @@ keyframe tests.
 - New: a `useKeyframePersistence` hook or `persistKeyframeEdit()` helper
 
 ### Related Tasks
-- Follows: keyframe-identity divergence fix on branch `fix/crop-keyframe-dup-snap` (crop + overlay persist sites, profile_db v015 heal)
+- Follows: keyframe-identity divergence fix on branch `fix/crop-keyframe-dup-snap` (crop + overlay persist sites, profile_db v014 heal)
 - Related: T2000 (Overlapping Crop Keyframes — shallower restore-path cause, DONE), T3820 (reconcile snap directions)
 
 ### Technical Notes

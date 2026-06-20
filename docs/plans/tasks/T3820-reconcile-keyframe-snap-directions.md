@@ -52,7 +52,7 @@ coverage.
   move-to-clicked, verify boundary keyframes are excluded from the move (you must never
   drag frame 0 or the end boundary off its position).
 - Whatever window is chosen, `MIN_KEYFRAME_SPACING` (the dedup/spacing invariant and the
-  v015 heal threshold) must stay consistent with it.
+  v014 heal threshold) must stay consistent with it.
 
 ## Implementation
 

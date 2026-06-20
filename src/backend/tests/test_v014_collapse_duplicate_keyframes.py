@@ -1,4 +1,4 @@
-"""Tests for profile_db v015: collapse near-duplicate crop/highlight keyframes."""
+"""Tests for profile_db v014: collapse near-duplicate crop/highlight keyframes."""
 
 import sqlite3
 import tempfile
@@ -7,8 +7,8 @@ import os
 import pytest
 
 from app.utils.encoding import encode_data, decode_data
-from app.migrations.profile_db.v015_collapse_duplicate_keyframes import (
-    V015CollapseDuplicateKeyframes,
+from app.migrations.profile_db.v014_collapse_duplicate_keyframes import (
+    V014CollapseDuplicateKeyframes,
     _collapse,
     CROP_MIN_FRAME_GAP,
     HIGHLIGHT_MIN_TIME_GAP,
@@ -102,30 +102,30 @@ def _get_clip(conn, clip_id):
 class TestMigrationCrop:
     def test_collapses_duplicate_crop_keyframes(self, conn):
         _insert_clip(conn, 1, [_crop_kf(0), _crop_kf(50), _crop_kf(55), _crop_kf(100)])
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         assert [k["frame"] for k in _get_clip(conn, 1)] == [0, 50, 100]
 
     def test_preserves_end_boundary_when_duplicate_is_near_end(self, conn):
         _insert_clip(conn, 1, [_crop_kf(0), _crop_kf(95), _crop_kf(100)])
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         # the permanent end boundary (100) survives, the near-dup (95) is dropped
         assert [k["frame"] for k in _get_clip(conn, 1)] == [0, 100]
 
     def test_leaves_clean_clips_untouched(self, conn):
         _insert_clip(conn, 1, [_crop_kf(0), _crop_kf(50), _crop_kf(100)])
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         assert [k["frame"] for k in _get_clip(conn, 1)] == [0, 50, 100]
 
     def test_null_crop_data_is_ignored(self, conn):
         conn.execute("INSERT INTO working_clips (id, crop_data) VALUES (1, NULL)")
-        V015CollapseDuplicateKeyframes().up(conn)  # must not raise
+        V014CollapseDuplicateKeyframes().up(conn)  # must not raise
         assert _get_clip(conn, 1) is None
 
     def test_idempotent(self, conn):
         _insert_clip(conn, 1, [_crop_kf(0), _crop_kf(50), _crop_kf(55), _crop_kf(100)])
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         first = _get_clip(conn, 1)
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         assert _get_clip(conn, 1) == first
 
 
@@ -139,7 +139,7 @@ class TestMigrationHighlights:
             "INSERT INTO working_videos (id, highlights_data) VALUES (?, ?)",
             (1, encode_data(regions)),
         )
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
 
         row = conn.execute(
             "SELECT highlights_data FROM working_videos WHERE id = 1"
@@ -156,7 +156,7 @@ class TestMigrationHighlights:
             "INSERT INTO working_videos (id, highlights_data) VALUES (?, ?)",
             (1, encode_data(regions)),
         )
-        V015CollapseDuplicateKeyframes().up(conn)
+        V014CollapseDuplicateKeyframes().up(conn)
         row = conn.execute(
             "SELECT highlights_data FROM working_videos WHERE id = 1"
         ).fetchone()

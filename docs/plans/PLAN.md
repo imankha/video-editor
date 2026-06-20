@@ -45,7 +45,7 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 
 ### Keyframe Identity Cleanup (follow-ups from crop/overlay duplicate-keyframe fix)
 
-Surfaced while fixing the keyframe-identity divergence (display snaps an edit to a nearby keyframe, but the surgical persistence sent the raw clicked frame/time, so the backend accumulated near-duplicate keyframes that, on delete, stripped a permanent boundary). Root fix + profile_db v015 heal shipped on branch `fix/crop-keyframe-dup-snap`; these are the remaining DRY/UX cleanups.
+Surfaced while fixing the keyframe-identity divergence (display snaps an edit to a nearby keyframe, but the surgical persistence sent the raw clicked frame/time, so the backend accumulated near-duplicate keyframes that, on delete, stripped a permanent boundary). Root fix + profile_db v014 heal shipped on branch `fix/crop-keyframe-dup-snap`; these are the remaining DRY/UX cleanups.
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
 |------|------|------|------|------|------|------|------|
