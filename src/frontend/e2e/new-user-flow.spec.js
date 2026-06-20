@@ -476,10 +476,16 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     await fiveStarBtn.click({ force: true });
     await page.waitForTimeout(1000);
 
-    // Click "Create Reel" — quest now requires a reel, not just a 5-star rating
+    // Rating a clip 5 stars auto-creates a reel, so the "Create Reel" button
+    // races to "Reel Created" (disabled). If it's still "Create Reel", click it;
+    // otherwise the auto-create already landed. Either way the reel is created,
+    // which the annotate_brilliant quest step below verifies.
     const createReelBtn = page.locator('[data-clip-details] button:has-text("Create Reel")');
-    await expect(createReelBtn).toBeVisible({ timeout: 5000 });
-    await createReelBtn.click({ force: true });
+    const reelCreatedBtn = page.locator('[data-clip-details] button:has-text("Reel Created")');
+    await expect(createReelBtn.or(reelCreatedBtn)).toBeVisible({ timeout: 5000 });
+    if (await createReelBtn.isVisible().catch(() => false)) {
+      await createReelBtn.click({ force: true });
+    }
     await page.waitForTimeout(2000);
 
     // Verify quest step: annotate_brilliant
