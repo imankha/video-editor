@@ -96,11 +96,14 @@ describe('StorageExtensionModal', () => {
     });
   });
 
-  it('shows buy credits modal when balance insufficient', () => {
+  it('shows buy credits modal when balance insufficient', async () => {
     useCreditStore.setState({ balance: 0 });
     render(<StorageExtensionModal {...defaultProps} />);
     fireEvent.click(screen.getByRole('button', { name: /Extend Storage/ }));
-    expect(screen.getByTestId('buy-credits-modal')).toBeTruthy();
+    // BuyCreditsModal is lazy-loaded behind Suspense, so it resolves async.
+    await waitFor(() => {
+      expect(screen.getByTestId('buy-credits-modal')).toBeTruthy();
+    });
   });
 
   it('handles zero video_size gracefully', () => {
@@ -131,11 +134,11 @@ describe('StorageExtensionModal', () => {
     expect(screen.getByText('Balance: 10')).toBeTruthy();
   });
 
-  it('calls onClose when backdrop clicked', () => {
+  it('does not close when backdrop clicked (no accidental dismiss)', () => {
     const onClose = vi.fn();
     render(<StorageExtensionModal {...defaultProps} onClose={onClose} />);
     const backdrop = document.querySelector('.bg-black\\/70');
     fireEvent.click(backdrop);
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

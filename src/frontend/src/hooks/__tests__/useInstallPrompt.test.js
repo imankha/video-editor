@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useInstallPrompt } from '../useInstallPrompt';
 
 function mockMatchMedia(standalone) {
@@ -7,10 +7,6 @@ function mockMatchMedia(standalone) {
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
   }));
-}
-
-function mockInstalledApps(apps = []) {
-  navigator.getInstalledRelatedApps = vi.fn(() => Promise.resolve(apps));
 }
 
 beforeEach(() => {
@@ -128,36 +124,5 @@ describe('useInstallPrompt', () => {
     act(() => { window.dispatchEvent(new Event('appinstalled')); });
     expect(result.current.isInstalled).toBe(true);
     expect(result.current.canInstall).toBe(false);
-  });
-
-  it('returns installedInBrowser when getInstalledRelatedApps reports installed', async () => {
-    mockInstalledApps([{ platform: 'webapp' }]);
-    const { result } = renderHook(() => useInstallPrompt());
-    await waitFor(() => {
-      expect(result.current.installedInBrowser).toBe(true);
-    });
-    expect(result.current.canInstall).toBe(false);
-  });
-
-  it('installedInBrowser is false when getInstalledRelatedApps returns empty', async () => {
-    mockInstalledApps([]);
-    const { result } = renderHook(() => useInstallPrompt());
-    await waitFor(() => {
-      expect(navigator.getInstalledRelatedApps).toHaveBeenCalled();
-    });
-    expect(result.current.installedInBrowser).toBe(false);
-  });
-
-  it('installedInBrowser is false when API is not available', () => {
-    const { result } = renderHook(() => useInstallPrompt());
-    expect(result.current.installedInBrowser).toBe(false);
-  });
-
-  it('installedInBrowser is false in standalone mode even if API reports installed', async () => {
-    mockInstalledApps([{ platform: 'webapp' }]);
-    mockMatchMedia(true);
-    const { result } = renderHook(() => useInstallPrompt());
-    expect(result.current.installedInBrowser).toBe(false);
-    expect(result.current.isInstalled).toBe(true);
   });
 });

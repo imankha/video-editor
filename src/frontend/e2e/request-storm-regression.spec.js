@@ -14,7 +14,7 @@ import { fileURLToPath } from 'url';
  */
 
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_reqstorm_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const __filename = fileURLToPath(import.meta.url);

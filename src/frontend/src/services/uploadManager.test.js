@@ -104,7 +104,8 @@ describe('uploadManager', () => {
       const url = await getDedupeGameUrl(123);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/games/dedupe/123/url')
+        expect.stringContaining('/api/games/dedupe/123/url'),
+        expect.objectContaining({ credentials: 'include' })
       );
       expect(url).toBe('https://example.com/signed-url');
     });
@@ -162,7 +163,8 @@ describe('uploadManager', () => {
       const games = await listDedupeGames();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/games/dedupe')
+        expect.stringContaining('/api/games/dedupe'),
+        expect.objectContaining({ credentials: 'include' })
       );
       expect(games).toEqual(mockGames);
     });

@@ -34,7 +34,7 @@ import { fileURLToPath } from 'url';
  */
 
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_newuser_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const TEST_HEADERS = { 'X-User-ID': TEST_USER_ID, 'Content-Type': 'application/json' };
 
@@ -529,7 +529,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
     // Click the auto-generated project from the 5-star clip
@@ -563,7 +563,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -588,7 +588,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
     await page.waitForTimeout(3000);
@@ -689,7 +689,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Navigate to project and trigger export
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
     const q3ProjectCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
@@ -824,7 +824,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
     const newProjectBtn = page.locator('button:has-text("New Reel")');
@@ -868,7 +868,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     // Navigate to the custom project and click Frame Video
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
     const reelCards = page.locator('.bg-gray-800.rounded-lg h3.text-white');
