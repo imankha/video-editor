@@ -1831,7 +1831,11 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
             None,
         )
         if duplicate:
-            share_records.append({"share_token": duplicate["share_token"], "recipient_email": email})
+            share_records.append({
+                "share_token": duplicate["share_token"],
+                "recipient_email": email,
+                "duplicate": True,
+            })
             continue
 
         try:
@@ -1862,6 +1866,9 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
     tasks = {}
     for email, share in zip(body.emails, share_records):
         if email in [r["email"] for r in email_results]:
+            continue
+        if share and share.get("duplicate"):
+            # Recipient already has an active share for this game; don't resend email.
             continue
         is_first_touch = not _is_existing_user(email)
         tasks[email] = send_playback_share_email(
