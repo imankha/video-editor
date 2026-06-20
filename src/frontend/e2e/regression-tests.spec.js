@@ -24,7 +24,7 @@ import { fileURLToPath } from 'url';
 // UI mode: Uses your running dev server on 8000
 // Headless mode: Tests go through Vite proxy on 5174 which forwards to backend
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +49,25 @@ async function setupTestUserContext(page) {
     'X-Test-Mode': 'true',
     'X-User-ID': TEST_USER_ID,
   });
+
+  // When targeting a deployed environment (E2E_BASE_URL/E2E_API_BASE set), the
+  // frontend and API live on different origins. In-browser `fetch('/api/...')`
+  // calls in these tests assume a same-origin Vite proxy, so forward any
+  // app-origin /api request to the real API origin. Registered first → lowest
+  // precedence, so the specific routes below (auth/me, credits) still win.
+  const apiOrigin = process.env.E2E_API_BASE ? new URL(process.env.E2E_API_BASE).origin : null;
+  const appOrigin = process.env.E2E_BASE_URL ? new URL(process.env.E2E_BASE_URL).origin : null;
+  if (apiOrigin && appOrigin) {
+    await page.route('**/api/**', async (route) => {
+      const reqUrl = new URL(route.request().url());
+      if (reqUrl.origin === appOrigin) {
+        const response = await route.fetch({ url: apiOrigin + reqUrl.pathname + reqUrl.search });
+        await route.fulfill({ response });
+      } else {
+        await route.fallback();
+      }
+    });
+  }
 
   // Strip test headers from R2 presigned URL requests to avoid CORS preflight
   await page.route(/r2\.cloudflarestorage\.com/, async (route) => {
@@ -510,7 +529,7 @@ async function navigateToProjectManager(page) {
   }
 
   // Switch to Projects tab (default might be Games tab)
-  const projectsTab = page.locator('button:has-text("Reels")').first();
+  const projectsTab = page.locator('button:has-text("Reel Drafts")').first();
   if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
     await projectsTab.click();
     await page.waitForTimeout(500);
@@ -640,7 +659,7 @@ async function navigateToProjectFromHome(page) {
   ]);
 
   // Click Projects tab to show "Your Projects" section
-  const projectsTab = page.locator('button:has-text("Reels")');
+  const projectsTab = page.locator('button:has-text("Reel Drafts")');
   if (await projectsTab.isVisible({ timeout: 2000 }).catch(() => false)) {
     await projectsTab.click();
     await page.waitForTimeout(500);
@@ -834,7 +853,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
       // Go to project manager first
       await page.goto('/');
       await page.waitForLoadState('networkidle');
-      await page.locator('button:has-text("Reels")').click();
+      await page.locator('button:has-text("Reel Drafts")').click();
       await page.waitForTimeout(500);
 
       // Click the first clip link that says "click to open" in its title/aria-label
@@ -879,7 +898,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   // Navigate to project manager and create project from clips
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(2000);
-  await page.locator('button:has-text("Reels")').click();
+  await page.locator('button:has-text("Reel Drafts")').click();
   await page.waitForTimeout(500);
 
   // Click New Project to open the modal
@@ -1254,7 +1273,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1309,7 +1328,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1353,7 +1372,7 @@ test.describe('Smoke Tests @smoke', () => {
     await page.waitForLoadState('networkidle');
 
     // Switch to Projects tab
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
     // Create project from clips
@@ -1490,7 +1509,7 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full] Step 2: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal
@@ -2272,7 +2291,7 @@ test.describe('Full Coverage Tests @full', () => {
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
     // Click New Project to open the Create Project from Clips modal

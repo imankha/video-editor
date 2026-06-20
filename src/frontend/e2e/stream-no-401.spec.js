@@ -17,7 +17,7 @@
 import { test, expect } from '@playwright/test';
 
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 
 // TODO(T1490): replace skip with real fixture — upload a test video, ingest
 // TSV to create a project + clips, then navigate to annotate/framing mode.

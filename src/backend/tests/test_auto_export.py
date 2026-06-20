@@ -51,6 +51,7 @@ def isolated_profile_db(tmp_path):
             clip_count INTEGER DEFAULT 0,
             status TEXT DEFAULT 'ready',
             auto_export_status TEXT,
+            auto_export_attempts INTEGER DEFAULT 0,
             recap_video_url TEXT,
             video_size INTEGER,
             video_duration REAL,
@@ -127,6 +128,14 @@ def isolated_profile_db(tmp_path):
             published_at TIMESTAMP,
             aspect_ratio TEXT,
             tags BLOB,
+            game_ids BLOB,
+            clip_count INTEGER DEFAULT 1,
+            quality_score REAL,
+            rating REAL,
+            rd REAL,
+            match_count INTEGER DEFAULT 0,
+            source_clip_id INTEGER,
+            clip_start_time REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -314,6 +323,29 @@ class TestAutoExportGame:
         assert result == "failed"
         assert _get_game_status(db, game_id)["auto_export_status"] == "failed"
         isolated_profile_db["mock_sync"].assert_called()
+
+    @patch(f"{M}._generate_recap", side_effect=RuntimeError("concat failed"))
+    @patch(f"{M}._export_brilliant_clip")
+    def test_each_run_increments_attempts(self, mock_brilliant, mock_recap, isolated_profile_db):
+        """Bug 23p: every run bumps auto_export_attempts so the sweep can cap retries."""
+        from app.services.auto_export import auto_export_game
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5)
+
+        def _attempts():
+            conn = sqlite3.connect(str(db))
+            n = conn.execute(
+                "SELECT auto_export_attempts FROM games WHERE id = ?", (game_id,)
+            ).fetchone()[0]
+            conn.close()
+            return n
+
+        auto_export_game(USER_ID, PROFILE_ID, game_id)
+        assert _attempts() == 1
+        auto_export_game(USER_ID, PROFILE_ID, game_id)
+        assert _attempts() == 2
 
     @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
     @patch(f"{M}._export_brilliant_clip")
@@ -561,6 +593,57 @@ class TestGenerateRecap:
         assert mock_presign.call_count == 2
         mock_presign.assert_any_call("games/hash_a.mp4")
         mock_presign.assert_any_call("games/hash_b.mp4")
+
+    @patch(f"{M}.upload_bytes_to_r2", return_value=True)
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_recap_skips_inverted_range_clip(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+        """Bug 23p: a clip with end_time < start_time (inverted range) must be
+        skipped so it doesn't fail the whole recap. The valid clips still export."""
+        import json
+        from app.services.auto_export import _generate_recap
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.filter.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        mock_ffmpeg.probe.return_value = {"format": {"duration": "5.0"}}
+
+        clips = [
+            {"id": 1, "video_hash": "abc", "start_time": 0.0, "end_time": 5.0,
+             "name": "Good", "rating": 5, "tags": None, "notes": None},
+            # Inverted range like prod clip 69 (end < start)
+            {"id": 69, "video_hash": "abc", "start_time": 3998.0, "end_time": 3959.0,
+             "name": "Inverted", "rating": 2, "tags": None, "notes": None},
+        ]
+        result = _generate_recap(USER_ID, PROFILE_ID, 1, clips)
+        assert result == "recaps/1.mp4"
+
+        # The inverted clip is excluded from the recap mapping; only the valid clip remains.
+        clip_json = json.loads(mock_upload_bytes.call_args[0][2].decode())
+        assert len(clip_json) == 1
+        assert clip_json[0]["id"] == 1
+        # ffmpeg.input called once per extracted clip (1) + once for concat = 2 (not 3).
+        assert mock_ffmpeg.input.call_count == 2
+
+    @patch(f"{M}.upload_bytes_to_r2", return_value=True)
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_recap_all_clips_invalid_raises(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
+        """If every clip has an invalid range, nothing is extracted and recap raises."""
+        from app.services.auto_export import _generate_recap
+
+        clips = [
+            {"id": 1, "video_hash": "abc", "start_time": 10.0, "end_time": 5.0,
+             "name": "Bad1", "rating": 5, "tags": None, "notes": None},
+            {"id": 2, "video_hash": "abc", "start_time": 7.0, "end_time": 7.0,
+             "name": "Zero", "rating": 4, "tags": None, "notes": None},
+        ]
+        with pytest.raises(RuntimeError, match="No clips extracted"):
+            _generate_recap(USER_ID, PROFILE_ID, 1, clips)
 
     @patch(f"{M}.generate_presigned_url_global", return_value=None)
     def test_recap_all_urls_fail_raises(self, mock_presign, isolated_profile_db):

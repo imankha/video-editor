@@ -25,7 +25,7 @@ import { fileURLToPath } from 'url';
 
 // Always use port 8000 - the dev backend port
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 
 // Unique test user ID for this test run (isolates E2E data from dev data)
 const TEST_USER_ID = `e2e_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -204,13 +204,13 @@ test.describe('Full Workflow Tests', () => {
 
     // Should see Project Manager tabs
     await expect(page.locator('button:has-text("Games")')).toBeVisible();
-    await expect(page.locator('button:has-text("Reels")')).toBeVisible();
+    await expect(page.locator('button:has-text("Reel Drafts")')).toBeVisible();
 
     // Games tab is the default for fresh users - verify it loads first
     await expect(page.locator('button:has-text("Add Game")')).toBeVisible();
 
     // Switch to Projects tab and verify
-    await page.locator('button:has-text("Reels")').click();
+    await page.locator('button:has-text("Reel Drafts")').click();
     await expect(page.locator('button:has-text("New Reel")')).toBeVisible();
   });
 

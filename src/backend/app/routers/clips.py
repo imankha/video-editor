@@ -31,6 +31,7 @@ from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
 from app.services.pg import get_pg
 from app.analytics import record_milestone
 from app.utils.encoding import encode_data, decode_data
+from app.utils.clip_range import normalize_clip_range
 
 logger = logging.getLogger(__name__)
 
@@ -801,6 +802,11 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
     if clip_data.create_project:
         logger.info(f"[CreateReel] save_raw_clip called with create_project=True, game_id={clip_data.game_id}")
 
+    # Normalize an inverted range (start > end) before it touches the DB or the
+    # end_time-keyed lookup below, so start_time <= end_time always holds.
+    clip_data.start_time, clip_data.end_time = normalize_clip_range(
+        clip_data.start_time, clip_data.end_time)
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -965,6 +971,13 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         new_end = update.end_time if update.end_time is not None else old_end
         auto_project_id = clip['auto_project_id']
 
+        # Normalize against the EFFECTIVE range so a partial update that inverts
+        # the clip (e.g. only start_time sent, past the stored end_time) still
+        # ends up with start_time <= end_time. Force both columns when swapped.
+        norm_start, norm_end = normalize_clip_range(new_start, new_end)
+        range_swapped = (norm_start, norm_end) != (new_start, new_end)
+        new_start, new_end = norm_start, norm_end
+
         # Check if duration changed
         duration_changed = (new_start != old_start or new_end != old_end)
 
@@ -1003,12 +1016,14 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.notes is not None:
             updates.append("notes = ?")
             params.append(update.notes)
-        if update.start_time is not None:
+        # Write normalized boundaries. A swap forces both columns even if the
+        # request only supplied one, so the stored range stays ordered.
+        if update.start_time is not None or range_swapped:
             updates.append("start_time = ?")
-            params.append(update.start_time)
-        if update.end_time is not None:
+            params.append(new_start)
+        if update.end_time is not None or range_swapped:
             updates.append("end_time = ?")
-            params.append(update.end_time)
+            params.append(new_end)
         if update.video_sequence is not None:
             updates.append("video_sequence = ?")
             params.append(update.video_sequence)

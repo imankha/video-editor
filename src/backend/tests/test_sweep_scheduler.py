@@ -44,6 +44,7 @@ def isolated_profile_db(tmp_path):
             name TEXT NOT NULL,
             blake3_hash TEXT,
             auto_export_status TEXT,
+            auto_export_attempts INTEGER DEFAULT 0,
             recap_video_url TEXT,
             status TEXT DEFAULT 'ready',
             video_filename TEXT,
@@ -92,16 +93,33 @@ def isolated_profile_db(tmp_path):
         yield {"db_path": db_path, "tmp_path": tmp_path}
 
 
-def _insert_game(db_path, blake3_hash="abc123", status=None):
+def _insert_game(db_path, blake3_hash="abc123", status=None, attempts=0):
     conn = sqlite3.connect(str(db_path))
     conn.execute(
-        "INSERT INTO games (name, blake3_hash, auto_export_status) VALUES ('Game', ?, ?)",
-        (blake3_hash, status),
+        "INSERT INTO games (name, blake3_hash, auto_export_status, auto_export_attempts) VALUES ('Game', ?, ?, ?)",
+        (blake3_hash, status, attempts),
     )
     game_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.commit()
     conn.close()
     return game_id
+
+
+def _set_status(db_path, game_id, status):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("UPDATE games SET auto_export_status = ? WHERE id = ?", (status, game_id))
+    conn.commit()
+    conn.close()
+
+
+def _set_attempts_and_status(db_path, game_id, status, attempts):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE games SET auto_export_status = ?, auto_export_attempts = ? WHERE id = ?",
+        (status, attempts, game_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def _insert_game_video(db_path, game_id, blake3_hash, sequence):
@@ -181,6 +199,37 @@ class TestFindGamesForHash:
         result = _find_games_for_hash(USER_ID, PROFILE_ID, "nonexistent", {"nonexistent"})
         assert result == set()
 
+    def test_failed_under_cap_is_retried(self, isolated_profile_db):
+        """Bug 23p: a failed export still under the retry cap is re-selected."""
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db, blake3_hash="hash_a", status="failed", attempts=1)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == {game_id}
+
+    def test_failed_at_cap_excluded(self, isolated_profile_db):
+        """A failed export that exhausted its retries is not re-selected."""
+        from app.services.sweep_scheduler import _find_games_for_hash
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="failed", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
+    def test_skipped_game_excluded(self, isolated_profile_db):
+        """A 'skipped' game (no clips) is settled and not re-selected."""
+        from app.services.sweep_scheduler import _find_games_for_hash
+
+        db = isolated_profile_db["db_path"]
+        _insert_game(db, blake3_hash="hash_a", status="skipped")
+
+        result = _find_games_for_hash(USER_ID, PROFILE_ID, "hash_a", {"hash_a"})
+        assert result == set()
+
 
 # ---------------------------------------------------------------------------
 # do_sweep tests
@@ -215,6 +264,9 @@ class TestDoSweep:
 
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc")
+        # Mirror real auto_export_game: mark the game complete in the DB so the
+        # post-export "still retryable?" re-check sees it settled.
+        mock_export.side_effect = lambda u, p, gid: (_set_status(db, gid, "complete") or "complete")
 
         do_sweep()
 
@@ -240,6 +292,7 @@ class TestDoSweep:
 
         db = isolated_profile_db["db_path"]
         _insert_game(db, blake3_hash="hash_abc")
+        mock_export.side_effect = lambda u, p, gid: (_set_status(db, gid, "complete") or "complete")
 
         do_sweep()
 
@@ -255,11 +308,13 @@ class TestDoSweep:
     @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
     @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
     @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
-    def test_sweep_continues_on_export_failure(
+    def test_sweep_keeps_ref_when_export_unsettled(
         self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
+        """Bug 23p: if the export didn't settle (here it raised, leaving the game
+        still retryable), keep the ref + source instead of reclaiming them."""
         from app.services.sweep_scheduler import do_sweep
 
         db = isolated_profile_db["db_path"]
@@ -267,8 +322,68 @@ class TestDoSweep:
 
         do_sweep()
 
-        mock_delete_ref.assert_called_once()
-        mock_insert_grace.assert_called_once()
+        # Game is still NULL-status (retryable) -> ref kept, source not grace-deleted.
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game", return_value="failed")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_sweep_keeps_ref_when_failed_under_cap(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
+    ):
+        """A failed export still under the retry cap keeps the ref for next sweep."""
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        # Mock mirrors auto_export_game's failure path: status='failed', one attempt used.
+        gid = _insert_game(db, blake3_hash="hash_abc")
+        mock_export.side_effect = lambda u, p, g: (
+            _set_attempts_and_status(db, g, status="failed", attempts=1) or "failed"
+        )
+
+        do_sweep()
+
+        mock_delete_ref.assert_not_called()
+        mock_insert_grace.assert_not_called()
+
+    @patch(f"{M}.get_expired_grace_deletions", return_value=[])
+    @patch(f"{M}.insert_grace_deletion")
+    @patch(f"{M}.has_remaining_refs", return_value=False)
+    @patch(f"{M}.delete_ref")
+    @patch(f"{M}.auto_export_game")
+    @patch(f"{M}.ensure_database")
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[{"blake3_hash": "hash_abc"}])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_sweep_reclaims_when_failed_exhausted(
+        self, mock_users, mock_profiles, mock_expired, mock_ensure, mock_export,
+        mock_delete_ref, mock_has_remaining, mock_insert_grace,
+        mock_grace_expired, isolated_profile_db
+    ):
+        """A failed export that exhausted the retry cap is no longer retryable, so
+        the sweep reclaims the ref + schedules source deletion."""
+        from app.services.sweep_scheduler import do_sweep, GRACE_PERIOD_DAYS
+        from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+
+        db = isolated_profile_db["db_path"]
+        # Already at the cap with status='failed' -> excluded from _find_games_for_hash,
+        # so auto_export_game is never called and the ref is reclaimed.
+        _insert_game(db, blake3_hash="hash_abc", status="failed", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
+
+        do_sweep()
+
+        mock_export.assert_not_called()
+        mock_delete_ref.assert_called_once_with(USER_ID, PROFILE_ID, "hash_abc")
+        mock_insert_grace.assert_called_once_with("hash_abc", GRACE_PERIOD_DAYS)
 
     @patch(f"{M}.delete_grace_deletion")
     @patch(f"{M}.r2_delete_object_global")

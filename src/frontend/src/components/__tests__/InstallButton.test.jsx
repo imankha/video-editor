@@ -33,14 +33,14 @@ describe('InstallButton', () => {
   it('shows install button when canInstall is true', () => {
     mockHook({ canInstall: true });
     render(<InstallButton />);
-    expect(screen.getByText('Install')).toBeTruthy();
+    expect(screen.getByText('Install App')).toBeTruthy();
   });
 
   it('calls promptInstall directly when canPrompt is true', () => {
     const promptInstall = vi.fn();
     mockHook({ canInstall: true, canPrompt: true, promptInstall });
     render(<InstallButton />);
-    fireEvent.click(screen.getByText('Install'));
+    fireEvent.click(screen.getByText('Install App'));
     expect(promptInstall).toHaveBeenCalled();
     expect(screen.queryByText('Install Reel Ballers')).toBeNull();
   });
@@ -48,7 +48,7 @@ describe('InstallButton', () => {
   it('opens panel with Android instructions on Android without prompt', () => {
     mockHook({ canInstall: true, canPrompt: false, platform: 'android' });
     render(<InstallButton />);
-    fireEvent.click(screen.getByText('Install'));
+    fireEvent.click(screen.getByText('Install App'));
     expect(screen.getByText('Install the App')).toBeTruthy();
     expect(screen.getByText(/Install app/)).toBeTruthy();
   });
@@ -56,7 +56,7 @@ describe('InstallButton', () => {
   it('opens panel with iOS instructions on iOS', () => {
     mockHook({ canInstall: true, platform: 'ios' });
     render(<InstallButton />);
-    fireEvent.click(screen.getByText('Install'));
+    fireEvent.click(screen.getByText('Install App'));
     expect(screen.getByText('Add to Home Screen')).toBeTruthy();
     expect(screen.getByText(/Share icon/)).toBeTruthy();
   });

@@ -16,7 +16,7 @@
 
 import { test, expect } from '@playwright/test';
 
-const DEV_BASE = 'http://localhost:5173';
+const DEV_BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const CLASSIFIER_URL = `${DEV_BASE}/src/utils/videoErrorClassifier.js`;
 
 test.describe('T1360 blob URL recovery', () => {

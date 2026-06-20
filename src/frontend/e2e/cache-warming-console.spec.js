@@ -22,7 +22,7 @@
 
 import { test, expect } from '@playwright/test';
 
-const DEV_BASE = 'http://localhost:5173';
+const DEV_BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const CACHE_WARMING_URL = `${DEV_BASE}/src/utils/cacheWarming.js`;
 
 test.describe('T1350 cache warming CORS cleanup', () => {

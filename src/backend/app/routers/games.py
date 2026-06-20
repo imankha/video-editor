@@ -22,6 +22,7 @@ import json
 
 from app.analytics import record_milestone
 from app.utils.encoding import encode_data, decode_data
+from app.utils.clip_range import normalize_clip_range
 
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -1483,7 +1484,12 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
         annotation_keys = set()
 
         for ann in annotations:
-            end_time = ann.get('end_time', ann.get('start_time', 0))
+            # Normalize an inverted range before it becomes the end_time-keyed
+            # natural key or hits the DB, so start_time <= end_time always holds.
+            start_time, end_time = normalize_clip_range(
+                ann.get('start_time', 0),
+                ann.get('end_time', ann.get('start_time', 0)),
+            )
             video_sequence = ann.get('video_sequence')
             clip_key = (end_time, video_sequence)
             annotation_keys.add(clip_key)
@@ -1505,7 +1511,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     SET start_time = ?, name = ?, rating = ?, tags = ?, notes = ?
                     WHERE id = ?
                 """, (
-                    ann.get('start_time', 0),
+                    start_time,
                     name,
                     rating,
                     tags_encoded,
@@ -1523,7 +1529,7 @@ def save_annotations_to_db(game_id: int, annotations: list) -> None:
                     tags_encoded,
                     name,
                     ann.get('notes', ''),
-                    ann.get('start_time', 0),
+                    start_time,
                     end_time,
                     game_id,
                     video_sequence,

@@ -28,6 +28,14 @@ const TEST_DATA_DIR = path.resolve(__dirname, '../../formal annotations/12.6.car
 const API_PORT = 8000;
 const FRONTEND_PORT = 5173;
 
+// Target override: run against a deployed environment (e.g. staging) instead of
+// local dev servers by setting E2E_BASE_URL + E2E_API_BASE. Defaults stay local.
+//   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
+//   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+//   npm run test:e2e
+const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${FRONTEND_PORT}`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // Run tests sequentially for workflow tests
@@ -49,13 +57,13 @@ export default defineConfig({
   outputDir: path.join(__dirname, 'test-results/artifacts'),
 
   use: {
-    baseURL: `http://localhost:${FRONTEND_PORT}`,
+    baseURL: BASE_URL,
     trace: 'retain-on-failure', // Keep traces for failed tests (helps debugging)
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     // Pass test data paths and API config to tests
     testDataDir: TEST_DATA_DIR,
-    apiBase: `http://localhost:${API_PORT}/api`,
+    apiBase: API_BASE,
     apiPort: API_PORT,
   },
 

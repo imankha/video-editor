@@ -20,7 +20,7 @@ from .auth_db import (
     has_remaining_refs,
     insert_grace_deletion,
 )
-from .auto_export import auto_export_game
+from .auto_export import auto_export_game, MAX_AUTO_EXPORT_ATTEMPTS
 from ..database import ensure_database, get_db_connection
 from ..profile_context import set_current_profile_id
 from ..storage import r2_delete_object_global
@@ -137,6 +137,17 @@ def do_sweep():
                     except Exception as e:
                         logger.error(f"[Sweep] Auto-export failed: user={user_id} game={game_id}: {e}")
 
+                # Keep the ref (and the source video) if any game on this hash
+                # still has a retryable auto-export — a failed export under the
+                # attempt cap. Reclaiming now would delete the source before we
+                # could ever produce its recap (bug 23p). The next sweep retries.
+                if _find_games_for_hash(user_id, profile_id, blake3_hash, expired_hashes):
+                    logger.warning(
+                        f"[Sweep] hash={blake3_hash[:12]} auto-export not settled "
+                        f"(failed, under retry cap) — keeping ref to retry next sweep"
+                    )
+                    continue
+
                 delete_ref(user_id, profile_id, blake3_hash)
 
                 if not has_remaining_refs(blake3_hash):
@@ -164,26 +175,37 @@ def _find_games_for_hash(
 ) -> set[int]:
     """Find all games (single and multi-video) using this hash that need export.
 
+    "Need export" means never exported (auto_export_status IS NULL) OR a prior
+    export failed and is still under the retry cap. Games that succeeded,
+    skipped, or exhausted their retries are excluded.
+
     For multi-video games, only includes games where ALL video hashes are in
     the expired set. Can't use a SQL join since game_storage_refs is in
     auth.sqlite while game_videos is in profile.sqlite.
     """
+    # A game needs (re)export when it was never run, or it failed and still has
+    # retries left. {p} is the games-table alias prefix ("" or "g.").
+    def needs_export(p):
+        return (f"({p}auto_export_status IS NULL OR "
+                f"({p}auto_export_status = 'failed' "
+                f"AND COALESCE({p}auto_export_attempts, 0) < ?))")
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
         # Single-video games
         single = cursor.execute(
-            """SELECT id FROM games
-               WHERE blake3_hash = ? AND auto_export_status IS NULL""",
-            (blake3_hash,),
+            f"""SELECT id FROM games
+               WHERE blake3_hash = ? AND {needs_export('')}""",
+            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS),
         ).fetchall()
 
         # Multi-video games using this hash
         multi_candidates = cursor.execute(
-            """SELECT DISTINCT g.id FROM games g
+            f"""SELECT DISTINCT g.id FROM games g
                JOIN game_videos gv ON gv.game_id = g.id
-               WHERE gv.blake3_hash = ? AND g.auto_export_status IS NULL""",
-            (blake3_hash,),
+               WHERE gv.blake3_hash = ? AND {needs_export('g.')}""",
+            (blake3_hash, MAX_AUTO_EXPORT_ATTEMPTS),
         ).fetchall()
 
         # Filter: only include multi-video games where ALL hashes are expired

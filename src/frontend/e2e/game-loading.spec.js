@@ -15,7 +15,7 @@ import { fileURLToPath } from 'url';
 
 // Always use port 8000 - the dev backend port
 const API_PORT = 8000;
-const API_BASE = `http://localhost:${API_PORT}/api`;
+const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 
 // Unique test user ID for this test run (isolates E2E data from dev data)
 const TEST_USER_ID = `e2e_gameload_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
