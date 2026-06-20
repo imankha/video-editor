@@ -135,8 +135,9 @@ async function createClip(page, seekTime) {
   await addClipBtn.click();
   await page.waitForTimeout(1000);
 
-  // Click the save button explicitly
-  const saveBtn = page.locator('button:has-text("Save & Continue"), button:has-text("Save Clip")').first();
+  // Click the save button explicitly. Opening via "Add Clip" puts the overlay
+  // in CREATING state, so the green action button reads "Save".
+  const saveBtn = page.locator('button.bg-green-600:has-text("Save")').first();
   const saveVisible = await saveBtn.isVisible({ timeout: 3000 }).catch(() => false);
   if (saveVisible) {
     await saveBtn.click();
@@ -301,7 +302,10 @@ test.describe('T690: Clip Selection State Machine', () => {
       await fsButton.click();
       await page.waitForTimeout(1500);
 
-      const saveOrUpdate = page.locator('button:has-text("Save & Continue"), button:has-text("Update & Continue")').first();
+      // Entering FS with an existing clip SELECTED transitions to EDITING, so the
+      // overlay's action button reads "Update" (it's "Save" only when CREATING).
+      // Scope to the green action button so we don't match the "Save" tag chip.
+      const saveOrUpdate = page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first();
       const overlayVis = await saveOrUpdate.isVisible({ timeout: 3000 }).catch(() => false);
       console.log(`  REQ 8: Overlay visible: ${overlayVis}`);
       expect(overlayVis).toBe(true);
@@ -392,8 +396,9 @@ test.describe('T690: Clip Selection State Machine', () => {
       await fsBtn2.click();
       await page.waitForTimeout(1500);
 
-      // We should now be in EDITING state with overlay open
-      const overlayOpen = await page.locator('button:has-text("Save & Continue"), button:has-text("Update & Continue")').first()
+      // We should now be in EDITING state with overlay open (green action button
+      // reads "Update" when editing, "Save" when creating).
+      const overlayOpen = await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
         .isVisible({ timeout: 3000 }).catch(() => false);
       console.log(`[Test] TIMELINE: Overlay open after entering FS: ${overlayOpen}`);
 
@@ -406,7 +411,7 @@ test.describe('T690: Clip Selection State Machine', () => {
             await page.mouse.click(box.x + box.width * 0.95, box.y + box.height / 2);
             await page.waitForTimeout(1500);
 
-            const overlayGone = !(await page.locator('button:has-text("Save & Continue"), button:has-text("Update & Continue")').first()
+            const overlayGone = !(await page.locator('button.bg-green-600:has-text("Update"), button.bg-green-600:has-text("Save")').first()
               .isVisible().catch(() => false));
             const addAppears = await page.locator('button:has-text("Add Clip")').first()
               .isVisible({ timeout: 2000 }).catch(() => false);

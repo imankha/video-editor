@@ -252,21 +252,15 @@ test.describe('Clip Editing Tests', () => {
   test('Edit clip rating via UI', async ({ page }) => {
     await enterAnnotateMode(page);
 
-    // Seek video to a position within the first clip's range (startTime=3s, endTime=9s)
-    // so that clicking the clip doesn't trigger an immediate auto-deselect from the
-    // "playhead is outside clip range" effect.
-    await page.locator('video').first().evaluate(v => { v.currentTime = 5; });
-    await page.waitForTimeout(500);
+    // Select the first clip to open the ClipDetailsEditor (force: list rows can
+    // sit partially under the details panel, so a plain click point is unreliable).
+    await page.locator('[title*="Great Control Pass"]').first().click({ force: true });
 
-    // Click on first clip — target the outer clickable container (not the inner title div)
-    // so that the onClick handler fires reliably without relying on bubbling with force:true
-    const firstClip = page.locator('.border-b.border-gray-800.cursor-pointer').first();
-    await expect(firstClip).toBeVisible({ timeout: 5000 });
-    await firstClip.click();
-    await page.waitForTimeout(800);
+    const detailsPanel = page.locator('[data-clip-details]');
+    await expect(detailsPanel).toBeVisible({ timeout: 10000 });
 
     // Should see rating stars in the ClipDetailsEditor sidebar panel
-    const stars = page.locator('svg.lucide-star');
+    const stars = detailsPanel.locator('svg.lucide-star');
     await expect(stars.first()).toBeVisible({ timeout: 5000 });
     const starCount = await stars.count();
     expect(starCount).toBeGreaterThan(0);
@@ -314,19 +308,14 @@ test.describe('UI Component Tests', () => {
   test('Star rating is visible for clips', async ({ page }) => {
     await enterAnnotateMode(page);
 
-    // Seek video to a position within the first clip's range (startTime=3s, endTime=9s)
-    // to prevent the auto-deselect effect from firing when we click the clip
-    await page.locator('video').first().evaluate(v => { v.currentTime = 5; });
-    await page.waitForTimeout(500);
+    // Select the first clip to open the ClipDetailsEditor (force: list rows can
+    // sit partially under the details panel, so a plain click point is unreliable).
+    await page.locator('[title*="Great Control Pass"]').first().click({ force: true });
 
-    // Click the outer clip container so the onClick handler fires reliably
-    const firstClip = page.locator('.border-b.border-gray-800.cursor-pointer').first();
-    if (await firstClip.isVisible().catch(() => false)) {
-      await firstClip.click();
-      await page.waitForTimeout(800);
-      const hasRatingUI = await page.locator('svg.lucide-star').count() > 0;
-      expect(hasRatingUI).toBeTruthy();
-    }
+    const detailsPanel = page.locator('[data-clip-details]');
+    await expect(detailsPanel).toBeVisible({ timeout: 10000 });
+    const hasRatingUI = await detailsPanel.locator('svg.lucide-star').count() > 0;
+    expect(hasRatingUI).toBeTruthy();
   });
 });
 

@@ -49,7 +49,11 @@ async function navigateToGamesTab(page) {
 function countGetGameRequests(page) {
   let count = 0;
   const handler = (req) => {
-    if (req.method() === 'GET' && /\/api\/games\/\d+$/.test(req.url())) {
+    // Opening a game now uses the consolidated GET /api/games/{id}/load endpoint
+    // (game + playback URL + teammate data in one request). getGame() — GET
+    // /api/games/{id} — remains as a fallback. Count both so the request-storm
+    // guard tracks however the open flow fetches game data.
+    if (req.method() === 'GET' && /\/api\/games\/\d+(\/load)?$/.test(req.url())) {
       count++;
     }
   };

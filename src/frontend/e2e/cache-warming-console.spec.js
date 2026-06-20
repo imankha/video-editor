@@ -2,20 +2,20 @@
  * T1350: Cache Warming CORS Cleanup
  *
  * Verifies that `cacheWarming.js` does not produce "blocked by CORS policy"
- * console errors. The root cause is `warmUrl()` using `mode: 'cors'` against
- * R2 presigned URLs that lack CORS headers — switching to `mode: 'no-cors'`
- * still warms the edge cache but avoids the console spam.
+ * console errors. The fix evolved past the original `no-cors` approach: because
+ * no-cors strips the Range header (forcing the browser to download the ENTIRE
+ * file and hand back an unusable opaque response), `warmUrl()` now SKIPS
+ * cross-origin URLs entirely. The <video> element issues its own Range requests
+ * for R2 content. Only SAME-ORIGIN proxy/stream URLs are warmed (with the
+ * session cookie via `credentials: 'include'`), which never trip CORS.
  *
  * Strategy (light harness, mirrors T1360 pattern):
- *   Run against vite dev server, dynamically import `cacheWarming.js`, and
- *   monkey-patch `window.fetch` to (a) record the RequestInit passed to
- *   fetch and (b) simulate the browser's CORS rejection (same TypeError the
- *   browser throws when CORS headers are missing, plus emitting a console
- *   error matching the real browser message).
- *
- * Assertions:
- *   - No console message matches /blocked by CORS policy/ after warmup.
- *   - fetch was invoked with `mode: 'no-cors'` (the actual fix).
+ *   Run against the vite dev server, dynamically import `cacheWarming.js`, and
+ *   monkey-patch `window.fetch` to record each RequestInit. We feed warmUrl a
+ *   mix of same-origin and cross-origin URLs and assert:
+ *     - cross-origin R2 URLs fire NO fetch (skipped — no CORS error possible).
+ *     - same-origin URLs fire a fetch and never use `mode: 'cors'`.
+ *     - zero "blocked by CORS policy" messages reach the console.
  *
  * Requires: vite dev server on :5173
  */
@@ -26,7 +26,7 @@ const DEV_BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const CACHE_WARMING_URL = `${DEV_BASE}/src/utils/cacheWarming.js`;
 
 test.describe('T1350 cache warming CORS cleanup', () => {
-  test('warmUrl uses no-cors mode and produces no CORS console errors', async ({ page }) => {
+  test('warmUrl skips cross-origin URLs and produces no CORS console errors', async ({ page }) => {
     const consoleMessages = [];
     page.on('console', (msg) => {
       consoleMessages.push({ type: msg.type(), text: msg.text() });
@@ -40,54 +40,68 @@ test.describe('T1350 cache warming CORS cleanup', () => {
     const result = await page.evaluate(async (modUrl) => {
       const mod = await import(modUrl);
 
-      // Capture fetch invocations and simulate a real browser's CORS
-      // rejection: when `mode: 'cors'` is used against a URL with no
-      // Access-Control-Allow-Origin, the browser logs a CORS error to the
-      // console AND rejects the fetch with a TypeError. With `mode: 'no-cors'`,
-      // the browser returns an opaque response (status 0, ok=false) and
-      // logs nothing.
+      // Capture fetch invocations. If any same-origin warm fetch were ever
+      // issued with `mode: 'cors'` against a resource lacking CORS headers,
+      // the browser would log a CORS error — so we also simulate that to prove
+      // the code never takes that path.
       const fetchCalls = [];
       // eslint-disable-next-line no-undef
       window.fetch = async (url, init = {}) => {
-        fetchCalls.push({ url, mode: init.mode, headers: init.headers });
+        fetchCalls.push({ url, mode: init.mode, credentials: init.credentials });
         if (init.mode === 'cors') {
-          // Emit the exact error shape the browser uses.
+          // eslint-disable-next-line no-undef
           console.error(
             `Access to fetch at '${url}' from origin '${location.origin}' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.`
           );
           throw new TypeError('Failed to fetch');
         }
-        // no-cors path: return an opaque-ish response. status 0 / ok false.
+        // Return a minimal response object the warmer can read.
         return {
-          ok: false,
-          status: 0,
-          type: 'opaque',
+          ok: true,
+          status: 206,
+          type: 'basic',
+          // eslint-disable-next-line no-undef
           headers: new Headers(),
         };
       };
 
-      // Drive warmMultipleVideos (exercises warmUrl) against 3 fake presigned URLs.
-      const urls = [
+      // Mix of cross-origin R2 URLs (must be SKIPPED) and same-origin proxy
+      // URLs (must be WARMED). Force bypasses the already-warmed cache.
+      const crossOriginUrls = [
         'https://example.r2.cloudflarestorage.com/video1.mp4?sig=a',
         'https://example.r2.cloudflarestorage.com/video2.mp4?sig=b',
-        'https://example.r2.cloudflarestorage.com/video3.mp4?sig=c',
       ];
-      const warmed = await mod.warmMultipleVideos(urls, { concurrency: 3, force: true });
+      const sameOriginUrls = [
+        '/api/stream/video1.mp4',
+        '/api/stream/video2.mp4',
+      ];
+
+      const crossWarmed = await mod.warmMultipleVideos(crossOriginUrls, { concurrency: 2, force: true });
+      const sameWarmed = await mod.warmMultipleVideos(sameOriginUrls, { concurrency: 2, force: true });
 
       return {
-        warmed,
+        crossWarmed,
+        sameWarmed,
         fetchCalls,
       };
     }, CACHE_WARMING_URL);
 
-    // Sanity: warming still fires against every URL.
-    expect(result.fetchCalls.length).toBeGreaterThanOrEqual(3);
-    // All fetches use no-cors (the fix).
-    for (const call of result.fetchCalls) {
-      expect(call.mode).toBe('no-cors');
+    // Cross-origin URLs are skipped: no fetch, no warm reported.
+    expect(result.crossWarmed).toBe(0);
+    const crossFetches = result.fetchCalls.filter((c) =>
+      c.url.startsWith('https://example.r2.cloudflarestorage.com')
+    );
+    expect(crossFetches.length).toBe(0);
+
+    // Same-origin URLs are warmed: one fetch each, never `mode: 'cors'`,
+    // and they carry the session cookie via `credentials: 'include'`.
+    const sameFetches = result.fetchCalls.filter((c) => c.url.startsWith('/api/stream/'));
+    expect(sameFetches.length).toBeGreaterThanOrEqual(2);
+    for (const call of sameFetches) {
+      expect(call.mode).not.toBe('cors');
+      expect(call.credentials).toBe('include');
     }
-    // Warming reports success for every URL (opaque response counts as warmed).
-    expect(result.warmed).toBe(3);
+    expect(result.sameWarmed).toBe(2);
 
     // The core assertion: zero CORS-blocked errors in console.
     const corsErrors = consoleMessages.filter((m) =>
