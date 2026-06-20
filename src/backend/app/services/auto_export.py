@@ -28,6 +28,11 @@ logger = logging.getLogger(__name__)
 
 EXPORT_TIMEOUT_SECONDS = 300
 
+# Max times the sweep will retry a failed auto-export before giving up and
+# letting the source be reclaimed. The counter lives in games.auto_export_attempts
+# and is read by sweep_scheduler._find_games_for_hash.
+MAX_AUTO_EXPORT_ATTEMPTS = 3
+
 
 def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
     """Auto-export brilliant clips and generate recap for a game.
@@ -59,8 +64,10 @@ def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
         if game['auto_export_status'] == 'pending':
             logger.info(f"[AutoExport] Retrying previously pending game {game_id}")
 
+        # Count this attempt so the sweep can cap retries of a failing game.
         cursor.execute(
-            "UPDATE games SET auto_export_status = 'pending' WHERE id = ?",
+            "UPDATE games SET auto_export_status = 'pending', "
+            "auto_export_attempts = COALESCE(auto_export_attempts, 0) + 1 WHERE id = ?",
             (game_id,),
         )
         conn.commit()

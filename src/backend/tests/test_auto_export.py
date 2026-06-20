@@ -51,6 +51,7 @@ def isolated_profile_db(tmp_path):
             clip_count INTEGER DEFAULT 0,
             status TEXT DEFAULT 'ready',
             auto_export_status TEXT,
+            auto_export_attempts INTEGER DEFAULT 0,
             recap_video_url TEXT,
             video_size INTEGER,
             video_duration REAL,
@@ -127,6 +128,14 @@ def isolated_profile_db(tmp_path):
             published_at TIMESTAMP,
             aspect_ratio TEXT,
             tags BLOB,
+            game_ids BLOB,
+            clip_count INTEGER DEFAULT 1,
+            quality_score REAL,
+            rating REAL,
+            rd REAL,
+            match_count INTEGER DEFAULT 0,
+            source_clip_id INTEGER,
+            clip_start_time REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -314,6 +323,29 @@ class TestAutoExportGame:
         assert result == "failed"
         assert _get_game_status(db, game_id)["auto_export_status"] == "failed"
         isolated_profile_db["mock_sync"].assert_called()
+
+    @patch(f"{M}._generate_recap", side_effect=RuntimeError("concat failed"))
+    @patch(f"{M}._export_brilliant_clip")
+    def test_each_run_increments_attempts(self, mock_brilliant, mock_recap, isolated_profile_db):
+        """Bug 23p: every run bumps auto_export_attempts so the sweep can cap retries."""
+        from app.services.auto_export import auto_export_game
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_clip(db, game_id, rating=5)
+
+        def _attempts():
+            conn = sqlite3.connect(str(db))
+            n = conn.execute(
+                "SELECT auto_export_attempts FROM games WHERE id = ?", (game_id,)
+            ).fetchone()[0]
+            conn.close()
+            return n
+
+        auto_export_game(USER_ID, PROFILE_ID, game_id)
+        assert _attempts() == 1
+        auto_export_game(USER_ID, PROFILE_ID, game_id)
+        assert _attempts() == 2
 
     @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
     @patch(f"{M}._export_brilliant_clip")
