@@ -6,7 +6,7 @@
 # running warm for a fast next launch. Use THIS only when you want the
 # container fully stopped. The next `claude-docker.sh` will start it again.
 #
-# USAGE:  .devcontainer-ondemand/claude-docker-stop.sh
+# USAGE:  .devcontainer/claude-docker-stop.sh
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR/.."
@@ -22,4 +22,4 @@ fi
 
 echo "[claude-docker-stop] stopping container ${CID:0:12}..."
 docker stop "$CID" >/dev/null
-echo "[claude-docker-stop] stopped. Run .devcontainer-ondemand/claude-docker.sh to start again."
+echo "[claude-docker-stop] stopped. Run .devcontainer/claude-docker.sh to start again."

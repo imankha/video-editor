@@ -1,15 +1,23 @@
 // Dev Container for permission-free Claude Code sessions.
 //
 // WHY: Inside this isolated container, Claude Code runs with
-// permissions.defaultMode = bypassPermissions (see .devcontainer-ondemand/setup.sh),
+// permissions.defaultMode = bypassPermissions (see .devcontainer/setup.sh),
 // so sessions never stop to ask you to approve a command. The HOST checkout
 // keeps its normal prompts -- the bypass setting is written into the
 // CONTAINER's own ~/.claude, never the host's.
 //
 // HOW TO USE: Command Palette -> "Dev Containers: Reopen in Container".
-// The Claude Code extension reinstalls inside the container and picks up the
-// bypass setting automatically. Your host login is reused (creds are copied
-// in read-only from the mount below) so you don't have to /login again.
+// The Claude Code extension installs inside the container automatically.
+//
+// AUTH (important): the VS Code Claude Code *extension* authenticates with its
+// own sign-in flow -- it does NOT read a copied ~/.claude/.credentials.json the
+// way the CLI does. So the first time you open the container, sign in once
+// (open the Claude panel -> Sign in, or run `claude` in the integrated terminal
+// and complete /login). That token is stored in the named volume mounted at
+// ~/.claude below, so it PERSISTS across rebuilds -- you only sign in once.
+// (auth-sync.sh additionally seeds the host's CLI token if the volume is empty,
+// which may let the CLI skip login, but the extension panel still uses its own
+// sign-in.) Same Claude subscription as the host -- no API key needed.
 //
 // NOTE: a running host session cannot be moved into the container mid-flight.
 // Containerization happens at launch -- so "reopen in container" IS the
@@ -38,9 +46,13 @@
   // (e.g. the shared dev Postgres on host :5432) via host.docker.internal.
   "runArgs": ["--add-host=host.docker.internal:host-gateway"],
 
-  // Reuse the host Claude login. Mounted READ-ONLY; setup.sh copies only
-  // .credentials.json out of it into the container's own ~/.claude.
   "mounts": [
+    // PERSIST ~/.claude (sign-in, settings, history) across container rebuilds.
+    // Without this, a rebuild wipes the home dir and you'd re-auth every time.
+    // ${devcontainerId} keeps the volume stable for THIS workspace's container.
+    "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    // Host ~/.claude mounted READ-ONLY; auth-sync.sh seeds the CLI token from
+    // here only if the volume has none yet (it never overwrites a sign-in).
     "source=${localEnv:USERPROFILE}/.claude,target=/host-claude,type=bind,readonly"
   ],
 
@@ -51,7 +63,7 @@
   },
 
   // Runs once when the container is built.
-  "onCreateCommand": "bash .devcontainer-ondemand/setup.sh",
-  // Runs on every container start -- refreshes the (rotatable) host token.
-  "postStartCommand": "bash .devcontainer-ondemand/auth-sync.sh"
+  "onCreateCommand": "bash .devcontainer/setup.sh",
+  // Runs on every container start.
+  "postStartCommand": "bash .devcontainer/auth-sync.sh"
 }

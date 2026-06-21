@@ -4,15 +4,14 @@ REM
 REM Inside the container, ~/.claude/settings.json has bypassPermissions (set by
 REM setup.sh), so Claude never asks you to approve anything. This script builds/
 REM starts the container if needed, then drops you into a bypassed `claude`
-REM session. Double-click it, or run `.devcontainer-ondemand\claude-docker.bat` from cmd.
+REM session. Double-click it, or run `.devcontainer\claude-docker.bat` from cmd.
 REM Any args are forwarded to claude (e.g. claude-docker.bat --resume).
 REM
 REM Requires: Docker Desktop running, Node (for npx). First run builds the image
 REM (several minutes); later runs reuse the container and are fast.
 setlocal
-REM This config dir is intentionally NOT named ".devcontainer" so VS Code does
-REM not auto-reopen the folder in a container (host is the default). We point
-REM the devcontainer CLI at the config explicitly via --config below.
+REM Point the devcontainer CLI at this folder's config explicitly via --config
+REM below, so the launcher works no matter where it's invoked from.
 set "CONFIG=%~dp0devcontainer.json"
 cd /d "%~dp0\.."
 

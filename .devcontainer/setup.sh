@@ -15,8 +15,12 @@ npm install -g @anthropic-ai/claude-code || echo "  (CLI install failed; the VS 
 # --- The whole point: bypass permissions, container-only ---------------------
 # This writes to the container's home, NOT the host's. The host ~/.claude is
 # only visible read-only at /host-claude and is never modified.
+#
+# ~/.claude is a PERSISTED named volume (see devcontainer.json). On first
+# creation a named volume is owned by root, so take ownership before writing.
 echo "[devcontainer setup] enabling bypassPermissions for in-container Claude..."
-mkdir -p "$HOME/.claude"
+sudo mkdir -p "$HOME/.claude"
+sudo chown -R "$(id -u):$(id -g)" "$HOME/.claude"
 cat > "$HOME/.claude/settings.json" <<'JSON'
 {
   "permissions": {

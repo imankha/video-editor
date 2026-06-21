@@ -9,17 +9,16 @@
 # host whenever you want a no-prompts session.
 #
 # USAGE (from Git Bash / WSL / macOS):
-#   .devcontainer-ondemand/claude-docker.sh            # start a bypassed Claude session
-#   .devcontainer-ondemand/claude-docker.sh --resume   # any args are forwarded to claude
+#   .devcontainer/claude-docker.sh            # start a bypassed Claude session
+#   .devcontainer/claude-docker.sh --resume   # any args are forwarded to claude
 #
 # Requires: Docker running, Node (for npx). The first run builds the image and
 # can take several minutes; later runs are fast (container is reused).
 set -euo pipefail
 
 # Repo root = parent of this script's dir, regardless of where it's invoked.
-# This config dir is intentionally NOT named ".devcontainer" so VS Code does
-# not auto-reopen the folder in a container (host is the default). We therefore
-# point the devcontainer CLI at the config explicitly via --config below.
+# Point the devcontainer CLI at this folder's config explicitly via --config
+# below, so the launcher works no matter where it's invoked from.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$SCRIPT_DIR/devcontainer.json"
 cd "$SCRIPT_DIR/.."
