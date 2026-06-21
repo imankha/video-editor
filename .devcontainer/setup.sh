@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
 # Runs ONCE at container creation (onCreateCommand).
-# Installs system deps, the Claude Code CLI, writes the bypass-permissions
-# setting into the CONTAINER's ~/.claude, and seeds project deps best-effort.
+# Installs ffmpeg, writes the bypass-permissions setting into the CONTAINER's
+# ~/.claude, seeds the host CLI login, and installs frontend deps.
+#
+# Keep this FAST and ROBUST: onCreateCommand failing aborts the whole build.
+# The Claude Code CLI is installed by the claude-code devcontainer feature
+# (don't `npm install -g` it here -- that hits EACCES on the global node dir).
+# Backend deps are intentionally NOT installed (heavy ML wheels like basicsr
+# compile for minutes and can destabilize Docker; the backend's Windows .venv
+# isn't used here anyway). Install them by hand if you ever need them:
+#     pip install -r src/backend/requirements.txt
 set -euo pipefail
 
 echo "[devcontainer setup] installing system deps (ffmpeg)..."
 sudo apt-get update -y
 sudo apt-get install -y --no-install-recommends ffmpeg
 sudo rm -rf /var/lib/apt/lists/*
-
-echo "[devcontainer setup] installing Claude Code CLI..."
-npm install -g @anthropic-ai/claude-code || echo "  (CLI install failed; the VS Code extension still works)"
 
 # --- The whole point: bypass permissions, container-only ---------------------
 # This writes to the container's home, NOT the host's. The host ~/.claude is
@@ -32,17 +37,11 @@ JSON
 # Reuse host login immediately (auth-sync.sh repeats this on every start).
 bash "$(dirname "$0")/auth-sync.sh" || true
 
-# --- Best-effort project deps so tests/builds work in-container --------------
-# Frontend is Linux-friendly. Backend uses a Windows .venv on the host that
-# will NOT work here; install its deps into the container python instead.
+# --- Frontend deps (Linux-friendly, fast) ------------------------------------
+# Backend deps are deliberately skipped here -- see the header note.
 if [ -f src/frontend/package.json ]; then
   echo "[devcontainer setup] installing frontend deps..."
   (cd src/frontend && npm install) || echo "  (frontend npm install failed; run it manually if needed)"
-fi
-
-if [ -f src/backend/requirements.txt ]; then
-  echo "[devcontainer setup] installing backend deps (best-effort)..."
-  pip install -r src/backend/requirements.txt || echo "  (backend deps failed; install manually if you need to run the backend here)"
 fi
 
 echo "[devcontainer setup] done."

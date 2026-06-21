@@ -74,8 +74,10 @@ Args are forwarded, e.g. `claude-docker.sh --resume`.
 
 - **First launch** may show a one-time folder-trust dialog; accept it once.
 - **Backend + Postgres:** the host's `src/backend/.venv` is Windows-only and
-  won't run here. `setup.sh` installs backend deps into the container's Python
-  best-effort. To reach the shared dev Postgres on the Windows host, use
+  won't run here. Backend deps are **not** auto-installed (the heavy ML wheels
+  compile for minutes and can destabilize Docker during the build); if you need
+  to run the backend in-container, `pip install -r src/backend/requirements.txt`
+  by hand. To reach the shared dev Postgres on the Windows host, use
   `host.docker.internal:5432` (wired via `--add-host`) instead of `localhost`.
 - **macOS host difference:** the CLI seed reuses the Linux/Windows file token;
   on a Mac host the token is in Keychain, so the seed simply no-ops and you sign
