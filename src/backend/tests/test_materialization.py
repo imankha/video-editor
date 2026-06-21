@@ -99,6 +99,28 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             UNIQUE(clip_id, tag_name)
         );
         CREATE INDEX IF NOT EXISTS idx_clip_teammates_tag ON clip_teammates(tag_name);
+        CREATE TABLE IF NOT EXISTS projects (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            aspect_ratio TEXT NOT NULL,
+            working_video_id INTEGER,
+            final_video_id INTEGER,
+            is_auto_created INTEGER DEFAULT 0,
+            archived_at TIMESTAMP DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS working_clips (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            raw_clip_id INTEGER REFERENCES raw_clips(id) ON DELETE CASCADE,
+            sort_order INTEGER DEFAULT 0,
+            version INTEGER NOT NULL DEFAULT 1,
+            raw_clip_version INTEGER,
+            width INTEGER,
+            height INTEGER,
+            fps REAL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
     """)
     conn.commit()
     return conn
@@ -825,6 +847,151 @@ class TestMaterializeGameShare:
 
         s_conn.close()
         r_conn.close()
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_five_star_shared_clip_creates_draft_reel(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """A shared 5-star clip auto-creates a draft reel (9:16 auto-project)
+        for the recipient, reusing the 'create reel' gesture path."""
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        s_game_id = _insert_game(s_conn, name="Match", blake3_hash="five_star_hash")
+        # One 5-star and one 3-star clip, both tagged for the recipient.
+        _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"],
+                     name="Brilliant Goal", rating=5)
+        _insert_clip(s_conn, s_game_id, 10, 15, tagged_teammates=["Jake"],
+                     name="Ordinary Play", rating=3)
+
+        mock_get_ref.return_value = {
+            "game_size_bytes": 50000,
+            "storage_expires_at": "2027-01-01T00:00:00+00:00",
+        }
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=s_game_id,
+                tag_name="Jake",
+                share_id=10,
+            )
+
+        r_conn2 = sqlite3.connect(
+            str(tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite")
+        )
+        r_conn2.row_factory = sqlite3.Row
+
+        # Exactly one draft reel: a 9:16 auto-created project for the 5-star clip.
+        projects = r_conn2.execute("SELECT * FROM projects").fetchall()
+        assert len(projects) == 1
+        assert projects[0]["is_auto_created"] == 1
+        assert projects[0]["aspect_ratio"] == "9:16"
+        assert projects[0]["name"] == "Brilliant Goal"
+
+        # The auto-project links back to the 5-star clip, which now carries the
+        # auto_project_id; the 3-star clip does not.
+        five_star = r_conn2.execute(
+            "SELECT * FROM raw_clips WHERE name = 'Brilliant Goal'").fetchone()
+        three_star = r_conn2.execute(
+            "SELECT * FROM raw_clips WHERE name = 'Ordinary Play'").fetchone()
+        assert five_star["auto_project_id"] == projects[0]["id"]
+        assert three_star["auto_project_id"] is None
+
+        # The clip is added as a working clip in the auto-project.
+        wclips = r_conn2.execute(
+            "SELECT * FROM working_clips WHERE project_id = ?",
+            (projects[0]["id"],)).fetchall()
+        assert len(wclips) == 1
+        assert wclips[0]["raw_clip_id"] == five_star["id"]
+
+        s_conn.close()
+        r_conn.close()
+        r_conn2.close()
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_no_draft_reel_without_five_star_clip(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """A share with no 5-star clips creates no draft reels."""
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        s_game_id = _insert_game(s_conn, name="Match", blake3_hash="no_five_hash")
+        _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"],
+                     name="Good Play", rating=4)
+
+        mock_get_ref.return_value = {
+            "game_size_bytes": 50000,
+            "storage_expires_at": "2027-01-01T00:00:00+00:00",
+        }
+
+        with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+            materialize_game_share(
+                sharer_user_id="sharer-user",
+                sharer_profile_id="sharer-profile",
+                recipient_user_id="recipient-user",
+                recipient_profile_id="recipient-profile",
+                game_id=s_game_id,
+                tag_name="Jake",
+                share_id=11,
+            )
+
+        r_conn2 = sqlite3.connect(
+            str(tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite")
+        )
+        projects = r_conn2.execute("SELECT * FROM projects").fetchall()
+        assert len(projects) == 0
+
+        s_conn.close()
+        r_conn.close()
+        r_conn2.close()
+
+    @patch("app.services.materialization.mark_game_share_materialized")
+    @patch("app.services.materialization.insert_game_storage_ref")
+    @patch("app.services.materialization.get_game_storage_ref")
+    def test_re_materialization_does_not_duplicate_draft_reel(
+        self, mock_get_ref, mock_insert_ref, mock_mark, tmp_path
+    ):
+        """Resolving the same share twice does not create duplicate draft reels:
+        the second pass merges the clip rather than inserting a new one."""
+        s_conn, r_conn = self._setup_dbs(tmp_path)
+        s_game_id = _insert_game(s_conn, name="Match", blake3_hash="dup_hash")
+        _insert_clip(s_conn, s_game_id, 0, 5, tagged_teammates=["Jake"],
+                     name="Brilliant Goal", rating=5)
+
+        mock_get_ref.return_value = {
+            "game_size_bytes": 50000,
+            "storage_expires_at": "2027-01-01T00:00:00+00:00",
+        }
+
+        def _run():
+            with patch("app.services.materialization.USER_DATA_BASE", tmp_path):
+                return materialize_game_share(
+                    sharer_user_id="sharer-user",
+                    sharer_profile_id="sharer-profile",
+                    recipient_user_id="recipient-user",
+                    recipient_profile_id="recipient-profile",
+                    game_id=s_game_id,
+                    tag_name="Jake",
+                    share_id=12,
+                )
+
+        _run()
+        _run()
+
+        r_conn2 = sqlite3.connect(
+            str(tmp_path / "recipient-user" / "profiles" / "recipient-profile" / "profile.sqlite")
+        )
+        projects = r_conn2.execute("SELECT * FROM projects").fetchall()
+        assert len(projects) == 1
+
+        s_conn.close()
+        r_conn.close()
+        r_conn2.close()
 
 
 # ===========================================================================
