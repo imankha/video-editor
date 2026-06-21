@@ -37,8 +37,12 @@ read -r CID WORKDIR RUSER < <(printf '%s' "$UP_JSON" | node -e '
 
 if [ -n "$CID" ]; then
   # docker exec -it guarantees a real TTY, which Claudes interactive UI needs.
+  # MSYS_NO_PATHCONV stops Git Bash from rewriting the Unix -w path
+  # (/workspaces/...) into a Windows path, which otherwise breaks docker exec
+  # with "Cwd must be an absolute path".
   echo "[claude-docker] entering bypassed Claude session (container ${CID:0:12})..." >&2
-  exec docker exec -it -u "$RUSER" -w "$WORKDIR" "$CID" bash -lc 'exec claude "$@"' _ "$@"
+  exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+    docker exec -it -u "$RUSER" -w "$WORKDIR" "$CID" bash -lc 'exec claude "$@"' _ "$@"
 fi
 
 # Fallback: let the devcontainer CLI run it (works, but TTY handling is weaker).
