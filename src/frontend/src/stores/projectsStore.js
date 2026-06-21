@@ -173,16 +173,27 @@ export const useProjectsStore = create((set, get) => ({
   },
 
   /**
-   * Refresh the selected project's data
+   * Refresh the selected project's data.
+   *
+   * The fetch is async, so the selection can change while it's in flight (e.g. a
+   * post-export navigation calls clearSelection() mid-fetch). Writing the result
+   * unconditionally would resurrect a selection that was deliberately cleared,
+   * leaving editorMode and selectedProject out of sync and rendering a blank
+   * screen. Discard any result whose selection is no longer current.
    */
   refreshSelectedProject: async () => {
-    const { selectedProjectId } = get();
-    if (selectedProjectId) {
-      const project = await get().fetchProject(selectedProjectId);
-      set({ selectedProject: project });
-      return project;
+    const startId = get().selectedProjectId;
+    if (!startId) return null;
+    const project = await get().fetchProject(startId);
+    if (get().selectedProjectId !== startId) {
+      console.warn('[projectsStore] discarded stale refreshSelectedProject result', {
+        startId,
+        current: get().selectedProjectId,
+      });
+      return null;
     }
-    return null;
+    set({ selectedProject: project });
+    return project;
   },
 
   /**

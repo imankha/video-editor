@@ -75,6 +75,46 @@ export const getScreenByType = (type) => {
 };
 
 /**
+ * Top-level app screens. Which one renders is a pure function of editorMode —
+ * see resolveEditorScreen. (ADMIN is handled by App before this is consulted.)
+ */
+export const APP_SCREENS = {
+  HOME: 'home',     // ProjectsScreen (project/game listing)
+  EDITOR: 'editor', // annotate/framing/overlay editor frame
+};
+
+/**
+ * Decide which top-level screen renders. The screen is derived ONLY from
+ * editorMode — never inferred from whether a project happens to be selected —
+ * so the two can't silently disagree (the failure that rendered a blank editor
+ * frame after an overlay export navigated to PROJECT_MANAGER).
+ *
+ * @param {string} editorMode - current EDITOR_MODES value
+ * @param {boolean} hasSelectedProject - whether a project is selected
+ * @returns {'home'|'editor'} APP_SCREENS value
+ */
+export function resolveEditorScreen(editorMode, hasSelectedProject) {
+  switch (editorMode) {
+    case EDITOR_MODES.PROJECT_MANAGER:
+      return APP_SCREENS.HOME;
+    case EDITOR_MODES.ANNOTATE:
+      // Annotate can render without a selected project (clip import flow).
+      return APP_SCREENS.EDITOR;
+    case EDITOR_MODES.FRAMING:
+    case EDITOR_MODES.OVERLAY:
+      if (hasSelectedProject) return APP_SCREENS.EDITOR;
+      // Editor mode with no project to edit — route home rather than render an
+      // empty editor frame, and log because this is an invalid combination.
+      console.warn('[App] editor mode with no selected project; routing home', { editorMode });
+      return APP_SCREENS.HOME;
+    default:
+      // Any unhandled / future mode must never render a blank screen.
+      console.error('[App] unhandled editorMode; routing home', { editorMode });
+      return APP_SCREENS.HOME;
+  }
+}
+
+/**
  * Editor Store - Manages editor mode and UI layer selection
  *
  * This store consolidates cross-cutting editor state that was previously
@@ -140,6 +180,24 @@ export const useEditorStore = create((set, get) => ({
     set({
       editorMode: mode,
       screen: getScreenByType(mode),
+    });
+  },
+
+  /**
+   * Navigate home to the Project Manager as ONE atomic transition: clear the
+   * project selection, reset the video, and switch mode together. Doing these
+   * as separate calls from a caller lets an in-flight async (e.g. a project
+   * refresh) interleave and resurrect the selection after it was cleared,
+   * leaving editorMode === PROJECT_MANAGER while selectedProject is still set —
+   * a state App.jsx cannot render. Owning the whole transition here prevents that.
+   */
+  goToProjectManager: () => {
+    useProjectsStore.getState().clearSelection();
+    useVideoStore.getState().reset();
+    updatePath(EDITOR_MODES.PROJECT_MANAGER);
+    set({
+      editorMode: EDITOR_MODES.PROJECT_MANAGER,
+      screen: getScreenByType(EDITOR_MODES.PROJECT_MANAGER),
     });
   },
 

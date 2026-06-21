@@ -46,7 +46,7 @@ import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { TermsOfService } from './components/TermsOfService';
 import { SignInScreen } from './components/SignInScreen';
 import ImpersonationBanner from './components/ImpersonationBanner';
-import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES } from './stores';
+import { useEditorStore, useExportStore, useFramingStore, useOverlayStore, useProjectDataStore, useProjectsStore, useProfileStore, useVideoStore, useGamesDataStore, useSettingsStore, useGalleryStore, EDITOR_MODES, APP_SCREENS, resolveEditorScreen } from './stores';
 import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
@@ -439,11 +439,11 @@ function App() {
       currentMode === EDITOR_MODES.OVERLAY &&
       completed.projectId === currentProjectId
     ) {
-      clearSelection();
-      useVideoStore.getState().reset();
-      setEditorMode(EDITOR_MODES.PROJECT_MANAGER);
+      // Atomic transition: clear selection + reset video + switch mode together,
+      // so an in-flight project refresh can't resurrect the selection afterward.
+      useEditorStore.getState().goToProjectManager();
     }
-  }, [fetchProjects, clearSelection, setEditorMode]);
+  }, [fetchProjects]);
 
   // Handler for loading saved games from ProjectManager
   // Sets pendingGameId in sessionStorage and navigates to annotate mode
@@ -662,8 +662,11 @@ function App() {
     );
   }
 
-  // If no project selected and not in annotate mode, show ProjectsScreen
-  if (!selectedProject && editorMode !== EDITOR_MODES.ANNOTATE) {
+  // Which top-level screen renders is derived PURELY from editorMode (never
+  // inferred from whether a project happens to be selected) so the two can't
+  // disagree and render a blank editor frame. resolveEditorScreen logs and
+  // routes home for any invalid/unhandled combination.
+  if (resolveEditorScreen(editorMode, !!selectedProject) === APP_SCREENS.HOME) {
     return (
       <>
         <ImpersonationBanner />
