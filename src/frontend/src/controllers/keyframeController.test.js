@@ -937,6 +937,44 @@ describe('keyframeController', () => {
   });
 
   // ============================================================================
+  // VIRTUAL TRIM: widening the end boundary (detrim) is non-destructive
+  // ============================================================================
+
+  describe('virtual trim (non-destructive end boundary)', () => {
+    it('extending endFrame keeps all existing keyframes (detrim restores them)', () => {
+      // Under virtual trim, the end permanent is anchored at the FULL duration.
+      // Widening endFrame (e.g. detrim, or loading a clip whose full duration is
+      // larger than the last keyframe) must NOT drop any keyframe.
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100, y: 0, width: 640, height: 360 },
+          { frame: 50, origin: 'user', x: 150, y: 10, width: 640, height: 360 },
+          { frame: 100, origin: 'permanent', x: 200, y: 20, width: 640, height: 360 }
+        ],
+        isEndKeyframeExplicit: true,
+        copiedData: null
+      };
+
+      // Extend the end boundary to the full clip duration (frame 200).
+      const newState = keyframeReducer(state, actions.setEndFrame(200));
+
+      // Nothing dropped: the user keyframe at 50 and the former end at 100 survive,
+      // and a permanent boundary now exists at 200.
+      const frames = newState.keyframes.map(kf => kf.frame);
+      expect(frames).toContain(50);
+      expect(frames).toContain(100);
+      expect(newState.keyframes[0].frame).toBe(0);
+      expect(newState.keyframes[0].origin).toBe('permanent');
+      const last = newState.keyframes[newState.keyframes.length - 1];
+      expect(last.frame).toBe(200);
+      expect(last.origin).toBe('permanent');
+      // Only first and last are permanent; interior keyframes are user-owned.
+      expect(newState.keyframes.filter(kf => kf.origin === 'permanent').length).toBe(2);
+    });
+  });
+
+  // ============================================================================
   // UNKNOWN ACTION
   // ============================================================================
 

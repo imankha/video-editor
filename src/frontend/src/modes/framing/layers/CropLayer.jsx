@@ -46,14 +46,18 @@ export default function CropLayer({
   // Tolerance of 1 frame for boundary checks (floating point precision)
   const FRAME_TOLERANCE = 1;
 
-  // Keyframes before the trim start are model scaffolding (the controller
-  // always keeps a permanent keyframe at frame 0, even when a front trim
-  // makes it invisible). They map to the same visual position as the trim
-  // boundary keyframe, so rendering them shows a phantom double marker.
+  // Trim is virtual: crop keyframes are never dropped, so the array can hold
+  // permanents/user keyframes OUTSIDE the visible trim window (before trimRange.start
+  // or after trimRange.end). Filter both sides so only keyframes within the visible
+  // range are shown as diamonds — out-of-range keyframes map to the same visual
+  // position as the boundary and would render as phantom double markers.
   // Keep original indexes — selectedKeyframeIndex indexes the full array.
   const visibleKeyframes = keyframes
     .map((keyframe, index) => ({ keyframe, index }))
-    .filter(({ keyframe }) => keyframe.frame >= effectiveStartFrame - FRAME_TOLERANCE);
+    .filter(({ keyframe }) =>
+      keyframe.frame >= effectiveStartFrame - FRAME_TOLERANCE &&
+      keyframe.frame <= effectiveEndFrame + FRAME_TOLERANCE
+    );
 
   /**
    * Convert frame number to visual pixel position on timeline

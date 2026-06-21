@@ -186,13 +186,15 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     }
   }, [savedKeyframes, framerate, restoreKeyframes, machineState]);
 
-  // Phase 2: Adjust keyframe boundaries when trimRange/duration loads after restore.
-  // Saved keyframes may span the full video (e.g., endFrame=599) while the clip is
-  // trimmed to a shorter range (e.g., frame 229). SET_END_FRAME filters out keyframes
-  // beyond the boundary and ensures a permanent at the correct endFrame.
+  // Virtual trim: the end permanent is anchored at the FULL clip duration
+  // (totalFrames), never at trimRange.end. Trimming only changes trimRange (what
+  // is visible/exported); crop keyframes are never dropped. This mirrors the start
+  // boundary, which is always frame 0. SET_END_FRAME(totalFrames) is therefore
+  // non-destructive — it ensures a permanent at totalFrames without removing any
+  // keyframe (none can exist beyond the full duration).
   useEffect(() => {
     if (machineState === 'uninitialized') return;
-    const effectiveDuration = trimRange?.end ?? videoMetadata?.duration;
+    const effectiveDuration = videoMetadata?.duration;
     if (!effectiveDuration) return;
 
     const correctEndFrame = timeToFrame(effectiveDuration, framerate);
@@ -203,7 +205,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     if (currentEndFrame !== null && currentEndFrame !== correctEndFrame) {
       setEndFrame(correctEndFrame);
     }
-  }, [trimRange, videoMetadata?.duration, machineState, framerate, setEndFrame]);
+  }, [videoMetadata?.duration, machineState, framerate, setEndFrame]);
 
   /**
    * Auto-initialize keyframes when metadata loads
@@ -211,12 +213,13 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * End keyframe initially mirrors start until explicitly modified
    * Also reinitializes if keyframes are stale (end frame doesn't match current video duration)
    * or if the current crop dimensions don't match the expected aspect ratio
-   * NOTE: Uses trimRange.end if trimming is active, otherwise uses original duration
+   * NOTE: Virtual trim — the end permanent is always at the FULL duration, never
+   * at trimRange.end. Trimming is non-destructive and handled via trimRange only.
    */
   useEffect(() => {
     if (videoMetadata?.width && videoMetadata?.height && videoMetadata?.duration) {
-      // Use trimmed end if available, otherwise use original duration
-      const effectiveDuration = trimRange?.end ?? videoMetadata.duration;
+      // Virtual trim: end boundary is always the full clip duration.
+      const effectiveDuration = videoMetadata.duration;
       const totalFrames = timeToFrame(effectiveDuration, framerate);
 
       // Check if we need to initialize:

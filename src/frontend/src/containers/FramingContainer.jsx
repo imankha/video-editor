@@ -384,100 +384,21 @@ export function FramingContainer({
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
-    // Identify user keyframes in trim range for Phase 3 persistence
-    let userKfsToDelete = [];
-    let boundaryKfToAdd = null;
-
     if (!isCurrentlyTrimmed) {
-      // We're about to trim this segment
+      // We're about to trim this segment.
       let boundaryTime;
-
       if (segment.isLast) {
         boundaryTime = segment.start;
       } else if (segment.isFirst) {
         boundaryTime = segment.end;
       }
 
-      // Tolerance for floating point comparisons (1 frame at 30fps = ~0.033s)
-      const TOLERANCE = 1 / framerate + 0.001;
+      // Virtual trim: crop keyframes are NOT touched. The permanent boundaries
+      // stay fixed at frame 0 and totalFrames; trimRange alone controls what is
+      // visible/exported. No keyframes are deleted, moved, or reconstituted, so
+      // detrim is fully reversible.
 
-      // Capture user keyframes in range before deleting (for backend persistence)
-      userKfsToDelete = keyframes.filter(kf => {
-        const kfTime = kf.frame / framerate;
-        return kfTime >= segment.start - TOLERANCE && kfTime <= segment.end + TOLERANCE && kf.origin === 'user';
-      });
-
-      // Find crop data to preserve - use tolerance for boundary checks
-      // Prioritize the edge that will become the new boundary
-      let cropDataToPreserve = null;
-
-      // First, try to get data from the boundary time itself (interpolated)
-      // This ensures we get the crop state at the exact new boundary
-      const edgeTime = segment.isLast ? segment.end : segment.start;
-      cropDataToPreserve = getCropDataAtTime(boundaryTime);
-
-      // If that fails, try the opposite edge (for cases where keyframe is at far end)
-      if (!cropDataToPreserve) {
-        cropDataToPreserve = getCropDataAtTime(edgeTime);
-      }
-
-      // Fallback: search for any keyframe within the trimmed range (with tolerance)
-      if (!cropDataToPreserve) {
-        for (let i = keyframes.length - 1; i >= 0; i--) {
-          const kfTime = keyframes[i].frame / framerate;
-          // Use tolerance for boundary checks to handle floating point precision
-          if (kfTime >= segment.start - TOLERANCE && kfTime <= segment.end + TOLERANCE) {
-            cropDataToPreserve = getCropDataAtTime(kfTime);
-            break;
-          }
-        }
-      }
-
-
-      // Delete crop keyframes in trimmed range
-      deleteKeyframesInRange(segment.start, segment.end, duration);
-
-      // Update controller's endFrame when trimming the end, or re-enforce
-      // boundaries when trimming the start (deleteKeyframesInRange removes
-      // frame 0, and ensurePermanentKeyframes in SET_END_FRAME restores it)
-      if (segment.isLast && boundaryTime !== undefined) {
-        setCropEndFrame(Math.round(boundaryTime * framerate));
-      } else if (segment.isFirst) {
-        // endFrame unchanged but need ensurePermanentKeyframes to restore frame 0
-        const currentEndFrame = Math.round((trimRange?.end ?? duration) * framerate);
-        setCropEndFrame(currentEndFrame);
-      }
-
-      // Reconstitute permanent keyframe at boundary
-      // This ensures there's always a keyframe at the new end/start of the visible timeline
-      if (cropDataToPreserve && boundaryTime !== undefined) {
-        addOrUpdateKeyframe(boundaryTime, cropDataToPreserve, duration, 'permanent');
-        boundaryKfToAdd = {
-          frame: Math.round(boundaryTime * framerate),
-          x: cropDataToPreserve.x,
-          y: cropDataToPreserve.y,
-          width: cropDataToPreserve.width,
-          height: cropDataToPreserve.height,
-          origin: 'permanent'
-        };
-      } else if (boundaryTime !== undefined) {
-        // Emergency fallback: if we couldn't preserve any data, get current interpolated crop
-        // This shouldn't happen in normal use, but ensures we always have boundary keyframes
-        const fallbackData = getCropDataAtTime(boundaryTime);
-        if (fallbackData) {
-          addOrUpdateKeyframe(boundaryTime, fallbackData, duration, 'permanent');
-          boundaryKfToAdd = {
-            frame: Math.round(boundaryTime * framerate),
-            x: fallbackData.x,
-            y: fallbackData.y,
-            width: fallbackData.width,
-            height: fallbackData.height,
-            origin: 'permanent'
-          };
-        }
-      }
-
-      // Handle highlight keyframes if available
+      // Highlights still reconcile to the trim boundary (their model is unchanged).
       if (highlightHook) {
         const highlightDataToPreserve = highlightHook.getHighlightDataAtTime?.(
           segment.isLast ? segment.end : segment.start
@@ -498,19 +419,8 @@ export function FramingContainer({
     if (selectedProjectId && clipId) {
       let hasError = false;
 
-      // Phase 3: Persist keyframe changes from trim operation
-      if (!isCurrentlyTrimmed) {
-        // Delete user keyframes that were in the trimmed range
-        for (const kf of userKfsToDelete) {
-          const result = await framingActions.deleteCropKeyframe(selectedProjectId, clipId, kf.frame);
-          if (!result.success) hasError = true;
-        }
-        // Add boundary permanent keyframe
-        if (boundaryKfToAdd) {
-          const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
-          if (!result.success) hasError = true;
-        }
-      }
+      // Virtual trim: no crop keyframe gestures are persisted. Only the trim range
+      // changes; crop keyframes are preserved as-is for reversible detrim.
 
       // Calculate new trim boundaries based on which segment was toggled
       let newTrimStart = trimRange?.start ?? null;
@@ -570,38 +480,11 @@ export function FramingContainer({
     const lastStartOp = [...trimHistory].reverse().find(op => op.type === 'start');
     const newStartTime = lastStartOp?.previousRange?.start ?? 0;
     const FRAME_TOLERANCE = 1;
-
-    // Handle crop keyframes
-    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
-    let boundaryKfToAdd = null;
-
-    if (boundaryFrame > 0) {
-      // Find keyframe at boundary using tolerance
-      const cropKfAtBoundary = keyframes.find(kf =>
-        Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
-      );
-      if (cropKfAtBoundary) {
-        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Re-enforce boundaries via setCropEndFrame (restores frame 0 via ensurePermanentKeyframes)
     const currentEndTime = trimRange.end ?? duration;
-    setCropEndFrame(Math.round(currentEndTime * framerate));
 
-    // Ensure permanent keyframe at new start position
-    const dataForStart = cropDataAtBoundary || getCropDataAtTime(newStartTime);
-    if (dataForStart) {
-      addOrUpdateKeyframe(newStartTime, dataForStart, duration, 'permanent');
-      boundaryKfToAdd = {
-        frame: Math.round(newStartTime * framerate),
-        x: dataForStart.x,
-        y: dataForStart.y,
-        width: dataForStart.width,
-        height: dataForStart.height,
-        origin: 'permanent'
-      };
-    }
+    // Virtual trim: crop keyframes are NOT touched on detrim. The start permanent
+    // stays at frame 0 and the end permanent at totalFrames; widening trimRange.start
+    // simply reveals the keyframes that were always there. Fully reversible.
 
     // Handle highlight keyframes if available
     if (highlightHook) {
@@ -630,11 +513,7 @@ export function FramingContainer({
     if (selectedProjectId && clipId) {
       let hasError = false;
 
-      // Phase 3: Persist boundary keyframe change
-      if (boundaryKfToAdd) {
-        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
-        if (!result.success) hasError = true;
-      }
+      // Virtual trim: no crop keyframe gestures on detrim — only the trim range changes.
 
       // After detrimStart, start restores to previous level (or 0)
       const hasStartTrim = newStartTime > 0.01;
@@ -688,39 +567,11 @@ export function FramingContainer({
     // Determine the NEW end after detrim: previous trim level, or full duration
     const lastEndOp = [...trimHistory].reverse().find(op => op.type === 'end');
     const newEndTime = lastEndOp?.previousRange?.end ?? duration;
-    const newEndFrame = Math.round(newEndTime * framerate);
     const FRAME_TOLERANCE = 1;
 
-    // Handle crop keyframes
-    const cropDataAtBoundary = getCropDataAtTime(boundaryTime);
-    let boundaryKfToAdd = null;
-
-    if (boundaryFrame < newEndFrame) {
-      // Find keyframe at boundary using tolerance
-      const cropKfAtBoundary = keyframes.find(kf =>
-        Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
-      );
-      if (cropKfAtBoundary) {
-        deleteKeyframesInRange(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-      }
-    }
-
-    // Update controller's endFrame to the new trim level (not always full duration)
-    setCropEndFrame(newEndFrame);
-
-    // Always ensure permanent keyframe at new end
-    const dataForEnd = cropDataAtBoundary || getCropDataAtTime(newEndTime);
-    if (dataForEnd) {
-      addOrUpdateKeyframe(newEndTime, dataForEnd, duration, 'permanent');
-      boundaryKfToAdd = {
-        frame: newEndFrame,
-        x: dataForEnd.x,
-        y: dataForEnd.y,
-        width: dataForEnd.width,
-        height: dataForEnd.height,
-        origin: 'permanent'
-      };
-    }
+    // Virtual trim: crop keyframes are NOT touched on detrim. The end permanent
+    // stays at totalFrames; widening trimRange.end simply reveals keyframes that
+    // were always there. Fully reversible.
 
     // Handle highlight keyframes if available
     if (highlightHook) {
@@ -752,11 +603,7 @@ export function FramingContainer({
     if (selectedProjectId && clipId) {
       let hasError = false;
 
-      // Phase 3: Persist boundary keyframe change
-      if (boundaryKfToAdd) {
-        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, boundaryKfToAdd);
-        if (!result.success) hasError = true;
-      }
+      // Virtual trim: no crop keyframe gestures on detrim — only the trim range changes.
 
       // After detrimEnd, trim end restores to previous level (or full duration)
       const newTrimStart = trimRange.start;
