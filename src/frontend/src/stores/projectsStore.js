@@ -98,7 +98,6 @@ export const useProjectsStore = create((set, get) => ({
         try {
           const m = performance.measure('project:load', 'project:load:start', 'project:load:end');
           if (m.duration >= 1000) {
-            // eslint-disable-next-line no-console
             console.warn(`[TIMING] project:load duration=${Math.round(m.duration)}ms threshold=1000ms`);
           }
         } catch { /* marks cleared */ }

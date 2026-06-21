@@ -14,7 +14,7 @@ import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { useIsMobile } from './hooks/useIsMobile';
-import { ConfirmationDialog, ToastContainer, UnifiedHeader } from './components/shared';
+import { ConfirmationDialog, toast, ToastContainer, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { SECTION_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
@@ -51,7 +51,6 @@ import { useAuthStore } from './stores/authStore';
 import useUploadStore from './stores/uploadStore';
 import { useQuestStore } from './stores/questStore';
 import { useCreditStore } from './stores/creditStore';
-import { toast } from './components/shared';
 import { API_BASE } from './config';
 import apiFetch from './utils/apiFetch';
 import { setPendingGame } from './utils/pendingNavigation';
