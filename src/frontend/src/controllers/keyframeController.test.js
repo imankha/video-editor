@@ -314,7 +314,7 @@ describe('keyframeController', () => {
       expect(newState.keyframes[0].frame).toBe(0);
     });
 
-    it('rejects removal if would leave less than 2 keyframes', () => {
+    it('rejects removal of a permanent boundary even in a minimal 2-keyframe array', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
@@ -328,6 +328,26 @@ describe('keyframeController', () => {
       const newState = keyframeReducer(state, actions.removeKeyframe(0));
 
       expect(newState.keyframes.length).toBe(2);
+    });
+
+    it('removes a user keyframe regardless of count (origin-gated, not count-gated)', () => {
+      // The persisted/divergent minimal case: a user keyframe with no persisted
+      // end boundary. Old behavior blocked this via `length <= 2`; now the user
+      // keyframe is removable and ensurePermanentKeyframes reconstitutes boundaries.
+      const state = {
+        machineState: KeyframeStates.EDITING,
+        keyframes: [
+          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 30, origin: 'user', x: 150 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null
+      };
+
+      const newState = keyframeReducer(state, actions.removeKeyframe(30));
+
+      expect(newState).not.toBe(state);
+      expect(newState.keyframes.every(kf => kf.origin === 'permanent')).toBe(true);
     });
 
     it('returns unchanged state if keyframe not found', () => {

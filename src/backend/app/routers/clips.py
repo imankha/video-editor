@@ -308,6 +308,12 @@ def _save_clip_framing_data(cursor, conn, clip: dict, project_id: int,
     return {"success": True, "refresh_required": False}
 
 
+# Minimum spacing between distinct keyframes, in frames. Mirrors the frontend's
+# keyframeUtils.FRAME_TOLERANCE / MIN_KEYFRAME_SPACING (10). New user keyframes
+# closer than this to an existing one are rejected so diamonds never overlap.
+MIN_KEYFRAME_SPACING = 10
+
+
 def _find_keyframe_by_frame(keyframes: list, frame: int) -> int:
     """Find index of keyframe by frame number. Returns -1 if not found."""
     for i, kf in enumerate(keyframes):
@@ -383,6 +389,21 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                     if len(crop_keyframes) == 0 and action.data.frame == 0:
                         origin = 'permanent'
 
+                    # Enforce minimum spacing for genuinely-new user keyframes
+                    # (mirrors the frontend). Permanent boundary keyframes are
+                    # system-placed and bypass spacing. The client resolves snap
+                    # targets before sending, so anything reaching this branch
+                    # that is too close indicates an overlapping new keyframe.
+                    if origin != 'permanent':
+                        too_close = any(
+                            abs(kf.get('frame', 0) - action.data.frame) < MIN_KEYFRAME_SPACING
+                            for kf in crop_keyframes
+                        )
+                        if too_close:
+                            raise ValueError(
+                                f"Keyframe too close to an existing one (min spacing {MIN_KEYFRAME_SPACING} frames)"
+                            )
+
                     new_kf = {
                         'frame': action.data.frame,
                         'x': action.data.x or 0,
@@ -427,13 +448,20 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if idx == -1:
                     raise ValueError(f"Keyframe at frame {action.target.frame} not found")
 
-                # Don't allow deleting frame-0 boundary keyframe
-                if action.target.frame == 0:
-                    raise ValueError("Cannot delete boundary keyframe at frame 0")
-
-                # Ensure minimum keyframe count (boundary pair)
-                if len(crop_keyframes) <= 2:
-                    raise ValueError("Cannot delete: minimum 2 keyframes required")
+                # Only permanent boundary keyframes are protected: the start at
+                # frame 0 and the end boundary (origin='permanent'). User keyframes
+                # are ALWAYS deletable — the keyframe count is NOT a guard.
+                #
+                # A count check here is wrong: the client reconstitutes the
+                # in-memory permanent boundaries on load (ensurePermanentKeyframes)
+                # but persists only gestures, so the persisted count legitimately
+                # differs from what the UI shows. A `len <= 2` check falsely blocked
+                # valid deletes of user keyframes ("minimum 2 keyframes required").
+                # Deleting only user keyframes can never drop below the 2 boundaries,
+                # because the boundaries are permanent and protected here.
+                target_kf = crop_keyframes[idx]
+                if action.target.frame == 0 or target_kf.get('origin') == 'permanent':
+                    raise ValueError("Cannot delete a permanent boundary keyframe")
 
                 del crop_keyframes[idx]
                 logger.info(f"[Framing Action] Deleted keyframe at frame {action.target.frame}")

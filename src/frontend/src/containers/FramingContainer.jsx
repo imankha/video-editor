@@ -807,19 +807,24 @@ export function FramingContainer({
    * Handle keyframe delete
    */
   const handleKeyframeDelete = useCallback(async (time) => {
-    // Enforce the 2-keyframe minimum up front. The keyframe reducer and the
-    // backend both refuse the delete, so attempting it only desyncs the
-    // optimistic store update from hook/DB state (bug 19p).
-    if (keyframes.length <= 2) {
-      toast.error('Cannot delete keyframe', { message: 'A clip needs at least 2 keyframes' });
+    const frame = Math.round(time * framerate);
+
+    // Only the permanent boundary keyframes (start at frame 0, end at duration)
+    // are protected — users can delete any keyframe they introduced. Guarding by
+    // origin (not by count) keeps the client in step with the reducer and backend,
+    // which also protect by origin. A count check desyncs because the in-memory
+    // array includes reconstituted boundaries the backend never persists (bug 19p,
+    // and the "minimum 2 keyframes required" backend rejection).
+    const targetKf = keyframes.find(kf => kf.frame === frame);
+    if (targetKf?.origin === 'permanent') {
+      toast.error('Cannot delete keyframe', { message: 'The start and end keyframes are permanent' });
       return;
     }
 
-    const frame = Math.round(time * framerate);
     const callerClipId = selectedClipId;
 
     // Capture keyframe data for rollback
-    const deletedKf = keyframes.find(kf => kf.frame === frame);
+    const deletedKf = targetKf;
     const deletedCropData = getCropDataAtTime(time);
     const deletedOrigin = deletedKf?.origin || 'user';
     const previousStoreKfs = clipCropKeyframes(selectedClip) || [];

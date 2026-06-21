@@ -399,9 +399,11 @@ export function keyframeReducer(state, action) {
       const keyframeToRemove = findKeyframeAtFrame(keyframes, frame);
       if (!keyframeToRemove) return state;
 
-      // Don't allow removing if it would leave less than 2 keyframes
-      // (ensurePermanentKeyframes will reconstitute boundary permanents from remaining keyframes)
-      if (keyframes.length <= 2) return state;
+      // Only permanent boundary keyframes (start/end) are protected. User keyframes
+      // are always removable — never count-gated. ensurePermanentKeyframes reconstitutes
+      // the boundaries from the survivors, so the >=2 invariant holds as a consequence
+      // of protecting the permanents, not via a separate (desync-prone) count check.
+      if (keyframeToRemove.origin === 'permanent') return state;
 
       const filtered = keyframes.filter(kf => kf.frame !== frame);
       return {
