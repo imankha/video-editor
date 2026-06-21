@@ -1,0 +1,28 @@
+{
+  "name": "claude-container",
+  "displayName": "Claude Container",
+  "description": "Adds a 'Claude Container' command that launches a bypass-permissions Claude Code session inside this repo's on-demand dev container.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "claude-container.launch",
+        "title": "Claude Container"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/imankha/video-editor"
+  },
+  "license": "MIT"
+}

@@ -106,3 +106,6 @@ src/frontend/dev-dist/registerSW.js
 
 # Stray Playwright MCP screenshot artifacts saved to repo root
 myreels-volleyball.png
+
+# Built VSIX for the local "Claude Container" VS Code command (source is tracked)
+tools/vscode-claude-container/*.vsix
