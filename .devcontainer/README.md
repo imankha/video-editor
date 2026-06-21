@@ -13,7 +13,27 @@ permission prompts disabled**, safely scoped to the container.
   don't have to `/login` again.
 - The container runs as the non-root `vscode` user, which bypass mode requires.
 
-## Using it
+## Two ways in
+
+### A. One command (terminal Claude) -- recommended for "never ask me"
+
+| Goal | Command |
+|------|---------|
+| **Go in** (start a bypassed Claude session) | `.devcontainer/claude-docker.sh` (or `claude-docker.bat`) |
+| **Leave the session** (keep container warm) | exit Claude: `Ctrl-C` / `/exit` -- you're back on the host instantly |
+| **Stop the container** (free RAM) | `.devcontainer/claude-docker-stop.sh` (or `.bat`) |
+
+`claude-docker` builds/starts the container if needed (first run takes a few
+minutes; later runs are instant because the container is reused) and drops you
+straight into a `claude` session that **never asks for permission**. Run it
+instead of `claude` whenever you want a no-prompts session. Args are forwarded,
+so `claude-docker.sh --resume` works.
+
+You don't need a command to "leave" -- just exit Claude and you're back on the
+host. The container stays running so the next launch is fast. Run
+`claude-docker-stop` only when you want to fully shut it down.
+
+### B. VS Code extension (your usual UI)
 
 1. Command Palette -> **Dev Containers: Reopen in Container**.
 2. Wait for build (first time installs ffmpeg, the Claude CLI, and frontend deps).
@@ -22,13 +42,19 @@ permission prompts disabled**, safely scoped to the container.
 
 To go back: **Dev Containers: Reopen Folder Locally**.
 
+**This is effectively "auto-default" for the extension:** VS Code *remembers your
+choice per folder*. After you Reopen in Container once, opening this folder
+reopens it in the container automatically every time after -- until you
+explicitly Reopen Folder Locally. So the one-time click sticks.
+
 ## The "spin up on demand" caveat
 
 A Claude session already running on the host **cannot** be moved into the
-container mid-conversation -- containerization happens at launch. So the
-practical trigger is: **whenever you're about to start permission-heavy work,
-Reopen in Container** and the fresh session runs fully bypassed. There's no way
-to auto-jump an in-flight host session into a container.
+container mid-conversation -- containerization happens at launch. So "jump into
+Docker the moment it wants permission" isn't possible for a live session; the
+fix is to *start* in the container. Either path above does that: `claude-docker`
+for a fresh terminal session, or Reopen in Container for the extension (which
+then sticks as the default for this folder).
 
 ## Notes / gotchas
 
