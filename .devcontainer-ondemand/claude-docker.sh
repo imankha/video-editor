@@ -9,20 +9,25 @@
 # host whenever you want a no-prompts session.
 #
 # USAGE (from Git Bash / WSL / macOS):
-#   .devcontainer/claude-docker.sh            # start a bypassed Claude session
-#   .devcontainer/claude-docker.sh --resume   # any args are forwarded to claude
+#   .devcontainer-ondemand/claude-docker.sh            # start a bypassed Claude session
+#   .devcontainer-ondemand/claude-docker.sh --resume   # any args are forwarded to claude
 #
 # Requires: Docker running, Node (for npx). The first run builds the image and
 # can take several minutes; later runs are fast (container is reused).
 set -euo pipefail
 
 # Repo root = parent of this script's dir, regardless of where it's invoked.
-cd "$(dirname "$0")/.."
+# This config dir is intentionally NOT named ".devcontainer" so VS Code does
+# not auto-reopen the folder in a container (host is the default). We therefore
+# point the devcontainer CLI at the config explicitly via --config below.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONFIG="$SCRIPT_DIR/devcontainer.json"
+cd "$SCRIPT_DIR/.."
 
 echo "[claude-docker] starting dev container (first run builds the image; be patient)..." >&2
 # `up` is idempotent: builds if missing, starts if stopped, no-op if running.
 # Progress logs go to stderr (shown live); the result JSON goes to stdout (captured).
-UP_JSON="$(npx --yes @devcontainers/cli up --workspace-folder .)"
+UP_JSON="$(npx --yes @devcontainers/cli up --workspace-folder . --config "$CONFIG")"
 
 # Pull containerId / workspace / user out of the result JSON with Node.
 read -r CID WORKDIR RUSER < <(printf '%s' "$UP_JSON" | node -e '
@@ -47,4 +52,4 @@ fi
 
 # Fallback: let the devcontainer CLI run it (works, but TTY handling is weaker).
 echo "[claude-docker] could not resolve container id; using devcontainer exec fallback..." >&2
-exec npx --yes @devcontainers/cli exec --workspace-folder . claude "$@"
+exec npx --yes @devcontainers/cli exec --workspace-folder . --config "$CONFIG" claude "$@"

@@ -11,7 +11,7 @@ cd /d "%~dp0\.."
 REM find-container.js matches the running dev container for this repo regardless
 REM of how the host path was formatted in the container label (see that file).
 set "CID="
-for /f "usebackq delims=" %%i in (`node .devcontainer\find-container.js`) do set "CID=%%i"
+for /f "usebackq delims=" %%i in (`node "%~dp0find-container.js"`) do set "CID=%%i"
 
 if not defined CID (
   echo [claude-docker-stop] no running dev container found for this repo. Nothing to stop.

@@ -1,7 +1,7 @@
 // Dev Container for permission-free Claude Code sessions.
 //
 // WHY: Inside this isolated container, Claude Code runs with
-// permissions.defaultMode = bypassPermissions (see .devcontainer/setup.sh),
+// permissions.defaultMode = bypassPermissions (see .devcontainer-ondemand/setup.sh),
 // so sessions never stop to ask you to approve a command. The HOST checkout
 // keeps its normal prompts -- the bypass setting is written into the
 // CONTAINER's own ~/.claude, never the host's.
@@ -51,7 +51,7 @@
   },
 
   // Runs once when the container is built.
-  "onCreateCommand": "bash .devcontainer/setup.sh",
+  "onCreateCommand": "bash .devcontainer-ondemand/setup.sh",
   // Runs on every container start -- refreshes the (rotatable) host token.
-  "postStartCommand": "bash .devcontainer/auth-sync.sh"
+  "postStartCommand": "bash .devcontainer-ondemand/auth-sync.sh"
 }

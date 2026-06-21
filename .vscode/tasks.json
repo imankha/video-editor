@@ -1,0 +1,36 @@
+{
+  // Host is the DEFAULT Claude experience for this repo: just use the Claude
+  // Code panel / `claude` in a terminal in a normally-opened (local) window.
+  //
+  // The CONTAINERIZED, bypass-permissions Claude is opt-in via the command
+  // below. Run it from the Command Palette:
+  //   Ctrl+Shift+P -> "Tasks: Run Task" -> "Claude: Containerized session (bypass perms)"
+  // It launches the dev container (building it on first run) and drops you into
+  // a no-prompts `claude` session inside it. Requires Docker Desktop running.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Claude: Containerized session (bypass perms)",
+      "detail": "Opt-in. Runs Claude Code inside the Docker dev container with permissions bypassed. Requires Docker Desktop.",
+      "type": "shell",
+      "command": "${workspaceFolder}/.devcontainer-ondemand/claude-docker.bat",
+      "windows": {
+        "command": "${workspaceFolder}\\.devcontainer-ondemand\\claude-docker.bat"
+      },
+      "linux": {
+        "command": "${workspaceFolder}/.devcontainer-ondemand/claude-docker.sh"
+      },
+      "osx": {
+        "command": "${workspaceFolder}/.devcontainer-ondemand/claude-docker.sh"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": false,
+        "echo": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

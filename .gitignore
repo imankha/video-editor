@@ -9,7 +9,11 @@ yarn-error.log*
 /dist
 
 # IDE
-.vscode/
+# Ignore .vscode contents, but track the shared "Claude: Containerized
+# session" launch command. (Must be .vscode/* not .vscode/ so the negation
+# below can re-include a file -- git can't un-exclude inside an excluded dir.)
+.vscode/*
+!.vscode/tasks.json
 .idea/
 *.swp
 *.swo

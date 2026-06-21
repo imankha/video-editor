@@ -6,13 +6,14 @@
 # running warm for a fast next launch. Use THIS only when you want the
 # container fully stopped. The next `claude-docker.sh` will start it again.
 #
-# USAGE:  .devcontainer/claude-docker-stop.sh
+# USAGE:  .devcontainer-ondemand/claude-docker-stop.sh
 set -euo pipefail
-cd "$(dirname "$0")/.."
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR/.."
 
 # find-container.js matches the running dev container for this repo regardless
 # of how the host path was formatted in the container label (see that file).
-CID="$(node .devcontainer/find-container.js)"
+CID="$(node "$SCRIPT_DIR/find-container.js")"
 
 if [ -z "$CID" ]; then
   echo "[claude-docker-stop] no running dev container found for this repo. Nothing to stop."
@@ -21,4 +22,4 @@ fi
 
 echo "[claude-docker-stop] stopping container ${CID:0:12}..."
 docker stop "$CID" >/dev/null
-echo "[claude-docker-stop] stopped. Run .devcontainer/claude-docker.sh to start again."
+echo "[claude-docker-stop] stopped. Run .devcontainer-ondemand/claude-docker.sh to start again."
