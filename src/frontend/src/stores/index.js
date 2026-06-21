@@ -8,7 +8,7 @@
  * @see APP_REFACTOR_PLAN.md for App.jsx refactoring plan
  */
 
-export { useEditorStore, EDITOR_MODES, SCREENS, getScreenByType, MODE_PATHS, PATH_TO_MODE } from './editorStore';
+export { useEditorStore, EDITOR_MODES, SCREENS, getScreenByType, MODE_PATHS, PATH_TO_MODE, APP_SCREENS, resolveEditorScreen } from './editorStore';
 export { useExportStore } from './exportStore';
 export { useVideoStore } from './videoStore';
 export { useProjectDataStore, useProjectClips, useSelectedClipId, useWorkingVideo, useProjectAspectRatio, useGlobalTransition } from './projectDataStore';

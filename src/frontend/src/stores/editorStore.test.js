@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useEditorStore } from './editorStore';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { useEditorStore, resolveEditorScreen, APP_SCREENS, EDITOR_MODES } from './editorStore';
+import { useProjectsStore } from './projectsStore';
 
 describe('editorStore', () => {
   // Reset store before each test
@@ -80,6 +81,62 @@ describe('editorStore', () => {
     it('can select highlight layer', () => {
       useEditorStore.getState().setSelectedLayer('highlight');
       expect(useEditorStore.getState().selectedLayer).toBe('highlight');
+    });
+  });
+
+  describe('resolveEditorScreen', () => {
+    let warn, error;
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('routes PROJECT_MANAGER home even when a project is still selected (the blank-screen bug)', () => {
+      expect(resolveEditorScreen(EDITOR_MODES.PROJECT_MANAGER, true)).toBe(APP_SCREENS.HOME);
+      expect(resolveEditorScreen(EDITOR_MODES.PROJECT_MANAGER, false)).toBe(APP_SCREENS.HOME);
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    });
+
+    it('routes FRAMING/OVERLAY to the editor when a project is selected', () => {
+      expect(resolveEditorScreen(EDITOR_MODES.FRAMING, true)).toBe(APP_SCREENS.EDITOR);
+      expect(resolveEditorScreen(EDITOR_MODES.OVERLAY, true)).toBe(APP_SCREENS.EDITOR);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('routes FRAMING/OVERLAY home and warns when no project is selected', () => {
+      expect(resolveEditorScreen(EDITOR_MODES.OVERLAY, false)).toBe(APP_SCREENS.HOME);
+      expect(warn).toHaveBeenCalled();
+    });
+
+    it('routes ANNOTATE to the editor with or without a project', () => {
+      expect(resolveEditorScreen(EDITOR_MODES.ANNOTATE, false)).toBe(APP_SCREENS.EDITOR);
+      expect(resolveEditorScreen(EDITOR_MODES.ANNOTATE, true)).toBe(APP_SCREENS.EDITOR);
+    });
+
+    it('routes any unhandled mode home and logs an error', () => {
+      expect(resolveEditorScreen('totally-unknown-mode', true)).toBe(APP_SCREENS.HOME);
+      expect(error).toHaveBeenCalled();
+    });
+  });
+
+  describe('goToProjectManager', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('clears the selection and switches to project-manager mode atomically', () => {
+      useProjectsStore.setState({ selectedProjectId: 45, selectedProject: { id: 45 } });
+      useEditorStore.setState({ editorMode: 'overlay' });
+
+      useEditorStore.getState().goToProjectManager();
+
+      expect(useEditorStore.getState().editorMode).toBe(EDITOR_MODES.PROJECT_MANAGER);
+      expect(useProjectsStore.getState().selectedProjectId).toBe(null);
+      expect(useProjectsStore.getState().selectedProject).toBe(null);
     });
   });
 
