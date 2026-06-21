@@ -335,6 +335,7 @@ def _materialize_clips(
     existing = _get_existing_clips(recipient_conn, recipient_game_id)
     inserted = 0
     merged = 0
+    inserted_clips: list[dict] = []
 
     for clip in incoming_clips:
         incoming_athletes = _build_athlete_set(clip, sharer_profile_name)
@@ -375,7 +376,7 @@ def _materialize_clips(
                 recipient_conn, recipient_game_id, clip,
                 shared_by=shared_by, tagged_teammates_blob=teammates_blob,
             )
-            existing.append({
+            new_clip = {
                 "id": new_id,
                 "start_time": clip.get("start_time"),
                 "end_time": clip.get("end_time"),
@@ -384,10 +385,12 @@ def _materialize_clips(
                 "notes": clip.get("notes"),
                 "rating": clip.get("rating"),
                 "tagged_teammates": teammates_blob,
-            })
+            }
+            existing.append(new_clip)
+            inserted_clips.append(new_clip)
             inserted += 1
 
-    return {"inserted": inserted, "merged": merged}
+    return {"inserted": inserted, "merged": merged, "inserted_clips": inserted_clips}
 
 
 def _create_storage_refs(
@@ -491,12 +494,24 @@ def materialize_game_share(
             )
 
         if game_only:
-            result = {"inserted": 0, "merged": 0}
+            result = {"inserted": 0, "merged": 0, "inserted_clips": []}
         else:
             result = _materialize_clips(
                 recipient_conn, recipient_game_id, clip_data,
                 shared_by=sharer_email, sharer_profile_name=sharer_profile_name,
             )
+
+        # Auto-create a draft reel for each shared 5-star clip, using the exact
+        # same path as the "mark 5-star / create reel" gesture in the editor.
+        # Runs on the recipient's connection before commit, so the draft projects
+        # sync to R2 in the same transaction as the materialized clips.
+        from app.routers.clips import _create_auto_project_for_clip
+        reel_cursor = recipient_conn.cursor()
+        for clip in result["inserted_clips"]:
+            if clip["rating"] == 5:
+                _create_auto_project_for_clip(
+                    reel_cursor, clip["id"], clip["name"] or "")
+
         recipient_conn.commit()
 
         # Create storage refs in Postgres
