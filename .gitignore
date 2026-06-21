@@ -9,11 +9,7 @@ yarn-error.log*
 /dist
 
 # IDE
-# Ignore .vscode contents, but track the shared "Claude: Containerized
-# session" launch command. (Must be .vscode/* not .vscode/ so the negation
-# below can re-include a file -- git can't un-exclude inside an excluded dir.)
-.vscode/*
-!.vscode/tasks.json
+.vscode/
 .idea/
 *.swp
 *.swo
@@ -106,6 +102,3 @@ src/frontend/dev-dist/registerSW.js
 
 # Stray Playwright MCP screenshot artifacts saved to repo root
 myreels-volleyball.png
-
-# Built VSIX for the local "Claude Container" VS Code command (source is tracked)
-tools/vscode-claude-container/*.vsix

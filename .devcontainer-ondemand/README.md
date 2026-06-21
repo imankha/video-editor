@@ -27,16 +27,7 @@ anything.
 
 ## How to start a bypassed session
 
-### A. VS Code command (recommended)
-
-Command Palette (`Ctrl+Shift+P`) -> **Tasks: Run Task** ->
-**"Claude: Containerized session (bypass perms)"**.
-
-This runs the launcher below in a dedicated terminal: it builds/starts the
-container if needed and drops you into a `claude` session that never asks for
-permission. (Defined in [.vscode/tasks.json](../.vscode/tasks.json).)
-
-### B. One command in a terminal
+Run the launcher in a terminal (Git Bash / WSL / cmd):
 
 | Goal | Command |
 |------|---------|
