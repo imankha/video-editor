@@ -38,7 +38,6 @@ def _build_share_email(
     footer_reason: str,
     is_first_touch: bool,
     preheader: str = "",
-    secondary_cta_url: str | None = None,
 ) -> str:
     heading = _html_escape(heading)
     game_name = _html_escape(game_name)
@@ -72,14 +71,6 @@ def _build_share_email(
             "Reel Ballers helps soccer parents create and share game highlights.</p>"
         )
 
-    secondary_html = ""
-    if not is_first_touch and secondary_cta_url:
-        secondary_html = (
-            '<p style="margin:16px 0 0 0;font-size:14px;">'
-            f'<a href="{_html_escape(secondary_cta_url)}" '
-            f'style="color:#6d28d9;text-decoration:underline;">Open in your gallery</a></p>'
-        )
-
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -108,7 +99,6 @@ def _build_share_email(
     <p style="color:#1f2937;font-size:20px;line-height:28px;font-weight:600;margin:0 0 24px 0;">{game_name}</p>
     <div style="text-align:center;margin:0 0 8px 0;">{cta_html}</div>
     {trust_html}
-    {secondary_html}
   </td></tr>
   <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
   <tr><td style="padding:24px 32px;">
@@ -519,7 +509,6 @@ async def send_collection_share_email(
         footer_reason=f"{display_name} shared a collection with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
-        secondary_cta_url=share_url if not is_first_touch else None,
     )
 
     try:
@@ -587,7 +576,6 @@ async def send_share_email(
         footer_reason=f"{display_name} shared a video with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
-        secondary_cta_url=share_url if not is_first_touch else None,
     )
 
     try:
@@ -659,7 +647,6 @@ async def send_teammate_share_email(
         footer_reason=f"{display_name} shared game clips with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
-        secondary_cta_url=share_url if not is_first_touch else None,
     )
 
     try:
@@ -727,7 +714,6 @@ async def send_game_share_email(
         footer_reason=f"{display_name} shared game footage with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
-        secondary_cta_url=share_url if not is_first_touch else None,
     )
 
     try:
@@ -795,7 +781,6 @@ async def send_playback_share_email(
         footer_reason=f"{display_name} shared game annotations with you",
         is_first_touch=is_first_touch,
         preheader=preheader,
-        secondary_cta_url=share_url if not is_first_touch else None,
     )
 
     try:
