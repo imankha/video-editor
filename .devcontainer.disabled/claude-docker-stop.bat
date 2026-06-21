@@ -8,11 +8,10 @@ REM next claude-docker.bat will start it again.
 setlocal
 cd /d "%~dp0\.."
 
-REM Resolve the same absolute host path the devcontainer CLI labels containers with.
-for /f "usebackq delims=" %%p in (`node -e "process.stdout.write(require('path').resolve('.'))"`) do set "FOLDER=%%p"
-
+REM find-container.js matches the running dev container for this repo regardless
+REM of how the host path was formatted in the container label (see that file).
 set "CID="
-for /f "usebackq delims=" %%i in (`docker ps -q --filter "label=devcontainer.local_folder=%FOLDER%"`) do set "CID=%%i"
+for /f "usebackq delims=" %%i in (`node .devcontainer\find-container.js`) do set "CID=%%i"
 
 if not defined CID (
   echo [claude-docker-stop] no running dev container found for this repo. Nothing to stop.

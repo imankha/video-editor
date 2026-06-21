@@ -10,20 +10,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The devcontainer CLI labels each container with the absolute host folder it
-# was started from. Resolve the same path the CLI would (Node, same cwd).
-FOLDER="$(node -e "process.stdout.write(require('path').resolve('.'))")"
-CID="$(docker ps -q --filter "label=devcontainer.local_folder=$FOLDER")"
-
-if [ -z "$CID" ]; then
-  # Fallback: match any running devcontainer whose folder basename is this repo
-  # (covers drive-letter/slash normalization differences across shells).
-  base="$(basename "$(pwd)")"
-  CID="$(docker ps -q --filter "label=devcontainer.local_folder" | while read -r c; do
-    lf="$(docker inspect -f '{{ index .Config.Labels "devcontainer.local_folder" }}' "$c" 2>/dev/null)"
-    case "$(basename "$lf")" in "$base") printf '%s\n' "$c"; break;; esac
-  done)"
-fi
+# find-container.js matches the running dev container for this repo regardless
+# of how the host path was formatted in the container label (see that file).
+CID="$(node .devcontainer/find-container.js)"
 
 if [ -z "$CID" ]; then
   echo "[claude-docker-stop] no running dev container found for this repo. Nothing to stop."
