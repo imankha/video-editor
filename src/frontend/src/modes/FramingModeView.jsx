@@ -604,47 +604,9 @@ export function FramingModeView({
         )}
       </div>
 
-      {/* Instructions when no video */}
-      {!videoUrl && !isLoading && !error && (
-        <div className="mt-8 text-center text-gray-400">
-          <div className="max-w-2xl mx-auto space-y-4">
-            <h2 className="text-xl font-semibold text-white mb-4">
-              Getting Started
-            </h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
-              <div className="bg-white/5 rounded-lg p-4">
-                <div className="text-2xl mb-2">📤</div>
-                <h3 className="font-semibold text-white mb-1">1. Add a Game</h3>
-                <p>Add your game footage to start clipping highlights</p>
-              </div>
-              <div className="bg-white/5 rounded-lg p-4">
-                <div className="text-2xl mb-2">✂️</div>
-                <h3 className="font-semibold text-white mb-1">2. Trim</h3>
-                <p>Cut out the boring parts and keep only the action</p>
-              </div>
-              <div className="bg-white/5 rounded-lg p-4">
-                <div className="text-2xl mb-2">🎯</div>
-                <h3 className="font-semibold text-white mb-1">3. Zoom</h3>
-                <p>Follow your player with dynamic crop keyframes</p>
-              </div>
-              <div className="bg-white/5 rounded-lg p-4">
-                <div className="text-2xl mb-2">🐌</div>
-                <h3 className="font-semibold text-white mb-1">4. Slow-Mo</h3>
-                <p>Create slow motion segments for key moments</p>
-              </div>
-              <div className="bg-white/5 rounded-lg p-4">
-                <div className="text-2xl mb-2">🚀</div>
-                <h3 className="font-semibold text-white mb-1">5. Export</h3>
-                <p>Play the video to make sure it's perfect and hit export to leverage AI Upscale</p>
-              </div>
-            </div>
-            <div className="mt-6 text-xs text-gray-500">
-              <p>Supported formats: MP4, MOV, WebM</p>
-              <p>Maximum file size: 4GB</p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* No "Getting Started" onboarding here: Framing is always reached with an
+          existing game/clips, so the app-level guide is out of context and only
+          flashed during the brief clip-load window. */}
     </>
   );
 }

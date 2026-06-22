@@ -313,7 +313,7 @@ const ExportButtonView = forwardRef(function ExportButtonView({
         {isCurrentlyExporting
           ? (isExternallyExporting && !isExporting ? 'Export in progress...' : 'Exporting...')
           : isFramingMode
-            ? (hasUnframedClips && isMultiClipMode
+            ? (hasUnframedClips && isMultiClipMode && totalExtractedClips > 1
               ? `Export Highlight (${totalExtractedClips - unframedCount}/${totalExtractedClips})`
               : 'Export Highlight')
             : 'Add Spotlight'
