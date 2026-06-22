@@ -45,6 +45,10 @@ as your host (Pro/Max); **no API key needed**.
   `~/.claude/settings.json` ([setup.sh](setup.sh)) — the host is never modified.
 - `~/.claude` is a **persisted named volume** (see [devcontainer.json](devcontainer.json)),
   so sign-in/settings/history survive rebuilds.
+- `CLAUDE_CONFIG_DIR` points Claude's whole config (incl. `.claude.json` — MCP
+  approvals, project trust, onboarding, theme) **into that volume**, so you don't
+  redo project setup on every rebuild. [auth-sync.sh](auth-sync.sh) also migrates
+  a legacy loose `~/.claude.json` onto the volume once.
 - [auth-sync.sh](auth-sync.sh) seeds the host's **CLI** token into that volume
   only if it's empty (never overwrites your in-container sign-in).
 - Runs as the non-root `vscode` user, which bypass mode requires.

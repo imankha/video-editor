@@ -39,7 +39,12 @@
   "containerEnv": {
     // Belt-and-suspenders for the CLI's root/sudo guard. We already run as the
     // non-root `vscode` user, so this is not strictly required, but harmless.
-    "IS_SANDBOX": "1"
+    "IS_SANDBOX": "1",
+    // Put Claude's ENTIRE config (incl. .claude.json: MCP approvals, project
+    // trust, onboarding, theme) inside the persisted ~/.claude volume. Without
+    // this, .claude.json lives loose in $HOME (off the volume) and you'd redo
+    // that setup on every rebuild. This dir == the named-volume mount below.
+    "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
   },
 
   // Lets in-container code reach services running on the Windows host

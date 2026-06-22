@@ -25,6 +25,15 @@ else
   echo "[auth-sync] no host credentials found at /host-claude/.credentials.json -- run /login once inside the container."
 fi
 
+# Migrate a legacy ~/.claude.json onto the persisted config dir. With
+# CLAUDE_CONFIG_DIR=~/.claude (set in devcontainer.json) Claude keeps
+# .claude.json INSIDE the volume; older containers had it loose in $HOME.
+# Move it once so MCP approvals / onboarding / trust survive rebuilds.
+if [ -f "$HOME/.claude.json" ] && [ ! -f "$HOME/.claude/.claude.json" ]; then
+  mv "$HOME/.claude.json" "$HOME/.claude/.claude.json"
+  echo "[auth-sync] migrated ~/.claude.json onto the persisted config volume."
+fi
+
 # Re-assert bypass mode (idempotent).
 if [ ! -f "$HOME/.claude/settings.json" ]; then
   cat > "$HOME/.claude/settings.json" <<'JSON'
