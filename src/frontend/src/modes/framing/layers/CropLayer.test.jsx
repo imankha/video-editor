@@ -65,14 +65,14 @@ describe('CropLayer trim range rendering', () => {
     expect(getMarkerTooltips()).toHaveLength(4);
   });
 
-  it('keeps the trim-boundary keyframe non-deletable and start-flagged', () => {
+  it('makes every visible keyframe deletable (flat-list model, no protected boundaries)', () => {
     renderCropLayer();
 
-    // Boundary keyframe at frame 42 must not expose a delete button.
-    // Out-of-range frame 0 is hidden, so no marker should be deletable here
-    // except genuine middle keyframes (frame 129).
+    // Flat-list model: there are no protected boundary keyframes. Frame 0 is
+    // hidden (before the trim), and all 3 visible keyframes (42, 129, 313) expose
+    // a delete button. The only floor is "can't delete the last remaining one".
     const deleteButtons = screen.queryAllByTitle('Delete keyframe');
-    expect(deleteButtons).toHaveLength(1); // only frame 129
+    expect(deleteButtons).toHaveLength(3);
   });
 });
 

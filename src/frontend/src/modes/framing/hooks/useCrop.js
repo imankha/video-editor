@@ -186,26 +186,9 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     }
   }, [savedKeyframes, framerate, restoreKeyframes, machineState]);
 
-  // Virtual trim: the end permanent is anchored at the FULL clip duration
-  // (totalFrames), never at trimRange.end. Trimming only changes trimRange (what
-  // is visible/exported); crop keyframes are never dropped. This mirrors the start
-  // boundary, which is always frame 0. SET_END_FRAME(totalFrames) is therefore
-  // non-destructive — it ensures a permanent at totalFrames without removing any
-  // keyframe (none can exist beyond the full duration).
-  useEffect(() => {
-    if (machineState === 'uninitialized') return;
-    const effectiveDuration = videoMetadata?.duration;
-    if (!effectiveDuration) return;
-
-    const correctEndFrame = timeToFrame(effectiveDuration, framerate);
-    const currentEndFrame = keyframesRef.current.length > 0
-      ? keyframesRef.current[keyframesRef.current.length - 1].frame
-      : null;
-
-    if (currentEndFrame !== null && currentEndFrame !== correctEndFrame) {
-      setEndFrame(correctEndFrame);
-    }
-  }, [videoMetadata?.duration, machineState, framerate, setEndFrame]);
+  // Flat-list model: there is no managed end boundary. Crop keyframes are a plain
+  // list; interpolation clamps to the first/last keyframe, and trim is virtual
+  // (handled by trimRange). No end-frame reconciliation effect is needed.
 
   /**
    * Auto-initialize keyframes when metadata loads
@@ -271,64 +254,30 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
   }, [videoMetadata, aspectRatio, initializeKeyframes, calculateDefaultCrop, framerate, trimRange, machineState]); // eslint-disable-line react-hooks/exhaustive-deps -- machineState replaces needsInitialization (only changes on init/reset/restore, not every keyframe edit)
 
   /**
-   * Update aspect ratio and recalculate all keyframes
-   * If end keyframe hasn't been explicitly set, both start and end get same values
-   * Uses refs to read keyframes/isEndKeyframeExplicit to keep callback stable
+   * Update aspect ratio and recalculate all keyframes to the new default crop.
+   * Flat-list model: every keyframe gets the new aspect-ratio default (no special
+   * start/end handling).
    */
   const updateAspectRatio = useCallback((newRatio) => {
     track('aspect_ratio_change', { from: aspectRatio, to: newRatio }, { debugOnly: true });
     setAspectRatio(newRatio);
 
-    // Use refs to read current values without adding to dependency array
     const currentKeyframes = keyframesRef.current;
-    const currentIsEndExplicit = isEndKeyframeExplicitRef.current;
 
-    // Recalculate all keyframes with new aspect ratio
     if (currentKeyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
-      // Get the new default crop for this aspect ratio
       const newCrop = calculateDefaultCrop(
         videoMetadata.width,
         videoMetadata.height,
         newRatio
       );
 
-      const totalFrames = timeToFrame(videoMetadata.duration, framerate);
-
-      updateAllKeyframes(kf => {
-        // Preserve origin
-        const origin = kf.origin || 'user';
-
-        // If end hasn't been explicitly set, use default for all keyframes
-        if (!currentIsEndExplicit) {
-          return {
-            frame: kf.frame,
-            origin,
-            ...newCrop
-          };
-        }
-
-        // If end has been explicitly set, only update non-end keyframes with default
-        // End keyframe keeps its custom position/size but updates to new aspect ratio
-        const isEnd = kf.frame === totalFrames;
-        if (isEnd) {
-          // Preserve end keyframe's relative position but adjust to new aspect ratio
-          // For now, just recalculate - could be smarter about preserving position
-          return {
-            frame: kf.frame,
-            origin,
-            ...newCrop
-          };
-        }
-
-        return {
-          frame: kf.frame,
-          origin,
-          ...newCrop
-        };
-      });
-
+      updateAllKeyframes(kf => ({
+        frame: kf.frame,
+        origin: kf.origin || 'user',
+        ...newCrop
+      }));
     }
-  }, [updateAllKeyframes, videoMetadata, calculateDefaultCrop, framerate]);
+  }, [updateAllKeyframes, videoMetadata, calculateDefaultCrop]);
 
   /**
    * Copy the crop keyframe at the specified time

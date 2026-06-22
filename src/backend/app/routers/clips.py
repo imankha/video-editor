@@ -382,27 +382,20 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                         kf['origin'] = action.data.origin
                     logger.info(f"[Framing Action] Updated keyframe at frame {action.data.frame}")
                 else:
-                    # First keyframe on an empty clip becomes the permanent
-                    # start boundary — the frontend's auto-init creates permanent
-                    # boundaries in memory but only persists on user gesture.
+                    # Flat-list model: crop keyframes are plain user keyframes with
+                    # no forced boundaries. Enforce minimum spacing for genuinely-new
+                    # keyframes (mirrors the frontend). The client resolves snap
+                    # targets before sending, so anything reaching this branch that
+                    # is too close indicates an overlapping new keyframe.
                     origin = action.data.origin or 'user'
-                    if len(crop_keyframes) == 0 and action.data.frame == 0:
-                        origin = 'permanent'
-
-                    # Enforce minimum spacing for genuinely-new user keyframes
-                    # (mirrors the frontend). Permanent boundary keyframes are
-                    # system-placed and bypass spacing. The client resolves snap
-                    # targets before sending, so anything reaching this branch
-                    # that is too close indicates an overlapping new keyframe.
-                    if origin != 'permanent':
-                        too_close = any(
-                            abs(kf.get('frame', 0) - action.data.frame) < MIN_KEYFRAME_SPACING
-                            for kf in crop_keyframes
+                    too_close = any(
+                        abs(kf.get('frame', 0) - action.data.frame) < MIN_KEYFRAME_SPACING
+                        for kf in crop_keyframes
+                    )
+                    if too_close:
+                        raise ValueError(
+                            f"Keyframe too close to an existing one (min spacing {MIN_KEYFRAME_SPACING} frames)"
                         )
-                        if too_close:
-                            raise ValueError(
-                                f"Keyframe too close to an existing one (min spacing {MIN_KEYFRAME_SPACING} frames)"
-                            )
 
                     new_kf = {
                         'frame': action.data.frame,
@@ -448,21 +441,9 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 if idx == -1:
                     raise ValueError(f"Keyframe at frame {action.target.frame} not found")
 
-                # Only permanent boundary keyframes are protected: the start at
-                # frame 0 and the end boundary (origin='permanent'). User keyframes
-                # are ALWAYS deletable — the keyframe count is NOT a guard.
-                #
-                # A count check here is wrong: the client reconstitutes the
-                # in-memory permanent boundaries on load (ensurePermanentKeyframes)
-                # but persists only gestures, so the persisted count legitimately
-                # differs from what the UI shows. A `len <= 2` check falsely blocked
-                # valid deletes of user keyframes ("minimum 2 keyframes required").
-                # Deleting only user keyframes can never drop below the 2 boundaries,
-                # because the boundaries are permanent and protected here.
-                target_kf = crop_keyframes[idx]
-                if action.target.frame == 0 or target_kf.get('origin') == 'permanent':
-                    raise ValueError("Cannot delete a permanent boundary keyframe")
-
+                # Flat-list model: any crop keyframe may be deleted. There are no
+                # protected boundary keyframes — the render path clamps to whatever
+                # remains, and an empty list falls back to a centered default crop.
                 del crop_keyframes[idx]
                 logger.info(f"[Framing Action] Deleted keyframe at frame {action.target.frame}")
 

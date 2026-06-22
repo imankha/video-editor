@@ -33,8 +33,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -47,7 +47,7 @@ describe('keyframeController', () => {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
           { frame: 0, x: 100 }, // Missing origin
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -61,8 +61,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { origin: 'permanent', x: 100 }, // Missing frame
-          { frame: 90, origin: 'permanent', x: 200 }
+          { origin: 'user', x: 100 }, // Missing frame
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -76,8 +76,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 90, origin: 'permanent', x: 200 },
-          { frame: 0, origin: 'permanent', x: 100 }
+          { frame: 90, origin: 'user', x: 200 },
+          { frame: 0, origin: 'user', x: 100 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -86,17 +86,32 @@ describe('keyframeController', () => {
       expect(violations.some(v => v.includes('not sorted'))).toBe(true);
     });
 
-    it('detects insufficient keyframes for initialized state', () => {
+    it('detects duplicate frames', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 }
+          { frame: 30, origin: 'user', x: 100 },
+          { frame: 30, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
       };
       const violations = validateInvariants(state);
-      expect(violations.some(v => v.includes('at least 2 keyframes'))).toBe(true);
+      expect(violations.some(v => v.includes('Duplicate keyframe at frame 30'))).toBe(true);
+    });
+
+    it('flat-list model: a single keyframe is valid (no "at least 2" rule)', () => {
+      const state = {
+        machineState: KeyframeStates.INITIALIZED,
+        keyframes: [
+          { frame: 0, origin: 'user', x: 100 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null
+      };
+      // The flat-list model removed the "at least 2 keyframes" invariant —
+      // one keyframe fully defines the crop (interpolation clamps).
+      expect(validateInvariants(state)).toEqual([]);
     });
 
     it('allows empty keyframes for uninitialized state', () => {
@@ -110,25 +125,35 @@ describe('keyframeController', () => {
   // ============================================================================
 
   describe('INITIALIZE action', () => {
-    it('initializes with default keyframes at frame 0 and end frame', () => {
+    it('initializes with exactly one keyframe at frame 0 (flat-list model)', () => {
       const state = createInitialState();
       const defaultData = { x: 100, y: 100, width: 200, height: 300 };
 
       const newState = keyframeReducer(state, actions.initialize(defaultData, 90, 30));
 
       expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
-      expect(newState.keyframes.length).toBe(2);
+      // Flat-list model: ONE keyframe at frame 0. No forced end boundary —
+      // interpolation clamps to the last keyframe so the crop is defined everywhere.
+      expect(newState.keyframes.length).toBe(1);
       expect(newState.keyframes[0]).toEqual({
         frame: 0,
-        origin: 'permanent',
-        ...defaultData
-      });
-      expect(newState.keyframes[1]).toEqual({
-        frame: 90,
-        origin: 'permanent',
+        origin: 'user',
         ...defaultData
       });
       expect(newState.isEndKeyframeExplicit).toBe(false);
+    });
+
+    it('honors a non-zero startFrame for the single keyframe', () => {
+      const state = createInitialState();
+      const defaultData = { x: 10, y: 20, width: 100, height: 200 };
+
+      const newState = keyframeReducer(state, {
+        type: ActionTypes.INITIALIZE,
+        payload: { defaultData, startFrame: 5 }
+      });
+
+      expect(newState.keyframes.length).toBe(1);
+      expect(newState.keyframes[0]).toEqual({ frame: 5, origin: 'user', ...defaultData });
     });
   });
 
@@ -137,9 +162,9 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: true,
         copiedData: { x: 100 },
@@ -159,8 +184,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -177,9 +202,9 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -191,12 +216,12 @@ describe('keyframeController', () => {
       expect(newState.keyframes[1]).toEqual({ frame: 30, origin: 'user', x: 175 });
     });
 
-    it('preserves permanent origin when updating boundary keyframes', () => {
+    it('updating a keyframe applies the requested origin (no permanent promotion)', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -204,16 +229,19 @@ describe('keyframeController', () => {
 
       const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 125 }, 'user'));
 
-      expect(newState.keyframes[0].origin).toBe('permanent');
+      // Snap-update of the frame-0 keyframe: data changes, origin is whatever was
+      // requested ('user'). There is no 'permanent' origin in the flat-list model.
+      expect(newState.keyframes[0].origin).toBe('user');
       expect(newState.keyframes[0].x).toBe(125);
+      expect(newState.keyframes.length).toBe(2);
     });
 
-    it('mirrors start to end when end not explicit', () => {
+    it('does NOT mirror an edit at the start to the end keyframe', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 100 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 100 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -221,51 +249,55 @@ describe('keyframeController', () => {
 
       const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 150 }, 'user'));
 
+      // Only the start keyframe changes — the flat-list model never mirrors
+      // start->end, regardless of isEndKeyframeExplicit.
       expect(newState.keyframes[0].x).toBe(150);
-      expect(newState.keyframes[1].x).toBe(150);
-      expect(newState.keyframes[1].origin).toBe('permanent');
+      expect(newState.keyframes[1].x).toBe(100); // Untouched
     });
 
-    it('does not mirror start to end when end is explicit', () => {
+    it('add/update always resets isEndKeyframeExplicit to false', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 100 }
         ],
         isEndKeyframeExplicit: true,
         copiedData: null
       };
 
-      const newState = keyframeReducer(state, actions.addKeyframe(0, { x: 150 }, 'user'));
+      const newState = keyframeReducer(state, actions.addKeyframe(90, { x: 200 }, 'user'));
 
-      expect(newState.keyframes[0].x).toBe(150);
-      expect(newState.keyframes[1].x).toBe(200); // Unchanged
+      // Editing the last keyframe is just a snap-update — there is no special
+      // "end keyframe became explicit" tracking anymore.
+      expect(newState.keyframes[1].x).toBe(200);
+      expect(newState.isEndKeyframeExplicit).toBe(false);
     });
 
-    it('sets isEndKeyframeExplicit when updating end keyframe', () => {
+    it('preserves a requested non-user origin when adding', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 100 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
       };
 
-      const newState = keyframeReducer(state, actions.addKeyframe(90, { x: 200 }, 'user'));
+      const newState = keyframeReducer(state, actions.addKeyframe(40, { x: 160 }, 'trim'));
 
-      expect(newState.isEndKeyframeExplicit).toBe(true);
+      const added = newState.keyframes.find(kf => kf.frame === 40);
+      expect(added.origin).toBe('trim');
     });
 
     it('maintains sorted order when adding keyframe', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 60, origin: 'user', x: 180 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -278,13 +310,13 @@ describe('keyframeController', () => {
   });
 
   describe('REMOVE_KEYFRAME action', () => {
-    it('removes non-permanent keyframe', () => {
+    it('removes an interior keyframe', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -296,13 +328,13 @@ describe('keyframeController', () => {
       expect(newState.keyframes.find(kf => kf.frame === 30)).toBeUndefined();
     });
 
-    it('rejects removal of permanent keyframe', () => {
+    it('removes the first keyframe (no boundary protection in the flat-list model)', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -310,34 +342,34 @@ describe('keyframeController', () => {
 
       const newState = keyframeReducer(state, actions.removeKeyframe(0));
 
-      expect(newState.keyframes.length).toBe(3);
-      expect(newState.keyframes[0].frame).toBe(0);
-    });
-
-    it('rejects removal of a permanent boundary even in a minimal 2-keyframe array', () => {
-      const state = {
-        machineState: KeyframeStates.EDITING,
-        keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
-        ],
-        isEndKeyframeExplicit: false,
-        copiedData: null
-      };
-
-      const newState = keyframeReducer(state, actions.removeKeyframe(0));
-
+      // Any keyframe is removable now — the first one is gone, the rest remain.
       expect(newState.keyframes.length).toBe(2);
+      expect(newState.keyframes.find(kf => kf.frame === 0)).toBeUndefined();
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([30, 90]);
     });
 
-    it('removes a user keyframe regardless of count (origin-gated, not count-gated)', () => {
-      // The persisted/divergent minimal case: a user keyframe with no persisted
-      // end boundary. Old behavior blocked this via `length <= 2`; now the user
-      // keyframe is removable and ensurePermanentKeyframes reconstitutes boundaries.
+    it('removes the last keyframe', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 30, origin: 'user', x: 150 },
+          { frame: 90, origin: 'user', x: 200 }
+        ],
+        isEndKeyframeExplicit: false,
+        copiedData: null
+      };
+
+      const newState = keyframeReducer(state, actions.removeKeyframe(90));
+
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([0, 30]);
+    });
+
+    it('can remove down to a single keyframe', () => {
+      const state = {
+        machineState: KeyframeStates.EDITING,
+        keyframes: [
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 }
         ],
         isEndKeyframeExplicit: false,
@@ -346,16 +378,17 @@ describe('keyframeController', () => {
 
       const newState = keyframeReducer(state, actions.removeKeyframe(30));
 
+      // No "at least 2 keyframes" floor — one keyframe is a valid result.
       expect(newState).not.toBe(state);
-      expect(newState.keyframes.every(kf => kf.origin === 'permanent')).toBe(true);
+      expect(newState.keyframes).toEqual([{ frame: 0, origin: 'user', x: 100 }]);
     });
 
-    it('returns unchanged state if keyframe not found', () => {
+    it('returns the SAME state object if keyframe not found', () => {
       const state = {
         machineState: KeyframeStates.EDITING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -376,10 +409,10 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
           { frame: 60, origin: 'user', x: 180 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -396,10 +429,10 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
           { frame: 60, origin: 'user', x: 180 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -420,10 +453,10 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
           { frame: 60, origin: 'user', x: 180 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -445,11 +478,11 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.TRIMMING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 25, origin: 'trim', x: 140 },
           { frame: 30, origin: 'user', x: 150 },
           { frame: 65, origin: 'trim', x: 185 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -498,8 +531,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100, y: 100 },
-          { frame: 90, origin: 'permanent', x: 200, y: 200 }
+          { frame: 0, origin: 'user', x: 100, y: 100 },
+          { frame: 90, origin: 'user', x: 200, y: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -516,21 +549,21 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 30, origin: 'user', x: 150 },
-          { frame: 60, origin: 'user', x: 180 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 30, origin: 'trim', x: 150 },
+          { frame: 60, origin: 'trim', x: 180 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
       };
 
-      // Remove keyframes with origin='user' by returning null
-      const updateFn = (kf) => kf.origin === 'user' ? null : kf;
+      // Remove keyframes with origin='trim' by returning null
+      const updateFn = (kf) => kf.origin === 'trim' ? null : kf;
       const newState = keyframeReducer(state, actions.updateAllKeyframes(updateFn));
 
       expect(newState.keyframes.length).toBe(2);
-      expect(newState.keyframes.every(kf => kf.origin === 'permanent')).toBe(true);
+      expect(newState.keyframes.every(kf => kf.origin === 'user')).toBe(true);
     });
   });
 
@@ -554,8 +587,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: { x: 150, y: 175 },
@@ -571,8 +604,8 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -633,9 +666,9 @@ describe('keyframeController', () => {
     const sampleState = {
       machineState: KeyframeStates.INITIALIZED,
       keyframes: [
-        { frame: 0, origin: 'permanent', x: 100 },
+        { frame: 0, origin: 'user', x: 100 },
         { frame: 30, origin: 'user', x: 150 },
-        { frame: 90, origin: 'permanent', x: 200 }
+        { frame: 90, origin: 'user', x: 200 }
       ],
       isEndKeyframeExplicit: true,
       copiedData: { x: 175 }
@@ -721,62 +754,87 @@ describe('keyframeController', () => {
   // T340: KEYFRAME INTEGRITY GUARDS
   // ============================================================================
 
-  describe('permanent keyframe invariant', () => {
-    it('RESTORE_KEYFRAMES reconstitutes missing frame 0', () => {
+  describe('RESTORE_KEYFRAMES (flat-list model)', () => {
+    it('restores keyframes exactly as saved, sorted, with no boundary scaffolding', () => {
       const state = createInitialState();
-      // Saved keyframes missing frame 0 (starts at frame 10)
-      // Frame 10 is within boundary-duplicate threshold and has identical data
-      // to the reconstituted frame 0, so it gets deduplicated
+      // Saved keyframes that do NOT start at frame 0 — the flat-list model does
+      // NOT reconstitute a frame-0 keyframe. They are restored as-is (sorted).
+      // First keyframe is well clear of the edge-dedupe window (>= 30 frames).
       const saved = [
-        { frame: 10, origin: 'user', x: 120 },
-        { frame: 50, origin: 'user', x: 160 },
-        { frame: 90, origin: 'permanent', x: 200 }
+        { frame: 50, origin: 'user', x: 160, y: 5, width: 640, height: 360 },
+        { frame: 35, origin: 'user', x: 120, y: 1, width: 640, height: 360 },
+        { frame: 90, origin: 'user', x: 200, y: 9, width: 640, height: 360 }
       ];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
-      expect(newState.keyframes[0].frame).toBe(0);
-      expect(newState.keyframes[0].origin).toBe('permanent');
-      expect(newState.keyframes[0].x).toBe(120); // Reconstituted from nearest
-      expect(newState.keyframes.length).toBe(3); // frame 10 deduplicated (identical to reconstituted frame 0)
+      expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([35, 50, 90]);
+      // No frame 0 was injected.
+      expect(newState.keyframes.find(kf => kf.frame === 0)).toBeUndefined();
     });
 
-    it('RESTORE_KEYFRAMES derives endFrame from last keyframe', () => {
+    it('does NOT inject an end boundary — last keyframe is whatever was saved', () => {
       const state = createInitialState();
-      // Saved keyframes — endFrame derived from last keyframe (frame 60)
       const saved = [
-        { frame: 0, origin: 'permanent', x: 100 },
+        { frame: 0, origin: 'user', x: 100 },
         { frame: 60, origin: 'user', x: 180 }
       ];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
-      expect(newState.keyframes[newState.keyframes.length - 1].frame).toBe(60);
-      expect(newState.keyframes[newState.keyframes.length - 1].origin).toBe('permanent');
+      const last = newState.keyframes[newState.keyframes.length - 1];
+      expect(last.frame).toBe(60);
+      expect(last.origin).toBe('user');
       expect(newState.keyframes.length).toBe(2);
     });
 
-    it('RESTORE_KEYFRAMES fixes origin on boundary keyframes', () => {
+    it('normalizes a legacy "permanent" origin to "user" but keeps "trim"', () => {
       const state = createInitialState();
-      // Saved keyframes with wrong origins at boundaries
+      // Legacy data on disk may still carry origin: 'permanent'.
       const saved = [
-        { frame: 0, origin: 'user', x: 100 },
-        { frame: 90, origin: 'user', x: 200 }
+        { frame: 0, origin: 'permanent', x: 100 },
+        { frame: 45, origin: 'trim', x: 150 },
+        { frame: 90, origin: 'permanent', x: 200 }
       ];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
-      expect(newState.keyframes[0].origin).toBe('permanent');
-      expect(newState.keyframes[1].origin).toBe('permanent');
+      expect(newState.keyframes[0].origin).toBe('user');
+      expect(newState.keyframes[1].origin).toBe('trim');
+      expect(newState.keyframes[2].origin).toBe('user');
     });
 
-    it('CLEANUP_TRIM_KEYFRAMES preserves permanent boundaries', () => {
+    it('cosmetically dedupes an edge keyframe with identical spatial data', () => {
+      const state = createInitialState();
+      // Frame 5 sits right next to frame 0 with identical spatial data, so the
+      // cosmetic removeBoundaryDuplicates drops it (so two diamonds don't stack).
+      const saved = [
+        { frame: 0, origin: 'user', x: 100, y: 0, width: 640, height: 360 },
+        { frame: 5, origin: 'user', x: 100, y: 0, width: 640, height: 360 },
+        { frame: 90, origin: 'user', x: 200, y: 0, width: 640, height: 360 }
+      ];
+
+      const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
+
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([0, 90]);
+    });
+
+    it('returns the SAME state for an empty/invalid keyframes array', () => {
+      const state = createInitialState();
+      expect(keyframeReducer(state, actions.restoreKeyframes([]))).toBe(state);
+      expect(keyframeReducer(state, actions.restoreKeyframes(null))).toBe(state);
+    });
+  });
+
+  describe('CLEANUP_TRIM_KEYFRAMES (flat-list model)', () => {
+    it('removes trim-origin keyframes and keeps the rest', () => {
       const state = {
         machineState: KeyframeStates.TRIMMING,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 25, origin: 'trim', x: 140 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -784,39 +842,9 @@ describe('keyframeController', () => {
 
       const newState = keyframeReducer(state, actions.cleanupTrimKeyframes());
 
-      expect(newState.keyframes.length).toBe(2);
-      expect(newState.keyframes[0].frame).toBe(0);
-      expect(newState.keyframes[0].origin).toBe('permanent');
-      expect(newState.keyframes[1].frame).toBe(90);
-      expect(newState.keyframes[1].origin).toBe('permanent');
-    });
-
-    it('validateInvariants detects missing permanent start keyframe', () => {
-      const state = {
-        machineState: KeyframeStates.INITIALIZED,
-        keyframes: [
-          { frame: 10, origin: 'user', x: 120 },
-          { frame: 90, origin: 'permanent', x: 200 }
-        ],
-        isEndKeyframeExplicit: false,
-        copiedData: null
-      };
-      const violations = validateInvariants(state);
-      expect(violations.some(v => v.includes('permanent at frame 0'))).toBe(true);
-    });
-
-    it('validateInvariants detects non-permanent last keyframe', () => {
-      const state = {
-        machineState: KeyframeStates.INITIALIZED,
-        keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 60, origin: 'user', x: 180 }
-        ],
-        isEndKeyframeExplicit: false,
-        copiedData: null
-      };
-      const violations = validateInvariants(state);
-      expect(violations.some(v => v.includes('Last keyframe must be permanent'))).toBe(true);
+      expect(newState.keyframes.map(kf => kf.frame)).toEqual([0, 90]);
+      expect(newState.keyframes.every(kf => kf.origin !== 'trim')).toBe(true);
+      expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
     });
   });
 
@@ -825,9 +853,9 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -845,9 +873,9 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -863,9 +891,9 @@ describe('keyframeController', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
+          { frame: 0, origin: 'user', x: 100 },
           { frame: 30, origin: 'user', x: 150 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
@@ -883,94 +911,54 @@ describe('keyframeController', () => {
   // T2710: DEGENERATE DATA GUARDS
   // ============================================================================
 
-  describe('degenerate data guards', () => {
-    it('RESTORE_KEYFRAMES with single keyframe at frame 0 initializes for SET_END_FRAME', () => {
+  describe('single-keyframe restore (flat-list model)', () => {
+    it('RESTORE_KEYFRAMES accepts a single keyframe and leaves it as the only one', () => {
       const state = createInitialState();
-      const saved = [{ frame: 0, origin: 'permanent', x: 100, y: 0, width: 1920, height: 1080 }];
+      const saved = [{ frame: 0, origin: 'user', x: 100, y: 0, width: 1920, height: 1080 }];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
-      // Accepts the single keyframe so SET_END_FRAME can add the end boundary
       expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
       expect(newState.keyframes.length).toBe(1);
       expect(newState.keyframes[0].frame).toBe(0);
-      expect(newState.keyframes[0].origin).toBe('permanent');
+      expect(newState.keyframes[0].origin).toBe('user');
       expect(newState.isEndKeyframeExplicit).toBe(false);
-
-      // SET_END_FRAME then completes the boundary pair
-      const withEnd = keyframeReducer(newState, actions.setEndFrame(300));
-      expect(withEnd.keyframes.length).toBe(2);
-      expect(withEnd.keyframes[0].frame).toBe(0);
-      expect(withEnd.keyframes[1].frame).toBe(300);
-      expect(withEnd.keyframes[1].origin).toBe('permanent');
     });
 
-    it('RESTORE_KEYFRAMES with single keyframe at non-zero frame still works', () => {
+    it('RESTORE_KEYFRAMES with single keyframe at non-zero frame keeps it as-is', () => {
       const state = createInitialState();
       const saved = [{ frame: 50, origin: 'user', x: 100, y: 0, width: 1920, height: 1080 }];
 
       const newState = keyframeReducer(state, actions.restoreKeyframes(saved));
 
       expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
-      expect(newState.keyframes.length).toBe(2);
-      expect(newState.keyframes[0].frame).toBe(0);
-      expect(newState.keyframes[0].origin).toBe('permanent');
-      expect(newState.keyframes[1].frame).toBe(50);
-      expect(newState.keyframes[1].origin).toBe('permanent');
+      // No frame-0 keyframe injected, no end boundary added.
+      expect(newState.keyframes.length).toBe(1);
+      expect(newState.keyframes[0].frame).toBe(50);
+      expect(newState.keyframes[0].origin).toBe('user');
     });
+  });
 
-    it('SET_END_FRAME to 0 preserves current keyframes', () => {
+  // ============================================================================
+  // SET_END_FRAME is a no-op in the flat-list model
+  // ============================================================================
+
+  describe('SET_END_FRAME (deprecated no-op)', () => {
+    it('returns the SAME state object unchanged', () => {
       const state = {
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: 0, origin: 'permanent', x: 100 },
-          { frame: 90, origin: 'permanent', x: 200 }
+          { frame: 0, origin: 'user', x: 100 },
+          { frame: 90, origin: 'user', x: 200 }
         ],
         isEndKeyframeExplicit: false,
         copiedData: null
       };
 
-      const newState = keyframeReducer(state, actions.setEndFrame(0));
-
-      expect(newState.keyframes.length).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  // ============================================================================
-  // VIRTUAL TRIM: widening the end boundary (detrim) is non-destructive
-  // ============================================================================
-
-  describe('virtual trim (non-destructive end boundary)', () => {
-    it('extending endFrame keeps all existing keyframes (detrim restores them)', () => {
-      // Under virtual trim, the end permanent is anchored at the FULL duration.
-      // Widening endFrame (e.g. detrim, or loading a clip whose full duration is
-      // larger than the last keyframe) must NOT drop any keyframe.
-      const state = {
-        machineState: KeyframeStates.INITIALIZED,
-        keyframes: [
-          { frame: 0, origin: 'permanent', x: 100, y: 0, width: 640, height: 360 },
-          { frame: 50, origin: 'user', x: 150, y: 10, width: 640, height: 360 },
-          { frame: 100, origin: 'permanent', x: 200, y: 20, width: 640, height: 360 }
-        ],
-        isEndKeyframeExplicit: true,
-        copiedData: null
-      };
-
-      // Extend the end boundary to the full clip duration (frame 200).
-      const newState = keyframeReducer(state, actions.setEndFrame(200));
-
-      // Nothing dropped: the user keyframe at 50 and the former end at 100 survive,
-      // and a permanent boundary now exists at 200.
-      const frames = newState.keyframes.map(kf => kf.frame);
-      expect(frames).toContain(50);
-      expect(frames).toContain(100);
-      expect(newState.keyframes[0].frame).toBe(0);
-      expect(newState.keyframes[0].origin).toBe('permanent');
-      const last = newState.keyframes[newState.keyframes.length - 1];
-      expect(last.frame).toBe(200);
-      expect(last.origin).toBe('permanent');
-      // Only first and last are permanent; interior keyframes are user-owned.
-      expect(newState.keyframes.filter(kf => kf.origin === 'permanent').length).toBe(2);
+      // The end is no longer a managed boundary (trim is virtual; interpolation
+      // clamps at the last keyframe). SET_END_FRAME must not mutate anything.
+      expect(keyframeReducer(state, actions.setEndFrame(300))).toBe(state);
+      expect(keyframeReducer(state, actions.setEndFrame(0))).toBe(state);
     });
   });
 

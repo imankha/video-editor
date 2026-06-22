@@ -140,9 +140,6 @@ export default function CropLayer({
           const isAtStartTime = Math.abs(currentTime - effectiveStartTime) < 0.01;
           const isSelected = selectedKeyframeIndex === index;
           const isPermanent = keyframe.origin === 'permanent';
-          // Boundary keyframes (at effective start/end) are never deletable
-          // Note: user keyframes at trim boundaries are valid — not a bug
-          const isBoundaryKeyframe = isStartKeyframe || isEffectiveEndKeyframe;
 
           // Highlight keyframe if no other keyframe is selected AND:
           // 1. At current time, OR
@@ -163,13 +160,11 @@ export default function CropLayer({
               isStartKeyframe={isStartKeyframe}
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
-              onDelete={visibleKeyframes.length > 2 && !isBoundaryKeyframe ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
-              tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${
-                isEffectiveEndKeyframe && !isEndKeyframeExplicit ? ' (mirrors start)' : ''
-              }${isSelected ? ' [SELECTED]' : ''}`}
+              onDelete={visibleKeyframes.length > 1 ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+              tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${isSelected ? ' [SELECTED]' : ''}`}
               edgePadding={edgePadding}
               showCopyButton={false}
-              showDeleteButton={visibleKeyframes.length > 2 && !isBoundaryKeyframe}
+              showDeleteButton={visibleKeyframes.length > 1}
             />
           );
         })}

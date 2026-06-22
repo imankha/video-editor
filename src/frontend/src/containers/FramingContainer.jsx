@@ -656,17 +656,10 @@ export function FramingContainer({
   const handleKeyframeDelete = useCallback(async (time) => {
     const frame = Math.round(time * framerate);
 
-    // Only the permanent boundary keyframes (start at frame 0, end at duration)
-    // are protected — users can delete any keyframe they introduced. Guarding by
-    // origin (not by count) keeps the client in step with the reducer and backend,
-    // which also protect by origin. A count check desyncs because the in-memory
-    // array includes reconstituted boundaries the backend never persists (bug 19p,
-    // and the "minimum 2 keyframes required" backend rejection).
+    // Flat-list model: any crop keyframe can be deleted. There are no protected
+    // boundary keyframes — interpolation clamps to whatever remains (and an empty
+    // list falls back to the default centered crop).
     const targetKf = keyframes.find(kf => kf.frame === frame);
-    if (targetKf?.origin === 'permanent') {
-      toast.error('Cannot delete keyframe', { message: 'The start and end keyframes are permanent' });
-      return;
-    }
 
     const callerClipId = selectedClipId;
 

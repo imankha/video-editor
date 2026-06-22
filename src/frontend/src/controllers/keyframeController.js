@@ -109,21 +109,14 @@ export function validateInvariants(state) {
     }
   }
 
-  // If initialized, should have at least 2 keyframes (start and end)
-  if (state.machineState !== KeyframeStates.UNINITIALIZED && state.keyframes.length < 2) {
-    violations.push(`Initialized state should have at least 2 keyframes, has ${state.keyframes.length}`);
-  }
-
-  // If initialized, must have permanent keyframes at frame 0 and endFrame
-  if (state.machineState !== KeyframeStates.UNINITIALIZED && state.keyframes.length >= 2) {
-    const first = state.keyframes[0];
-    if (first.frame !== 0 || first.origin !== 'permanent') {
-      violations.push(`First keyframe must be permanent at frame 0, got frame=${first.frame} origin=${first.origin}`);
+  // No duplicate frames
+  const seenFrames = new Set();
+  for (const kf of state.keyframes) {
+    if (seenFrames.has(kf.frame)) {
+      violations.push(`Duplicate keyframe at frame ${kf.frame}`);
+      break;
     }
-    const last = state.keyframes[state.keyframes.length - 1];
-    if (last.origin !== 'permanent') {
-      violations.push(`Last keyframe must be permanent, got frame=${last.frame} origin=${last.origin}`);
-    }
+    seenFrames.add(kf.frame);
   }
 
   return violations;
@@ -143,72 +136,25 @@ function getEndFrame(keyframes) {
 }
 
 /**
- * Ensure permanent keyframes exist at frame 0 and endFrame.
- * If missing, reconstitute from the nearest keyframe's data.
- * @param {Array} keyframes - Sorted array of keyframes
- * @param {number|null} endFrame - End frame number
- * @returns {Array} Keyframes with permanent boundaries guaranteed
+ * Normalize a keyframe list: sort by frame.
+ *
+ * Keyframes are a flat list with NO forced boundary keyframes. Interpolation
+ * clamps to the first/last keyframe, so a crop value is defined at every frame
+ * without explicit start/end "permanent" keyframes. The `endFrame` argument is
+ * accepted for call-site compatibility but ignored.
  */
-function ensurePermanentKeyframes(keyframes, endFrame) {
-  if (keyframes.length === 0) return keyframes;
-
-  let result = [...keyframes];
-
-  // Ensure frame 0 exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
-  const startIndex = result.findIndex(kf => kf.frame === 0);
-  if (startIndex >= 0) {
-    result[startIndex] = { ...result[startIndex], origin: 'permanent' };
-  } else {
-    const nearbyStartIndex = result.findIndex(kf => kf.frame < MIN_KEYFRAME_SPACING);
-    if (nearbyStartIndex >= 0) {
-      // Absorb: move nearby keyframe to frame 0
-      result[nearbyStartIndex] = { ...result[nearbyStartIndex], frame: 0, origin: 'permanent' };
-    } else {
-      // No nearby keyframe — reconstitute from first
-      const { frame: _f, origin: _o, ...data } = result[0];
-      result = [{ ...data, frame: 0, origin: 'permanent' }, ...result];
-    }
-  }
-
-  // Ensure endFrame exists — absorb nearby keyframe if within MIN_KEYFRAME_SPACING
-  // Skip frame 0 when looking for nearby candidates — absorbing the start permanent
-  // keyframe into endFrame would collapse both boundaries into a single keyframe.
-  if (endFrame !== null && endFrame !== undefined) {
-    const endIndex = result.findIndex(kf => kf.frame === endFrame);
-    if (endIndex >= 0) {
-      result[endIndex] = { ...result[endIndex], origin: 'permanent' };
-    } else {
-      const nearbyEndIndex = result.findIndex(kf => kf.frame > endFrame - MIN_KEYFRAME_SPACING && kf.frame < endFrame && kf.frame !== 0);
-      if (nearbyEndIndex >= 0) {
-        // Absorb: move nearby keyframe to endFrame
-        result[nearbyEndIndex] = { ...result[nearbyEndIndex], frame: endFrame, origin: 'permanent' };
-      } else {
-        // No nearby keyframe — reconstitute from last
-        const { frame: _f, origin: _o, ...data } = result[result.length - 1];
-        result = [...result, { ...data, frame: endFrame, origin: 'permanent' }];
-      }
-    }
-  }
-
-  // Demote middle keyframes with origin='permanent' to 'user'.
-  // After boundary changes (trim/detrim), old boundary keyframes may
-  // remain as permanent in the middle — only first and last should be permanent.
-  const sorted = sortKeyframes(result);
-  const final = sorted.map((kf, i) => {
-    const isBoundary = i === 0 || i === sorted.length - 1;
-    if (!isBoundary && kf.origin === 'permanent') {
-      return { ...kf, origin: 'user' };
-    }
-    return kf;
-  });
-
-  return final;
+function ensurePermanentKeyframes(keyframes, endFrame) { // eslint-disable-line no-unused-vars
+  return sortKeyframes(keyframes);
 }
 
 function hasSameSpatialData(a, b) {
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
 }
 
+/**
+ * Cosmetic dedupe: drop a keyframe sitting right next to the first/last that
+ * carries identical spatial data, so two diamonds don't visually stack at an edge.
+ */
 function removeBoundaryDuplicates(keyframes) {
   if (keyframes.length <= 2) return keyframes;
 
@@ -217,30 +163,10 @@ function removeBoundaryDuplicates(keyframes) {
   const threshold = MIN_KEYFRAME_SPACING * 3;
 
   return keyframes.filter(kf => {
-    if (kf.origin === 'permanent') return true;
     if (kf.frame > 0 && kf.frame < threshold && hasSameSpatialData(kf, startKf)) return false;
     if (kf.frame < endKf.frame && endKf.frame - kf.frame < threshold && hasSameSpatialData(kf, endKf)) return false;
     return true;
   });
-}
-
-/**
- * Determine the origin for a keyframe based on its position
- * @param {number} frame - Frame number
- * @param {number} endFrame - End frame number
- * @param {string} requestedOrigin - Requested origin
- * @returns {string} Actual origin to use
- */
-function determineOrigin(frame, endFrame, requestedOrigin) {
-  const isStartKeyframe = frame === 0;
-  const isEndKeyframe = endFrame !== null && frame === endFrame;
-
-  // Permanent keyframes always have origin='permanent'
-  if (isStartKeyframe || isEndKeyframe) {
-    return 'permanent';
-  }
-
-  return requestedOrigin || 'user';
 }
 
 // ============================================================================
@@ -258,14 +184,16 @@ function determineOrigin(frame, endFrame, requestedOrigin) {
 export function keyframeReducer(state, action) {
   switch (action.type) {
     case ActionTypes.INITIALIZE: {
-      const { defaultData, endFrame, startFrame = 0 } = action.payload;
+      // Flat-list model: a single default keyframe at the start. Interpolation
+      // clamps, so this one keyframe defines the crop across the whole clip until
+      // the user adds more. No forced end keyframe.
+      const { defaultData, startFrame = 0 } = action.payload;
 
       return {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
         keyframes: [
-          { frame: startFrame, origin: 'permanent', ...defaultData },
-          { frame: endFrame, origin: 'permanent', ...defaultData }
+          { frame: startFrame, origin: 'user', ...defaultData }
         ],
         isEndKeyframeExplicit: false
       };
@@ -283,61 +211,32 @@ export function keyframeReducer(state, action) {
         return state;
       }
 
+      // Flat-list model: sort, normalize origin, and cosmetically dedupe edges.
+      // No boundary scaffolding — keyframes are restored exactly as saved.
       const sorted = sortKeyframes(keyframes.map(kf => ({
         ...kf,
-        origin: kf.origin || 'user'
+        origin: kf.origin === 'trim' ? 'trim' : 'user'
       })));
 
-      const sortedKeyframes = sorted.map((kf, i) => {
-        const isBoundary = i === 0 || i === sorted.length - 1;
-        if (!isBoundary && kf.origin === 'permanent') {
-          return { ...kf, origin: 'user' };
-        }
-        return kf;
-      });
+      const guardedKeyframes = removeBoundaryDuplicates(sorted);
 
-      // Derive endFrame from the keyframes themselves — the last keyframe's
-      // frame is the authoritative boundary. ensurePermanentKeyframes will
-      // mark it permanent. No dependency on external trimRange/duration.
-      const resolvedEndFrame = sortedKeyframes[sortedKeyframes.length - 1].frame;
-
-      const guarded = ensurePermanentKeyframes(sortedKeyframes, resolvedEndFrame);
-      const guardedKeyframes = removeBoundaryDuplicates(guarded);
-
-      if (guardedKeyframes.length < 2) {
-        if (guardedKeyframes.length === 1 && guardedKeyframes[0].frame === 0) {
-          // Single keyframe at frame 0: end boundary unknown (only start was saved
-          // by a surgical gesture before full-state export). Accept the restore --
-          // SET_END_FRAME will add the end boundary once duration/trimRange loads.
-          return {
-            ...state,
-            machineState: KeyframeStates.INITIALIZED,
-            keyframes: guardedKeyframes,
-            isEndKeyframeExplicit: false
-          };
-        }
-        console.warn('[keyframeController] Restore produced < 2 keyframes (degenerate data) — skipping, will auto-init');
+      if (guardedKeyframes.length === 0) {
+        console.warn('[keyframeController] Restore produced 0 keyframes — skipping, will auto-init');
         return state;
       }
-
-      const startKf = guardedKeyframes[0];
-      const endKf = guardedKeyframes[guardedKeyframes.length - 1];
-      const isEndExplicit = JSON.stringify({ x: startKf.x, y: startKf.y, width: startKf.width, height: startKf.height }) !==
-                           JSON.stringify({ x: endKf.x, y: endKf.y, width: endKf.width, height: endKf.height });
 
       return {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
         keyframes: guardedKeyframes,
-        isEndKeyframeExplicit: isEndExplicit
+        isEndKeyframeExplicit: false
       };
     }
 
     case ActionTypes.ADD_KEYFRAME:
     case ActionTypes.UPDATE_KEYFRAME: {
       const { frame, data, origin: requestedOrigin = 'user' } = action.payload;
-      const { keyframes, isEndKeyframeExplicit } = state;
-      const endFrame = getEndFrame(keyframes);
+      const { keyframes } = state;
 
       // Check if a keyframe exists within tolerance range (snap to existing)
       // This prevents accidentally creating new keyframes when user intends to edit existing ones
@@ -353,41 +252,23 @@ export function keyframeReducer(state, action) {
         if (tooClose) return state;
       }
 
-      const isEndKeyframe = endFrame !== null && targetFrame === endFrame;
-      const isStartKeyframe = targetFrame === 0;
-      const actualOrigin = determineOrigin(targetFrame, endFrame, requestedOrigin);
-
-      // Track if we're explicitly setting the end keyframe
-      const newIsEndExplicit = isEndKeyframe ? true : isEndKeyframeExplicit;
+      const actualOrigin = requestedOrigin || 'user';
 
       let updatedKeyframes;
       if (nearbyIndex >= 0) {
-        // Update existing nearby keyframe - preserve origin if updating permanent keyframe
-        const preservedOrigin = keyframes[nearbyIndex].origin === 'permanent' ? 'permanent' : actualOrigin;
+        // Update existing nearby keyframe (snap-to-update)
         updatedKeyframes = [...keyframes];
-        updatedKeyframes[nearbyIndex] = { ...data, frame: targetFrame, origin: preservedOrigin };
+        updatedKeyframes[nearbyIndex] = { ...data, frame: targetFrame, origin: actualOrigin };
       } else {
         // Add new keyframe and sort (no nearby keyframe to snap to)
         updatedKeyframes = sortKeyframes([...keyframes, { ...data, frame: targetFrame, origin: actualOrigin }]);
-      }
-
-      // Mirror start to end if end hasn't been explicitly set
-      if (isStartKeyframe && !isEndKeyframeExplicit && endFrame !== null) {
-        const endKeyframeIndex = findKeyframeIndexAtFrame(updatedKeyframes, endFrame);
-        if (endKeyframeIndex >= 0) {
-          updatedKeyframes[endKeyframeIndex] = {
-            ...data,
-            frame: endFrame,
-            origin: 'permanent'
-          };
-        }
       }
 
       return {
         ...state,
         machineState: KeyframeStates.EDITING,
         keyframes: updatedKeyframes,
-        isEndKeyframeExplicit: newIsEndExplicit
+        isEndKeyframeExplicit: false
       };
     }
 
@@ -395,15 +276,11 @@ export function keyframeReducer(state, action) {
       const { frame } = action.payload;
       const { keyframes } = state;
 
-      // Find the keyframe
+      // Flat-list model: any keyframe is removable. There are no protected
+      // boundary keyframes — interpolation clamps to whatever remains (and the
+      // editor falls back to a default crop when none remain).
       const keyframeToRemove = findKeyframeAtFrame(keyframes, frame);
       if (!keyframeToRemove) return state;
-
-      // Only permanent boundary keyframes (start/end) are protected. User keyframes
-      // are always removable — never count-gated. ensurePermanentKeyframes reconstitutes
-      // the boundaries from the survivors, so the >=2 invariant holds as a consequence
-      // of protecting the permanents, not via a separate (desync-prone) count check.
-      if (keyframeToRemove.origin === 'permanent') return state;
 
       const filtered = keyframes.filter(kf => kf.frame !== frame);
       return {
@@ -501,19 +378,10 @@ export function keyframeReducer(state, action) {
     }
 
     case ActionTypes.SET_END_FRAME: {
-      const { endFrame } = action.payload;
-      const trimmed = state.keyframes.filter(kf => kf.frame <= endFrame);
-      const guarded = removeBoundaryDuplicates(ensurePermanentKeyframes(
-        trimmed.length > 0 ? trimmed : state.keyframes,
-        endFrame
-      ));
-      if (guarded.length < 2) {
-        return state;
-      }
-      return {
-        ...state,
-        keyframes: guarded
-      };
+      // Deprecated in the flat-list model: the end is no longer a managed boundary
+      // (trim is virtual; interpolation clamps at the last keyframe). Kept as a
+      // no-op so any stale callers don't mutate keyframes. Returns state unchanged.
+      return state;
     }
 
     case ActionTypes.SET_END_EXPLICIT: {

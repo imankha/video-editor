@@ -22,25 +22,24 @@ const SAVED_KEYFRAMES = [
 ];
 
 describe('useCrop keyframe initialization', () => {
-  it('auto-initializes default keyframes when no saved keyframes and no trim', () => {
+  it('auto-initializes a single default keyframe when no saved keyframes and no trim', () => {
+    // Flat-list model: one keyframe at frame 0 defines the crop for the whole clip
+    // (interpolation clamps). No forced end keyframe.
     const { result } = renderHook(() => useCrop(METADATA, null, null));
 
-    expect(result.current.keyframes.length).toBe(2);
+    expect(result.current.keyframes.length).toBe(1);
     expect(result.current.keyframes[0].frame).toBe(0);
-    expect(result.current.keyframes[1].frame).toBe(Math.round(34.7 * 30));
   });
 
-  it('auto-initializes default keyframes when trimRange is set but no keyframes are saved (bug 19p)', () => {
+  it('auto-initializes a default keyframe when trimRange is set but no keyframes are saved (bug 19p)', () => {
     // Reel clips can have a trim/speed saved with empty crop_data — the crop
-    // must still initialize or the reticule never renders.
+    // must still initialize or the reticule never renders. Trim is virtual, so
+    // init is unaffected by trimRange.
     const trimRange = { start: 0, end: 11.389 };
     const { result } = renderHook(() => useCrop(METADATA, trimRange, null));
 
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(2);
+    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
     expect(result.current.keyframes[0].frame).toBe(0);
-    // End keyframe sits at the trimmed boundary, not full duration
-    expect(result.current.keyframes[result.current.keyframes.length - 1].frame)
-      .toBe(Math.round(11.389 * 30));
   });
 
   it('restores saved keyframes', () => {
@@ -70,13 +69,13 @@ describe('useCrop keyframe initialization', () => {
   it('re-initializes defaults after reset when the clip has a trim but no saved keyframes (bug 19p)', () => {
     const trimRange = { start: 0, end: 11.389 };
     const { result } = renderHook(() => useCrop(METADATA, trimRange, null));
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(2);
+    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
 
     act(() => {
       result.current.reset();
     });
 
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(2);
+    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
   });
 
   it('does not auto-initialize when saved keyframes are provided', () => {

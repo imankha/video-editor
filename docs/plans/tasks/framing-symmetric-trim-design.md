@@ -1,6 +1,15 @@
 # Design: Symmetric Virtual Trim for Framing
 
-**Status:** Awaiting approval
+> **UPDATE (2026-06-21): Pivoted to the simpler flat-list model.** After Phase 2,
+> we concluded the permanent start/end keyframe concept added complexity the
+> interpolation clamp already covers. We DROPPED permanent boundaries entirely:
+> crop keyframes are now a flat list (1 kf = constant crop, 0 = default), trim
+> stays virtual, and any keyframe is freely deletable. This **replaces Phases 3 & 4**
+> (no backend permanents, no re-extend migration needed — existing 'permanent'
+> keyframes load as ordinary keyframes). The original "minimum 2 keyframes" bug is
+> dissolved rather than guarded. Highlights (Overlay) remain a follow-up.
+
+**Status:** Phase 2 + flat-list pivot implemented
 **Origin:** Follow-up to the keyframe-delete fix (commit 730a0362). User asked to make
 trim handling symmetric between start/end and consistent across frontend/backend, including
 N-level "trim over trim".

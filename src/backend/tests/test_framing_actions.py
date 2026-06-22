@@ -359,22 +359,16 @@ class TestFramingActions:
         assert data["success"] is False
         assert "not found" in data["error"]
 
-    def test_delete_user_keyframe_when_only_two_persisted(self, test_project_with_clip):
-        """Regression: deleting a USER keyframe must succeed even when only 2
-        keyframes are persisted.
-
-        The client reconstitutes the permanent end boundary in memory but does not
-        persist it, so the backend can legitimately hold just [frame 0 permanent,
-        user keyframe]. The old `len <= 2` guard wrongly rejected this with
-        "minimum 2 keyframes required" (the production bug)."""
+    def test_delete_keyframe_down_to_one(self, test_project_with_clip):
+        """Flat-list model: deleting succeeds regardless of how many keyframes remain.
+        This is the regression for the original "minimum 2 keyframes required" bug,
+        which no longer applies — there is no count floor on the backend."""
         project_id, clip_id = test_project_with_clip
 
-        # frame 0 becomes the permanent start boundary (first keyframe on empty clip)
         client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "add_crop_keyframe", "data": {"frame": 0, "x": 100, "y": 50, "width": 1080, "height": 1920, "origin": "user"}}
         )
-        # a user keyframe the end boundary was never persisted, so total persisted == 2
         client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "add_crop_keyframe", "data": {"frame": 40, "x": 150, "y": 75, "width": 1080, "height": 1920, "origin": "user"}}
@@ -396,39 +390,38 @@ class TestFramingActions:
             assert 40 not in frames
             assert 0 in frames
 
-    def test_cannot_delete_permanent_keyframe(self, test_project_with_clip):
-        """Permanent boundary keyframes (frame 0 and origin='permanent') cannot be deleted."""
+    def test_any_keyframe_is_deletable(self, test_project_with_clip):
+        """Flat-list model: there are no protected boundary keyframes — any crop
+        keyframe (including frame 0 and the last) can be deleted."""
         project_id, clip_id = test_project_with_clip
 
-        client.post(
-            f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
-            json={"action": "add_crop_keyframe", "data": {"frame": 0, "x": 100, "y": 50, "width": 1080, "height": 1920, "origin": "user"}}
-        )
-        client.post(
-            f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
-            json={"action": "add_crop_keyframe", "data": {"frame": 30, "x": 150, "y": 75, "width": 1080, "height": 1920, "origin": "user"}}
-        )
-        # explicit permanent end boundary
-        client.post(
-            f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
-            json={"action": "add_crop_keyframe", "data": {"frame": 90, "x": 200, "y": 100, "width": 1080, "height": 1920, "origin": "permanent"}}
-        )
+        for frame, x in ((0, 100), (30, 150), (90, 200)):
+            client.post(
+                f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
+                json={"action": "add_crop_keyframe", "data": {"frame": frame, "x": x, "y": 50, "width": 1080, "height": 1920, "origin": "user"}}
+            )
 
-        # frame 0 (start boundary) cannot be deleted
+        # frame 0 (start) is deletable
         resp_start = client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "delete_crop_keyframe", "target": {"frame": 0}}
         )
-        assert resp_start.status_code == 400
-        assert "permanent" in resp_start.json()["error"].lower()
+        assert resp_start.status_code == 200
+        assert resp_start.json()["success"] is True
 
-        # the permanent end boundary cannot be deleted
+        # the last keyframe is deletable too
         resp_end = client.post(
             f"/api/clips/projects/{project_id}/clips/{clip_id}/actions",
             json={"action": "delete_crop_keyframe", "target": {"frame": 90}}
         )
-        assert resp_end.status_code == 400
-        assert "permanent" in resp_end.json()["error"].lower()
+        assert resp_end.status_code == 200
+        assert resp_end.json()["success"] is True
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
+            frames = [kf["frame"] for kf in decode_data(cursor.fetchone()[0])]
+            assert frames == [30]
 
     def test_add_user_keyframe_too_close_rejected(self, test_project_with_clip):
         """New user keyframes within MIN_KEYFRAME_SPACING of an existing one are rejected."""

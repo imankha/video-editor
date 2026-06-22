@@ -45,12 +45,13 @@ describe('Keyframe Integration Tests', () => {
       });
 
       act(() => {
-        result.current.addOrUpdateKeyframe(0.5, { x: 120, y: 120, width: 200, height: 300 }, 90, 'user');
-        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
-        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'user');
+        result.current.addOrUpdateKeyframe(0.5, { x: 120, y: 120, width: 200, height: 300 }, 90, 'user'); // frame 15
+        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user'); // frame 30
+        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'user'); // frame 60
       });
 
-      expect(result.current.keyframes.length).toBe(5);
+      // Flat-list init makes 1 keyframe (frame 0) + 3 added = 4 keyframes.
+      expect(result.current.keyframes.length).toBe(4);
 
       // Simulate trim: remove first 1 second (frames 0-30)
       act(() => {
@@ -58,13 +59,11 @@ describe('Keyframe Integration Tests', () => {
       });
 
       // All keyframes in range [0, 30] are deleted (inclusive)
-      // Caller is responsible for reconstituting boundary keyframes
       const remainingFrames = result.current.keyframes.map(kf => kf.frame);
       expect(remainingFrames).not.toContain(0); // Deleted (was at start of range)
       expect(remainingFrames).not.toContain(15); // Deleted
       expect(remainingFrames).not.toContain(30); // Deleted (was at end of range)
-      expect(remainingFrames).toContain(60); // Outside range
-      expect(remainingFrames).toContain(90); // Outside range
+      expect(remainingFrames).toEqual([60]); // Only the frame outside the range remains
     });
 
     it('simulates full trim workflow: trim end of video', () => {
@@ -82,12 +81,13 @@ describe('Keyframe Integration Tests', () => {
       });
 
       act(() => {
-        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
-        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'user');
-        result.current.addOrUpdateKeyframe(2.5, { x: 190, y: 190, width: 200, height: 300 }, 90, 'user');
+        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user'); // frame 30
+        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'user'); // frame 60
+        result.current.addOrUpdateKeyframe(2.5, { x: 190, y: 190, width: 200, height: 300 }, 90, 'user'); // frame 75
       });
 
-      expect(result.current.keyframes.length).toBe(5);
+      // Flat-list init makes 1 keyframe (frame 0) + 3 added = 4 keyframes.
+      expect(result.current.keyframes.length).toBe(4);
 
       // Simulate trim: remove last 1 second (frames 60-90)
       act(() => {
@@ -95,13 +95,11 @@ describe('Keyframe Integration Tests', () => {
       });
 
       // All keyframes in range [60, 90] are deleted (inclusive)
-      // Caller is responsible for reconstituting boundary keyframes
       const remainingFrames = result.current.keyframes.map(kf => kf.frame);
       expect(remainingFrames).toContain(0);
       expect(remainingFrames).toContain(30);
       expect(remainingFrames).not.toContain(60); // Deleted (was at start of range)
       expect(remainingFrames).not.toContain(75); // Deleted
-      expect(remainingFrames).not.toContain(90); // Deleted (was at end of range)
     });
 
     it('simulates trim with boundary keyframe creation', () => {
@@ -133,7 +131,7 @@ describe('Keyframe Integration Tests', () => {
       expect(trimKeyframe.frame).toBe(30);
     });
 
-    it('preserves permanent keyframes origin after operations', () => {
+    it('keeps user origin on edits and added keyframes (no permanent promotion)', () => {
       const { result } = renderHook(() =>
         useKeyframeController({
           interpolateFn: mockCropInterpolate,
@@ -146,21 +144,17 @@ describe('Keyframe Integration Tests', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
-      // Update the start keyframe
+      // Update the start keyframe — origin stays 'user' (no 'permanent' in this model).
       act(() => {
         result.current.addOrUpdateKeyframe(0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
       });
+      expect(result.current.keyframes[0].origin).toBe('user');
 
-      // Origin should still be permanent
-      expect(result.current.keyframes[0].origin).toBe('permanent');
-
-      // Update the end keyframe
+      // Add an end keyframe — also 'user'.
       act(() => {
         result.current.addOrUpdateKeyframe(3.0, { x: 200, y: 200, width: 200, height: 300 }, 90, 'user');
       });
-
-      // Origin should still be permanent
-      expect(result.current.keyframes[1].origin).toBe('permanent');
+      expect(result.current.keyframes[1].origin).toBe('user');
     });
   });
 
@@ -184,22 +178,24 @@ describe('Keyframe Integration Tests', () => {
 
       // Add mix of user and trim keyframes
       act(() => {
-        result.current.addOrUpdateKeyframe(0.5, { x: 110, y: 110, width: 200, height: 300 }, 90, 'trim');
-        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
-        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'trim');
-        result.current.addOrUpdateKeyframe(2.5, { x: 195, y: 195, width: 200, height: 300 }, 90, 'trim');
+        result.current.addOrUpdateKeyframe(0.5, { x: 110, y: 110, width: 200, height: 300 }, 90, 'trim'); // frame 15
+        result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user'); // frame 30
+        result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180, width: 200, height: 300 }, 90, 'trim'); // frame 60
+        result.current.addOrUpdateKeyframe(2.5, { x: 195, y: 195, width: 200, height: 300 }, 90, 'trim'); // frame 75
       });
 
-      expect(result.current.keyframes.length).toBe(6);
+      // 1 (init, frame 0, user) + 4 added = 5 keyframes.
+      expect(result.current.keyframes.length).toBe(5);
 
       // Detrim: cleanup all trim keyframes
       act(() => {
         result.current.cleanupTrimKeyframes();
       });
 
-      expect(result.current.keyframes.length).toBe(3);
+      // Only the init (frame 0) and the user keyframe (frame 30) survive.
+      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([0, 30]);
       expect(result.current.keyframes.every(kf => kf.origin !== 'trim')).toBe(true);
-      expect(result.current.keyframes.map(kf => kf.origin)).toEqual(['permanent', 'user', 'permanent']);
+      expect(result.current.keyframes.map(kf => kf.origin)).toEqual(['user', 'user']);
     });
   });
 
@@ -221,24 +217,24 @@ describe('Keyframe Integration Tests', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
-      // Add
+      // Add (init frame 0 + new frame 30 = 2)
       act(() => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90, 'user');
       });
-      expect(result.current.keyframes.length).toBe(3);
+      expect(result.current.keyframes.length).toBe(2);
 
-      // Update
+      // Update (snap-update keeps count at 2)
       act(() => {
         result.current.addOrUpdateKeyframe(1.0, { x: 175, y: 175, width: 200, height: 300 }, 90, 'user');
       });
-      expect(result.current.keyframes.length).toBe(3);
+      expect(result.current.keyframes.length).toBe(2);
       expect(result.current.keyframes[1].x).toBe(175);
 
-      // Remove
+      // Remove (back to just the frame-0 keyframe)
       act(() => {
         result.current.removeKeyframe(1.0);
       });
-      expect(result.current.keyframes.length).toBe(2);
+      expect(result.current.keyframes.length).toBe(1);
     });
 
     it('handles copy from start -> paste at middle -> delete middle sequence', () => {
@@ -264,15 +260,16 @@ describe('Keyframe Integration Tests', () => {
         result.current.pasteKeyframe(1.5, 90);
       });
 
-      expect(result.current.keyframes.length).toBe(3);
+      // init frame 0 + pasted frame 45 = 2 keyframes.
+      expect(result.current.keyframes.length).toBe(2);
       expect(result.current.keyframes[1].x).toBe(100); // Copied value
 
-      // Delete middle
+      // Delete the pasted keyframe
       act(() => {
         result.current.removeKeyframe(1.5);
       });
 
-      expect(result.current.keyframes.length).toBe(2);
+      expect(result.current.keyframes.length).toBe(1);
     });
 
     it('handles multiple adds maintaining sort order', () => {
@@ -306,7 +303,8 @@ describe('Keyframe Integration Tests', () => {
       });
 
       const frames = result.current.keyframes.map(kf => kf.frame);
-      expect(frames).toEqual([0, 15, 30, 45, 60, 90]);
+      // init frame 0 + added frames 60, 15, 45, 30 -> sorted, no end boundary.
+      expect(frames).toEqual([0, 15, 30, 45, 60]);
     });
   });
 
@@ -361,7 +359,8 @@ describe('Keyframe Integration Tests', () => {
         result.current.addOrUpdateKeyframe(1.4, { x: 151, y: 151, width: 200, height: 300 }, 90, 'user');
       });
 
-      expect(result.current.keyframes.length).toBe(4);
+      // init frame 0 + frames 30 and 42 (12 apart, > MIN_KEYFRAME_SPACING) = 3.
+      expect(result.current.keyframes.length).toBe(3);
       const frames = result.current.keyframes.map(kf => kf.frame);
       expect(frames).toContain(30);
       expect(frames).toContain(42);
