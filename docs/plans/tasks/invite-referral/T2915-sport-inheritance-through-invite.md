@@ -1,11 +1,21 @@
 # T2915: Sport Inheritance Through Invite
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-06-17
-**Updated:** 2026-06-17
+**Updated:** 2026-06-20
 **Requires migration:** YES (Postgres) — implement on a dedicated branch.
+
+> **SHIPPED (diverged) — 2026-06-20.** Implemented as a **link snapshot**, NOT the live
+> `users.default_sport` mirror this doc originally specced (a Postgres mirror was rejected as
+> redundant state). The inviter's sport is frozen onto `referrals.inherited_sport`
+> (migration `v017_referral_inherited_sport`) at invite-code fetch / sport edit, and onto
+> `shares.sharer_default_sport` (`v018_share_sharer_sport`) for share channels. The invitee
+> reads the snapshot via the referrals graph at first init and falls back to soccer.
+> Extended to all share/invite channels in commit `c41a13a1` (also `74c7710b`, `04866524`).
+> Prod Postgres migrated to v18 on 2026-06-20. The "Solution" below describes the original
+> mirror design and is retained for history only.
 
 ## Problem
 

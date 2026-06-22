@@ -262,7 +262,7 @@ Goal: Get user feedback. Core functionality works, performance is acceptable, on
 | T2900 | ↳ [Invite Button + Email](tasks/invite-referral/T2900-invite-button-email.md) | 8 | 3 | 2.7 | DONE | [ ] | "Invite a Friend" button on home screen. Opens mailto: with crafted pitch + reelballers.com?ref={code}. Landing page passes ref through to app signup. |
 | T2905 | ↳ [Share Annotated Playback](tasks/invite-referral/T2905-share-annotated-playback.md) | 7 | 4 | 1.8 | DONE | [ ] | Share annotated playback via email link. Reuses shares table + SharedAnnotationView. Non-users see playback + signup CTA. Feeds `annotation_share` referral channel. |
 | T2910 | ↳ [Referral Graph](tasks/invite-referral/T2910-referral-graph.md) | 7 | 4 | 1.8 | DONE | [ ] | Postgres `referrals` adjacency table. Attribution on signup from invite codes + share acceptance. Admin queries for leaderboard and channel effectiveness. |
-| T2915 | ↳ [Sport Inheritance Through Invite](tasks/invite-referral/T2915-sport-inheritance-through-invite.md) | 6 | 4 | 1.5 | TODO | [x] | When A invites B, B's default profile inherits A's sport (instead of soccer). New Postgres `users.default_sport` mirror (migration v017) written in the owner's context (invite-code fetch / sport edit); invitee reads it via the referrals graph at first init; falls back to soccer. Needs its own branch (migration). Builds on T2910. |
+| T2915 | ↳ [Sport Inheritance Through Invite](tasks/invite-referral/T2915-sport-inheritance-through-invite.md) | 6 | 4 | 1.5 | DONE | [x] | **DONE (diverged, shipped + prod-migrated 2026-06-20):** When A invites B, B's default profile inherits A's sport (instead of soccer). Shipped as a **link snapshot**, NOT the spec's live `users.default_sport` mirror (rejected as redundant state). The inviter's sport is frozen onto `referrals.inherited_sport` (Postgres v017) at invite-code fetch / sport edit, and onto `shares.sharer_default_sport` (v018) for share channels; the invitee reads the snapshot via the referrals graph at first init, falling back to soccer. Extended to all share/invite channels (commit c41a13a1). Builds on T2910. |
 |  | **[PWA Quick Wins](tasks/pwa/EPIC.md)** | 6 | 2 | 3.0 |  |  | Installable app + native share sheet + screen wake lock. Foundation for all PWA features. |
 | T441 | ↳ [PWA Install](tasks/pwa/T441-pwa-install.md) | 6 | 3 | 2.0 | DONE | [ ] | Manifest, service worker, icons, install prompt. Install CTA on share pages. Foundation for all PWA features. |
 | T442 | ↳ [Web Share API](tasks/pwa/T442-web-share-api.md) | 8 | 3 | 2.7 | DONE | [ ] | Native share sheet for exported reels -- one tap to Instagram/TikTok/WhatsApp. Post-export toast with share button. |
@@ -543,7 +543,7 @@ IDs use gaps of 10 to allow insertions:
 - `T2880-T2885` - Games List Performance epic
 - `T2890` - Cache Warming Efficiency (standalone, warming system upgrade)
 - `T2900-T2910` - Invite & Referral epic
-- `T2915` - Sport Inheritance Through Invite (users.default_sport mirror + migration v017; needs own branch)
+- `T2915` - Sport Inheritance Through Invite (link snapshot: referrals.inherited_sport v017 + shares.sharer_default_sport v018; NOT a users.default_sport mirror)
 - `T2920` - Migration System Infrastructure (standalone)
 - `T2930` - Postgres Data Locality Audit (standalone)
 - `T3000-T3020` - Analytics 1 epic (CF Web Analytics + Postgres event log + admin migration)
