@@ -271,23 +271,14 @@ export function TimelineBase({
     }
   }, [progress, timelineScale, isPlaying]);
 
-  // Use visual duration for display (if segments exist), otherwise use source duration
-  const displayDuration = visualDuration || duration;
-
   return (
     <div className="timeline-container py-0.5 lg:py-4">
-      {/* Time labels - shows visual duration (after speed/trim adjustments) */}
-      <div className="flex justify-between mb-0.5 lg:mb-2 text-xs text-gray-400 pl-20 lg:pl-32">
-        <span>{formatTimeSimple(visualCurrentTime)}</span>
-        <div className="flex items-center gap-2">
-          {timelineZoom > 100 && (
-            <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
-          )}
-          <span title={visualDuration !== duration ? `Source: ${formatTimeSimple(duration)}` : undefined}>
-            {formatTimeSimple(displayDuration)}
-          </span>
+      {/* Zoom indicator (timestamps removed - redundant with player timecode) */}
+      {timelineZoom > 100 && (
+        <div className="flex justify-end mb-0.5 lg:mb-2 text-xs text-gray-400 pr-2">
+          <span className="text-blue-400">Zoom: {Math.round(timelineZoom)}%</span>
         </div>
-      </div>
+      )}
 
       {/* Timeline with fixed labels and scrollable tracks */}
       <div className="relative">
