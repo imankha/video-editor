@@ -53,7 +53,11 @@ export function VideoPlayer({
   onVideoClick,
   muted = false,
   panEnabled = true,
-  loadingMessage = 'Loading video...'
+  loadingMessage = 'Loading video...',
+  // When false, the player is not an upload target (e.g. Framing, where clips come
+  // from the game): drag-and-drop is disabled and the empty state drops the
+  // "drag and drop / upload" hint.
+  allowUpload = true
 }) {
   const isBuffering = useVideoStore((s) => s.isBuffering);
   const isPlaying = useVideoStore((s) => s.isPlaying);
@@ -94,6 +98,7 @@ export function VideoPlayer({
   const handleDragEnter = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!allowUpload) return;
     setIsDragging(true);
   };
 
@@ -111,6 +116,7 @@ export function VideoPlayer({
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!allowUpload) return;
     setIsDragging(false);
 
     const files = e.dataTransfer?.files;
@@ -339,9 +345,11 @@ export function VideoPlayer({
             <p className="mt-2 text-sm">
               {isDragging ? 'Drop video here' : 'No video loaded'}
             </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {isDragging ? 'Release to upload' : 'Drag and drop a video or upload to get started'}
-            </p>
+            {allowUpload && (
+              <p className="mt-1 text-xs text-gray-500">
+                {isDragging ? 'Release to upload' : 'Drag and drop a video or upload to get started'}
+              </p>
+            )}
           </div>
         </div>
       )}

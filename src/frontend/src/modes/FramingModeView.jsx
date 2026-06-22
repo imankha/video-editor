@@ -344,6 +344,7 @@ export function FramingModeView({
               clipRange={clipRange}
               muted={!includeAudio}
               onFileSelect={(isFullscreen || mobileFs) ? undefined : onFileSelect}
+              allowUpload={false}
               panEnabled={!mobileFs || touchMode === 'view'}
               overlays={[
                 videoUrl && currentCropState && metadata && (
