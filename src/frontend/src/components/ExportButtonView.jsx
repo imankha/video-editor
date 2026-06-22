@@ -289,9 +289,11 @@ const ExportButtonView = forwardRef(function ExportButtonView({
           <span>
             {isMultiClipMode
               ? (unframedCount === totalExtractedClips
-                  ? 'No clips have been framed yet. Add crop keyframes to each clip.'
+                  ? (totalExtractedClips === 1
+                      ? 'This clip has not been framed yet.'
+                      : 'No clips have been framed yet.')
                   : `${unframedCount} of ${totalExtractedClips} clip${unframedCount > 1 ? 's' : ''} need${unframedCount === 1 ? 's' : ''} framing. Select and add crop keyframes.`)
-              : 'Add crop keyframes to frame this clip.'
+              : 'This clip has not been framed yet.'
             }
           </span>
         </div>
