@@ -404,6 +404,24 @@ export const useGamesDataStore = create((set, get) => ({
     }
   },
 
+  // Persist the exact last playhead position for single-video resume.
+  // Distinct from finishAnnotation's viewed_duration high-water mark: this is a
+  // direct overwrite and may move backward. `keepalive` lets the request survive
+  // page unload (tab/browser close) — see the visibilitychange/pagehide handlers.
+  saveLastPlayhead: async (gameId, position, { keepalive = false } = {}) => {
+    if (!gameId || position == null || position < 0) return;
+    try {
+      await apiFetch(`${API_BASE}/api/games/${gameId}/playhead`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position }),
+        keepalive,
+      });
+    } catch (err) {
+      console.error('[gamesDataStore] save playhead error:', err);
+    }
+  },
+
   selectGame: (game) => set({ selectedGame: game }),
   clearSelection: () => set({ selectedGame: null }),
 

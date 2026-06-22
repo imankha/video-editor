@@ -6,6 +6,7 @@ import { useExportStore, useAuthStore } from '../stores';
 import { useVideoStore } from '../stores/videoStore';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useUploadStore } from '../stores/uploadStore';
+import { useGamesDataStore } from '../stores/gamesDataStore';
 import { useQuestStore } from '../stores/questStore';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -306,6 +307,12 @@ export function AnnotateContainer({
   const viewedHighWaterRef = useRef(new Map());
   // Previously persisted viewed_duration from the backend (loaded on game open)
   const persistedViewedDurationRef = useRef(0);
+  // Exact last playhead position for single-video resume. Recorded on playback
+  // (ref-only, no persistence side effect), persisted on leave + on tab close.
+  // Unlike viewedHighWaterRef this is NOT a high-water mark — it may decrease.
+  const lastPlayheadRef = useRef(null);
+  // Whether the loaded game is single-video (multi-video resume is out of scope).
+  const isSingleVideoRef = useRef(false);
 
   // T740: Pending clip selection from Framing → Annotate navigation
   const pendingSelectSeekTimeRef = useRef(null);
@@ -493,6 +500,10 @@ export function AnnotateContainer({
 
     viewedHighWaterRef.current = new Map();
     persistedViewedDurationRef.current = gameData.viewed_duration || 0;
+    isSingleVideoRef.current = !isMultiVideo;
+    // Seed from the persisted value so a leave/close before any playback doesn't
+    // overwrite the saved position with null.
+    lastPlayheadRef.current = isMultiVideo ? null : (gameData.last_playhead_position ?? null);
     // videoStore.currentTime is global and survives leaving a game. Reset it
     // in the same batch as setAnnotateGameId, or the high-water effect records
     // the previous game's playhead as this game's viewed_duration.
@@ -510,10 +521,18 @@ export function AnnotateContainer({
     }
     if (pendingClipSeekTime != null) {
       playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
-    } else if (!isMultiVideo && gameData.viewed_duration > 0 && gameData.video_duration > 0) {
-      const resumePercent = gameData.viewed_duration / gameData.video_duration;
-      if (resumePercent < 0.95) {
-        playbackUrl = `${playbackUrl}#t=${gameData.viewed_duration}`;
+    } else if (!isMultiVideo && gameData.video_duration > 0) {
+      // Prefer the exact last playhead position (resume exactly where the user
+      // left off). Fall back to the legacy viewed_duration high-water resume for
+      // games saved before last_playhead_position existed.
+      if (gameData.last_playhead_position != null &&
+          gameData.last_playhead_position < gameData.video_duration) {
+        playbackUrl = `${playbackUrl}#t=${gameData.last_playhead_position}`;
+      } else if (gameData.viewed_duration > 0) {
+        const resumePercent = gameData.viewed_duration / gameData.video_duration;
+        if (resumePercent < 0.95) {
+          playbackUrl = `${playbackUrl}#t=${gameData.viewed_duration}`;
+        }
       }
     }
     setAnnotateVideoUrl(playbackUrl);
@@ -1152,7 +1171,40 @@ export function AnnotateContainer({
     if (effectiveCurrentTime > prev) {
       viewedHighWaterRef.current.set(key, effectiveCurrentTime);
     }
+    // Record the exact playhead (single-video only) for resume. Ref-only — this
+    // is NOT persistence; the value is written to the backend on leave/tab-close.
+    if (isSingleVideoRef.current) {
+      lastPlayheadRef.current = effectiveCurrentTime;
+    }
   }, [effectiveCurrentTime, annotateGameId, currentVideoSequence, fullTimeline]);
+
+  // Accessor for the exact last playhead position (single-video resume).
+  const getLastPlayhead = useCallback(
+    () => (isSingleVideoRef.current ? lastPlayheadRef.current : null),
+    []
+  );
+
+  // Persist the playhead when the tab is hidden or the page is unloaded, so
+  // resume survives closing/killing the browser (the in-app leave handlers never
+  // fire in that case). keepalive lets the POST outlive the page. Gesture-based:
+  // the gesture is the user closing/backgrounding the tab.
+  useEffect(() => {
+    const persistOnLeave = () => {
+      const gameId = annotateGameIdRef.current;
+      const position = lastPlayheadRef.current;
+      if (!gameId || !isSingleVideoRef.current || position == null) return;
+      useGamesDataStore.getState().saveLastPlayhead(gameId, position, { keepalive: true });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') persistOnLeave();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', persistOnLeave);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', persistOnLeave);
+    };
+  }, []);
 
   // T251: Compute total viewed duration across all videos (for finish-annotation)
   const getViewedDuration = useCallback(() => {
@@ -1325,6 +1377,8 @@ export function AnnotateContainer({
 
     // T251: View progress tracking
     getViewedDuration,
+    // Exact last playhead position (single-video resume)
+    getLastPlayhead,
 
     // Cleanup
     clearAnnotateState: useCallback(() => {

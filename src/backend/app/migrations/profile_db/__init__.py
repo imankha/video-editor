@@ -13,6 +13,7 @@ from .v011_drop_game_aggregates import V011DropGameAggregates
 from .v012_flip_inverted_clip_ranges import V012FlipInvertedClipRanges
 from .v013_auto_export_attempts import V013AutoExportAttempts
 from .v014_collapse_duplicate_keyframes import V014CollapseDuplicateKeyframes
+from .v015_add_last_playhead_position import V015AddLastPlayheadPosition
 
 MIGRATIONS = [
     V001Baseline(),
@@ -29,6 +30,7 @@ MIGRATIONS = [
     V012FlipInvertedClipRanges(),
     V013AutoExportAttempts(),
     V014CollapseDuplicateKeyframes(),
+    V015AddLastPlayheadPosition(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
