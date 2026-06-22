@@ -716,6 +716,7 @@ def ensure_database():
                 game_type TEXT,
                 tournament_name TEXT,
                 viewed_duration REAL DEFAULT 0,
+                last_playhead_position REAL,
                 video_fps REAL,
                 status TEXT DEFAULT 'ready',
                 auto_export_status TEXT,

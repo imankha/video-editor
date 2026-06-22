@@ -48,6 +48,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const loadGame = useGamesDataStore(state => state.loadGame);
   const getGameVideoUrl = useGamesDataStore(state => state.getGameVideoUrl);
   const finishAnnotation = useGamesDataStore(state => state.finishAnnotation);
+  const saveLastPlayhead = useGamesDataStore(state => state.saveLastPlayhead);
 
   // Projects — Zustand store
   const fetchProjects = useProjectsStore(state => state.fetchProjects);
@@ -125,6 +126,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const gameIdRef = useRef(null);
   // T251: Ref to store getViewedDuration function from AnnotateContainer
   const getViewedDurationRef = useRef(null);
+  // Ref to store getLastPlayhead function from AnnotateContainer (exact resume)
+  const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
 
@@ -134,12 +137,15 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     if (gameIdRef.current) {
       const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
       finishAnnotation(gameIdRef.current, viewedDuration);
+      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
+      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
     }
     // T1550: Hint ProjectManager to open on the Games tab when coming from Annotate
     sessionStorage.setItem('projectManagerTab', 'games');
     onClearSelection?.();  // Clear App.jsx's selected project (from Framing → Annotate navigation)
     setEditorMode('project-manager');
-  }, [finishAnnotation, onClearSelection, setEditorMode]);
+  }, [finishAnnotation, saveLastPlayhead, onClearSelection, setEditorMode]);
 
   // T1550: Unified mode change handler — fires finishAnnotation before delegating
   const handleAnnotateModeChange = useCallback((newMode) => {
@@ -151,6 +157,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     if (gameIdRef.current) {
       const viewedDuration = getViewedDurationRef.current ? getViewedDurationRef.current() : 0;
       finishAnnotation(gameIdRef.current, viewedDuration);
+      // Persist exact playhead for resume (single-video; getLastPlayhead returns null otherwise)
+      const playhead = getLastPlayheadRef.current ? getLastPlayheadRef.current() : null;
+      if (playhead != null) saveLastPlayhead(gameIdRef.current, playhead);
     }
     // When switching to framing, select the auto-project from the most recent clip
     if (newMode === 'framing') {
@@ -163,7 +172,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     }
     // Delegate to App.jsx mode change handler (handles project selection, confirmations)
     onModeChange?.(newMode);
-  }, [handleBackToProjects, finishAnnotation, selectProject, onModeChange]);
+  }, [handleBackToProjects, finishAnnotation, saveLastPlayhead, selectProject, onModeChange]);
 
   // AnnotateContainer - encapsulates all annotate mode state and handlers
   // NOTE: Clips are now saved in real-time during annotation, no batch import needed
@@ -257,6 +266,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     dismissTagWarning,
     // T251: View progress tracking
     getViewedDuration,
+    // Exact last playhead position (single-video resume)
+    getLastPlayhead,
   } = annotate;
 
   // T2750: Compute regions with virtual offsets for timeline/sidebar display
@@ -338,6 +349,8 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
 
   // T251: Keep getViewedDuration ref updated for handleBackToProjects
   getViewedDurationRef.current = getViewedDuration;
+  // Keep getLastPlayhead ref updated for the leave handlers
+  getLastPlayheadRef.current = getLastPlayhead;
 
   // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
   useEffect(() => {

@@ -188,6 +188,10 @@ class FinishAnnotationRequest(BaseModel):
     viewed_duration: float = Field(0, description="High-water mark of video watched in seconds")
 
 
+class PlayheadRequest(BaseModel):
+    position: float = Field(..., ge=0, description="Exact last playhead position in seconds")
+
+
 # ==============================================================================
 # Game Management Endpoints
 # ==============================================================================
@@ -1152,7 +1156,7 @@ async def get_game(game_id: int):
             SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name,
-                   viewed_duration, status
+                   viewed_duration, last_playhead_position, status
             FROM games
             WHERE id = ?
         """, (game_id,))
@@ -1205,6 +1209,7 @@ async def get_game(game_id: int):
             'clip_count': len(annotations),
             'created_at': row['created_at'],
             'viewed_duration': row['viewed_duration'] or 0,
+            'last_playhead_position': row['last_playhead_position'],
             'video_duration': total_duration,
             'video_width': video_width,
             'video_height': video_height,
@@ -1622,6 +1627,26 @@ async def finish_annotation(game_id: int, body: FinishAnnotationRequest = Finish
     }
 
 
+@router.post("/{game_id:int}/playhead")
+async def save_playhead(game_id: int, body: PlayheadRequest):
+    """Persist the exact last playhead position for a game (single-video resume).
+
+    Unlike viewed_duration (a high-water mark for review progress), this is a
+    direct overwrite — it may move backward so reopening lands exactly where the
+    user left off. Designed to accept navigator.sendBeacon on tab close.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE games SET last_playhead_position = ? WHERE id = ?",
+            (body.position, game_id)
+        )
+        conn.commit()
+        logger.info(f"[Playhead] Saved last_playhead_position={body.position:.1f}s for game {game_id}")
+
+    return {"success": True}
+
+
 class ShareGameRequest(BaseModel):
     emails: list[str]
 
@@ -1998,7 +2023,7 @@ async def load_game(game_id: int):
             SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name,
-                   viewed_duration, status
+                   viewed_duration, last_playhead_position, status
             FROM games
             WHERE id = ?
         """, (game_id,))
@@ -2046,6 +2071,7 @@ async def load_game(game_id: int):
             'clip_count': len(annotations),
             'created_at': row['created_at'],
             'viewed_duration': row['viewed_duration'] or 0,
+            'last_playhead_position': row['last_playhead_position'],
             'video_duration': total_duration,
             'video_width': video_width,
             'video_height': video_height,
