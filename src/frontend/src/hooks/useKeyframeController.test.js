@@ -44,7 +44,7 @@ describe('useKeyframeController hook', () => {
       expect(result.current.keyframes).toEqual([]);
     });
 
-    it('initializes with a single keyframe at frame 0 (flat-list model)', () => {
+    it('initializes with ZERO keyframes (flat-list model)', () => {
       const { result } = renderHook(() =>
         useKeyframeController({
           interpolateFn: mockInterpolateFn,
@@ -58,16 +58,9 @@ describe('useKeyframeController hook', () => {
       });
 
       expect(result.current.machineState).toBe(KeyframeStates.INITIALIZED);
-      // Flat-list model: ONE keyframe at frame 0, no forced end boundary.
-      expect(result.current.keyframes.length).toBe(1);
-      expect(result.current.keyframes[0]).toEqual({
-        frame: 0,
-        origin: 'user',
-        x: 100,
-        y: 100,
-        width: 200,
-        height: 300
-      });
+      // Flat-list model: opening a clip seeds NO keyframe. The editor shows a
+      // computed default crop; the first keyframe appears only on a user edit.
+      expect(result.current.keyframes).toEqual([]);
     });
 
     it('needsInitialization returns true for empty keyframes', () => {
@@ -89,11 +82,16 @@ describe('useKeyframeController hook', () => {
         })
       );
 
-      // Flat-list init makes ONE keyframe at frame 0, so the last keyframe is
-      // frame 0. needsInitialization compares the last keyframe to the expected
-      // end frame — so it's "already initialized" only when they match (0 here).
+      // Flat-list init seeds NO keyframes, so add one at frame 0 to make the
+      // last keyframe frame 0. needsInitialization compares the last keyframe to
+      // the expected end frame — so it's "already initialized" only when they
+      // match (0 here).
       act(() => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
+      });
+
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
       });
 
       expect(result.current.needsInitialization(0)).toBe(false);
@@ -109,6 +107,10 @@ describe('useKeyframeController hook', () => {
 
       act(() => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
+      });
+
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
       });
 
       // Last keyframe is at frame 0; an expected end of 120 mismatches -> needs init.
@@ -160,9 +162,9 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
       });
 
-      // Init created 1 keyframe (frame 0); adding at frame 30 -> 2 keyframes.
-      expect(result.current.keyframes.length).toBe(2);
-      expect(result.current.keyframes[1]).toEqual({
+      // Init created 0 keyframes; adding at frame 30 -> the first keyframe.
+      expect(result.current.keyframes.length).toBe(1);
+      expect(result.current.keyframes[0]).toEqual({
         frame: 30,
         origin: 'user',
         x: 150,
@@ -192,9 +194,9 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 175, y: 175 }, 90, 'user');
       });
 
-      // 1 (init) + 1 (frame 30), then a snap-update keeps the count at 2.
-      expect(result.current.keyframes.length).toBe(2);
-      expect(result.current.keyframes[1].x).toBe(175);
+      // First add creates frame 30, then a snap-update keeps the count at 1.
+      expect(result.current.keyframes.length).toBe(1);
+      expect(result.current.keyframes[0].x).toBe(175);
     });
 
     it('removes an added keyframe', () => {
@@ -214,13 +216,13 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
       });
 
-      expect(result.current.keyframes.length).toBe(2);
+      expect(result.current.keyframes.length).toBe(1);
 
       act(() => {
         result.current.removeKeyframe(1.0);
       });
 
-      expect(result.current.keyframes.length).toBe(1);
+      expect(result.current.keyframes.length).toBe(0);
     });
 
     it('removes the frame-0 keyframe (no boundary protection)', () => {
@@ -236,7 +238,9 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
+      // Explicitly create a frame-0 keyframe (init no longer seeds one).
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
       });
 
@@ -304,7 +308,8 @@ describe('useKeyframeController hook', () => {
       });
 
       const frames = result.current.keyframes.map(kf => kf.frame);
-      expect(frames).toEqual([0, 30, 60, 90]);
+      // Init seeds no keyframes; the three adds sort to 30, 60, 90.
+      expect(frames).toEqual([30, 60, 90]);
     });
   });
 
@@ -331,15 +336,15 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180 }, 90, 'user'); // frame 60
       });
 
-      // 1 (init, frame 0) + 2 added = 3 keyframes.
-      expect(result.current.keyframes.length).toBe(3);
+      // Init seeds no keyframes; 2 added = 2 keyframes.
+      expect(result.current.keyframes.length).toBe(2);
 
       act(() => {
         result.current.deleteKeyframesInRange(0.8, 2.2); // frames [24, 66]
       });
 
-      // Frames 30 and 60 deleted; only frame 0 remains.
-      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([0]);
+      // Frames 30 and 60 deleted; no keyframes remain.
+      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([]);
       expect(result.current.machineState).toBe(KeyframeStates.TRIMMING);
     });
 
@@ -366,10 +371,11 @@ describe('useKeyframeController hook', () => {
         result.current.deleteKeyframesInRange(1.0, 2.5);
       });
 
-      // All keyframes in range are deleted (inclusive); frame 0 is outside it.
+      // Both keyframes (frames 30 and 60) fall in the range and are deleted
+      // inclusive of boundaries; init seeded none, so the list is empty.
       expect(result.current.keyframes.find(kf => kf.frame === 30)).toBeUndefined();
       expect(result.current.keyframes.find(kf => kf.frame === 60)).toBeUndefined();
-      expect(result.current.keyframes.find(kf => kf.frame === 0)).toBeDefined();
+      expect(result.current.keyframes).toEqual([]);
     });
 
     it('deletes the last keyframe when it falls in the range', () => {
@@ -396,7 +402,8 @@ describe('useKeyframeController hook', () => {
 
       // Frame 60 (the last keyframe) is removable like any other.
       expect(result.current.keyframes.find(kf => kf.frame === 60)).toBeUndefined();
-      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([0]);
+      // Frames 30 and 60 both fall in [15, 60]; init seeded none, so empty.
+      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([]);
     });
 
     it('supports trim-origin keyframes at boundaries', () => {
@@ -417,7 +424,8 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'trim');
       });
 
-      expect(result.current.keyframes[1].origin).toBe('trim');
+      // Init seeded no keyframes; this is the first (index 0).
+      expect(result.current.keyframes[0].origin).toBe('trim');
     });
 
     it('cleans up trim keyframes when trim cleared', () => {
@@ -439,15 +447,15 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(2.5, { x: 190, y: 190 }, 90, 'trim'); // frame 75
       });
 
-      // 1 (init, frame 0) + 3 added = 4 keyframes.
-      expect(result.current.keyframes.length).toBe(4);
+      // Init seeds no keyframes; 3 added = 3 keyframes.
+      expect(result.current.keyframes.length).toBe(3);
 
       act(() => {
         result.current.cleanupTrimKeyframes();
       });
 
-      // Both trim keyframes removed; frame 0 (init) and frame 30 (user) remain.
-      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([0, 30]);
+      // Both trim keyframes removed; only the user keyframe (frame 30) remains.
+      expect(result.current.keyframes.map(kf => kf.frame)).toEqual([30]);
       expect(result.current.keyframes.every(kf => kf.origin !== 'trim')).toBe(true);
     });
   });
@@ -470,8 +478,9 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
-      // Add an end keyframe at frame 90 (time 3.0).
+      // Add a start keyframe (frame 0) and an end keyframe (frame 90, time 3.0).
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
         result.current.addOrUpdateKeyframe(3.0, { x: 200, y: 200 }, 90, 'user');
       });
 
@@ -516,13 +525,14 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
       });
 
+      // Init seeded no keyframes, so frame 30 is the only one (index 0).
       // Slightly before frame 30 (within 2 frame tolerance)
       const timeSlightlyBefore = (30 - 1) / 30; // frame 29
-      expect(result.current.getSelectedKeyframeIndex(timeSlightlyBefore)).toBe(1);
+      expect(result.current.getSelectedKeyframeIndex(timeSlightlyBefore)).toBe(0);
 
       // Slightly after frame 30 (within 2 frame tolerance)
       const timeSlightlyAfter = (30 + 1) / 30; // frame 31
-      expect(result.current.getSelectedKeyframeIndex(timeSlightlyAfter)).toBe(1);
+      expect(result.current.getSelectedKeyframeIndex(timeSlightlyAfter)).toBe(0);
     });
 
     it('selection updates when keyframes change', () => {
@@ -546,8 +556,8 @@ describe('useKeyframeController hook', () => {
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'user');
       });
 
-      // Now there should be a keyframe
-      expect(result.current.getSelectedKeyframeIndex(1.0)).toBe(1);
+      // Now there should be a keyframe (the first one, index 0).
+      expect(result.current.getSelectedKeyframeIndex(1.0)).toBe(0);
     });
   });
 
@@ -567,6 +577,11 @@ describe('useKeyframeController hook', () => {
 
       act(() => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
+      });
+
+      // Init seeds no keyframes; create the frame-0 keyframe to copy from.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100, width: 200, height: 300 }, 90, 'user');
       });
 
       let success;
@@ -591,8 +606,10 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
-      // Update end keyframe to different values
+      // Init seeds no keyframes; create start (frame 0) and end (frame 90)
+      // keyframes with different values so frame 45 interpolates between them.
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100, width: 200, height: 300 }, 90);
         result.current.addOrUpdateKeyframe(3.0, { x: 200, y: 200, width: 200, height: 300 }, 90);
       });
 
@@ -622,6 +639,11 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
+      // Init seeds no keyframes; create the frame-0 keyframe to copy from.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
+      });
+
       act(() => {
         result.current.copyKeyframe(0, ['x', 'y']);
       });
@@ -632,7 +654,7 @@ describe('useKeyframeController hook', () => {
       });
 
       expect(success).toBe(true);
-      // 1 (init, frame 0) + paste at frame 30 = 2 keyframes.
+      // frame 0 (added) + paste at frame 30 = 2 keyframes.
       expect(result.current.keyframes.length).toBe(2);
       expect(result.current.keyframes[1]).toEqual({
         frame: 30,
@@ -661,7 +683,8 @@ describe('useKeyframeController hook', () => {
       });
 
       expect(success).toBe(false);
-      expect(result.current.keyframes.length).toBe(1);
+      // Init seeds no keyframes and the paste was a no-op.
+      expect(result.current.keyframes.length).toBe(0);
     });
   });
 
@@ -727,13 +750,14 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
+      // Init seeds no keyframes; add frame 0 and frame 30 explicitly.
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100, width: 200, height: 300 }, 90);
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150, width: 200, height: 300 }, 90);
       });
 
       const exported = result.current.getKeyframesForExport(['x', 'y', 'width', 'height']);
 
-      // Flat-list model: init makes 1 keyframe (frame 0), plus the added frame 30.
       expect(exported.length).toBe(2);
       expect(exported[0]).toEqual({ time: 0, x: 100, y: 100, width: 200, height: 300 });
       expect(exported[1]).toEqual({ time: 1, x: 150, y: 150, width: 200, height: 300 });
@@ -750,6 +774,11 @@ describe('useKeyframeController hook', () => {
 
       act(() => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300, extra: 'ignored' }, 90);
+      });
+
+      // Init seeds no keyframes; create a frame-0 keyframe to export.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100, width: 200, height: 300, extra: 'ignored' }, 90, 'user');
       });
 
       const exported = result.current.getKeyframesForExport(['x', 'y']);
@@ -769,11 +798,12 @@ describe('useKeyframeController hook', () => {
       );
 
       act(() => {
-        result.current.initializeKeyframes({ x: 100, y: 100 }, 180); // single keyframe at frame 0
+        result.current.initializeKeyframes({ x: 100, y: 100 }, 180); // seeds no keyframes
       });
 
-      // Add a keyframe at 3.0s (frame 180 at 60fps).
+      // Add a frame-0 keyframe and one at 3.0s (frame 180 at 60fps).
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 180, 'user');
         result.current.addOrUpdateKeyframe(3.0, { x: 200, y: 200 }, 180, 'user');
       });
 
@@ -802,7 +832,10 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
-      // Init makes a keyframe at frame 0 only.
+      // Init seeds no keyframes; create one at frame 0.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
+      });
       expect(result.current.hasKeyframeAt(0)).toBe(true);
 
       // Add one at frame 90 (time 3.0).
@@ -839,6 +872,11 @@ describe('useKeyframeController hook', () => {
 
       act(() => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
+      });
+
+      // Init seeds no keyframes; create the frame-0 keyframe.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');
       });
 
       const kf = result.current.getKeyframeAt(0);
@@ -879,6 +917,15 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100, width: 200, height: 300 }, 90);
       });
 
+      // With zero keyframes, the hook-level interpolate returns null, so
+      // getDataAtTime returns null (the default-crop fallback lives in useCrop).
+      expect(result.current.getDataAtTime(0, ['x', 'width'])).toBeNull();
+
+      // After creating a frame-0 keyframe, the data is interpolated from it.
+      act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100, width: 200, height: 300 }, 90, 'user');
+      });
+
       const data = result.current.getDataAtTime(0, ['x', 'width']);
       expect(data).toEqual({ x: 100, width: 200 });
     });
@@ -902,8 +949,9 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
-      // Add a second keyframe so the map covers more than one.
+      // Init seeds no keyframes; add two so the map covers more than one.
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');   // frame 0
         result.current.addOrUpdateKeyframe(3.0, { x: 200, y: 200 }, 90, 'user'); // frame 90
       });
 
@@ -928,12 +976,14 @@ describe('useKeyframeController hook', () => {
         result.current.initializeKeyframes({ x: 100, y: 100 }, 90);
       });
 
+      // Init seeds no keyframes; add a user keyframe plus two trim keyframes.
       act(() => {
+        result.current.addOrUpdateKeyframe(0, { x: 100, y: 100 }, 90, 'user');   // frame 0
         result.current.addOrUpdateKeyframe(1.0, { x: 150, y: 150 }, 90, 'trim'); // frame 30
         result.current.addOrUpdateKeyframe(2.0, { x: 180, y: 180 }, 90, 'trim'); // frame 60
       });
 
-      // 1 (init, frame 0, origin user) + 2 trim keyframes.
+      // 1 user keyframe + 2 trim keyframes.
       expect(result.current.keyframes.length).toBe(3);
 
       // Remove trim keyframes by returning null for them.

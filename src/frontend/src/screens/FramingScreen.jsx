@@ -698,16 +698,11 @@ export function FramingScreen({
     return null;
   }, [videoUrl, currentTime, framerate, keyframes, trimRange]);
 
-  // Current crop state
+  // Current crop state. With no keyframes, interpolateCrop falls back to the
+  // default centered crop so the reticule still renders (and matches what the GPU
+  // export applies for an empty crop).
   const currentCropState = useMemo(() => {
-    let crop;
-    if (dragCrop) {
-      crop = dragCrop;
-    } else if (keyframes.length === 0) {
-      return null;
-    } else {
-      crop = interpolateCrop(currentTime);
-    }
+    const crop = dragCrop || interpolateCrop(currentTime);
     if (!crop) return null;
     return {
       x: crop.x,
@@ -715,7 +710,7 @@ export function FramingScreen({
       width: crop.width,
       height: crop.height
     };
-  }, [dragCrop, keyframes, currentTime, interpolateCrop]);
+  }, [dragCrop, currentTime, interpolateCrop]);
 
   // Crop context value for child components
   const cropContextValue = useMemo(() => ({

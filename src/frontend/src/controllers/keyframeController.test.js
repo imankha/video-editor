@@ -125,35 +125,17 @@ describe('keyframeController', () => {
   // ============================================================================
 
   describe('INITIALIZE action', () => {
-    it('initializes with exactly one keyframe at frame 0 (flat-list model)', () => {
+    it('marks the controller initialized with NO seeded keyframe (flat-list model)', () => {
       const state = createInitialState();
       const defaultData = { x: 100, y: 100, width: 200, height: 300 };
 
       const newState = keyframeReducer(state, actions.initialize(defaultData, 90, 30));
 
       expect(newState.machineState).toBe(KeyframeStates.INITIALIZED);
-      // Flat-list model: ONE keyframe at frame 0. No forced end boundary —
-      // interpolation clamps to the last keyframe so the crop is defined everywhere.
-      expect(newState.keyframes.length).toBe(1);
-      expect(newState.keyframes[0]).toEqual({
-        frame: 0,
-        origin: 'user',
-        ...defaultData
-      });
+      // Opening a clip does not create a keyframe — the editor renders the default
+      // crop, and the first keyframe is created only when the user edits the box.
+      expect(newState.keyframes).toEqual([]);
       expect(newState.isEndKeyframeExplicit).toBe(false);
-    });
-
-    it('honors a non-zero startFrame for the single keyframe', () => {
-      const state = createInitialState();
-      const defaultData = { x: 10, y: 20, width: 100, height: 200 };
-
-      const newState = keyframeReducer(state, {
-        type: ActionTypes.INITIALIZE,
-        payload: { defaultData, startFrame: 5 }
-      });
-
-      expect(newState.keyframes.length).toBe(1);
-      expect(newState.keyframes[0]).toEqual({ frame: 5, origin: 'user', ...defaultData });
     });
   });
 

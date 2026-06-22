@@ -22,24 +22,29 @@ const SAVED_KEYFRAMES = [
 ];
 
 describe('useCrop keyframe initialization', () => {
-  it('auto-initializes a single default keyframe when no saved keyframes and no trim', () => {
-    // Flat-list model: one keyframe at frame 0 defines the crop for the whole clip
-    // (interpolation clamps). No forced end keyframe.
+  it('does NOT seed a keyframe on open, but exposes the default crop for the reticule', () => {
+    // Flat-list model: opening a clip creates no keyframe. The reticule renders
+    // the default centered crop via getCropDataAtTime/interpolateCrop fallback,
+    // and the first keyframe is created only when the user edits the box.
     const { result } = renderHook(() => useCrop(METADATA, null, null));
 
-    expect(result.current.keyframes.length).toBe(1);
-    expect(result.current.keyframes[0].frame).toBe(0);
+    expect(result.current.keyframes.length).toBe(0);
+    const crop = result.current.getCropDataAtTime(0);
+    expect(crop).toBeTruthy();
+    expect(crop.width).toBeGreaterThan(0);
+    expect(crop.height).toBeGreaterThan(0);
+    // Matches the GPU export default (centered 9:16 crop)
+    expect(result.current.interpolateCrop(0)).toMatchObject({ width: crop.width, height: crop.height });
   });
 
-  it('auto-initializes a default keyframe when trimRange is set but no keyframes are saved (bug 19p)', () => {
-    // Reel clips can have a trim/speed saved with empty crop_data — the crop
-    // must still initialize or the reticule never renders. Trim is virtual, so
-    // init is unaffected by trimRange.
+  it('does NOT seed a keyframe when trimRange is set but no keyframes are saved', () => {
+    // Reel clips can have a trim/speed saved with empty crop_data. Trim is virtual
+    // and init seeds nothing; the reticule still renders via the default fallback.
     const trimRange = { start: 0, end: 11.389 };
     const { result } = renderHook(() => useCrop(METADATA, trimRange, null));
 
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
-    expect(result.current.keyframes[0].frame).toBe(0);
+    expect(result.current.keyframes.length).toBe(0);
+    expect(result.current.getCropDataAtTime(0)).toBeTruthy();
   });
 
   it('restores saved keyframes', () => {
@@ -66,16 +71,17 @@ describe('useCrop keyframe initialization', () => {
     expect(result.current.keyframes[1].x).toBe(300);
   });
 
-  it('re-initializes defaults after reset when the clip has a trim but no saved keyframes (bug 19p)', () => {
+  it('keeps the default crop available after reset when the clip has a trim but no saved keyframes', () => {
     const trimRange = { start: 0, end: 11.389 };
     const { result } = renderHook(() => useCrop(METADATA, trimRange, null));
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
+    expect(result.current.keyframes.length).toBe(0);
+    expect(result.current.getCropDataAtTime(0)).toBeTruthy();
 
     act(() => {
       result.current.reset();
     });
 
-    expect(result.current.keyframes.length).toBeGreaterThanOrEqual(1);
+    expect(result.current.getCropDataAtTime(0)).toBeTruthy();
   });
 
   it('does not auto-initialize when saved keyframes are provided', () => {

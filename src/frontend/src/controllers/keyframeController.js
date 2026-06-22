@@ -184,17 +184,14 @@ function removeBoundaryDuplicates(keyframes) {
 export function keyframeReducer(state, action) {
   switch (action.type) {
     case ActionTypes.INITIALIZE: {
-      // Flat-list model: a single default keyframe at the start. Interpolation
-      // clamps, so this one keyframe defines the crop across the whole clip until
-      // the user adds more. No forced end keyframe.
-      const { defaultData, startFrame = 0 } = action.payload;
-
+      // Flat-list model: opening a clip does NOT seed any keyframe. The editor
+      // shows the computed default crop (a keyframe-less reticule), and the FIRST
+      // keyframe is created only when the user moves/resizes the crop box. This
+      // marks the controller ready (INITIALIZED) with an empty keyframe list.
       return {
         ...state,
         machineState: KeyframeStates.INITIALIZED,
-        keyframes: [
-          { frame: startFrame, origin: 'user', ...defaultData }
-        ],
+        keyframes: [],
         isEndKeyframeExplicit: false
       };
     }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { timeToFrame } from '../../../utils/videoUtils';
 import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
@@ -298,9 +298,25 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
    * Returns only the spatial properties (x, y, width, height)
    * Useful for copying crop state from one time to another
    */
+  // The default centered crop for the current aspect ratio. Shown when there are
+  // NO keyframes (a fresh, untouched clip) so the reticule still renders. This is
+  // the SAME default the GPU export applies for an empty crop (backend
+  // default_crop.py mirrors calculateDefaultCrop), so preview matches export.
+  const defaultCropData = useMemo(() => {
+    if (!videoMetadata?.width || !videoMetadata?.height) return null;
+    return calculateDefaultCrop(videoMetadata.width, videoMetadata.height, aspectRatio);
+  }, [videoMetadata?.width, videoMetadata?.height, aspectRatio, calculateDefaultCrop]);
+
   const getCropDataAtTime = useCallback((time) => {
-    return getDataAtTime(time, cropDataKeys);
-  }, [getDataAtTime]);
+    // Falls back to the default crop when there are no keyframes yet.
+    return getDataAtTime(time, cropDataKeys) ?? defaultCropData;
+  }, [getDataAtTime, defaultCropData]);
+
+  // Interpolate the crop at a time, falling back to the default crop when the
+  // clip has no keyframes (so the reticule renders before the first edit).
+  const interpolateCrop = useCallback((time) => {
+    return interpolate(time) ?? defaultCropData;
+  }, [interpolate, defaultCropData]);
 
   /**
    * Get keyframes in time-based format for export
@@ -354,7 +370,7 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     restoreState,
 
     // Queries
-    interpolateCrop: interpolate,
+    interpolateCrop,
     hasKeyframeAt,
     getKeyframeAt,
     getCropDataAtTime,
