@@ -33,7 +33,6 @@ import { useProject } from '../contexts/ProjectContext';
 export function FramingScreen({
   onExportComplete,
   onProceedToOverlay,
-  highlightHook,
   exportButtonRef: externalExportButtonRef,
 }) {
   const setEditorMode = useEditorStore(state => state.setEditorMode);
@@ -338,10 +337,6 @@ export function FramingScreen({
     setGlobalAspectRatio,
     setGlobalTransition,
     getClipExportData,
-    highlightHook: highlightHook || {
-      deleteHighlightKeyframesInRange: () => {},
-      cleanupHighlightTrimKeyframes: () => {},
-    },
     saveFramingEdits: boundSaveFramingEdits,
     onCropChange: setDragCrop,
     onUserEdit: () => { clipHasUserEditsRef.current = true; },

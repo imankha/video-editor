@@ -27,8 +27,7 @@ import { track } from '../utils/analytics';
  *
  * This component owns all overlay-specific hooks and state:
  * - useOverlayState - consolidated overlay interaction state
- * - useHighlight - highlight keyframe management
- * - useHighlightRegions - highlight region management
+ * - useHighlightRegions - highlight region management (keyframes per region)
  * - useVideo - video playback (without segment awareness)
  * - useZoom - video zoom/pan
  * - useTimelineZoom - timeline zoom

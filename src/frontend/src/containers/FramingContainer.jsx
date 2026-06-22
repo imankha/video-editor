@@ -103,9 +103,6 @@ export function FramingContainer({
   setGlobalTransition,
   getClipExportData,
 
-  // Highlight hook (for coordinated trim operations)
-  highlightHook,
-
   // Video metadata cache (keyed by clip ID)
   clipMetadataCache = {},
 
@@ -384,31 +381,10 @@ export function FramingContainer({
     const segment = segments[segmentIndex];
     const isCurrentlyTrimmed = segment.isTrimmed;
 
-    if (!isCurrentlyTrimmed) {
-      // We're about to trim this segment.
-      let boundaryTime;
-      if (segment.isLast) {
-        boundaryTime = segment.start;
-      } else if (segment.isFirst) {
-        boundaryTime = segment.end;
-      }
-
-      // Virtual trim: crop keyframes are NOT touched. The permanent boundaries
-      // stay fixed at frame 0 and totalFrames; trimRange alone controls what is
-      // visible/exported. No keyframes are deleted, moved, or reconstituted, so
-      // detrim is fully reversible.
-
-      // Highlights still reconcile to the trim boundary (their model is unchanged).
-      if (highlightHook) {
-        const highlightDataToPreserve = highlightHook.getHighlightDataAtTime?.(
-          segment.isLast ? segment.end : segment.start
-        );
-        highlightHook.deleteKeyframesInRange?.(segment.start, segment.end, duration);
-        if (highlightDataToPreserve && boundaryTime !== undefined) {
-          highlightHook.addOrUpdateKeyframe?.(boundaryTime, highlightDataToPreserve, duration, 'permanent');
-        }
-      }
-    }
+    // Virtual trim: crop keyframes are NOT touched. The permanent boundaries stay
+    // fixed at frame 0 and totalFrames; trimRange alone controls what is
+    // visible/exported. No keyframes are deleted, moved, or reconstituted, so
+    // detrim is fully reversible.
 
     toggleTrimSegment(segmentIndex);
     onUserEdit?.();
@@ -462,7 +438,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [duration, segments, keyframes, framerate, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, toggleTrimSegment, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, trimRange, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for start
@@ -473,36 +449,14 @@ export function FramingContainer({
 
     clipHasUserEditsRef.current = true;
 
-    const boundaryTime = trimRange.start;
-    const boundaryFrame = Math.round(boundaryTime * framerate);
-
     // Determine the NEW start after detrim: previous trim level, or 0
     const lastStartOp = [...trimHistory].reverse().find(op => op.type === 'start');
     const newStartTime = lastStartOp?.previousRange?.start ?? 0;
-    const FRAME_TOLERANCE = 1;
     const currentEndTime = trimRange.end ?? duration;
 
     // Virtual trim: crop keyframes are NOT touched on detrim. The start permanent
     // stays at frame 0 and the end permanent at totalFrames; widening trimRange.start
     // simply reveals the keyframes that were always there. Fully reversible.
-
-    // Handle highlight keyframes if available
-    if (highlightHook) {
-      const highlightDataAtBoundary = highlightHook.getHighlightDataAtTime?.(boundaryTime);
-      if (boundaryFrame > 0) {
-        // Use tolerance for highlight keyframe matching too
-        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf =>
-          Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
-        );
-        if (highlightKfAtBoundary) {
-          highlightHook.deleteKeyframesInRange?.(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-        }
-      }
-      // Always ensure permanent keyframe at start
-      if (highlightDataAtBoundary) {
-        highlightHook.addOrUpdateKeyframe?.(0, highlightDataAtBoundary, duration, 'permanent');
-      }
-    }
 
     detrimStart();
     onUserEdit?.();
@@ -550,7 +504,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimStart, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Coordinated de-trim handler for end
@@ -561,38 +515,13 @@ export function FramingContainer({
 
     clipHasUserEditsRef.current = true;
 
-    const boundaryTime = trimRange.end;
-    const boundaryFrame = Math.round(boundaryTime * framerate);
-
     // Determine the NEW end after detrim: previous trim level, or full duration
     const lastEndOp = [...trimHistory].reverse().find(op => op.type === 'end');
     const newEndTime = lastEndOp?.previousRange?.end ?? duration;
-    const FRAME_TOLERANCE = 1;
 
     // Virtual trim: crop keyframes are NOT touched on detrim. The end permanent
     // stays at totalFrames; widening trimRange.end simply reveals keyframes that
     // were always there. Fully reversible.
-
-    // Handle highlight keyframes if available
-    if (highlightHook) {
-      const highlightDataAtBoundary = highlightHook.getHighlightDataAtTime?.(boundaryTime);
-      const highlightDuration = highlightHook.duration || duration;
-      const highlightEndFrame = Math.round(highlightDuration * (highlightHook.framerate || 30));
-
-      if (boundaryFrame < highlightEndFrame) {
-        // Use tolerance for highlight keyframe matching too
-        const highlightKfAtBoundary = highlightHook.keyframes?.find(kf =>
-          Math.abs(kf.frame - boundaryFrame) <= FRAME_TOLERANCE && kf.origin === 'permanent'
-        );
-        if (highlightKfAtBoundary) {
-          highlightHook.deleteKeyframesInRange?.(boundaryTime - 0.001, boundaryTime + 0.001, duration);
-        }
-      }
-      // Always ensure permanent keyframe at end
-      if (highlightDataAtBoundary) {
-        highlightHook.addOrUpdateKeyframe?.(highlightDuration, highlightDataAtBoundary, duration, 'permanent');
-      }
-    }
 
     detrimEnd();
     onUserEdit?.();
@@ -641,7 +570,7 @@ export function FramingContainer({
         });
       }
     }
-  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, highlightHook, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
+  }, [trimRange, trimHistory, duration, framerate, keyframes, getCropDataAtTime, deleteKeyframesInRange, addOrUpdateKeyframe, setCropEndFrame, detrimEnd, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, segmentBoundaries, segmentSpeeds, updateClipData]);
 
   /**
    * Handle keyframe click (seek to keyframe time)
@@ -970,10 +899,9 @@ export function FramingContainer({
   useEffect(() => {
     if (prevTrimRangeRef.current !== undefined && prevTrimRangeRef.current !== null && trimRange === null) {
       cleanupTrimKeyframes();
-      highlightHook?.cleanupTrimKeyframes?.();
     }
     prevTrimRangeRef.current = trimRange;
-  }, [trimRange, cleanupTrimKeyframes, highlightHook]);
+  }, [trimRange, cleanupTrimKeyframes]);
 
   // Effect: Auto-reposition playhead when it becomes invalid after trim
   const lastSeekTimeRef = useRef(null);
