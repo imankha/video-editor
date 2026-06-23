@@ -89,10 +89,13 @@ _fv = [900]
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
                quality_score=5.0, rating=None, rd=glicko.RD_MAX, match_count=0,
                source_clip_id=None, clip_start_time=None, clip_count=1,
-               project_id=None, created_at="2026-01-01 00:00:00", published=True):
+               project_id=None, created_at="2026-01-01 00:00:00", published=True,
+               source_type="custom_project", game_id=None):
     """clip_count defaults to 1 (single-clip = collection-eligible + rankable);
     pass clip_count=2 for a multi-clip (Mixes-only) reel. rating defaults to the
-    star seed when not given (mirrors the export freeze)."""
+    star seed when not given (mirrors the export freeze). source_type/game_id
+    default to a custom project; pass source_type='brilliant_clip' + a scalar
+    game_id for an auto-exported brilliant-clip reel (the game recap surface)."""
     _fv[0] += 1
     if project_id is None:
         project_id = _fv[0]
@@ -100,12 +103,13 @@ def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
         rating = glicko.seed_rating(quality_score)
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, source_type, "
-        "name, aspect_ratio, tags, game_ids, quality_score, clip_count, rating, rd, "
+        "name, aspect_ratio, tags, game_ids, game_id, quality_score, clip_count, rating, rd, "
         "match_count, source_clip_id, clip_start_time, published_at, created_at) "
-        "VALUES (?, 'f.mp4', 1, ?, 'custom_project', 'Reel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (project_id, duration, ratio,
+        "VALUES (?, 'f.mp4', 1, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (project_id, duration, source_type, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
+         game_id,
          quality_score, clip_count, rating, rd, match_count,
          source_clip_id, clip_start_time,
          "2026-01-01 00:00:00" if published else None, created_at),
@@ -347,6 +351,24 @@ class TestMyAthleteReelExclusion:
         with _conn(db) as c:
             ids = {r["id"] for r in _rankable_pool(c.cursor(), "9:16")}
         assert orphan in ids and dangling in ids
+
+    def test_brilliant_clips_exclude_teammate_reel(self, db):
+        # The game recap "Highlights" tab (games.get_brilliant_clips) surfaces a
+        # game's auto-exported single-clip reels -- a teammate clip's reel must
+        # not leak in there either (bug 22, same class as Rankings/gallery).
+        from app.routers.games import get_brilliant_clips
+        with _conn(db) as c:
+            cur = c.cursor()
+            rc_mine = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=1)
+            rc_team = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=0)
+            rc_null = _insert_raw_clip(cur, rating=5, game_id=1, my_athlete=None)
+            mine = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_mine)
+            team = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_team)
+            nul = _insert_fv(cur, source_type="brilliant_clip", game_id=1, source_clip_id=rc_null)
+            c.commit()
+        ids = {clip["id"] for clip in asyncio.run(get_brilliant_clips(1))["clips"]}
+        assert mine in ids and nul in ids  # mine + pre-migration kept
+        assert team not in ids             # teammate reel excluded
 
 
 # ---------------------------------------------------------------------------

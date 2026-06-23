@@ -10,7 +10,7 @@ from fastapi import APIRouter
 
 from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..queries import latest_final_videos_subquery
+from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from ..services.user_db import (
     get_profiles, get_selected_profile_id, get_credit_balance,
 )
@@ -91,7 +91,10 @@ async def bootstrap():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Downloads count
+        # Downloads count -- counts actual gallery reels, so it matches the
+        # gallery list (list_downloads / get_download_count). A single-clip reel
+        # built from a teammate clip (my_athlete=0) is not the user's own reel
+        # and is excluded everywhere the gallery is surfaced (bug 22).
         cursor.execute(f"""
             SELECT
                 COUNT(*) as count,
@@ -99,6 +102,7 @@ async def bootstrap():
             FROM final_videos
             WHERE id IN ({latest_final_videos_subquery()})
             AND published_at IS NOT NULL
+            {exclude_teammate_reels_clause("final_videos")}
         """)
         dl_row = cursor.fetchone()
         downloads = {
