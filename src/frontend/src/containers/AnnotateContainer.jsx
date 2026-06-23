@@ -62,7 +62,6 @@ export function AnnotateContainer({
   setEditorMode,
 
   // Downloads
-  downloadsCount,
   onOpenDownloads,
 }) {
   // Annotate mode state (consolidated via useAnnotateState hook)

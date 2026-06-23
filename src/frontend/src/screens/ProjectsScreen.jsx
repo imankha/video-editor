@@ -103,7 +103,9 @@ export function ProjectsScreen({
 
   // Gallery store for downloads panel
   const openGallery = useGalleryStore(state => state.open);
-  const downloadsCount = useGalleryStore(state => state.count);
+  // My Reels badge = count of NEW (unwatched) published reels, not the total.
+  // Clears as the user watches reels (gesture-based, see useDownloads.markWatched).
+  const unseenReelsCount = useGalleryStore(state => state.unwatchedCount);
 
   // Local UI state
   const [loadingProjectId, setLoadingProjectId] = useState(null);
@@ -357,7 +359,7 @@ export function ProjectsScreen({
     selectedProjectId: null,
     selectedProject: null,
     exportingProject: activeExportingProject,
-    downloadsCount,
+    unseenReelsCount,
   };
 
   return (

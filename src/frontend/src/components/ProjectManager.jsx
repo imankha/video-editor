@@ -93,7 +93,7 @@ export function ProjectManager({
   onDeleteGame,
   onFetchGames,
   // Downloads props - now optional, from context
-  downloadsCount: downloadsCountProp,
+  unseenReelsCount: unseenReelsCountProp,
   onOpenDownloads,
   // Export state - now optional, from context
   exportingProject: exportingProjectProp,
@@ -109,10 +109,10 @@ export function ProjectManager({
   pendingGameIds = new Set(),
 }) {
   // Get downloads and export state from context
-  const { downloadsCount: contextDownloadsCount, exportingProject: contextExportingProject } = useAppState();
+  const { unseenReelsCount: contextUnseenReelsCount, exportingProject: contextExportingProject } = useAppState();
 
   // Use props if provided, otherwise fall back to context
-  const downloadsCount = downloadsCountProp ?? contextDownloadsCount ?? 0;
+  const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
   const initialTab = projects.length === 0 ? 'games' : 'projects';
@@ -545,12 +545,14 @@ export function ProjectManager({
             variant="reelOutline"
             icon={Image}
             onClick={onOpenDownloads}
-            title={SECTION_NAMES.LIBRARY}
+            title={unseenReelsCount > 0
+              ? `${SECTION_NAMES.LIBRARY} (${unseenReelsCount} new)`
+              : SECTION_NAMES.LIBRARY}
           >
             <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
-            {downloadsCount > 0 && (
+            {unseenReelsCount > 0 && (
               <span className={`px-1.5 py-0.5 ${REEL.bg} text-white text-xs font-bold rounded-full min-w-[20px] text-center`}>
-                {downloadsCount > 9 ? '9+' : downloadsCount}
+                {unseenReelsCount > 9 ? '9+' : unseenReelsCount}
               </span>
             )}
           </Button>
