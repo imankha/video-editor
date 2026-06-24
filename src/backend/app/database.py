@@ -686,6 +686,7 @@ def ensure_database():
                 match_count INTEGER DEFAULT 0,
                 source_clip_id INTEGER,
                 clip_start_time REAL,
+                clip_game_start_time REAL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

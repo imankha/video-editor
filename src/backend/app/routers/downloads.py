@@ -196,6 +196,7 @@ class DownloadItem(BaseModel):
     rating: Optional[float] = None  # Glicko rating (T3630); primary ordering key, NULL until seeded
     quality_score: Optional[float] = None  # Frozen single-clip star (T3630); seed + secondary ordering
     clip_count: Optional[int] = None  # Distinct constituent clips (T3630); 1 = collection-eligible
+    clip_game_start_time: Optional[float] = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
     # Game grouping info
     watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
     game_ids: List[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -272,7 +273,8 @@ async def list_downloads(
                 fv.name as fv_name,
                 fv.rating,
                 fv.quality_score,
-                fv.clip_count
+                fv.clip_count,
+                fv.clip_game_start_time
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
             AND fv.published_at IS NOT NULL{extra}
@@ -499,6 +501,7 @@ async def list_downloads(
                 rating=row['rating'],
                 quality_score=row['quality_score'],
                 clip_count=row['clip_count'],
+                clip_game_start_time=row['clip_game_start_time'],
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,

@@ -20,7 +20,7 @@ import ffmpeg
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from .collection_metadata import compute_project_metadata, encode_game_ids
+from .collection_metadata import compute_project_metadata, encode_game_ids, compute_unified_clip_start
 from ..storage import delete_from_r2, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2
 from ..user_context import set_current_user_id
 
@@ -226,15 +226,18 @@ def _export_brilliant_clip(
         from .glicko import seed_rating, RD_MAX
         quality_score = float(clip['rating']) if clip['rating'] is not None else None
         rating = seed_rating(quality_score)
+        # T3920: unified two-half in-match start (file-relative + prior-half durations)
+        clip_game_start_time = compute_unified_clip_start(
+            cursor, clip['id'], clip['start_time'])
         cursor.execute(
             """INSERT INTO final_videos
                (project_id, filename, version, source_type, game_id, name,
                 published_at, duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time)
-               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?)""",
+                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
+               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?)""",
             (clip['auto_project_id'], filename, game_id, clip_name, duration,
              aspect_ratio, tags_blob, game_ids_blob, quality_score,
-             rating, RD_MAX, clip['id'], clip['start_time']),
+             rating, RD_MAX, clip['id'], clip['start_time'], clip_game_start_time),
         )
         conn.commit()
 

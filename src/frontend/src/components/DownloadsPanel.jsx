@@ -25,6 +25,7 @@ import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 import { ratioGlyph, ratioLabel } from '../constants/aspectRatios';
+import { formatGameClock } from '../utils/timeFormat';
 
 /**
  * DownloadsPanel - Slide-out panel for managing final video downloads
@@ -342,6 +343,10 @@ export function DownloadsPanel({
     const isUnwatched = !download.watched_at;
     const style = isUnwatched ? getUnwatchedStyle(download.id) : null;
 
+    // T3920: where the clip starts in the source game, in soccer notation
+    // (e.g. 50'15"). Only single-clip reels carry a start; multi-clip -> null.
+    const gameClock = formatGameClock(download.clip_game_start_time);
+
     return (
       <div
         key={download.id}
@@ -416,6 +421,8 @@ export function DownloadsPanel({
               <span className="shrink-0">{formatDate(download.created_at)}</span>
               {formatDurationHuman(download.duration) && <span aria-hidden>·</span>}
               {formatDurationHuman(download.duration) && <span className="shrink-0">{formatDurationHuman(download.duration)}</span>}
+              {gameClock && <span aria-hidden>·</span>}
+              {gameClock && <span className={`shrink-0 font-mono ${REEL.accent}`} title="Game time">{gameClock}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
