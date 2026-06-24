@@ -118,7 +118,7 @@ up() {
   # frontend deps into the node_modules volume on first up (backend deps are baked)
   if ! MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" test -d /workspace/src/frontend/node_modules/.bin; then
     echo "[task] installing frontend deps (one-time, ~1-2 min; runs in background)..." >&2
-    MSYS_NO_PATHCONV=1 docker exec -d -u dev -w /workspace/src/frontend "$cn" npm install
+    MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash -lc 'cd /workspace/src/frontend && npm install'
   fi
   echo "$cn"
 }
@@ -132,8 +132,10 @@ claude_session() {
   # "the input device is not a TTY". winpty (bundled with Git Bash) bridges it.
   local WINPTY=""
   case "${MSYSTEM:-}" in MINGW*|MSYS*|UCRT*) command -v winpty >/dev/null 2>&1 && WINPTY="winpty";; esac
+  # No -w: the image's WORKDIR is /workspace, so exec lands there. Passing a
+  # unix -w path would get mangled by MSYS ("Cwd must be an absolute path").
   exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    $WINPTY docker exec -it -u dev -w /workspace "$cn" bash -lc 'exec claude "$@"' _ "$@"
+    $WINPTY docker exec -it -u dev "$cn" bash -lc 'cd /workspace && exec claude "$@"' _ "$@"
 }
 
 stack() {
