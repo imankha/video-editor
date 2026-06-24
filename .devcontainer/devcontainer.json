@@ -54,8 +54,9 @@
   "mounts": [
     // PERSIST ~/.claude (sign-in, settings, history) across container rebuilds.
     // Without this, a rebuild wipes the home dir and you'd re-auth every time.
-    // ${devcontainerId} keeps the volume stable for THIS workspace's container.
-    "source=claude-code-config-${devcontainerId},target=/home/vscode/.claude,type=volume",
+    // FIXED name (shared with the scripts/task CLI sandboxes) so you sign in ONCE
+    // for both the GUI "Reopen in Container" path and every task container.
+    "source=reel-claude-config,target=/home/vscode/.claude,type=volume",
     // Host ~/.claude mounted READ-ONLY; auth-sync.sh seeds the CLI token from
     // here only if the volume has none yet (it never overwrites a sign-in).
     "source=${localEnv:USERPROFILE}/.claude,target=/host-claude,type=bind,readonly"
