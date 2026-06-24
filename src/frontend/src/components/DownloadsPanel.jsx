@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
@@ -74,9 +74,27 @@ export function DownloadsPanel({
   // it fills the viewport (the drawer's transform would otherwise confine it).
   const [storyPlayer, setStoryPlayer] = useState(null);
   const watchTimerRef = useRef(null);
+  // Reels already marked watched in the current player session — avoids redundant
+  // PATCH/recompute calls when the user navigates back and forth (T3900).
+  const watchedThisSessionRef = useRef(new Set());
 
-  const onPlayCollection = (reels, title) => setStoryPlayer({ reels, title });
+  const onPlayCollection = (reels, title) => {
+    watchedThisSessionRef.current.clear();
+    setStoryPlayer({ reels, title });
+  };
   const closeStoryPlayer = () => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); };
+
+  // Single source of watched-marking for BOTH the single-reel and collection
+  // playback paths: the player fires onReelChange when a reel becomes active
+  // (on mount and on each advance). Mark it watched -> PATCH the DB ->
+  // galleryStore recomputes the badge (T3900). Idempotent on the server, so the
+  // session set is purely a redundant-call guard.
+  const handleReelWatched = useCallback((_index, reel) => {
+    if (!reel?.id || watchedThisSessionRef.current.has(reel.id)) return;
+    watchedThisSessionRef.current.add(reel.id);
+    markWatched(reel.id);
+    collections.patchMember(reel.id, { watched_at: new Date().toISOString() });
+  }, [markWatched, collections]);
 
   // State for inline rename
   const [editingId, setEditingId] = useState(null);
@@ -183,16 +201,15 @@ export function DownloadsPanel({
     e.stopPropagation();
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
     // Single reel = a one-reel story, played through the SAME player as collections.
+    // Watched-marking happens via the player's onReelChange (handleReelWatched),
+    // the single source for both the single-reel and collection paths (T3900).
+    watchedThisSessionRef.current.clear();
     setStoryPlayer({
       reels: [toPlayerReel(download)],
       title: download.project_name,
       downloadId: download.id,
     });
     close();
-    if (!download.watched_at) {
-      markWatched(download.id);
-      collections.patchMember(download.id, { watched_at: new Date().toISOString() });
-    }
     // T540: Record achievements for viewing gallery video
     useQuestStore.getState().recordAchievement('viewed_gallery_video');
     // Custom project video gets a separate achievement for Quest 3
@@ -651,6 +668,7 @@ export function DownloadsPanel({
         <CollectionPlayer
           reels={storyPlayer.reels}
           title={storyPlayer.title}
+          onReelChange={handleReelWatched}
           onClose={closeStoryPlayer}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}

@@ -352,10 +352,12 @@ export function useDownloads(isOpen = false) {
     ));
     try {
       await apiFetch(`${API_BASE_URL}/downloads/${downloadId}/watched`, { method: 'PATCH' });
+      // Model changed (watched_at set) -> recompute the badge from the source of
+      // truth instead of decrementing imperatively. The count query is
+      // `watched_at IS NULL`, so a recompute is idempotent and stays correct even
+      // when a reel was already watched or watched again in a collection (T3900).
       const { useGalleryStore } = await import('../stores/galleryStore');
-      useGalleryStore.getState().setUnwatchedCount(
-        Math.max(0, useGalleryStore.getState().unwatchedCount - 1)
-      );
+      useGalleryStore.getState().fetchCount({ force: true });
     } catch (err) {
       console.error('[useDownloads] markWatched error:', err);
     }

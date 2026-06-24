@@ -38,15 +38,6 @@ describe('galleryStore count derivation', () => {
     expect(unwatchedCount).toBe(0);
   });
 
-  it('setUnwatchedCount updates only the badge (unseen) count', () => {
-    useGalleryStore.getState().setFromBootstrap({ count: 5, unwatched_count: 2 });
-    // Watching a reel decrements unwatchedCount via this gesture-based setter.
-    useGalleryStore.getState().setUnwatchedCount(1);
-    const { count, unwatchedCount } = useGalleryStore.getState();
-    expect(unwatchedCount).toBe(1);
-    expect(count).toBe(5); // total unchanged
-  });
-
   it('reset clears both counts and the loaded flag', () => {
     useGalleryStore.getState().setFromBootstrap({ count: 5, unwatched_count: 2 });
     useGalleryStore.getState().reset();
@@ -75,6 +66,24 @@ describe('galleryStore count derivation', () => {
       expect(unwatchedCount).toBe(3);
       expect(countLoaded).toBe(true);
       expect(returned).toBe(7);
+    });
+
+    it('recomputes the badge from source after a reel is watched (T3900)', async () => {
+      // Watching a reel sets watched_at in the DB, then markWatched recomputes via
+      // fetchCount. The badge derives from the recomputed value — total unchanged,
+      // unwatched drops — rather than being imperatively decremented.
+      useGalleryStore.getState().setFromBootstrap({ count: 4, unwatched_count: 3 });
+
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ count: 4, unwatched_count: 2 }),
+      }));
+
+      await useGalleryStore.getState().fetchCount({ force: true });
+
+      const { count, unwatchedCount } = useGalleryStore.getState();
+      expect(count).toBe(4); // total reels unchanged by watching
+      expect(unwatchedCount).toBe(2); // one fewer unseen
     });
   });
 });

@@ -35,7 +35,6 @@ export const useGalleryStore = create((set) => ({
   close: () => set({ isOpen: false }),
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   setCount: (count) => set({ count, countLoaded: true }),
-  setUnwatchedCount: (unwatchedCount) => set({ unwatchedCount }),
 
   // Dispatch a "published reels changed" event. Call after a publish/unpublish
   // succeeds on the backend (the model change), so subscribed views refresh.
