@@ -422,7 +422,7 @@ export function DownloadsPanel({
               {formatDurationHuman(download.duration) && <span aria-hidden>·</span>}
               {formatDurationHuman(download.duration) && <span className="shrink-0">{formatDurationHuman(download.duration)}</span>}
               {gameClock && <span aria-hidden>·</span>}
-              {gameClock && <span className={`shrink-0 font-mono ${REEL.accent}`} title="Game time">{gameClock}</span>}
+              {gameClock && <span className="shrink-0" title="Game time">{gameClock}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">

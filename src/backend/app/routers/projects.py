@@ -17,6 +17,7 @@ from app.queries import latest_working_clips_subquery, derive_clip_name
 from app.user_context import get_current_user_id
 from app.storage import R2_ENABLED, generate_presigned_url
 from app.utils.encoding import encode_data, decode_data
+from app.services.collection_metadata import compute_unified_clip_start
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +234,10 @@ class ProjectListItem(BaseModel):
     group_key: Optional[str] = None  # Group key for hierarchical display
     # Clip details for card display
     clips: List[ClipSummary] = []  # Info about each clip in the project
+    # Unified two-half in-match start (sec) for single-clip drafts; soccer-notation
+    # card mark (T3920). Computed at read-time (drafts have no frozen final_video).
+    # NULL for multi-clip drafts.
+    clip_game_start_time: Optional[float] = None
 
 
 class WorkingClipResponse(BaseModel):
@@ -393,11 +398,11 @@ async def list_projects():
 
         # Fetch clip details for each project (names, tags, rating)
         cursor.execute("""
-            SELECT project_id, clip_id, name, tags, rating, sort_order
+            SELECT project_id, clip_id, name, tags, rating, sort_order, start_time
             FROM (
                 SELECT rc.auto_project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    0 as sort_order
+                    0 as sort_order, rc.start_time
                 FROM raw_clips rc
                 WHERE rc.auto_project_id IS NOT NULL
 
@@ -405,7 +410,7 @@ async def list_projects():
 
                 SELECT wc.project_id as project_id, rc.id as clip_id,
                     rc.name, rc.tags, rc.rating,
-                    wc.sort_order
+                    wc.sort_order, rc.start_time
                 FROM working_clips wc
                 JOIN raw_clips rc ON rc.id = wc.raw_clip_id
             ) combined
@@ -413,12 +418,16 @@ async def list_projects():
         """)
         clip_rows = cursor.fetchall()
 
-        # Build a map of project_id -> list of clips
+        # Build a map of project_id -> list of clips, plus distinct source-clip
+        # start_times (keyed by clip_id so the auto_project_id + working_clips
+        # UNION can't double-count one clip) for the single-clip game time (T3920).
         project_clips = {}
+        project_clip_starts = {}
         for clip_row in clip_rows:
             project_id = clip_row['project_id']
             if project_id not in project_clips:
                 project_clips[project_id] = []
+                project_clip_starts[project_id] = {}
             tags = decode_data(clip_row['tags']) or []
             project_clips[project_id].append(ClipSummary(
                 id=clip_row['clip_id'],
@@ -426,6 +435,8 @@ async def list_projects():
                 tags=tags,
                 rating=clip_row['rating']
             ))
+            project_clip_starts[project_id].setdefault(
+                clip_row['clip_id'], clip_row['start_time'])
 
         result = []
         for row in rows:
@@ -441,6 +452,17 @@ async def list_projects():
                 game_info['game_names'],
                 game_info['game_dates']
             )
+
+            # T3920: unified in-match start for single-clip drafts (the same
+            # file-relative + prior-half offset frozen on export). Multi-clip or
+            # clipless -> None. Keyed on distinct source clips, not clip_count
+            # (auto-drafts have a raw_clip but no working_clips row).
+            clip_game_start_time = None
+            clip_starts = project_clip_starts.get(project_id, {})
+            if len(clip_starts) == 1:
+                source_clip_id, clip_start_time = next(iter(clip_starts.items()))
+                clip_game_start_time = compute_unified_clip_start(
+                    cursor, source_clip_id, clip_start_time)
 
             result.append(ProjectListItem(
                 id=row['id'],
@@ -464,7 +486,8 @@ async def list_projects():
                 game_ids=game_info['game_ids'],
                 game_names=game_info['game_names'],
                 game_dates=game_info['game_dates'],
-                group_key=group_key
+                group_key=group_key,
+                clip_game_start_time=clip_game_start_time
             ))
 
         return result

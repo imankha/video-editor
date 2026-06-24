@@ -136,6 +136,7 @@ def isolated_profile_db(tmp_path):
             match_count INTEGER DEFAULT 0,
             source_clip_id INTEGER,
             clip_start_time REAL,
+            clip_game_start_time REAL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)

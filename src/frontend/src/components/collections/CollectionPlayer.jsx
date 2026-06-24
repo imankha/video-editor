@@ -3,6 +3,7 @@ import { X, Download, Loader } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
+import { formatGameClock } from '../../utils/timeFormat';
 
 const SWIPE_THRESHOLD_PX = 48;
 
@@ -112,9 +113,21 @@ export function CollectionPlayer({
         ))}
       </div>
 
-      {/* Header */}
+      {/* Header: source game + in-match minute for the active reel (T3920),
+          falling back to the group title for multi-clip reels with no game. */}
       <div className="flex items-center justify-between gap-2 px-3 py-2">
-        <h3 className="text-white text-sm font-medium truncate min-w-0">{title}</h3>
+        <h3 className="text-white text-sm font-medium truncate min-w-0">
+          {activeReel.gameName ? (
+            <>
+              {activeReel.gameName}
+              {formatGameClock(activeReel.gameStartTime) && (
+                <span className="ml-2 font-mono text-gray-300">
+                  {formatGameClock(activeReel.gameStartTime)}
+                </span>
+              )}
+            </>
+          ) : title}
+        </h3>
         <div className="flex items-center gap-2 shrink-0">
           {onDownload && (
             <Button

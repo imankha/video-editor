@@ -850,3 +850,59 @@ class TestDownloadsExposesGameStart:
 
         assert response.total_count == 1
         assert response.downloads[0].clip_game_start_time is None
+
+
+# ---------------------------------------------------------------------------
+# T3920: GET /api/projects exposes clip_game_start_time for single-clip drafts
+# (read-time computed -- drafts have no frozen final_video yet)
+# ---------------------------------------------------------------------------
+
+def _seed_auto_draft(db_path, game_id, video_sequence, start_time, name="Draft"):
+    """An auto-created single-clip draft: project + raw_clip(auto_project_id)."""
+    conn = _connect(db_path)
+    cur = conn.cursor()
+    cur.execute("INSERT INTO projects (name, aspect_ratio, is_auto_created) "
+                "VALUES (?, '9:16', 1)", (name,))
+    pid = cur.lastrowid
+    cur.execute(
+        "INSERT INTO raw_clips (filename, rating, start_time, end_time, game_id, "
+        "video_sequence, auto_project_id) VALUES ('c.mp4', 5, ?, ?, ?, ?, ?)",
+        (start_time, start_time + 5.0, game_id, video_sequence, pid))
+    conn.commit()
+    conn.close()
+    return pid
+
+
+class TestProjectsExposeGameStart:
+    def test_second_half_draft_gets_offset(self, full_schema_db):
+        from app.routers.projects import list_projects
+        db = full_schema_db["db_path"]
+        game_id = _seed_two_half_game(db, first_half_duration=2715.0)
+        pid = _seed_auto_draft(db, game_id, video_sequence=2, start_time=300.0)
+
+        items = asyncio.run(list_projects())
+        p = next(p for p in items if p.id == pid)
+        # Fresh auto-drafts have no working_clips (clip_count counts those), but
+        # carry exactly one source raw_clip -> game time still resolves.
+        assert p.clip_game_start_time == 3015.0  # 2715 + 300
+
+    def test_first_half_draft_equals_file_relative(self, full_schema_db):
+        from app.routers.projects import list_projects
+        db = full_schema_db["db_path"]
+        game_id = _seed_two_half_game(db)
+        pid = _seed_auto_draft(db, game_id, video_sequence=1, start_time=120.0)
+
+        items = asyncio.run(list_projects())
+        p = next(p for p in items if p.id == pid)
+        assert p.clip_game_start_time == 120.0
+
+    def test_multiclip_draft_has_no_game_time(self, full_schema_db):
+        from app.routers.projects import list_projects
+        db = full_schema_db["db_path"]
+        # _seed_custom_project seeds a 2-clip working-clip project
+        pid = _seed_custom_project(db)
+
+        items = asyncio.run(list_projects())
+        p = next(p for p in items if p.id == pid)
+        assert p.clip_count == 2
+        assert p.clip_game_start_time is None

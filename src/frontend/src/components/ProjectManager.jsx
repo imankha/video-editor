@@ -11,6 +11,7 @@ import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName } from '../utils/clipDisplayName';
+import { formatGameClock } from '../utils/timeFormat';
 import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
 import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
@@ -1984,6 +1985,12 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${REEL.bgMuted} ${REEL.accent} flex-shrink-0`}>
                 <CheckCircle size={12} />
                 In {SECTION_NAMES.LIBRARY}
+              </span>
+            )}
+            {/* T3920: clip's game time (single-clip drafts only) */}
+            {formatGameClock(project.clip_game_start_time) && (
+              <span className="shrink-0 text-sm text-gray-400" title="Game time">
+                {formatGameClock(project.clip_game_start_time)}
               </span>
             )}
           </div>
