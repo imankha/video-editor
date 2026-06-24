@@ -563,6 +563,20 @@ class TestRankEndpoints:
         assert {m.a.id, m.b.id} == {a, b}
         assert m.a.stream_url.endswith(f"/api/downloads/{m.a.id}/stream")
 
+    def test_next_exposes_project_id(self, db):
+        # T3940: the matchup side carries project_id so the ranker replay can offer
+        # "Re-edit this reel" (restore the project + open the editor).
+        with _conn(db) as c:
+            cur = c.cursor()
+            a = _insert_fv(cur, game_ids=[1], source_clip_id=1, project_id=4101)
+            b = _insert_fv(cur, game_ids=[2], source_clip_id=2, project_id=4102)
+            c.commit()
+        m = self._next(aspect_ratio="9:16")
+        by_id = {m.a.id: m.a, m.b.id: m.b}
+        assert set(by_id) == {a, b}
+        assert by_id[a].project_id == 4101
+        assert by_id[b].project_id == 4102
+
     def test_result_updates_and_confidence_rises(self, db):
         with _conn(db) as c:
             cur = c.cursor()
