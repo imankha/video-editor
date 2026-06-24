@@ -117,7 +117,6 @@ export function RankingGame({ onClose }) {
   });
   useEffect(() => {
     const url = window.location.pathname + window.location.search + window.location.hash;
-    window.history.pushState({ rankGuard: true }, '', url);
     const onPop = () => {
       if (canUndoRef.current) {
         undoRef.current();
@@ -126,8 +125,23 @@ export function RankingGame({ onClose }) {
         onCloseRef.current();
       }
     };
-    window.addEventListener('popstate', onPop);
+    // Defer the install one microtask so React StrictMode's dev-only
+    // mount->cleanup->remount cycle can't churn the history stack. The throwaway
+    // first mount is torn down (active=false) before its microtask runs, so it
+    // never pushes a trap entry or calls history.back(). Without this, the first
+    // cleanup's history.back() fires a popstate that the remounted listener reads
+    // as a user Back press and instantly closes the game (dev-only flash-close).
+    let active = true;
+    let installed = false;
+    queueMicrotask(() => {
+      if (!active) return;
+      window.history.pushState({ rankGuard: true }, '', url);
+      window.addEventListener('popstate', onPop);
+      installed = true;
+    });
     return () => {
+      active = false;
+      if (!installed) return; // throwaway mount never armed -> nothing to undo
       window.removeEventListener('popstate', onPop);
       // Closed via the X (not Back): drop our leftover same-URL history entry.
       if (window.history.state && window.history.state.rankGuard) window.history.back();
