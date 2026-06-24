@@ -45,9 +45,11 @@ export function DownloadsPanel({
   // Gallery state from store
   const isOpen = useGalleryStore((state) => state.isOpen);
   const close = useGalleryStore((state) => state.close);
-  // Header chip count: galleryStore is the source of truth (the full reel list is
-  // no longer fetched on open). Badge unchanged (T3610 §0.6).
-  const galleryCount = useGalleryStore((state) => state.count);
+  // Header chip = NEW (unwatched) reels, matching the home "My Reels" badge so the
+  // same number appears in both places. galleryStore is the source of truth (the
+  // full reel list is not fetched on open); the count derives from watched_at and
+  // decrements as reels are watched (T3900).
+  const unseenReelsCount = useGalleryStore((state) => state.unwatchedCount);
 
   // useDownloads supplies the per-reel action helpers + formatters. The full-list
   // fetch is disabled (false) — the single view sources members from
@@ -594,9 +596,9 @@ export function DownloadsPanel({
           <div className="flex items-center gap-3">
             <Image size={20} className={REEL.accent} />
             <h2 className="text-lg font-bold text-white">{SECTION_NAMES.LIBRARY}</h2>
-            {galleryCount > 0 && (
+            {unseenReelsCount > 0 && (
               <span className={`px-2 py-0.5 ${REEL.bg} text-white text-xs font-medium rounded-full`}>
-                {galleryCount}
+                {unseenReelsCount}
               </span>
             )}
           </div>

@@ -552,7 +552,7 @@ export function ProjectManager({
             <span className="hidden sm:inline">{SECTION_NAMES.LIBRARY}</span>
             {unseenReelsCount > 0 && (
               <span className={`px-1.5 py-0.5 ${REEL.bg} text-white text-xs font-bold rounded-full min-w-[20px] text-center`}>
-                {unseenReelsCount > 9 ? '9+' : unseenReelsCount}
+                {unseenReelsCount}
               </span>
             )}
           </Button>
