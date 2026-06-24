@@ -13,6 +13,10 @@ export function toPlayerReel(d) {
     streamUrl: `${API_BASE}/api/downloads/${d.id}/stream`,
     aspect_ratio: d.aspect_ratio,
     duration: d.duration, // may be null; the player never relies on it
+    // T3920: source game + unified in-match start, shown in the player header.
+    // Single-clip reels only; null for multi-clip Mixes (no single game/start).
+    gameName: d.game_names?.[0] ?? null,
+    gameStartTime: d.clip_game_start_time ?? null,
   };
 }
 

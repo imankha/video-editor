@@ -246,6 +246,41 @@ def compute_project_clip_identity(cursor, project_id: int):
     return rows[0][0], rows[0][1]
 
 
+def compute_unified_clip_start(cursor, source_clip_id, clip_start_time):
+    """Unified in-match start (seconds) for a single-clip reel: the clip's
+    file-relative start_time plus the total duration of every game-video half
+    that precedes the clip's own half (T3920).
+
+    A clip 5 min into the 2nd half is stored as start_time=300, video_sequence=2;
+    its game minute must read ~50' (45'+5'), not 6'. The first-half duration lives
+    in game_videos, which persists with the game even after the reel's project is
+    archived (raw_clips survive too), so this resolves for old reels at backfill.
+
+    - clip_start_time is None (multi-clip reels): returns None.
+    - first/single video (video_sequence None or <= 1): returns clip_start_time.
+    - source clip or its prior-half duration unresolvable: returns clip_start_time
+      (best-effort file-relative; never invents an offset). Callers that backfill
+      in bulk log how many rows fell back so the gap stays visible.
+    """
+    if clip_start_time is None or source_clip_id is None:
+        return clip_start_time
+    row = cursor.execute(
+        "SELECT video_sequence, game_id FROM raw_clips WHERE id = ?",
+        (source_clip_id,),
+    ).fetchone()
+    if row is None:
+        return clip_start_time
+    video_sequence, game_id = row[0], row[1]
+    if not video_sequence or video_sequence <= 1 or game_id is None:
+        return clip_start_time
+    offset = cursor.execute(
+        "SELECT COALESCE(SUM(duration), 0) FROM game_videos "
+        "WHERE game_id = ? AND sequence < ?",
+        (game_id, video_sequence),
+    ).fetchone()[0] or 0.0
+    return float(clip_start_time) + float(offset)
+
+
 def compute_archive_clip_identity(cursor, archive: dict):
     """compute_project_clip_identity for an archived project: the lone archived
     working_clip raw_clip_id (its start_time read from the live raw_clips row,

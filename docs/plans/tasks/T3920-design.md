@@ -1,8 +1,9 @@
 # T3920 Design: Reel Drafts Show Clip Game Time (Soccer Notation)
 
-**Status:** Awaiting approval
-**Stack:** Frontend + Backend
-**Approved decisions (user):** DownloadsPanel card only · backend derives game-second · single shows / multi shows nothing · `MM'SS"` plain (no stoppage)
+**Status:** Approved + implemented
+**Stack:** Frontend + Backend + Migration
+**Approved decisions (user):** DownloadsPanel card only · single shows / multi shows nothing · `MM'SS"` plain (no stoppage)
+**Approval amendment:** persist the value as a frozen `final_videos.clip_game_start_time` column (written at export) and **backfill all previous reels via migration** — not read-time only. Plus: a follow-up task for the ranking-card 2nd-half fix ([T3930](T3930-ranking-card-game-minute-secondhalf-offset.md)).
 
 ---
 
@@ -78,7 +79,9 @@ flowchart LR
 
 ## 5. Implementation Plan
 
-### 5.1 Backend — expose a derived (non-persisted) unified game-second
+> **Implemented approach (supersedes the read-time sketch below):** `clip_game_start_time REAL` is a **frozen column** on `final_videos`, written at export by both paths (overlay + auto-export) via `compute_unified_clip_start`, and **backfilled for all existing reels by migration v016**. `final_videos` is already a frozen-snapshot table (`clip_start_time`, `game_ids` live there); source raw clips can be archived, so freezing at export is robust and keeps `/api/downloads` a plain SELECT. Justified per "no new persisted field unless justified." The offset helper is unchanged from below — it just runs at export + migration time, not per request.
+
+### 5.1 Backend — expose a derived unified game-second
 
 **New helper** `src/backend/app/services/collection_metadata.py` (lives next to `compute_project_clip_identity`, reusable by ranking later):
 

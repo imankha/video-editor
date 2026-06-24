@@ -48,7 +48,7 @@ from ...services.image_extractor import (
 )
 from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
 from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids, compute_project_ranking_freeze
+from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids, compute_project_ranking_freeze, compute_unified_clip_start
 from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
@@ -94,15 +94,17 @@ def _finalize_overlay_export(
         # source_clip_id/clip_start_time, all frozen in one shot.
         (clip_count, quality_score, rating, rd,
          source_clip_id, clip_start_time) = compute_project_ranking_freeze(cursor, project_id)
+        # T3920: unified two-half in-match start (file-relative + prior-half durations)
+        clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
 
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1152,16 +1154,18 @@ async def export_final(
         # source_clip_id/clip_start_time, all frozen in one shot.
         (clip_count, quality_score, rating, rd,
          source_clip_id, clip_start_time) = compute_project_ranking_freeze(cursor, project_id)
+        # T3920: unified two-half in-match start (file-relative + prior-half durations)
+        clip_game_start_time = compute_unified_clip_start(cursor, source_clip_id, clip_start_time)
 
         # Create new final video entry with version number and source_type
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 
