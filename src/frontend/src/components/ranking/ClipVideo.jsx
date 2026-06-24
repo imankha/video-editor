@@ -31,10 +31,16 @@ export function ClipVideo({ streamUrl, active = true, muted = true, loop = true,
   const blurRef = useRef(null);
 
   // Reload sources when the clip changes -> releases the old media (no decoder /
-  // buffer pile-up) and starts the new one from the top.
+  // buffer pile-up) and starts the new one from the top. We also re-assert src
+  // first: React won't re-apply the unchanged `src` prop after StrictMode's dev
+  // mount->cleanup->remount runs the release cleanup below (removeAttribute
+  // 'src'), which would otherwise leave the <video> source-less and blank.
   useEffect(() => {
-    blurRef.current?.load();
-    sharpRef.current?.load();
+    for (const v of [blurRef.current, sharpRef.current]) {
+      if (!v) continue;
+      if (v.getAttribute('src') !== url) v.setAttribute('src', url);
+      v.load();
+    }
   }, [url]);
 
   // Play + mute control. `muted` is set via the DOM property (React's attribute
