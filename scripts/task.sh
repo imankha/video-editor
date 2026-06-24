@@ -128,8 +128,12 @@ claude_session() {
   local cn; cn="$(cname "$id")"
   container_running "$id" || up "$id" >/dev/null
   echo "[task] entering permission-free Claude session in $cn (Ctrl-C / /exit to leave; container stays warm)..." >&2
+  # Git Bash/MinTTY isn't a real console TTY, so `docker exec -it` fails with
+  # "the input device is not a TTY". winpty (bundled with Git Bash) bridges it.
+  local WINPTY=""
+  case "${MSYSTEM:-}" in MINGW*|MSYS*|UCRT*) command -v winpty >/dev/null 2>&1 && WINPTY="winpty";; esac
   exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
-    docker exec -it -u dev -w /workspace "$cn" bash -lc 'exec claude "$@"' _ "$@"
+    $WINPTY docker exec -it -u dev -w /workspace "$cn" bash -lc 'exec claude "$@"' _ "$@"
 }
 
 stack() {
