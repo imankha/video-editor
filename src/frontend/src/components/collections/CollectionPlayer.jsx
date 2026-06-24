@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { X, Download, Loader } from 'lucide-react';
+import { X, Download, Loader, Pencil } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
@@ -25,6 +25,10 @@ const SWIPE_THRESHOLD_PX = 48;
  * @param {Function=} onEnded       - all reels finished
  * @param {Function=} onDownload    - (activeReel) => void; shows a Download button when set
  * @param {boolean=}  downloadLoading
+ * @param {Function=} onReEdit      - (activeReel) => void; shows a "Re-edit" button when set
+ *                                     AND the active reel has an editable project (T3940). The
+ *                                     public viewer omits this prop, so its player has no button.
+ * @param {number|null=} reEditLoadingId - download id currently restoring; spins the button for it
  */
 export function CollectionPlayer({
   reels,
@@ -35,6 +39,8 @@ export function CollectionPlayer({
   onEnded,
   onDownload,
   downloadLoading,
+  onReEdit,
+  reEditLoadingId,
 }) {
   const videoRef = useRef(null);
   const pointerStart = useRef(null);
@@ -129,6 +135,21 @@ export function CollectionPlayer({
           ) : title}
         </h3>
         <div className="flex items-center gap-2 shrink-0">
+          {/* T3940: jump straight into THIS reel's editor (acts on the active reel).
+              Gated on the prop (public viewer omits it) AND an editable project
+              (project_id null/0 -> non-editable export, button hidden). */}
+          {onReEdit && activeReel.project_id ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={reEditLoadingId === activeReel.id ? Loader : Pencil}
+              iconOnly
+              disabled={reEditLoadingId === activeReel.id}
+              title="Re-edit this reel"
+              onClick={() => onReEdit(activeReel)}
+              className={reEditLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
+            />
+          ) : null}
           {onDownload && (
             <Button
               variant="primary"
