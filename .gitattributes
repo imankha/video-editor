@@ -1,0 +1,7 @@
+# Shell scripts run under bash -- on the host (Git Bash) and inside the Linux
+# sandbox containers. CRLF breaks the shebang ("bad interpreter: ...^M") and
+# `bash`, so force LF everywhere regardless of core.autocrlf.
+*.sh text eol=lf
+
+# Windows batch wrappers want CRLF.
+*.bat text eol=crlf

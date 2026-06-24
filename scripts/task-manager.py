@@ -1516,6 +1516,7 @@ function buildTaskCard(t, ms) {
         ${t.link ? '<button class="load-btn">Load details</button>' : ''}
         ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
         ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
+        <button class="sandbox-cmd-btn" title="Copy the command to open a permission-free sandbox for this task">&#128274; Sandbox cmd</button>
       </div>
     </div>
   `;
@@ -1552,7 +1553,7 @@ function buildTaskCard(t, ms) {
   };
 
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.status-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.open-editor-btn')) return;
+    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.status-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.sandbox-cmd-btn') || e.target.closest('.open-editor-btn')) return;
     card.classList.toggle('expanded');
   });
 
@@ -1582,6 +1583,20 @@ function buildTaskCard(t, ms) {
         const text = `## ${t.id}: ${t.name}\n\n${content}`;
         copyToClipboard(text, copyDetailsBtn);
       }
+    };
+  }
+
+  const sandboxBtn = card.querySelector('.sandbox-cmd-btn');
+  if (sandboxBtn) {
+    sandboxBtn.onclick = (e) => {
+      e.stopPropagation();
+      // Paste this in a Git Bash terminal at the repo root to open a
+      // permission-free sandbox container for this task. Run it again (another
+      // terminal) to open a 2nd conversation on the SAME task/files.
+      const cmd = 'bash scripts/task.sh ' + t.id;
+      copyToClipboard(cmd, sandboxBtn);
+      sandboxBtn.textContent = 'Copied!';
+      setTimeout(() => { sandboxBtn.innerHTML = '&#128274; Sandbox cmd'; }, 2000);
     };
   }
 
