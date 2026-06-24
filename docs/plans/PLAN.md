@@ -20,6 +20,16 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 | ID | Description | Reporter | Status | Created | Description |
 |------|------|------|------|------|------|
 
+### Next Up
+
+Queued for the next working session.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T3900 | [Investigate "Number Above My Reels" Meaning](tasks/T3900-my-reels-number-meaning.md) | 5 | 2 | 2.5 | TODO | [ ] | Investigation-first: trace what the number shown above My Reels is bound to today, decide what it should represent for the user (published reels? unseen/new badge?), then rebind/relabel if they differ. Display-only derivation, no reactive persistence. Related to T1720 badge-count family. |
+| T3910 | [Multi-Clip Aspect Ratio Applies to All Clips](tasks/T3910-multiclip-aspect-ratio-all-clips.md) | 7 | 4 | 1.8 | TODO | [ ] | Framing aspect-ratio change applies to the active clip only; for multi-clip reels the user must set it on every clip. Make the ratio change a reel-level gesture that applies to all clips and re-fits crop boxes (not discard). Decide per-clip vs per-reel model first. Surgical persistence, single-clip unchanged. |
+| T3920 | [Reel Drafts Show Clip Game Time (Soccer Notation)](tasks/T3920-reel-draft-clip-game-timestamp.md) | 5 | 3 | 1.7 | TODO | [ ] | Reel Draft cards don't show where in the game a clip came from. Show the clip's start position in soccer notation (e.g. `38'45"`) derived from existing clip start time. Decide single- vs multi-clip card display; handle two-half unified video (T2750). Display-only derivation, no new persisted field. |
+
 ### Bugs
 
 | ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
