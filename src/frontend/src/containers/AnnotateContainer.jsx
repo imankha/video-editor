@@ -21,6 +21,7 @@ import { PROFILING_ENABLED } from '../utils/profiling';
 import { setWarmupPriority, WARMUP_PRIORITY, getWarmedPresignedUrl } from '../utils/cacheWarming';
 import { hasUncommittedTeammateText } from '../components/shared/TeammateTagInput';
 import { setPendingGame } from '../utils/pendingNavigation';
+import { beginGameVideoLoad, computeResumePosition, seekVideoElementWhenReady } from './annotateVideoLoad';
 
 /**
  * AnnotateContainer - Encapsulates all Annotate mode logic and UI
@@ -463,7 +464,7 @@ export function AnnotateContainer({
    * Apply game data to annotate state. Shared by both the single-request
    * load path and the legacy fallback.
    */
-  const applyGameData = useCallback((gameData, playbackUrlData, teammateSharesData, pendingClipSeekTime) => {
+  const applyGameData = useCallback((gameData, playbackUrlData, teammateSharesData) => {
     const isMultiVideo = gameData.videos && gameData.videos.length > 1;
 
     let videoMetadata = null;
@@ -511,30 +512,17 @@ export function AnnotateContainer({
     resetAnnotate();
     setAnnotateVideoFile(null);
 
-    let playbackUrl;
+    // T4000: the single-video first-paint src is already set to the stable /video
+    // URL in handleLoadGame (before /load), so the byte fetch overlaps /load. Do
+    // NOT re-set annotateVideoUrl here — switching src mid-load restarts the
+    // download. We only capture the presigned URL's expiry to schedule the long-
+    // session refresh; resume position is applied via a post-/load seek in
+    // handleLoadGame (clip seek is already carried in the early src's #t=).
+    // Multi-video playback is driven by gameVideos (useVideoProxy), so the early
+    // single-video src is harmlessly superseded for it.
     if (playbackUrlData?.url) {
-      playbackUrl = playbackUrlData.url;
       schedulePlaybackUrlRefresh(gameData.id, playbackUrlData.expires_in);
-    } else {
-      playbackUrl = `${API_BASE}/api/games/${gameData.id}/stream`;
     }
-    if (pendingClipSeekTime != null) {
-      playbackUrl = `${playbackUrl}#t=${pendingClipSeekTime}`;
-    } else if (!isMultiVideo && gameData.video_duration > 0) {
-      // Prefer the exact last playhead position (resume exactly where the user
-      // left off). Fall back to the legacy viewed_duration high-water resume for
-      // games saved before last_playhead_position existed.
-      if (gameData.last_playhead_position != null &&
-          gameData.last_playhead_position < gameData.video_duration) {
-        playbackUrl = `${playbackUrl}#t=${gameData.last_playhead_position}`;
-      } else if (gameData.viewed_duration > 0) {
-        const resumePercent = gameData.viewed_duration / gameData.video_duration;
-        if (resumePercent < 0.95) {
-          playbackUrl = `${playbackUrl}#t=${gameData.viewed_duration}`;
-        }
-      }
-    }
-    setAnnotateVideoUrl(playbackUrl);
     setAnnotateVideoMetadata(videoMetadata);
     annotateGameIdRef.current = gameData.id;
     setAnnotateGameId(gameData.id);
@@ -576,11 +564,21 @@ export function AnnotateContainer({
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
+
+    // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
+    // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
+    // loadGame, so the video byte fetch (302 -> direct R2, sequence=1) overlaps
+    // /load instead of being gated by it. loadPromise is /load's in-flight promise.
+    if (annotateVideoUrl && annotateVideoUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(annotateVideoUrl);
+    }
+    const loadPromise = beginGameVideoLoad({ gameId, pendingClipSeekTime, setAnnotateVideoUrl, loadGame });
+
     try {
       let gameData, playbackUrlData, teammateSharesData, teammateTagsData;
 
       try {
-        const loadResult = await loadGame(gameId);
+        const loadResult = await loadPromise;
         gameData = loadResult.game;
         playbackUrlData = loadResult.playback_url;
         teammateSharesData = loadResult.teammate_shares;
@@ -609,7 +607,15 @@ export function AnnotateContainer({
           .catch(() => {});
       }
 
-      const { isMultiVideo, videoMetadata } = applyGameData(gameData, playbackUrlData, teammateSharesData, pendingClipSeekTime);
+      const { isMultiVideo, videoMetadata } = applyGameData(gameData, playbackUrlData, teammateSharesData);
+
+      // T4000 R3: resume position is only known from /load, which now runs in
+      // parallel, so first paint starts at t=0. Apply the saved playhead via a
+      // post-load seek (single-video, non-clip-seek). A click-time clip seek is
+      // already carried in the early src's #t=, so skip resume when present.
+      if (!isMultiVideo && pendingClipSeekTime == null) {
+        seekVideoElementWhenReady(videoRef.current, computeResumePosition(gameData));
+      }
 
       if (teammateTagsData) {
         setServerTeammateTags(teammateTagsData);
@@ -681,7 +687,7 @@ export function AnnotateContainer({
         performance.clearMarks('gesture:load-game:end');
       }
     }
-  }, [loadGame, getGame, applyGameData, annotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip, requireAuth]);
+  }, [loadGame, getGame, applyGameData, annotateVideoUrl, setAnnotateVideoUrl, resetAnnotate, importAnnotations, setEditorMode, saveClip, requireAuth]);
 
   // T710: Annotation playback hook (dual-video ping-pong)
   const playback = useAnnotationPlayback({
