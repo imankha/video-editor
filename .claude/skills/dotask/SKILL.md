@@ -70,6 +70,12 @@ Turn a planned task into finished, pushed work — driven entirely from this one
    Tell the user: in GitHub Desktop, **Fetch origin -> switch to `feature/T<id>-…` -> test it ->
    PR/merge**. (They do the final merge; you never merge their branch without approval.)
 
+8. **Cleanup is automatic.** A committed `post-merge` hook (`.githooks/post-merge`, enabled via
+   `git config core.hooksPath .githooks`) deletes the remote branch + nukes the container when the
+   branch lands on master — whether merged in GitHub Desktop or CLI. Don't ask the user to clean up.
+   Only step in if the hook's log (`/c/tmp/post-merge-cleanup.log`) shows the container nuke was
+   skipped (GitHub Desktop's PATH lacks docker) — then run `bash scripts/task.sh nuke <SLUG>`.
+
 ## Notes
 - **Read/inspect the worker's files directly:** the container bind-mounts to `C:\work\tasks\<SLUG>\…`
   on the host — open any file there without git.
