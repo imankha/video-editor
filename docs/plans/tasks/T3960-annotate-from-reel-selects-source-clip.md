@@ -1,6 +1,6 @@
 # T3960: Annotate From a Draft Reel Selects Its Source Clip
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-06-25

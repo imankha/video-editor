@@ -1,6 +1,6 @@
 # T3970: Expired Game - Block Sharing, Allow Annotation Playback
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-06-25
