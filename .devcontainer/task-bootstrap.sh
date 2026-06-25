@@ -34,3 +34,11 @@ fi
 # /workspace is a bind mount owned by a different uid than `dev`, so git refuses
 # it ("detected dubious ownership"). Mark it safe so the worker can branch/commit.
 git config --global --add safe.directory /workspace 2>/dev/null || true
+
+# The frontend node_modules is a separate named volume, root-owned on first mount,
+# so `npm install` (run as dev) fails with EACCES. Take ownership when it isn't
+# already dev's (instant on the common path; recursive only on a fresh/root volume).
+NM=/workspace/src/frontend/node_modules
+if [ -d "$NM" ] && [ "$(stat -c %U "$NM" 2>/dev/null)" != dev ]; then
+  sudo chown -R dev:dev "$NM" 2>/dev/null || true
+fi
