@@ -1401,15 +1401,6 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
             </Button>
           )}
           <Button
-            variant="ghost"
-            size="sm"
-            icon={Share2}
-            disabled
-            title="Storage expired - extend to share"
-          >
-            Share
-          </Button>
-          <Button
             variant={showDeleteConfirm ? 'danger' : 'ghost'}
             size="sm"
             icon={Trash2}

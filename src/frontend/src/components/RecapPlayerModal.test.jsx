@@ -222,9 +222,31 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     });
   });
 
+  it('plays the game video for an expired in-grace game (video_kind="game")', async () => {
+    globalThis.fetch = mockFetch({
+      url: 'https://r2.example.com/games/abc.mp4',
+      clips: RECAP_DATA_WITH_CLIPS.clips,
+      video_kind: 'game',
+    });
+    const { container } = render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => {
+      const video = container.querySelector('video');
+      expect(video).toBeTruthy();
+      expect(video.getAttribute('src')).toBe('https://r2.example.com/games/abc.mp4');
+    });
+    // Video present => no graceful fallback message.
+    expect(screen.queryByText(/no longer available/i)).toBeNull();
+  });
+
   it('shows a graceful message when the recap video is gone but annotations persist', async () => {
-    globalThis.fetch = mockFetch({ clips: RECAP_DATA_WITH_CLIPS.clips }); // no `url`
-    render(
+    globalThis.fetch = mockFetch({ url: null, clips: RECAP_DATA_WITH_CLIPS.clips, video_kind: null });
+    const { container } = render(
       <RecapPlayerModal
         game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
         initialTab="annotations"
@@ -234,5 +256,7 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     await waitFor(() => {
       expect(screen.getByText(/no longer available/i)).toBeTruthy();
     });
+    // No video element when url is null.
+    expect(container.querySelector('video')).toBeNull();
   });
 });

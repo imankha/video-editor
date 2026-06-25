@@ -44,11 +44,10 @@ function renderCard(overrides = {}, handlers = {}) {
 describe('GameCard - expired game (T3970)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('disables the Share button with an expired reason on an expired card', () => {
+  it('does not render any Share button on an expired card', () => {
     renderCard({ storage_status: 'expired' });
-    const share = screen.getByTitle('Storage expired - extend to share');
-    expect(share).toBeTruthy();
-    expect(share.disabled).toBe(true);
+    expect(screen.queryByTitle('Storage expired - extend to share')).toBeNull();
+    expect(screen.queryByTitle('Share game')).toBeNull();
   });
 
   it('exposes a Playback annotations action on an expired card', () => {

@@ -7,8 +7,12 @@ Covers the backend expiry guard added to:
 
 Both endpoints must reject a game whose storage has expired
 (game_storage.storage_expires_at < utcnow) with HTTP 410, while an active
-(non-expired) game stays shareable. Annotation/recap playback endpoints are
-intentionally left open and are NOT exercised here.
+(non-expired) game stays shareable.
+
+Also covers the recap-data robustness fix: GET /api/games/{id}/recap-data must
+NOT 404 when no stitched recap exists. It falls back to the GAME video (with
+game-relative clip timestamps), and to a url=None clip list when both the recap
+and the game video are gone (post-grace). It 404s only when the game is missing.
 
 NOTE: This suite is written but NOT run in-container -- the backend test suite
 truncates the shared dev Postgres. Run it in CI / a safe env.
@@ -73,9 +77,11 @@ def _auth_headers(user_id: str) -> dict:
     return {"X-User-ID": user_id}
 
 
-def _seed_game(blake3: str, expires_at: datetime | None, user_id: str = SHARER_ID) -> int:
+def _seed_game(blake3: str, expires_at: datetime | None, user_id: str = SHARER_ID,
+               recap_url: str | None = None) -> int:
     """Insert a game (+video, +clips) and, if expires_at given, a game_storage
-    row pinning its storage expiry. Returns the game_id."""
+    row pinning its storage expiry. recap_url sets games.recap_video_url.
+    Returns the game_id."""
     from app.database import get_db_connection
     from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
@@ -85,8 +91,8 @@ def _seed_game(blake3: str, expires_at: datetime | None, user_id: str = SHARER_I
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO games (name, blake3_hash) VALUES (?, ?)",
-            ("Test Game", blake3),
+            "INSERT INTO games (name, blake3_hash, recap_video_url) VALUES (?, ?, ?)",
+            ("Test Game", blake3, recap_url),
         )
         game_id = cursor.lastrowid
         cursor.execute(
@@ -187,3 +193,70 @@ class TestActiveGameStillShareable:
         )
         assert resp.status_code == 200
         assert resp.json()["all_sent"] is True
+
+
+# ---------------------------------------------------------------------------
+# recap-data falls back to the game video instead of 404ing (playback fix)
+# ---------------------------------------------------------------------------
+
+class TestRecapDataFallback:
+    def test_returns_game_video_when_no_recap(self, client):
+        """recap_video_url is null but the game video exists in R2 -> play the
+        game video with game-relative clip timestamps (no 404)."""
+        game_id = _seed_game(ACTIVE_HASH, _future())  # recap_video_url left null
+        with patch("app.routers.games.file_exists_in_r2", return_value=False), \
+             patch("app.routers.games.r2_head_object_global", return_value={"ContentLength": 1}), \
+             patch("app.routers.games.generate_presigned_url_global",
+                   return_value="https://r2.example.com/games/x.mp4"):
+            resp = client.get(
+                f"/api/games/{game_id}/recap-data",
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["video_kind"] == "game"
+        assert data["url"] == "https://r2.example.com/games/x.mp4"
+        assert len(data["clips"]) == 3
+        # Game-relative timestamps come straight from raw_clips start/end.
+        first = data["clips"][0]
+        assert first["recap_start"] == 0.0
+        assert first["recap_end"] == 5.0
+
+    def test_returns_clip_list_when_video_gone(self, client):
+        """Neither recap nor game video in R2 (post-grace) -> url=None + clips."""
+        game_id = _seed_game(ACTIVE_HASH, _future())
+        with patch("app.routers.games.file_exists_in_r2", return_value=False), \
+             patch("app.routers.games.r2_head_object_global", return_value=None):
+            resp = client.get(
+                f"/api/games/{game_id}/recap-data",
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["url"] is None
+        assert data["video_kind"] is None
+        assert len(data["clips"]) == 3
+
+    def test_returns_recap_when_recap_exists(self, client):
+        """A real stitched recap in R2 is preferred and reported as kind=recap."""
+        game_id = _seed_game(ACTIVE_HASH, _future(), recap_url="recaps/g.mp4")
+        with patch("app.routers.games.file_exists_in_r2", return_value=True), \
+             patch("app.routers.games.r2_head_object_global", return_value={"ContentLength": 1}), \
+             patch("app.routers.games.generate_presigned_url",
+                   return_value="https://r2.example.com/recaps/g.mp4"), \
+             patch("app.routers.games._try_load_recap_mapping", return_value=None):
+            resp = client.get(
+                f"/api/games/{game_id}/recap-data",
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["video_kind"] == "recap"
+        assert data["url"] == "https://r2.example.com/recaps/g.mp4"
+
+    def test_404_only_when_game_missing(self, client):
+        resp = client.get(
+            "/api/games/99999/recap-data",
+            headers=_auth_headers(SHARER_ID),
+        )
+        assert resp.status_code == 404

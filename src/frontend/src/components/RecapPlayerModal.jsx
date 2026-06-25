@@ -35,16 +35,21 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   useEffect(() => {
     let cancelled = false;
 
-    const recapPromise = apiFetch(`${API_BASE}/api/games/${game.id}/recap-data`)
+    const recapUrl = `${API_BASE}/api/games/${game.id}/recap-data`;
+    const recapPromise = apiFetch(recapUrl)
       .then(r => {
-        if (!r.ok) throw new Error('Failed to load recap');
+        if (!r.ok) {
+          const err = new Error('Failed to load recap');
+          err.status = r.status;
+          throw err;
+        }
         return r.json();
       })
       .then(data => {
         if (!cancelled) setRecapData(data);
       })
       .catch(err => {
-        console.error('[RecapPlayerModal] Recap fetch failed:', err.message);
+        console.error('[RecapPlayerModal] recap-data failed', { url: recapUrl, status: err.status });
         if (!cancelled) setRecapError(err.message);
       });
 
