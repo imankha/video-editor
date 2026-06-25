@@ -17,12 +17,35 @@ describe('pendingNavigation', () => {
     it('round-trips game id and seek time', () => {
       setPendingGame(42, 12.5);
       expect(hasPendingGame()).toBe(true);
-      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: 12.5 });
+      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: 12.5, sourceClipId: null });
     });
 
     it('omits seek time when not provided', () => {
       setPendingGame(7);
-      expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null });
+      expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null, sourceClipId: null });
+    });
+
+    it('round-trips the source clip id (T3960)', () => {
+      setPendingGame(42, 12.5, 99);
+      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: 12.5, sourceClipId: 99 });
+    });
+
+    it('carries source clip id without a seek time', () => {
+      setPendingGame(42, null, 99);
+      expect(consumePendingGame()).toEqual({ gameId: 42, seekTime: null, sourceClipId: 99 });
+    });
+
+    it('omits source clip id when not provided', () => {
+      setPendingGame(42, 12.5);
+      expect(consumePendingGame().sourceClipId).toBeNull();
+    });
+
+    it('consume clears the source clip breadcrumb', () => {
+      setPendingGame(42, 12.5, 99);
+      consumePendingGame();
+      expect(consumePendingGame()).toBeNull();
+      setPendingGame(7);
+      expect(consumePendingGame()).toEqual({ gameId: 7, seekTime: null, sourceClipId: null });
     });
 
     it('consume clears the breadcrumb', () => {

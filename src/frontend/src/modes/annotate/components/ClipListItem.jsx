@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Info, Play } from 'lucide-react';
 import { getRatingDisplay } from '../../../components/shared/clipConstants';
 import { generateClipName } from '../../../utils/clipDisplayName';
@@ -26,6 +26,18 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
+  // T3960: scroll the selected row into view so an auto-selection (e.g. the
+  // reel's source clip when arriving from Framing) is visible even when it sits
+  // below the fold. `block: 'nearest'` is a no-op when the row is already
+  // visible, so clicking a visible item never causes a jump. No behavior arg =
+  // instant scroll within the ClipsSidePanel overflow container.
+  const rowRef = useRef(null);
+  useEffect(() => {
+    if (isSelected && rowRef.current) {
+      rowRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [isSelected]);
+
   // Derive display name from stored name or auto-generate from rating+tags
   const displayName = region.name || generateClipName(rating, region.tags || [], region.notes || '') || `Clip ${index + 1}`;
 
@@ -34,6 +46,7 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
 
   return (
     <div
+      ref={rowRef}
       onClick={isMobile ? undefined : onClick}
       className={`
         ${isMobile ? '' : 'cursor-pointer'} transition-all
