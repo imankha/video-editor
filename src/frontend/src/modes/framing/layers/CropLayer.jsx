@@ -160,11 +160,11 @@ export default function CropLayer({
               isStartKeyframe={isStartKeyframe}
               isEndKeyframe={isEffectiveEndKeyframe}
               onClick={() => onKeyframeClick(keyframeTime, index)}
-              onDelete={visibleKeyframes.length > 1 ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
+              onDelete={visibleKeyframes.length >= 1 ? () => onKeyframeDelete(keyframeTime, duration) : undefined}
               tooltip={`Keyframe at frame ${keyframe.frame} (${keyframeTime.toFixed(3)}s)${isSelected ? ' [SELECTED]' : ''}`}
               edgePadding={edgePadding}
               showCopyButton={false}
-              showDeleteButton={visibleKeyframes.length > 1}
+              showDeleteButton={visibleKeyframes.length >= 1}
             />
           );
         })}
