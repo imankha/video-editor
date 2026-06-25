@@ -463,8 +463,9 @@ function App() {
 
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
 
-    // Store navigation intent for AnnotateScreen to pick up
-    setPendingGame(gameId, selectedClipForAnnotate?.start_time);
+    // Store navigation intent for AnnotateScreen to pick up. Thread the reel's
+    // source clip so AnnotateScreen can re-select it in the Clips sidebar (T3960).
+    setPendingGame(gameId, selectedClipForAnnotate?.start_time, selectedClipForAnnotate?.raw_clip_id);
 
     // Reset video store to clear stale clipOffset/clipDuration from framing mode
     useVideoStore.getState().reset();

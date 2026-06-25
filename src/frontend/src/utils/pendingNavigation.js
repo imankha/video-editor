@@ -18,6 +18,7 @@
 
 const GAME_ID_KEY = 'pendingGameId';
 const GAME_SEEK_KEY = 'pendingClipSeekTime';
+const GAME_SOURCE_CLIP_KEY = 'pendingSourceClipId';
 
 const PROJECT_ID_KEY = 'pendingProjectId';
 const PROJECT_MODE_KEY = 'pendingProjectMode';
@@ -25,10 +26,13 @@ const PROJECT_CLIP_KEY = 'pendingProjectClipIndex';
 
 // --- Games (consumed by AnnotateScreen) ---
 
-export function setPendingGame(gameId, seekTime = null) {
+export function setPendingGame(gameId, seekTime = null, sourceClipId = null) {
   sessionStorage.setItem(GAME_ID_KEY, gameId.toString());
   if (seekTime != null) {
     sessionStorage.setItem(GAME_SEEK_KEY, seekTime.toString());
+  }
+  if (sourceClipId != null) {
+    sessionStorage.setItem(GAME_SOURCE_CLIP_KEY, sourceClipId.toString());
   }
 }
 
@@ -40,11 +44,14 @@ export function consumePendingGame() {
   const gameId = sessionStorage.getItem(GAME_ID_KEY);
   if (gameId == null) return null;
   const seekTime = sessionStorage.getItem(GAME_SEEK_KEY);
+  const sourceClipId = sessionStorage.getItem(GAME_SOURCE_CLIP_KEY);
   sessionStorage.removeItem(GAME_ID_KEY);
   sessionStorage.removeItem(GAME_SEEK_KEY);
+  sessionStorage.removeItem(GAME_SOURCE_CLIP_KEY);
   return {
     gameId: parseInt(gameId),
     seekTime: seekTime != null ? parseFloat(seekTime) : null,
+    sourceClipId: sourceClipId != null ? parseInt(sourceClipId) : null,
   };
 }
 

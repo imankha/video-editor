@@ -130,6 +130,11 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   const getLastPlayheadRef = useRef(null);
   // Ref to clip regions for annotate-to-framing project selection
   const clipRegionsRef = useRef([]);
+  // T3960: source clip id captured from the pending-game breadcrumb (set when
+  // arriving via "Edit in Annotate" from a draft reel). consumePendingGame()
+  // runs once and clears sessionStorage, so we stash the value here and let a
+  // separate effect select the matching clip region once clips have loaded.
+  const pendingSourceClipIdRef = useRef(null);
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
@@ -363,10 +368,28 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       const controller = new AbortController();
       isLoadingRef.current = true;
 
+      // T3960: remember the reel's source clip so we can re-select it in the
+      // Clips sidebar once clipRegions finish loading (see effect below).
+      pendingSourceClipIdRef.current = pending.sourceClipId;
+
       handleLoadGame(pending.gameId, pending.seekTime);
       return () => controller.abort();
     }
   }, [handleLoadGame, annotateVideoUrl]);
+
+  // T3960: once clips load, select the reel's source clip in the Clips sidebar.
+  // Matches by rawClipId (works for two-half virtual regions). Graceful no-op if
+  // the source clip was deleted. Clears the ref after one attempt so it doesn't
+  // fight a later manual selection.
+  useEffect(() => {
+    const sourceClipId = pendingSourceClipIdRef.current;
+    if (sourceClipId == null || clipRegions.length === 0) return;
+    pendingSourceClipIdRef.current = null;
+    const region = clipRegions.find(r => r.rawClipId === sourceClipId);
+    if (region) {
+      selectAnnotateRegion(region.id);
+    }
+  }, [clipRegions, selectAnnotateRegion]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   // Supports both single-video (file) and multi-video (files array in details)
