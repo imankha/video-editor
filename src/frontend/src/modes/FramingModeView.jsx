@@ -294,7 +294,6 @@ export function FramingModeView({
           <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
             {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop. */}
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Aspect ratio:</span>
               <AspectRatioSelector
                 aspectRatio={aspectRatio}
                 onAspectRatioChange={onAspectRatioChange}
