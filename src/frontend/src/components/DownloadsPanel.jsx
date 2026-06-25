@@ -86,7 +86,7 @@ export function DownloadsPanel({
     watchedThisSessionRef.current.clear();
     setStoryPlayer({ reels, title });
   };
-  const closeStoryPlayer = () => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); };
+  const closeStoryPlayer = useCallback(() => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); }, []);
 
   // Single source of watched-marking for BOTH the single-reel and collection
   // playback paths: the player fires onReelChange when a reel becomes active
@@ -114,7 +114,7 @@ export function DownloadsPanel({
     onOpenProject?.(projectId);
     close();
     closeStoryPlayer();
-  }, [onOpenProject, close]);
+  }, [onOpenProject, close, closeStoryPlayer]);
   const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
 
   // State for share modal
