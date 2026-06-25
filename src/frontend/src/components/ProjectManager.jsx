@@ -1235,7 +1235,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
+export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [actionsRevealed, setActionsRevealed] = useState(false);
   const longPressTimer = useRef(null);
@@ -1319,9 +1319,9 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
     }
   };
 
-  if (isExpired) {
-    const hasBrilliant = game.brilliant_count > 0;
+  const hasAnnotations = game.clip_count > 0;
 
+  if (isExpired) {
     return (
       <div
         className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
@@ -1364,29 +1364,19 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
             </div>
           </div>
 
-          {hasBrilliant && hasRecap && (
+          {hasAnnotations && (
             <button
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('highlights'); }}
+              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
               className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
+              title="Watch the recap (annotations and highlights)"
             >
-              <Star size={18} />
-              Highlights
+              <Play size={18} />
+              Recap
             </button>
           )}
         </div>
 
         <div className="mt-2 flex items-center justify-center gap-2">
-          {hasRecap && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Play}
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
-              title="Watch all annotated clips"
-            >
-              Annotations
-            </Button>
-          )}
           {canExtend && (
             <Button
               variant="ghost"
@@ -1398,15 +1388,6 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
               Extend Storage
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Share2}
-            onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-            title="Share game"
-          >
-            Share
-          </Button>
           <Button
             variant={showDeleteConfirm ? 'danger' : 'ghost'}
             size="sm"
@@ -1487,15 +1468,17 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
               className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
               title="Edit game details"
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Share2}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-              className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
-              title="Share game"
-            />
+            {!isExpired && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Share2}
+                iconOnly
+                onClick={(e) => { e.stopPropagation(); onShare?.(); }}
+                className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+                title="Share game"
+              />
+            )}
             <Button
               variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"

@@ -35,6 +35,7 @@ from app.storage import (
     generate_presigned_url,
     r2_head_object_global,
     download_from_r2,
+    file_exists_in_r2,
 )
 from app.user_context import get_current_user_id
 from app.profile_context import get_current_profile_id
@@ -1005,27 +1006,89 @@ def _compute_recap_clips(game_id: int):
     return result
 
 
+def _compute_game_clips(game_id: int):
+    """Clips with timestamps relative to the GAME video (not a stitched recap).
+
+    Field names mirror _compute_recap_clips (recap_start / recap_end) because the
+    recap viewer's useRecapPlayback consumes those keys; here they carry the
+    game-relative clip start/end so the same player can seek each clip inside the
+    full game video. Ordered by (video_sequence, start_time) via _get_annotated_clips.
+    """
+    from app.services.auto_export import _get_annotated_clips
+
+    result = []
+    for clip in _get_annotated_clips(game_id):
+        if clip['start_time'] is None or clip['end_time'] is None:
+            continue
+        result.append({
+            'id': clip['id'],
+            'name': clip['name'],
+            'rating': clip['rating'],
+            'tags': decode_data(clip['tags']) or [],
+            'notes': clip['notes'] or '',
+            'recap_start': round(clip['start_time'], 3),
+            'recap_end': round(clip['end_time'], 3),
+        })
+    return result
+
+
 @router.get("/{game_id:int}/recap-data")
 async def get_recap_data(game_id: int):
-    """Get recap video URL and clip timeline data for the recap viewer."""
+    """Get a playable video URL + clip timeline for the recap / annotation viewer.
+
+    Resolution order (robust for expired in-grace games whose stitched recap may
+    never have existed):
+      1. Stitched recap exists in R2  -> recap url + recap-relative clips.
+      2. Else game video exists in R2 -> game video url + game-relative clips.
+      3. Else (post-grace hard-delete) -> url=None + clips so the modal lists them.
+
+    Only 404s when the game row itself is missing. video_kind tells the client
+    which source was chosen ('recap' | 'game' | None).
+    """
     with get_db_connection() as conn:
         cursor = conn.cursor()
         game = cursor.execute(
-            "SELECT recap_video_url FROM games WHERE id = ?",
+            "SELECT blake3_hash, video_filename, recap_video_url FROM games WHERE id = ?",
             (game_id,),
         ).fetchone()
 
-    if not game or not game['recap_video_url']:
-        raise HTTPException(status_code=404, detail="No recap video")
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
 
     user_id = get_current_user_id()
-    url = generate_presigned_url(user_id, game['recap_video_url'], expires_in=14400)
+    recap_key = game['recap_video_url']
+    blake3 = game['blake3_hash']
+    game_video_key = f"games/{blake3}.mp4" if blake3 else None
 
-    clips = _try_load_recap_mapping(user_id, game_id)
-    if clips is None:
-        clips = _compute_recap_clips(game_id)
+    recap_exists = bool(recap_key) and file_exists_in_r2(user_id, recap_key)
+    game_video_exists = bool(game_video_key) and (r2_head_object_global(game_video_key) is not None)
 
-    return {"url": url, "clips": clips}
+    if recap_exists:
+        url = generate_presigned_url(user_id, recap_key, expires_in=14400)
+        clips = _try_load_recap_mapping(user_id, game_id)
+        if clips is None:
+            clips = _compute_recap_clips(game_id)
+        video_kind = 'recap'
+        source = f"recap ({recap_key})"
+    elif game_video_exists:
+        url = get_game_video_url(blake3, game['video_filename'])
+        clips = _compute_game_clips(game_id)
+        video_kind = 'game'
+        source = f"game video ({game_video_key})"
+    else:
+        url = None
+        clips = _compute_game_clips(game_id)
+        video_kind = None
+        source = "none (video unavailable post-grace)"
+
+    logger.info(
+        f"[recap-data] game={game_id} "
+        f"recap_key={recap_key!r} recap_exists={recap_exists} "
+        f"game_video_key={game_video_key!r} game_video_exists={game_video_exists} "
+        f"-> source={source}, video_kind={video_kind}, clips={len(clips)}"
+    )
+
+    return {"url": url, "clips": clips, "video_kind": video_kind}
 
 
 @router.get("/{game_id:int}/brilliant-clips")
@@ -1648,6 +1711,30 @@ async def save_playhead(game_id: int, body: PlayheadRequest):
     return {"success": True}
 
 
+def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
+    """Return True if a game's storage has expired.
+
+    Mirrors the is_expired computation in list_games (~L877-884): reads
+    storage_expires_at from game_storage (per-profile SQLite) and compares to
+    utcnow(). Used to gate sharing of expired games. Annotation/recap playback
+    is intentionally NOT gated -- those endpoints stay open for expired games.
+    """
+    if not blake3_hash:
+        return False
+    row = cursor.execute(
+        "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+        (blake3_hash,),
+    ).fetchone()
+    if not row or not row["storage_expires_at"]:
+        return False
+    expires_at_val = row["storage_expires_at"]
+    try:
+        exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
+        return exp_dt.replace(tzinfo=None) < datetime.utcnow()
+    except (ValueError, TypeError):
+        return False
+
+
 class ShareGameRequest(BaseModel):
     emails: list[str]
 
@@ -1690,6 +1777,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
             gv_row = cursor.fetchone()
             if gv_row:
                 game_blake3 = gv_row["blake3_hash"]
+
+        if _is_game_storage_expired(cursor, game_blake3):
+            raise HTTPException(
+                status_code=410,
+                detail="Storage expired - extend storage to share this game.",
+            )
 
     email_results = []
     all_sent = True
@@ -1832,6 +1925,12 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
             gv_row = cursor.fetchone()
             if gv_row:
                 game_blake3 = gv_row["blake3_hash"]
+
+        if _is_game_storage_expired(cursor, game_blake3):
+            raise HTTPException(
+                status_code=410,
+                detail="Storage expired - extend storage to share this game.",
+            )
 
         cursor.execute(
             """SELECT id, rating, tags, name, notes, start_time, end_time, video_sequence
