@@ -716,16 +716,14 @@ HTML = r"""<!DOCTYPE html>
     padding: 12px 16px; font-size: 13px; white-space: pre-wrap; max-height: 400px;
     overflow-y: auto; margin-top: 8px; line-height: 1.6; color: var(--text-dim);
   }
-  .task-detail .load-btn, .task-detail .copy-details-btn, .task-detail .gen-prompt-btn, .task-detail .open-editor-btn {
+  .task-detail .load-btn, .task-detail .copy-details-btn, .task-detail .open-editor-btn {
     background: none; border: 1px solid var(--border); color: var(--accent);
     padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
     margin-top: 4px;
   }
-  .task-detail .load-btn:hover, .task-detail .copy-details-btn:hover, .task-detail .gen-prompt-btn:hover, .task-detail .open-editor-btn:hover {
+  .task-detail .load-btn:hover, .task-detail .copy-details-btn:hover, .task-detail .open-editor-btn:hover {
     border-color: var(--accent); background: rgba(88,166,255,0.05);
   }
-  .task-detail .gen-prompt-btn { color: var(--green); border-color: var(--green); }
-  .task-detail .gen-prompt-btn:hover { background: rgba(63,185,80,0.1); }
   .task-detail .open-editor-btn { color: #f0883e; border-color: #f0883e; }
   .task-detail .open-editor-btn:hover { background: rgba(240,136,62,0.1); }
   .detail-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
@@ -1515,8 +1513,6 @@ function buildTaskCard(t, ms) {
         ${t.link ? '<button class="open-editor-btn" title="Open in Notepad++">&#9998; Edit</button>' : ''}
         ${t.link ? '<button class="load-btn">Load details</button>' : ''}
         ${t.link ? '<button class="copy-details-btn">Copy details</button>' : ''}
-        ${t.link ? '<button class="gen-prompt-btn">Copy kickoff prompt</button>' : ''}
-        <button class="sandbox-cmd-btn" title="Copy the command to open a permission-free sandbox for this task">&#128274; Sandbox cmd</button>
       </div>
     </div>
   `;
@@ -1553,7 +1549,7 @@ function buildTaskCard(t, ms) {
   };
 
   card.addEventListener('click', (e) => {
-    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.status-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.gen-prompt-btn') || e.target.closest('.sandbox-cmd-btn') || e.target.closest('.open-editor-btn')) return;
+    if (e.target.closest('.drag-handle') || e.target.closest('.delete-btn') || e.target.closest('.task-epic-btn') || e.target.closest('.status-btn') || e.target.closest('.load-btn') || e.target.closest('.task-id') || e.target.closest('.copy-details-btn') || e.target.closest('.open-editor-btn')) return;
     card.classList.toggle('expanded');
   });
 
@@ -1582,38 +1578,6 @@ function buildTaskCard(t, ms) {
       if (content) {
         const text = `## ${t.id}: ${t.name}\n\n${content}`;
         copyToClipboard(text, copyDetailsBtn);
-      }
-    };
-  }
-
-  const sandboxBtn = card.querySelector('.sandbox-cmd-btn');
-  if (sandboxBtn) {
-    sandboxBtn.onclick = (e) => {
-      e.stopPropagation();
-      // Paste this in a Git Bash terminal at the repo root to open a
-      // permission-free sandbox container for this task. Run it again (another
-      // terminal) to open a 2nd conversation on the SAME task/files.
-      const cmd = 'bash scripts/task.sh ' + t.id;
-      copyToClipboard(cmd, sandboxBtn);
-      sandboxBtn.textContent = 'Copied!';
-      setTimeout(() => { sandboxBtn.innerHTML = '&#128274; Sandbox cmd'; }, 2000);
-    };
-  }
-
-  const genPromptBtn = card.querySelector('.gen-prompt-btn');
-  if (genPromptBtn) {
-    genPromptBtn.onclick = async (e) => {
-      e.stopPropagation();
-      genPromptBtn.textContent = 'Loading...';
-      const content = await fetchTaskContent(t.link);
-      if (content) {
-        const prompt = buildKickoffPrompt(t.id, t.name, content);
-        copyToClipboard(prompt, genPromptBtn);
-        genPromptBtn.textContent = 'Copied!';
-        setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
-      } else {
-        genPromptBtn.textContent = 'Failed to load';
-        setTimeout(() => { genPromptBtn.textContent = 'Copy kickoff prompt'; }, 2000);
       }
     };
   }
@@ -2281,14 +2245,6 @@ async function fetchTaskContent(link) {
     }
   } catch(e) {}
   return null;
-}
-
-function buildKickoffPrompt(id, name, taskContent) {
-  return `Create a detailed kickoff prompt I can use in a fresh AI session to implement the following task. Read CLAUDE.md for project context, coding standards, and workflow rules.
-
-## Task: ${id} -- ${name}
-
-${taskContent}`;
 }
 
 async function load() {
