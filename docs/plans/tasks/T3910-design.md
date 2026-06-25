@@ -191,17 +191,11 @@ authoritative result (single write path; no duplicated geometry in two languages
 
 ---
 
-## Open Questions (need your call)
+## Resolved Decisions (user-approved 2026-06-24)
 
-1. **Selector placement.** Recommended: the Framing desktop **controls bar**
-   (`FramingModeView.jsx:292`, alongside Background/Zoom). Acceptable alternative: next to the
-   Export button. Mobile: show read-only or include in the mobile controls? (Recommend desktop
-   controls bar + read-only chip on mobile for now.)
-2. **Confirm storage stays per-reel** (`projects.aspect_ratio`, no per-clip ratio column). I
-   recommend **yes** (avoids redundant state).
-3. **UI affordance.** Changing ratio re-frames every clip — do you want a confirm step for
-   multi-clip reels, or apply immediately (recommended: immediate, it's non-destructive/center-
-   preserving and re-fit is reversible by switching back)?
-4. **`projects` ratio update home.** New dedicated `POST .../aspect-ratio` action
-   (recommended) vs. folding re-fit into the existing `PUT /projects/{id}` (rejected: that
-   endpoint is also used by plain rename and must not re-fit on every save).
+1. **Selector placement:** Framing desktop **controls bar** (`FramingModeView.jsx:292`,
+   alongside Background/Zoom). Read-only ratio chip on mobile for now.
+2. **Storage stays per-reel:** `projects.aspect_ratio`, no per-clip ratio column.
+3. **Apply behavior:** apply **immediately** (non-destructive, center-preserving, reversible).
+4. **Ratio update home:** new dedicated `POST /api/clips/projects/{id}/aspect-ratio` action
+   (not folded into `PUT /projects/{id}`, which plain rename uses and must not re-fit).

@@ -13,7 +13,7 @@ from app.main import app
 from app.database import get_db_connection
 from app.user_context import set_current_user_id
 from app.profile_context import set_current_profile_id
-from app.utils.encoding import decode_data
+from app.utils.encoding import decode_data, encode_data
 from app.session_init import _init_cache
 
 TEST_USER_ID = f"test_framing_{uuid.uuid4().hex[:8]}"
@@ -449,3 +449,199 @@ class TestFramingActions:
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
             frames = [kf["frame"] for kf in decode_data(cursor.fetchone()[0])]
             assert 55 not in frames
+
+
+@pytest.fixture
+def multi_clip_project():
+    """Project with TWO 1920x1080 clips, each holding an off-center 9:16 crop keyframe.
+
+    Yields (project_id, [clip_a_id, clip_b_id]). Clips start at aspect_ratio '9:16'.
+    """
+    set_current_user_id(TEST_USER_ID)
+    set_current_profile_id(TEST_PROFILE_ID)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('Multi Reel', '9:16')")
+        project_id = cursor.lastrowid
+
+        # Centered 9:16 box: width=608, height=1080 in a 1920x1080 frame -> x=656, y=0.
+        # center = (960, 540). Re-fit to 16:9 (640x360) -> x=640, y=360 (no clamp).
+        clip_a_crop = [{"frame": 0, "x": 656, "y": 0, "width": 608, "height": 1080, "origin": "permanent"}]
+        # Off-center box pushed to top-left: center=(235, 340). Re-fit to 16:9 (640x360) ->
+        # x = round(235-320) = -85 -> clamp 0 ; y = round(340-180) = 160.
+        clip_b_crop = [
+            {"frame": 0, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "permanent"},
+            {"frame": 90, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "user"},
+        ]
+
+        clip_ids = []
+        for crop in (clip_a_crop, clip_b_crop):
+            cursor.execute("""
+                INSERT INTO working_clips (
+                    project_id, uploaded_filename, version, crop_data, segments_data, width, height, fps
+                ) VALUES (?, ?, 1, ?, NULL, 1920, 1080, 30)
+            """, (project_id, f"clip_{len(clip_ids)}.mp4", encode_data(crop)))
+            clip_ids.append(cursor.lastrowid)
+
+        conn.commit()
+        yield project_id, clip_ids
+
+        cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+        cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        conn.commit()
+
+
+class TestSetProjectAspectRatio:
+    """T3910: reel-level aspect-ratio change re-fits all clips."""
+
+    def _crop(self, clip_id):
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (clip_id,))
+            return decode_data(cursor.fetchone()[0])
+
+    def _project_ratio(self, project_id):
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,))
+            return cursor.fetchone()[0]
+
+    def test_updates_project_ratio_and_refits_all_clips(self, multi_clip_project):
+        project_id, (clip_a, clip_b) = multi_clip_project
+
+        response = client.post(
+            f"/api/clips/projects/{project_id}/aspect-ratio",
+            json={"aspect_ratio": "16:9"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["success"] is True
+        assert body["aspect_ratio"] == "16:9"
+        assert body["updated_clip_count"] == 2
+
+        # Reel ratio persisted.
+        assert self._project_ratio(project_id) == "16:9"
+
+        # Every clip's boxes are now the 16:9 default size.
+        for clip_id in (clip_a, clip_b):
+            for kf in self._crop(clip_id):
+                assert kf["width"] == 640
+                assert kf["height"] == 360
+
+    def test_refit_preserves_center_when_unclamped(self, multi_clip_project):
+        project_id, (clip_a, _clip_b) = multi_clip_project
+        client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})
+
+        kf = self._crop(clip_a)[0]
+        # center stays (960, 540): 640+640/2 == 960, 360+360/2 == 540
+        assert kf["x"] == 640 and kf["y"] == 360
+
+    def test_refit_clamps_to_frame_bounds(self, multi_clip_project):
+        project_id, (_clip_a, clip_b) = multi_clip_project
+        client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})
+
+        kf = self._crop(clip_b)[0]
+        # x would be negative (-85) so clamped to 0; y = 160 within bounds.
+        assert kf["x"] == 0 and kf["y"] == 160
+
+    def test_refit_preserves_frame_and_origin(self, multi_clip_project):
+        project_id, (_clip_a, clip_b) = multi_clip_project
+        client.post(f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"})
+
+        kfs = self._crop(clip_b)
+        assert [kf["frame"] for kf in kfs] == [0, 90]
+        assert [kf["origin"] for kf in kfs] == ["permanent", "user"]
+
+    def test_empty_crop_clip_left_untouched(self, multi_clip_project):
+        project_id, _clips = multi_clip_project
+        # Add a third clip with no crop data.
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO working_clips (project_id, uploaded_filename, version, crop_data, width, height, fps)
+                VALUES (?, 'empty.mp4', 1, NULL, 1920, 1080, 30)
+            """, (project_id,))
+            empty_id = cursor.lastrowid
+            conn.commit()
+
+        response = client.post(
+            f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
+        )
+        # Only the two clips WITH crop data are counted as updated.
+        assert response.json()["updated_clip_count"] == 2
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (empty_id,))
+            assert cursor.fetchone()[0] is None
+
+    def test_clip_missing_dimensions_skipped(self):
+        """A clip with crop data but no stored width/height is skipped (can't re-center)."""
+        set_current_user_id(TEST_USER_ID)
+        set_current_profile_id(TEST_PROFILE_ID)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('NoDims', '9:16')")
+            project_id = cursor.lastrowid
+            crop = [{"frame": 0, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "permanent"}]
+            cursor.execute("""
+                INSERT INTO working_clips (project_id, uploaded_filename, version, crop_data, width, height, fps)
+                VALUES (?, 'nodims.mp4', 1, ?, NULL, NULL, NULL)
+            """, (project_id, encode_data(crop)))
+            clip_id = cursor.lastrowid
+            conn.commit()
+
+        try:
+            response = client.post(
+                f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
+            )
+            assert response.status_code == 200
+            assert response.json()["updated_clip_count"] == 0
+            # Crop unchanged (still the original 270x480 box).
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT crop_data, aspect_ratio FROM working_clips wc "
+                               "JOIN projects p ON p.id = wc.project_id WHERE wc.id = ?", (clip_id,))
+                row = cursor.fetchone()
+                assert decode_data(row[0])[0]["width"] == 270
+                # Reel ratio still updated even though no clip was re-fit.
+                assert row["aspect_ratio"] == "16:9"
+        finally:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
+                cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+                conn.commit()
+
+    def test_single_clip_project_refits_one_clip(self, test_project_with_clip):
+        """Single-clip behaviour: the one clip is re-fit, same path as multi-clip."""
+        project_id, clip_id = test_project_with_clip
+        # Give the single clip a crop + dimensions.
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            crop = [{"frame": 0, "x": 656, "y": 0, "width": 608, "height": 1080, "origin": "permanent"}]
+            cursor.execute(
+                "UPDATE working_clips SET crop_data = ?, width = 1920, height = 1080, fps = 30 WHERE id = ?",
+                (encode_data(crop), clip_id),
+            )
+            conn.commit()
+
+        response = client.post(
+            f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
+        )
+        assert response.json()["updated_clip_count"] == 1
+        kf = self._crop(clip_id)[0]
+        assert (kf["width"], kf["height"]) == (640, 360)
+
+    def test_invalid_aspect_ratio_rejected(self, multi_clip_project):
+        project_id, _clips = multi_clip_project
+        response = client.post(
+            f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "banana"}
+        )
+        assert response.status_code == 400
+        assert self._project_ratio(project_id) == "9:16"  # unchanged
+
+    def test_unknown_project_404(self):
+        response = client.post(
+            "/api/clips/projects/99999999/aspect-ratio", json={"aspect_ratio": "16:9"}
+        )
+        assert response.status_code == 404

@@ -32,6 +32,7 @@ from app.services.pg import get_pg
 from app.analytics import record_milestone
 from app.utils.encoding import encode_data, decode_data
 from app.utils.clip_range import normalize_clip_range
+from app.services.default_crop import refit_crop_keyframes
 
 logger = logging.getLogger(__name__)
 
@@ -539,6 +540,95 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
         except Exception as e:
             logger.error(f"[Framing Action] Error: {e}", exc_info=True)
             return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
+
+
+class AspectRatioChange(BaseModel):
+    """Request body for a reel-level aspect-ratio change (T3910)."""
+    aspect_ratio: str
+
+
+def _parse_aspect_ratio(value: str) -> tuple[int, int]:
+    """Parse a 'W:H' aspect ratio into positive ints, or raise ValueError."""
+    try:
+        w_str, h_str = value.split(":")
+        w, h = int(w_str), int(h_str)
+    except (ValueError, AttributeError):
+        raise ValueError(f"Invalid aspect ratio: {value!r} (expected 'W:H')")
+    if w <= 0 or h <= 0:
+        raise ValueError(f"Invalid aspect ratio: {value!r} (W and H must be positive)")
+    return w, h
+
+
+@router.post("/projects/{project_id}/aspect-ratio")
+async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
+    """Change a reel's aspect ratio and re-fit every clip's crop to it (T3910).
+
+    Aspect ratio is stored once per reel (projects.aspect_ratio). Picking a new ratio in Framing
+    is a single gesture that applies to ALL clips: we update the project ratio and re-fit each
+    latest-version clip's crop keyframes (center-preserving, clamped — see refit_crop_keyframes)
+    so framing work is kept, not discarded.
+
+    Surgical: only the changed ratio + the re-fit crop boxes are written, in place (no version
+    bump). Clips with no crop keyframes are left empty — export applies the new ratio's centered
+    default to them automatically. Clips missing stored dimensions are skipped (logged), since a
+    box can't be re-centered without knowing the frame size.
+    """
+    try:
+        _parse_aspect_ratio(body.aspect_ratio)
+    except ValueError as e:
+        return JSONResponse(status_code=400, content={"success": False, "error": str(e)})
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT aspect_ratio FROM projects WHERE id = ?", (project_id,))
+        project = cursor.fetchone()
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Update the canonical reel ratio.
+        cursor.execute(
+            "UPDATE projects SET aspect_ratio = ? WHERE id = ?",
+            (body.aspect_ratio, project_id),
+        )
+
+        # Re-fit every latest-version clip that has crop keyframes.
+        cursor.execute(f"""
+            SELECT id, crop_data, width, height
+            FROM working_clips wc
+            WHERE wc.project_id = ?
+            AND wc.id IN ({latest_working_clips_subquery()})
+        """, (project_id, project_id))
+        clips = cursor.fetchall()
+
+        updated_count = 0
+        for clip in clips:
+            crop_keyframes = decode_data(clip['crop_data']) or []
+            if not crop_keyframes:
+                # Uncropped clip: export defaults it to the new ratio, nothing to persist.
+                continue
+
+            width, height = clip['width'], clip['height']
+            if not width or not height:
+                logger.warning(
+                    f"[Aspect Ratio] Clip {clip['id']} has crop data but no stored dimensions; "
+                    f"skipping re-fit (re-export the clip to populate width/height)."
+                )
+                continue
+
+            refit = refit_crop_keyframes(crop_keyframes, width, height, body.aspect_ratio)
+            cursor.execute(
+                "UPDATE working_clips SET crop_data = ? WHERE id = ?",
+                (encode_data(refit), clip['id']),
+            )
+            updated_count += 1
+
+        conn.commit()
+        logger.info(
+            f"[Aspect Ratio] project={project_id} -> {body.aspect_ratio}, "
+            f"re-fit {updated_count}/{len(clips)} clips"
+        )
+        return {"success": True, "aspect_ratio": body.aspect_ratio, "updated_clip_count": updated_count}
 
 
 # ============ RAW CLIPS (LIBRARY) ============

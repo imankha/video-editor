@@ -37,6 +37,46 @@ def default_crop_size(video_width: int, video_height: int, aspect_ratio: str) ->
     return int(crop_w), int(crop_h)
 
 
+def refit_crop_keyframes(keyframes: list[dict], video_width: int, video_height: int,
+                         new_aspect_ratio: str) -> list[dict]:
+    """Re-fit existing crop keyframes to a new aspect ratio, preserving framing (T3910).
+
+    For each keyframe we keep the box CENTER (where the user pointed the crop), swap in the
+    ratio-correct box size for ``new_aspect_ratio``, and clamp the repositioned box to the video
+    bounds. ``frame`` and ``origin`` are copied verbatim so keyframe origins are never corrupted
+    (the permanent frame-0 boundary stays permanent — see T350/T2000).
+
+    This is the "re-fit, don't discard" behaviour: changing the reel ratio keeps each clip's
+    framing position instead of snapping every box back to centered default.
+
+    Returns a NEW list; the input is not mutated. Keyframes missing box geometry are passed
+    through unchanged (we can't re-center a box we can't measure).
+    """
+    new_w, new_h = default_crop_size(video_width, video_height, new_aspect_ratio)
+    max_x = max(0, video_width - new_w)
+    max_y = max(0, video_height - new_h)
+
+    refit = []
+    for kf in keyframes:
+        x, y = kf.get("x"), kf.get("y")
+        w, h = kf.get("width"), kf.get("height")
+        if None in (x, y, w, h):
+            # No box geometry — leave the keyframe as-is rather than guessing a center.
+            refit.append(dict(kf))
+            continue
+
+        center_x = x + w / 2
+        center_y = y + h / 2
+        new_x = min(max(round(center_x - new_w / 2), 0), max_x)
+        new_y = min(max(round(center_y - new_h / 2), 0), max_y)
+
+        new_kf = dict(kf)
+        new_kf.update({"x": new_x, "y": new_y, "width": new_w, "height": new_h})
+        refit.append(new_kf)
+
+    return refit
+
+
 def default_crop_keyframes(video_width: int, video_height: int, aspect_ratio: str,
                            total_frames: int = 1) -> list[dict]:
     """Frame-based keyframes for a static, centered default crop.
