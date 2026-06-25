@@ -135,6 +135,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // runs once and clears sessionStorage, so we stash the value here and let a
   // separate effect select the matching clip region once clips have loaded.
   const pendingSourceClipIdRef = useRef(null);
+  // T3960: bounds the select-on-load retry loop so a clip that can never land
+  // (e.g. video never becomes seekable) can't spin the effect forever.
+  const pendingSourceSelectAttemptsRef = useRef(0);
 
   // Handlers
   const handleBackToProjects = useCallback(() => {
@@ -371,6 +374,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       // T3960: remember the reel's source clip so we can re-select it in the
       // Clips sidebar once clipRegions finish loading (see effect below).
       pendingSourceClipIdRef.current = pending.sourceClipId;
+      pendingSourceSelectAttemptsRef.current = 0;
       // [T3960] TEMP diagnostic (branch-only): pending consumed, ref stored.
       console.log('[T3960] AnnotateScreen consumed pending', {
         gameId: pending.gameId,
@@ -383,41 +387,121 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     }
   }, [handleLoadGame, annotateVideoUrl]);
 
-  // T3960: once clips load, select the reel's source clip in the Clips sidebar.
-  // The breadcrumb carries the working clip's raw_clips id; loaded regions carry
-  // that same id in rawClipId (backend sends raw_clip_id; see useAnnotate import).
+  // T3960: once clips load AND the video is seekable, select the reel's source
+  // clip in the Clips sidebar. The breadcrumb carries the working clip's
+  // raw_clips id; loaded regions carry that same id in rawClipId (backend sends
+  // raw_clip_id; see useAnnotate import).
+  //
   // We go through handleSelectAnnotateRegion (NOT the raw selectAnnotateRegion):
-  // it selects AND seeks the playhead into the clip. The seek matters — the
-  // playhead-driven auto-deselect effect in AnnotateContainer deselects any clip
-  // whose range doesn't contain the playhead, so a select-without-seek on a fresh
-  // load (playhead at 0) is immediately undone, which is why nothing appeared
-  // selected. The ref is only cleared once a match is found, so a clip whose
-  // rawClipId is populated a render later still gets selected.
+  // it selects AND seeks the playhead into the clip. Two timing hazards:
+  //   1. Seek clamps to 0 if the video element has no duration yet, so the
+  //      playhead lands outside the clip and AnnotateContainer's playhead-driven
+  //      auto-deselect immediately wipes the selection. So we GATE on the video
+  //      being seekable — useVideo's `duration` is set on loadedmetadata and is
+  //      the exact value the seek clamp reads, so `duration > 0` means the seek
+  //      will land at the real clip time instead of clamping to 0.
+  //   2. We only clear pendingSourceClipIdRef once the selection has actually
+  //      STUCK (the clip is selected AND the playhead sits within its range, the
+  //      same range test the auto-deselect effect uses). Until then we keep the
+  //      ref and retry on later renders (video-ready, regions, playhead changes).
+  // A bounded attempt counter prevents an infinite (re)select loop if it can
+  // never land.
   useEffect(() => {
     const sourceClipId = pendingSourceClipIdRef.current;
-    const region = (sourceClipId == null || clipRegions.length === 0)
+    if (sourceClipId == null) return; // nothing pending, or already landed
+
+    const region = clipRegions.length === 0
       ? null
       : clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId);
-    // [T3960] TEMP diagnostic (branch-only): every run of the select effect.
+
+    // useVideo sets `duration` on loadedmetadata; it is the same value the seek
+    // clamp reads, so >0 means a seek will not clamp to 0.
+    const videoSeekable = duration > 0;
+
+    // Has the selection landed and stuck? Mirror AnnotateContainer's auto-deselect
+    // range math (virtual offset in multi-video mode + frame tolerance).
+    let within = false;
+    if (region) {
+      let clipStart = region.startTime;
+      let clipEnd = region.endTime;
+      if (fullTimeline && region.videoSequence) {
+        const offset = fullTimeline.getVideoOffset(region.videoSequence);
+        clipStart += offset;
+        clipEnd += offset;
+      }
+      const FRAME_TOLERANCE = 0.15;
+      within = effectiveCurrentTime >= clipStart - FRAME_TOLERANCE
+        && effectiveCurrentTime <= clipEnd + FRAME_TOLERANCE;
+    }
+    const isSelected = region != null && annotateSelectedRegionId === region.id;
+
+    // [T3960] TEMP diagnostic (branch-only): gate + landing decision each run.
     console.log('[T3960] AnnotateScreen select effect run', {
       clipRegionsLength: clipRegions.length,
       sourceClipId,
       matched: region ? { id: region.id, rawClipId: region.rawClipId } : null,
+      videoSeekable,
+      duration,
+      isSelected,
+      within,
+      effectiveCurrentTime,
+      attempts: pendingSourceSelectAttemptsRef.current,
     });
-    if (sourceClipId == null || clipRegions.length === 0) return;
-    if (region) {
-      pendingSourceClipIdRef.current = null;
-      handleSelectAnnotateRegion(region.id);
-    } else {
-      // No silent fallback (CLAUDE.md): surface the mismatch so a remaining id
-      // shape problem is visible in the browser console. Ref kept set in case
-      // rawClipId populates on a later render.
+
+    if (clipRegions.length === 0) return; // wait for clips to load
+
+    if (!region) {
+      // No silent fallback (CLAUDE.md): surface the mismatch. Ref kept set in
+      // case rawClipId populates on a later render.
       console.warn('[T3960] AnnotateScreen: no clip region matched source clip', {
         sourceClipId,
         availableIds: clipRegions.map(r => ({ id: r.id, rawClipId: r.rawClipId, start_time: r.startTime })),
       });
+      return;
     }
-  }, [clipRegions, handleSelectAnnotateRegion]);
+
+    // Selection has stuck → success. Clear the ref so we stop retrying.
+    if (isSelected && within) {
+      pendingSourceClipIdRef.current = null;
+      console.log('[T3960] AnnotateScreen source clip selection landed', {
+        regionId: region.id,
+        effectiveCurrentTime,
+        attempts: pendingSourceSelectAttemptsRef.current,
+      });
+      return;
+    }
+
+    // Don't (re)select until the video can actually seek without clamping to 0.
+    if (!videoSeekable) {
+      console.log('[T3960] AnnotateScreen waiting for video to be seekable', { duration });
+      return;
+    }
+
+    // Already selected, but the seek hasn't landed the playhead in range yet —
+    // wait for the 'seeked' event rather than re-issuing (which would thrash).
+    if (isSelected) {
+      console.log('[T3960] AnnotateScreen selected, waiting for seek to land', { effectiveCurrentTime });
+      return;
+    }
+
+    // Bound the retry loop.
+    if (pendingSourceSelectAttemptsRef.current >= 40) {
+      pendingSourceClipIdRef.current = null;
+      console.warn('[T3960] AnnotateScreen giving up source-clip select after retries', {
+        sourceClipId,
+        regionId: region.id,
+      });
+      return;
+    }
+
+    // Video is seekable but selection hasn't stuck yet → (re)issue select + seek.
+    pendingSourceSelectAttemptsRef.current += 1;
+    console.log('[T3960] AnnotateScreen issuing select+seek', {
+      regionId: region.id,
+      attempt: pendingSourceSelectAttemptsRef.current,
+    });
+    handleSelectAnnotateRegion(region.id);
+  }, [clipRegions, duration, annotateSelectedRegionId, effectiveCurrentTime, fullTimeline, handleSelectAnnotateRegion]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   // Supports both single-video (file) and multi-video (files array in details)
