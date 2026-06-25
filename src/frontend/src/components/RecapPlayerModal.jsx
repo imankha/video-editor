@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Play } from 'lucide-react';
+import { X, Play, Plus } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -8,6 +8,8 @@ import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
 import { PlaybackControls } from '../modes/annotate/components/PlaybackControls';
 import { SharePlaybackDialog } from './SharePlaybackDialog';
+import { setPendingGame } from '../utils/pendingNavigation';
+import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -35,16 +37,21 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   useEffect(() => {
     let cancelled = false;
 
-    const recapPromise = apiFetch(`${API_BASE}/api/games/${game.id}/recap-data`)
+    const recapUrl = `${API_BASE}/api/games/${game.id}/recap-data`;
+    const recapPromise = apiFetch(recapUrl)
       .then(r => {
-        if (!r.ok) throw new Error('Failed to load recap');
+        if (!r.ok) {
+          const err = new Error('Failed to load recap');
+          err.status = r.status;
+          throw err;
+        }
         return r.json();
       })
       .then(data => {
         if (!cancelled) setRecapData(data);
       })
       .catch(err => {
-        console.error('[RecapPlayerModal] Recap fetch failed:', err.message);
+        console.error('[RecapPlayerModal] recap-data failed', { url: recapUrl, status: err.status });
         if (!cancelled) setRecapError(err.message);
       });
 
@@ -82,23 +89,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     }
   }, []);
 
-  const activeVideoRef = activeTab === 'highlights' ? highlightsVideoRef : recapVideoRef;
-
-  useEffect(() => {
-    if (!isFullscreen) return;
-    const handler = (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        const video = activeVideoRef.current;
-        if (!video) return;
-        if (video.paused) video.play();
-        else video.pause();
-      }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isFullscreen, activeVideoRef]);
-
   const recap = useRecapPlayback(recapVideoRef, recapData?.clips || []);
 
   const highlights = useHighlightsPlayback(
@@ -106,6 +96,74 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     brilliantClips || [],
     getStreamUrl,
   );
+
+  const hasRecapClips = recapData?.clips && recapData.clips.length > 0;
+  const hasHighlights = brilliantClips && brilliantClips.length > 0;
+  const showTabs = hasRecapClips && hasHighlights;
+
+  // Post-grace, an expired game's video is hard-deleted while annotations persist.
+  // Sharing an expired game is blocked (backend 410), so suppress the in-modal share too.
+  const isExpired = game.storage_status === 'expired';
+  // Recap clips exist but the stitched video is gone (post-grace deletion).
+  const recapVideoMissing = hasRecapClips && !recapData?.url;
+
+  const effectiveTab = (!hasRecapClips && hasHighlights) ? 'highlights'
+    : (!hasHighlights && hasRecapClips) ? 'annotations'
+    : activeTab;
+
+  const activeVideoRef = effectiveTab === 'highlights' ? highlightsVideoRef : recapVideoRef;
+
+  // A playable source video exists (in-grace) whenever recap-data resolved a url
+  // (video_kind 'recap' | 'game'); null video_kind means the video is gone post-grace.
+  const canCreateClip = recapData?.video_kind != null;
+
+  // Track play/pause off the *active* video element so the transport icon reflects
+  // real state (incl. autoplay). Re-subscribes when the tab / clip / source changes,
+  // since the highlights <video> remounts per clip (key=activeClipId).
+  const [isPlaying, setIsPlaying] = useState(false);
+  useEffect(() => {
+    const video = activeVideoRef.current;
+    if (!video) { setIsPlaying(false); return; }
+    setIsPlaying(!video.paused);
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    return () => {
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+    };
+    // isLoading is included so the effect re-runs when the spinner clears and the
+    // <video> finally mounts (no other dep changes at that exact transition).
+  }, [activeVideoRef, effectiveTab, isLoading, recapData?.url, highlights.streamUrl, highlights.activeClipId]);
+
+  // Spacebar toggles play/pause while the modal is open. Ignore when focus is on a
+  // control that needs Space (input/textarea/button/contenteditable).
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      const el = e.target;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || el?.isContentEditable) return;
+      const video = activeVideoRef.current;
+      if (!video) return;
+      e.preventDefault();
+      if (video.paused) video.play();
+      else video.pause();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [activeVideoRef]);
+
+  // "Create clip" (Highlights): jump to Annotate for THIS game at the current
+  // playback time, reusing the pendingGame breadcrumb the Annotate-from-reel flow
+  // uses (setPendingGame -> AnnotateScreen consumes gameId + seekTime).
+  const handleCreateClip = useCallback(() => {
+    const t = activeVideoRef.current?.currentTime;
+    setPendingGame(game.id, Number.isFinite(t) ? t : null);
+    useEditorStore.getState().setEditorMode(EDITOR_MODES.ANNOTATE);
+    onClose();
+  }, [game.id, onClose, activeVideoRef]);
 
   const bothFailed = recapError && (!brilliantClips || brilliantClips.length === 0);
   if (bothFailed && !isLoading) {
@@ -132,20 +190,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
       </div>
     );
   }
-
-  const hasRecapClips = recapData?.clips && recapData.clips.length > 0;
-  const hasHighlights = brilliantClips && brilliantClips.length > 0;
-  const showTabs = hasRecapClips && hasHighlights;
-
-  // Post-grace, an expired game's video is hard-deleted while annotations persist.
-  // Sharing an expired game is blocked (backend 410), so suppress the in-modal share too.
-  const isExpired = game.storage_status === 'expired';
-  // Recap clips exist but the stitched video is gone (post-grace deletion).
-  const recapVideoMissing = hasRecapClips && !recapData?.url;
-
-  const effectiveTab = (!hasRecapClips && hasHighlights) ? 'highlights'
-    : (!hasHighlights && hasRecapClips) ? 'annotations'
-    : activeTab;
 
   const highlightsSidebarClips = (brilliantClips || []).map(clip => ({
     id: clip.id,
@@ -291,7 +335,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
               {hasRecapClips && (
                 <div className="flex-shrink-0">
                   <PlaybackControls
-                    isPlaying={recap.isPlaying}
+                    isPlaying={isPlaying}
                     virtualTime={recap.virtualTime}
                     totalVirtualDuration={recap.totalVirtualDuration}
                     segments={recap.segments}
@@ -321,10 +365,21 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             {/* Highlights sidebar — hidden in fullscreen */}
             {!isFullscreen && (
               <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
-                <div className="p-2 border-b border-gray-700">
+                <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2">
                   <span className="text-xs text-gray-400 font-medium">
                     {(brilliantClips || []).length} highlights
                   </span>
+                  {canCreateClip && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Plus}
+                      onClick={handleCreateClip}
+                      title="Create a clip in Annotate at this moment"
+                    >
+                      Create clip
+                    </Button>
+                  )}
                 </div>
                 <div className="flex-1 overflow-y-auto min-h-0">
                   <RecapClipsSidebar
@@ -359,7 +414,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
 
               <div className="flex-shrink-0">
                 <PlaybackControls
-                  isPlaying={highlights.isPlaying}
+                  isPlaying={isPlaying}
                   virtualTime={highlights.virtualTime}
                   totalVirtualDuration={highlights.totalVirtualDuration}
                   segments={highlights.segments}

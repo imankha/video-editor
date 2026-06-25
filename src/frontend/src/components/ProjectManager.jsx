@@ -1386,7 +1386,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
               title="Watch all annotated clips"
             >
-              Playback annotations
+              Recap
             </Button>
           )}
           {canExtend && (
@@ -1400,15 +1400,6 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               Extend Storage
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Share2}
-            disabled
-            title="Storage expired - extend to share"
-          >
-            Share
-          </Button>
           <Button
             variant={showDeleteConfirm ? 'danger' : 'ghost'}
             size="sm"
