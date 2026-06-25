@@ -14,6 +14,7 @@
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
 #   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
+#   bash scripts/task.sh push <id>     # push the task's branch to GitHub (host creds) so you can fetch + test + merge it
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
 #   bash scripts/task.sh nuke <id>     # down + delete the checkout dir
 #   bash scripts/task.sh list          # show all task containers, ports, status
@@ -251,6 +252,29 @@ nuke() {
   [ -d "$dir" ] && rm -rf "$dir" && echo "[task] deleted checkout $dir" >&2 || true
 }
 
+# --- push the task's branch to GitHub so YOU can fetch + test + merge it --------
+# Runs HOST-side git on the checkout dir (which lives on your disk), so it uses
+# your existing GitHub credentials (Credential Manager / GitHub Desktop) -- the
+# container has no push creds. A push sends only COMMITS, so the container's
+# CRLF working-tree noise never goes up. Refuses master/main and shows the
+# diffstat vs the checkout's master first (a huge list = the worker accidentally
+# committed line-ending noise; abort and have it re-commit explicit paths).
+push() {
+  local id="$1"; [ -n "$id" ] || die "usage: task push <id>"
+  local dir; dir="$(taskdir "$id")"
+  [ -d "$dir/.git" ] || die "no checkout at $dir (run 'task up $id' first)"
+  local branch; branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD)"
+  [ "$branch" = "HEAD" ] && die "detached HEAD in $dir; the worker must be on a branch"
+  case "$branch" in master|main) die "refusing to push '$branch' from a task sandbox";; esac
+  local ahead files; ahead="$(git -C "$dir" rev-list --count master.."$branch" 2>/dev/null || echo '?')"
+  files="$(git -C "$dir" diff --name-only master.."$branch" 2>/dev/null | wc -l | tr -d ' ')"
+  echo "[task] $branch: $ahead commit(s), $files file(s) changed vs master. Diffstat:" >&2
+  git -C "$dir" diff --stat master.."$branch" 2>/dev/null | tail -25 >&2
+  echo "[task] pushing $branch to origin (using your host GitHub creds)..." >&2
+  git -C "$dir" push -u origin "$branch" || die "push failed (is host git signed in to GitHub?)"
+  echo "[task] pushed. In GitHub Desktop: Fetch origin -> switch to '$branch' -> test -> PR/merge." >&2
+}
+
 list() {
   printf '%-26s %-10s %-22s %s\n' "CONTAINER" "STATE" "PORTS(host)" "CHECKOUT"
   docker ps -a --filter "name=reel-task-" --format '{{.Names}}\t{{.State}}\t{{.Ports}}' \
@@ -263,12 +287,13 @@ list() {
 # --- dispatch ----------------------------------------------------------------
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  ""|-h|--help) sed -n '2,23p' "$0" ;;
+  ""|-h|--help) sed -n '2,24p' "$0" ;;
   up)     up "$@" >/dev/null ;;
   claude) claude_session "$@" ;;
   stack)  stack "$@" ;;
   test)   e2e_test "$@" ;;
   code)   code_session "$@" ;;
+  push)   push "$@" ;;
   down)   down "$@" ;;
   nuke)   nuke "$@" ;;
   list)   list ;;
