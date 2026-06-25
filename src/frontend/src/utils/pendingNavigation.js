@@ -27,8 +27,6 @@ const PROJECT_CLIP_KEY = 'pendingProjectClipIndex';
 // --- Games (consumed by AnnotateScreen) ---
 
 export function setPendingGame(gameId, seekTime = null, sourceClipId = null) {
-  // [T3960] TEMP diagnostic (branch-only): what gets stored in the breadcrumb.
-  console.log('[T3960] setPendingGame', { gameId, seekTime, sourceClipId });
   sessionStorage.setItem(GAME_ID_KEY, gameId.toString());
   if (seekTime != null) {
     sessionStorage.setItem(GAME_SEEK_KEY, seekTime.toString());
@@ -50,14 +48,11 @@ export function consumePendingGame() {
   sessionStorage.removeItem(GAME_ID_KEY);
   sessionStorage.removeItem(GAME_SEEK_KEY);
   sessionStorage.removeItem(GAME_SOURCE_CLIP_KEY);
-  const consumed = {
+  return {
     gameId: parseInt(gameId),
     seekTime: seekTime != null ? parseFloat(seekTime) : null,
     sourceClipId: sourceClipId != null ? parseInt(sourceClipId) : null,
   };
-  // [T3960] TEMP diagnostic (branch-only): what the consumer receives.
-  console.log('[T3960] consumePendingGame ->', consumed);
-  return consumed;
 }
 
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---
