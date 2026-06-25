@@ -3,6 +3,7 @@ import { Minimize, ArrowLeft, Crop, Move } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
+import AspectRatioSelector from '../components/AspectRatioSelector';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
@@ -201,6 +202,7 @@ export function FramingModeView({
   hasClips,
   clipsWithCurrentState,
   globalAspectRatio,
+  onAspectRatioChange,
   globalTransition,
 
   // Export
@@ -290,6 +292,13 @@ export function FramingModeView({
         {/* Controls Bar - hidden in fullscreen and on mobile */}
         {videoUrl && !isFullscreen && !mobileFs && (
           <div className="hidden lg:flex mb-3 lg:mb-6 gap-4 items-center">
+            {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop. */}
+            <div className="flex items-center gap-2">
+              <AspectRatioSelector
+                aspectRatio={aspectRatio}
+                onAspectRatioChange={onAspectRatioChange}
+              />
+            </div>
             <div className="ml-auto flex items-center gap-2">
               <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-400 mr-2">Background:</span>
@@ -418,9 +427,13 @@ export function FramingModeView({
 
           {/* Mobile-only clip title — minimal, under video */}
           {clipTitle && !isFullscreen && !mobileFs && (
-            <div className="lg:hidden px-2 py-0.5 text-sm text-gray-300 truncate">
-              <span className="font-medium text-white">{clipTitle}</span>
-              {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
+            <div className="lg:hidden flex items-center justify-between gap-2 px-2 py-0.5 text-sm text-gray-300">
+              <div className="truncate">
+                <span className="font-medium text-white">{clipTitle}</span>
+                {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
+              </div>
+              {/* Aspect ratio is reel-wide; read-only on mobile (change it on desktop). */}
+              <AspectRatioSelector aspectRatio={aspectRatio} readOnly />
             </div>
           )}
 

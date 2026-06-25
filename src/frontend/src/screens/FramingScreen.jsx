@@ -52,6 +52,7 @@ export function FramingScreen({
   const saveFramingEdits = useProjectDataStore(state => state.saveFramingEdits);
   const updateClipMetadata = useProjectDataStore(state => state.updateClipMetadata);
   const removeClipFromServer = useProjectDataStore(state => state.removeClip);
+  const changeAspectRatioAction = useProjectDataStore(state => state.changeAspectRatio);
 
   // Framing persistent state
   const {
@@ -101,6 +102,21 @@ export function FramingScreen({
     setGlobalTransition,
     getExportData: getClipExportData,
   } = useClipManager();
+
+  // Reel-level aspect-ratio change (T3910): a single gesture that re-fits every clip's crop
+  // to the new ratio server-side, then refreshes clips + project so the UI reflects the
+  // authoritative re-fit. Surgical (sends only the ratio); no reactive write-back.
+  const handleAspectRatioChange = useCallback(async (newRatio) => {
+    if (!projectId || newRatio === projectAspectRatio) return;
+    const result = await changeAspectRatioAction(projectId, newRatio);
+    if (result?.success) {
+      // Re-fetch the project so projectAspectRatio updates → the useCrop ratio-sync effect
+      // sets the active clip's reticule shape; re-fit boxes arrive via the refreshed clips.
+      await refreshProject();
+    } else if (result?.error) {
+      console.error('[Framing] Aspect ratio change failed:', result.error);
+    }
+  }, [projectId, projectAspectRatio, changeAspectRatioAction, refreshProject]);
 
   // Games — Zustand store (ready-only: pending uploads excluded)
   const games = useReadyGames();
@@ -1164,6 +1180,7 @@ export function FramingScreen({
       hasClips={hasClips}
       clipsWithCurrentState={framingClipsWithCurrentState}
       globalAspectRatio={globalAspectRatio}
+      onAspectRatioChange={handleAspectRatioChange}
       globalTransition={globalTransition}
       exportButtonRef={exportButtonRef}
       getFilteredKeyframesForExport={getFilteredKeyframesForExport}

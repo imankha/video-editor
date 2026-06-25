@@ -161,6 +161,40 @@ export const useProjectDataStore = create((set, get) => ({
     return promise;
   },
 
+  /**
+   * Change the reel-level aspect ratio (T3910).
+   *
+   * Surgical gesture: POSTs only the new ratio. The backend updates projects.aspect_ratio
+   * and re-fits EVERY clip's crop keyframes (center-preserving). On success we refresh the
+   * clip list so the store holds the authoritative re-fit crop_data, and update the runtime
+   * globalAspectRatio used by export. Caller is responsible for refreshing the selected
+   * project (so projectAspectRatio / the crop reticule pick up the new ratio).
+   */
+  changeAspectRatio: async (projectId, newAspectRatio) => {
+    if (!projectId) return { success: false };
+    try {
+      const response = await apiFetch(
+        `${API_BASE_URL}/clips/projects/${projectId}/aspect-ratio`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ aspect_ratio: newAspectRatio }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        return { success: false, error: err.error || `HTTP ${response.status}` };
+      }
+      const result = await response.json();
+      set({ aspectRatio: newAspectRatio });
+      await get().fetchClips(projectId);
+      return result;
+    } catch (err) {
+      console.error('[projectDataStore] changeAspectRatio error:', err);
+      return { success: false, error: err.message };
+    }
+  },
+
   saveFramingEdits: async (projectId, clipId, framingData) => {
     if (!projectId) return { success: false };
 

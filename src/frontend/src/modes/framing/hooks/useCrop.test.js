@@ -91,3 +91,37 @@ describe('useCrop keyframe initialization', () => {
     expect(result.current.keyframes[0].x).toBe(100);
   });
 });
+
+
+describe('useCrop updateAspectRatio (T3910)', () => {
+  it('updates the ratio state without rewriting saved keyframes', () => {
+    // Aspect-ratio change is a reel-level gesture: it re-fits crop server-side and the
+    // re-fit boxes arrive via refreshed savedKeyframes. updateAspectRatio must NOT snap
+    // the active clip's boxes back to the centered default (that discards framing).
+    const { result } = renderHook(() => useCrop(METADATA, null, SAVED_KEYFRAMES));
+    expect(result.current.keyframes.length).toBe(2);
+    const before = result.current.keyframes.map(k => ({ ...k }));
+
+    act(() => {
+      result.current.updateAspectRatio('16:9');
+    });
+
+    expect(result.current.aspectRatio).toBe('16:9');
+    expect(result.current.keyframes).toEqual(before);
+  });
+
+  it('changes the default-crop reticule shape for a clip with no keyframes', () => {
+    // With no saved keyframes the reticule is driven by the default crop, which must
+    // follow the new ratio so the preview matches what export will produce.
+    const { result } = renderHook(() => useCrop(METADATA, null, null));
+    const portrait = result.current.getCropDataAtTime(0);
+    expect(portrait.width).toBeLessThan(portrait.height); // 9:16 default
+
+    act(() => {
+      result.current.updateAspectRatio('16:9');
+    });
+
+    const landscape = result.current.getCropDataAtTime(0);
+    expect(landscape.width).toBeGreaterThan(landscape.height); // 16:9 default
+  });
+});

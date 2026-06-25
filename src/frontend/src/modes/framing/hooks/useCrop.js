@@ -132,7 +132,6 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     keyframes,
     isEndKeyframeExplicit,
     machineState,
-    updateAllKeyframes,
     restoreKeyframes,
     addOrUpdateKeyframe,
     removeKeyframe,
@@ -254,30 +253,19 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
   }, [videoMetadata, aspectRatio, initializeKeyframes, calculateDefaultCrop, framerate, trimRange, machineState]); // eslint-disable-line react-hooks/exhaustive-deps -- machineState replaces needsInitialization (only changes on init/reset/restore, not every keyframe edit)
 
   /**
-   * Update aspect ratio and recalculate all keyframes to the new default crop.
-   * Flat-list model: every keyframe gets the new aspect-ratio default (no special
-   * start/end handling).
+   * Update the active clip's aspect ratio (the reticule shape / crop constraint).
+   *
+   * This ONLY sets the local ratio state. It deliberately does NOT rewrite the crop
+   * keyframes: aspect-ratio changes are a reel-level gesture (T3910) that re-fits every
+   * clip's crop server-side (center-preserving), and the re-fit boxes flow back into this
+   * hook via the refreshed `savedKeyframes` restore path. Rewriting keyframes here would
+   * (a) discard the user's framing by snapping every box to the centered default, and
+   * (b) fight the load-time `projectAspectRatio` sync, resetting framing on every open.
    */
   const updateAspectRatio = useCallback((newRatio) => {
     track('aspect_ratio_change', { from: aspectRatio, to: newRatio }, { debugOnly: true });
     setAspectRatio(newRatio);
-
-    const currentKeyframes = keyframesRef.current;
-
-    if (currentKeyframes.length > 0 && videoMetadata?.width && videoMetadata?.height) {
-      const newCrop = calculateDefaultCrop(
-        videoMetadata.width,
-        videoMetadata.height,
-        newRatio
-      );
-
-      updateAllKeyframes(kf => ({
-        frame: kf.frame,
-        origin: kf.origin || 'user',
-        ...newCrop
-      }));
-    }
-  }, [updateAllKeyframes, videoMetadata, calculateDefaultCrop]);
+  }, [aspectRatio]);
 
   /**
    * Copy the crop keyframe at the specified time
