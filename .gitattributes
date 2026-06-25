@@ -5,3 +5,6 @@
 
 # Windows batch wrappers want CRLF.
 *.bat text eol=crlf
+
+# Git hooks run under bash too -- force LF so the shebang isn't mangled.
+.githooks/* text eol=lf

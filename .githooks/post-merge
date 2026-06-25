@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# ============================================================================
+# post-merge -- auto-clean a task sandbox when its branch lands on master.
+# ============================================================================
+# When a feature/T<id>-* branch is merged into master (via CLI or GitHub Desktop),
+# delete its remote branch and nuke its per-task container/checkout. Best-effort and
+# BACKGROUNDED: it never blocks or fails the merge. Enable once per clone with:
+#     git config core.hooksPath .githooks
+# Logs to /c/tmp/post-merge-cleanup.log.
+#
+# Caveat: GitHub Desktop runs hooks with its own PATH, where `docker` may be absent;
+# in that case the remote branch is still deleted but the container nuke is skipped
+# (run `bash scripts/task.sh nuke <slug>` from a normal shell, or just merge from CLI).
+# ============================================================================
+[ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "master" ] || exit 0
+
+# Only act on merge commits whose merged branch is a task branch.
+subj="$(git log -1 --format=%s HEAD 2>/dev/null)"
+branch="$(printf '%s' "$subj" | grep -oE 'feature/T[0-9]+-[A-Za-z0-9._-]+' | head -1)"
+[ -n "$branch" ] || exit 0
+slug="$(printf '%s' "$branch" | grep -oE 'T[0-9]+' | head -1 | tr 'A-Z' 'a-z')"
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+LOG=/c/tmp/post-merge-cleanup.log
+(
+  echo "=== post-merge cleanup: $branch (slug $slug) ==="
+  git push origin --delete "$branch" 2>&1 || echo "  remote branch already gone / push skipped"
+  if command -v docker >/dev/null 2>&1 && [ -f "$repo_root/scripts/task.sh" ]; then
+    ( cd "$repo_root" && bash scripts/task.sh nuke "$slug" ) 2>&1 || echo "  no container to nuke"
+  else
+    echo "  docker not on PATH here -- skipped container nuke (run: bash scripts/task.sh nuke $slug)"
+  fi
+  echo "=== done $branch ==="
+) >> "$LOG" 2>&1 &
+
+exit 0
