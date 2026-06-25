@@ -378,15 +378,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [handleLoadGame, annotateVideoUrl]);
 
   // T3960: once clips load, select the reel's source clip in the Clips sidebar.
-  // Matches by rawClipId (works for two-half virtual regions). Graceful no-op if
-  // the source clip was deleted. Clears the ref after one attempt so it doesn't
-  // fight a later manual selection.
+  // Matches by rawClipId (works for two-half virtual regions). The ref is only
+  // cleared once a match is found and selected, so a clip whose rawClipId is
+  // populated slightly later (later render pass) still gets selected. Graceful
+  // no-op if the source clip was deleted (ref stays set but never matches).
   useEffect(() => {
     const sourceClipId = pendingSourceClipIdRef.current;
     if (sourceClipId == null || clipRegions.length === 0) return;
-    pendingSourceClipIdRef.current = null;
     const region = clipRegions.find(r => r.rawClipId === sourceClipId);
     if (region) {
+      pendingSourceClipIdRef.current = null;
       selectAnnotateRegion(region.id);
     }
   }, [clipRegions, selectAnnotateRegion]);
