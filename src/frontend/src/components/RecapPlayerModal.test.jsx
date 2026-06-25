@@ -189,3 +189,50 @@ describe('RecapPlayerModal - Share Button', () => {
     });
   });
 });
+
+describe('RecapPlayerModal - expired game (T3970)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch();
+  });
+
+  it('suppresses the in-modal share button for an expired game', async () => {
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    // Clips load, but sharing an expired game is blocked => no share affordance.
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    expect(screen.queryByTitle('Share highlights')).toBeNull();
+  });
+
+  it('keeps the share button for an active game with clips', async () => {
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'active' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByTitle('Share highlights')).toBeTruthy();
+    });
+  });
+
+  it('shows a graceful message when the recap video is gone but annotations persist', async () => {
+    globalThis.fetch = mockFetch({ clips: RECAP_DATA_WITH_CLIPS.clips }); // no `url`
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => {
+      expect(screen.getByText(/no longer available/i)).toBeTruthy();
+    });
+  });
+});

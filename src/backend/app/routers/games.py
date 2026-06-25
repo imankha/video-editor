@@ -1648,6 +1648,30 @@ async def save_playhead(game_id: int, body: PlayheadRequest):
     return {"success": True}
 
 
+def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
+    """Return True if a game's storage has expired.
+
+    Mirrors the is_expired computation in list_games (~L877-884): reads
+    storage_expires_at from game_storage (per-profile SQLite) and compares to
+    utcnow(). Used to gate sharing of expired games. Annotation/recap playback
+    is intentionally NOT gated -- those endpoints stay open for expired games.
+    """
+    if not blake3_hash:
+        return False
+    row = cursor.execute(
+        "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+        (blake3_hash,),
+    ).fetchone()
+    if not row or not row["storage_expires_at"]:
+        return False
+    expires_at_val = row["storage_expires_at"]
+    try:
+        exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
+        return exp_dt.replace(tzinfo=None) < datetime.utcnow()
+    except (ValueError, TypeError):
+        return False
+
+
 class ShareGameRequest(BaseModel):
     emails: list[str]
 
@@ -1690,6 +1714,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
             gv_row = cursor.fetchone()
             if gv_row:
                 game_blake3 = gv_row["blake3_hash"]
+
+        if _is_game_storage_expired(cursor, game_blake3):
+            raise HTTPException(
+                status_code=410,
+                detail="Storage expired - extend storage to share this game.",
+            )
 
     email_results = []
     all_sent = True
@@ -1832,6 +1862,12 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
             gv_row = cursor.fetchone()
             if gv_row:
                 game_blake3 = gv_row["blake3_hash"]
+
+        if _is_game_storage_expired(cursor, game_blake3):
+            raise HTTPException(
+                status_code=410,
+                detail="Storage expired - extend storage to share this game.",
+            )
 
         cursor.execute(
             """SELECT id, rating, tags, name, notes, start_time, end_time, video_sequence

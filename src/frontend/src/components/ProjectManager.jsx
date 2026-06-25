@@ -1235,7 +1235,7 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
 /**
  * GameCard - Individual game in the list
  */
-function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
+export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [actionsRevealed, setActionsRevealed] = useState(false);
   const longPressTimer = useRef(null);
@@ -1319,6 +1319,8 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
     }
   };
 
+  const hasAnnotations = game.clip_count > 0;
+
   if (isExpired) {
     const hasBrilliant = game.brilliant_count > 0;
 
@@ -1376,7 +1378,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
         </div>
 
         <div className="mt-2 flex items-center justify-center gap-2">
-          {hasRecap && (
+          {hasAnnotations && (
             <Button
               variant="ghost"
               size="sm"
@@ -1384,7 +1386,7 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
               onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
               title="Watch all annotated clips"
             >
-              Annotations
+              Playback annotations
             </Button>
           )}
           {canExtend && (
@@ -1402,8 +1404,8 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
             variant="ghost"
             size="sm"
             icon={Share2}
-            onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-            title="Share game"
+            disabled
+            title="Storage expired - extend to share"
           >
             Share
           </Button>
@@ -1487,15 +1489,17 @@ function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEd
               className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
               title="Edit game details"
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Share2}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-              className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
-              title="Share game"
-            />
+            {!isExpired && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Share2}
+                iconOnly
+                onClick={(e) => { e.stopPropagation(); onShare?.(); }}
+                className={isMobile ? '' : 'opacity-0 group-hover:opacity-100'}
+                title="Share game"
+              />
+            )}
             <Button
               variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"

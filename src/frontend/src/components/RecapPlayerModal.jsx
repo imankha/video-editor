@@ -137,6 +137,12 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   const hasHighlights = brilliantClips && brilliantClips.length > 0;
   const showTabs = hasRecapClips && hasHighlights;
 
+  // Post-grace, an expired game's video is hard-deleted while annotations persist.
+  // Sharing an expired game is blocked (backend 410), so suppress the in-modal share too.
+  const isExpired = game.storage_status === 'expired';
+  // Recap clips exist but the stitched video is gone (post-grace deletion).
+  const recapVideoMissing = hasRecapClips && !recapData?.url;
+
   const effectiveTab = (!hasRecapClips && hasHighlights) ? 'highlights'
     : (!hasHighlights && hasRecapClips) ? 'annotations'
     : activeTab;
@@ -261,7 +267,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   ? 'relative flex-1 min-h-0 bg-black'
                   : 'flex-1 flex items-center justify-center bg-black p-2 min-h-0'
               }>
-                {recapData?.url && (
+                {recapData?.url ? (
                   <video
                     ref={recapVideoRef}
                     src={recapData.url}
@@ -271,6 +277,14 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                       : 'max-w-full max-h-full rounded-lg'
                     }
                   />
+                ) : recapVideoMissing && (
+                  <div className="text-center text-gray-400 px-6 py-8 max-w-md">
+                    <p className="text-sm">
+                      This game's video is no longer available
+                      {isExpired ? ' (storage expired)' : ''}. The annotation
+                      details are still listed.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -295,7 +309,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     onPlaybackRateChange={recap.changePlaybackRate}
                     isFullscreen={isFullscreen}
                     onToggleFullscreen={toggleFullscreen}
-                    onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
+                    onShare={!isExpired && recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                     videoController={recapVideoController}
                   />
                 </div>
@@ -363,7 +377,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   onPlaybackRateChange={highlights.changePlaybackRate}
                   isFullscreen={isFullscreen}
                   onToggleFullscreen={toggleFullscreen}
-                  onShare={recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
+                  onShare={!isExpired && recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                   videoController={highlightsVideoController}
                 />
               </div>
