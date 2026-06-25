@@ -11,6 +11,7 @@
 #   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
+#   bash scripts/task.sh code <id>     # open VS Code ATTACHED to the container (GUI Claude -> image paste works)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
 #   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
@@ -198,6 +199,24 @@ e2e_test() {
     bash -lc 'cd /workspace/src/frontend && exec npx playwright test "$@"' _ "$@"
 }
 
+# --- VS Code attached to the container (GUI session -> image paste works) -----
+# A terminal `claude` session can't paste images; the VS Code Claude extension
+# can. This opens a VS Code window ATTACHED to the task's running container, so
+# the extension runs inside it (same /workspace, same bypassPermissions, same
+# seeded auth volume) with full GUI. First attach installs the VS Code server +
+# extensions in the container (~1 min); later attaches are instant.
+code_session() {
+  local id="$1"; [ -n "$id" ] || die "usage: task code <id>"
+  command -v code >/dev/null 2>&1 || die "VS Code 'code' CLI not on PATH"
+  local cn; cn="$(cname "$id")"
+  container_running "$id" || up "$id" >/dev/null
+  # Dev Containers "attach to running container" folder URI: the authority is
+  # attached-container+<hex>, where <hex> is hex-encoded {"containerName":"/<cn>"}.
+  local hex; hex="$(printf '{"containerName":"/%s"}' "$cn" | od -An -tx1 | tr -d ' \n')"
+  echo "[task] opening VS Code attached to $cn:/workspace (use the Claude extension there)..." >&2
+  code --folder-uri "vscode-remote://attached-container+${hex}/workspace"
+}
+
 down() {
   local id="$1"; [ -n "$id" ] || die "usage: task down <id>"
   local cn; cn="$(cname "$id")"
@@ -224,11 +243,12 @@ list() {
 # --- dispatch ----------------------------------------------------------------
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  ""|-h|--help) sed -n '2,22p' "$0" ;;
+  ""|-h|--help) sed -n '2,23p' "$0" ;;
   up)     up "$@" >/dev/null ;;
   claude) claude_session "$@" ;;
   stack)  stack "$@" ;;
   test)   e2e_test "$@" ;;
+  code)   code_session "$@" ;;
   down)   down "$@" ;;
   nuke)   nuke "$@" ;;
   list)   list ;;

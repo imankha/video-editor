@@ -70,5 +70,9 @@ expand step itself and launches the sandbox window pre-fed, so the user does not
   attaches another session to the same container/files.
 - **Run the app / test it:** `bash scripts/task.sh stack <SLUG>` (open the printed port), or
   `bash scripts/task.sh test <SLUG>` to run the Playwright E2E suite headless in the container.
+- **Need image paste / a GUI chat?** A terminal Claude session can't paste images.
+  `bash scripts/task.sh code <SLUG>` opens VS Code ATTACHED to the same container -- run the
+  Claude extension there for full GUI + image paste (still permission-free). The kickoff prompt
+  is at `/workspace/.dotask-kickoff.md` inside the container if you want to reference it there.
 - **Bugs:** for a bug id use the bug-triage skill to assemble context first, then write that as
   the prompt file and launch with a `bug-<id>` SLUG.
