@@ -1,6 +1,6 @@
 # T3930: Ranking Card Game Minute — Apply 2nd-Half Offset
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-06-24
