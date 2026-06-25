@@ -30,3 +30,7 @@ fi
 if [ -f "$HOME/.claude.json" ] && [ ! -f "$HOME/.claude/.claude.json" ]; then
   mv "$HOME/.claude.json" "$HOME/.claude/.claude.json"
 fi
+
+# /workspace is a bind mount owned by a different uid than `dev`, so git refuses
+# it ("detected dubious ownership"). Mark it safe so the worker can branch/commit.
+git config --global --add safe.directory /workspace 2>/dev/null || true

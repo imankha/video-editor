@@ -40,14 +40,16 @@ Turn a planned task into a working container session with no copy-paste and no G
    `Implement T<id>: <title>`; tell the worker to follow the standard workflow (classify -> branch
    -> implement -> test) and NOT to change task statuses (the user promotes manually).
 
-4. **Write the prompt** to `C:\tmp\kickoff-<SLUG>.md` with the Write tool.
+4. **Write the prompt** to `C:\tmp\kickoff-<SLUG>.md` with the Write tool. (The same file is
+   `/c/tmp/kickoff-<SLUG>.md` in the Bash-tool / Git Bash path form used in step 6 -- pass the
+   FORWARD-SLASH form to bash; a backslash `C:\tmp\...` gets mangled by MSYS into `C:tmp...`.)
 
 5. **Pre-flight Docker.** Run `docker info` (via Bash). If Docker isn't running, tell the user to
    start Docker Desktop and stop here -- containers need it.
 
 6. **Start the worker + open its GUI window** (single command, via Bash):
    ```
-   bash scripts/task.sh code <SLUG> --prompt-file C:\tmp\kickoff-<SLUG>.md
+   bash scripts/task.sh code <SLUG> --prompt-file /c/tmp/kickoff-<SLUG>.md
    ```
    This: ensures the container is up (first run builds the image + installs deps, a few minutes),
    seeds the kickoff to `/workspace/.dotask-kickoff.md` inside it, and opens a VS Code window
@@ -63,7 +65,7 @@ Turn a planned task into a working container session with no copy-paste and no G
 ## Notes
 
 - **Terminal worker instead (hands-off/autonomous):** `bash scripts/task.sh <SLUG> --prompt-file
-  C:\tmp\kickoff-<SLUG>.md` launches a CLI Claude session pre-fed with the prompt (no GUI, no image
+  /c/tmp/kickoff-<SLUG>.md` launches a CLI Claude session pre-fed with the prompt (no GUI, no image
   paste). Use only when you don't need to chat with the worker.
 - **Second window on the same task:** `bash scripts/task.sh code <SLUG>` (no prompt file) attaches
   another VS Code window to the same container/files.

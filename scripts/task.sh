@@ -193,6 +193,11 @@ e2e_test() {
     echo "[task] servers did not come up in time; see /tmp/backend.log /tmp/frontend.log" >&2
     exit 1
   ' || die "stack failed to start; check logs with: bash scripts/task.sh claude $id  then reduce_log /tmp/backend.log"
+  # Self-heal the browser: the image bakes chromium for the pinned @playwright/test
+  # (1.57). If that version ever drifts, this downloads ONLY the matching browser
+  # (system libs are already baked, so it's fast); a no-op when it already matches.
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" \
+    bash -lc 'cd /workspace/src/frontend && npx playwright install chromium' >/dev/null 2>&1 || true
   echo "[task] running Playwright E2E (headless chromium) in $cn..." >&2
   # Pass through any extra args (e.g. --grep @smoke, a spec path).
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" \
