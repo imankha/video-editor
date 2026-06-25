@@ -11,7 +11,7 @@
 #   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
-#   bash scripts/task.sh code <id>     # open VS Code ATTACHED to the container (GUI Claude -> image paste works)
+#   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
 #   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
@@ -206,15 +206,30 @@ e2e_test() {
 # seeded auth volume) with full GUI. First attach installs the VS Code server +
 # extensions in the container (~1 min); later attaches are instant.
 code_session() {
-  local id="$1"; [ -n "$id" ] || die "usage: task code <id>"
+  local id="$1"; shift || true; [ -n "$id" ] || die "usage: task code <id> [--prompt-file <path>]"
+  # Optional: --prompt-file seeds the kickoff into the container so the GUI Claude
+  # session in the attached window can act on it (the user sends one short line).
+  local prompt_file=""
+  if [ "${1:-}" = "--prompt-file" ]; then
+    prompt_file="${2:-}"; shift 2 || true
+    [ -f "$prompt_file" ] || die "prompt file not found: $prompt_file"
+  fi
   command -v code >/dev/null 2>&1 || die "VS Code 'code' CLI not on PATH"
   local cn; cn="$(cname "$id")"
   container_running "$id" || up "$id" >/dev/null
+  if [ -n "$prompt_file" ]; then
+    MSYS_NO_PATHCONV=1 docker exec -i -u dev "$cn" \
+      bash -c 'cat > /workspace/.dotask-kickoff.md' < "$prompt_file" \
+      || die "failed to seed prompt into $cn"
+    echo "[task] seeded kickoff -> $cn:/workspace/.dotask-kickoff.md" >&2
+  fi
   # Dev Containers "attach to running container" folder URI: the authority is
   # attached-container+<hex>, where <hex> is hex-encoded {"containerName":"/<cn>"}.
   local hex; hex="$(printf '{"containerName":"/%s"}' "$cn" | od -An -tx1 | tr -d ' \n')"
-  echo "[task] opening VS Code attached to $cn:/workspace (use the Claude extension there)..." >&2
+  echo "[task] opening VS Code attached to $cn:/workspace (Claude extension there: GUI + image paste)..." >&2
   code --folder-uri "vscode-remote://attached-container+${hex}/workspace"
+  [ -n "$prompt_file" ] && echo "[task] In the new window's Claude panel, send:  Implement /workspace/.dotask-kickoff.md" >&2
+  true
 }
 
 down() {
