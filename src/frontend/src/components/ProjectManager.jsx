@@ -1386,7 +1386,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
               title="Watch all annotated clips"
             >
-              Playback annotations
+              Recap
             </Button>
           )}
           {canExtend && (

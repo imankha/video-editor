@@ -50,10 +50,11 @@ describe('GameCard - expired game (T3970)', () => {
     expect(screen.queryByTitle('Share game')).toBeNull();
   });
 
-  it('exposes a Playback annotations action on an expired card', () => {
+  it('exposes a "Recap" playback action on an expired card', () => {
     const { onPlayRecap } = renderCard({ storage_status: 'expired' });
     const playback = screen.getByTitle('Watch all annotated clips');
-    expect(playback.textContent).toContain('Playback annotations');
+    expect(playback.textContent).toContain('Recap');
+    expect(playback.textContent).not.toContain('Playback annotations');
     playback.click();
     expect(onPlayRecap).toHaveBeenCalledWith('annotations');
   });

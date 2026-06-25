@@ -2,6 +2,20 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RecapPlayerModal } from './RecapPlayerModal';
 
+const { mockSetPendingGame, mockSetEditorMode } = vi.hoisted(() => ({
+  mockSetPendingGame: vi.fn(),
+  mockSetEditorMode: vi.fn(),
+}));
+
+vi.mock('../utils/pendingNavigation', () => ({
+  setPendingGame: mockSetPendingGame,
+}));
+
+vi.mock('../stores/editorStore', () => ({
+  EDITOR_MODES: { ANNOTATE: 'annotate' },
+  useEditorStore: { getState: () => ({ setEditorMode: mockSetEditorMode }) },
+}));
+
 vi.mock('./shared/Toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
@@ -61,8 +75,10 @@ vi.mock('./recap/RecapClipsSidebar', () => ({
 }));
 
 vi.mock('../modes/annotate/components/PlaybackControls', () => ({
-  PlaybackControls: ({ onShare }) => (
+  PlaybackControls: ({ onShare, isPlaying, onTogglePlay }) => (
     <div data-testid="playback-controls">
+      <span data-testid="is-playing">{isPlaying ? 'playing' : 'paused'}</span>
+      <button data-testid="toggle-play" onClick={onTogglePlay}>toggle</button>
       {onShare && <button onClick={onShare} title="Share highlights">Share</button>}
     </div>
   ),
@@ -92,13 +108,13 @@ const RECAP_DATA_NO_CLIPS = {
   download_id: 'dl-456',
 };
 
-function mockFetch(recapData = RECAP_DATA_WITH_CLIPS) {
+function mockFetch(recapData = RECAP_DATA_WITH_CLIPS, highlightClips = []) {
   return vi.fn(async (url) => {
     if (url.includes('/recap-data')) {
       return { ok: true, json: async () => recapData };
     }
     if (url.includes('/brilliant-clips')) {
-      return { ok: true, json: async () => [] };
+      return { ok: true, json: async () => ({ clips: highlightClips }) };
     }
     if (url.includes('/contacts')) {
       return { ok: true, json: async () => ({ contacts: [] }) };
@@ -258,5 +274,97 @@ describe('RecapPlayerModal - expired game (T3970)', () => {
     });
     // No video element when url is null.
     expect(container.querySelector('video')).toBeNull();
+  });
+});
+
+const GAME_VIDEO_DATA = {
+  url: 'https://r2.example.com/games/abc.mp4',
+  clips: RECAP_DATA_WITH_CLIPS.clips,
+  video_kind: 'game',
+};
+
+describe('RecapPlayerModal - transport + create clip (T3970)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // jsdom does not implement media playback.
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    globalThis.fetch = mockFetch(GAME_VIDEO_DATA);
+  });
+
+  it('reflects play/pause state from the active video element', async () => {
+    const { container } = render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    const video = container.querySelector('video');
+    expect(video).toBeTruthy();
+    // Not autoplaying in jsdom -> paused.
+    expect(screen.getByTestId('is-playing').textContent).toBe('paused');
+
+    fireEvent.play(video);
+    await waitFor(() => expect(screen.getByTestId('is-playing').textContent).toBe('playing'));
+
+    fireEvent.pause(video);
+    await waitFor(() => expect(screen.getByTestId('is-playing').textContent).toBe('paused'));
+  });
+
+  it('toggles play/pause on Spacebar and prevents default', async () => {
+    const { container } = render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    const video = container.querySelector('video');
+
+    const ev = new KeyboardEvent('keydown', { code: 'Space', key: ' ', bubbles: true, cancelable: true });
+    document.dispatchEvent(ev);
+
+    expect(ev.defaultPrevented).toBe(true);
+    expect(video.play).toHaveBeenCalled(); // paused -> play()
+  });
+
+  it('shows "Create clip" on Highlights and navigates to Annotate for the game', async () => {
+    globalThis.fetch = mockFetch(GAME_VIDEO_DATA, [{ id: 101, name: 'Highlight 1', duration: 5 }]);
+    const onClose = vi.fn();
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="highlights"
+        onClose={onClose}
+      />
+    );
+    const createBtn = await screen.findByTitle('Create a clip in Annotate at this moment');
+    expect(createBtn.textContent).toContain('Create clip');
+
+    fireEvent.click(createBtn);
+
+    expect(mockSetPendingGame).toHaveBeenCalled();
+    expect(mockSetPendingGame.mock.calls[0][0]).toBe(42); // navigates to THIS game
+    expect(mockSetEditorMode).toHaveBeenCalledWith('annotate');
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('hides "Create clip" when the source video is gone (video_kind null)', async () => {
+    globalThis.fetch = mockFetch(
+      { url: null, clips: RECAP_DATA_WITH_CLIPS.clips, video_kind: null },
+      [{ id: 101, name: 'Highlight 1', duration: 5 }],
+    );
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="highlights"
+        onClose={vi.fn()}
+      />
+    );
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    expect(screen.queryByTitle('Create a clip in Annotate at this moment')).toBeNull();
   });
 });
