@@ -8,7 +8,8 @@ import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
 import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
-import { frameToTime } from '../utils/videoUtils';
+import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
+import { frameToTime, timeToFrame } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { API_BASE, resolveApiUrl } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -632,17 +633,27 @@ export function OverlayScreen({
     const region = getRegionAtTime(time);
     const result = addHighlightRegionKeyframe(time, data);
     if (result && canSyncActions && region) {
-      // If the hook moved a nearby keyframe onto this frame, delete the stale
-      // keyframe on the backend first — otherwise the surgical add appends a
-      // near-duplicate and the moved-from keyframe persists as an orphan
-      // (the overlapping-keyframe / lost-boundary bug). Mirror the move.
-      if (result.movedFromFrame != null) {
-        const oldTime = frameToTime(result.movedFromFrame, highlightRegionsFramerate);
-        overlayActions.deleteKeyframe(projectId, region.id, oldTime)
-          .catch(err => console.error('[OverlayScreen] Failed to sync moved keyframe delete:', err));
-      }
-      overlayActions.addKeyframe(projectId, region.id, { time, ...data })
-        .catch(err => console.error('[OverlayScreen] Failed to sync addKeyframe:', err));
+      // Persist via the shared keyframe-edit path (T3800). The helper mirrors a
+      // snap-move as delete(old) + add(new): if the hook moved a nearby keyframe
+      // onto this frame, the stale keyframe is deleted first — otherwise the add
+      // appends a near-duplicate and the moved-from keyframe persists as an orphan
+      // (the overlapping-keyframe / lost-boundary bug). Fire-and-forget, as before.
+      //
+      // Overlay keys the backend by time. The `add` keeps the original `time`
+      // value (no frame round-trip); only `del` converts the moved-from frame.
+      persistKeyframeEdit({
+        resolution: {
+          targetKey: timeToFrame(time, highlightRegionsFramerate),
+          movedFromKey: result.movedFromFrame ?? null,
+        },
+        data,
+        actions: {
+          add: (frame, d) => overlayActions.addKeyframe(projectId, region.id, { time, ...d }),
+          del: (frame) => overlayActions.deleteKeyframe(projectId, region.id, frameToTime(frame, highlightRegionsFramerate)),
+        },
+        awaited: false,
+        onError: (err) => console.error('[OverlayScreen] Failed to sync keyframe:', err),
+      });
     }
     setOverlayChangedSinceExport(true);
     return !!result;

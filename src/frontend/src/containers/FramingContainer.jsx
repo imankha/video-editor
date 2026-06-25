@@ -4,9 +4,22 @@ import { API_BASE } from '../config';
 import * as framingActions from '../api/framingActions';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { resolveTargetFrame } from '../utils/keyframeUtils';
+import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { toast } from '../components/shared';
 import { track } from '../utils/analytics';
 import { useQuestStore } from '../stores/questStore';
+
+/**
+ * Frame-keyed persist adapter for crop keyframes (T3800). Crop keys by frame
+ * exactly and never moves a keyframe, so only `add` is exercised; `del` is
+ * provided for contract completeness with the shared helper.
+ */
+function cropPersistActions(projectId, clipId) {
+  return {
+    add: (frame, data) => framingActions.addCropKeyframe(projectId, clipId, { frame, ...data }),
+    del: (frame) => framingActions.deleteCropKeyframe(projectId, clipId, frame),
+  };
+}
 
 /**
  * FramingContainer - Encapsulates Framing mode logic and computed state
@@ -324,33 +337,27 @@ export function FramingContainer({
     // T3700: quest_2 "Keep your player in frame" — the user adjusted the crop box
     useQuestStore.getState().recordAchievement('crop_adjusted');
 
-    // Optimistically update clip store so sidebar framing indicator reflects the change immediately.
-    // (crop_data in the store is otherwise only written on export via saveCurrentClipState)
-    const newKf = { frame: targetFrame, x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin };
-    if (callerClipId) {
-      const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== targetFrame), newKf];
-      updateClipData(callerClipId, { crop_data: updatedKfs });
-    }
-
-    // Persist to backend with error recovery
+    // Persist via the shared keyframe-edit path (T3800). The backend key can only
+    // be the resolved targetFrame — no raw frame can leak past identity resolution.
     const clipId = selectedClip?.id;
     if (selectedProjectId && clipId) {
-      const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
-        frame: targetFrame,
-        x: cropData.x,
-        y: cropData.y,
-        width: cropData.width,
-        height: cropData.height,
-        origin
-      });
-      if (!result.success) {
-        // Store rollback is keyed by clip id — always safe
-        if (callerClipId) {
-          updateClipData(callerClipId, { crop_data: previousStoreKfs });
-        }
-        // Hook rollback only if the user is still on the same clip — the hook
-        // now holds the new clip's keyframes after a switch
-        if (latestSelectedClipIdRef.current === callerClipId) {
+      await persistKeyframeEdit({
+        resolution: { targetKey: targetFrame, movedFromKey: null },
+        data: { x: cropData.x, y: cropData.y, width: cropData.width, height: cropData.height, origin },
+        actions: cropPersistActions(selectedProjectId, clipId),
+        // Optimistically update clip store so sidebar framing indicator reflects the
+        // change immediately. (crop_data in the store is otherwise only written on
+        // export via saveCurrentClipState.) Store rollback is keyed by clip id — always safe.
+        optimistic: callerClipId && {
+          apply: (frame, d) => updateClipData(callerClipId, {
+            crop_data: [...previousStoreKfs.filter(kf => kf.frame !== frame), { frame, ...d }],
+          }),
+          rollback: () => updateClipData(callerClipId, { crop_data: previousStoreKfs }),
+        },
+        // Hook rollback only if the user is still on the same clip — the hook now
+        // holds the new clip's keyframes after a switch.
+        rollback: () => {
+          if (latestSelectedClipIdRef.current !== callerClipId) return;
           if (previousKf && previousKfData) {
             addOrUpdateKeyframe(currentTime, previousKfData, duration, previousKf.origin);
           } else {
@@ -358,9 +365,10 @@ export function FramingContainer({
           }
           clipHasUserEditsRef.current = false;
           setFramingChangedSinceExport?.(false);
-        }
-        toast.error('Failed to save crop keyframe', { message: result.error });
-      }
+        },
+        awaited: true,
+        onError: (error) => toast.error('Failed to save crop keyframe', { message: error }),
+      });
     }
   }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
 
@@ -662,32 +670,24 @@ export function FramingContainer({
       onUserEdit?.();
       setFramingChangedSinceExport?.(true);
 
-      // Sync to clip store so sidebar indicator updates
-      if (callerClipId) {
-        const newKf = { frame: targetFrame, x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin };
-        const updatedKfs = [...previousStoreKfs.filter(kf => kf.frame !== targetFrame), newKf];
-        updateClipData(callerClipId, { crop_data: updatedKfs });
-      }
-
-      // Persist to backend with error recovery
+      // Persist via the shared keyframe-edit path (T3800) — same contract as
+      // handleCropComplete; only the data source (copiedCrop) differs.
       const clipId = selectedClip?.id;
       if (selectedProjectId && clipId) {
-        const result = await framingActions.addCropKeyframe(selectedProjectId, clipId, {
-          frame: targetFrame,
-          x: copiedCrop.x,
-          y: copiedCrop.y,
-          width: copiedCrop.width,
-          height: copiedCrop.height,
-          origin
-        });
-        if (!result.success) {
-          // Store rollback is keyed by clip id — always safe
-          if (callerClipId) {
-            updateClipData(callerClipId, { crop_data: previousStoreKfs });
-          }
-          // Hook rollback only if the user is still on the same clip — the hook
-          // now holds the new clip's keyframes after a switch
-          if (latestSelectedClipIdRef.current === callerClipId) {
+        await persistKeyframeEdit({
+          resolution: { targetKey: targetFrame, movedFromKey: null },
+          data: { x: copiedCrop.x, y: copiedCrop.y, width: copiedCrop.width, height: copiedCrop.height, origin },
+          actions: cropPersistActions(selectedProjectId, clipId),
+          // Sync to clip store so sidebar indicator updates. Keyed by clip id — always safe.
+          optimistic: callerClipId && {
+            apply: (frame, d) => updateClipData(callerClipId, {
+              crop_data: [...previousStoreKfs.filter(kf => kf.frame !== frame), { frame, ...d }],
+            }),
+            rollback: () => updateClipData(callerClipId, { crop_data: previousStoreKfs }),
+          },
+          // Hook rollback only if the user is still on the same clip.
+          rollback: () => {
+            if (latestSelectedClipIdRef.current !== callerClipId) return;
             if (previousKf && previousKfData) {
               addOrUpdateKeyframe(time, previousKfData, duration, previousKf.origin);
             } else {
@@ -695,9 +695,10 @@ export function FramingContainer({
             }
             clipHasUserEditsRef.current = false;
             setFramingChangedSinceExport?.(false);
-          }
-          toast.error('Failed to paste crop keyframe', { message: result.error });
-        }
+          },
+          awaited: true,
+          onError: (error) => toast.error('Failed to paste crop keyframe', { message: error }),
+        });
       }
     }
   }, [videoUrl, currentTime, copiedCrop, duration, framerate, keyframes, getCropDataAtTime, pasteCropKeyframe, addOrUpdateKeyframe, removeKeyframe, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
