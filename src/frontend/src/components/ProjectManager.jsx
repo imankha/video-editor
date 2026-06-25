@@ -1322,8 +1322,6 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
   const hasAnnotations = game.clip_count > 0;
 
   if (isExpired) {
-    const hasBrilliant = game.brilliant_count > 0;
-
     return (
       <div
         className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
@@ -1366,29 +1364,19 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
             </div>
           </div>
 
-          {hasBrilliant && hasRecap && (
+          {hasAnnotations && (
             <button
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('highlights'); }}
+              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
               className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
+              title="Watch the recap (annotations and highlights)"
             >
-              <Star size={18} />
-              Highlights
+              <Play size={18} />
+              Recap
             </button>
           )}
         </div>
 
         <div className="mt-2 flex items-center justify-center gap-2">
-          {hasAnnotations && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Play}
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
-              title="Watch all annotated clips"
-            >
-              Recap
-            </Button>
-          )}
           {canExtend && (
             <Button
               variant="ghost"

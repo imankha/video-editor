@@ -367,4 +367,25 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     await waitFor(() => screen.getByTestId('playback-controls'));
     expect(screen.queryByTitle('Create a clip in Annotate at this moment')).toBeNull();
   });
+
+  it('opens on the Annotations tab but still exposes the Highlights tab', async () => {
+    globalThis.fetch = mockFetch(GAME_VIDEO_DATA, [{ id: 101, name: 'Highlight 1', duration: 5 }]);
+    render(
+      <RecapPlayerModal
+        game={{ id: 42, name: 'Big Game', storage_status: 'expired' }}
+        initialTab="annotations"
+        onClose={vi.fn()}
+      />
+    );
+    // Tab bar present with both tabs; user can switch to Highlights inside the modal.
+    const highlightsTab = await screen.findByRole('button', { name: 'Highlights' });
+    expect(highlightsTab).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Annotations' })).toBeTruthy();
+
+    fireEvent.click(highlightsTab);
+    // After switching, the Highlights-only "Create clip" action appears.
+    await waitFor(() =>
+      expect(screen.getByTitle('Create a clip in Annotate at this moment')).toBeTruthy()
+    );
+  });
 });

@@ -50,24 +50,31 @@ describe('GameCard - expired game (T3970)', () => {
     expect(screen.queryByTitle('Share game')).toBeNull();
   });
 
-  it('exposes a "Recap" playback action on an expired card', () => {
+  it('exposes exactly ONE recap entry labeled "Recap" (opens annotations tab)', () => {
     const { onPlayRecap } = renderCard({ storage_status: 'expired' });
-    const playback = screen.getByTitle('Watch all annotated clips');
-    expect(playback.textContent).toContain('Recap');
-    expect(playback.textContent).not.toContain('Playback annotations');
-    playback.click();
+    const recapButtons = screen.getAllByText('Recap');
+    expect(recapButtons).toHaveLength(1);
+    // The single consolidated entry; no separate Highlights / Playback annotations.
+    expect(screen.queryByText('Highlights')).toBeNull();
+    expect(screen.queryByText('Playback annotations')).toBeNull();
+    recapButtons[0].click();
     expect(onPlayRecap).toHaveBeenCalledWith('annotations');
   });
 
-  it('offers playback even when the game is still extendable', () => {
+  it('offers the Recap entry even when the game is still extendable', () => {
     renderCard({ storage_status: 'expired', can_extend: true });
-    expect(screen.getByTitle('Watch all annotated clips')).toBeTruthy();
+    expect(screen.getByText('Recap')).toBeTruthy();
     expect(screen.getByTitle('Extend storage')).toBeTruthy();
   });
 
-  it('offers playback even without a recap video (annotations persist post-grace)', () => {
+  it('offers the Recap entry even without a recap video (annotations persist post-grace)', () => {
     renderCard({ storage_status: 'expired', recap_video_url: null });
-    expect(screen.getByTitle('Watch all annotated clips')).toBeTruthy();
+    expect(screen.getByText('Recap')).toBeTruthy();
+  });
+
+  it('shows no Recap entry when the expired game has no clips', () => {
+    renderCard({ storage_status: 'expired', clip_count: 0 });
+    expect(screen.queryByText('Recap')).toBeNull();
   });
 
   it('does not render an enabled Share affordance on an expired card', () => {
