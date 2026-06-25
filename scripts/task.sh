@@ -14,7 +14,7 @@
 #   bash scripts/task.sh code <id> [--prompt-file <path>]  # open VS Code ATTACHED to the container (GUI Claude + image paste; optionally seed a kickoff)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
 #   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
-#   bash scripts/task.sh push <id>     # push the task's branch to GitHub (host creds) so you can fetch + test + merge it
+#   bash scripts/task.sh push <id> [--force]  # push the task's branch to GitHub (host creds); guards against CRLF-noise pushes (--force overrides)
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
 #   bash scripts/task.sh nuke <id>     # down + delete the checkout dir
 #   bash scripts/task.sh list          # show all task containers, ports, status
@@ -260,7 +260,8 @@ nuke() {
 # diffstat vs the checkout's master first (a huge list = the worker accidentally
 # committed line-ending noise; abort and have it re-commit explicit paths).
 push() {
-  local id="$1"; [ -n "$id" ] || die "usage: task push <id>"
+  local id="$1"; shift || true; [ -n "$id" ] || die "usage: task push <id> [--force]"
+  local force=""; [ "${1:-}" = "--force" ] && force=1
   local dir; dir="$(taskdir "$id")"
   [ -d "$dir/.git" ] || die "no checkout at $dir (run 'task up $id' first)"
   local branch; branch="$(git -C "$dir" rev-parse --abbrev-ref HEAD)"
@@ -270,6 +271,23 @@ push() {
   files="$(git -C "$dir" diff --name-only master.."$branch" 2>/dev/null | wc -l | tr -d ' ')"
   echo "[task] $branch: $ahead commit(s), $files file(s) changed vs master. Diffstat:" >&2
   git -C "$dir" diff --stat master.."$branch" 2>/dev/null | tail -25 >&2
+
+  # CRLF-noise guard: compare raw churn vs churn IGNORING cr-at-eol. A big gap means
+  # line-ending flips got committed (e.g. GitHub-Desktop entanglement) that would
+  # pollute master on merge. Refuse unless --force, and point at the offending files.
+  local raw cri noise
+  raw="$(git -C "$dir" diff --numstat master.."$branch" 2>/dev/null | awk '{a+=$1;d+=$2} END{print a+d+0}')"
+  cri="$(git -C "$dir" diff --ignore-cr-at-eol --numstat master.."$branch" 2>/dev/null | awk '{a+=$1;d+=$2} END{print a+d+0}')"
+  noise=$((raw - cri))
+  if [ -z "$force" ] && [ "$noise" -gt 200 ] && [ "$raw" -gt $((cri * 2)) ]; then
+    echo "[task] ABORT: ~$noise lines look like CRLF line-ending churn (raw=$raw vs real=$cri)." >&2
+    echo "[task] Likely a line-ending flip (GitHub-Desktop entanglement). Biggest raw-vs-real files:" >&2
+    git -C "$dir" diff --numstat master.."$branch" 2>/dev/null | awk '{print $1+$2, $3}' | sort -rn | head -5 | sed 's/^/      /' >&2
+    echo "[task] Fix: normalize those to LF in the checkout (e.g. sed -i 's/\\r\$//' <file>), commit, retry." >&2
+    echo "[task] Or override with: bash scripts/task.sh push $id --force" >&2
+    die "CRLF-noise guard tripped"
+  fi
+
   echo "[task] pushing $branch to origin (using your host GitHub creds)..." >&2
   git -C "$dir" push -u origin "$branch" || die "push failed (is host git signed in to GitHub?)"
   echo "[task] pushed. In GitHub Desktop: Fetch origin -> switch to '$branch' -> test -> PR/merge." >&2
