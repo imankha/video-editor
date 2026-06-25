@@ -20,24 +20,37 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    - "deploy frontend" / "just the frontend": `--frontend-only`
    - "deploy backend" / "just the backend": `--backend-only`
 
-3. **Run the script**:
+3. **Launch the deploy in the BACKGROUND** (do not block on it):
    ```bash
-   bash scripts/deploy_production.sh [--all | --frontend-only | --backend-only] 2>&1 | tee /tmp/deploy-output.log
+   bash scripts/deploy_production.sh [--all | --frontend-only | --backend-only] > /tmp/deploy-output.log 2>&1; echo "DEPLOY_EXIT: $?"
    ```
-   Use a 5-minute timeout (300000ms). The script handles:
+   Run it with `run_in_background: true` (timeout 600000ms; the harness notifies you when it exits).
+   The script handles:
    - Pre-flight checks (branch, clean tree, origin sync)
    - **Secrets sync**: pushes `.env.prod` → Fly.io secrets (except DATABASE_URL, managed by `fly postgres attach`)
    - Backend: `fly deploy` + health check
    - Frontend: `npm run build:production` + `wrangler pages deploy` + site verify
    - Git tagging of successful deploys
 
-4. **Report result**: Summarize what deployed and confirm the health/verify checks passed.
+4. **Reconcile IN PARALLEL — start immediately; do NOT wait for the deploy to finish.** The commit
+   range and code/task state are frozen the moment the deploy starts (the deploy only builds + ships
+   commits that already exist), so the analysis is independent and safe to run concurrently. While the
+   deploy runs in the background, do Steps A–D of
+   [Post-Deploy: Plan Reconciliation](#post-deploy-plan-reconciliation): compute the range with
+   `PREV..HEAD` (use HEAD — no need to wait for the new deploy tag), verify each candidate task, and
+   present the recommended-updates table for the user to approve. Do this work concurrently — the only
+   thing that waits for the deploy is the *apply* in step 5.
 
-5. **Reconcile the plan** (run on every successful deploy): see [Post-Deploy: Plan Reconciliation](#post-deploy-plan-reconciliation). Produce a recommended-updates list and get user approval BEFORE editing any plan/task files.
+5. **On deploy completion (you'll be notified):**
+   - **Exited 0:** reduce_log the output, report what deployed (health/verify ✓), then **apply the
+     approved promotions and auto-commit them** (Step E). Approval + a successful deploy IS the
+     authorization — do not ask "should I commit?" again.
+   - **Failed:** reduce_log the output and report the failure; do **NOT** apply any promotions
+     (nothing shipped to prod). Keep the proposal for after a fix + redeploy.
 
 ## Post-Deploy: Plan Reconciliation
 
-Goal: keep PLAN.md, EPIC.md, and task files current automatically. A deploy ships work to prod, so it is the natural moment to reconcile what the commits *claim* against what the tasks *specify*, then propose plan updates for the user to approve. **Propose, then apply on approval — never edit statuses or files silently** (project rule: the user promotes statuses; this approval gate is what authorizes the edits).
+Goal: keep PLAN.md, EPIC.md, and task files current automatically. A deploy ships work to prod, so it is the natural moment to reconcile what the commits *claim* against what the tasks *specify*, then propose plan updates for the user to approve. **Run this analysis IN PARALLEL with the deploy (don't wait for it to finish); propose, then apply + commit on approval — never edit statuses or files silently** (project rule: the user promotes statuses; this approval gate + a successful deploy is what authorizes the edits, including the auto-commit).
 
 ### Step A — Find what shipped in this deploy
 
@@ -96,7 +109,7 @@ Only after approval, edit `PLAN.md` / `EPIC.md` / task files:
 - Promote statuses; rewrite descriptions to match shipped reality.
 - Create split task files; `git rm` dropped task files and remove their rows.
 - Fix collateral cross-references and epic completion criteria.
-- Leave edits **uncommitted** unless the user asks to commit (statuses are normally user-promoted; the user reviews the diff).
+- **Auto-commit the approved promotions** once the deploy has exited 0 (approval + a successful deploy is the authorization — this is the standing default; don't ask "should I commit?" again). Use an ASCII commit message with the co-author line. **Pushing stays the user's call** (push auto-deploys staging), so commit but don't push unless asked.
 
 Keep the reconciliation lightweight when little shipped (a couple of status promotions) and thorough when a milestone/epic landed (verify with subagents, update epic criteria).
 
