@@ -1,6 +1,6 @@
 # T3940: "Re-edit This Reel" — 1-Click to the Editor From Any Player
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 5
 **Created:** 2026-06-24

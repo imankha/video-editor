@@ -1,6 +1,6 @@
 # T3920: Reel Drafts Show Clip Game Time (Soccer Notation)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-06-23

@@ -1,6 +1,6 @@
 # T3910: Multi-Clip Aspect Ratio Applies to All Clips
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-06-23

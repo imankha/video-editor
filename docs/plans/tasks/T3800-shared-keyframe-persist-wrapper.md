@@ -1,6 +1,6 @@
 # T3800: Shared Keyframe Persist Wrapper
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 4
 **Created:** 2026-06-20
