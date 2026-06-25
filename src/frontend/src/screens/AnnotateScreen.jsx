@@ -371,6 +371,12 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       // T3960: remember the reel's source clip so we can re-select it in the
       // Clips sidebar once clipRegions finish loading (see effect below).
       pendingSourceClipIdRef.current = pending.sourceClipId;
+      // [T3960] TEMP diagnostic (branch-only): pending consumed, ref stored.
+      console.log('[T3960] AnnotateScreen consumed pending', {
+        gameId: pending.gameId,
+        seekTime: pending.seekTime,
+        sourceClipIdStoredInRef: pendingSourceClipIdRef.current,
+      });
 
       handleLoadGame(pending.gameId, pending.seekTime);
       return () => controller.abort();
@@ -389,8 +395,16 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // rawClipId is populated a render later still gets selected.
   useEffect(() => {
     const sourceClipId = pendingSourceClipIdRef.current;
+    const region = (sourceClipId == null || clipRegions.length === 0)
+      ? null
+      : clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId);
+    // [T3960] TEMP diagnostic (branch-only): every run of the select effect.
+    console.log('[T3960] AnnotateScreen select effect run', {
+      clipRegionsLength: clipRegions.length,
+      sourceClipId,
+      matched: region ? { id: region.id, rawClipId: region.rawClipId } : null,
+    });
     if (sourceClipId == null || clipRegions.length === 0) return;
-    const region = clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId);
     if (region) {
       pendingSourceClipIdRef.current = null;
       handleSelectAnnotateRegion(region.id);
@@ -398,9 +412,9 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
       // No silent fallback (CLAUDE.md): surface the mismatch so a remaining id
       // shape problem is visible in the browser console. Ref kept set in case
       // rawClipId populates on a later render.
-      console.warn('[AnnotateScreen] T3960: no clip region matched source clip', {
+      console.warn('[T3960] AnnotateScreen: no clip region matched source clip', {
         sourceClipId,
-        availableIds: clipRegions.map(r => ({ id: r.id, rawClipId: r.rawClipId })),
+        availableIds: clipRegions.map(r => ({ id: r.id, rawClipId: r.rawClipId, start_time: r.startTime })),
       });
     }
   }, [clipRegions, handleSelectAnnotateRegion]);

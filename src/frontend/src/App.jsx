@@ -458,8 +458,20 @@ function App() {
 
   // Handler for "Edit in Annotate" button - navigates to Annotate mode with clip's game
   const handleEditInAnnotate = useCallback(() => {
+    // [T3960] TEMP diagnostic (branch-only): what is the source clip here?
+    console.log('[T3960] handleEditInAnnotate called', {
+      selectedClipForAnnotate: selectedClipForAnnotate ? {
+        id: selectedClipForAnnotate.id,
+        game_id: selectedClipForAnnotate.game_id,
+        raw_clip_id: selectedClipForAnnotate.raw_clip_id,
+        source_clip_id: selectedClipForAnnotate.source_clip_id,
+      } : null,
+    });
     const gameId = selectedClipForAnnotate?.game_id;
-    if (!gameId) return;
+    if (!gameId) {
+      console.warn('[T3960] handleEditInAnnotate bailing — no game_id on selectedClipForAnnotate');
+      return;
+    }
 
     setWarmupPriority(WARMUP_PRIORITY.GAMES); // Prioritize game video warming
 
@@ -468,6 +480,12 @@ function App() {
     // (T3960). A working clip carries raw_clip_id; fall back to source_clip_id in
     // case a final_video/reel shape is ever the source here.
     const sourceClipId = selectedClipForAnnotate?.raw_clip_id ?? selectedClipForAnnotate?.source_clip_id;
+    // [T3960] TEMP diagnostic (branch-only): the values being threaded.
+    console.log('[T3960] handleEditInAnnotate threading nav', {
+      gameId,
+      sourceClipId,
+      seekTime: selectedClipForAnnotate?.start_time,
+    });
     setPendingGame(gameId, selectedClipForAnnotate?.start_time, sourceClipId);
 
     // Reset video store to clear stale clipOffset/clipDuration from framing mode
@@ -485,6 +503,13 @@ function App() {
     if (newMode === editorMode) return;
 
     console.log(`[App] Switching from ${editorMode} to ${newMode} mode`);
+    // [T3960] TEMP diagnostic (branch-only): does the top Annotate button reach
+    // handleModeChange, and will it route through handleEditInAnnotate?
+    console.log('[T3960] handleModeChange', {
+      from: editorMode,
+      to: newMode,
+      willRouteToEditInAnnotate: newMode === EDITOR_MODES.ANNOTATE && editorMode !== EDITOR_MODES.ANNOTATE,
+    });
 
     // Check if leaving framing with uncommitted changes
     // Only show confirmation when there's a working video that would be invalidated
