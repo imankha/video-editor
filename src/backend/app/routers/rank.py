@@ -46,7 +46,7 @@ class MatchupSide(BaseModel):
     aspect_ratio: Optional[str] = None
     project_id: Optional[int] = None      # editable project behind the reel (re-edit; T3940)
     opponent_line: Optional[str] = None   # "vs Carlsbad - Dec 6" (None when game-less)
-    minute: Optional[int] = None          # floor(clip_start_time/60)+1, soccer `33'`
+    minute: Optional[int] = None          # floor(clip_game_start_time/60)+1, soccer `33'` (2nd-half offset applied, T3930)
     tags: List[str] = []
     stream_url: str                       # same-origin proxy (tap-to-replay)
 
@@ -105,7 +105,7 @@ def _rankable_pool(cursor, aspect_ratio: str) -> list:
     cursor.execute(
         f"""
         SELECT fv.id, fv.name, fv.aspect_ratio, fv.rating, fv.rd, fv.match_count,
-               fv.source_clip_id, fv.clip_start_time, fv.game_ids, fv.tags, fv.clip_count,
+               fv.source_clip_id, fv.clip_game_start_time, fv.game_ids, fv.tags, fv.clip_count,
                fv.duration, fv.project_id
         FROM final_videos fv
         WHERE fv.id IN ({latest_final_videos_subquery()})
@@ -179,7 +179,7 @@ def _side(row, games_info: dict) -> MatchupSide:
         aspect_ratio=row["aspect_ratio"],
         project_id=row["project_id"],
         opponent_line=_opponent_line(opponent_name, game_date),
-        minute=_minute(row["clip_start_time"]),
+        minute=_minute(row["clip_game_start_time"]),
         tags=decode_data(row["tags"]) or [],
         stream_url=f"/api/downloads/{row['id']}/stream",
     )
