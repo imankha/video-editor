@@ -88,7 +88,8 @@ _fv = [900]
 
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
                quality_score=5.0, rating=None, rd=glicko.RD_MAX, match_count=0,
-               source_clip_id=None, clip_start_time=None, clip_count=1,
+               source_clip_id=None, clip_start_time=None, clip_game_start_time=None,
+               clip_count=1,
                project_id=None, created_at="2026-01-01 00:00:00", published=True,
                source_type="custom_project", game_id=None):
     """clip_count defaults to 1 (single-clip = collection-eligible + rankable);
@@ -104,14 +105,14 @@ def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, source_type, "
         "name, aspect_ratio, tags, game_ids, game_id, quality_score, clip_count, rating, rd, "
-        "match_count, source_clip_id, clip_start_time, published_at, created_at) "
-        "VALUES (?, 'f.mp4', 1, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "match_count, source_clip_id, clip_start_time, clip_game_start_time, published_at, created_at) "
+        "VALUES (?, 'f.mp4', 1, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (project_id, duration, source_type, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
          game_id,
          quality_score, clip_count, rating, rd, match_count,
-         source_clip_id, clip_start_time,
+         source_clip_id, clip_start_time, clip_game_start_time,
          "2026-01-01 00:00:00" if published else None, created_at),
     )
     return cur.lastrowid
@@ -707,6 +708,26 @@ class TestRankEndpoints:
             c.commit()
         r = self._confidence()
         assert r.confidence_pct == 58 and r.eligible is True  # not 100 while a clip is unsorted
+
+    def test_minute_uses_unified_game_start_for_second_half(self, db):
+        # T3930: the ranking card minute must be the unified two-half in-match
+        # minute (clip_game_start_time), not the file-relative clip_start_time.
+        # A clip 5'05" into the 2nd half is stored file-relative as start ~305s
+        # (would show 6') but its unified start is ~50' in (clip_game_start_time
+        # = 305 + 45*60 prior-half = 3005s -> 51'). A 1st-half/single-video clip
+        # has clip_game_start_time == clip_start_time, so it is unchanged.
+        with _conn(db) as c:
+            cur = c.cursor()
+            second_half = _insert_fv(cur, game_ids=[1], source_clip_id=10,
+                                     clip_start_time=305.0, clip_game_start_time=3005.0)
+            first_half = _insert_fv(cur, game_ids=[2], source_clip_id=20,
+                                    clip_start_time=600.0, clip_game_start_time=600.0)
+            c.commit()
+        m = self._next(aspect_ratio="9:16")
+        by_id = {m.a.id: m.a, m.b.id: m.b}
+        assert set(by_id) == {second_half, first_half}
+        assert by_id[second_half].minute == 51   # unified (not 6' file-relative)
+        assert by_id[first_half].minute == 11     # 1st-half clip unchanged
 
     def test_orphan_updates_only_itself(self, db):
         # source_clip_id NULL -> per-reel rating (update only its own row).
