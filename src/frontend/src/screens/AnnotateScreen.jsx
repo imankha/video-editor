@@ -378,19 +378,32 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   }, [handleLoadGame, annotateVideoUrl]);
 
   // T3960: once clips load, select the reel's source clip in the Clips sidebar.
-  // Matches by rawClipId (works for two-half virtual regions). The ref is only
-  // cleared once a match is found and selected, so a clip whose rawClipId is
-  // populated slightly later (later render pass) still gets selected. Graceful
-  // no-op if the source clip was deleted (ref stays set but never matches).
+  // The breadcrumb carries the working clip's raw_clips id; loaded regions carry
+  // that same id in rawClipId (backend sends raw_clip_id; see useAnnotate import).
+  // We go through handleSelectAnnotateRegion (NOT the raw selectAnnotateRegion):
+  // it selects AND seeks the playhead into the clip. The seek matters — the
+  // playhead-driven auto-deselect effect in AnnotateContainer deselects any clip
+  // whose range doesn't contain the playhead, so a select-without-seek on a fresh
+  // load (playhead at 0) is immediately undone, which is why nothing appeared
+  // selected. The ref is only cleared once a match is found, so a clip whose
+  // rawClipId is populated a render later still gets selected.
   useEffect(() => {
     const sourceClipId = pendingSourceClipIdRef.current;
     if (sourceClipId == null || clipRegions.length === 0) return;
-    const region = clipRegions.find(r => r.rawClipId === sourceClipId);
+    const region = clipRegions.find(r => r.rawClipId === sourceClipId || r.id === sourceClipId);
     if (region) {
       pendingSourceClipIdRef.current = null;
-      selectAnnotateRegion(region.id);
+      handleSelectAnnotateRegion(region.id);
+    } else {
+      // No silent fallback (CLAUDE.md): surface the mismatch so a remaining id
+      // shape problem is visible in the browser console. Ref kept set in case
+      // rawClipId populates on a later render.
+      console.warn('[AnnotateScreen] T3960: no clip region matched source clip', {
+        sourceClipId,
+        availableIds: clipRegions.map(r => ({ id: r.id, rawClipId: r.rawClipId })),
+      });
     }
-  }, [clipRegions, selectAnnotateRegion]);
+  }, [clipRegions, handleSelectAnnotateRegion]);
 
   // Handle pending game file from ProjectsScreen (when "Add Game" was clicked)
   // Supports both single-video (file) and multi-video (files array in details)
