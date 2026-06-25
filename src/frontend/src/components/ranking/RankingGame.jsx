@@ -14,13 +14,16 @@ import { HeroMatchup } from './HeroMatchup';
 import { CollectionPlayer } from '../collections/CollectionPlayer';
 
 /** Map a matchup side to a presentational player reel for the full-screen player. */
-function toReplayReel(side) {
+export function toReplayReel(side) {
   return {
     id: side.id,
     name: side.name,
     streamUrl: `${API_BASE}${side.stream_url}`,
     aspect_ratio: side.aspect_ratio,
     duration: null,
+    // T3940: editable project behind the ranked reel, so the replay player can
+    // surface "Re-edit". null/0 -> no editable project (button hidden).
+    project_id: side.project_id,
   };
 }
 
@@ -41,8 +44,10 @@ function toReplayReel(side) {
  * then loads the next pair.
  *
  * @param {Function} onClose - REQUIRED. X button only (no backdrop close).
+ * @param {Function=} onReEdit - (reel) => void; when set, the replay player shows a
+ *   "Re-edit" button. Clicking it closes the ranker first, then navigates (T3940).
  */
-export function RankingGame({ onClose }) {
+export function RankingGame({ onClose, onReEdit }) {
   // Which ratios are eligible to rank. null = still determining.
   const [ratios, setRatios] = useState(null);
   const [ratio, setRatio] = useState(RATIO.PORTRAIT);
@@ -265,6 +270,9 @@ export function RankingGame({ onClose }) {
           reels={[replayReel]}
           title={replayReel.name}
           onClose={() => setReplayReel(null)}
+          // Re-editing abandons the ranking session (server-side + resumable, so no
+          // confirm): close the ranker first, then restore + navigate (T3940).
+          onReEdit={onReEdit ? (reel) => { onClose(); onReEdit(reel); } : undefined}
         />
       )}
 

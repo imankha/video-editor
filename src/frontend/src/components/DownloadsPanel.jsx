@@ -9,6 +9,7 @@ import { CollectionPlayer } from './collections/CollectionPlayer';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
+import { useReEditReel } from '../hooks/useReEditReel';
 import { CardMedia, CardIconButton } from './shared/MediaCard';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
@@ -85,7 +86,7 @@ export function DownloadsPanel({
     watchedThisSessionRef.current.clear();
     setStoryPlayer({ reels, title });
   };
-  const closeStoryPlayer = () => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); };
+  const closeStoryPlayer = useCallback(() => { clearTimeout(watchTimerRef.current); setStoryPlayer(null); }, []);
 
   // Single source of watched-marking for BOTH the single-reel and collection
   // playback paths: the player fires onReelChange when a reel becomes active
@@ -106,8 +107,15 @@ export function DownloadsPanel({
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
 
-  // State for project restore (T66)
-  const [restoringProjectId, setRestoringProjectId] = useState(null);
+  // T3940: one restore-then-navigate path shared by the My Reels card, the in-player
+  // Re-edit button, and the ranker replay. Navigation = open the editor (T66 restore
+  // resumes Framing) + close the gallery + tear down the story player if it's open.
+  const navigateToProject = useCallback((projectId) => {
+    onOpenProject?.(projectId);
+    close();
+    closeStoryPlayer();
+  }, [onOpenProject, close, closeStoryPlayer]);
+  const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
 
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
@@ -226,30 +234,10 @@ export function DownloadsPanel({
     }, 1000);
   };
 
-  const handleOpenProject = async (e, download) => {
+  // Card folder button -> same shared restore-then-navigate path as the players (T3940).
+  const handleOpenProject = (e, download) => {
     e.stopPropagation();
-    if (onOpenProject && download.project_id && download.project_id !== 0) {
-      // T66: Restore project from archive if needed
-      setRestoringProjectId(download.id);
-      try {
-        const response = await apiFetch(`${API_BASE}/api/downloads/${download.id}/restore-project`, {
-          method: 'POST',
-        });
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.detail || 'Failed to restore reel');
-        }
-        const result = await response.json();
-        // Navigate to the project (project_id from response, may differ if restored)
-        onOpenProject(result.project_id);
-        close();
-      } catch (error) {
-        console.error('[DownloadsPanel] Restore project error:', error);
-        alert(`Failed to open reel as draft: ${error.message}`);
-      } finally {
-        setRestoringProjectId(null);
-      }
-    }
+    if (onOpenProject) openReelAsProject(download);
   };
 
   // Check if folder button should be shown for a download
@@ -562,10 +550,10 @@ export function DownloadsPanel({
                       {canOpenSource(download) && (
                         <button
                           onClick={(e) => { handleOpenProject(e, download); setOverflowMenuId(null); }}
-                          disabled={restoringProjectId === download.id}
+                          disabled={restoringId === download.id}
                           className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
                         >
-                          {restoringProjectId === download.id ? (
+                          {restoringId === download.id ? (
                             <Loader size={18} className="text-gray-300 animate-spin flex-shrink-0" />
                           ) : (
                             <FolderOpen size={18} className="text-gray-300 flex-shrink-0" />
@@ -669,7 +657,12 @@ export function DownloadsPanel({
       )}
 
       {/* Ranking game (T3630) — full-screen, opened from the ConfidenceBanner. */}
-      {showRankingGame && <RankingGame onClose={closeRankingGame} />}
+      {showRankingGame && (
+        <RankingGame
+          onClose={closeRankingGame}
+          onReEdit={onOpenProject ? openReelAsProject : undefined}
+        />
+      )}
 
       {/* Shared story player — single reels AND collections play here, at the
           panel top level so it fills the viewport (T3610). */}
@@ -681,6 +674,8 @@ export function DownloadsPanel({
           onClose={closeStoryPlayer}
           onDownload={storyPlayer.downloadId ? () => downloadFile(storyPlayer.downloadId) : undefined}
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
+          onReEdit={onOpenProject ? openReelAsProject : undefined}
+          reEditLoadingId={restoringId}
         />
       )}
     </>
