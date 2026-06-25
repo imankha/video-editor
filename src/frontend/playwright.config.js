@@ -36,6 +36,14 @@ const FRONTEND_PORT = 5173;
 const BASE_URL = process.env.E2E_BASE_URL || `http://localhost:${FRONTEND_PORT}`;
 const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 
+// Opt-in auto-start of the dev servers (E2E_AUTOSTART=1). OFF by default so the
+// historical "start servers by hand" contract is unchanged and cancelled runs
+// can't orphan host processes. Use it for unattended runs (sandbox/worktree),
+// where the process tree dies with the container. `reuseExistingServer` means an
+// already-running stack (e.g. `task.sh test`, which pre-starts it) is reused, not
+// duplicated. Never auto-start when pointed at a deployed target.
+const AUTOSTART = process.env.E2E_AUTOSTART === '1' && !process.env.E2E_BASE_URL;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // Run tests sequentially for workflow tests
@@ -74,12 +82,31 @@ export default defineConfig({
     },
   ],
 
-  // Web server configuration - DISABLED
-  // Playwright will NOT start servers automatically.
-  // You must start them manually before running tests:
+  // Web server configuration.
+  // DEFAULT (AUTOSTART off): Playwright will NOT start servers -- start them by
+  // hand first (prevents orphaned host processes when a run is cancelled):
   //   Terminal 1: cd src/backend && python -m uvicorn app.main:app --port 8000
   //   Terminal 2: cd src/frontend && npm run dev
-  // This prevents zombie processes when tests are cancelled.
+  // OPT-IN (E2E_AUTOSTART=1): Playwright starts both servers itself. Intended for
+  // unattended runs inside a sandbox container/worktree (the tree dies with the
+  // container, so no orphans). reuseExistingServer reuses an already-running stack.
+  ...(AUTOSTART ? {
+    webServer: [
+      {
+        command: 'python -m uvicorn app.main:app --port 8000',
+        cwd: path.resolve(__dirname, '../backend'),
+        url: `http://localhost:${API_PORT}/api/health`,
+        reuseExistingServer: true,
+        timeout: 120000,
+      },
+      {
+        command: 'npm run dev',
+        url: BASE_URL,
+        reuseExistingServer: true,
+        timeout: 120000,
+      },
+    ],
+  } : {}),
 
   // Increase timeout for video processing operations
   timeout: 300000, // 5 minutes per test (video uploads take time)

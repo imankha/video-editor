@@ -8,9 +8,11 @@
 # sharing files -- while DIFFERENT tasks run fully in parallel and isolated.
 #
 #   bash scripts/task.sh <id>          # up + open a permission-free Claude session (common path)
+#   bash scripts/task.sh <id> --prompt-file <path>   # ...and feed Claude that prompt as its first message
 #   bash scripts/task.sh up <id>       # ensure the task's checkout + container are running (no Claude)
 #   bash scripts/task.sh claude <id>   # open ANOTHER Claude session in the task (run N times for N chats)
 #   bash scripts/task.sh stack <id>    # start the app (backend+frontend) in the container on offset ports
+#   bash scripts/task.sh test <id>     # start the stack + run the Playwright E2E suite (headless) in the container
 #   bash scripts/task.sh down <id>     # stop + remove the container (keeps the checkout)
 #   bash scripts/task.sh nuke <id>     # down + delete the checkout dir
 #   bash scripts/task.sh list          # show all task containers, ports, status
@@ -125,8 +127,23 @@ up() {
 
 claude_session() {
   local id="$1"; shift || true; [ -n "$id" ] || die "usage: task claude <id>"
+  # Optional: --prompt-file <hostpath> feeds Claude an initial prompt. We pipe the
+  # file's bytes over `docker exec -i` stdin into a file INSIDE the container, then
+  # have Claude read it there -- so the (multi-line) prompt never crosses the
+  # winpty/MSYS arg boundary, where quoting + path conversion would mangle it.
+  local prompt_file=""
+  if [ "${1:-}" = "--prompt-file" ]; then
+    prompt_file="${2:-}"; shift 2 || true
+    [ -f "$prompt_file" ] || die "prompt file not found: $prompt_file"
+  fi
   local cn; cn="$(cname "$id")"
   container_running "$id" || up "$id" >/dev/null
+  if [ -n "$prompt_file" ]; then
+    MSYS_NO_PATHCONV=1 docker exec -i -u dev "$cn" \
+      bash -c 'cat > /workspace/.dotask-kickoff.md' < "$prompt_file" \
+      || die "failed to write prompt into $cn"
+    echo "[task] seeded kickoff prompt -> $cn:/workspace/.dotask-kickoff.md" >&2
+  fi
   echo "[task] entering permission-free Claude session in $cn (Ctrl-C / /exit to leave; container stays warm)..." >&2
   # Git Bash/MinTTY isn't a real console TTY, so `docker exec -it` fails with
   # "the input device is not a TTY". winpty (bundled with Git Bash) bridges it.
@@ -134,6 +151,11 @@ claude_session() {
   case "${MSYSTEM:-}" in MINGW*|MSYS*|UCRT*) command -v winpty >/dev/null 2>&1 && WINPTY="winpty";; esac
   # No -w: the image's WORKDIR is /workspace, so exec lands there. Passing a
   # unix -w path would get mangled by MSYS ("Cwd must be an absolute path").
+  if [ -n "$prompt_file" ]; then
+    # Read the prompt inside the container (one quoted arg); never crosses winpty.
+    exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      $WINPTY docker exec -it -u dev "$cn" bash -lc 'cd /workspace && exec claude "$(cat .dotask-kickoff.md)"'
+  fi
   exec env MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
     $WINPTY docker exec -it -u dev "$cn" bash -lc 'cd /workspace && exec claude "$@"' _ "$@"
 }
@@ -146,6 +168,34 @@ stack() {
   echo "[task] starting app stack in $cn -> host backend :$((INTERNAL_BACKEND+off)), frontend :$((INTERNAL_FRONTEND+off))" >&2
   MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash /workspace/.devcontainer/container-stack.sh
   echo "[task] open: http://localhost:$((INTERNAL_FRONTEND+off))" >&2
+}
+
+# --- E2E (Playwright runs INSIDE the container; headless chromium is baked) ----
+# Starts the app stack (container-stack.sh -> correct host.docker.internal DB),
+# waits for the frontend to answer on the container's internal port (5173), then
+# runs the suite. Servers run on the image's internal 8000/5173, which is exactly
+# what playwright.config.js defaults to -- so no base-URL juggling is needed.
+e2e_test() {
+  local id="$1"; shift || true; [ -n "$id" ] || die "usage: task test <id>"
+  local cn; cn="$(cname "$id")"
+  container_running "$id" || up "$id" >/dev/null
+  echo "[task] starting app stack in $cn for E2E..." >&2
+  MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash /workspace/.devcontainer/container-stack.sh
+  echo "[task] waiting for frontend (container :$INTERNAL_FRONTEND) and backend health..." >&2
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc '
+    for i in $(seq 1 60); do
+      curl -fsS "http://localhost:'"$INTERNAL_FRONTEND"'" >/dev/null 2>&1 \
+        && curl -fsS "http://localhost:'"$INTERNAL_BACKEND"'/api/health" >/dev/null 2>&1 \
+        && exit 0
+      sleep 2
+    done
+    echo "[task] servers did not come up in time; see /tmp/backend.log /tmp/frontend.log" >&2
+    exit 1
+  ' || die "stack failed to start; check logs with: bash scripts/task.sh claude $id  then reduce_log /tmp/backend.log"
+  echo "[task] running Playwright E2E (headless chromium) in $cn..." >&2
+  # Pass through any extra args (e.g. --grep @smoke, a spec path).
+  MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" \
+    bash -lc 'cd /workspace/src/frontend && exec npx playwright test "$@"' _ "$@"
 }
 
 down() {
@@ -178,6 +228,7 @@ case "$cmd" in
   up)     up "$@" >/dev/null ;;
   claude) claude_session "$@" ;;
   stack)  stack "$@" ;;
+  test)   e2e_test "$@" ;;
   down)   down "$@" ;;
   nuke)   nuke "$@" ;;
   list)   list ;;

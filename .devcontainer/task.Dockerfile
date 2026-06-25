@@ -43,6 +43,17 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # --- Claude Code CLI (global; installed as root, run as non-root later) ------
 RUN npm install -g @anthropic-ai/claude-code
 
+# --- Playwright + headless Chromium (so a sandbox can run its OWN E2E) --------
+# WHY baked: frontend node_modules lives on a volume and isn't present at build
+# time, so we can't rely on the project's playwright. We install the browser +
+# its system libs here, pinned to the SAME minor the repo uses (@playwright/test
+# ^1.57) so the browser revision the project's playwright expects is the one on
+# disk. Installed under a world-readable PLAYWRIGHT_BROWSERS_PATH so the non-root
+# `dev` user (which runs the tests) can find it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx -y playwright@1.57.0 install --with-deps chromium \
+    && chmod -R a+rx /ms-playwright
+
 # --- backend PROD deps (baked into system site-packages, OUTSIDE /workspace) --
 # Living outside /workspace means the /workspace bind mount never shadows them.
 COPY src/backend/requirements.prod.txt /tmp/requirements.prod.txt
