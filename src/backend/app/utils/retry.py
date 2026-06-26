@@ -18,6 +18,7 @@ import asyncio
 import random
 import logging
 import socket
+import ssl
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,13 @@ def is_transient_error(exc: Exception) -> bool:
     if isinstance(exc, socket.gaierror):
         return True
 
+    # SSL connection drops (e.g. SSLEOFError "EOF occurred in violation of
+    # protocol") are transient — R2's certificate is valid, so an SSLError on
+    # that endpoint is a mid-flight TLS reset, not a config problem. A genuine
+    # certificate-verification failure is NOT transient and must not be retried.
+    if isinstance(exc, ssl.SSLError):
+        return not isinstance(exc, ssl.SSLCertVerificationError)
+
     # httpx transient errors
     httpx_transient_types = {"TimeoutException", "ConnectTimeout", "ReadTimeout", "ConnectError"}
     if error_type in httpx_transient_types:
@@ -94,6 +102,9 @@ def is_transient_error(exc: Exception) -> bool:
         "network unreachable",
         "could not connect to the endpoint url",
         "temporary failure in name resolution",
+        "eof occurred in violation of protocol",
+        "ssl validation failed",
+        "unexpected eof",
     ]
     for keyword in network_keywords:
         if keyword in error_msg:

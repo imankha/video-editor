@@ -97,6 +97,26 @@ class TestIsTransientError:
             exc = type(name, (Exception,), {})("timed out")
             assert is_transient_error(exc), f"{name} should be transient"
 
+    def test_ssl_eof_error_is_transient(self):
+        """An R2 TLS connection drop mid-upload must be retried (real export failure)."""
+        import ssl
+        exc = ssl.SSLEOFError("EOF occurred in violation of protocol (_ssl.c:2427)")
+        assert is_transient_error(exc)
+
+    def test_generic_ssl_error_is_transient(self):
+        import ssl
+        assert is_transient_error(ssl.SSLError("ssl validation failed"))
+
+    def test_ssl_cert_verification_error_is_not_transient(self):
+        """A real cert-verification failure is a config problem, not a transient drop."""
+        import ssl
+        exc = ssl.SSLCertVerificationError("certificate verify failed")
+        assert not is_transient_error(exc)
+
+    def test_ssl_eof_message_keyword_is_transient(self):
+        """Catch SSL drops even when re-wrapped as a plain exception (type lost)."""
+        assert is_transient_error(Exception("EOF occurred in violation of protocol"))
+
 
 # ---------------------------------------------------------------------------
 # retry_r2_call (sync)
@@ -145,6 +165,26 @@ class TestRetryR2Call:
         assert result == "ok"
         # Should take at least ~0.05s (with jitter reducing to 50%)
         assert elapsed >= 0.025
+
+    def test_ssl_drop_uses_all_retries_then_succeeds(self):
+        """A TLS drop on the first attempts is retried (3 backoff retries via TIER_1),
+        not given up on immediately — the regression behind the export failure."""
+        import ssl
+        func = MagicMock(side_effect=[
+            ssl.SSLEOFError("EOF occurred in violation of protocol"),
+            ssl.SSLEOFError("EOF occurred in violation of protocol"),
+            "ok",
+        ])
+        result = retry_r2_call(func, max_attempts=4, initial_delay=0.01)
+        assert result == "ok"
+        assert func.call_count == 3
+
+    def test_ssl_drop_exhausts_all_attempts(self):
+        import ssl
+        func = MagicMock(side_effect=ssl.SSLEOFError("EOF occurred in violation of protocol"))
+        with pytest.raises(ssl.SSLEOFError):
+            retry_r2_call(func, max_attempts=4, initial_delay=0.01)
+        assert func.call_count == 4  # 1 initial + 3 backoff retries
 
     def test_passes_kwargs(self):
         func = MagicMock(return_value="ok")

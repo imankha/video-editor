@@ -329,10 +329,12 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
         """, (project_id, output_filename, next_version, video_duration, existing_highlights, existing_effect_type))
         working_video_id = cursor.lastrowid
 
-        # Update project to point to new working video
+        # Update project to point to new working video.
+        # T4010: do NOT null final_video_id -- the published reel stays valid until a
+        # new final is exported. Staleness is detected via timestamps downstream.
         cursor.execute("""
             UPDATE projects
-            SET working_video_id = ?, final_video_id = NULL
+            SET working_video_id = ?
             WHERE id = ?
         """, (working_video_id, project_id))
 

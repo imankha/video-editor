@@ -508,6 +508,54 @@ class TestExportBrilliantClip:
         assert _count_final_videos(db, game_id) == 1
 
     @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.delete_from_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_re_export_inserts_new_before_deleting_old(self, mock_ffmpeg, mock_presign, mock_delete, mock_upload, isolated_profile_db):
+        """T4010: re-export must INSERT the new final_videos row before deleting
+        the old one, delete the old row BY id (not project-wide, which would also
+        kill the new row), and only delete the old R2 object AFTER the DB commit.
+
+        At delete_from_r2 time the swap must already be committed: exactly one
+        final_videos row remains and it is the NEW one (old row gone, new present)."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip = self._make_clip(auto_project_id=400)
+        _insert_final_video(db, game_id, project_id=400, filename="old.mp4")
+
+        seen = {}
+
+        def _inspect_on_delete(user_id, key):
+            conn = sqlite3.connect(str(db))
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT filename FROM final_videos WHERE project_id = 400").fetchall()
+            conn.close()
+            seen["filenames"] = [r["filename"] for r in rows]
+            seen["key"] = key
+            return True
+
+        mock_delete.side_effect = _inspect_on_delete
+
+        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
+
+        # Old R2 object deleted, by old filename
+        assert seen["key"] == "final_videos/old.mp4"
+        # At delete time: new row committed, old row already gone (no zero-row window,
+        # and the delete did NOT take out the new row).
+        assert len(seen["filenames"]) == 1
+        assert seen["filenames"][0] != "old.mp4"
+        # End state: exactly one row (the new one).
+        assert _count_final_videos(db, game_id) == 1
+
+    @patch(f"{M}.upload_to_r2", return_value=True)
     @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
     @patch(f"{M}.ffmpeg")
     def test_timing_logged(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db, caplog):

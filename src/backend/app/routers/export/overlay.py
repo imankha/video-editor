@@ -35,7 +35,7 @@ _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="ov
 from ...websocket import export_progress, manager
 from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
 from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress
+from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress, delete_from_r2
 from ...user_context import get_current_user_id
 from ...profile_context import get_current_profile_id
 from ...highlight_transform import (
@@ -56,6 +56,41 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _prior_final_is_shared(prior_filename: str) -> bool:
+    """Whether an active share still serves the prior final video's R2 object.
+
+    Shares snapshot the filename + resolve playback straight from R2, so deleting an
+    object an active share points at would break the share. Postgres is an external
+    dependency here: if the check can't run, fail SAFE (treat as shared -> keep the
+    object) rather than risk deleting a still-served reel."""
+    if not prior_filename:
+        return False
+    try:
+        from app.services.sharing_db import filename_has_active_share
+        return filename_has_active_share(prior_filename)
+    except Exception as e:
+        logger.warning(
+            f"[ReExport] Active-share check failed for {prior_filename}; "
+            f"keeping prior object to be safe: {e}")
+        return True
+
+
+def _delete_prior_final_object(user_id: str, prior_filename: str, new_filename: str) -> None:
+    """Post-commit, best-effort cleanup of a re-exported reel's PRIOR R2 object.
+
+    Runs ONLY after the new version is committed + the pointer repointed. Never
+    deletes the just-written object, and never raises -- a cleanup failure must not
+    roll back the successful swap. Caller has already confirmed the object is not
+    served by an active share."""
+    if not prior_filename or prior_filename == new_filename:
+        return
+    try:
+        delete_from_r2(user_id, f"final_videos/{prior_filename}")
+        logger.info(f"[ReExport] Deleted prior final R2 object final_videos/{prior_filename}")
+    except Exception as e:
+        logger.warning(f"[ReExport] Failed to delete prior final final_videos/{prior_filename}: {e}")
+
+
 def _finalize_overlay_export(
     project_id: int,
     output_filename: str,
@@ -71,6 +106,20 @@ def _finalize_overlay_export(
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
+
+        # T4010: capture the PRIOR final the project currently points at so we can
+        # atomically swap to the new version and clean up the old one after commit.
+        cursor.execute("""
+            SELECT fv.id, fv.filename
+            FROM projects p JOIN final_videos fv ON fv.id = p.final_video_id
+            WHERE p.id = ?
+        """, (project_id,))
+        prior = cursor.fetchone()
+        prior_final_id = prior['id'] if prior else None
+        prior_filename = prior['filename'] if prior else None
+        # An active share still serves the old object straight from R2 -> keep both
+        # its row and its object; otherwise the re-export replaces it in place.
+        keep_prior = _prior_final_is_shared(prior_filename)
 
         cursor.execute("""
             SELECT COALESCE(MAX(version), 0) + 1 as next_version
@@ -109,6 +158,12 @@ def _finalize_overlay_export(
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
 
+        # T4010: drop the now-superseded prior row in the SAME transaction as the
+        # swap, so DB + R2 stay consistent (the prior R2 object is deleted post-commit
+        # below). Skipped when an active share still serves it.
+        if prior_final_id and not keep_prior:
+            cursor.execute("DELETE FROM final_videos WHERE id = ?", (prior_final_id,))
+
         cursor.execute("""
             UPDATE export_jobs SET status = 'complete', output_video_id = ?, output_filename = ?,
                 completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
@@ -116,6 +171,10 @@ def _finalize_overlay_export(
         """, (final_video_id, output_filename, gpu_seconds, modal_function, export_id))
 
         conn.commit()
+
+    # T4010: only after the swap is committed, best-effort delete the prior object.
+    if not keep_prior:
+        _delete_prior_final_object(user_id, prior_filename, output_filename)
 
     from app.analytics import record_milestone
     record_milestone(user_id, "export_completed", {"export_id": export_id, "type": "overlay"})
@@ -1109,6 +1168,16 @@ async def export_final(
                 detail="Project must have a working video before final export"
             )
 
+        # T4010: capture the PRIOR final the project points at, to swap atomically
+        # and clean up the old version after commit (unless an active share serves it).
+        prior_final_id = project['final_video_id']
+        prior_filename = None
+        if prior_final_id:
+            cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (prior_final_id,))
+            prior_row = cursor.fetchone()
+            prior_filename = prior_row['filename'] if prior_row else None
+        keep_prior = _prior_final_is_shared(prior_filename)
+
         # Generate unique filename using project name + UUID (no local storage)
         project_name = project['name'] or f"project_{project_id}"
         safe_name = re.sub(r'[^\w\s-]', '', project_name).strip()
@@ -1174,6 +1243,11 @@ async def export_final(
             UPDATE projects SET final_video_id = ? WHERE id = ?
         """, (final_video_id, project_id))
 
+        # T4010: drop the superseded prior row in the same transaction as the swap
+        # (its R2 object is deleted post-commit). Skipped when a share still serves it.
+        if prior_final_id and not keep_prior:
+            cursor.execute("DELETE FROM final_videos WHERE id = ?", (prior_final_id,))
+
         # Track source clips for before/after comparison
         cursor.execute("""
             SELECT wc.id, wc.raw_clip_id, wc.uploaded_filename, wc.segments_data, wc.sort_order,
@@ -1226,6 +1300,10 @@ async def export_final(
         conn.commit()
 
         logger.info(f"[Final Export] Created final video {final_video_id} for project {project_id}")
+
+    # T4010: only after the swap is committed, best-effort delete the prior object.
+    if not keep_prior:
+        _delete_prior_final_object(user_id, prior_filename, filename)
 
     return JSONResponse({
         'success': True,
