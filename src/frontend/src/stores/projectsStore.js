@@ -83,7 +83,19 @@ export const useProjectsStore = create((set, get) => ({
     if (PROFILING_ENABLED) performance.mark('project:load:start');
     set({ loading: true, error: null });
     try {
-      const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      // Retry once on a transient network failure (native fetch rejects with a
+      // TypeError when the connection drops — common when a long-open tab clicks
+      // through a staging/prod auto-deploy that restarts the backend). HTTP error
+      // statuses are deterministic, so they are NOT retried.
+      let response;
+      try {
+        response = await apiFetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      } catch (netErr) {
+        if (!(netErr instanceof TypeError)) throw netErr;
+        console.warn('[projectsStore] fetchProject network error, retrying once:', netErr);
+        await new Promise((r) => setTimeout(r, 400));
+        response = await apiFetch(`${API_BASE_URL}/projects/${projectId}?_t=${Date.now()}`);
+      }
       if (!response.ok) throw new Error('Failed to fetch project');
       const data = await response.json();
       set({ loading: false });
