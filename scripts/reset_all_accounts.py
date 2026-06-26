@@ -202,11 +202,15 @@ def main():
     parser = argparse.ArgumentParser(
         description="Reset ALL dev/staging accounts (preserves games, never touches prod)")
     parser.add_argument("--yes", action="store_true", help="Skip confirmation prompt")
+    parser.add_argument("--only", choices=ALLOWED_ENVS,
+                        help="Restrict the reset to a single environment (e.g. --only dev)")
     args = parser.parse_args()
+
+    envs = [args.only] if args.only else ALLOWED_ENVS
 
     r2_configs = {}
     pg_conns = {}
-    for env_name in ALLOWED_ENVS:
+    for env_name in envs:
         print(f"Loading {env_name} config...")
         config = load_env(env_name)
         if config:
