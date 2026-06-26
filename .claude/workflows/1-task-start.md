@@ -7,6 +7,10 @@
 git checkout -b feature/T{id}-{short-description}
 ```
 
+### 1b. Mark Task IN PROGRESS
+
+Set the task's Status column to `IN PROGRESS` in `docs/plans/PLAN.md` (factual status — AI owns this; see CLAUDE.md Task Status Rule). This is the only status field AI edits at task start. Do NOT touch TESTING/DONE — those are user promotions.
+
 ### 2. Read Task File
 - Read `docs/plans/tasks/T{id}-*.md`
 - Understand the problem, solution, and acceptance criteria

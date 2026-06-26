@@ -25,15 +25,19 @@ grep -r "print(" src/backend/app --include="*.py" | grep -v "__pycache__"
 
 ### 2. Commit Final Changes
 
-```bash
-git add -A
-git commit -m "$(cat <<'EOF'
-docs: Mark T{id} as DONE
+Stage explicit paths (never `git add -A` / `git add .` — the working tree is shared and may hold unrelated WIP).
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+```bash
+git add <changed files>
+git commit -m "$(cat <<'EOF'
+T{id}: {final cleanup summary}
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
+
+Do NOT mark the task DONE in this commit. DONE is a user promotion (see CLAUDE.md Task Status Rule).
 
 ### 5. Notify User
 
@@ -43,14 +47,13 @@ T{id} complete. Branch `feature/T{id}-*` is ready to merge.
 
 ---
 
-## User Handles Merge
+## Merge -> STAGING
 
-The user will:
-1. Review the branch
-2. Merge to master
-3. Delete the feature branch (optional)
+The user reviews and decides when to merge. When the task branch lands on master — whether AI performs the merge (only when the user explicitly asks) or AI confirms the user merged it — set that task's Status to `STAGING` in `docs/plans/PLAN.md`. Pushing to master auto-deploys staging, so STAGING is factually true at that point (AI owns this status; see CLAUDE.md Task Status Rule).
 
-**AI does NOT push or merge to master.**
+After merge the user will (optionally) delete the feature branch, verify on staging, then promote `STAGING -> DONE` via the task board "Resolve" button. Being on staging is the test phase — there is no separate TESTING step.
+
+**AI does NOT push or merge to master unless the user explicitly asks** (see [No merge without approval] memory).
 
 ---
 

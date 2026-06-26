@@ -733,6 +733,8 @@ HTML = r"""<!DOCTYPE html>
     text-transform: uppercase; white-space: nowrap; text-align: center;
   }
   .badge-todo { background: rgba(88,166,255,0.15); color: var(--blue); }
+  .badge-inprogress { background: rgba(56,139,253,0.22); color: var(--blue); }
+  .badge-staging { background: rgba(247,129,102,0.18); color: var(--orange, #f78166); }
   .badge-testing { background: rgba(210,153,34,0.15); color: var(--yellow); }
   .badge-done { background: rgba(63,185,80,0.15); color: var(--green); }
   .badge-ice { background: rgba(72,79,88,0.25); color: var(--gray); }
@@ -1399,6 +1401,8 @@ function slugify(text) {
 function statusClass(s) {
   const l = (s || '').toLowerCase().replace(/\s/g, '');
   if (l === 'done') return 'badge-done';
+  if (l === 'staging') return 'badge-staging';
+  if (l === 'inprogress' || l === 'in_progress') return 'badge-inprogress';
   if (l === 'testing') return 'badge-testing';
   if (l === 'todo') return 'badge-todo';
   if (l === 'ice') return 'badge-ice';
@@ -1484,9 +1488,8 @@ function buildTaskCard(t, ms) {
 
   const statusLower = (t.status || '').toLowerCase().replace(/\s/g, '');
   let statusBtnHtml = '';
-  if (statusLower === 'todo' || statusLower === 'in_progress' || statusLower === 'in progress') {
-    statusBtnHtml = '<button class="status-btn to-testing" title="Move to Testing">Testing</button>';
-  } else if (statusLower === 'testing') {
+  if (statusLower === 'staging' || statusLower === 'testing' || statusLower === 'in_progress' || statusLower === 'inprogress') {
+    // STAGING is the test phase; user resolves straight to DONE. (TESTING kept for legacy rows.)
     statusBtnHtml = '<button class="status-btn to-done" title="Resolve (mark Done)">Resolve</button>';
   }
 

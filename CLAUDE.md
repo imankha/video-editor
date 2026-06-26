@@ -47,9 +47,18 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 | Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for <10 LOC single-file) |
 | Commit | After implementation | Commit with co-author line |
 
-### Task Completion Rule
+### Task Status Rule
 
-**AI does NOT change task statuses.** The user manually promotes tasks via the task board buttons ("Move to Testing", "Resolve"). AI should NOT update PLAN.md status fields. After implementation and tests pass, tell the user the task is ready -- they will promote it themselves.
+Task statuses split into two kinds, with different owners:
+
+**Factual statuses (AI auto-updates as part of the workflow).** These are objectively true from what the workflow did, so AI sets them in PLAN.md:
+- `IN PROGRESS` — set when work begins (feature branch created, Stage 1). See [1-task-start.md](.claude/workflows/1-task-start.md).
+- `STAGING` — set when the task branch lands on master (pushing to master auto-deploys staging). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
+
+**Judgment promotion (user only).** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. The user verifies on staging then marks it done; AI never sets this:
+- `DONE`/`Resolved` — the user promotes via the task board "Resolve" button once satisfied on staging.
+
+Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user)`. After merge, tell the user the task is on staging and ready to test -- they Resolve it themselves when satisfied.
 
 ### Classification Output (Required)
 
