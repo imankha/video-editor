@@ -22,6 +22,7 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
 import { useProject } from '../contexts/ProjectContext';
+import { shouldPersistFramingForOverlayTransition } from './framingOverlayTransition';
 
 /**
  * FramingScreen - Self-contained screen for Framing mode
@@ -892,11 +893,20 @@ export function FramingScreen({
       return;
     }
 
-    try {
-      await framingSaveCurrentClipState();
-      console.log('[FramingScreen] Saved current clip state');
-    } catch (err) {
-      console.warn('[FramingScreen] Failed to save clip state (continuing):', err);
+    // T4020: The export -> overlay transition is NOT a user gesture. By now the
+    // rendered working video's metadata has superseded the source clip's, so
+    // useCrop/useSegments have re-initialized to defaults (empty crop + default
+    // segments). A full-state save here would write that empty/default state as
+    // a new MAX(version), shadowing the real exported version. The user's edits
+    // were already persisted by the pre-render full-state save in
+    // ExportButtonContainer (and surgically per gesture). The gate is centralized
+    // and unit-tested to stay closed; see framingOverlayTransition.js.
+    if (shouldPersistFramingForOverlayTransition()) {
+      try {
+        await framingSaveCurrentClipState();
+      } catch (err) {
+        console.warn('[FramingScreen] Failed to save clip state (continuing):', err);
+      }
     }
 
     let workingVideoSet = false;
