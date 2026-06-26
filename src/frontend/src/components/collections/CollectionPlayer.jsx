@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useCallback } from 'react';
-import { X, Download, Loader, Pencil } from 'lucide-react';
+import { X, Download, Loader, Pencil, Scale } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
 import { useStoryPlayback } from './useStoryPlayback';
@@ -29,6 +29,11 @@ const SWIPE_THRESHOLD_PX = 48;
  *                                     AND the active reel has an editable project (T3940). The
  *                                     public viewer omits this prop, so its player has no button.
  * @param {number|null=} reEditLoadingId - download id currently restoring; spins the button for it
+ * @param {Function=} onReRank      - (activeReel) => void; shows a "Re-rank this" button when set
+ *                                     AND the active reel is a single-clip reel with an editable
+ *                                     project (T4030). Author-only: the public viewer omits this
+ *                                     prop, so its player never shows it. Hidden on Mixes/multi-clip.
+ * @param {number|null=} reRankLoadingId - download id currently re-ranking; spins the button for it
  */
 export function CollectionPlayer({
   reels,
@@ -41,6 +46,8 @@ export function CollectionPlayer({
   downloadLoading,
   onReEdit,
   reEditLoadingId,
+  onReRank,
+  reRankLoadingId,
 }) {
   const videoRef = useRef(null);
   const pointerStart = useRef(null);
@@ -148,6 +155,21 @@ export function CollectionPlayer({
               title="Re-edit this reel"
               onClick={() => onReEdit(activeReel)}
               className={reEditLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
+            />
+          ) : null}
+          {/* T4030: re-open THIS reel for ranking (rd reset, progress drops).
+              Author-only (public viewer omits onReRank) AND single-clip with an
+              editable project -- Mixes/multi-clip never rank, so the control hides. */}
+          {onReRank && activeReel.project_id && activeReel.clip_count === 1 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={reRankLoadingId === activeReel.id ? Loader : Scale}
+              iconOnly
+              disabled={reRankLoadingId === activeReel.id}
+              title="Re-rank this reel"
+              onClick={() => onReRank(activeReel)}
+              className={reRankLoadingId === activeReel.id ? '[&_svg]:animate-spin' : ''}
             />
           ) : null}
           {onDownload && (

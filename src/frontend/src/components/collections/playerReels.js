@@ -16,6 +16,9 @@ export function toPlayerReel(d) {
     // T3940: editable project behind the reel, so the in-player "Re-edit" button
     // can restore + open it. null/0 -> no editable project (button hidden).
     project_id: d.project_id,
+    // T4030: single-clip reels are the only rankable pool -- the "Re-rank this"
+    // control gates on clip_count === 1 (Mixes/multi-clip never rank).
+    clip_count: d.clip_count,
     // T3920: source game + unified in-match start, shown in the player header.
     // Single-clip reels only; null for multi-clip Mixes (no single game/start).
     gameName: d.game_names?.[0] ?? null,
