@@ -1,0 +1,188 @@
+diff --git a/src/backend/app/quest_config.py b/src/backend/app/quest_config.py
+index 70d15e21..7ee29a22 100644
+--- a/src/backend/app/quest_config.py
++++ b/src/backend/app/quest_config.py
+@@ -60,3 +60,9 @@ QUEST_DEFINITIONS = [
+ 
+ QUEST_BY_ID = {q["id"]: q for q in QUEST_DEFINITIONS}
+ ALL_STEP_IDS = [s for q in QUEST_DEFINITIONS for s in q["step_ids"]]
++
++# Extra tracked steps shown in the admin funnel but not part of quest completion.
++# These are post-quest actions (e.g. the Vamos dialog after the final quest).
++EXTRA_TRACKED_STEPS = [
++    {"id": "clicked_vamos", "after_quest": "quest_4"},
++]
+diff --git a/src/backend/app/routers/admin.py b/src/backend/app/routers/admin.py
+index bc7696ad..56177aba 100644
+--- a/src/backend/app/routers/admin.py
++++ b/src/backend/app/routers/admin.py
+@@ -28,7 +28,7 @@ from ..services.user_db import (
+     get_credit_stats_for_admin,
+     grant_credits,
+ )
+-from ..quest_config import QUEST_DEFINITIONS
++from ..quest_config import QUEST_DEFINITIONS, EXTRA_TRACKED_STEPS
+ 
+ logger = logging.getLogger(__name__)
+ 
+@@ -169,6 +169,11 @@ def _check_steps_on_conn(conn) -> dict[str, bool]:
+         "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
+     )
+ 
++    # --- Extra tracked steps (not part of quest completion) ---
++    steps["clicked_vamos"] = one(
++        "SELECT 1 FROM achievements WHERE key = 'clicked_vamos'"
++    )
++
+     return steps
+ 
+ 
+@@ -215,12 +220,15 @@ async def _compute_quest_progress(user_id: str) -> dict:
+     for qdef in QUEST_DEFINITIONS:
+         qid = qdef["id"]
+         step_ids = qdef["step_ids"]
++        # Include extra tracked steps that follow this quest
++        extra_ids = [e["id"] for e in EXTRA_TRACKED_STEPS if e["after_quest"] == qid]
++        all_ids = step_ids + extra_ids
+         completed = sum(1 for sid in step_ids if merged.get(sid, False))
+         result[qid] = {
+             "completed": completed,
+             "total": len(step_ids),
+             "reward_claimed": reward_claimed[qid],
+-            "steps": {sid: merged.get(sid, False) for sid in step_ids},
++            "steps": {sid: merged.get(sid, False) for sid in all_ids},
+         }
+     return result
+ 
+diff --git a/src/backend/app/routers/quests.py b/src/backend/app/routers/quests.py
+index c41e87aa..69d9aee5 100644
+--- a/src/backend/app/routers/quests.py
++++ b/src/backend/app/routers/quests.py
+@@ -14,14 +14,14 @@ from fastapi import APIRouter, HTTPException
+ from ..user_context import get_current_user_id
+ from ..database import get_db_connection
+ from ..services.user_db import grant_credits, get_credit_balance, get_credit_transactions, mark_quest_completed, get_completed_quest_ids
+-from ..quest_config import QUEST_DEFINITIONS, QUEST_BY_ID
++from ..quest_config import QUEST_DEFINITIONS, QUEST_BY_ID, EXTRA_TRACKED_STEPS
+ 
+ logger = logging.getLogger(__name__)
+ 
+ router = APIRouter(prefix="/quests", tags=["quests"])
+ 
+ # Known achievement keys — only these can be recorded
+-KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s"}
++KNOWN_ACHIEVEMENT_KEYS = {"opened_framing_editor", "viewed_gallery_video", "viewed_custom_project_video", "played_annotations", "watched_gallery_video_1s", "clicked_vamos"}
+ 
+ 
+ def _check_all_steps(user_id: str, conn) -> dict:
+@@ -163,6 +163,11 @@ def _check_all_steps(user_id: str, conn) -> dict:
+         "SELECT 1 FROM achievements WHERE key = 'viewed_custom_project_video'"
+     ).fetchone() is not None
+ 
++    # --- Extra tracked steps (not part of quest completion) ---
++    steps["clicked_vamos"] = cursor.execute(
++        "SELECT 1 FROM achievements WHERE key = 'clicked_vamos'"
++    ).fetchone() is not None
++
+     return steps
+ 
+ 
+diff --git a/src/frontend/src/components/QuestPanel.jsx b/src/frontend/src/components/QuestPanel.jsx
+index dfdc3c52..79c5bd27 100644
+--- a/src/frontend/src/components/QuestPanel.jsx
++++ b/src/frontend/src/components/QuestPanel.jsx
+@@ -24,6 +24,7 @@ export function QuestPanel() {
+   const fetchProgress = useQuestStore((s) => s.fetchProgress);
+ 
+   const claimReward = useQuestStore((s) => s.claimReward);
++  const recordAchievement = useQuestStore((s) => s.recordAchievement);
+ 
+   const [expanded, setExpanded] = useState(true);  // Start expanded for new users
+   const [hidden, setHidden] = useState(false);       // User fully dismissed
+@@ -172,7 +173,7 @@ export function QuestPanel() {
+             <p className="text-white font-medium">Use your credits to create more AI-upscaled highlights!</p>
+           </div>
+           <button
+-            onClick={() => setShowCompletionModal(false)}
++            onClick={() => { recordAchievement('clicked_vamos'); setShowCompletionModal(false); }}
+             className="mt-10 w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-xl rounded-xl transition-colors"
+           >
+             Vamos!
+diff --git a/src/frontend/src/components/admin/QuestFunnelChart.jsx b/src/frontend/src/components/admin/QuestFunnelChart.jsx
+index e222013a..40113b72 100644
+--- a/src/frontend/src/components/admin/QuestFunnelChart.jsx
++++ b/src/frontend/src/components/admin/QuestFunnelChart.jsx
+@@ -22,26 +22,49 @@ export function QuestFunnelChart({ users }) {
+   const definitions = useQuestStore((s) => s.definitions);
+   const [hovered, setHovered] = useState(null);
+ 
+-  // Build flat step list from definitions
++  // Extra tracked steps appended after their parent quest (not part of quest completion)
++  const EXTRA_TRACKED_STEPS = [
++    { id: 'clicked_vamos', afterQuest: 'quest_4' },
++  ];
++
++  // Build flat step list from definitions + extra tracked steps
+   const allSteps = useMemo(() => {
+     if (!definitions) return [];
+-    return definitions.flatMap((quest, qi) =>
+-      quest.step_ids.map((stepId, si) => ({
+-        stepId,
+-        title: STEP_TITLES[stepId] || stepId,
+-        questTitle: quest.title,
+-        questIndex: qi + 1,
+-        stepWithinQuest: si + 1,
+-      }))
+-    );
++    const steps = [];
++    definitions.forEach((quest, qi) => {
++      quest.step_ids.forEach((stepId, si) => {
++        steps.push({
++          stepId,
++          title: STEP_TITLES[stepId] || stepId,
++          questTitle: quest.title,
++          questIndex: qi + 1,
++          stepWithinQuest: si + 1,
++        });
++      });
++      // Append extra tracked steps that follow this quest
++      EXTRA_TRACKED_STEPS
++        .filter(e => e.afterQuest === quest.id)
++        .forEach(extra => {
++          steps.push({
++            stepId: extra.id,
++            title: STEP_TITLES[extra.id] || extra.id,
++            questTitle: quest.title,
++            questIndex: qi + 1,
++            stepWithinQuest: quest.step_ids.length + 1,
++            isExtra: true,
++          });
++        });
++    });
++    return steps;
+   }, [definitions]);
+ 
+-  // Quest boundary indices for color banding
++  // Quest boundary indices for color banding (includes extra tracked steps)
+   const questBoundaries = useMemo(() => {
+     if (!definitions) return [];
+     return definitions.reduce((acc, q, i) => {
+       const prev = acc[i - 1] ?? -1;
+-      acc.push(prev + q.step_ids.length);
++      const extraCount = EXTRA_TRACKED_STEPS.filter(e => e.afterQuest === q.id).length;
++      acc.push(prev + q.step_ids.length + extraCount);
+       return acc;
+     }, []);
+   }, [definitions]);
+diff --git a/src/frontend/src/config/questDefinitions.jsx b/src/frontend/src/config/questDefinitions.jsx
+index adfb9c31..f5eb0bf3 100644
+--- a/src/frontend/src/config/questDefinitions.jsx
++++ b/src/frontend/src/config/questDefinitions.jsx
+@@ -66,6 +66,7 @@ export const STEP_TITLES = {
+   wait_for_reel: 'Wait For Export',
+   overlay_reel: 'Spotlight Your Player',
+   watch_reel: 'Watch Your Reel',
++  clicked_vamos: 'Vamos!',
+ };
+ 
+ /** Step descriptions keyed by step ID — JSX with inline icons */
