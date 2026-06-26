@@ -573,12 +573,22 @@ export function AnnotateContainer({
       URL.revokeObjectURL(annotateVideoUrl);
     }
     const loadPromise = beginGameVideoLoad({ gameId, pendingClipSeekTime, setAnnotateVideoUrl, loadGame });
+    // T4000: timing seam so a staging/prod HAR is unambiguous about the overlap.
+    // videoDispatchTs marks when the video byte fetch is in flight; we log how long
+    // AFTER that /load resolves (the head start the video got by not waiting on /load).
+    const videoDispatchTs = PROFILING_ENABLED ? performance.now() : 0;
+    if (PROFILING_ENABLED) {
+      console.info(`[T4000] game=${gameId} early video fetch dispatched (parallel with /load), src=${API_BASE}/api/games/${gameId}/video`);
+    }
 
     try {
       let gameData, playbackUrlData, teammateSharesData, teammateTagsData;
 
       try {
         const loadResult = await loadPromise;
+        if (PROFILING_ENABLED) {
+          console.info(`[T4000] game=${gameId} /load resolved +${Math.round(performance.now() - videoDispatchTs)}ms after the video fetch was dispatched (video had this much head start)`);
+        }
         gameData = loadResult.game;
         playbackUrlData = loadResult.playback_url;
         teammateSharesData = loadResult.teammate_shares;
