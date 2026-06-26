@@ -4,6 +4,7 @@ import { validateVideoFile } from '../utils/fileValidation';
 import { useVideoStore } from '../stores';
 import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
+import { PROFILING_ENABLED } from '../utils/profiling';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback, getTotalBufferedSec } from '../utils/videoLoadWatchdog';
@@ -873,7 +874,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       loadNudgeCountRef.current = 0;
       // T1380: one-shot moov-position probe so logs confirm whether the
       // currently-playing URL is faststart-ordered. Blob URLs skipped.
-      if (!isBlob && video.src) {
+      // Gated behind profiling (T4000): it's a diagnostic, and now that the
+      // src is the /video 302 it would cost every prod load an extra
+      // /video -> R2 round-trip just to read 64 bytes. Runs only when profiling.
+      if (PROFILING_ENABLED && !isBlob && video.src) {
         probeVideoUrlMoovPosition(video.src, 'on-load').catch(() => {});
       }
       // Set loading state - this catches cases where URL is set directly (e.g., Annotate mode)
