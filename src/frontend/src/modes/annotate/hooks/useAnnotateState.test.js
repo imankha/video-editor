@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import useAnnotateState from './useAnnotateState';
+import { setPendingGame } from '../../../utils/pendingNavigation';
+import { API_BASE } from '../../../config';
 
 // Mock the videoMetadata utility
 vi.mock('../../../utils/videoMetadata', () => ({
@@ -15,16 +17,18 @@ vi.mock('../../../utils/videoMetadata', () => ({
 // Mock URL.createObjectURL and URL.revokeObjectURL
 const mockCreateObjectURL = vi.fn().mockReturnValue('blob:mock-url');
 const mockRevokeObjectURL = vi.fn();
-global.URL.createObjectURL = mockCreateObjectURL;
-global.URL.revokeObjectURL = mockRevokeObjectURL;
+globalThis.URL.createObjectURL = mockCreateObjectURL;
+globalThis.URL.revokeObjectURL = mockRevokeObjectURL;
 
 describe('useAnnotateState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear(); // T4000: annotateVideoUrl now seeds from the pending-game breadcrumb
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
   });
 
   // ============================================================================
@@ -74,6 +78,31 @@ describe('useAnnotateState', () => {
       const { result } = renderHook(() => useAnnotateState());
 
       expect(result.current.isAssociatedWithGame).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // T4000: EARLY /video SRC SEED (no-render-tick start)
+  // ============================================================================
+
+  describe('early /video src seed (T4000)', () => {
+    it('seeds annotateVideoUrl from a pending game on first render (mounts <video> immediately)', () => {
+      setPendingGame(42);
+      const { result } = renderHook(() => useAnnotateState());
+      // Seeded synchronously on the first render — the controlled <video> can mount
+      // with a src on the first commit instead of waiting for a post-commit setState.
+      expect(result.current.annotateVideoUrl).toBe(`${API_BASE}/api/games/42/video`);
+    });
+
+    it('carries a click-time clip seek into the seeded src', () => {
+      setPendingGame(42, 12.5);
+      const { result } = renderHook(() => useAnnotateState());
+      expect(result.current.annotateVideoUrl).toBe(`${API_BASE}/api/games/42/video#t=12.5`);
+    });
+
+    it('does not seed (stays null) when there is no pending game', () => {
+      const { result } = renderHook(() => useAnnotateState());
+      expect(result.current.annotateVideoUrl).toBeNull();
     });
   });
 

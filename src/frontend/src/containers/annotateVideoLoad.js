@@ -31,24 +31,48 @@ export function buildEarlyGameVideoSrc(gameId, pendingClipSeekTime = null) {
   return src;
 }
 
+// In-flight dedup for beginGameVideoLoad — keyed by gameId. Mirrors gamesDataStore's
+// loadGame/getGame `_getGameInflight` pattern. Without it, a double-invoke (React
+// StrictMode's double effect, a rapid remount) runs the early src-set twice, firing a
+// second /video 302 + second R2 range fetch (loadGame already dedups /load, which is
+// why only the video doubled). The entry clears when /load settles, so a genuine
+// later re-open still works.
+const _beginLoadInflight = new Map();
+
 /**
  * Begin loading a saved game's video.
  *
  * Sets the stable first-paint src synchronously (so the byte fetch starts now),
  * then kicks off `/load` and returns its in-flight promise. The synchronous
  * src-set BEFORE awaiting `loadGame` is the core T4000 optimization: the two
- * round-trips overlap instead of chaining.
+ * round-trips overlap instead of chaining. Deduped by gameId so a StrictMode /
+ * remount double-invoke does not fire two /video fetches.
  *
  * @param {Object} params
- * @param {string} params.gameId
+ * @param {string|number} params.gameId
  * @param {number|null} [params.pendingClipSeekTime]
  * @param {(url: string) => void} params.setAnnotateVideoUrl
- * @param {(gameId: string) => Promise<any>} params.loadGame
+ * @param {(gameId: string|number) => Promise<any>} params.loadGame
  * @returns {Promise<any>} the in-flight loadGame promise
  */
 export function beginGameVideoLoad({ gameId, pendingClipSeekTime = null, setAnnotateVideoUrl, loadGame }) {
+  const existing = _beginLoadInflight.get(gameId);
+  if (existing) return existing;
+
   setAnnotateVideoUrl(buildEarlyGameVideoSrc(gameId, pendingClipSeekTime));
-  return loadGame(gameId);
+  const promise = Promise.resolve(loadGame(gameId));
+  _beginLoadInflight.set(gameId, promise);
+  promise.finally(() => {
+    if (_beginLoadInflight.get(gameId) === promise) {
+      _beginLoadInflight.delete(gameId);
+    }
+  });
+  return promise;
+}
+
+/** Test seam: clear the beginGameVideoLoad in-flight dedup between tests. */
+export function __resetBeginLoadDedup() {
+  _beginLoadInflight.clear();
 }
 
 /**
