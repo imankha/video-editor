@@ -200,24 +200,20 @@ def _export_brilliant_clip(
                 f"[AutoExport] Auto project {clip['auto_project_id']} missing for "
                 f"clip {clip['id']} — aspect_ratio stays NULL"
             )
-        # Replace existing export for this clip (re-export scenario)
+        # T4010: capture the prior export (re-export scenario) so we can swap it
+        # out atomically: INSERT the new row first, then DELETE the old row BY id
+        # (a project-wide DELETE would also remove the row we just inserted), and
+        # only delete the old R2 object AFTER the commit. This removes the
+        # zero-row / object-deleted-before-commit window.
         cursor.execute(
-            """SELECT filename FROM final_videos
+            """SELECT id, filename FROM final_videos
                WHERE source_type = 'brilliant_clip' AND project_id = ?""",
             (clip['auto_project_id'],),
         )
         old_row = cursor.fetchone()
-        if old_row:
-            old_r2_key = f"final_videos/{old_row['filename']}"
-            try:
-                delete_from_r2(user_id, old_r2_key)
-            except Exception as e:
-                logger.warning(f"[AutoExport] Failed to delete old R2 file {old_r2_key}: {e}")
-            cursor.execute(
-                """DELETE FROM final_videos
-                   WHERE source_type = 'brilliant_clip' AND project_id = ?""",
-                (clip['auto_project_id'],),
-            )
+        old_id = old_row['id'] if old_row else None
+        old_filename = old_row['filename'] if old_row else None
+
         # T3605: brilliant clip belongs to exactly one game -> [game_id]
         game_ids_blob = encode_game_ids([game_id])
         # T3630: a brilliant clip IS a single clip -> clip_count=1, quality=its
@@ -239,7 +235,18 @@ def _export_brilliant_clip(
              aspect_ratio, tags_blob, game_ids_blob, quality_score,
              rating, RD_MAX, clip['id'], clip['start_time'], clip_game_start_time),
         )
+        if old_id is not None:
+            cursor.execute("DELETE FROM final_videos WHERE id = ?", (old_id,))
         conn.commit()
+
+    # T4010: post-commit, best-effort cleanup of the prior R2 object. Never the
+    # just-written object; a cleanup failure must not undo the committed swap.
+    if old_filename and old_filename != filename:
+        old_r2_key = f"final_videos/{old_filename}"
+        try:
+            delete_from_r2(user_id, old_r2_key)
+        except Exception as e:
+            logger.warning(f"[AutoExport] Failed to delete old R2 file {old_r2_key}: {e}")
 
 
 def _generate_recap(

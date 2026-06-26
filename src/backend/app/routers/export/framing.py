@@ -242,11 +242,10 @@ async def export_framing(
         existing_highlights = existing['highlights_data'] if existing else None
         existing_effect_type = normalize_effect_type(existing['effect_type']) if existing else DEFAULT_HIGHLIGHT_EFFECT.value
 
-        # Reset final_video_id since framing changed (user needs to re-export from overlay)
-        cursor.execute("""
-            UPDATE projects SET final_video_id = NULL WHERE id = ?
-        """, (project_id,))
-        logger.info(f"[Framing Export] Reset final_video_id due to framing change")
+        # T4010: do NOT null final_video_id on a framing re-export. The published
+        # reel stays valid until a new final actually exists; staleness is detected
+        # downstream via working_video_created_at > final_video_created_at, so the
+        # user is still routed to re-export overlay without losing the reference.
 
         # Create new working video entry with version number and duration (carry forward overlay data)
         cursor.execute("""
@@ -364,7 +363,11 @@ async def render_project(request: RenderRequest, http_request: Request):
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
+            # T4010: do NOT null working_video_id / final_video_id here. The old
+            # pointers stay valid for the whole in-flight render; the success path
+            # repoints working_video_id and a failure restores both (see
+            # _run_render_background). The 'processing' export_jobs row below is the
+            # in-progress signal -- the UI keys on it, not on a nulled pointer.
             cursor.execute("""
                 INSERT INTO export_jobs (id, project_id, type, status, input_data)
                 VALUES (?, ?, 'framing', 'processing', '{}')
@@ -523,6 +526,21 @@ async def _run_render_background(
     all progress and errors are reported via WebSocket."""
     from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
 
+    # T4010: snapshot the pre-job pointers so a failed render restores the project
+    # to exactly its prior state (the success path repoints working_video_id itself).
+    prior_working_video_id = None
+    prior_final_video_id = None
+    try:
+        with get_db_connection() as conn:
+            row = conn.cursor().execute(
+                "SELECT working_video_id, final_video_id FROM projects WHERE id = ?",
+                (project_id,)).fetchone()
+        if row:
+            prior_working_video_id = row['working_video_id']
+            prior_final_video_id = row['final_video_id']
+    except Exception as e:
+        logger.warning(f"[Render] Could not snapshot prior pointers for project {project_id}: {e}")
+
     temp_dir = tempfile.mkdtemp()
     pipeline_entered = False
     try:
@@ -638,6 +656,18 @@ async def _run_render_background(
             refund_credits(user_id, credits_deducted, export_id, video_seconds)
             logger.info(f"[Render] Refunded {credits_deducted} credits (pre-pipeline failure)")
         logger.error(f"[Render] Background render failed: {e}", exc_info=True)
+
+        # T4010: a failed render must leave the project exactly as before the job.
+        # Restore the pointers in case the pipeline advanced working_video_id or
+        # nulled final_video_id before failing -- the published reel is never lost.
+        try:
+            with get_db_connection() as conn:
+                conn.cursor().execute(
+                    "UPDATE projects SET working_video_id = ?, final_video_id = ? WHERE id = ?",
+                    (prior_working_video_id, prior_final_video_id, project_id))
+                conn.commit()
+        except Exception as restore_err:
+            logger.error(f"[Render] Failed to restore prior pointers for project {project_id}: {restore_err}")
 
         fail_export_job(export_id, str(e))
 

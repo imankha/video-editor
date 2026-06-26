@@ -21,6 +21,27 @@ def get_sharing_db():
     return get_pg()
 
 
+def filename_has_active_share(video_filename: str) -> bool:
+    """True if any non-revoked video share still serves this final-video filename.
+
+    Shares snapshot the final video's filename into share_videos.video_filename and
+    resolve playback directly from that R2 object (see shares._build_video_r2_key) --
+    they never re-read final_videos. So the re-export cleanup must NOT delete an R2
+    object an active share still points at. Used by the overlay re-export cleanup to
+    decide whether the prior version's object (and row) may be removed."""
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT 1
+                 FROM share_videos sv
+                 JOIN shares s ON s.id = sv.share_id
+                WHERE sv.video_filename = %s AND s.revoked_at IS NULL
+                LIMIT 1""",
+            (video_filename,),
+        )
+        return cur.fetchone() is not None
+
+
 # ---------------------------------------------------------------------------
 # Video share CRUD
 # ---------------------------------------------------------------------------

@@ -1646,7 +1646,8 @@ async def _export_clips(
                     """, (project_id,))
                     next_version = cursor.fetchone()['next_version']
 
-                    cursor.execute("UPDATE projects SET final_video_id = NULL WHERE id = ?", (project_id,))
+                    # T4010: do NOT null final_video_id on framing re-export; the
+                    # published reel stays valid until a new final exists.
 
                     actual_durations = [get_video_duration(path) for path in processed_paths]
                     source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
@@ -1834,7 +1835,10 @@ async def export_multi_clip(
         try:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("UPDATE projects SET working_video_id = NULL, final_video_id = NULL WHERE id = ?", (project_id,))
+                # T4010: do NOT null the pointers here. They stay valid for the whole
+                # in-flight export; success repoints working_video_id and a failure
+                # restores both (see _run_multi_clip_background). The 'processing'
+                # export_jobs row is the in-progress signal the UI keys on.
                 cursor.execute("""
                     INSERT INTO export_jobs (id, project_id, type, status, input_data)
                     VALUES (?, ?, 'framing', 'processing', '{}')
@@ -1970,6 +1974,22 @@ async def _run_multi_clip_background(
     Runs via asyncio.create_task after /multi-clip returns 202; all progress
     and errors are reported via WebSocket."""
     from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
+
+    # T4010: snapshot the pre-job pointers so a failed export restores the project
+    # to exactly its prior state (the success path repoints working_video_id itself).
+    prior_working_video_id = None
+    prior_final_video_id = None
+    if project_id:
+        try:
+            with get_db_connection() as conn:
+                row = conn.cursor().execute(
+                    "SELECT working_video_id, final_video_id FROM projects WHERE id = ?",
+                    (project_id,)).fetchone()
+            if row:
+                prior_working_video_id = row['working_video_id']
+                prior_final_video_id = row['final_video_id']
+        except Exception as e:
+            logger.warning(f"[Multi-Clip Export] Could not snapshot prior pointers for project {project_id}: {e}")
 
     pipeline_entered = False
     try:
@@ -2212,6 +2232,19 @@ async def _run_multi_clip_background(
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits (pre-pipeline failure)")
         logger.error(f"[Multi-Clip Export] Background export failed: {e}", exc_info=True)
+
+        # T4010: a failed export must leave the project exactly as before the job.
+        # Restore the pointers in case the pipeline advanced working_video_id or
+        # nulled final_video_id before failing -- the published reel is never lost.
+        if project_id:
+            try:
+                with get_db_connection() as conn:
+                    conn.cursor().execute(
+                        "UPDATE projects SET working_video_id = ?, final_video_id = ? WHERE id = ?",
+                        (prior_working_video_id, prior_final_video_id, project_id))
+                    conn.commit()
+            except Exception as restore_err:
+                logger.error(f"[Multi-Clip Export] Failed to restore prior pointers for project {project_id}: {restore_err}")
 
         fail_export_job(export_id, str(e))
 
