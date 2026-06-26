@@ -1,11 +1,15 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildEarlyGameVideoSrc,
   beginGameVideoLoad,
   computeResumePosition,
   seekVideoElementWhenReady,
+  __resetBeginLoadDedup,
 } from './annotateVideoLoad';
 import { API_BASE } from '../config';
+
+// beginGameVideoLoad dedups by gameId across calls; clear it so each test starts clean.
+afterEach(() => __resetBeginLoadDedup());
 
 describe('buildEarlyGameVideoSrc', () => {
   it('builds a stable, gameId-only /video URL with no suffix when there is no clip seek', () => {
@@ -48,6 +52,46 @@ describe('beginGameVideoLoad', () => {
     const loadGame = vi.fn(() => Promise.resolve({ game: {} }));
     beginGameVideoLoad({ gameId: 'g1', pendingClipSeekTime: 9, setAnnotateVideoUrl, loadGame });
     expect(setAnnotateVideoUrl).toHaveBeenCalledWith(`${API_BASE}/api/games/g1/video#t=9`);
+  });
+});
+
+describe('beginGameVideoLoad dedup (StrictMode / remount)', () => {
+  it('sets the src and fires /load only ONCE for a double-invoke of the same game', () => {
+    const setAnnotateVideoUrl = vi.fn();
+    const loadGame = vi.fn(() => new Promise(() => {})); // stays in-flight
+
+    const p1 = beginGameVideoLoad({ gameId: 42, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+    const p2 = beginGameVideoLoad({ gameId: 42, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+
+    // Exactly one src-set (one <video> fetch) and one /load, despite two invocations.
+    expect(setAnnotateVideoUrl).toHaveBeenCalledTimes(1);
+    expect(loadGame).toHaveBeenCalledTimes(1);
+    // The second call returns the same in-flight promise.
+    expect(p2).toBe(p1);
+  });
+
+  it('does not dedup across different games', () => {
+    const setAnnotateVideoUrl = vi.fn();
+    const loadGame = vi.fn(() => new Promise(() => {}));
+
+    beginGameVideoLoad({ gameId: 1, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+    beginGameVideoLoad({ gameId: 2, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+
+    expect(loadGame).toHaveBeenCalledTimes(2);
+    expect(setAnnotateVideoUrl).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows a genuine re-open after /load settles (in-flight entry cleared)', async () => {
+    const setAnnotateVideoUrl = vi.fn();
+    const loadGame = vi.fn(() => Promise.resolve({ game: { id: 7 } }));
+
+    await beginGameVideoLoad({ gameId: 7, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+    // Let the .finally() cleanup run.
+    await Promise.resolve();
+    await beginGameVideoLoad({ gameId: 7, pendingClipSeekTime: null, setAnnotateVideoUrl, loadGame });
+
+    expect(loadGame).toHaveBeenCalledTimes(2);
+    expect(setAnnotateVideoUrl).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -40,19 +40,32 @@ export function hasPendingGame() {
   return sessionStorage.getItem(GAME_ID_KEY) != null;
 }
 
-export function consumePendingGame() {
+/**
+ * Read the pending game breadcrumb WITHOUT clearing it.
+ *
+ * Used by useAnnotateState to seed the early /video src during the first render
+ * (T4000), so the <video> element mounts with a src on the first commit. The
+ * authoritative consume still happens in AnnotateScreen's mount effect.
+ */
+export function peekPendingGame() {
   const gameId = sessionStorage.getItem(GAME_ID_KEY);
   if (gameId == null) return null;
   const seekTime = sessionStorage.getItem(GAME_SEEK_KEY);
   const sourceClipId = sessionStorage.getItem(GAME_SOURCE_CLIP_KEY);
-  sessionStorage.removeItem(GAME_ID_KEY);
-  sessionStorage.removeItem(GAME_SEEK_KEY);
-  sessionStorage.removeItem(GAME_SOURCE_CLIP_KEY);
   return {
     gameId: parseInt(gameId),
     seekTime: seekTime != null ? parseFloat(seekTime) : null,
     sourceClipId: sourceClipId != null ? parseInt(sourceClipId) : null,
   };
+}
+
+export function consumePendingGame() {
+  const pending = peekPendingGame();
+  if (!pending) return null;
+  sessionStorage.removeItem(GAME_ID_KEY);
+  sessionStorage.removeItem(GAME_SEEK_KEY);
+  sessionStorage.removeItem(GAME_SOURCE_CLIP_KEY);
+  return pending;
 }
 
 // --- Projects/reels (consumed by ProjectsScreen restore effect) ---

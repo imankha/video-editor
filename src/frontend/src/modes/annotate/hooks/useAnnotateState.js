@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { extractVideoMetadataFromUrl } from '../../../utils/videoMetadata';
+import { peekPendingGame } from '../../../utils/pendingNavigation';
+import { buildEarlyGameVideoSrc } from '../../../containers/annotateVideoLoad';
 
 /**
  * useAnnotateState - Consolidates annotate mode state management
@@ -22,7 +24,17 @@ const DEFAULT_SELECTED_LAYER = 'clips';
 export default function useAnnotateState() {
   // Video state
   const [annotateVideoFile, setAnnotateVideoFile] = useState(null);
-  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(null);
+  // T4000: when we arrive here to open a saved game (pending-navigation breadcrumb),
+  // seed the stable /video src NOW so the controlled <video> mounts WITH a src on the
+  // FIRST commit. The byte fetch then starts a render-cycle earlier (overlapping /load)
+  // instead of after handleLoadGame's post-commit setAnnotateVideoUrl — which is what
+  // made /video fire ~38ms after /load. A non-consuming peek; AnnotateScreen's effect
+  // still consumes the breadcrumb and runs the full load, where beginGameVideoLoad's
+  // setAnnotateVideoUrl(sameSrc) is a no-op. Null when not opening a saved game.
+  const [annotateVideoUrl, setAnnotateVideoUrl] = useState(() => {
+    const pending = peekPendingGame();
+    return pending ? buildEarlyGameVideoSrc(pending.gameId, pending.seekTime) : null;
+  });
   const [annotateVideoMetadata, setAnnotateVideoMetadata] = useState(null);
 
   // Current game ID and name for saving annotations
