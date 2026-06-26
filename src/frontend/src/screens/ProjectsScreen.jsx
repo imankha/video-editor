@@ -47,6 +47,41 @@ export function clearPendingGameFile() {
 // (the resume handler re-sets the breadcrumb it just consumed).
 let navigationResumeAttempted = false;
 
+// Editor screens are lazy-loaded in App.jsx via lazyWithReload(). After a deploy,
+// the still-open tab runs the OLD build and references OLD chunk hashes that no longer
+// exist on the CDN. The first editor navigation then hits a purged chunk, import()
+// rejects, and lazyWithReload reloads the page = the visible "refresh" (T3990).
+//
+// Preloading these chunks while the home screen sits idle caches the modules from the
+// CURRENT build (whose chunks still exist), so the first draft click reuses an
+// already-resolved module instead of a late import that can hit a purged hash.
+//
+// CRITICAL: these specifiers must resolve to the SAME modules as App.jsx's lazyWithReload
+// imports so Vite emits the SAME chunk and shares the module registry. App.jsx (in src/)
+// uses './screens/FramingScreen'; from here (src/screens/) the equivalent is
+// './FramingScreen' — both resolve to src/screens/FramingScreen.jsx. A different
+// specifier would produce a different chunk and defeat the fix.
+const EDITOR_SCREEN_IMPORTERS = [
+  () => import('./AnnotateScreen'),
+  () => import('./FramingScreen'),
+  () => import('./OverlayScreen'),
+];
+
+// Fire-and-forget preload of the lazy editor screen chunks. A failed preload MUST NOT
+// surface to the user — lazyWithReload's reload + the breadcrumb resume below remain the
+// safety net. This is code/network preloading, not data persistence, so the
+// gesture-based-persistence rule does not apply. Returns a promise that always resolves.
+// `importers` is a seam for tests; production always uses the literal-specifier defaults.
+export function preloadEditorScreens(importers = EDITOR_SCREEN_IMPORTERS) {
+  return Promise.all(
+    importers.map((load) =>
+      load().catch((err) => {
+        console.warn('[ProjectsScreen] Editor screen preload failed:', err);
+      })
+    )
+  );
+}
+
 /**
  * ProjectsScreen - Self-contained screen for Project Manager
  *
@@ -119,6 +154,29 @@ export function ProjectsScreen({
 
   useEffect(() => {
     setWarmupPriority(WARMUP_PRIORITY.DRAFT_REELS);
+  }, []);
+
+  // Warm the lazy editor screen chunks while the home screen sits idle, so the first
+  // draft/project click reuses an already-resolved module instead of a late import that
+  // could hit a chunk hash purged by a deploy (T3990). Runs once on mount; the failed
+  // case is swallowed inside preloadEditorScreens (lazyWithReload + breadcrumb resume
+  // stay as the safety net).
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    let idleHandle;
+    let timeoutId;
+    if (typeof window.requestIdleCallback === 'function') {
+      idleHandle = window.requestIdleCallback(() => preloadEditorScreens(), { timeout: 2000 });
+    } else {
+      // Safari / older browsers: no requestIdleCallback — fall back to a short timer.
+      timeoutId = setTimeout(() => preloadEditorScreens(), 1500);
+    }
+    return () => {
+      if (idleHandle !== undefined && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
   }, []);
 
   // Listen for export completion events and refresh project list
