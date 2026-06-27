@@ -45,15 +45,36 @@ export function ClipVideo({ streamUrl, active = true, muted = true, loop = true,
 
   // Play + mute control. `muted` is set via the DOM property (React's attribute
   // is unreliable) with a fallback to muted if sound autoplay is blocked.
+  //
+  // A single one-shot play() is fragile: browsers cap concurrent decoders, and
+  // the load() above (or a sibling card mounting at the same time) can abort an
+  // in-flight play(), leaving the clip stuck paused while its twin plays fine
+  // (it works alone in full-screen, where there's no contention). So we re-assert
+  // play() on `canplay` (fires once the decoder/media is actually ready) and
+  // recover if the clip is evicted/paused while it's still meant to be playing.
   useEffect(() => {
     const v = sharpRef.current;
     if (!v) return;
     v.muted = muted;
     if (!active) return;
-    const p = v.play();
-    if (p && typeof p.catch === 'function') {
-      p.catch(() => { v.muted = true; v.play().catch(() => {}); });
-    }
+
+    const tryPlay = () => {
+      const p = v.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => { v.muted = true; v.play().catch(() => {}); });
+      }
+    };
+    // `ended` (natural finish) sets paused without a play intent -- don't fight
+    // it (hero auto-advance relies on onEnded); only recover unexpected pauses.
+    const onPause = () => { if (!v.ended) tryPlay(); };
+
+    tryPlay();
+    v.addEventListener('canplay', tryPlay);
+    v.addEventListener('pause', onPause);
+    return () => {
+      v.removeEventListener('canplay', tryPlay);
+      v.removeEventListener('pause', onPause);
+    };
   }, [active, muted, url]);
 
   // Free both <video> resources on unmount so decoders/buffers don't accumulate.
