@@ -17,7 +17,7 @@ import logging
 
 from app.database import get_db_connection, get_final_videos_path
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
-from app.user_context import get_current_user_id
+from app.user_context import get_current_user_id, get_current_req_id
 from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
 from app.services.project_archive import archive_project, restore_project, is_project_archived
 from app.constants import SourceType
@@ -816,6 +816,17 @@ async def publish_to_my_reels(project_id: int):
     project's working data to R2 to keep the database small.
     """
     user_id = get_current_user_id()
+    req_id = get_current_req_id()
+    # T4050 publish tracing: this gesture commits published_at + archived_at to the
+    # LOCAL profile.sqlite, but the R2 upload of that file is fired fire-and-forget by
+    # the middleware AFTER this response returns (see _background_sync in db_sync.py).
+    # If the machine is replaced or the upload lock times out before that background
+    # task completes, the local commit never reaches R2 and a later session_init pulls
+    # the pre-publish snapshot back down -> published_at/archived_at revert to NULL.
+    # These [Publish] markers let a real attempt be traced end-to-end against the
+    # middleware's "[SYNC] POST /api/downloads/publish/... -> R2 sync OK/FAILED" line
+    # (chain by req_id).
+    logger.info(f"[Publish] start project={project_id} user={user_id} req_id={req_id}")
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -829,6 +840,10 @@ async def publish_to_my_reels(project_id: int):
         row = cursor.fetchone()
 
         if not row:
+            logger.warning(
+                f"[Publish] no final_video for project={project_id} user={user_id} "
+                f"req_id={req_id} - returning 404, nothing persisted"
+            )
             raise HTTPException(status_code=404, detail="No final video found for this project")
 
         cursor.execute(
@@ -836,19 +851,34 @@ async def publish_to_my_reels(project_id: int):
             (row['id'],),
         )
         conn.commit()
+        logger.info(
+            f"[Publish] published_at committed LOCALLY project={project_id} "
+            f"final_video_id={row['id']} user={user_id} req_id={req_id} "
+            f"(R2 sync still pending - runs in middleware background task)"
+        )
 
     archived = await asyncio.to_thread(archive_project, project_id, user_id)
     if archived:
         from app.routers.auth import mark_user_archived
         mark_user_archived(user_id)
+        logger.info(
+            f"[Publish] archived LOCALLY project={project_id} user={user_id} "
+            f"req_id={req_id} - archive/{project_id}.msgpack uploaded to R2, working "
+            f"data deleted locally; profile.sqlite R2 sync still pending (background)"
+        )
     else:
         logger.warning(
-            f"Failed to archive project {project_id} after publish "
-            f"(user={user_id}, final_video_id={row['id']}) - working data retained, "
-            f"card stays in Drafts with In My Reels badge; see preceding archive/R2 "
-            f"errors for root cause"
+            f"[Publish] archive FAILED project={project_id} "
+            f"(user={user_id}, final_video_id={row['id']}, req_id={req_id}) - working "
+            f"data retained, card stays in Drafts with In My Reels badge; see preceding "
+            f"archive/R2 errors for root cause"
         )
 
+    logger.info(
+        f"[Publish] returning 200 project={project_id} final_video_id={row['id']} "
+        f"archived={archived} user={user_id} req_id={req_id} - watch for the "
+        f"matching [SYNC] ... R2 sync OK/FAILED line to confirm durability"
+    )
     return {"success": True, "final_video_id": row['id'], "archived": archived}
 
 

@@ -7,6 +7,7 @@ for framing modifications (crop keyframes, segments, trim).
 
 import pytest
 import json
+import logging
 import uuid
 from fastapi.testclient import TestClient
 from app.main import app
@@ -574,8 +575,11 @@ class TestSetProjectAspectRatio:
             cursor.execute("SELECT crop_data FROM working_clips WHERE id = ?", (empty_id,))
             assert cursor.fetchone()[0] is None
 
-    def test_clip_missing_dimensions_skipped(self):
-        """A clip with crop data but no stored width/height is skipped (can't re-center)."""
+    def test_clip_missing_dimensions_refit_without_bounds(self, caplog):
+        """T4050: a clip with crop data but no stored width/height (and none recoverable
+        from game_videos) is NO LONGER skipped. The box is re-shaped to the new ratio
+        without a bounds clamp, and a loud warning is logged. Previously this path no-op'd
+        and the reframe was silently dropped at export."""
         set_current_user_id(TEST_USER_ID)
         set_current_profile_id(TEST_PROFILE_ID)
         with get_db_connection() as conn:
@@ -583,6 +587,7 @@ class TestSetProjectAspectRatio:
             cursor.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('NoDims', '9:16')")
             project_id = cursor.lastrowid
             crop = [{"frame": 0, "x": 100, "y": 100, "width": 270, "height": 480, "origin": "permanent"}]
+            # raw_clip_id is NULL, so no source dims are recoverable from game_videos either.
             cursor.execute("""
                 INSERT INTO working_clips (project_id, uploaded_filename, version, crop_data, width, height, fps)
                 VALUES (?, 'nodims.mp4', 1, ?, NULL, NULL, NULL)
@@ -591,20 +596,32 @@ class TestSetProjectAspectRatio:
             conn.commit()
 
         try:
-            response = client.post(
-                f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
-            )
+            with caplog.at_level(logging.WARNING):
+                response = client.post(
+                    f"/api/clips/projects/{project_id}/aspect-ratio", json={"aspect_ratio": "16:9"}
+                )
             assert response.status_code == 200
-            assert response.json()["updated_clip_count"] == 0
-            # Crop unchanged (still the original 270x480 box).
+            # No-skip: the clip IS re-fit even without stored dimensions.
+            assert response.json()["updated_clip_count"] == 1
             with get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT crop_data, aspect_ratio FROM working_clips wc "
                                "JOIN projects p ON p.id = wc.project_id WHERE wc.id = ?", (clip_id,))
                 row = cursor.fetchone()
-                assert decode_data(row[0])[0]["width"] == 270
-                # Reel ratio still updated even though no clip was re-fit.
+                kf = decode_data(row[0])[0]
+                # Box re-shaped to the 16:9 product size (640x360), not the original 270x480.
+                assert (kf["width"], kf["height"]) == (640, 360)
+                # frame + origin preserved verbatim (no keyframe-origin corruption).
+                assert kf["frame"] == 0
+                assert kf["origin"] == "permanent"
+                # top-left clamped to >= 0 (no frame bounds to clamp against).
+                assert kf["x"] >= 0 and kf["y"] >= 0
                 assert row["aspect_ratio"] == "16:9"
+            # The missing-dimensions path logs a loud warning so a future bad row is visible.
+            assert any(
+                "no stored" in r.message and "dimensions" in r.message
+                for r in caplog.records if r.levelno == logging.WARNING
+            ), "expected a [Aspect Ratio] missing-dimensions WARNING"
         finally:
             with get_db_connection() as conn:
                 cursor = conn.cursor()
