@@ -133,6 +133,19 @@ export function useRanking(ratio, active = true) {
     setUndoState(null);
   }, [undoState, fetchPair]);
 
+  // Re-rank a reel (T4030): re-open it for ranking (rd -> RD_MAX, match_count ->
+  // 0 server-side; rating untouched) and refresh the banner so the % drops live.
+  // GESTURE-ONLY: called from a user tap, never reactively.
+  const reopenReel = useCallback(async (finalVideoId) => {
+    const res = await apiFetch(`${RANK_BASE}/reopen`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ final_video_id: finalVideoId }),
+    });
+    if (res.ok) setConfidence(await res.json());
+    return res;
+  }, []);
+
   // Start / restart when the ratio changes or the game becomes active.
   useEffect(() => {
     if (!active) return;
@@ -141,7 +154,7 @@ export function useRanking(ratio, active = true) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ratio, active]);
 
-  return { pair, status, confidence, pick, undo, canUndo: !!undoState, reload };
+  return { pair, status, confidence, pick, undo, canUndo: !!undoState, reload, reopenReel };
 }
 
 export default useRanking;

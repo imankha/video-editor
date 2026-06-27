@@ -117,6 +117,32 @@ export function DownloadsPanel({
   }, [onOpenProject, close, closeStoryPlayer]);
   const { openReelAsProject, restoringId } = useReEditReel(navigateToProject);
 
+  // T4030: author re-ranks a reel while watching it. The tap is the only write
+  // trigger (gesture-only): POST /api/rank/reopen re-opens the reel for ranking
+  // (rd reset, match_count -> 0, rating untouched, twin-synced server-side) so it
+  // re-enters the game and the Confidence banner % drops on next read.
+  const [reRankingId, setReRankingId] = useState(null);
+  const handleReRank = useCallback(async (reel) => {
+    if (!reel?.id) return;
+    setReRankingId(reel.id);
+    try {
+      const res = await apiFetch(`${API_BASE}/api/rank/reopen`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ final_video_id: reel.id }),
+      });
+      if (!res.ok) throw new Error(`reopen failed (${res.status})`);
+      toast.success("We'll re-rank this one", {
+        message: 'It re-enters the ranking game so its spot can move.',
+      });
+      setRankRefreshKey((k) => k + 1); // banner refetches the dropped %
+    } catch {
+      toast.error('Could not re-rank this reel');
+    } finally {
+      setReRankingId(null);
+    }
+  }, []);
+
   // State for share modal
   const [sharingDownload, setSharingDownload] = useState(null);
 
@@ -676,6 +702,8 @@ export function DownloadsPanel({
           downloadLoading={storyPlayer.downloadId ? downloadingId === storyPlayer.downloadId : false}
           onReEdit={onOpenProject ? openReelAsProject : undefined}
           reEditLoadingId={restoringId}
+          onReRank={handleReRank}
+          reRankLoadingId={reRankingId}
         />
       )}
     </>

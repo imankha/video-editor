@@ -70,6 +70,10 @@ class RankResultRequest(BaseModel):
     loser_id: int
 
 
+class RankReopenRequest(BaseModel):
+    final_video_id: int
+
+
 class UndoInfo(BaseModel):
     """Pre-pick snapshot so a result can be reverted (rematch). The client holds
     the last one and POSTs it back to /restore to undo an accidental pick."""
@@ -366,10 +370,11 @@ async def rank_result(body: RankResultRequest):
         return RankResultResponse(**conf.model_dump(), undo=undo)
 
 
-def _restore_reel(cursor, reel_id, source_clip_id, rating, rd, match_count) -> None:
-    """SET (not increment) rating/rd/match_count back to a snapshot, across twins
-    (rows sharing source_clip_id), or just the reel itself when orphaned. Used to
-    revert a pick (rematch)."""
+def _set_rating_state(cursor, reel_id, source_clip_id, rating, rd, match_count) -> None:
+    """SET (not increment) rating/rd/match_count to explicit values across twins
+    (rows sharing source_clip_id), or just the reel itself when orphaned. Shared
+    twin-sync SET write path for both /restore (rematch revert) and /reopen
+    (re-rank)."""
     if source_clip_id is not None:
         cursor.execute(
             "UPDATE final_videos SET rating = ?, rd = ?, match_count = ? "
@@ -381,6 +386,13 @@ def _restore_reel(cursor, reel_id, source_clip_id, rating, rd, match_count) -> N
             "UPDATE final_videos SET rating = ?, rd = ?, match_count = ? WHERE id = ?",
             (rating, rd, match_count, reel_id),
         )
+
+
+def _restore_reel(cursor, reel_id, source_clip_id, rating, rd, match_count) -> None:
+    """SET rating/rd/match_count back to a snapshot, across twins or just the reel
+    when orphaned. Used to revert a pick (rematch). Thin wrapper over the shared
+    twin-sync SET write."""
+    _set_rating_state(cursor, reel_id, source_clip_id, rating, rd, match_count)
 
 
 @router.post("/restore", response_model=ConfidenceResponse)
@@ -403,6 +415,38 @@ async def rank_restore(body: UndoInfo):
                       body.loser_rating, body.loser_rd, body.loser_match_count)
         conn.commit()
         return _confidence_stats(cursor, row["aspect_ratio"])
+
+
+@router.post("/reopen", response_model=ConfidenceResponse)
+async def rank_reopen(body: RankReopenRequest):
+    """Re-rank a published reel (author "Re-rank this" gesture, T4030): re-inflate
+    uncertainty (rd -> RD_MAX) and zero its coverage (match_count -> 0) so it
+    re-enters /next as the first candidate and the Confidence banner % drops. The
+    RATING IS LEFT UNCHANGED -- the user is saying "I'm unsure," not "move it."
+    Twin-synced across source_clip_id like /result and /restore. GESTURE-ONLY: the
+    middleware R2-syncs the profile DB after this authenticated write."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, rating, rd, match_count, source_clip_id, aspect_ratio "
+            "FROM final_videos WHERE id = ? AND published_at IS NOT NULL",
+            (body.final_video_id,),
+        )
+        reel = cursor.fetchone()
+        if reel is None:
+            raise HTTPException(status_code=404, detail="Reel not found")
+        # No silent fallback: a published reel without a rating is a seed/backfill
+        # gap -- surface it rather than re-rank against a guessed value.
+        if reel["rating"] is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Reel is not rankable (missing rating -- re-export or backfill)",
+            )
+        # Rating passes through UNCHANGED; only rd and match_count are reset.
+        _set_rating_state(cursor, reel["id"], reel["source_clip_id"],
+                          reel["rating"], RD_MAX, 0)
+        conn.commit()
+        return _confidence_stats(cursor, reel["aspect_ratio"])
 
 
 def _apply_twin_sync(cursor, reel, new_rating: float, new_rd: float) -> None:

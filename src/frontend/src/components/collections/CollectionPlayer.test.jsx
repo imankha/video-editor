@@ -60,3 +60,41 @@ describe('CollectionPlayer Re-edit button gating (T3940)', () => {
     expect(screen.getByTitle(RE_EDIT).disabled).toBe(true);
   });
 });
+
+const RE_RANK = 'Re-rank this reel';
+const rankReel = ({ project_id = 7, clip_count = 1 } = {}) =>
+  [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id, clip_count }];
+
+describe('CollectionPlayer Re-rank button gating (T4030)', () => {
+  it('shows the button when onReRank is set AND the reel is single-clip with a project', () => {
+    render(<CollectionPlayer reels={rankReel()} title="T" onClose={vi.fn()} onReRank={vi.fn()} />);
+    expect(screen.getByTitle(RE_RANK)).toBeTruthy();
+  });
+
+  it('hides the button on the public viewer (no onReRank prop)', () => {
+    render(<CollectionPlayer reels={rankReel()} title="T" onClose={vi.fn()} />);
+    expect(screen.queryByTitle(RE_RANK)).toBeNull();
+  });
+
+  it('hides the button for a multi-clip reel (Mix)', () => {
+    render(<CollectionPlayer reels={rankReel({ clip_count: 2 })} title="T" onClose={vi.fn()} onReRank={vi.fn()} />);
+    expect(screen.queryByTitle(RE_RANK)).toBeNull();
+  });
+
+  it('hides the button when the reel has no editable project', () => {
+    render(<CollectionPlayer reels={rankReel({ project_id: null })} title="T" onClose={vi.fn()} onReRank={vi.fn()} />);
+    expect(screen.queryByTitle(RE_RANK)).toBeNull();
+  });
+
+  it('invokes onReRank with the active reel on click', () => {
+    const onReRank = vi.fn();
+    render(<CollectionPlayer reels={rankReel()} title="T" onClose={vi.fn()} onReRank={onReRank} />);
+    fireEvent.click(screen.getByTitle(RE_RANK));
+    expect(onReRank).toHaveBeenCalledWith(expect.objectContaining({ id: 99, clip_count: 1 }));
+  });
+
+  it('disables the button while that reel is re-ranking', () => {
+    render(<CollectionPlayer reels={rankReel()} title="T" onClose={vi.fn()} onReRank={vi.fn()} reRankLoadingId={99} />);
+    expect(screen.getByTitle(RE_RANK).disabled).toBe(true);
+  });
+});

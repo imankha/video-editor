@@ -549,6 +549,10 @@ class TestRankEndpoints:
         from app.routers.rank import rank_restore
         return asyncio.run(rank_restore(undo))
 
+    def _reopen(self, final_video_id):
+        from app.routers.rank import rank_reopen, RankReopenRequest
+        return asyncio.run(rank_reopen(RankReopenRequest(final_video_id=final_video_id)))
+
     def test_next_shape_and_empty_pool(self, db):
         # Empty / single-reel pool -> 204.
         with _conn(db) as c:
@@ -741,3 +745,107 @@ class TestRankEndpoints:
             row = c.execute("SELECT rating, match_count FROM final_videos WHERE id=?",
                             (orphan,)).fetchone()
         assert row["match_count"] == 1 and row["rating"] > glicko.seed_rating(5.0)
+
+
+    # -----------------------------------------------------------------------
+    # Re-rank / reopen endpoint (T4030)
+    # -----------------------------------------------------------------------
+
+    def test_reopen_resets_rd_and_match_count_rating_unchanged(self, db):
+        # After a matchup a reel has rd < RD_MAX and match_count = 1. Reopen must
+        # set rd -> RD_MAX, match_count -> 0, and leave the RATING untouched.
+        with _conn(db) as c:
+            cur = c.cursor()
+            w = _insert_fv(cur, game_ids=[1], source_clip_id=10, quality_score=3.0)
+            l = _insert_fv(cur, game_ids=[2], source_clip_id=20, quality_score=3.0)
+            c.commit()
+        self._result(w, l)
+        with _conn(db) as c:
+            before = c.execute("SELECT rating, rd, match_count FROM final_videos WHERE id=?",
+                               (w,)).fetchone()
+        assert before["rd"] < glicko.RD_MAX and before["match_count"] == 1
+        self._reopen(w)
+        with _conn(db) as c:
+            after = c.execute("SELECT rating, rd, match_count FROM final_videos WHERE id=?",
+                              (w,)).fetchone()
+        assert after["rating"] == before["rating"]   # rating UNCHANGED
+        assert after["rd"] == glicko.RD_MAX
+        assert after["match_count"] == 0
+
+    def test_reopen_twin_synced_across_source_clip_id(self, db):
+        # Portrait + Landscape twins (source_clip_id=10) both reset by one reopen.
+        with _conn(db) as c:
+            cur = c.cursor()
+            portrait = _insert_fv(cur, ratio="9:16", game_ids=[1], source_clip_id=10)
+            landscape = _insert_fv(cur, ratio="16:9", game_ids=[1], source_clip_id=10)
+            opp = _insert_fv(cur, ratio="9:16", game_ids=[2], source_clip_id=20)
+            c.commit()
+        self._result(portrait, opp)  # bumps both twins to match_count 1, rd < max
+        self._reopen(portrait)
+        with _conn(db) as c:
+            rows = {r["id"]: r for r in c.execute(
+                "SELECT id, rd, match_count FROM final_videos").fetchall()}
+        for fid in (portrait, landscape):
+            assert rows[fid]["rd"] == glicko.RD_MAX
+            assert rows[fid]["match_count"] == 0
+        # The untouched opponent keeps its post-match state.
+        assert rows[opp]["match_count"] == 1
+
+    def test_reopen_clip_reappears_in_next_and_confidence_drops(self, db):
+        # Two reels sorted to their target K=3 -> fully sorted (next 204, conf 100).
+        with _conn(db) as c:
+            cur = c.cursor()
+            a = _insert_fv(cur, game_ids=[1], source_clip_id=10, duration=20.0)
+            b = _insert_fv(cur, game_ids=[2], source_clip_id=20, duration=20.0)
+            c.execute("UPDATE final_videos SET match_count = 3")
+            c.commit()
+        done = self._confidence()
+        assert done.confidence_pct == 100
+        assert getattr(self._next(aspect_ratio="9:16"), "status_code", None) == 204
+        # Reopen a -> it re-enters the queue and coverage drops below 100.
+        reopened = self._reopen(a)
+        assert reopened.confidence_pct < done.confidence_pct
+        m = self._next(aspect_ratio="9:16")
+        assert getattr(m, "status_code", None) != 204
+        assert a in {m.a.id, m.b.id}
+
+    def test_reopen_missing_rating_surfaced(self, db):
+        from fastapi import HTTPException
+        with _conn(db) as c:
+            cur = c.cursor()
+            broken = _insert_fv(cur, game_ids=[1], clip_count=1)
+            cur.execute("UPDATE final_videos SET rating = NULL WHERE id = ?", (broken,))
+            c.commit()
+        with pytest.raises(HTTPException) as e:
+            self._reopen(broken)
+        assert e.value.status_code == 400
+
+    def test_reopen_unknown_id_404(self, db):
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as e:
+            self._reopen(987654)
+        assert e.value.status_code == 404
+
+    def test_reopen_unpublished_404(self, db):
+        from fastapi import HTTPException
+        with _conn(db) as c:
+            cur = c.cursor()
+            draft = _insert_fv(cur, game_ids=[1], source_clip_id=10, published=False)
+            c.commit()
+        with pytest.raises(HTTPException) as e:
+            self._reopen(draft)
+        assert e.value.status_code == 404
+
+    def test_reopen_idempotent(self, db):
+        # A second reopen leaves state at rd=RD_MAX, match_count=0 (harmless re-tap).
+        with _conn(db) as c:
+            cur = c.cursor()
+            a = _insert_fv(cur, game_ids=[1], source_clip_id=10)
+            _insert_fv(cur, game_ids=[2], source_clip_id=20)
+            c.commit()
+        self._reopen(a)
+        self._reopen(a)
+        with _conn(db) as c:
+            row = c.execute("SELECT rd, match_count FROM final_videos WHERE id=?",
+                            (a,)).fetchone()
+        assert row["rd"] == glicko.RD_MAX and row["match_count"] == 0
