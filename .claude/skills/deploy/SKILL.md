@@ -38,19 +38,28 @@ Deploy the app to production using `scripts/deploy_production.sh`.
    deploy runs in the background, do Steps A–D of
    [Post-Deploy: Plan Reconciliation](#post-deploy-plan-reconciliation): compute the range with
    `PREV..HEAD` (use HEAD — no need to wait for the new deploy tag), verify each candidate task, and
-   present the recommended-updates table for the user to approve. Do this work concurrently — the only
-   thing that waits for the deploy is the *apply* in step 5.
+   determine which tasks' implementation shipped (those auto-promote to DONE) vs. the ambiguous cases
+   that still need a quick `AskUserQuestion` (diverged / partial / drop). Do this work concurrently —
+   the only thing that waits for the deploy is the *apply* in step 5.
 
 5. **On deploy completion (you'll be notified):**
-   - **Exited 0:** reduce_log the output, report what deployed (health/verify ✓), then **apply the
-     approved promotions and auto-commit them** (Step E). Approval + a successful deploy IS the
-     authorization — do not ask "should I commit?" again.
+   - **Exited 0:** reduce_log the output, report what deployed (health/verify ✓), then **auto-promote
+     every shipped task to DONE, apply any approved ambiguous-case edits, and auto-commit** (Step E).
+     Running `/deploy` is the DONE gesture + a successful deploy IS the authorization — do not ask
+     "should I mark these done?" or "should I commit?". **Report the list of auto-promoted tasks** so
+     the user can correct any on the board.
    - **Failed:** reduce_log the output and report the failure; do **NOT** apply any promotions
-     (nothing shipped to prod). Keep the proposal for after a fix + redeploy.
+     (nothing shipped to prod). Keep the analysis for after a fix + redeploy.
 
 ## Post-Deploy: Plan Reconciliation
 
-Goal: keep PLAN.md, EPIC.md, and task files current automatically. A deploy ships work to prod, so it is the natural moment to reconcile what the commits *claim* against what the tasks *specify*, then propose plan updates for the user to approve. **Run this analysis IN PARALLEL with the deploy (don't wait for it to finish); propose, then apply + commit on approval — never edit statuses or files silently** (project rule: the user promotes statuses; this approval gate + a successful deploy is what authorizes the edits, including the auto-commit).
+Goal: keep PLAN.md, EPIC.md, and task files current automatically. A deploy ships work to prod, so it is the natural moment to reconcile what the commits *claim* against what the tasks *specify*.
+
+**Running `/deploy` IS the user's DONE gesture.** Every task whose *implementation* shipped in this deploy is auto-promoted to DONE on a successful deploy — no per-task approval. This is the standing default; it replaces the old propose-and-approve gate for plain DONE promotions. The user can move any row back on the task board if a promotion was wrong, so always **report the list of what was auto-promoted**.
+
+The only cases that still need an `AskUserQuestion` (because they are judgment calls, not plain DONE) are **DONE (diverged)**, **PARTIAL/SPLIT**, and **DROP** — see Step D. And a task that was merely *added* in this range (a `docs(plan): add T#### task` commit with no implementation) is NOT shipped work — never auto-promote it.
+
+**Run this analysis IN PARALLEL with the deploy (don't wait for it to finish); apply + commit on a successful deploy.**
 
 ### Step A — Find what shipped in this deploy
 
@@ -88,28 +97,33 @@ For each candidate task ID:
 
 Also flag **collateral staleness** the deploy introduced: task copy/cross-references that other tasks now contradict (e.g. an auto-advance shipping makes another task's "click the card" copy wrong), and **epic completion criteria** that should flip.
 
-### Step D — Present the recommended-updates list for approval
+### Step D — Auto-promote shipped tasks; ask only on ambiguity
 
-Output a single table the user can approve/reject per row:
+Split the candidates into two buckets:
+
+- **Auto-DONE (no approval):** `DONE` and `STATUS-STALE` rows — tasks whose implementation shipped in this range. Promote these to DONE automatically. Exclude `NO CHANGE` rows (already accurate) and any task merely *added* in this range (no implementation commit).
+- **Ask first (`AskUserQuestion`):** only the genuine judgment calls — `DONE (diverged)` (how to record the divergence), `PARTIAL/SPLIT` (what to carve into a new task), `DROP` (done-vs-keep). These are not plain DONE, so the deploy gesture does not auto-decide them.
+
+Always output a table of what shipped, marking which rows auto-promote vs. which are being asked:
 
 ```
-| Task | Current | Recommended | Why (commit vs criteria) |
-|------|---------|-------------|--------------------------|
-| T#### | TODO | DONE | commits X,Y satisfy all 3 acceptance criteria |
-| T#### | TODO | DONE (diverged) | shipped as <Z> instead of <spec>; rewrite description |
-| T#### | TODO | SPLIT | P0 shipped (commit X); P1/P2 unbuilt -> new task |
-| T#### | TODO | DROP | superseded by <other>; never built |
+| Task | Current | Action | Why (commit vs criteria) |
+|------|---------|--------|--------------------------|
+| T#### | TODO | DONE (auto) | commits X,Y satisfy all 3 acceptance criteria |
+| T#### | TODO | DONE (auto, stale) | merged earlier, PLAN still said TODO |
+| T#### | TODO | ASK: diverged | shipped as <Z> instead of <spec>; rewrite description |
+| T#### | TODO | ASK: split | P0 shipped (commit X); P1/P2 unbuilt -> new task |
+| T#### | TODO | NO CHANGE | only added as a task this range; not implemented |
 ```
 
-Use `AskUserQuestion` for genuine judgment calls (done-vs-drop, how to record a divergence, what to keep). For clearly status-stale rows, list them and let the user bulk-approve.
+### Step E — Apply updates
 
-### Step E — Apply approved updates
-
-Only after approval, edit `PLAN.md` / `EPIC.md` / task files:
-- Promote statuses; rewrite descriptions to match shipped reality.
-- Create split task files; `git rm` dropped task files and remove their rows.
+On a successful deploy (exited 0):
+- **Promote all Auto-DONE rows to DONE** (prefix the description with `DONE (deployed {date} prod).`) — no approval needed.
+- For the Ask-first rows, apply whatever the user chose: rewrite diverged descriptions + add a design note; create split task files; `git rm` dropped task files and remove their rows.
 - Fix collateral cross-references and epic completion criteria.
-- **Auto-commit the approved promotions** once the deploy has exited 0 (approval + a successful deploy is the authorization — this is the standing default; don't ask "should I commit?" again). Use an ASCII commit message with the co-author line. **Pushing stays the user's call** (push auto-deploys staging), so commit but don't push unless asked.
+- **Auto-commit** all of the above once the deploy has exited 0 (the deploy gesture + a successful deploy is the authorization — don't ask "should I commit?"). Use an ASCII commit message with the co-author line. **Pushing stays the user's call** (push auto-deploys staging), so commit but don't push unless asked.
+- **Report the auto-promoted list** to the user so they can move any row back on the board if a promotion was wrong.
 
 Keep the reconciliation lightweight when little shipped (a couple of status promotions) and thorough when a milestone/epic landed (verify with subagents, update epic criteria).
 

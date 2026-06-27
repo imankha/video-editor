@@ -55,10 +55,11 @@ Task statuses split into two kinds, with different owners:
 - `IN PROGRESS` — set when work begins (feature branch created, Stage 1). See [1-task-start.md](.claude/workflows/1-task-start.md).
 - `STAGING` — set when the task branch lands on master (pushing to master auto-deploys staging). See [7-task-complete.md](.claude/workflows/7-task-complete.md).
 
-**Judgment promotion (user only).** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. The user verifies on staging then marks it done; AI never sets this:
-- `DONE`/`Resolved` — the user promotes via the task board "Resolve" button once satisfied on staging.
+**DONE — the user's call, expressed by an explicit gesture.** STAGING is the test phase — being on staging *is* testing, so there is no separate TESTING step. `DONE`/`Resolved` is set only by a deliberate user gesture, of which there are exactly two:
+1. The user clicks **Resolve** on the task board (per-task, once satisfied on staging), OR
+2. The user runs **`/deploy`** — a prod deploy auto-promotes every task whose *implementation* shipped in that deploy to DONE (the deploy command is the user's "ship it, it's done" gesture). See [deploy skill](.claude/skills/deploy/SKILL.md) reconciliation. AI never marks DONE outside these two gestures.
 
-Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user)`. After merge, tell the user the task is on staging and ready to test -- they Resolve it themselves when satisfied.
+Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user gesture: Resolve button or /deploy)`.
 
 ### Classification Output (Required)
 
