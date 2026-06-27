@@ -903,13 +903,24 @@ def calculate_multi_clip_resolution(
     global_aspect_ratio: str
 ) -> Tuple[int, int]:
     """
-    Calculate target resolution for all clips based on global aspect ratio.
-    Uses the smallest crop dimensions across all clips to determine base size.
+    Calculate target resolution for all clips based on the global aspect ratio.
+
+    The project's nominal aspect ratio is AUTHORITATIVE for output ORIENTATION/shape;
+    the crop keyframes only set the SCALE. This is the T4050 structural fix: previously
+    the output geometry was derived straight from the crop-box pixel dims, so a stale
+    crop box (e.g. a 9:16 box left over from before a 9:16 -> 16:9 reframe) would silently
+    win and the reframe was dropped in the exported pixels. Now the box can only scale the
+    output within the requested ratio; it can never flip the orientation away from it.
+
+    When a crop box already matches the nominal ratio this is a no-op (output is identical
+    to the old behaviour). It only changes the result when box and ratio DISAGREE -- exactly
+    the case that used to drop the reframe.
     """
     # Parse aspect ratio
     ratio_w, ratio_h = map(int, global_aspect_ratio.split(':'))
+    target_ratio = ratio_w / ratio_h
 
-    # Find minimum crop size across all clips
+    # Find minimum crop size across all clips (sets the SCALE budget only).
     min_crop_width = float('inf')
     min_crop_height = float('inf')
 
@@ -926,9 +937,19 @@ def calculate_multi_clip_resolution(
         else:
             return (1920, 1080)
 
-    # Calculate target resolution (upscaled, capped at max resolution)
-    sr_w = int(min_crop_width * AI_UPSCALE_FACTOR)
-    sr_h = int(min_crop_height * AI_UPSCALE_FACTOR)
+    # Upscale the crop box, then CONFORM it to the nominal aspect ratio. The crop box
+    # gives us a resolution budget; the project ratio decides the shape. We bind the
+    # dimension that keeps the output within the budget and derive the other from the
+    # ratio, so the orientation always follows global_aspect_ratio.
+    sr_w = min_crop_width * AI_UPSCALE_FACTOR
+    sr_h = min_crop_height * AI_UPSCALE_FACTOR
+
+    if sr_w / sr_h > target_ratio:
+        # Crop box is wider than the target: keep height, derive width from the ratio.
+        sr_w = sr_h * target_ratio
+    else:
+        # Crop box is taller/narrower than the target: keep width, derive height.
+        sr_h = sr_w / target_ratio
 
     max_w, max_h = VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT
     scale_limit = min(max_w / sr_w, max_h / sr_h, 1.0)

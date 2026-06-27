@@ -295,7 +295,7 @@ export function FramingModeView({
             {/* Reel-level aspect ratio (T3910): applies to ALL clips, re-fitting their crop. */}
             <div className="flex items-center gap-2">
               <AspectRatioSelector
-                aspectRatio={aspectRatio}
+                aspectRatio={globalAspectRatio}
                 onAspectRatioChange={onAspectRatioChange}
               />
             </div>
@@ -433,7 +433,7 @@ export function FramingModeView({
                 {clipGameName && <span className="text-gray-500"> · {clipGameName}</span>}
               </div>
               {/* Aspect ratio is reel-wide; read-only on mobile (change it on desktop). */}
-              <AspectRatioSelector aspectRatio={aspectRatio} readOnly />
+              <AspectRatioSelector aspectRatio={globalAspectRatio} readOnly />
             </div>
           )}
 

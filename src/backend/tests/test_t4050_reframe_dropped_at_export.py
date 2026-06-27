@@ -1,50 +1,24 @@
 """
-T4050 (CORRECTED) — Re-framing a reel 9:16 -> 16:9 does not change the exported
-output geometry.
+T4050 — Re-framing a reel must change the exported output geometry (the fix).
 
-Corrected ground truth (supervisor, verified against PROD):
-  - The reel's game source IS present (not a missing-source failure).
-  - The failing export COMPLETED and produced a VALID 9:16 video (808x1440),
-    even though the user had set the reel to 16:9.
-  - i.e. the new aspect ratio is silently dropped somewhere between the editor
-    and the framing export; the pixels stay 9:16.
+Ground truth (supervisor, verified against PROD): a user re-framed a single-clip
+reel 9:16 -> 16:9, exported, and got a valid 9:16 (808x1440) video — the reframe
+was silently dropped. Two structural causes, both fixed here:
 
-What these tests pin down (DIAGNOSIS ONLY — no fix):
+  1. Export geometry was derived from the crop-BOX pixel dims, so a stale 9:16 box
+     left over from before the reframe silently won and the nominal 16:9 ratio was
+     ignored. `calculate_multi_clip_resolution` now treats the project's aspect
+     ratio as AUTHORITATIVE for orientation; the crop box only sets the scale.
 
-The OUTPUT geometry of a framing export is decided ENTIRELY by the crop-box
-width/height stored in working_clips.crop_data — see
-`calculate_multi_clip_resolution` (multi_clip.py:901-943), which scans the crop
-keyframes and IGNORES the nominal aspect-ratio string whenever any crop keyframe
-exists. The nominal ratio (projects.aspect_ratio) only drives (a) the centered
-DEFAULT crop applied to clips that have NO crop at all, and (b) the FROZEN label
-written to final_videos.aspect_ratio by `compute_project_metadata`.
+  2. `set_project_aspect_ratio` -> `refit_crop_keyframes` silently SKIPPED the
+     crop-box re-fit whenever working_clips.width/height was NULL (legacy clips
+     materialized from a game_videos row with no recorded dims). It now probes the
+     parent game_video for the real dims (and persists them), and when none exist
+     still re-shapes the box to the new ratio's fixed size — the reframe is never
+     a no-op.
 
-So a reframe only changes the pixels if the per-clip crop BOXES are re-shaped to
-the new ratio. That re-shaping lives in ONE place: `set_project_aspect_ratio`
-(clips.py:562) calling `refit_crop_keyframes`. And that re-fit is SILENTLY
-SKIPPED for any latest-version clip whose working_clips.width/height is NULL
-(clips.py:611-617) — which is exactly the case for clips materialized from a
-game_videos row that never recorded video_width/video_height (clips.py:763-766,
-"may be None for legacy rows").
-
-Consequences this file reproduces:
-  1. width/height PRESENT  -> refit runs  -> 16:9 box -> landscape output  (PASS, control)
-  2. width/height NULL     -> refit SKIPPED -> 9:16 box stays -> portrait output
-                              even though projects.aspect_ratio == '16:9'   (FAIL = repro)
-  3. The metadata/geometry SPLIT: final_videos.aspect_ratio is frozen from
-     projects.aspect_ratio ('16:9') while the actual pixels remain 9:16 — a
-     label that lies about the file. (documents current behavior)
-
-NOTE on the PROD datum (fv 36 recorded aspect_ratio '9:16'): that label is frozen
-from projects.aspect_ratio at overlay time, so a '9:16' label means
-projects.aspect_ratio was STILL '9:16' at export — i.e. in the user's actual
-session the reframe gesture never reached projects at all (a separate, frontend
-drop). The single discriminating prod query is:
-    SELECT aspect_ratio FROM projects WHERE id = 41;
-    SELECT id, width, height, length(crop_data) FROM working_clips WHERE project_id = 41;
-  - projects.aspect_ratio == '9:16'  -> the gesture never persisted (frontend)
-  - projects.aspect_ratio == '16:9' AND crop box still 9:16 -> the refit-skip
-    reproduced here (backend).
+This file is the regression suite for both: a reframe always reaches the pixels,
+and the frozen metadata label can no longer disagree with the actual geometry.
 """
 
 import sqlite3
@@ -60,8 +34,8 @@ PROFILE_ID = "testdefault"
 NINE_W, NINE_H = DEFAULT_CROP_SIZES["9:16"]      # (205, 365) portrait box
 SIXTEEN_W, SIXTEEN_H = DEFAULT_CROP_SIZES["16:9"]  # (640, 360) landscape box
 
-# A source frame big enough to hold a 16:9 box (640x360) so the refit isn't
-# clamped into a different shape.
+# A source frame big enough to hold either box so the refit isn't clamped into a
+# different shape.
 SRC_W, SRC_H = 1080, 1920
 
 
@@ -87,17 +61,19 @@ def _connect(db_path):
     return conn
 
 
-def _seed_reel_9x16(db_path, *, with_dimensions: bool):
-    """A single-clip reel framed 9:16: project + one working_clip carrying a
-    static 9:16 crop box. `with_dimensions` toggles whether working_clips has the
-    stored width/height the re-fit needs (the bug trigger when NULL).
-    Returns (project_id, working_clip_id)."""
+def _seed_reel(db_path, *, ratio: str, with_dimensions: bool):
+    """A single-clip reel framed to `ratio` (a static centered crop box of that
+    shape) + matching projects.aspect_ratio. `with_dimensions` toggles whether
+    working_clips carries the stored width/height the re-fit needs (the bug
+    trigger when NULL). Returns (project_id, working_clip_id)."""
     from app.utils.encoding import encode_data
+
+    box_w, box_h = DEFAULT_CROP_SIZES[ratio]
 
     conn = _connect(db_path)
     cur = conn.cursor()
 
-    cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('Brilliant Dribble', '9:16')")
+    cur.execute("INSERT INTO projects (name, aspect_ratio) VALUES ('Brilliant Dribble', ?)", (ratio,))
     project_id = cur.lastrowid
 
     cur.execute(
@@ -105,11 +81,9 @@ def _seed_reel_9x16(db_path, *, with_dimensions: bool):
         "VALUES ('raw56.mp4', 5, 3566.0, 3625.0, 7, 0)")
     raw_clip_id = cur.lastrowid
 
-    # Static centered 9:16 crop box, two permanent keyframes (start + end) — the
-    # exact shape both the editor default and default_crop_keyframes produce.
     box = {
-        "x": round((SRC_W - NINE_W) / 2), "y": round((SRC_H - NINE_H) / 2),
-        "width": NINE_W, "height": NINE_H,
+        "x": round((SRC_W - box_w) / 2), "y": round((SRC_H - box_h) / 2),
+        "width": box_w, "height": box_h,
     }
     crop = [{"frame": 0, **box}, {"frame": 60, **box}]
 
@@ -129,7 +103,6 @@ def _seed_reel_9x16(db_path, *, with_dimensions: bool):
 
 
 def _latest_crop_box(db_path, working_clip_id):
-    """Decode the stored crop box (first keyframe) for the clip."""
     from app.utils.encoding import decode_data
     conn = _connect(db_path)
     row = conn.execute(
@@ -147,10 +120,10 @@ def _project_ratio(db_path, project_id):
     return row["aspect_ratio"]
 
 
-def _export_output_resolution(db_path, project_id):
-    """Reproduce exactly what the framing export does to size the output:
-    read the latest crop keyframes and run calculate_multi_clip_resolution
-    (the real sizing function used by _export_clips)."""
+def _export_output_resolution(db_path, project_id, ratio):
+    """Reproduce exactly what the framing export does to size the output: read the
+    latest crop keyframes and run calculate_multi_clip_resolution (the real sizing
+    function used by _export_clips) with the project's nominal ratio."""
     from app.utils.encoding import decode_data
     from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
@@ -165,9 +138,7 @@ def _export_output_resolution(db_path, project_id):
         kfs = decode_data(r["crop_data"]) or []
         clips_data.append({"cropKeyframes": kfs})
 
-    # The reframe set projects.aspect_ratio to 16:9, so the export is invoked with
-    # the 16:9 nominal ratio (framing.py:490 reads project['aspect_ratio']).
-    return calculate_multi_clip_resolution(clips_data, "16:9")
+    return calculate_multi_clip_resolution(clips_data, ratio)
 
 
 async def _reframe(project_id, ratio):
@@ -181,10 +152,9 @@ async def _reframe(project_id, ratio):
 
 @pytest.mark.asyncio
 async def test_reframe_resizes_output_when_dimensions_present(db):
-    """When working_clips has width/height, the reframe re-fits the crop box to a
-    16:9 shape and the exported output is LANDSCAPE. This is the happy path and
-    pins the fix locus: the bug below is the SAME path minus stored dimensions."""
-    project_id, wc = _seed_reel_9x16(db, with_dimensions=True)
+    """9:16 -> 16:9 with stored dims: box re-fits to a 16:9 shape and the exported
+    output is LANDSCAPE."""
+    project_id, wc = _seed_reel(db, ratio="9:16", with_dimensions=True)
 
     result = await _reframe(project_id, "16:9")
     assert result["updated_clip_count"] == 1, "clip with dimensions must be re-fit"
@@ -194,102 +164,162 @@ async def test_reframe_resizes_output_when_dimensions_present(db):
     assert (box["width"], box["height"]) == (SIXTEEN_W, SIXTEEN_H), \
         "crop box must be re-shaped to the 16:9 default size"
 
-    w, h = _export_output_resolution(db, project_id)
+    w, h = _export_output_resolution(db, project_id, "16:9")
     assert w > h, f"output must be landscape after 16:9 reframe, got {w}x{h}"
 
 
 # ===========================================================================
-# REPRO: missing stored dimensions -> re-fit silently skipped -> output stays 9:16
+# THE FIX: missing stored dimensions no longer drops the reframe
 # ===========================================================================
 
 @pytest.mark.asyncio
 async def test_reframe_dropped_when_working_clip_missing_dimensions(db):
-    """REPRODUCTION. A clip materialized from a game_videos row with no recorded
-    video_width/video_height has working_clips.width/height = NULL. The reframe
-    updates projects.aspect_ratio to '16:9' but `refit_crop_keyframes` is SILENTLY
-    SKIPPED (clips.py:611-617), so the 9:16 crop box survives and the export sizes
-    a PORTRAIT output — the reframe is dropped in pixels.
-
-    This assertion FAILS on current code: that is the bug."""
-    project_id, wc = _seed_reel_9x16(db, with_dimensions=False)
+    """REGRESSION (was the repro). A clip with working_clips.width/height = NULL and
+    no recoverable game_videos dims used to have its re-fit SILENTLY SKIPPED, so the
+    9:16 box survived and the export sized a PORTRAIT output. The fix re-shapes the
+    box to the new ratio's fixed size even without source dims, so the export is now
+    LANDSCAPE — the reframe reaches the pixels."""
+    project_id, wc = _seed_reel(db, ratio="9:16", with_dimensions=False)
 
     result = await _reframe(project_id, "16:9")
 
-    # The ratio flips in metadata...
     assert _project_ratio(db, project_id) == "16:9"
-    # ...but the crop re-fit was skipped (the silent drop).
-    assert result["updated_clip_count"] == 0, \
-        "diagnosis: re-fit is skipped for clips with no stored dimensions"
+    # The re-fit now RUNS (no silent skip) even with no stored / probeable dims.
+    assert result["updated_clip_count"] == 1, \
+        "re-fit must run even when the clip has no stored dimensions"
     box = _latest_crop_box(db, wc)
-    assert (box["width"], box["height"]) == (NINE_W, NINE_H), \
-        "diagnosis: stale 9:16 crop box survives the reframe"
+    assert (box["width"], box["height"]) == (SIXTEEN_W, SIXTEEN_H), \
+        "box must be re-shaped to 16:9 even without source dims"
 
-    # DESIRED behavior (FAILS today): exported output should be 16:9 (landscape).
-    w, h = _export_output_resolution(db, project_id)
+    w, h = _export_output_resolution(db, project_id, "16:9")
     assert w > h, (
-        f"BUG: reframed 9:16 -> 16:9 but exported output is still portrait {w}x{h}. "
-        f"The crop box was never re-shaped (working_clips.width/height was NULL), and "
-        f"calculate_multi_clip_resolution sizes output from the crop box, not the "
-        f"nominal ratio."
+        f"reframed 9:16 -> 16:9 must export landscape, got {w}x{h}."
     )
 
 
+@pytest.mark.asyncio
+async def test_reframe_recovers_dims_from_game_videos_when_missing(db):
+    """When working_clips has no dims but the parent game_video does, the re-fit
+    recovers them, persists them onto the working clip (Correct Data), and re-fits."""
+    project_id, wc = _seed_reel(db, ratio="9:16", with_dimensions=False)
+
+    # Backfill the parent game_video with real source dims (game_id=7, sequence=0).
+    conn = _connect(db)
+    conn.execute(
+        "INSERT INTO game_videos (game_id, sequence, blake3_hash, video_width, video_height, fps) "
+        "VALUES (7, 0, 'deadbeef', ?, ?, 30.0)", (SRC_W, SRC_H))
+    conn.commit()
+    conn.close()
+
+    result = await _reframe(project_id, "16:9")
+    assert result["updated_clip_count"] == 1
+
+    # Dims were recovered and persisted onto the working clip.
+    conn = _connect(db)
+    row = conn.execute(
+        "SELECT width, height FROM working_clips WHERE id = ?", (wc,)).fetchone()
+    conn.close()
+    assert (row["width"], row["height"]) == (SRC_W, SRC_H), \
+        "recovered source dims must be persisted onto the working clip"
+
+    w, h = _export_output_resolution(db, project_id, "16:9")
+    assert w > h, f"output must be landscape, got {w}x{h}"
+
+
 # ===========================================================================
-# Structural cause: output geometry ignores the nominal ratio when a crop exists
+# Both directions
 # ===========================================================================
 
 @pytest.mark.asyncio
-async def test_output_geometry_is_driven_by_crop_box_not_nominal_ratio(db):
-    """Documents the structural reason the reframe can be dropped: with a crop box
-    present, `calculate_multi_clip_resolution` derives the output size from the
-    box dimensions and never consults the nominal aspect ratio. Passing a 16:9
-    nominal ratio over a stale 9:16 box still yields a portrait result."""
+async def test_reframe_16x9_to_9x16_produces_portrait(db):
+    """16:9 -> 9:16 produces a PORTRAIT output."""
+    project_id, wc = _seed_reel(db, ratio="16:9", with_dimensions=True)
+
+    result = await _reframe(project_id, "9:16")
+    assert result["updated_clip_count"] == 1
+    assert _project_ratio(db, project_id) == "9:16"
+
+    box = _latest_crop_box(db, wc)
+    assert (box["width"], box["height"]) == (NINE_W, NINE_H)
+
+    w, h = _export_output_resolution(db, project_id, "9:16")
+    assert w < h, f"output must be portrait after 9:16 reframe, got {w}x{h}"
+
+
+# ===========================================================================
+# No-regression: unchanged reels keep their orientation
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_unchanged_9x16_reel_still_exports_portrait(db):
+    """A reel that is never reframed still exports 9:16 (portrait)."""
+    project_id, _wc = _seed_reel(db, ratio="9:16", with_dimensions=True)
+    w, h = _export_output_resolution(db, project_id, "9:16")
+    assert w < h, f"unchanged 9:16 reel must export portrait, got {w}x{h}"
+
+
+@pytest.mark.asyncio
+async def test_native_16x9_reel_still_exports_landscape(db):
+    """A natively-16:9 reel still exports 16:9 (landscape)."""
+    project_id, _wc = _seed_reel(db, ratio="16:9", with_dimensions=True)
+    w, h = _export_output_resolution(db, project_id, "16:9")
+    assert w > h, f"native 16:9 reel must export landscape, got {w}x{h}"
+
+
+# ===========================================================================
+# Structural fix: output geometry follows the NOMINAL ratio, not the crop box
+# ===========================================================================
+
+@pytest.mark.asyncio
+async def test_output_geometry_follows_nominal_ratio_over_stale_box(db):
+    """A stale crop box can no longer flip the orientation away from the nominal
+    ratio: a 9:16 box exported under a 16:9 nominal ratio yields LANDSCAPE, and a
+    16:9 box under 9:16 yields PORTRAIT. The crop box only scales; the ratio shapes."""
     from app.utils.encoding import decode_data
     from app.routers.export.multi_clip import calculate_multi_clip_resolution
 
-    project_id, wc = _seed_reel_9x16(db, with_dimensions=False)
-    kfs = decode_data(_connect(db).execute(
+    project_id, wc = _seed_reel(db, ratio="9:16", with_dimensions=False)
+    portrait_box = decode_data(_connect(db).execute(
         "SELECT crop_data FROM working_clips WHERE id = ?", (wc,)).fetchone()["crop_data"])
 
-    portrait = calculate_multi_clip_resolution([{"cropKeyframes": kfs}], "16:9")
-    assert portrait[0] < portrait[1], (
-        "current behavior: a 9:16 crop box yields portrait output even when the "
-        f"nominal ratio is 16:9 (got {portrait}) — the nominal ratio is ignored."
-    )
+    # Stale 9:16 box, but nominal ratio is 16:9 -> landscape (the ratio wins).
+    out = calculate_multi_clip_resolution([{"cropKeyframes": portrait_box}], "16:9")
+    assert out[0] > out[1], f"nominal 16:9 must win over a 9:16 box, got {out}"
 
-    # Only a clip with NO crop keyframes falls back to the nominal ratio.
+    # And a landscape box under a 9:16 nominal ratio -> portrait.
+    landscape_box = [{"frame": 0, "x": 0, "y": 0, "width": SIXTEEN_W, "height": SIXTEEN_H}]
+    out2 = calculate_multi_clip_resolution([{"cropKeyframes": landscape_box}], "9:16")
+    assert out2[0] < out2[1], f"nominal 9:16 must win over a 16:9 box, got {out2}"
+
+    # No-crop clips still honor the nominal ratio (the centered-default path).
     fallback = calculate_multi_clip_resolution([{"cropKeyframes": []}], "16:9")
-    assert fallback[0] > fallback[1], \
-        "no-crop clips DO honor the nominal ratio (the centered-default path)"
+    assert fallback[0] > fallback[1], "no-crop clips honor the nominal ratio"
 
 
 # ===========================================================================
-# Metadata/geometry split: the frozen label can disagree with the pixels
+# Metadata/geometry agreement: the frozen label and the pixels now AGREE
 # ===========================================================================
 
 @pytest.mark.asyncio
-async def test_frozen_metadata_label_can_disagree_with_pixels(db):
+async def test_frozen_metadata_label_matches_pixels_after_reframe(db):
     """compute_project_metadata freezes final_videos.aspect_ratio from
-    projects.aspect_ratio. After a dropped reframe the label says '16:9' while the
-    pixels are still 9:16 — the metadata lies about the file. (When the gesture
-    never persists at all, the inverse happens: label stays '9:16', matching the
-    prod fv36 datum.)"""
+    projects.aspect_ratio. After a reframe the pixels follow the same ratio, so the
+    label and the geometry AGREE (previously they could silently disagree)."""
     from app.database import get_db_connection
     from app.services.collection_metadata import compute_project_metadata
 
-    project_id, wc = _seed_reel_9x16(db, with_dimensions=False)
+    project_id, _wc = _seed_reel(db, ratio="9:16", with_dimensions=False)
     await _reframe(project_id, "16:9")
 
     with get_db_connection() as conn:
         _dur, frozen_ratio, _tags = compute_project_metadata(conn.cursor(), project_id)
 
-    w, h = _export_output_resolution(db, project_id)
+    w, h = _export_output_resolution(db, project_id, "16:9")
 
     assert frozen_ratio == "16:9", "label is frozen from projects.aspect_ratio"
-    assert w < h, "but the exported pixels are still portrait"
-    # The two disagree — this is the diagnosable inconsistency.
     lw, lh = (int(x) for x in frozen_ratio.split(":"))
     label_is_landscape = lw > lh
     pixels_are_landscape = w > h
-    assert label_is_landscape != pixels_are_landscape, \
-        "diagnosis: frozen aspect-ratio label disagrees with actual output geometry"
+    assert label_is_landscape == pixels_are_landscape, (
+        f"frozen label ({frozen_ratio}) must agree with output geometry ({w}x{h})"
+    )
