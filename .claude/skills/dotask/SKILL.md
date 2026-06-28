@@ -77,6 +77,11 @@ Turn a planned task into finished, pushed work — driven entirely from this one
    skipped (GitHub Desktop's PATH lacks docker) — then run `bash scripts/task.sh nuke <SLUG>`.
 
 ## Notes
+- **Workers self-verify in the live app.** For any change that needs the running app, the worker should
+  verify itself from inside the container with `bash scripts/dev-verify.sh e2e/<spec>` — it starts the
+  stack (correct `host.docker.internal` DB), dev-logins as a real user, and runs the Playwright spec.
+  See [drive-app-as-user](../drive-app-as-user/SKILL.md). Only fall back to the supervisor's
+  `bash scripts/task.sh test <SLUG>` if the worker is blocked (e.g. a host-side Postgres bind issue).
 - **Read/inspect the worker's files directly:** the container bind-mounts to `C:\work\tasks\<SLUG>\…`
   on the host — open any file there without git.
 - **Test the app on the branch:** `bash scripts/task.sh stack <SLUG>` -> `http://localhost:<offset>`,
