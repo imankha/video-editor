@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Button } from '../shared';
 import { useAuthStore } from '../../stores/authStore';
 import { API_BASE } from '../../config';

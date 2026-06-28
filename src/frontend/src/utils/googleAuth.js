@@ -110,3 +110,44 @@ export function ensureGisInitialized() {
   _initialized = true;
   return gis;
 }
+
+/**
+ * Wait for GIS to become available, then init and hand the consumer the
+ * handle. The GIS script tag is `async defer`, so on a slow network — or
+ * after a transient load failure during PWA startup — `window.google` may
+ * not exist when a consumer first mounts. A one-shot `ensureGisInitialized()`
+ * would then give up forever, leaving the Google button permanently missing
+ * until the page is reloaded.
+ *
+ * This polls until GIS appears (recovering when the network comes back),
+ * calls `onReady(gis)`, and gives up via `onTimeout` only after `maxWaitMs`.
+ * Resolves immediately if GIS is already loaded. Returns an unsubscribe to
+ * cancel the wait (call it from the effect cleanup).
+ */
+export function onGisReady({ onReady, onTimeout, intervalMs = 500, maxWaitMs = 12000 }) {
+  const immediate = ensureGisInitialized();
+  if (immediate) {
+    onReady(immediate);
+    return () => {};
+  }
+  let cancelled = false;
+  let waited = 0;
+  const id = setInterval(() => {
+    if (cancelled) return;
+    const gis = ensureGisInitialized();
+    if (gis) {
+      clearInterval(id);
+      onReady(gis);
+      return;
+    }
+    waited += intervalMs;
+    if (waited >= maxWaitMs) {
+      clearInterval(id);
+      if (onTimeout) onTimeout();
+    }
+  }, intervalMs);
+  return () => {
+    cancelled = true;
+    clearInterval(id);
+  };
+}

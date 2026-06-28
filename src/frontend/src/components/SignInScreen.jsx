@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { LogoWithText } from './Logo';
 import { OtpAuthForm } from './auth/OtpAuthForm';
 import {
-  ensureGisInitialized,
+  onGisReady,
   getLastAuthError,
   clearLastAuthError,
   onAuthError,
@@ -26,18 +26,22 @@ export function SignInScreen() {
 
   useEffect(() => {
     if (!googleButtonRef.current) return;
-    const gis = ensureGisInitialized();
-    if (!gis) {
-      setGisAvailable(false);
-      return;
-    }
-    setGisAvailable(true);
-    gis.renderButton(googleButtonRef.current, {
-      type: 'standard',
-      theme: 'filled_black',
-      size: 'large',
-      text: 'continue_with',
-      width: 360,
+    // Stay optimistic while GIS loads (it's `async defer`); only surface the
+    // "unavailable" fallback after a real timeout. Recovers if the network
+    // glitch clears and the script loads late.
+    return onGisReady({
+      onReady: (gis) => {
+        setGisAvailable(true);
+        if (!googleButtonRef.current) return;
+        gis.renderButton(googleButtonRef.current, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
+          width: 360,
+        });
+      },
+      onTimeout: () => setGisAvailable(false),
     });
   }, []);
 
