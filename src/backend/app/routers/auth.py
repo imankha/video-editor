@@ -879,3 +879,43 @@ async def test_login(request: Request):
         user_id,
         {"email": email, "user_id": user_id},
     )
+
+
+@router.post("/dev-login")
+async def dev_login(request: Request):
+    """DEV-ONLY faithful login as a REAL user by email (no OAuth).
+
+    Mints a real session cookie so Playwright/automation (and the /dotask container
+    worker) can drive the app AS that account with its real data -- no httpOnly
+    cookie juggling, no direct DB writes. One HTTP call sets rb_session.
+
+    Hard-blocked outside local dev (never staging/prod): minting a session for an
+    ARBITRARY email is unsafe anywhere shared. Gate is APP_ENV in {dev,development}.
+
+    Body: {"email": "..."}  (or X-Dev-Login-Email header).
+    """
+    if APP_ENV not in ("dev", "development", "local"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    email = None
+    try:
+        body = await request.json()
+        if isinstance(body, dict):
+            email = body.get("email")
+    except Exception:
+        pass
+    email = email or request.headers.get("x-dev-login-email")
+    if not email:
+        raise HTTPException(status_code=400, detail="email required (body {\"email\"} or X-Dev-Login-Email header)")
+
+    user = get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"No user with email {email} in {APP_ENV} Postgres")
+    user_id = user["user_id"]
+    set_current_user_id(user_id)
+    logger.info(f"[Auth] DEV-LOGIN as {email} ({user_id}) [env={APP_ENV}]")
+
+    return _issue_session_cookie(
+        user_id,
+        {"email": email, "user_id": user_id, "dev_login": True},
+    )

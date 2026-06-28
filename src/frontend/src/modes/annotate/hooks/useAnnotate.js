@@ -668,9 +668,13 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       return [];
     }
 
-    // If we have an override duration, also set it in state for future operations
-    if (overrideDuration && !duration) {
-      console.log('[useAnnotate] Setting duration from override:', overrideDuration);
+    // T4060: always write the override duration into state when provided. Previously gated on
+    // `!duration`, but on a second game open the closure `duration` carries the prior game's value
+    // (truthy) while reset() nulls it in the same commit -> the write was skipped, duration stayed
+    // null, and regionsWithLayout returned [] (empty timeline). The override is the authoritative
+    // duration for this import, so write it unconditionally; in the batch it runs after reset()'s
+    // setDuration(null) and wins.
+    if (overrideDuration) {
       setDuration(overrideDuration);
     }
 
