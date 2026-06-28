@@ -1,6 +1,6 @@
 # T4050: Diagnose - Re-edited reel's new framing never materializes
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-06-28 prod)
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-06-27

@@ -1,6 +1,6 @@
 # T4060: Annotations not rendering in the Annotate view (DIAGNOSE + INSTRUMENT)
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-06-28 prod)
 **Impact:** 10
 **Complexity:** 4
 **Created:** 2026-06-28

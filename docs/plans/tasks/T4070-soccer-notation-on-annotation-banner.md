@@ -1,6 +1,6 @@
 # T4070: Show soccer-notation time on the annotation banner
 
-**Status:** TODO
+**Status:** DONE (deployed 2026-06-28 prod)
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-06-28
