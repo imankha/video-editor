@@ -586,9 +586,21 @@ async def _run_render_background(
                 raise RuntimeError(
                     f"Clip references game_id={clip['game_id']} but game_videos has no row for (game_id, video_sequence={clip.get('video_sequence')})",
                 )
-            source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
+            source_key = f"games/{clip['game_blake3_hash']}.mp4"
+            source_url = generate_presigned_url_global(source_key)
             clip_path = Path(temp_dir) / "clip_0.mp4"
-            logger.info(f"[Render] Extracting game clip range: {clip['raw_start_time']}s - {clip['raw_end_time']}s")
+            # T4050: trace the source-resolution decision branch. The
+            # reframe-never-materializes bug bites HERE when the game's source
+            # mp4 has been reclaimed/expired -- the ffmpeg extract below fails
+            # (moov parse / head fetch) and the whole re-export aborts with no
+            # new working video. Log the exact key so a future failing run is
+            # traceable from the logs alone.
+            logger.info(
+                f"[ReExport] source=game project={project_id} clip={clip['id']} "
+                f"raw_clip={clip['raw_clip_id']} game={clip['game_id']} "
+                f"seq={clip.get('video_sequence')} key={source_key} "
+                f"url_resolved={bool(source_url)} range={clip['raw_start_time']}s-{clip['raw_end_time']}s"
+            )
 
             def _extract_clip():
                 (
@@ -599,7 +611,20 @@ async def _run_render_background(
                     .run(quiet=True)
                 )
             _t0 = time_module.monotonic()
-            await asyncio.to_thread(_extract_clip)
+            try:
+                await asyncio.to_thread(_extract_clip)
+            except Exception as extract_err:
+                # T4050: make the "source object missing/unreadable" branch loud
+                # and unambiguous. This is the prod signature for clip 56
+                # (moov parse failed / head fetch failed) -> no working video
+                # produced -> draft card with no preview, nothing to republish.
+                logger.error(
+                    f"[ReExport] SOURCE EXTRACT FAILED project={project_id} "
+                    f"clip={clip['id']} key={source_key} -- re-frame cannot render "
+                    f"(reclaimed/expired game source object?). No new working "
+                    f"video will be produced. err={type(extract_err).__name__}: {extract_err}"
+                )
+                raise
             logger.info(f"[Render] ffmpeg extract took {time_module.monotonic() - _t0:.2f}s")
 
             with open(clip_path, 'rb') as f:
@@ -607,9 +632,17 @@ async def _run_render_background(
         else:
             r2_key = f"raw_clips/{clip['raw_filename']}"
             clip_path = Path(temp_dir) / "clip_0.mp4"
-            logger.info(f"[Render] Downloading raw clip: {r2_key}")
+            logger.info(
+                f"[ReExport] source=raw_clip project={project_id} clip={clip['id']} "
+                f"raw_clip={clip['raw_clip_id']} key={r2_key}"
+            )
             _t0 = time_module.monotonic()
             if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
+                logger.error(
+                    f"[ReExport] SOURCE DOWNLOAD FAILED project={project_id} "
+                    f"clip={clip['id']} key={r2_key} -- re-frame cannot render "
+                    f"(missing raw clip object?). No new working video will be produced."
+                )
                 raise RuntimeError("Failed to download source clip from R2")
             logger.info(f"[Render] download_from_r2 took {time_module.monotonic() - _t0:.2f}s")
 

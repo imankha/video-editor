@@ -594,7 +594,7 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
 
         # Re-fit every latest-version clip that has crop keyframes.
         cursor.execute(f"""
-            SELECT id, crop_data, width, height
+            SELECT id, raw_clip_id, crop_data, width, height
             FROM working_clips wc
             WHERE wc.project_id = ?
             AND wc.id IN ({latest_working_clips_subquery()})
@@ -610,11 +610,32 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
 
             width, height = clip['width'], clip['height']
             if not width or not height:
-                logger.warning(
-                    f"[Aspect Ratio] Clip {clip['id']} has crop data but no stored dimensions; "
-                    f"skipping re-fit (re-export the clip to populate width/height)."
-                )
-                continue
+                # T4050: working_clips never recorded source dims (legacy / un-backfilled
+                # game_videos row). Don't silently skip the re-fit — that drops the reframe.
+                # First try to recover the real dims from the parent game_video and persist
+                # them (Correct Data, Not Workarounds); the box can then be re-fit + clamped
+                # properly, and future re-fits/exports have the dims too.
+                probed_w, probed_h, _fps = _get_dims_from_raw_clip(cursor, clip['raw_clip_id'])
+                if probed_w and probed_h:
+                    width, height = probed_w, probed_h
+                    cursor.execute(
+                        "UPDATE working_clips SET width = ?, height = ? WHERE id = ?",
+                        (width, height, clip['id']),
+                    )
+                    logger.info(
+                        f"[Aspect Ratio] Clip {clip['id']} had no stored dimensions; "
+                        f"recovered {width}x{height} from game_videos."
+                    )
+                else:
+                    # No dims anywhere. For the product ratios the box size is fixed, so we
+                    # still re-shape the box to the new ratio (refit_crop_keyframes clamps
+                    # only the top-left when dims are unknown). The reframe takes effect.
+                    width, height = None, None
+                    logger.warning(
+                        f"[Aspect Ratio] Clip {clip['id']} has crop data but no stored "
+                        f"dimensions and none in game_videos; re-fitting box shape without "
+                        f"bounds clamp (re-export to populate width/height)."
+                    )
 
             refit = refit_crop_keyframes(crop_keyframes, width, height, body.aspect_ratio)
             cursor.execute(

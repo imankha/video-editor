@@ -71,6 +71,35 @@ from ..utils.cookies import set_cookie as _set_cookie
 
 logger = logging.getLogger(__name__)
 
+# T4050: payload returned when a durable (sync-before-respond) gesture commits
+# locally but cannot push the change to R2. The frontend keeps the card in place
+# and offers Retry instead of optimistically moving/removing it.
+DURABLE_SYNC_FAILED_RESPONSE = {
+    "detail": "Could not save to the cloud. Your reel was not moved. Please try again.",
+    "code": "sync_failed",
+    "retryable": True,
+}
+
+
+async def durable_sync(request: Request) -> None:
+    """FastAPI dependency: opt a write route into sync-before-respond (T4050).
+
+    One-shot irreversible gestures (publish / restore-project / delete) commit to
+    the LOCAL profile.sqlite and, by default, sync to R2 fire-and-forget AFTER the
+    response is sent. If the machine is replaced (deploy/autostop/crash) or the
+    0.5s upload-lock defer fires before that background task runs, the write never
+    reaches R2 and a later session_init pulls the stale pre-gesture snapshot back
+    down — the action silently reverts.
+
+    Marking the route durable makes RequestContextMiddleware AWAIT the R2 sync
+    INSIDE the still-held per-user write lock (lock_timeout=None, never defers) and
+    return 503 instead of a lying 200 when the sync fails. Setting the marker on
+    request.state is visible to the middleware because the endpoint Request and the
+    middleware Request share the same ASGI scope.
+    """
+    request.state.durable_sync = True
+
+
 FLY_MACHINE_ID = os.getenv("FLY_MACHINE_ID", "")
 FLY_APP_NAME = os.getenv("FLY_APP_NAME", "")
 PROFILING_ENABLED = os.getenv("PROFILING_ENABLED", "false").lower() == "true"
@@ -628,16 +657,40 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 # Prevents concurrent readers from seeing a stale .sync_pending
                 # marker and flashing X-Sync-Status: failed.
                 _begin_sync_attempt(user_id)
-                # T3250: Fire sync as background task — response returns
-                # immediately. Write lock releases when _sync_aware_flow
-                # returns; background sync runs outside the lock.
-                asyncio.create_task(
-                    self._background_sync(
+
+                # T4050: durable (sync-before-respond) gestures AWAIT the R2 push
+                # INSIDE the still-held per-user write lock, so a machine swap can
+                # never strand a committed publish/edit/delete. On failure we return
+                # 503 (card stays, frontend offers Retry) instead of a lying 200.
+                durable = bool(getattr(request.state, "durable_sync", False))
+                if durable:
+                    sync_status = await self._background_sync(
                         user_id, profile_id, req_id, method, path,
                         had_writes, had_user_db_writes,
                         do_profile, force_profile,
+                        durable=True,
                     )
-                )
+                    if sync_status != "ok":
+                        logger.warning(
+                            f"[SYNC] DURABLE {method} {path} -> {sync_status}; "
+                            f"returning 503 user={user_id}"
+                            f"{(' req_id=' + req_id) if req_id else ''}"
+                        )
+                        return JSONResponse(
+                            status_code=503,
+                            content=DURABLE_SYNC_FAILED_RESPONSE,
+                        )
+                else:
+                    # T3250: Fire sync as background task — response returns
+                    # immediately. Write lock releases when _sync_aware_flow
+                    # returns; background sync runs outside the lock.
+                    asyncio.create_task(
+                        self._background_sync(
+                            user_id, profile_id, req_id, method, path,
+                            had_writes, had_user_db_writes,
+                            do_profile, force_profile,
+                        )
+                    )
 
             # T950: Surface prior sync failure on response header.
             # AND-gate: only show "failed" when the marker is stale and no
@@ -696,14 +749,25 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         do_profile: bool,
         force_profile: bool,
         is_error_path: bool = False,
+        durable: bool = False,
     ):
         """T3250: R2 sync as background task. Runs after response is sent.
 
         _begin_sync_attempt must be called BEFORE this task is created
         (so the X-Sync-Status header doesn't flash "failed").
         _end_sync_attempt is called in the finally block here.
+
+        Returns the sync status string ("ok" | "failed" | "conflict"). The
+        fire-and-forget caller wraps this in asyncio.create_task and ignores the
+        return; the T4050 durable caller awaits it inside the write lock and turns
+        a non-ok result into a 503.
+
+        durable: never defer on the upload lock (lock_timeout=None) — the 0.5s
+        defer is a silent loss path, unacceptable for one-shot gestures.
         """
-        lock_timeout = None if is_error_path else _SYNC_LOCK_TIMEOUT
+        # is_error_path already blocks fully (errors must not be dropped); durable
+        # gestures get the same full-block treatment so they never silently defer.
+        lock_timeout = None if (is_error_path or durable) else _SYNC_LOCK_TIMEOUT
         sync_start = time.perf_counter()
         sync_status = "ok"
         try:
@@ -813,6 +877,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         if is_error_path:
             set_sync_failed(user_id, sync_status != "ok")
+
+        return sync_status
 
 
 # Keep old name for backward compatibility with imports

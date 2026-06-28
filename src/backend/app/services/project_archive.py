@@ -272,10 +272,20 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
             conn.commit()
 
+            n_clips = len(archive.get("working_clips", []))
+            n_videos = len(archive.get("working_videos", []))
             logger.info(
-                f"Restored project {project_id}: {len(archive.get('working_clips', []))} clips, "
-                f"{len(archive.get('working_videos', []))} videos"
+                f"[Restore] Restored project {project_id}: {n_clips} clips, {n_videos} videos "
+                f"(working_video_id={project.get('working_video_id')})"
             )
+            # T4050: a restore that brings back ZERO working data is the
+            # "draft card with no preview" signature -- the editor has nothing
+            # to render. Surface it loudly so a future bad archive is visible.
+            if n_videos == 0 or n_clips == 0:
+                logger.warning(
+                    f"[Restore] project {project_id} restored with EMPTY working data "
+                    f"(clips={n_clips}, videos={n_videos}) -- draft will have no preview/source"
+                )
 
         # Archive intentionally NOT deleted from R2 here. The DB write above
         # hasn't been synced to R2 yet (middleware does that after the handler).

@@ -158,6 +158,17 @@ def _finalize_overlay_export(
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
 
+        # T4050: trace the atomic final-video swap. This is the ONLY place a
+        # re-framed reel becomes a materialized final; if a re-export never
+        # reaches here (prod max final_video.id stuck), the failure is upstream
+        # in the render/source path -- this log marks the successful boundary.
+        logger.info(
+            f"[ReExport] finalize project={project_id} new_final_id={final_video_id} "
+            f"version={next_version} filename={output_filename!r} "
+            f"prior_final_id={prior_final_id} "
+            f"{'KEEP prior (active share)' if (prior_final_id and keep_prior) else ('DELETE prior id=' + str(prior_final_id)) if prior_final_id else 'no prior (first final)'}"
+        )
+
         # T4010: drop the now-superseded prior row in the SAME transaction as the
         # swap, so DB + R2 stay consistent (the prior R2 object is deleted post-commit
         # below). Skipped when an active share still serves it.

@@ -112,6 +112,18 @@ export function useDownloads(isOpen = false) {
         { method: 'DELETE' }
       );
 
+      // T4050: durable sync failure — the delete committed locally but never reached
+      // R2. Do NOT optimistically remove the card (it would reappear on the next
+      // session); surface a retryable message so the user can delete again.
+      if (response.status === 503) {
+        const err = await response.json().catch(() => ({}));
+        if (err.code === 'sync_failed') {
+          console.warn(`[useDownloads] deleteDownload sync_failed (503) for id=${downloadId} - card kept`);
+          setError('Could not save to the cloud. Your reel was not deleted. Please try again.');
+          return false;
+        }
+      }
+
       if (!response.ok) throw new Error('Failed to delete download');
 
       // Update local state optimistically
