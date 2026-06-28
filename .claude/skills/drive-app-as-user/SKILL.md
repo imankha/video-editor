@@ -59,11 +59,32 @@ Canonical example/regression: `e2e/annotate-annotations-render.spec.js`.
    and `page.on('pageerror', ...)`; `console.log(logs.join('\n'))` at the end.
 3. Run, read the trace, narrow, repeat. Strip the `[DBG]` logging before committing the fix.
 
-## Container worker (/dotask) usage
-The container copies the host `.env` and reaches the host DB via `host.docker.internal`;
-`bash scripts/task.sh stack <slug>` starts the app and `bash scripts/task.sh test <slug>` runs
-Playwright in-container against it. The same helper + dev-login endpoint work there. A worker can
-mint auth + drive the app without re-deriving any of this.
+## From inside a /dotask container
+A /dotask container worker can run the **entire** live-verify loop itself — no supervisor needed.
+Run this one command from the repo root inside the container:
+```bash
+bash scripts/dev-verify.sh e2e/<your>.spec.js [extra playwright args...]
+# e.g.
+bash scripts/dev-verify.sh e2e/annotate-soccer-times.spec.js --reporter=line
+```
+`dev-verify.sh` starts the stack via `.devcontainer/container-stack.sh` (idempotent — reuses an
+already-running stack), waits for the frontend + backend `/api/health`, self-heals chromium, then
+runs the spec and exits with Playwright's code.
+
+- **DB host is handled for you.** The container `.env` has `DATABASE_URL=…@localhost:5432`, which is
+  wrong inside the container. `container-stack.sh` exports a `DATABASE_URL` override rewriting the
+  host to `host.docker.internal` (the shared dev Postgres on the host machine) — it does **not** edit
+  `.env`, so host-side scripts keep their `localhost` semantics. Don't edit `.env` or add a second
+  rewrite.
+- **Dev-login data prerequisite.** realAuth specs `dev-login` as a real account; that email must exist
+  in this env's Postgres (reached via `host.docker.internal`). If dev-login 404s on the user, seed it:
+  `scripts/copy_user_between_envs.py --from production --to dev`.
+- A worker **no longer needs the supervisor's `task.sh test`** for live verification — use
+  `dev-verify.sh` and only fall back to the supervisor if blocked (e.g. a host-side Postgres bind
+  issue you can't fix from inside the container).
+
+The same `loginAsRealUser` helper + `dev-login` endpoint work in-container; `dev-verify.sh` just wires
+up the stack + correct DB host around them.
 
 ## Gotchas
 - Email must exist in the env's Postgres `users` table (use a real account, e.g. one copied down
