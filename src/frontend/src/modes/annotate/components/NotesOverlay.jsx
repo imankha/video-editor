@@ -34,7 +34,7 @@ const RATING_COLORS = {
  *
  * Only visible when playhead is in a clip region with a name or notes.
  */
-export function NotesOverlay({ name, notes, rating, isVisible, isFullscreen = false, isMobile = false }) {
+export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible, isFullscreen = false, isMobile = false }) {
   if (!isVisible || (!name && !notes)) {
     return null;
   }
@@ -60,7 +60,13 @@ export function NotesOverlay({ name, notes, rating, isVisible, isFullscreen = fa
       }}
     >
       {name && (
-        <div style={{ textAlign: 'center', fontWeight: 'bold', marginBottom: notes ? '4px' : 0 }}>
+        <div style={{ position: 'relative', textAlign: 'center', fontWeight: 'bold', marginBottom: notes ? '4px' : 0 }}>
+          {/* T4070: in-match time (soccer notation) on the left, name centered. */}
+          {gameClock && (
+            <span style={{ position: 'absolute', left: 0, top: 0, fontVariantNumeric: 'tabular-nums', color: '#666' }}>
+              {gameClock}
+            </span>
+          )}
           {notation && <span style={{ marginRight: '6px', color: '#666' }}>{notation}</span>}
           {name}
         </div>

@@ -6,6 +6,7 @@ import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
+import { formatGameClock } from '../utils/timeFormat';
 import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
@@ -106,6 +107,17 @@ export function AnnotateModeView({
     if (!annotateSelectedRegionId || !showAnnotateOverlay) return null;
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
+
+  // T4070: in-match soccer-notation clock (MM'SS") for a clip region, shown on the NotesOverlay
+  // banner. In-match start = file-relative startTime + the half offset. boundaryOffsets are the
+  // per-half virtual starts; single-video games have none, so startTime is already the in-match
+  // position. The (seq-2) index maps videoSequence 2 -> boundaryOffsets[0] (start of the 2nd half).
+  const gameClockFor = useCallback((clip) => {
+    if (!clip || clip.startTime == null) return null;
+    const seq = clip.videoSequence ?? 1;
+    const halfOffset = seq >= 2 && boundaryOffsets?.length ? (boundaryOffsets[seq - 2] ?? 0) : 0;
+    return formatGameClock(clip.startTime + halfOffset);
+  }, [boundaryOffsets]);
 
   const isPlaybackMode = playback?.isPlaybackMode;
   const isMobile = useIsMobile();
@@ -249,6 +261,7 @@ export function AnnotateModeView({
                     name={displayName}
                     notes={activePlaybackClip.notes}
                     rating={activePlaybackClip.rating}
+                    gameClock={gameClockFor(activePlaybackClip)}
                     isVisible={true}
                     isFullscreen={isFS}
                     isMobile={isMobile}
@@ -485,6 +498,7 @@ export function AnnotateModeView({
                         name={displayName}
                         notes={region.notes}
                         rating={region.rating}
+                        gameClock={gameClockFor(region)}
                         isVisible={true}
                         isFullscreen={annotateFullscreen}
                         isMobile={isMobile}
@@ -521,6 +535,7 @@ export function AnnotateModeView({
                             name={displayName}
                             notes={region.notes}
                             rating={region.rating}
+                            gameClock={gameClockFor(region)}
                             isVisible={true}
                             isFullscreen={annotateFullscreen}
                             isMobile={isMobile}
