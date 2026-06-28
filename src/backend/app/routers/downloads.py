@@ -5,7 +5,7 @@ Provides access to final videos that have been exported from Overlay mode.
 Users can list, download, and delete their final videos.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import Optional, List
@@ -23,6 +23,7 @@ from app.services.project_archive import archive_project, restore_project, is_pr
 from app.constants import SourceType
 from app.utils.encoding import decode_data
 from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
+from app.middleware.db_sync import durable_sync
 
 logger = logging.getLogger(__name__)
 
@@ -727,7 +728,11 @@ async def stream_download(download_id: int, request: Request):
 
 
 @router.delete("/{download_id}")
-async def delete_download(download_id: int, remove_file: bool = False):
+async def delete_download(
+    download_id: int,
+    remove_file: bool = False,
+    _durable: None = Depends(durable_sync),
+):
     """
     Delete a download entry.
 
@@ -808,7 +813,10 @@ async def rename_download(download_id: int, body: dict):
 
 
 @router.post("/publish/{project_id}")
-async def publish_to_my_reels(project_id: int):
+async def publish_to_my_reels(
+    project_id: int,
+    _durable: None = Depends(durable_sync),
+):
     """Publish a project's latest final video to My Reels.
 
     Sets published_at on the latest final_video for the given project,
@@ -910,7 +918,10 @@ async def get_download_count():
 
 
 @router.post("/{download_id}/restore-project")
-async def restore_project_from_archive(download_id: int):
+async def restore_project_from_archive(
+    download_id: int,
+    _durable: None = Depends(durable_sync),
+):
     """
     Restore a project from archive (T66).
 

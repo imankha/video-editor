@@ -5,6 +5,6 @@ Contains FastAPI middleware for cross-cutting concerns:
 - RequestContextMiddleware: User context setup + R2 database sync (combined)
 """
 
-from .db_sync import RequestContextMiddleware, DatabaseSyncMiddleware
+from .db_sync import RequestContextMiddleware, DatabaseSyncMiddleware, durable_sync
 
-__all__ = ['RequestContextMiddleware', 'DatabaseSyncMiddleware']
+__all__ = ['RequestContextMiddleware', 'DatabaseSyncMiddleware', 'durable_sync']

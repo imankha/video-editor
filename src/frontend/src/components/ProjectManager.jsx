@@ -1729,10 +1729,14 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
  * - Click on a clip segment: Open in framing mode with that clip selected
  * - Click on overlay segment: Open in overlay mode
  */
-function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
+export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  // T4050: when a durable publish fails to reach R2 (503 sync_failed), the card
+  // stays put and we stash the gesture args so the user can Retry the exact same
+  // "Move to My Reels" with one click (no refetch, no optimistic removal).
+  const [publishRetry, setPublishRetry] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [actionsRevealed, setActionsRevealed] = useState(false);
   const longPressTimer = useRef(null);
@@ -1756,6 +1760,18 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
       const response = await apiFetch(`${API_BASE}/api/downloads/publish/${project.id}`, {
         method: 'POST',
       });
+      // T4050: a durable sync failure means the publish committed locally but never
+      // reached R2. Returning 200 would let fetchProjects remove the card while the
+      // reel silently reverts on the next session. Keep the card, skip the refetch,
+      // and surface Retry (same gesture) instead of the blunt alert.
+      if (response.status === 503) {
+        const error = await response.json().catch(() => ({}));
+        if (error.code === 'sync_failed') {
+          console.warn(`[Publish] project=${project.id} sync_failed (503) - card kept, offering Retry`);
+          setPublishRetry({ openGallery });
+          return;
+        }
+      }
       if (!response.ok) {
         const error = await response.json();
         // Card is NOT removed on failure: we throw before fetchProjects, the catch
@@ -1764,6 +1780,7 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
         throw new Error(error.detail || 'Failed to publish');
       }
       const result = await response.json();
+      setPublishRetry(null);
       console.log(`[Publish] project=${project.id} 200 ok archived=${result.archived} final_video_id=${result.final_video_id}`);
       if (!result.archived) {
         console.warn(`[ProjectCard] Project ${project.id} published but archive failed - card stays in Drafts.`);
@@ -2078,6 +2095,22 @@ function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingP
           />
         )}
       </div>
+
+      {publishRetry && (
+        /* T4050: durable publish couldn't reach the cloud — keep the card and let
+           the user retry the same gesture instead of silently reverting later. */
+        <div className="mt-2 flex items-center justify-center gap-2 text-sm" role="alert">
+          <span className="text-amber-400">Couldn&apos;t save to the cloud.</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); publishProject(publishRetry); }}
+            disabled={isPublishing}
+            className="px-3 py-1 rounded-md font-medium border border-amber-500 text-amber-300 hover:bg-amber-900/30 disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {isComplete ? (
         /* Secondary actions row — shown for all Done reels, published or not */

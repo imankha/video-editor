@@ -31,6 +31,17 @@ export function useReEditReel(navigateToProject) {
       const response = await apiFetch(`${API_BASE}/api/downloads/${reel.id}/restore-project`, {
         method: 'POST',
       });
+      // T4050: durable sync failure — the unpublish committed locally but never
+      // reached R2. Do NOT navigate (which would imply the edit stuck); the reel
+      // stays in My Reels and the user can retry by clicking Edit again.
+      if (response.status === 503) {
+        const error = await response.json().catch(() => ({}));
+        if (error.code === 'sync_failed') {
+          console.warn(`[useReEditReel] sync_failed (503) for reel=${reel.id} - reel kept, ask user to retry`);
+          alert('Could not save to the cloud. Your reel was not moved. Please try again.');
+          return;
+        }
+      }
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.detail || 'Failed to restore reel');
