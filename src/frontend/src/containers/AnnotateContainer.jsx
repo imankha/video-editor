@@ -637,6 +637,12 @@ export function AnnotateContainer({
           ? Math.max(...gameData.videos.map(v => v.duration || 0))
           : (videoMetadata?.duration || gameData.video_duration);
 
+        // T4060: trace the data feeding the import. The <video> element often
+        // reports a SHORTER duration than the game (T4000 early /video src), so
+        // log both: the gameDuration we pass to importAnnotations comes from
+        // /load (video_duration), NOT the element, so clips SHOULD import.
+        console.log('[Annotate] handleLoadGame importing', gameData.annotations.length, 'annotations; gameDuration=', gameDuration, '(videoMetadata.duration=', videoMetadata?.duration, ', gameData.video_duration=', gameData.video_duration, ', <video>.duration=', videoRef.current?.duration, ')');
+
         const annotationsWithoutRawClips = gameData.annotations.filter(a => !a.id);
 
         if (annotationsWithoutRawClips.length > 0) {

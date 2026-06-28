@@ -660,6 +660,12 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
     // Use override duration if provided, otherwise use state duration
     const effectiveDuration = overrideDuration ?? duration;
 
+    // T4060: trace the import decision. `duration` here is the closure (last
+    // render) value -- if a prior game left it truthy, the override-setDuration
+    // below is skipped while reset() nulls duration in the same commit, leaving
+    // `duration` state null -> regionsWithLayout returns [] -> empty timeline.
+    console.log('[useAnnotate] importAnnotations:', annotations.length, 'annotations; overrideDuration=', overrideDuration, 'closure duration=', duration, '-> effectiveDuration=', effectiveDuration, effectiveDuration ? '(IMPORT)' : '(QUEUE)');
+
     // If duration not available yet, queue for later
     if (!effectiveDuration) {
       console.log('[useAnnotate] Duration not available, queueing', annotations.length, 'annotations for later');
@@ -668,8 +674,15 @@ export default function useAnnotate(videoMetadata, { selectedRegionId = null, on
       return [];
     }
 
-    // If we have an override duration, also set it in state for future operations
-    if (overrideDuration && !duration) {
+    // T4060 FIX: always write the override duration into state when provided.
+    // Previously this was gated on `!duration`, but in handleLoadGame the closure
+    // `duration` carries the PRIOR game's value (truthy) while reset() nulls
+    // duration in the same commit -> the override write was skipped, duration
+    // stayed null, regionsWithLayout returned [] and the timeline rendered empty.
+    // The override is the authoritative duration for this import, so write it
+    // unconditionally; in the batch it runs after reset()'s setDuration(null) and
+    // wins.
+    if (overrideDuration) {
       console.log('[useAnnotate] Setting duration from override:', overrideDuration);
       setDuration(overrideDuration);
     }
