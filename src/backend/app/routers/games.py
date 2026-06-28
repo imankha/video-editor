@@ -540,6 +540,31 @@ async def add_game_videos(game_id: int, request: AddVideosRequest):
     }
 
 
+def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str):
+    """Insert any missing game_storage refs for a game's videos. Idempotent.
+
+    bug26p: insert_game_storage_ref opens its OWN connection (profile SQLite +
+    Postgres game_ref_counts), so the caller's connection MUST NOT hold an open
+    write transaction when this runs (else SQLite writer lock). Call only after a
+    commit / on a read-only connection. Returns the count of refs newly inserted.
+    """
+    video_rows = cursor.execute(
+        "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
+        (game_id,),
+    ).fetchall()
+    existing = {
+        r["blake3_hash"]
+        for r in cursor.execute("SELECT blake3_hash FROM game_storage").fetchall()
+    }
+    inserted = 0
+    for vr in video_rows:
+        h = vr["blake3_hash"]
+        if h and h not in existing:
+            insert_game_storage_ref(user_id, profile_id, h, vr["video_size"] or 0, expires_str)
+            inserted += 1
+    return inserted
+
+
 @router.post("/{game_id:int}/activate")
 async def activate_game(game_id: int):
     """
@@ -558,6 +583,17 @@ async def activate_game(game_id: int):
             raise HTTPException(status_code=404, detail="Game not found")
 
         if game['status'] == GameStatus.READY:
+            # bug26p: A prior activation may have flipped status to ready before
+            # writing storage refs (or crashed between). Self-heal any missing refs
+            # idempotently. The connection has only read so far (no open write txn),
+            # so insert_game_storage_ref's own connection can't deadlock here.
+            healed = _ensure_game_storage_refs(
+                cursor, game_id,
+                get_current_user_id(), get_current_profile_id(),
+                storage_expires_at().isoformat(),
+            )
+            if healed:
+                logger.info(f"[activate] self-healed {healed} missing storage ref(s) for ready game {game_id}")
             return {"game_id": game_id, "status": GameStatus.READY}
 
         # Validate all videos exist in R2
@@ -665,7 +701,7 @@ async def activate_game(game_id: int):
             )
         """, (game_id,))
 
-        # T1580: Compute total size and deduct storage credits
+        # T1580: Compute total size and storage cost
         cursor.execute(
             "SELECT blake3_hash, video_size FROM game_videos WHERE game_id = ?",
             (game_id,),
@@ -676,7 +712,27 @@ async def activate_game(game_id: int):
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()
         upload_cost = calculate_upload_cost(total_size) if total_size > 0 else 1
+        expires_str = storage_expires_at().isoformat()
 
+        # bug26p: Commit the metadata backfills BEFORE credits/refs/status. This closes
+        # activate's write transaction so insert_game_storage_ref (which opens its own
+        # connection) can't deadlock, and lets us write storage refs BEFORE flipping
+        # status. Backfills are safe to persist on a still-pending game (metadata only).
+        conn.commit()
+
+        # Write storage refs FIRST, before the status flip. If this fails the game stays
+        # pending: no charge, and never a ready-without-ref (the games 8/9/10 class of
+        # bug). insert_game_storage_ref is idempotent per hash, so retries are no-ops.
+        for vr in game_video_rows:
+            if vr["blake3_hash"]:
+                insert_game_storage_ref(
+                    user_id, profile_id, vr["blake3_hash"],
+                    vr["video_size"] or 0, expires_str,
+                )
+
+        # Deduct credits, then flip status — kept ADJACENT so the charge->ready window is
+        # as small as today. deduct_credits is idempotent on (source, reference_id), so a
+        # retry after a crash between deduct and the status commit won't double-charge.
         result = deduct_credits(user_id, upload_cost, source="game_upload", reference_id=str(game_id))
         if not result["success"]:
             raise HTTPException(
@@ -688,20 +744,11 @@ async def activate_game(game_id: int):
                 },
             )
 
-        # Set game ready and record cross-user storage refs
-        expires_str = storage_expires_at().isoformat()
         cursor.execute(
             "UPDATE games SET status = ? WHERE id = ?",
             (GameStatus.READY, game_id),
         )
         conn.commit()
-
-        for vr in game_video_rows:
-            if vr["blake3_hash"]:
-                insert_game_storage_ref(
-                    user_id, profile_id, vr["blake3_hash"],
-                    vr["video_size"] or 0, expires_str,
-                )
 
     logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
     return {

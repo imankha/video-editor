@@ -367,4 +367,11 @@ describe('hashFile', () => {
     // Should still return a valid hash (of the file size = 0)
     expect(hash).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  // bug26p: an aborted signal (e.g. the hash timeout fired) must reject loudly
+  // instead of silently completing — so a stalled hash can't masquerade as success.
+  it('should reject when the abort signal is already set', async () => {
+    const file = new File(['some content'], 'test.mp4', { type: 'video/mp4' });
+    await expect(hashFile(file, () => {}, { aborted: true })).rejects.toThrow(/abort|timed out/i);
+  });
 });

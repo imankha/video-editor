@@ -23,6 +23,10 @@ export const useUploadStore = create((set, get) => ({
   // T1580: Insufficient credits info (shown when upload is blocked)
   insufficientCredits: null, // { required, balance }
 
+  // bug26p: Retained args from the last startUpload so a failed upload can be
+  // retried in one click. Memory-only (holds the File handle) — never persisted.
+  retryContext: null, // { fileOrFiles, gameDetails, videoMetadata, onComplete, displayInfo, onGameCreated }
+
   // Callbacks to notify when upload completes
   onCompleteCallbacks: [],
 
@@ -72,6 +76,8 @@ export const useUploadStore = create((set, get) => ({
         gameName: displayInfo?.gameName || primaryFile.name,
       },
       onCompleteCallbacks: onComplete ? [onComplete] : [],
+      // bug26p: retain everything needed to re-run this exact upload on Retry.
+      retryContext: { fileOrFiles, gameDetails, videoMetadata, onComplete, displayInfo, onGameCreated },
     });
 
     // Build upload options
@@ -127,7 +133,7 @@ export const useUploadStore = create((set, get) => ({
         }
       });
       const gameName = get().activeUpload?.gameName;
-      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
+      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, retryContext: null });
       toast.success('Game ready!', {
         message: `${gameName || 'Video'} uploaded successfully`,
       });
@@ -140,11 +146,14 @@ export const useUploadStore = create((set, get) => ({
     const onUploadError = (error) => {
       console.error('[UploadStore] Upload failed:', error);
       if (error.insufficientCredits) {
+        // The insufficient-credits modal is the failure surface here; no toast,
+        // and no retry context (the user must buy credits, not just retry).
         set({
           activeUpload: null,
           onCompleteCallbacks: [],
           uploadGameId: null,
           uploadGameName: null,
+          retryContext: null,
           insufficientCredits: {
             required: error.uploadCost,
             balance: error.balance,
@@ -152,6 +161,10 @@ export const useUploadStore = create((set, get) => ({
         });
         return;
       }
+      // bug26p: a real upload failure must be IMPOSSIBLE to mistake for success.
+      // Surface a prominent toast (in addition to the corner indicator), and keep
+      // retryContext so the error UI can offer a one-click Retry.
+      const gameName = get().activeUpload?.gameName;
       set((state) => ({
         activeUpload: state.activeUpload ? {
           ...state.activeUpload,
@@ -159,6 +172,9 @@ export const useUploadStore = create((set, get) => ({
           message: error.message || 'Upload failed',
         } : null,
       }));
+      toast.error('Upload failed', {
+        message: `${gameName || 'Your video'} didn't upload. Please tap Retry to try again.`,
+      });
     };
 
     // Thread onGameCreated into upload options so clip saves work during upload.
@@ -207,8 +223,22 @@ export const useUploadStore = create((set, get) => ({
   clearFailedUpload: () => {
     const state = get();
     if (state.activeUpload?.phase === UPLOAD_PHASE.ERROR) {
-      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
+      set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, retryContext: null });
     }
+  },
+
+  /**
+   * bug26p: Retry the last failed upload using the retained args (incl. the File
+   * handle). Clears the errored upload first so startUpload's in-progress guard
+   * passes, then re-runs the exact same upload.
+   */
+  retryUpload: () => {
+    const ctx = get().retryContext;
+    if (!ctx) return null;
+    set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, retryContext: null });
+    return get().startUpload(
+      ctx.fileOrFiles, ctx.gameDetails, ctx.videoMetadata, ctx.onComplete, ctx.displayInfo, ctx.onGameCreated,
+    );
   },
 
   clearInsufficientCredits: () => set({ insufficientCredits: null }),
@@ -235,7 +265,7 @@ export const useUploadStore = create((set, get) => ({
    */
   cancelUpload: () => {
     if (!get().activeUpload) return;
-    set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null });
+    set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, retryContext: null });
     toast.info('Upload cancelled');
   },
 
@@ -244,7 +274,7 @@ export const useUploadStore = create((set, get) => ({
    * In-flight XHR continues (aborting multipart R2 uploads is complex),
    * but the completion callback is discarded so it won't affect the new profile.
    */
-  reset: () => set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, insufficientCredits: null }),
+  reset: () => set({ activeUpload: null, onCompleteCallbacks: [], uploadGameId: null, uploadGameName: null, insufficientCredits: null, retryContext: null }),
 }));
 
 export default useUploadStore;
