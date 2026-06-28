@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import {
-  ensureGisInitialized,
+  onGisReady,
   getLastAuthError,
   clearLastAuthError,
   onAuthError,
@@ -44,21 +44,28 @@ export function AuthGateModal() {
 
   useEffect(() => {
     if (!showAuthModal || !googleButtonRef.current) return;
-    const gis = ensureGisInitialized();
-    if (!gis) {
-      console.error('[Auth:Modal] Google Identity Services not loaded. ' +
-        'This may be caused by an ad blocker, script blocker, or network issue. ' +
-        `Browser: ${navigator.userAgent}`);
-      setGisAvailable(false);
-      return;
-    }
+    // Stay optimistic while GIS loads (`async defer`); only show the
+    // "unavailable" fallback after a real timeout. Recovers if a network
+    // glitch clears and the script loads late.
     setGisAvailable(true);
-    gis.renderButton(googleButtonRef.current, {
-      type: 'standard',
-      theme: 'filled_black',
-      size: 'large',
-      text: 'continue_with',
-      width: 360,
+    return onGisReady({
+      onReady: (gis) => {
+        setGisAvailable(true);
+        if (!googleButtonRef.current) return;
+        gis.renderButton(googleButtonRef.current, {
+          type: 'standard',
+          theme: 'filled_black',
+          size: 'large',
+          text: 'continue_with',
+          width: 360,
+        });
+      },
+      onTimeout: () => {
+        console.error('[Auth:Modal] Google Identity Services not loaded. ' +
+          'This may be caused by an ad blocker, script blocker, or network issue. ' +
+          `Browser: ${navigator.userAgent}`);
+        setGisAvailable(false);
+      },
     });
   }, [showAuthModal]);
 

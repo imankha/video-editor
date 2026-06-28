@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
-import { ensureGisInitialized } from '../utils/googleAuth';
+import { onGisReady } from '../utils/googleAuth';
 
 /**
  * Google One Tap — shows Google's floating sign-in UI for unauthenticated
@@ -22,17 +22,18 @@ export function GoogleOneTap() {
     if (showAuthModal) return;
     if (promptShownRef.current) return;
 
-    const gis = ensureGisInitialized();
-    if (!gis) {
-      console.warn(`[Auth:OneTap] Google Identity Services not loaded. Possible ad blocker or network issue. Browser: ${navigator.userAgent}`);
-      return;
-    }
-    gis.prompt();
-    promptShownRef.current = true;
-
-    // No cleanup cancel — it would race with React StrictMode's mount/
-    // unmount/mount cycle and abort the prompt before the user can
-    // interact. requireAuth() explicitly cancels when opening the modal.
+    // GIS loads `async defer`; wait for it (recovering after a slow load or
+    // transient network glitch) rather than giving up on a single check.
+    return onGisReady({
+      onReady: (gis) => {
+        if (promptShownRef.current) return;
+        gis.prompt();
+        promptShownRef.current = true;
+      },
+      onTimeout: () => {
+        console.warn(`[Auth:OneTap] Google Identity Services not loaded. Possible ad blocker or network issue. Browser: ${navigator.userAgent}`);
+      },
+    });
   }, [isCheckingSession, isAuthenticated, showAuthModal]);
 
   return null;
