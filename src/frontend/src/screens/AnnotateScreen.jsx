@@ -360,26 +360,30 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
   // Keep getLastPlayhead ref updated for the leave handlers
   getLastPlayheadRef.current = getLastPlayhead;
 
-  // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing)
+  // Handle initial game ID from sessionStorage (when loading a saved game or navigating from Framing).
+  //
+  // T4060 FIX: consume the pending game FIRST and load it whenever present. Do NOT bail on
+  // annotateVideoUrl. T4000 now seeds the early `/api/games/{id}/video` src on the first render
+  // (peekPendingGame in useAnnotateState) BEFORE the game is loaded, so the old
+  // `if (annotateVideoUrl) return` guard saw that placeholder src and skipped handleLoadGame
+  // entirely -> /load never ran and annotations never imported (empty Annotate timeline). A
+  // pendingGameId breadcrumb means the user navigated to open that game, so loading it must win;
+  // an upload/resume sets no breadcrumb, so this is a no-op for those.
   useEffect(() => {
-    if (annotateVideoUrl) return;
     const pending = consumePendingGame();
-    if (pending) {
-      // T1410: AbortController so StrictMode's synthetic unmount short-circuits
-      // the first mount's load chain. handleLoadGame is async and touches the
-      // store; bailing early on aborted signal prevents duplicate work.
-      const controller = new AbortController();
-      isLoadingRef.current = true;
+    if (!pending) return;
+    // T1410: AbortController so StrictMode's synthetic unmount short-circuits the first mount's load.
+    const controller = new AbortController();
+    isLoadingRef.current = true;
 
-      // T3960: remember the reel's source clip so we can re-select it in the
-      // Clips sidebar once clipRegions finish loading (see effect below).
-      pendingSourceClipIdRef.current = pending.sourceClipId;
-      pendingSourceSelectAttemptsRef.current = 0;
+    // T3960: remember the reel's source clip so we can re-select it in the
+    // Clips sidebar once clipRegions finish loading (see effect below).
+    pendingSourceClipIdRef.current = pending.sourceClipId;
+    pendingSourceSelectAttemptsRef.current = 0;
 
-      handleLoadGame(pending.gameId, pending.seekTime);
-      return () => controller.abort();
-    }
-  }, [handleLoadGame, annotateVideoUrl]);
+    handleLoadGame(pending.gameId, pending.seekTime);
+    return () => controller.abort();
+  }, [handleLoadGame]);
 
   // T3960: once clips load AND the video is seekable, select the reel's source
   // clip in the Clips sidebar. The breadcrumb carries the working clip's
