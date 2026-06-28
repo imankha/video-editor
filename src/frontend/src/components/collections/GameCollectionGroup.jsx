@@ -5,6 +5,7 @@ import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
 import { RATIO_ORDER } from '../../constants/aspectRatios';
+import { compareGameTime } from '../../utils/timeFormat';
 
 /**
  * GameCollectionGroup - Container for one scope's collections (T3610 §0B).
@@ -55,7 +56,12 @@ export function GameCollectionGroup({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const membersFor = (ratio) => (members || []).filter((m) => m.aspect_ratio === ratio);
+  // Order each ratio's reels by their in-game time so My Reels matches the
+  // annotation clip-list order (T4080); multi-clip reels (null start) sort last.
+  const membersFor = (ratio) =>
+    (members || [])
+      .filter((m) => m.aspect_ratio === ratio)
+      .sort((a, b) => compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
   const loadingMembers = memberState === 'loading' || memberState === undefined;
 
   return (

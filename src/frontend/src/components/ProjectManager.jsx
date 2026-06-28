@@ -10,10 +10,9 @@ import { GameClipSelectorModal } from './GameClipSelectorModal';
 import { GameDetailsModal } from './GameDetailsModal';
 import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
-import { generateClipName } from '../utils/clipDisplayName';
-import { formatGameClock } from '../utils/timeFormat';
+import { generateClipName, getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
+import { formatGameClock, compareGameTime } from '../utils/timeFormat';
 import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
-import { getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
@@ -350,6 +349,11 @@ export function ProjectManager({
 
     // Compute status counts and most recent game date for each group
     Object.keys(groups).forEach(key => {
+      // Order drafts within a game by their in-game time so Reel Drafts matches
+      // the annotation clip-list and My Reels order (T4080). Single-clip drafts
+      // carry clip_game_start_time (backend-derived); multi-clip drafts sort last.
+      groups[key].projects.sort((a, b) =>
+        compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
       // Find the most recent game date in this group
       let mostRecentDate = null;

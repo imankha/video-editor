@@ -69,6 +69,48 @@ export function formatGameClock(seconds) {
 }
 
 /**
+ * Soccer game-clock (MM'SS") for a clip region's in-match START (T4080).
+ *
+ * Extracted from AnnotateModeView's inline gameClockFor (T4070) so the annotation
+ * clip lists and the playback banner share one definition. The in-match start is
+ * the clip's file-relative start plus the offset of any prior video halves. Two
+ * start representations reach this helper:
+ *   - "virtual" regions (AnnotateScreen's virtualClipRegions) bake the prior-half
+ *     offset into `startTime` and stash the file-relative value in `_actualStartTime`.
+ *   - raw regions (e.g. getRegionAtTimeUnified) carry the file-relative `startTime`.
+ * Reading `_actualStartTime ?? startTime` always yields the file-relative start, so
+ * adding boundaryOffsets[seq-2] applies the half offset exactly once for both.
+ *
+ * @param {object|null} clip - clip/region with startTime (+ optional _actualStartTime, videoSequence)
+ * @param {number[]=} boundaryOffsets - per-half virtual starts; empty/absent for single-video games
+ * @returns {string|null} e.g. "38'45\"", or null when the start is unknown
+ */
+export function clipGameClock(clip, boundaryOffsets) {
+  if (!clip) return null;
+  const fileRelativeStart = clip._actualStartTime ?? clip.startTime;
+  if (fileRelativeStart == null) return null;
+  const seq = clip.videoSequence ?? 1;
+  const halfOffset = seq >= 2 && boundaryOffsets?.length ? (boundaryOffsets[seq - 2] ?? 0) : 0;
+  return formatGameClock(fileRelativeStart + halfOffset);
+}
+
+/**
+ * Comparator for sorting clips/reels by their in-match start time in seconds,
+ * with unknown (null) starts sorted last (T4080). Keeps reels under a game in
+ * Reel Drafts and My Reels in the same order as the annotation clip list.
+ *
+ * @param {number|null|undefined} a - in-match start seconds (e.g. clip_game_start_time)
+ * @param {number|null|undefined} b - in-match start seconds
+ * @returns {number} negative if a before b, positive if after, 0 if equal
+ */
+export function compareGameTime(a, b) {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return a - b;
+}
+
+/**
  * Convert pixel position to time
  * @param {number} pixel - X coordinate relative to timeline
  * @param {number} duration - Total video duration in seconds

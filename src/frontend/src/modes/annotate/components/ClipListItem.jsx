@@ -21,8 +21,12 @@ const formatTime = (seconds) => {
  *
  * On mobile: two action buttons — "details" and "jump to clip".
  * On desktop: entire row is clickable to select.
+ *
+ * T4080: when `gameClock` (soccer notation, e.g. "34'12\"") is provided, it renders
+ * right-aligned on the row. Callers that lack an in-match start (e.g. recap mode)
+ * omit it and the row renders without a time.
  */
-export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip }) {
+export function ClipListItem({ region, index, isSelected, isPlaybackActive = false, onClick, isMobile = false, onViewDetails, onJumpToClip, gameClock = null }) {
   const rating = region.rating || 3;
   const { notation, badgeColor, backgroundColor } = getRatingDisplay(rating);
 
@@ -85,10 +89,21 @@ export function ClipListItem({ region, index, isSelected, isPlaybackActive = fal
           {displayName}
         </div>
 
+        {/* Desktop: in-match soccer-notation time, right-aligned (T4080) */}
+        {!isMobile && gameClock && (
+          <span
+            className="ml-2 flex-shrink-0 text-xs text-gray-400 tabular-nums"
+            title="Game time"
+          >
+            {gameClock}
+          </span>
+        )}
+
         {/* Mobile: two action buttons */}
         {isMobile ? (
           <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-            <span className="text-xs text-gray-500 mr-1">{formatTime(region.endTime)}</span>
+            {/* T4080: prefer the in-match soccer clock; fall back to clip end time */}
+            <span className="text-xs text-gray-500 mr-1 tabular-nums">{gameClock || formatTime(region.endTime)}</span>
             <button
               onClick={onViewDetails}
               className="p-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"

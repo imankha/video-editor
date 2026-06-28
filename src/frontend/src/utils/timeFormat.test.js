@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatGameClock } from './timeFormat';
+import { formatGameClock, clipGameClock, compareGameTime } from './timeFormat';
 
 describe('formatGameClock (T3920 soccer notation)', () => {
   it('formats exact zero as 0\'00"', () => {
@@ -39,5 +39,52 @@ describe('formatGameClock (T3920 soccer notation)', () => {
     expect(formatGameClock(undefined)).toBeNull();
     expect(formatGameClock(NaN)).toBeNull();
     expect(formatGameClock(-5)).toBeNull();
+  });
+});
+
+describe('clipGameClock (T4080 shared in-match clock)', () => {
+  it('single-video clip: formats startTime with no half offset', () => {
+    expect(clipGameClock({ startTime: 754 }, [])).toBe("12'34\"");
+  });
+
+  it('first-half clip in a two-half game: no offset applied (seq 1)', () => {
+    expect(clipGameClock({ startTime: 754, videoSequence: 1 }, [2700])).toBe("12'34\"");
+  });
+
+  it('second-half clip: adds the prior-half offset (boundaryOffsets[seq-2])', () => {
+    // 2nd half clip 10s into the half, first half was 2700s -> 2710s in-match
+    expect(clipGameClock({ startTime: 10, videoSequence: 2 }, [2700])).toBe("45'10\"");
+  });
+
+  it('virtual region: prefers _actualStartTime so the offset is not double-counted', () => {
+    // virtualClipRegions bake the offset into startTime AND keep raw in _actualStartTime;
+    // the helper must use the raw value (10) + offset (2700), not virtual (2710) + offset.
+    expect(
+      clipGameClock({ startTime: 2710, _actualStartTime: 10, videoSequence: 2 }, [2700]),
+    ).toBe("45'10\"");
+  });
+
+  it('returns null for missing clip or missing start', () => {
+    expect(clipGameClock(null, [])).toBeNull();
+    expect(clipGameClock({ videoSequence: 1 }, [])).toBeNull();
+  });
+
+  it('treats a zero start (_actualStartTime 0) as valid, not missing', () => {
+    expect(clipGameClock({ startTime: 2700, _actualStartTime: 0, videoSequence: 2 }, [2700]))
+      .toBe("45'00\"");
+  });
+});
+
+describe('compareGameTime (T4080 in-game ordering)', () => {
+  it('orders ascending by seconds', () => {
+    expect([300, 60, 180].sort(compareGameTime)).toEqual([60, 180, 300]);
+  });
+
+  it('sorts null/unknown starts last', () => {
+    expect([null, 120, null, 30].sort(compareGameTime)).toEqual([30, 120, null, null]);
+  });
+
+  it('returns 0 when both are null', () => {
+    expect(compareGameTime(null, null)).toBe(0);
   });
 });

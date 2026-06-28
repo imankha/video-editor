@@ -5,6 +5,7 @@ import ClipListItem from './ClipListItem';
 import ClipDetailsEditor from './ClipDetailsEditor';
 import { AnnotateFullscreenOverlay } from './AnnotateFullscreenOverlay';
 import { validateTsvContent, generateTsvContent } from '../hooks/useAnnotate';
+import { clipGameClock } from '../../../utils/timeFormat';
 
 /**
  * ClipsSidePanel - Left sidebar for managing clip regions in Annotate mode
@@ -38,6 +39,7 @@ export function ClipsSidePanel({
   onOverlayResume,
   onOverlayClose,
   teammateSuggestions = [],
+  boundaryOffsets,
 }) {
   const selectedRegion = clipRegions.find(r => r.id === selectedRegionId);
   const fileInputRef = useRef(null);
@@ -232,12 +234,13 @@ export function ClipsSidePanel({
                 No clips yet
               </div>
             ) : (
-              // Sort by endTime to match timeline order
+              // Sort by in-match start time so the list matches the timeline and
+              // the in-game-time ordering of Reel Drafts / My Reels (T4080).
               [...clipRegions].sort((a, b) => {
                 const seqA = a.videoSequence ?? 1;
                 const seqB = b.videoSequence ?? 1;
                 if (seqA !== seqB) return seqA - seqB;
-                return a.endTime - b.endTime;
+                return a.startTime - b.startTime;
               }).map((region, index) => (
                 <ClipListItem
                   key={region.id}
@@ -245,7 +248,8 @@ export function ClipsSidePanel({
                   index={index}
                   isSelected={region.id === selectedRegionId}
                   isPlaybackActive={region.id === activePlaybackClipId}
-                  onClick={() => { console.log('[ClipClick]', index + 1, region.id, region.name, 'start:', region.startTime, 'end:', region.endTime, 'seq:', region.videoSequence); onSelectRegion(region.id); }}
+                  gameClock={clipGameClock(region, boundaryOffsets)}
+                  onClick={() => onSelectRegion(region.id)}
                   isMobile={isMobile}
                   onViewDetails={isMobile ? () => handleMobileViewDetails(region.id) : undefined}
                   onJumpToClip={isMobile && onJumpToClip ? () => onJumpToClip(region.id, region.endTime) : undefined}
