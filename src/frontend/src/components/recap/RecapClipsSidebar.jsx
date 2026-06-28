@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { ClipListItem } from '../../modes/annotate/components/ClipListItem';
+import { formatGameClock } from '../../utils/timeFormat';
 
 export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
   const activeRef = useRef(null);
@@ -27,6 +28,7 @@ export function RecapClipsSidebar({ clips, activeClipId, onSeekToClip }) {
               index={index}
               isSelected={false}
               isPlaybackActive={isActive}
+              gameClock={clip.game_start_time != null ? formatGameClock(clip.game_start_time) : null}
               onClick={() => onSeekToClip(clip.id)}
             />
           </div>
