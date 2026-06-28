@@ -44,6 +44,28 @@ import { createBLAKE3 } from 'hash-wasm';
 // Sample size for fast hashing - 1MB per sample position
 const SAMPLE_SIZE = 1 * 1024 * 1024;
 
+// bug26p: wall-clock ceilings so a stalled upload fails LOUDLY instead of hanging
+// forever (a hang reads as "still uploading" and the user assumes success).
+// These are "something is wrong" ceilings, not normal-path limits: a sampled hash
+// reads only 5x1MB, and even the slowest part finishes well under 180s.
+const HASH_TIMEOUT_MS = 120_000;        // hash + faststart analyze of one file
+const PART_UPLOAD_TIMEOUT_MS = 180_000; // single R2 part PUT
+
+/**
+ * Reject `promise` if it doesn't settle within `ms`. Runs `onTimeout` (e.g. to
+ * abort in-flight work) before rejecting. Always clears the timer.
+ */
+function withTimeout(promise, ms, message, onTimeout) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      if (onTimeout) onTimeout();
+      reject(new Error(message));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Hash a file using BLAKE3 with sampling for speed (T81)
  *
@@ -58,7 +80,7 @@ const SAMPLE_SIZE = 1 * 1024 * 1024;
  * @param {function} onProgress - Progress callback: (percent) => void
  * @returns {Promise<string>} - BLAKE3 hash as hex string
  */
-export async function hashFile(file, onProgress) {
+export async function hashFile(file, onProgress, signal = null) {
   const hasher = await createBLAKE3();
 
   // Calculate sample positions (0%, 25%, 50%, 75%, end)
@@ -77,6 +99,10 @@ export async function hashFile(file, onProgress) {
 
   // Hash each sample
   for (let i = 0; i < positions.length; i++) {
+    // bug26p: bail promptly if the surrounding timeout aborted us.
+    if (signal?.aborted) {
+      throw new Error('Hashing aborted (timed out)');
+    }
     const start = positions[i];
     const end = Math.min(start + SAMPLE_SIZE, file.size);
     const chunk = file.slice(start, end);
@@ -124,6 +150,9 @@ async function uploadPart(file, part, onProgress, faststartInfo = null) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', presigned_url);
+    // bug26p: a stalled R2 socket must fail loudly, not hang the upload forever.
+    // ontimeout is treated as retryable below (same path as a network error).
+    xhr.timeout = PART_UPLOAD_TIMEOUT_MS;
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
@@ -145,6 +174,10 @@ async function uploadPart(file, part, onProgress, faststartInfo = null) {
       reject(new Error(`Part ${part_number} network error`));
     };
 
+    xhr.ontimeout = () => {
+      reject(new Error(`Part ${part_number} timed out`));
+    };
+
     xhr.send(blob);
   });
 }
@@ -158,7 +191,8 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
       return await uploadPart(file, part, onProgress, faststartInfo);
     } catch (error) {
       const msg = error.message || '';
-      const isRetryable = msg.includes('network error') || /upload failed: 5\d\d/.test(msg);
+      // bug26p: part timeouts are transient stalls — retry them like network errors.
+      const isRetryable = msg.includes('network error') || msg.includes('timed out') || /upload failed: 5\d\d/.test(msg);
 
       if (!isRetryable || attempt === MAX_RETRIES) {
         if (sessionId && completedResults.length > 0) {
@@ -347,6 +381,18 @@ async function uploadParts(
  * @returns {Promise<{blake3_hash: string, faststartInfo: object, file_size: number}>}
  */
 export async function hashAndAnalyze(file, onProgress) {
+  // bug26p: cap the whole hash+analyze phase. If a file handle dies or the read
+  // stalls, abort the hash loop and reject loudly instead of hanging forever.
+  const controller = new AbortController();
+  return withTimeout(
+    _hashAndAnalyze(file, onProgress, controller.signal),
+    HASH_TIMEOUT_MS,
+    'Preparing the video timed out. Please try again.',
+    () => controller.abort(),
+  );
+}
+
+async function _hashAndAnalyze(file, onProgress, signal) {
   const notify = (phase, percent, message) => {
     if (onProgress) onProgress({ phase, percent, message });
   };
@@ -374,7 +420,7 @@ export async function hashAndAnalyze(file, onProgress) {
   const __diagHashStart = performance.now();
   const hash = await hashFile(file, (p) => {
     notify(UPLOAD_PHASE.HASHING, p, `Computing hash... ${p}%`);
-  });
+  }, signal);
   console.log(`[DIAG upload-freeze] hashFile ${(performance.now() - __diagHashStart).toFixed(0)}ms`);
   notify(UPLOAD_PHASE.HASHING, 100, 'Hash complete');
 
