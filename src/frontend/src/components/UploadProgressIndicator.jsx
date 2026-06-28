@@ -8,6 +8,7 @@ import { UPLOAD_PHASE } from '../services/uploadManager';
 export function UploadProgressIndicator() {
   const activeUpload = useUploadStore(state => state.activeUpload);
   const clearFailedUpload = useUploadStore(state => state.clearFailedUpload);
+  const retryUpload = useUploadStore(state => state.retryUpload);
 
   if (!activeUpload) {
     return null;
@@ -45,16 +46,24 @@ export function UploadProgressIndicator() {
           </div>
         </>
       ) : (
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-red-400">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-red-400 flex-1">
             {activeUpload.message || 'Upload failed'}
           </span>
-          <button
-            onClick={clearFailedUpload}
-            className="text-xs text-gray-400 hover:text-white underline"
-          >
-            Dismiss
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={retryUpload}
+              className="text-xs font-medium text-blue-400 hover:text-blue-300 underline"
+            >
+              Retry
+            </button>
+            <button
+              onClick={clearFailedUpload}
+              className="text-xs text-gray-400 hover:text-white underline"
+            >
+              Dismiss
+            </button>
+          </div>
         </div>
       )}
     </div>
