@@ -282,8 +282,33 @@ def deduct_credits(
 ) -> dict:
     """
     Deduct credits atomically. Returns {success, balance, required}.
+
+    Idempotent on (source, reference_id): if a deduction with the same source and
+    reference_id already exists, this is a retry — do NOT deduct again, just report
+    the current balance as success. This guards retried operations (e.g. game
+    activation re-run after a mid-flight failure) from double-charging.
     """
     with get_user_db_connection(user_id) as conn:
+        # Idempotency guard: a prior deduction for this (source, reference_id) means
+        # this is a retry. Only applies when reference_id is provided (None is not a key).
+        if reference_id is not None:
+            existing = conn.execute(
+                """SELECT 1 FROM credit_transactions
+                   WHERE user_id = ? AND source = ? AND reference_id = ? AND amount < 0
+                   LIMIT 1""",
+                (user_id, source, reference_id),
+            ).fetchone()
+            if existing:
+                bal_row = conn.execute(
+                    "SELECT balance FROM credits WHERE user_id = ?", (user_id,)
+                ).fetchone()
+                current = bal_row["balance"] if bal_row else 0
+                logger.info(
+                    f"[UserDB] Skipping duplicate deduction for {user_id} "
+                    f"(source={source}, ref={reference_id}), balance={current}"
+                )
+                return {"success": True, "balance": current, "required": amount}
+
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
         if not row:
             return {"success": False, "balance": 0, "required": amount}
