@@ -1081,6 +1081,21 @@ async def get_recap_data(game_id: int):
         video_kind = None
         source = "none (video unavailable post-grace)"
 
+    # T4080: enrich each clip with its unified in-match start (seconds) so the recap
+    # clip list can show the soccer-notation game time. Derived from raw_clips (a
+    # recap clip's 'id' is its raw_clip id), so it works even for frozen recap
+    # mappings (recaps/{id}_clips.json) that predate this field. raw_clips persist
+    # for expired games, so this resolves there too.
+    from app.services.collection_metadata import compute_unified_clip_start
+    with get_db_connection() as conn:
+        _cur = conn.cursor()
+        for c in clips:
+            rc = _cur.execute(
+                "SELECT start_time FROM raw_clips WHERE id = ?", (c.get('id'),)
+            ).fetchone()
+            if rc and rc['start_time'] is not None:
+                c['game_start_time'] = compute_unified_clip_start(_cur, c['id'], rc['start_time'])
+
     logger.info(
         f"[recap-data] game={game_id} "
         f"recap_key={recap_key!r} recap_exists={recap_exists} "

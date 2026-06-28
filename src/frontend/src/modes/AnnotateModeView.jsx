@@ -6,7 +6,7 @@ import ZoomControls from '../components/ZoomControls';
 import { AnnotateMode, AnnotateControls, NotesOverlay, AnnotateFullscreenOverlay } from './annotate';
 import PlaybackControls from './annotate/components/PlaybackControls';
 import { generateClipName } from '../utils/clipDisplayName';
-import { formatGameClock } from '../utils/timeFormat';
+import { clipGameClock } from '../utils/timeFormat';
 import { formatFileSize } from '../utils/fileValidation';
 import { useIsMobile, useIsLandscape } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
@@ -108,16 +108,14 @@ export function AnnotateModeView({
     return clipRegions?.find(r => r.id === annotateSelectedRegionId) || null;
   }, [annotateSelectedRegionId, showAnnotateOverlay, clipRegions]);
 
-  // T4070: in-match soccer-notation clock (MM'SS") for a clip region, shown on the NotesOverlay
-  // banner. In-match start = file-relative startTime + the half offset. boundaryOffsets are the
-  // per-half virtual starts; single-video games have none, so startTime is already the in-match
-  // position. The (seq-2) index maps videoSequence 2 -> boundaryOffsets[0] (start of the 2nd half).
-  const gameClockFor = useCallback((clip) => {
-    if (!clip || clip.startTime == null) return null;
-    const seq = clip.videoSequence ?? 1;
-    const halfOffset = seq >= 2 && boundaryOffsets?.length ? (boundaryOffsets[seq - 2] ?? 0) : 0;
-    return formatGameClock(clip.startTime + halfOffset);
-  }, [boundaryOffsets]);
+  // T4070/T4080: in-match soccer-notation clock (MM'SS") for a clip region, shown on the
+  // NotesOverlay banner. Shared with the annotation clip lists via clipGameClock (T4080) so the
+  // banner and the lists agree. boundaryOffsets are the per-half virtual starts; single-video
+  // games have none, so the file-relative start is already the in-match position.
+  const gameClockFor = useCallback(
+    (clip) => clipGameClock(clip, boundaryOffsets),
+    [boundaryOffsets],
+  );
 
   const isPlaybackMode = playback?.isPlaybackMode;
   const isMobile = useIsMobile();

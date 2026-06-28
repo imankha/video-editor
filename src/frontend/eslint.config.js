@@ -62,6 +62,15 @@ export default [
     },
   },
   {
+    // Playwright e2e specs run under Node (process.env params, etc.)
+    files: ["e2e/**/*.{js,jsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     ignores: ["dist/", "node_modules/", "*.config.js", "*.config.mjs"],
   },
 ];

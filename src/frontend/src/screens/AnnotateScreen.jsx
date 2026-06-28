@@ -620,6 +620,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
           onOverlayResume={handleOverlayResume}
           onOverlayClose={handleOverlayClose}
           teammateSuggestions={teammateSuggestions}
+          boundaryOffsets={multiVideo?.boundaryOffsets}
         />
       </div>
       {/* Mobile sidebar overlay */}
@@ -642,6 +643,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
               isVideoUploading={isUploadingGameVideo}
               isMobile
               teammateSuggestions={teammateSuggestions}
+              boundaryOffsets={multiVideo?.boundaryOffsets}
               onSeek={effectiveSeek}
               videoController={videoController}
               onJumpToClip={(regionId, endTime) => {
