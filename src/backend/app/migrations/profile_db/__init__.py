@@ -15,6 +15,7 @@ from .v013_auto_export_attempts import V013AutoExportAttempts
 from .v014_collapse_duplicate_keyframes import V014CollapseDuplicateKeyframes
 from .v015_add_last_playhead_position import V015AddLastPlayheadPosition
 from .v016_clip_game_start_time import V016ClipGameStartTime
+from .v017_backfill_missing_storage_refs import V017BackfillMissingStorageRefs
 
 MIGRATIONS = [
     V001Baseline(),
@@ -33,6 +34,7 @@ MIGRATIONS = [
     V014CollapseDuplicateKeyframes(),
     V015AddLastPlayheadPosition(),
     V016ClipGameStartTime(),
+    V017BackfillMissingStorageRefs(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
