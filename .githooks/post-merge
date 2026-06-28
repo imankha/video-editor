@@ -16,19 +16,35 @@
 # ============================================================================
 [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "master" ] || exit 0
 
-# Only act on merge commits whose merged branch is a task branch.
+# Only act on merges that reference a task branch (feature/T<id>...), tolerant of
+# BOTH the default "...feature/T123-slug" subject AND a custom "...feature/T123: ..."
+# (colon) one. Requiring the literal "feature/" prefix avoids false positives from a
+# bare "T123" mentioned elsewhere in the subject (and "feature/T-auth-..." has no
+# digits, so it never matches).
 subj="$(git log -1 --format=%s HEAD 2>/dev/null)"
-branch="$(printf '%s' "$subj" | grep -oE 'feature/T[0-9]+-[A-Za-z0-9._-]+' | head -1)"
-[ -n "$branch" ] || exit 0
-slug="$(printf '%s' "$branch" | grep -oE 'T[0-9]+' | head -1 | tr 'A-Z' 'a-z')"
+id="$(printf '%s' "$subj" | grep -oE 'feature/T[0-9]+' | grep -oE 'T[0-9]+' | head -1)"
+[ -n "$id" ] || exit 0
+slug="$(printf '%s' "$id" | tr 'A-Z' 'a-z')"
+# Resolve the FULL branch name to delete: prefer the full token in the subject; if
+# the subject only had "feature/T123" (colon style omits the slug), look it up among
+# refs matching feature/T<id>-* so the real branch is still found + deleted.
+branch="$(printf '%s' "$subj" | grep -oE "feature/${id}-[A-Za-z0-9._-]+" | head -1)"
+[ -n "$branch" ] || branch="$(git for-each-ref --format='%(refname:short)' \
+  "refs/remotes/origin/feature/${id}-*" "refs/heads/feature/${id}-*" 2>/dev/null \
+  | sed 's#^origin/##' | head -1)"
 
 repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"
 LOG=/c/tmp/post-merge-cleanup.log
 (
-  echo "=== post-merge cleanup: $branch (slug $slug) ==="
-  # 1. remote + local versions of the just-merged branch
-  git push origin --delete "$branch" 2>&1 || echo "  remote branch already gone / push skipped"
-  git branch -d "$branch" 2>&1 || echo "  local branch already gone / not fully merged"
+  echo "=== post-merge cleanup: ${branch:-feature/$id (name unresolved)} (slug $slug) ==="
+  # 1. remote + local versions of the just-merged branch (if we resolved its name;
+  #    if not, the merged-branch sweep in step 3 still prunes the local branch).
+  if [ -n "$branch" ]; then
+    git push origin --delete "$branch" 2>&1 || echo "  remote branch already gone / push skipped"
+    git branch -d "$branch" 2>&1 || echo "  local branch already gone / not fully merged"
+  else
+    echo "  branch name unresolved from subject/refs; relying on the merged-branch sweep below"
+  fi
   # 2. nuke the sandbox container + checkout
   if command -v docker >/dev/null 2>&1 && [ -f "$repo_root/scripts/task.sh" ]; then
     ( cd "$repo_root" && bash scripts/task.sh nuke "$slug" ) 2>&1 || echo "  no container to nuke"
