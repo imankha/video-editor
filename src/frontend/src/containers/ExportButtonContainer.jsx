@@ -350,12 +350,18 @@ export function ExportButtonContainer({
           await onExportComplete({ projectId, mode: editorMode });
         }
       },
-      onError: (serverError) => {
-        // Server reported a real error — show it
+      onError: (serverError, meta = {}) => {
+        // Server reported a terminal error — show it. T4110: a retryable
+        // sync_failed (render OK but durable R2 sync failed) is NOT a successful
+        // export, so we stay on the error path (no "complete", no Move-to-My-Reels)
+        // and prompt the user to try Export again.
         setDisconnected(false);
-        setError(serverError || 'Export failed on server');
+        const fallback = meta.retryable
+          ? "Render finished but couldn't save to the cloud. Please try Export again."
+          : 'Export failed on server';
+        setError(serverError || fallback);
         if (exportIdRef.current) {
-          failExportInStore(exportIdRef.current, serverError || 'Export failed on server');
+          failExportInStore(exportIdRef.current, serverError || fallback, { retryable: !!meta.retryable });
         }
         setIsExporting(false);
         handleExportEnd();

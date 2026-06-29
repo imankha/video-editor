@@ -10,7 +10,9 @@ This module handles exports related to the Overlay editing mode:
 These endpoints handle highlight regions, effect types, and final output.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request, Depends
+
+from ...middleware.db_sync import durable_sync, DURABLE_SYNC_FAILED_RESPONSE
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
@@ -192,6 +194,22 @@ def _finalize_overlay_export(
     record_milestone(user_id, "overlay_exported", {"export_id": export_id, "project_id": project_id})
 
     return final_video_id
+
+
+def _export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:
+    """T4110: completion event when the render succeeded but the durable R2 sync
+    failed. Sent as a terminal ERROR (so the client marks the export failed, never
+    'complete', and never surfaces Move-to-My-Reels) but flagged retryable so the
+    UI prompts Retry — the WebSocket analog of T4050's 503 sync_failed response."""
+    from app.websocket import make_progress_data
+    data = make_progress_data(
+        current=100, total=100, phase='error',
+        message="Render finished but couldn't save to the cloud. Please try Export again.",
+        export_type=export_type, project_id=project_id, project_name=project_name,
+    )
+    data['retryable'] = True
+    data['code'] = 'sync_failed'
+    return data
 
 
 # =============================================================================
@@ -806,6 +824,7 @@ async def export_overlay_only(
     highlight_regions_json: str = Form(None),
     highlight_keyframes_json: str = Form(None),  # Legacy format (deprecated)
     highlight_effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value),
+    _durable: None = Depends(durable_sync),  # T4110: sync final_videos row to R2 before 200
 ):
     """
     Export video with highlight overlays ONLY - no cropping, no AI upscaling.
@@ -1132,7 +1151,8 @@ async def export_overlay_only(
 async def export_final(
     project_id: int = Form(...),
     video: UploadFile = File(...),
-    overlay_data: str = Form("{}")
+    overlay_data: str = Form("{}"),
+    _durable: None = Depends(durable_sync),  # T4110: sync final_videos row to R2 before 200
 ):
     """
     Export final video with overlays for a project.
@@ -1877,21 +1897,35 @@ async def _run_overlay_export_background(
         )
         logger.info(f"[T1110] _finalize_overlay_export (background) took {time_module.monotonic() - _t0:.2f}s (threaded)")
 
-        # Send complete progress via WebSocket
-        complete_data = {
-            "progress": 100,
-            "message": "Export complete!",
-            "status": ExportStatus.COMPLETE,
-            "projectId": project_id,
-            "projectName": project_name,
-            "type": "overlay",
-            "finalVideoId": final_video_id,
-            "finalFilename": output_filename
-        }
+        # T4110: DURABLE BOUNDARY. The new final_videos/export_jobs rows are
+        # committed only to the LOCAL profile.sqlite; a single Fly machine that
+        # cycles before they reach R2 loses the re-export (prod project 46). Push
+        # them to R2 (blocking, never deferring) BEFORE announcing completion, and
+        # GATE the COMPLETE event on that sync. On failure, emit a retryable
+        # sync_failed completion (the WebSocket analog of T4050's 503) instead of a
+        # lying "Export complete", so the client offers Retry — not Move-to-My-Reels.
+        from app.services.export_helpers import sync_export_db_to_r2
+        synced = await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
+        if synced:
+            complete_data = {
+                "progress": 100,
+                "message": "Export complete!",
+                "status": ExportStatus.COMPLETE,
+                "projectId": project_id,
+                "projectName": project_name,
+                "type": "overlay",
+                "finalVideoId": final_video_id,
+                "finalFilename": output_filename
+            }
+        else:
+            complete_data = _export_sync_failed_data('overlay', project_id, project_name)
         export_progress[export_id] = complete_data
         await manager.send_progress(export_id, complete_data)
 
-        logger.info(f"[Overlay Background] Complete: final_video_id={final_video_id}")
+        logger.info(
+            f"[Overlay Background] {'Complete' if synced else 'SYNC FAILED (retryable)'}: "
+            f"final_video_id={final_video_id} project={project_id}"
+        )
 
     except Exception as e:
         logger.error(f"[Overlay Background] Failed: {e}", exc_info=True)
@@ -1917,9 +1951,9 @@ async def _run_overlay_export_background(
         )
         export_progress[export_id] = error_data
         await manager.send_progress(export_id, error_data)
-    finally:
-        # Background tasks run outside the request middleware, so DB writes
-        # (final_videos, export_jobs) must be synced explicitly.
+
+        # The error path committed an export_jobs='error' row locally; persist it.
+        # (Success-path sync happens above, gated, before COMPLETE is announced.)
         from app.services.export_helpers import sync_export_db_to_r2
         await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id)
 
@@ -2085,6 +2119,15 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             logger.info(f"[T1110] _finalize_overlay_export (no GPU) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] Complete (no GPU): final_video_id={final_video_id}")
 
+            # T4110: durable boundary — sync the new final_videos row to R2 before
+            # announcing completion; on failure return 503 (+ retryable WS event).
+            from app.services.export_helpers import sync_export_db_to_r2
+            if not await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id):
+                sync_failed = _export_sync_failed_data('overlay', project_id, project_name)
+                export_progress[export_id] = sync_failed
+                await manager.send_progress(export_id, sync_failed)
+                return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+
             # Send final completion
             completion_data = {
                 "progress": 100,
@@ -2142,6 +2185,15 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             final_video_id = await asyncio.to_thread(_finalize_overlay_export, project_id, output_filename, export_id, user_id)
             logger.info(f"[T1110] _finalize_overlay_export (test mode) took {time_module.monotonic() - _t0:.2f}s (threaded)")
             logger.info(f"[Overlay Render] TEST MODE complete: final_video_id={final_video_id}")
+
+            # T4110: durable boundary — sync the new final_videos row to R2 before
+            # announcing completion; on failure return 503 (+ retryable WS event).
+            from app.services.export_helpers import sync_export_db_to_r2
+            if not await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id):
+                sync_failed = _export_sync_failed_data('overlay', project_id, project_name)
+                export_progress[export_id] = sync_failed
+                await manager.send_progress(export_id, sync_failed)
+                return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
 
             # Send final completion via WebSocket
             completion_data = {

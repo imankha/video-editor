@@ -276,7 +276,7 @@ export const useExportStore = create((set, get) => ({
   /**
    * Mark export as failed - called by WebSocket handler
    */
-  failExport: (exportId, error) => {
+  failExport: (exportId, error, opts = {}) => {
     set((state) => {
       const existing = state.activeExports[exportId];
       if (!existing) return state;
@@ -288,6 +288,8 @@ export const useExportStore = create((set, get) => ({
             ...existing,
             status: 'error',
             error: typeof error === 'string' ? error : error?.message || 'Export failed',
+            // T4110: render-OK-but-sync-failed is retryable; the UI prompts Retry.
+            retryable: opts.retryable === true,
             completedAt: new Date().toISOString(),
           },
         },

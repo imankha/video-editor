@@ -220,12 +220,17 @@ class ExportWebSocketManager {
         // Close connection - export is done
         this._closeConnection(exportId, true);
       } else if (status === ExportStatus.ERROR) {
-        store.failExport(exportId, message.error || 'Export failed');
+        // T4110: the render succeeded but the durable R2 sync failed -> the backend
+        // sends a terminal ERROR flagged retryable/code=sync_failed. Treat it as a
+        // failed export (never "complete", never Move-to-My-Reels) but surface that
+        // it is retryable so the UI prompts Retry instead of a hard failure.
+        const retryable = message.retryable === true || message.code === 'sync_failed';
+        store.failExport(exportId, message.error || 'Export failed', { retryable });
 
         // Notify callback (wrap in try-catch - callback may reference unmounted component)
         if (callbacks.onError) {
           try {
-            callbacks.onError(message.error);
+            callbacks.onError(message.error, { retryable, code: message.code });
           } catch (e) {
             console.warn(`[ExportWSManager] onError callback error (continuing):`, e);
           }

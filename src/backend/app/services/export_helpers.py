@@ -330,15 +330,25 @@ def get_project_info(project_id: int) -> dict:
 # Background Task R2 Sync
 # =============================================================================
 
-def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> None:
+def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> bool:
     """
-    Explicit R2 sync for background export tasks (T940 pattern).
+    Explicit, durable R2 sync for background export tasks (T940 pattern).
 
     Background tasks run outside the request middleware, so their DB writes
     (working_videos/final_videos rows, export_jobs status, credit refunds)
     are never synced automatically. Call this after the background pipeline
     completes or fails. On failure, marks sync pending so the next write
     request retries via the middleware recovery path.
+
+    Durable: sync_db_to_r2_explicit/sync_user_db_to_r2_explicit default to
+    lock_timeout=None, so this blocks on the per-user upload lock rather than
+    silently deferring (the 0.5s defer is a loss path).
+
+    T4110: returns the sync status (True iff BOTH the profile DB — where
+    final_videos lives — and the user DB reached R2). Callers gate the
+    export-COMPLETE WebSocket event on this so we never announce "done" for
+    rows that aren't durably in R2 (the prod project-46 loss). It still marks
+    pending on failure as the secondary recovery path.
     """
     from app.database import (
         sync_db_to_r2_explicit,
@@ -360,10 +370,11 @@ def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> None:
         ok = False
 
     if ok:
-        logger.info(f"[Export] Background R2 sync complete for user={user_id}")
+        logger.info(f"[SYNC] EXPORT user={user_id} -> R2 sync OK")
     else:
         mark_sync_pending(user_id)
-        logger.warning(f"[Export] Background R2 sync incomplete for user={user_id} - marked pending for retry")
+        logger.warning(f"[SYNC] EXPORT user={user_id} -> R2 sync FAILED - marked pending for retry")
+    return ok
 
 
 # =============================================================================
