@@ -59,6 +59,12 @@ RUN npx -y playwright@1.57.0 install --with-deps chromium \
 COPY src/backend/requirements.prod.txt /tmp/requirements.prod.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.prod.txt && rm /tmp/requirements.prod.txt
 
+# --- backend TEST deps (T4120: pytest in the image, baked not bootstrapped) ----
+# So a worker runs `python run_tests.py` / pytest in-container with no manual
+# install. Kept OUT of requirements.prod.txt -- Fly prod must not ship test deps.
+COPY src/backend/requirements.test.txt /tmp/requirements.test.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.test.txt && rm /tmp/requirements.test.txt
+
 # --- non-root user -----------------------------------------------------------
 # bypassPermissions refuses to start as root, so sessions run as `dev`.
 # Passwordless sudo so in-container `apt-get` etc. still work if a task needs it.

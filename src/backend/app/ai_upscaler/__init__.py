@@ -7,7 +7,16 @@ Modular implementation of AI-powered video upscaling with Real-ESRGAN support.
 __all__ = ['utils', 'VideoEncoder', 'KeyframeInterpolator', 'ModelManager', 'FrameEnhancer', 'FrameProcessor', 'AIVideoUpscaler']
 
 import cv2
-import torch
+# T4120: torch is GPU-only and intentionally absent from the lean prod/CPU image
+# (requirements.prod.txt). It's used ONLY inside AIVideoUpscaler methods (never at
+# module/class-definition level), so make the import optional: a CPU container
+# (e.g. /dotask local-render verify) can import this package — and the torch-free
+# KeyframeInterpolator the overlay renderer needs — without torch. Real GPU runs
+# (Modal/prod) have torch, so behavior there is unchanged.
+try:
+    import torch
+except ImportError:
+    torch = None
 import numpy as np
 from pathlib import Path
 import os
@@ -28,10 +37,17 @@ from ..constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
 from . import utils
 from .utils import setup_torchvision_compatibility, detect_aspect_ratio, enhance_frame_opencv
 from .video_encoder import VideoEncoder
-from .keyframe_interpolator import KeyframeInterpolator
-from .model_manager import ModelManager
-from .frame_enhancer import FrameEnhancer
-from .frame_processor import FrameProcessor
+from .keyframe_interpolator import KeyframeInterpolator  # torch-free (cv2/numpy) — overlay uses this
+# T4120: these submodules import torch at module top; guard them so a CPU container
+# can still import the package (and KeyframeInterpolator above). The GPU upscaler
+# (AIVideoUpscaler) needs them, but it is never instantiated on CPU — MockVideoUpscaler
+# is used instead. On prod/Modal (torch present) these import normally.
+try:
+    from .model_manager import ModelManager
+    from .frame_enhancer import FrameEnhancer
+    from .frame_processor import FrameProcessor
+except ImportError:
+    ModelManager = FrameEnhancer = FrameProcessor = None
 
 # Try to import diffusion SR model
 try:

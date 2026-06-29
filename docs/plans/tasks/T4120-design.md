@@ -1,6 +1,19 @@
 # T4120 — Self-verifying /dotask containers: Architecture (Stage 2)
 
-**Status:** Design — awaiting approval (do NOT implement past this gate)
+> **APPROVED 2026-06-29 with 3 scope-changing decisions (Step 2).** This doc is updated to
+> reflect them. Summary of the deltas vs the original gate:
+> - **D1 (bigger scope):** add CPU/local fallbacks for **all** export types behind
+>   `MODAL_ENABLED=false` — multi-clip + framing-AI scale-only. (Overlay & overlay-auto already
+>   render locally — see correction in §3.) Prod (`MODAL_ENABLED=true`) render semantics unchanged.
+> - **D2:** implement **both** test seams (`/api/test/sync-fault`, `/api/test/simulate-machine-cycle`),
+>   triple-layer inert under **production AND staging**, with unit tests asserting inertness in both.
+> - **D3:** **drop Modal-in-container entirely** — no `~/.modal.toml` provisioning; `dev-verify.sh`
+>   ALWAYS runs local (`MODAL_ENABLED=false`); no `/health` modal flag / mode-mismatch handling.
+>
+> §3 and §4 below are superseded by D1/D3 (kept with strike-through notes); §1 idempotency hazard
+> is dropped per D3.
+
+**Status:** Design — APPROVED (Step 2 in progress)
 **Branch:** `feature/T4120-self-verifying-containers` (from `feature/T4110-edit-reel-persistence-durability`)
 **Type:** Infra/tooling + small backend seams + one E2E spec
 **Task file:** [T4120-self-verifying-dotask-containers.md](T4120-self-verifying-dotask-containers.md)
@@ -72,12 +85,12 @@ trick `container-stack.sh` uses for `DATABASE_URL` (`container-stack.sh:18,27-36
 `MODAL_ENABLED=false` in `dev-verify.sh` before it spawns `container-stack.sh` → uvicorn inherits it →
 `.env`'s `MODAL_ENABLED=true` is ignored for the verify backend only. Prod (Fly) never runs dev-verify.
 
-**Idempotency hazard (must address):** `dev-verify.sh:44` reuses an already-running stack. If a worker
-previously started the stack via plain `container-stack.sh` (Modal=true), reuse would silently render via
-Modal and the headline would fail with no local render. Fix:
-- Expose a **non-secret** boolean `modal_enabled` in `GET /api/health` (`routers/health.py`).
-- `dev-verify.sh` probes it; if a reused stack's mode ≠ requested mode, it **restarts** the stack (or
-  aborts with a clear message). Add `DEV_VERIFY_FRESH=1` to force a teardown+restart.
+**Idempotency (D3 — simplified):** Modal-in-container is dropped, so there is no Modal-mode stack to
+mismatch with. `dev-verify.sh` exports `MODAL_ENABLED=false` (+ `STACK_RELOAD=0`, §6) before starting
+the stack and reuses an already-up stack as-is. No `/health` modal flag, no mode probe, no
+`DEV_VERIFY_FRESH`. (A reused interactive stack has no Modal tokens anyway, so it cannot render via
+Modal even if `MODAL_ENABLED` leaked true.) We still expose a tiny non-secret `modal_enabled` in
+`/api/health` for diagnostics only — nothing branches on it.
 
 **Dockerfile:** no change for render (ffmpeg + ffmpeg-python already baked). (Test deps added separately — §5.)
 
@@ -171,42 +184,58 @@ assert `sync_db_to_r2_explicit` still attempts a real sync (guard inert), the to
 
 ---
 
-## 3. Paths without a local renderer — verification matrix
+## 3. Local-render verification matrix — D1: CPU fallbacks for ALL export types
 
-**Decision: do NOT add new CPU fallbacks in T4120.** The kickoff risk rule — "local-render verification
-must not alter the real render code path semantics" — plus scope (overlay-auto/multi-clip/framing-AI
-fallbacks are large and touch production routing). The headline self-verify path uses **overlay**
-(real local renderer, the T4110 bug class) + **framing via `X-Test-Mode`**. Modal-required paths are
-documented and reachable only via the optional Gap-3 tokens.
+**D1 (supersedes the original "no CPU fallbacks" decision).** Every export type is now locally
+verifiable with `MODAL_ENABLED=false` and NO Modal. All fallbacks live **only** in the
+`if not _modal_enabled:` branch — the Modal code paths (prod `MODAL_ENABLED=true`) are untouched.
 
-| Export type | Entry | Local renderer? | Locally verifiable? | How |
-|-------------|-------|-----------------|---------------------|-----|
-| **Overlay** (highlight) | `render-overlay` / `call_modal_overlay` | ✅ `_overlay_sync` ffmpeg (`modal_client.py:1020`) | ✅ **Yes** | `MODAL_ENABLED=false` |
-| **Framing** (crop/reframe, no upscale) | `framing.py` | ⚠️ `X-Test-Mode` copy branch (`framing.py:480`) | ✅ partial (copy, no real upscale) | `X-Test-Mode: true` header |
-| Overlay-auto (brilliant-clip) | `call_modal_overlay_auto` (`modal_client.py:1271`) | ❌ raises | ❌ needs Modal | Gap-3 tokens |
-| Multi-clip | `modal_client.py:825` | ❌ raises | ❌ needs Modal | Gap-3 tokens |
-| Framing-AI (Real-ESRGAN upscale) | `_framing_sync` `device='cuda'` (`local_processors.py:344`) | ❌ CUDA only | ❌ needs Modal/GPU | document; Gap-3 |
+**Fact correction (verified at implementation):** the original ground-truth table mis-attributed
+two line numbers. `modal_client.py:1271/1272` is `call_modal_detect_players` (NOT overlay-auto), and
+`call_modal_overlay_auto` (def @1200) **delegates to `call_modal_overlay`**, which already has the
+`_overlay_sync` local fallback. So **overlay AND overlay-auto already render locally today** — D1(a)
+needs no code, only a confirming test. The genuine raises under `MODAL_ENABLED=false` are
+`call_modal_clips_ai` (multi-clip, @826) and the detector helpers (@1272/@1332).
 
-CPU fallbacks for the ❌ rows are a documented **follow-up**, not this task.
+| Export type | Entry | Before | After D1 |
+|-------------|-------|--------|----------|
+| **Overlay** (highlight) | `call_modal_overlay` @1020 | ✅ `_overlay_sync` ffmpeg | ✅ unchanged (headline path) |
+| **Overlay-auto** (brilliant-clip) | `call_modal_overlay_auto` @1200 → delegates | ✅ already local | ✅ confirmed by test (no code) |
+| **Framing** (`X-Test-Mode`) | `framing.py:480` | ✅ copy branch | ✅ unchanged |
+| **Framing-AI** (upscale) | `_framing_sync`/`local_framing` `device='cuda'` | ❌ CUDA only | ✅ **D1(c):** CPU **scale-only** (skip Real-ESRGAN) when CUDA absent |
+| **Multi-clip** | `_export_clips` local branch | ❌ 503 if no CUDA | ✅ **D1(b):** CPU scale-only fallback (MockVideoUpscaler) |
+
+**D1(b) multi-clip — corrected at implementation.** The `call_modal_clips_ai` `raise` (@826) is
+**unreachable** under `MODAL_ENABLED=false`: `multi_clip.py::_export_clips` already branches
+`if modal_enabled(): call_modal_clips_ai(...) else: <local process_single_clip + concat>`. So the
+raise is a misuse-guard, not the real gap — building a parallel `_clips_sync` in `modal_client`
+would duplicate the existing local branch (anti-pattern). The **reachable** gap is that the local
+branch requires CUDA (`multi_clip.py` 503 "CUDA not available") on a CPU container. **Fix:** add a
+CPU **scale-only** fallback there — when `AIVideoUpscaler`/CUDA is absent **and** `not
+modal_enabled()`, use `MockVideoUpscaler` (ffmpeg crop+resize) instead of 503, mirroring D1(c). The
+`not modal_enabled()` guard keeps prod's Modal-failure path 503-ing exactly as before. The @826
+guard is left intact.
+
+**D1(c) framing-AI scale-only**: `_framing_sync`/`local_framing` request Real-ESRGAN
+`device='cuda'`. Add a CUDA-availability probe (`torch.cuda.is_available()`, guarded so a missing
+torch ⇒ False); when CUDA is absent, **skip upscaling** and do an ffmpeg crop+scale to the target
+size instead (fast, CPU-only). Goal is pipeline + durability verification, **not** upscale quality.
+Real-ESRGAN/torch are NOT in the prod image (intentionally) so this branch is what actually runs
+in-container. Prod GPU semantics unchanged.
+
+**D1(detector helpers)**: `call_modal_detect_players[_batch]` (@1272/@1332) are auto-keyframing
+helpers, not final-video export types. Multi-clip verification uses explicit keyframes (no
+auto-detect), so these stay Modal-only and out of D1 scope — documented here, not changed.
 
 ---
 
-## 4. Optional Modal-in-container (for the Modal-required paths only)
+## 4. ~~Optional Modal-in-container~~ — DROPPED (D3)
 
-In `.devcontainer/task-bootstrap.sh`, when both tokens are present, write `~/.modal.toml` (chmod 600):
-
-```sh
-if [ -n "${MODAL_TOKEN_ID:-}" ] && [ -n "${MODAL_TOKEN_SECRET:-}" ]; then
-  printf '[default]\ntoken_id = "%s"\ntoken_secret = "%s"\nactive = true\n' \
-    "$MODAL_TOKEN_ID" "$MODAL_TOKEN_SECRET" > "$HOME/.modal.toml"
-  chmod 600 "$HOME/.modal.toml"
-fi
-```
-
-Tokens reach the container via `scripts/task.sh` docker run, conditionally appending
-`-e MODAL_TOKEN_ID -e MODAL_TOKEN_SECRET` **only when set in the launcher env** (extend the `-e` list at
-`scripts/task.sh:108`). **Off by default** (cost + network). **Never** baked into the image or committed —
-env/secret only. The headline overlay path does NOT need this.
+**D3: Modal-in-container is removed entirely.** No `~/.modal.toml` provisioning in
+`task-bootstrap.sh`, no `-e MODAL_TOKEN_ID/SECRET` passthrough in `scripts/task.sh`. With D1, every
+export type renders locally, so there is no remaining Modal-required path to provision tokens for.
+This removes the cost/network/secret surface and the only reason dev-verify needed a Modal-mode
+probe (§1). Prod still uses Modal via Fly secrets — unchanged and untouched by this task.
 
 ---
 
@@ -282,15 +311,18 @@ make an edit with sync-fault ON (delta only local) → POST /api/test/simulate-m
 | `src/backend/app/routers/test_seams.py` | **new** gated router: `/api/test/sync-fault`, `/api/test/simulate-machine-cycle` |
 | `src/backend/app/main.py` | mount test_seams router only when `_test_seams_enabled()` |
 | `src/backend/app/routers/health.py` | expose non-secret `modal_enabled` boolean |
+| `src/backend/app/services/modal_client.py:826` | **D1(b):** replace multi-clip `raise` with local `_run_in_subprocess(_clips_sync, …)` |
+| `src/backend/app/services/local_processors.py` | **D1(b):** new `_clips_sync`; **D1(c):** CPU scale-only fallback in `_framing_sync`/`local_framing` when CUDA absent |
 | `src/backend/requirements.test.txt` | **new** pytest deps |
 | `.devcontainer/task.Dockerfile` | install requirements.test.txt |
-| `.devcontainer/task-bootstrap.sh` | optional `~/.modal.toml` from tokens |
 | `.devcontainer/container-stack.sh` | `--timeout-graceful-shutdown 5`, `STACK_RELOAD` gate |
-| `scripts/task.sh:108` | conditional `-e MODAL_TOKEN_ID/SECRET` passthrough |
-| `scripts/dev-verify.sh` | export `MODAL_ENABLED=false`+`STACK_RELOAD=0`; `DEV_VERIFY_TIMEOUT`; health modal-mode probe; orphan reap |
+| `scripts/dev-verify.sh` | export `MODAL_ENABLED=false`+`STACK_RELOAD=0`; `DEV_VERIFY_TIMEOUT`; orphan reap (D3: no modal probe) |
 | `src/frontend/e2e/T4120-self-verify-durability.spec.js` | **new** reference spec (hard asserts) |
-| backend unit tests | prod-gating tests for every seam |
+| backend unit tests | prod+staging-gating tests for every seam (D2) |
 | docs (dev-verify README + drive-app-as-user skill) | recipe |
+
+**D3 removals:** no change to `.devcontainer/task-bootstrap.sh` (`~/.modal.toml`) or
+`scripts/task.sh` (`-e MODAL_TOKEN_ID/SECRET`).
 
 **Migration:** none (no schema change).
 

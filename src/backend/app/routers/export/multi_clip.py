@@ -1466,6 +1466,18 @@ async def _export_clips(
             from app.services.local_processors import MockVideoUpscaler
             shared_upscaler = MockVideoUpscaler()
             logger.info(f"[Multi-Clip Export] TEST MODE: Using MockVideoUpscaler (no AI)")
+        elif (AIVideoUpscaler is None or not torch or not torch.cuda.is_available()) and not modal_enabled():
+            # T4120 D1(b): CPU container with Modal disabled -> CPU scale-only verify
+            # (ffmpeg crop+resize, NO AI upscale), mirroring the framing-AI fallback.
+            # Lets a /dotask worker verify the multi-clip PIPELINE + durability locally.
+            # Guarded on `not modal_enabled()` so prod (Modal enabled) NEVER reaches this
+            # and a Modal-failure local fallback on prod still 503s as before.
+            from app.services.local_processors import MockVideoUpscaler
+            shared_upscaler = MockVideoUpscaler()
+            logger.warning(
+                "[Multi-Clip Export] CUDA unavailable + Modal disabled -> CPU scale-only "
+                "(MockVideoUpscaler); pipeline verify only, no AI upscale"
+            )
         else:
             if AIVideoUpscaler is None:
                 raise HTTPException(

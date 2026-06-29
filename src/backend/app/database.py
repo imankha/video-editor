@@ -1213,6 +1213,16 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | 
 
     Returns True on success (or if R2 is disabled), False on failure.
     """
+    # T4120: durability test seam (gated; inert on prod/staging). Returning False
+    # — never raising — exercises the REAL failure handling (mark_sync_pending,
+    # sync_status="failed", the retryable sync_failed surfaces) exactly as a true
+    # R2 outage would, without touching R2. Placed before the R2_ENABLED check so
+    # it is deterministic regardless of R2 config.
+    from .storage import _force_r2_sync_failure
+    if _force_r2_sync_failure():
+        logger.warning(f"[TEST] FORCE_R2_SYNC_FAILURE active — short-circuiting profile sync for user={user_id}")
+        return False
+
     if not R2_ENABLED:
         return True
 
@@ -1245,6 +1255,14 @@ def sync_user_db_to_r2_explicit(user_id: str, lock_timeout: float | None = None)
 
     Returns True on success (or if R2 is disabled), False on failure.
     """
+    # T4120: durability test seam (gated; inert on prod/staging). See the profile
+    # sync above — short-circuit before the R2_ENABLED check so both DBs fail
+    # together under a forced fault.
+    from .storage import _force_r2_sync_failure
+    if _force_r2_sync_failure():
+        logger.warning(f"[TEST] FORCE_R2_SYNC_FAILURE active — short-circuiting user.sqlite sync for user={user_id}")
+        return False
+
     if not R2_ENABLED:
         return True
 
