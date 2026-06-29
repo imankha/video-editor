@@ -57,10 +57,14 @@ class V017BackfillMissingStorageRefs(BaseMigration):
 
         # Deduplicate by hash (a hash may appear via both sources / multiple games).
         # Keep the largest known size for each hash.
+        # The migration runner's connection uses the default (tuple) row factory,
+        # not sqlite3.Row, so index positionally (SELECT order: blake3_hash, video_size).
+        # Positional indexing works for both tuple and Row, unlike string keys which
+        # raised "tuple indices must be integers or slices, not str" on prod (T4110).
         size_by_hash: dict[str, int] = {}
         for r in rows:
-            h = r["blake3_hash"]
-            size_by_hash[h] = max(size_by_hash.get(h, 0), r["video_size"] or 0)
+            h = r[0]
+            size_by_hash[h] = max(size_by_hash.get(h, 0), r[1] or 0)
 
         # Delegate to the production write path so Postgres game_ref_counts is
         # incremented too. insert_game_storage_ref opens its OWN connection; this
