@@ -25,6 +25,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
+from app.utils.encoding import encode_data
+
 
 SHARER_ID = "sharer-user"
 SHARER_EMAIL = "sharer@example.com"
@@ -103,7 +105,7 @@ def _seed_game(blake3: str, expires_at: datetime | None, user_id: str = SHARER_I
             cursor.execute(
                 """INSERT INTO raw_clips (game_id, filename, name, tags, rating, start_time, end_time, video_sequence)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (game_id, f"clip_{i+1}.mp4", f"Clip {i+1}", json.dumps(["Jake"]), 3, i * 10.0, i * 10.0 + 5.0, 1),
+                (game_id, f"clip_{i+1}.mp4", f"Clip {i+1}", encode_data(["Jake"]), 3, i * 10.0, i * 10.0 + 5.0, 1),
             )
         if expires_at is not None:
             cursor.execute(
