@@ -2,9 +2,17 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RecapPlayerModal } from './RecapPlayerModal';
 
-const { mockSetPendingGame, mockSetEditorMode } = vi.hoisted(() => ({
+const {
+  mockSetPendingGame, mockSetEditorMode, mockUpdateClip,
+  mockToastSuccess, mockFetchProjects, recapState,
+} = vi.hoisted(() => ({
   mockSetPendingGame: vi.fn(),
   mockSetEditorMode: vi.fn(),
+  mockUpdateClip: vi.fn(),
+  mockToastSuccess: vi.fn(),
+  mockFetchProjects: vi.fn(),
+  // Mutable so a test can pick which recap clip is "active"; defaults to none.
+  recapState: { activeClipId: null },
 }));
 
 vi.mock('../utils/pendingNavigation', () => ({
@@ -17,7 +25,19 @@ vi.mock('../stores/editorStore', () => ({
 }));
 
 vi.mock('./shared/Toast', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
+  toast: { success: mockToastSuccess, error: vi.fn() },
+}));
+
+vi.mock('../hooks/useRawClipSave', () => ({
+  useRawClipSave: () => ({ updateClip: mockUpdateClip, isSaving: false }),
+}));
+
+vi.mock('../stores/projectsStore', () => ({
+  useProjectsStore: { getState: () => ({ fetchProjects: mockFetchProjects }) },
+}));
+
+vi.mock('../hooks/useIsMobile', () => ({
+  useIsMobile: () => false,
 }));
 
 vi.mock('./shared/Button', () => ({
@@ -32,7 +52,7 @@ vi.mock('./recap/useRecapPlayback', () => ({
     virtualTime: 0,
     totalVirtualDuration: 60,
     segments: [],
-    activeClipId: null,
+    activeClipId: recapState.activeClipId,
     activeClipName: null,
     currentSegment: null,
     togglePlay: vi.fn(),
@@ -386,6 +406,124 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     // After switching, the Highlights-only "Create clip" action appears.
     await waitFor(() =>
       expect(screen.getByTitle('Create a clip in Annotate at this moment')).toBeTruthy()
+    );
+  });
+});
+
+const T4130_CLIPS = [
+  { id: 1, name: 'Overlay Clip', rating: 4, tags: ['Jake'], notes: 'great pass',
+    start_time: 0, end_time: 5, recap_start: 0, recap_end: 5, duration: 5,
+    game_start_time: 65, in_drafts: false },
+  { id: 2, name: 'Draft Clip', rating: 5, tags: [], notes: '',
+    start_time: 10, end_time: 15, recap_start: 5, recap_end: 10, duration: 5,
+    game_start_time: 120, in_drafts: true },
+];
+const T4130_DATA = {
+  url: 'https://r2.example.com/games/abc.mp4',
+  clips: T4130_CLIPS,
+  video_kind: 'game',
+};
+
+describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
+  const renderModal = (props = {}) => render(
+    <RecapPlayerModal
+      game={{ id: 42, name: 'Big Game' }}
+      initialTab="annotations"
+      onClose={vi.fn()}
+      {...props}
+    />
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // jsdom does not implement media playback.
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    recapState.activeClipId = 1; // clip 1 active by default
+    mockUpdateClip.mockResolvedValue({ project_id: 99, project_created: true });
+    globalThis.fetch = mockFetch(T4130_DATA);
+  });
+
+  it('overlays the active clip annotation, visible by default', async () => {
+    renderModal();
+    // The active clip name appears via NotesOverlay (sidebar list is mocked out).
+    expect(await screen.findByText('Overlay Clip')).toBeTruthy();
+  });
+
+  it('toggles the overlay off and back on', async () => {
+    renderModal();
+    await screen.findByText('Overlay Clip');
+
+    fireEvent.click(screen.getByLabelText('Hide annotations'));
+    await waitFor(() => expect(screen.queryByText('Overlay Clip')).toBeNull());
+
+    fireEvent.click(screen.getByLabelText('Show annotations'));
+    expect(await screen.findByText('Overlay Clip')).toBeTruthy();
+  });
+
+  it('does not render the overlay/toggle on the Highlights tab', async () => {
+    globalThis.fetch = mockFetch(T4130_DATA, [{ id: 101, name: 'Highlight 1', duration: 5 }]);
+    renderModal();
+    await screen.findByText('Overlay Clip');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Highlights' }));
+
+    await waitFor(() => expect(screen.queryByLabelText('Hide annotations')).toBeNull());
+    expect(screen.queryByText('Overlay Clip')).toBeNull();
+  });
+
+  it('enables "Create clip" when a clip is active, source exists, and it is not a draft', async () => {
+    renderModal();
+    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('disables "Create clip" when no clip is active', async () => {
+    recapState.activeClipId = null;
+    renderModal();
+    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('disables "Create clip" when no source video exists (video_kind null)', async () => {
+    globalThis.fetch = mockFetch({ url: null, clips: T4130_CLIPS, video_kind: null });
+    renderModal();
+    const btn = await screen.findByTitle('Video source unavailable');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('disables "Create clip" when the active clip is already a draft', async () => {
+    recapState.activeClipId = 2; // in_drafts: true
+    renderModal();
+    const btn = await screen.findByTitle('This clip is already a draft reel');
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('creates a draft via updateClip and optimistically flips in_drafts', async () => {
+    renderModal();
+    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    fireEvent.click(btn);
+
+    await waitFor(() =>
+      expect(mockUpdateClip).toHaveBeenCalledWith(1, { create_project: true })
+    );
+    expect(mockToastSuccess).toHaveBeenCalledWith('Reel created!', { duration: 5000 });
+    expect(mockFetchProjects).toHaveBeenCalledWith({ force: true });
+
+    // Optimistic flip: the button now reflects the clip being a draft and is disabled.
+    await waitFor(() =>
+      expect(screen.getByTitle('This clip is already a draft reel').disabled).toBe(true)
+    );
+  });
+
+  it('informs the user when the draft already existed (project_created false)', async () => {
+    mockUpdateClip.mockResolvedValue({ project_id: 99, project_created: false });
+    renderModal();
+    const btn = await screen.findByTitle('Create a draft reel from this clip');
+    fireEvent.click(btn);
+
+    await waitFor(() =>
+      expect(mockToastSuccess).toHaveBeenCalledWith('This clip is already a draft reel', { duration: 5000 })
     );
   });
 });

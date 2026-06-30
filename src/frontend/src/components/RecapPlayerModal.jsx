@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Play, Plus } from 'lucide-react';
+import { X, Play, Plus, Eye, EyeOff } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -7,9 +7,16 @@ import { useRecapPlayback } from './recap/useRecapPlayback';
 import { useHighlightsPlayback } from './recap/useHighlightsPlayback';
 import { RecapClipsSidebar } from './recap/RecapClipsSidebar';
 import { PlaybackControls } from '../modes/annotate/components/PlaybackControls';
+import { NotesOverlay } from '../modes/annotate/components/NotesOverlay';
 import { SharePlaybackDialog } from './SharePlaybackDialog';
 import { setPendingGame } from '../utils/pendingNavigation';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
+import { useProjectsStore } from '../stores/projectsStore';
+import { useRawClipSave } from '../hooks/useRawClipSave';
+import { formatGameClock } from '../utils/timeFormat';
+import { generateClipName } from '../utils/clipDisplayName';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { toast } from './shared/Toast';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
@@ -21,6 +28,10 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [activeTab, setActiveTab] = useState(initialTab || 'annotations');
   const [isLoading, setIsLoading] = useState(true);
   const [showShareDialog, setShowShareDialog] = useState(false);
+  // T4130: per-clip annotation overlay — visible by default on the Annotations tab.
+  const [showOverlay, setShowOverlay] = useState(true);
+  const isMobile = useIsMobile();
+  const { updateClip, isSaving } = useRawClipSave();
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
   const contentRef = useRef(null);
@@ -116,6 +127,37 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   // A playable source video exists (in-grace) whenever recap-data resolved a url
   // (video_kind 'recap' | 'game'); null video_kind means the video is gone post-grace.
   const canCreateClip = recapData?.video_kind != null;
+
+  // T4130: the currently-active recap clip drives the annotation overlay and the
+  // "Create clip" target (a recap clip's id IS its raw_clip id).
+  const activeRecapClip = useMemo(
+    () => (recapData?.clips || []).find(c => c.id === recap.activeClipId) || null,
+    [recapData, recap.activeClipId],
+  );
+  // Enabled only when a clip is active, a source exists, and it is not already a draft.
+  const createClipEnabled = canCreateClip && !!activeRecapClip && !activeRecapClip.in_drafts;
+
+  // Create a draft reel for the active recap clip. Gesture-driven: fires the surgical
+  // PUT /clips/raw/{id} {create_project:true} straight from the click (no reactive
+  // persistence). The clip already exists as a raw_clip, so this only adds the draft
+  // project (idempotent server-side). Optimistically flips in_drafts so the button
+  // disables without re-fetching recap-data.
+  const handleCreateRecapClip = useCallback(async () => {
+    if (!activeRecapClip || !canCreateClip || activeRecapClip.in_drafts) return;
+    const clipId = activeRecapClip.id;
+    const result = await updateClip(clipId, { create_project: true });
+    if (result?.project_id) {
+      setRecapData(prev => prev ? {
+        ...prev,
+        clips: prev.clips.map(c => c.id === clipId ? { ...c, in_drafts: true } : c),
+      } : prev);
+      useProjectsStore.getState().fetchProjects({ force: true });
+      toast.success(
+        result.project_created ? 'Reel created!' : 'This clip is already a draft reel',
+        { duration: 5000 },
+      );
+    }
+  }, [activeRecapClip, canCreateClip, updateClip]);
 
   // Track play/pause off the *active* video element so the transport icon reflects
   // real state (incl. autoplay). Re-subscribes when the tab / clip / source changes,
@@ -272,10 +314,24 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
 
               return (
                 <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
-                  <div className="p-2 border-b border-gray-700">
+                  <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2">
                     <span className="text-xs text-gray-400 font-medium">
                       {recapData.clips.length} clips
                     </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={Plus}
+                      onClick={handleCreateRecapClip}
+                      disabled={!createClipEnabled || isSaving}
+                      title={
+                        !canCreateClip ? 'Video source unavailable'
+                          : activeRecapClip?.in_drafts ? 'This clip is already a draft reel'
+                          : 'Create a draft reel from this clip'
+                      }
+                    >
+                      Create clip
+                    </Button>
                   </div>
                   <div className="flex-1 overflow-y-auto min-h-0">
                     <RecapClipsSidebar
@@ -309,7 +365,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
               <div className={
                 isFullscreen
                   ? 'relative flex-1 min-h-0 bg-black'
-                  : 'flex-1 flex items-center justify-center bg-black p-2 min-h-0'
+                  : 'relative flex-1 flex items-center justify-center bg-black p-2 min-h-0'
               }>
                 {recapData?.url ? (
                   <video
@@ -329,6 +385,31 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                       details are still listed.
                     </p>
                   </div>
+                )}
+
+                {/* T4130: active-clip annotation overlay (Annotations tab), visible by default */}
+                {recapData?.url && activeRecapClip && (
+                  <NotesOverlay
+                    name={activeRecapClip.name ||
+                      generateClipName(activeRecapClip.rating, activeRecapClip.tags, activeRecapClip.notes)}
+                    notes={activeRecapClip.notes}
+                    rating={activeRecapClip.rating}
+                    gameClock={formatGameClock(activeRecapClip.game_start_time)}
+                    isVisible={showOverlay}
+                    isFullscreen={isFullscreen}
+                    isMobile={isMobile}
+                  />
+                )}
+                {recapData?.url && (
+                  <button
+                    onClick={() => setShowOverlay(v => !v)}
+                    title={showOverlay ? 'Hide annotations' : 'Show annotations'}
+                    aria-label={showOverlay ? 'Hide annotations' : 'Show annotations'}
+                    aria-pressed={showOverlay}
+                    className="absolute top-2 right-2 z-[60] p-1.5 rounded-lg bg-black/50 text-white hover:bg-black/70 transition-colors"
+                  >
+                    {showOverlay ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 )}
               </div>
 

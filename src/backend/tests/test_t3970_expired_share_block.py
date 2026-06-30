@@ -260,3 +260,66 @@ class TestRecapDataFallback:
             headers=_auth_headers(SHARER_ID),
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# T4130: recap-data marks each clip with in_drafts so the viewer can disable
+# "Create clip" when a draft reel already exists for that clip.
+# ---------------------------------------------------------------------------
+
+class TestRecapDataInDrafts:
+    def _game_video_patches(self):
+        """Resolve to the game video (no recap) so recap-data returns the clip list."""
+        return [
+            patch("app.routers.games.file_exists_in_r2", return_value=False),
+            patch("app.routers.games.r2_head_object_global", return_value={"ContentLength": 1}),
+            patch("app.routers.games.generate_presigned_url_global",
+                  return_value="https://r2.example.com/games/x.mp4"),
+        ]
+
+    def _get_recap_clips(self, client, game_id):
+        from contextlib import ExitStack
+        with ExitStack() as stack:
+            for p in self._game_video_patches():
+                stack.enter_context(p)
+            resp = client.get(
+                f"/api/games/{game_id}/recap-data",
+                headers=_auth_headers(SHARER_ID),
+            )
+        assert resp.status_code == 200
+        return resp.json()["clips"]
+
+    def test_in_drafts_false_when_no_auto_project(self, client):
+        game_id = _seed_game(ACTIVE_HASH, _future())  # seeded clips have no auto_project_id
+        clips = self._get_recap_clips(client, game_id)
+        assert len(clips) == 3
+        assert all(c["in_drafts"] is False for c in clips)
+
+    def test_in_drafts_true_for_clip_with_auto_project(self, client):
+        game_id = _seed_game(ACTIVE_HASH, _future())
+        # Attach an auto-created draft project to the first clip (FK enforced -> real row).
+        from app.database import get_db_connection
+        from app.user_context import set_current_user_id
+        from app.profile_context import set_current_profile_id
+        set_current_user_id(SHARER_ID)
+        set_current_profile_id("testdefault")
+        with get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "INSERT INTO projects (name, aspect_ratio, is_auto_created) VALUES (?, ?, 1)",
+                ("Draft Reel", "9:16"),
+            )
+            proj_id = cur.lastrowid
+            drafted_clip_id = cur.execute(
+                "SELECT id FROM raw_clips WHERE game_id = ? ORDER BY id LIMIT 1", (game_id,)
+            ).fetchone()["id"]
+            cur.execute(
+                "UPDATE raw_clips SET auto_project_id = ? WHERE id = ?", (proj_id, drafted_clip_id)
+            )
+            conn.commit()
+
+        clips = self._get_recap_clips(client, game_id)
+        drafted = [c for c in clips if c["id"] == drafted_clip_id]
+        others = [c for c in clips if c["id"] != drafted_clip_id]
+        assert drafted and drafted[0]["in_drafts"] is True
+        assert others and all(c["in_drafts"] is False for c in others)

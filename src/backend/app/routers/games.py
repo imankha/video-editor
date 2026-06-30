@@ -1133,15 +1133,20 @@ async def get_recap_data(game_id: int):
     # recap clip's 'id' is its raw_clip id), so it works even for frozen recap
     # mappings (recaps/{id}_clips.json) that predate this field. raw_clips persist
     # for expired games, so this resolves there too.
+    # T4130: also surface `in_drafts` (does this clip already have a draft reel?) from the
+    # same raw_clips row so the recap viewer's "Create clip" button can disable when a draft
+    # already exists. Mirrors update_raw_clip's auto_project_id dedup; no new query/storage.
     from app.services.collection_metadata import compute_unified_clip_start
     with get_db_connection() as conn:
         _cur = conn.cursor()
         for c in clips:
             rc = _cur.execute(
-                "SELECT start_time FROM raw_clips WHERE id = ?", (c.get('id'),)
+                "SELECT start_time, auto_project_id FROM raw_clips WHERE id = ?", (c.get('id'),)
             ).fetchone()
-            if rc and rc['start_time'] is not None:
-                c['game_start_time'] = compute_unified_clip_start(_cur, c['id'], rc['start_time'])
+            if rc:
+                if rc['start_time'] is not None:
+                    c['game_start_time'] = compute_unified_clip_start(_cur, c['id'], rc['start_time'])
+                c['in_drafts'] = rc['auto_project_id'] is not None
 
     logger.info(
         f"[recap-data] game={game_id} "
