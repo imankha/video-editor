@@ -67,6 +67,53 @@ APP_ENV = os.getenv("APP_ENV", "dev")
 # Check if R2 is enabled
 R2_ENABLED = os.getenv("R2_ENABLED", "false").lower() == "true"
 R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
+
+# ---------------------------------------------------------------------------
+# T4120: durability test seams (gated; PROD AND STAGING inert)
+# ---------------------------------------------------------------------------
+# A /dotask container worker self-verifies the durable-export boundary (T4110)
+# by forcing R2 sync to fail mid-run, then clearing it — all in one process.
+# Every seam funnels through ONE default-deny gate so it is impossible on prod
+# AND staging (stricter than `!= production`, mirroring dev-login auth.py:897).
+
+# Process-global override flipped by POST /api/test/sync-fault. None = unset
+# (fall back to the static env var). Lets a spec force -> clear in one process.
+_force_sync_failure_override: Optional[bool] = None
+_force_sync_failure_lock = threading.Lock()
+
+
+def _test_seams_enabled() -> bool:
+    """True only in dev/development/local/test — never production/prod/staging.
+
+    Single gate for ALL test seams (sync-fault, machine-cycle, force-sync-failure).
+    Default-deny: any unrecognized APP_ENV is treated as non-dev and returns False
+    is NOT used here — we allowlist the safe envs explicitly so a typo never opens
+    the seam on a shared environment.
+    """
+    return APP_ENV in ("dev", "development", "local", "test")
+
+
+def set_force_r2_sync_failure(enabled: Optional[bool]) -> None:
+    """Set/clear the runtime FORCE_R2_SYNC_FAILURE override (test seam only)."""
+    global _force_sync_failure_override
+    with _force_sync_failure_lock:
+        _force_sync_failure_override = enabled
+
+
+def _force_r2_sync_failure() -> bool:
+    """Whether R2 sync should be force-failed (test seam). Inert unless enabled.
+
+    Order: (1) the gate — if seams are disabled (prod/staging), ALWAYS False so the
+    real sync runs even if FORCE_R2_SYNC_FAILURE=1 leaked into the env; (2) the
+    process-global runtime override (set by /api/test/sync-fault); (3) the static
+    FORCE_R2_SYNC_FAILURE env var as the default.
+    """
+    if not _test_seams_enabled():
+        return False
+    with _force_sync_failure_lock:
+        if _force_sync_failure_override is not None:
+            return _force_sync_failure_override
+    return os.getenv("FORCE_R2_SYNC_FAILURE", "").lower() in ("1", "true", "yes")
 R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID", "")
 R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY", "")
 R2_BUCKET = os.getenv("R2_BUCKET", "reel-ballers-users")

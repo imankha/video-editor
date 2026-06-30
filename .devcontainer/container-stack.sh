@@ -36,8 +36,15 @@ if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
 fi
 
 # --- backend -----------------------------------------------------------------
-echo "[stack] backend  -> container :$BACKEND_PORT   (log: $LOGDIR/backend.log)"
-( cd src/backend && uvicorn app.main:app --reload --host 0.0.0.0 --port "$BACKEND_PORT" \
+# STACK_RELOAD=1 (default) keeps uvicorn --reload for interactive dev. dev-verify
+# exports STACK_RELOAD=0: --reload + an orphaned Playwright WebSocket is the known
+# shutdown-hang source, and a verify stack has no code-edit loop to need reload.
+# --timeout-graceful-shutdown 5 caps how long a stuck connection can wedge exit.
+STACK_RELOAD="${STACK_RELOAD:-1}"
+reload_flag=""; [ "$STACK_RELOAD" = "1" ] && reload_flag="--reload"
+echo "[stack] backend  -> container :$BACKEND_PORT   (reload=$STACK_RELOAD, log: $LOGDIR/backend.log)"
+( cd src/backend && uvicorn app.main:app $reload_flag --timeout-graceful-shutdown 5 \
+    --host 0.0.0.0 --port "$BACKEND_PORT" \
     > "$LOGDIR/backend.log" 2>&1 ) &
 echo "  pid $!"
 

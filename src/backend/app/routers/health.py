@@ -89,8 +89,13 @@ async def health_check():
     t1 = time.perf_counter()
     logger.info(f"[PROFILE health] handler={int((t1-t0)*1000)}ms")
 
+    # T4120: non-secret render-mode flag for diagnostics (nothing branches on it;
+    # dev-verify always runs local). Lets a worker eyeball whether a reused stack
+    # is rendering locally.
+    from ..services.modal_client import modal_enabled
     return {
         "status": "healthy",
+        "modal_enabled": modal_enabled(),
         **db_info,
     }
 

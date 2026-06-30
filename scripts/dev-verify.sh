@@ -29,9 +29,23 @@ cd "$(dirname "$0")/.."  # -> /workspace (repo root), like container-stack.sh
 [ "$#" -ge 1 ] || { echo "usage: bash scripts/dev-verify.sh e2e/<spec>.spec.js [extra playwright args...]" >&2; exit 2; }
 SPEC="$1"; shift
 
+# T4120 D3: verify ALWAYS renders locally (no Modal in-container). Export before
+# the stack starts so uvicorn inherits it; python-dotenv won't override an env var
+# already set, so .env's MODAL_ENABLED=true is ignored for the verify backend.
+# STACK_RELOAD=0 drops uvicorn --reload (the shutdown-hang source) for verify runs.
+export MODAL_ENABLED="${MODAL_ENABLED:-false}"
+export STACK_RELOAD="${STACK_RELOAD:-0}"
+
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 LOGDIR="${LOGDIR:-/tmp}"
+# Health-wait cap in seconds (raised default: first local ffmpeg render + R2 buffering is slow).
+DEV_VERIFY_TIMEOUT="${DEV_VERIFY_TIMEOUT:-120}"
+
+# Reap any stray Playwright/Chromium node workers on exit so an orphaned WebSocket
+# can't survive to wedge a reused stack's next shutdown.
+reap_orphans() { pkill -f 'playwright.*(chromium|driver)' 2>/dev/null || true; }
+trap reap_orphans EXIT
 
 fe_url="http://localhost:$FRONTEND_PORT"
 health_url="http://localhost:$BACKEND_PORT/api/health"
@@ -48,15 +62,16 @@ else
   bash .devcontainer/container-stack.sh
 fi
 
-# --- 2. wait for frontend + backend health (~60s cap) ------------------------
-echo "[verify] waiting for $fe_url and $health_url ..."
-for i in $(seq 1 30); do
+# --- 2. wait for frontend + backend health (DEV_VERIFY_TIMEOUT cap) -----------
+echo "[verify] waiting for $fe_url and $health_url (cap ${DEV_VERIFY_TIMEOUT}s) ..."
+attempts=$(( DEV_VERIFY_TIMEOUT / 2 )); [ "$attempts" -lt 1 ] && attempts=1
+for i in $(seq 1 "$attempts"); do
   if stack_up; then
     echo "[verify] stack is up."
     break
   fi
-  if [ "$i" -eq 30 ]; then
-    echo "[verify] FAIL: servers did not come up in 60s." >&2
+  if [ "$i" -eq "$attempts" ]; then
+    echo "[verify] FAIL: servers did not come up in ${DEV_VERIFY_TIMEOUT}s." >&2
     echo "[verify] inspect the logs (use reduce_log, do NOT cat): $LOGDIR/backend.log $LOGDIR/frontend.log" >&2
     echo "[verify] a DB connection error in backend.log usually means the host dev Postgres" >&2
     echo "[verify] isn't reachable at host.docker.internal:5432 (must listen on 0.0.0.0)." >&2
@@ -65,10 +80,19 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# --- 3. self-heal chromium (best-effort; no-op when already matching) --------
-# The image bakes chromium for the pinned @playwright/test; if it drifts this
-# downloads only the matching browser (system libs are baked, so it's fast).
-( cd src/frontend && npx playwright install chromium ) >/dev/null 2>&1 || true
+# --- 3. self-heal chromium (only when missing; capped so it can't hang) ------
+# The image bakes chromium for the pinned @playwright/test. Re-running
+# `playwright install` re-validates over the network and HANGS in a
+# network-restricted container (observed: it wedged the whole verify run), so
+# skip it when a baked chromium is present and cap it when it isn't.
+_pw_browsers="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+if ls "$_pw_browsers"/chromium-* >/dev/null 2>&1; then
+  echo "[verify] chromium present in $_pw_browsers -> skipping self-heal"
+else
+  echo "[verify] chromium not found -> installing (capped 120s)..."
+  ( cd src/frontend && timeout 120 npx playwright install chromium ) >/dev/null 2>&1 \
+    || echo "[verify] WARN: chromium install failed/timed out; relying on any baked browser" >&2
+fi
 
 # --- 4. run the spec ---------------------------------------------------------
 echo "[verify] running: npx playwright test \"$SPEC\" --reporter=line $*"

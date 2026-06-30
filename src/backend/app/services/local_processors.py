@@ -121,6 +121,44 @@ class MockVideoUpscaler:
         return {"status": "success"}
 
 
+def _cuda_available() -> bool:
+    """True iff a usable CUDA device is present.
+
+    A missing torch (the CPU /dotask container case) returns False, so the
+    framing-AI fallback below degrades to scale-only instead of crashing.
+    """
+    try:
+        import torch
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def _make_framing_upscaler(export_mode: str):
+    """Pick the framing processor: Real-ESRGAN on CUDA, else CPU scale-only.
+
+    T4120 D1(c): when CUDA is unavailable (CPU container), fall back to
+    MockVideoUpscaler — ffmpeg crop+resize to the target size, NO AI upscale —
+    so a worker can verify the framing-AI PIPELINE + durability locally with
+    MODAL_ENABLED=false. The goal is pipeline verification, not upscale quality.
+    Prod runs on GPU (Modal), so this branch never executes there.
+    """
+    if _cuda_available():
+        from app.ai_upscaler import AIVideoUpscaler
+        return AIVideoUpscaler(
+            device='cuda',
+            export_mode=export_mode,
+            enable_source_preupscale=False,
+            enable_diffusion_sr=False,
+            sr_model_name='realesr_general_x4v3',
+        )
+    logger.warning(
+        "[LocalProcessor] CUDA unavailable -> CPU scale-only framing "
+        "(MockVideoUpscaler); pipeline verify only, no AI upscale"
+    )
+    return MockVideoUpscaler()
+
+
 async def local_overlay(
     job_id: str,
     user_id: str,
@@ -281,13 +319,6 @@ async def local_framing(
             logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
     try:
-        # Import AIVideoUpscaler here to avoid import errors if dependencies not installed
-        try:
-            from app.ai_upscaler import AIVideoUpscaler
-        except (ImportError, OSError, AttributeError) as e:
-            logger.error(f"[LocalProcessor] AI upscaler not available: {e}")
-            return {"status": "error", "error": f"AI upscaler not available: {e}"}
-
         with tempfile.TemporaryDirectory(prefix="framing_") as temp_dir:
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
@@ -339,14 +370,8 @@ async def local_framing(
                 except Exception as e:
                     logger.warning(f"[LocalProcessor] Progress callback failed: {e}")
 
-            # Initialize upscaler
-            upscaler = AIVideoUpscaler(
-                device='cuda',
-                export_mode=export_mode,
-                enable_source_preupscale=False,
-                enable_diffusion_sr=False,
-                sr_model_name='realesr_general_x4v3'
-            )
+            # T4120 D1(c): Real-ESRGAN on CUDA, CPU scale-only fallback otherwise.
+            upscaler = _make_framing_upscaler(export_mode)
 
             if upscaler.upsampler is None:
                 return {"status": "error", "error": "AI SR model failed to load"}
@@ -577,12 +602,6 @@ def _framing_sync(
         progress_callback(5, "Downloading video...", ExportPhase.DOWNLOAD)
 
     try:
-        try:
-            from app.ai_upscaler import AIVideoUpscaler
-        except (ImportError, OSError, AttributeError) as e:
-            logger.error(f"[Subprocess] AI upscaler not available: {e}")
-            return {"status": "error", "error": f"AI upscaler not available: {e}"}
-
         with tempfile.TemporaryDirectory(prefix="framing_") as temp_dir:
             input_path = os.path.join(temp_dir, "input.mp4")
             output_path = os.path.join(temp_dir, "output.mp4")
@@ -627,13 +646,8 @@ def _framing_sync(
             if progress_callback:
                 progress_callback(15, "Processing with AI upscaler...", ExportPhase.PROCESSING)
 
-            upscaler = AIVideoUpscaler(
-                device='cuda',
-                export_mode=export_mode,
-                enable_source_preupscale=False,
-                enable_diffusion_sr=False,
-                sr_model_name='realesr_general_x4v3'
-            )
+            # T4120 D1(c): Real-ESRGAN on CUDA, CPU scale-only fallback otherwise.
+            upscaler = _make_framing_upscaler(export_mode)
 
             if upscaler.upsampler is None:
                 return {"status": "error", "error": "AI SR model failed to load"}
