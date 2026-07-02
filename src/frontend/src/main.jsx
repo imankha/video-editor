@@ -8,6 +8,7 @@ import './index.css'
 import { installResponsivenessMonitor } from './utils/responsiveness.js'
 import { installClientLogger } from './utils/clientLogger.js'
 import { setupActionTracking } from './utils/analytics.js'
+import { setupPwaUpdatePrompt } from './utils/pwaUpdate.js'
 
 // T1650: Capture console.error/warn before anything else runs
 installClientLogger();
@@ -15,6 +16,7 @@ setupActionTracking();
 
 console.info(`[Build] ${__COMMIT_HASH__}`);
 installResponsivenessMonitor();
+setupPwaUpdatePrompt();
 
 
 ReactDOM.createRoot(document.getElementById('root')).render(

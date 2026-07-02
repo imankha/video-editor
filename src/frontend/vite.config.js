@@ -15,7 +15,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new SW waits until the user accepts the update toast (see
+      // utils/pwaUpdate.js) — a silent reload could interrupt in-memory editing state.
+      registerType: 'prompt',
       manifest: {
         name: 'Reel Ballers',
         short_name: 'ReelBallers',
