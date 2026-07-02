@@ -64,14 +64,18 @@ Architecture (single small UX decision, resolve inline), Code Expert, Reviewer.
 Rejected alternative: silent auto-reload (`registerType: 'autoUpdate'` +
 `registerSW({ immediate: true })`) — simplest, but can reload mid-edit.
 
-Either way, ALSO add a periodic update check for long-lived installed PWAs (the actual stuck case):
-`onRegisteredSW(swUrl, r) { setInterval(() => r && r.update(), 60 * 60 * 1000); }`.
+Either way, ALSO add a re-check for long-lived installed PWAs (the actual stuck case). Decided
+(post-review): NOT a `setInterval` — browsers throttle/freeze background timers in installed PWAs,
+and a page-lifetime interval widens the risk surface. Instead, a `visibilitychange` listener in
+`onRegisteredSW`: when the app becomes visible, call `registration.update()` (rate-limited to one
+check per 5 minutes), and if a SW is already waiting, re-surface the refresh toast (covers a
+dismissed prompt). Returning to the app is exactly the moment the check should fire.
 
 ## Implementation
 
 1. Branch: `feature/T4150-pwa-in-session-update`
 2. In the app entry (`src/frontend/src/main.jsx`), import from `virtual:pwa-register` and call
-   registerSW with the toast strategy + the hourly `r.update()` periodic check.
+   registerSW with the toast strategy + the visibility-triggered `registration.update()` re-check.
 3. Set registerType 'prompt' in vite.config.js and wire a toast to `updateSW(true)` — reuse the
    existing `toast` helper + `ToastContainer` (`src/frontend/src/components/shared/Toast.jsx`,
    already mounted in App.jsx; supports `duration: 0` and an `action` button).
@@ -83,7 +87,8 @@ Either way, ALSO add a periodic update check for long-lived installed PWAs (the 
 - `npm run build`, serve the dist, load app, then rebuild with a visible change and reload once →
   confirm the toast appears and the new build takes effect WITHOUT manually clearing
   storage/unregistering the SW.
-- Confirm the hourly `r.update()` is registered (no error in console; SW re-check fires).
+- Confirm the visibility re-check fires: hide + reshow the tab -> `registration.update()` runs
+  (rate-limited to one per 5 min); dismiss the toast, hide + reshow -> toast re-appears.
 - Regression: normal navigation and existing flows unaffected; no reload loop.
 - Frontend unit tests: `cd src/frontend && npm test` green.
 
@@ -91,3 +96,10 @@ Either way, ALSO add a periodic update check for long-lived installed PWAs (the 
 
 - Frontend only; no backend/DB/migration.
 - Do NOT change task statuses in PLAN.md (leave T4150 as TODO for the user to promote).
+
+## Known limitation (accepted)
+
+This fix is prospective-only: clients already stuck on pre-T4150 bundles have no re-check code,
+and browsers don't re-check sw.js for idle pages, so the currently-stale installed PWA needs ONE
+manual full close/reopen after this deploys to get onto the new system. Accepted because the only
+PWA user is the owner's account.
