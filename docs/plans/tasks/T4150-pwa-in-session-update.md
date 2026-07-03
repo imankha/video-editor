@@ -13,6 +13,11 @@ new builds DO download and activate in the background. BUT the app never imports
 NEXT app load, and there is no "update available" prompt or auto-reload. A user who keeps the
 installed PWA open long-lived (never fully closes it) can run a build that is many versions old.
 
+> **Correction (2026-07-02, post-merge):** the motivating incident below was later attributed to
+> T4160 (sweep auto-export publishes raw stream-copies over framed reels), NOT a stale PWA bundle —
+> see the T4160 task file. The update gap this task fixes is real and shipped anyway; only the
+> incident attribution was wrong.
+
 This is not hypothetical — it caused a full false-alarm debugging session: a prod user
 (imankh@gmail.com) saw the ranking game showing unframed 16:9 raw clips labeled "Clip 16"/"Clip 5".
 Investigation proved the CURRENT deployed backend + bundle can't produce that screen (live
