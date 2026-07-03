@@ -1,6 +1,6 @@
 # T4170: profile_db v019 — Heal Sweep Stream-Copy Reel Metadata (aspect_ratio + names)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-01
