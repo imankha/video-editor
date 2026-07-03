@@ -14,7 +14,7 @@ import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
 import { useIsMobile } from './hooks/useIsMobile';
-import { ConfirmationDialog, toast, ToastContainer, UnifiedHeader } from './components/shared';
+import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
 import { SECTION_NAMES } from './config/displayNames';
 // Screen components (self-contained, own their hooks)
@@ -660,7 +660,6 @@ function App() {
         <Suspense fallback={null}>
           <AdminScreen onBack={() => setEditorMode(EDITOR_MODES.PROJECT_MANAGER)} />
         </Suspense>
-        <ToastContainer />
       </>
     );
   }
@@ -700,8 +699,6 @@ function App() {
         <SyncStatusIndicator />
         {/* T430: Account Settings panel */}
         <AccountSettings />
-        {/* Toast Notifications */}
-        <ToastContainer />
         {/* Admin button — fixed top-right, visible only to admins */}
         {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
         {/* T1780: Shared video overlay */}
@@ -825,10 +822,7 @@ function App() {
         ]}
       />
 
-      {/* Toast Notifications */}
-      <ToastContainer />
-
-      {/* GoogleOneTap + AuthGateModal are mounted once in main.jsx. */}
+      {/* GoogleOneTap + AuthGateModal + ToastContainer are mounted once in main.jsx. */}
       {/* T430: Account Settings panel */}
       <AccountSettings />
 
