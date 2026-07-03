@@ -130,7 +130,20 @@ Per user direction: actual bugs first, prioritized by exposure (run frequency ×
 | T4270 | A7 + A9(saveAnnotations, dedupe DELETE) | Latent traps; deletions shrink search space |
 | T4280 | A10 remainder | Silent-fallback rule enforcement, varied exposure |
 
-Still awaiting approval: all of B2-B8, C, D, E, F, G.
+**2026-07-03 (later): user approved EVERYTHING.** Full task mapping:
+
+| Audit items | Task(s) |
+|-------------|---------|
+| F1, F3 | T4290, T4300 (guardrails, land first) |
+| B2, B3, C8+G1+B6, B5, B7, B8+G3 | Durability & Sync epic: T4310, T4320, T4330, T4340, T4350, T4360 |
+| F2, E1, E2, B4, E8+E9-partial | Export Write-Path epic (strict order): T4370, T4380, T4390, T4400, T4410 |
+| E4, E3 | T4420, T4430 (render fidelity; depend on T4370) |
+| C3, C4, C1 (absorbs T3810, T3820) | Keyframe Unification epic (strict order): T4440, T4450, T4460 (Stage-2 gated) |
+| D1, D2+G2, D3+G2, D4, D5, D6+D7+C11, G4 | Editor Decoupling epic: T4470-T4530 (T4530 last) |
+| C7, C2, C9 (absorbs T301-T303), C10, C6, C12, C5 | T4540, T4550, T4560, T4570, T4580, T4590, T4600 (Stage-2 gated) |
+| E6, E5+E12+E14, E7, E9, E11, E10 | T4610, T4620, T4630, T4640, T4650, T4660 |
+
+Every audit item is now tasked. Old refactoring-standards leftovers T331/T332 are superseded by the Editor Decoupling epic outcomes.
 
 ## Recommended first wave (pending approval)
 1. **Bug batch A1-A7** (one or two container tasks; all S, low risk, several are live data-destroyers)
