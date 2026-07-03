@@ -7,7 +7,7 @@
  *
  * T3700: copy is outcome-framed and jargon-free. Never say "set crop keyframes" —
  * say "keep your player in the shot." Button references must match the renamed
- * terminal buttons: "Export Highlight" (framing) and "Add Spotlight" (overlay).
+ * terminal buttons: "Export" (framing) and "Add Spotlight" (overlay).
  */
 
 import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
@@ -139,7 +139,7 @@ export const STEP_DESCRIPTIONS = {
   open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
-  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export Highlight</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
+  export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,

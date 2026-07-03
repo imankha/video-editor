@@ -151,7 +151,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
       note('no aspect-ratio toggle found; reframe-by-ratio not exercised');
     }
 
-    const exportBtn = page.getByRole('button', { name: /Export Highlight|Add Spotlight/i }).first();
+    const exportBtn = page.getByRole('button', { name: /Export( Highlight)?|Add Spotlight/i }).first();
     if (await exportBtn.count()) {
       await exportBtn.click({ timeout: 10000 }).catch(() => note('export click failed'));
       note('clicked export; waiting up to 120s for completion / Move-to-My-Reels');
