@@ -1,6 +1,6 @@
 # T4150: PWA In-Session Update (stop users lagging on stale builds)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5 | **Complexity:** 2 | **Priority:** 2.5
 **Stack Layers:** Frontend
 
