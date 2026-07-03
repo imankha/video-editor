@@ -1,6 +1,6 @@
 # T4160: Sweep Auto-Export Must Not Publish Raw Stream-Copies Over Framed Reels
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 4
 **Created:** 2026-07-01
