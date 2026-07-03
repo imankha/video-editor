@@ -38,8 +38,10 @@ Turn a planned task into finished, pushed work — driven entirely from this one
    classification, agent table, applied/skipped stages, task-specific steps, key rules. Start with
    `Implement T<id>: <title>`. Tell the worker to: follow the standard workflow; if it's design-gated,
    STOP at the architecture gate; **commit with EXPLICIT `git add <paths>` only — never `-A`/`-a`**
-   (the container clone shows mass CRLF noise; a broad add would commit thousands of junk lines);
-   and NOT change task statuses. Write it to `C:\tmp\kickoff-<SLUG>.md` (Write tool).
+   (standing hygiene so a stray file never rides along); and NOT change task statuses. The clone is
+   LF-clean now (T4180), and `/workspace/CLAUDE.local.md` already carries the container facts (python
+   path, backend test commands, exported DATABASE_URL, no-MCP log fallback) — the worker auto-loads it,
+   so the kickoff needn't repeat them. Write it to `C:\tmp\kickoff-<SLUG>.md` (Write tool).
 
 4. **Pre-flight Docker:** `docker info`. If down, tell the user to start Docker Desktop and stop.
 

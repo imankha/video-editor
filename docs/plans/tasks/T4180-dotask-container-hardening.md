@@ -56,17 +56,18 @@ bootstrap-delivered items (fact sheet, DATABASE_URL export) come from the CLONE'
 
 ## Remaining follow-ups (unchecked = not done)
 
-- [ ] Verify fact sheet + DATABASE_URL land in a fresh container AFTER this commit is on master
-      (re-run the smoke test; supervisor did this — see progress log)
-- [ ] Modal token provisioning (T4120 Gap 3): bootstrap writes `~/.modal.toml` from
+- [x] Verify fact sheet + DATABASE_URL land in a fresh container AFTER this commit is on master
+      (supervisor verified 2026-07-03 in a fresh container: fact sheet present, DATABASE_URL
+      exported, psycopg2 connect OK)
+- [x] Modal token provisioning (T4120 Gap 3): bootstrap writes `~/.modal.toml` from
       `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` when present (opt-in real-Modal verify)
 - [ ] Consider ephemeral in-container Postgres for backend tests — today in-container pytest
       TRUNCATES the shared host dev DB (same as supervisor runs); parallel task containers running
       backend tests will stomp each other
 - [ ] Rotate/de-hardcode the `ANTHROPIC_API_KEY` in the host's untracked `.mcp.json` (logreducer
       server env) — never reaches containers, but violates the no-hardcoded-secrets rule
-- [ ] Update `.claude/skills/dotask/SKILL.md` kickoff template: drop the CRLF warning boilerplate
-      once a few tasks confirm clean trees (keep explicit-`git add` as good hygiene)
+- [x] Update `.claude/skills/dotask/SKILL.md` kickoff template: dropped the CRLF-noise claim (clones
+      are LF-clean now), kept explicit-`git add` as hygiene, and pointed at `/workspace/CLAUDE.local.md`
 
 ## Context
 
