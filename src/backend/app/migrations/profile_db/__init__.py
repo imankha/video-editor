@@ -17,6 +17,7 @@ from .v015_add_last_playhead_position import V015AddLastPlayheadPosition
 from .v016_clip_game_start_time import V016ClipGameStartTime
 from .v017_backfill_missing_storage_refs import V017BackfillMissingStorageRefs
 from .v018_heal_lost_publish_proj41 import V018HealLostPublishProj41
+from .v019_heal_sweep_reel_metadata import V019HealSweepReelMetadata
 
 MIGRATIONS = [
     V001Baseline(),
@@ -37,6 +38,7 @@ MIGRATIONS = [
     V016ClipGameStartTime(),
     V017BackfillMissingStorageRefs(),
     V018HealLostPublishProj41(),
+    V019HealSweepReelMetadata(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

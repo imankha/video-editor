@@ -212,6 +212,34 @@ def _insert_final_video(db_path, game_id, project_id, filename="old_video.mp4"):
     conn.close()
 
 
+def _insert_project(db_path, project_id, name="Clip 7", aspect_ratio="9:16"):
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT INTO projects (id, name, aspect_ratio, is_auto_created) VALUES (?, ?, ?, 1)",
+        (project_id, name, aspect_ratio),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _insert_published_final(db_path, game_id, project_id, source_clip_id,
+                            filename="framed.mp4", aspect_ratio="9:16"):
+    """Insert a published (framed) final_videos row carrying source_clip_id, as a
+    real match-played reel would. Distinct from _insert_final_video, which leaves
+    published_at/source_clip_id NULL (the T4010 re-export placeholder)."""
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        """INSERT INTO final_videos
+           (project_id, filename, version, source_type, game_id, name,
+            published_at, aspect_ratio, source_clip_id, match_count, rating)
+           VALUES (?, ?, 1, 'brilliant_clip', ?, 'Framed Reel',
+                   CURRENT_TIMESTAMP, ?, ?, 7, 1500.0)""",
+        (project_id, filename, game_id, aspect_ratio, source_clip_id),
+    )
+    conn.commit()
+    conn.close()
+
+
 # ---------------------------------------------------------------------------
 # auto_export_game tests
 # ---------------------------------------------------------------------------
@@ -579,6 +607,116 @@ class TestExportBrilliantClip:
         assert "Brilliant clip=" in log_text
         assert "ffmpeg stream-copy in" in log_text
         assert "uploaded as" in log_text
+
+    # --- T4160: preserve framed reels, honest aspect ratio, derived names ---
+
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_skips_when_published_reel_exists(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db):
+        """T4160(a): a published final with the same source_clip_id (e.g. the
+        user's framed, match-played reel — even from a *different* custom project)
+        means the highlight is already preserved. The sweep must skip entirely:
+        no ffmpeg, no upload, no new row, and the existing row untouched."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip = self._make_clip(clip_id=5, auto_project_id=100)
+        # Framed reel lives under a custom project (999), not the auto project (100),
+        # proving the guard keys on source_clip_id, not project_id.
+        _insert_published_final(db, game_id, project_id=999, source_clip_id=5,
+                                filename="framed.mp4", aspect_ratio="9:16")
+
+        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
+
+        mock_presign.assert_not_called()
+        mock_ffmpeg.input.assert_not_called()
+        mock_upload.assert_not_called()
+
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT filename, aspect_ratio FROM final_videos WHERE game_id = ?", (game_id,)
+        ).fetchall()
+        conn.close()
+        assert len(rows) == 1  # framed row still the only row
+        assert rows[0]["filename"] == "framed.mp4"
+        assert rows[0]["aspect_ratio"] == "9:16"
+
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_stamps_real_aspect_ratio_and_derived_name(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db):
+        """T4160(b): with no pre-existing reel, the new stream-copy row carries the
+        aspect_ratio probed from the actual file (16:9 for a wide game video), NOT
+        the auto project's 9:16, and a derived name, NOT a 'Clip N' fallback."""
+        from app.services.auto_export import _export_brilliant_clip
+        from app.utils.encoding import encode_data
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        mock_ffmpeg.probe.return_value = {
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}],
+            "format": {"duration": "5.0"},
+        }
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        # Auto project stamped 9:16 — the raw 16:9 stream-copy must NOT inherit it.
+        _insert_project(db, project_id=100, aspect_ratio="9:16")
+        clip = self._make_clip(clip_id=7, auto_project_id=100)
+        clip["name"] = None
+        clip["rating"] = 5
+        clip["tags"] = encode_data(["Goal"])
+
+        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
+
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        fv = conn.execute(
+            "SELECT name, aspect_ratio FROM final_videos WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        conn.close()
+        assert fv["aspect_ratio"] == "16:9"   # probed from the file, not the 9:16 project
+        assert fv["name"] == "Brilliant Goal"  # derived, not "Clip 7"
+
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_underivable_name_falls_back_to_clip_id(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db):
+        """T4160(c): an unnamed, untagged, note-less clip has nothing to derive a
+        name from, so it falls back to the documented 'Clip {id}' last resort."""
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        mock_ffmpeg.probe.return_value = {
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}],
+            "format": {"duration": "5.0"},
+        }
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        clip = self._make_clip(clip_id=88, auto_project_id=100)
+        clip["name"] = None
+        clip["tags"] = None
+        clip["notes"] = None
+        clip["rating"] = 5
+
+        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
+
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        fv = conn.execute(
+            "SELECT name FROM final_videos WHERE game_id = ?", (game_id,)
+        ).fetchone()
+        conn.close()
+        assert fv["name"] == "Clip 88"
 
 
 # ---------------------------------------------------------------------------
