@@ -23,6 +23,15 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 LOGDIR="${LOGDIR:-/tmp}"
 
+# --- Modal default -------------------------------------------------------------
+# In-container there is no ~/.modal.toml unless tokens were provisioned, so a
+# stack started with .env's MODAL_ENABLED=true would crash exports. Default OFF
+# (local ffmpeg render path) unless the caller set it or provided tokens.
+if [ -z "${MODAL_ENABLED:-}" ]; then
+  if [ -n "${MODAL_TOKEN_ID:-}" ]; then export MODAL_ENABLED=true; else export MODAL_ENABLED=false; fi
+  echo "[stack] MODAL_ENABLED=$MODAL_ENABLED (container default; set MODAL_TOKEN_ID/MODAL_ENABLED to override)"
+fi
+
 # --- DB host rewrite ---------------------------------------------------------
 if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then
   RAW="$(grep -E '^DATABASE_URL=' .env | head -1 | cut -d= -f2-)"
@@ -49,6 +58,16 @@ echo "[stack] backend  -> container :$BACKEND_PORT   (reload=$STACK_RELOAD, log:
 echo "  pid $!"
 
 # --- frontend ----------------------------------------------------------------
+# Gate on the deps install task.sh kicked off in the background (`npm ci` writes
+# node_modules/.ready when done) -- starting vite mid-install crashes confusingly.
+if [ ! -f src/frontend/node_modules/.ready ] && [ ! -x src/frontend/node_modules/.bin/vite ]; then
+  echo "[stack] frontend deps still installing (npm ci in background); waiting up to 180s..."
+  for i in $(seq 1 90); do
+    { [ -f src/frontend/node_modules/.ready ] || [ -x src/frontend/node_modules/.bin/vite ]; } && break
+    sleep 2
+  done
+fi
+
 # --host 0.0.0.0 so the published host port can reach it. Vite proxies /api to
 # the backend on localhost:$BACKEND_PORT (same container), which is the default.
 echo "[stack] frontend -> container :$FRONTEND_PORT  (log: $LOGDIR/frontend.log)"

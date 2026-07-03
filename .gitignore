@@ -102,3 +102,8 @@ src/frontend/dev-dist/registerSW.js
 
 # Stray Playwright MCP screenshot artifacts saved to repo root
 myreels-volleyball.png
+
+# /dotask container droppings
+.dotask-kickoff.md
+.task-env
+CLAUDE.local.md

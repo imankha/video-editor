@@ -28,7 +28,15 @@ set -euo pipefail
 # --- constants (this machine) ------------------------------------------------
 MAIN_REPO="${MAIN_REPO:-/c/Users/imank/projects/video-editor}"
 TASKS_ROOT="${TASKS_ROOT:-/c/work/tasks}"
-IMAGE="${REEL_TASK_IMAGE:-reel-task:latest}"
+# Image tag is a content hash of its build inputs, so editing the Dockerfile or
+# the baked requirements AUTO-rebuilds on the next `up` (a fixed :latest tag let
+# the image go stale: T4120's pytest bake never reached workers).
+image_hash() {
+  ( cd "$MAIN_REPO" && cat .devcontainer/task.Dockerfile \
+      src/backend/requirements.prod.txt src/backend/requirements.test.txt 2>/dev/null \
+      | git hash-object --stdin | cut -c1-12 )
+}
+IMAGE="${REEL_TASK_IMAGE:-reel-task:$(image_hash)}"
 AUTH_VOLUME="reel-claude-config"      # shared across ALL task containers -> sign in once
 DOCKERFILE_REL=".devcontainer/task.Dockerfile"
 INTERNAL_BACKEND=8000
@@ -46,9 +54,13 @@ taskdir(){ echo "$TASKS_ROOT/$(sanitize "$1")"; }
 # --- image -------------------------------------------------------------------
 ensure_image() {
   if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "[task] building image $IMAGE (first time; a couple of minutes)..." >&2
+    echo "[task] building image $IMAGE (inputs changed or first time; a couple of minutes)..." >&2
     ( cd "$MAIN_REPO" && docker build -f "$DOCKERFILE_REL" -t "$IMAGE" . ) \
       || die "image build failed"
+    # keep a stable alias for manual docker runs; prune superseded content tags
+    docker tag "$IMAGE" reel-task:latest >/dev/null 2>&1 || true
+    docker images 'reel-task' --format '{{.Repository}}:{{.Tag}}' \
+      | grep -v -e ":latest$" -e "^$IMAGE$" | xargs -r docker rmi >/dev/null 2>&1 || true
   fi
 }
 
@@ -77,13 +89,28 @@ ensure_checkout() {
   if [ ! -d "$dir/.git" ]; then
     mkdir -p "$TASKS_ROOT"
     echo "[task] cloning $MAIN_REPO -> $dir (local hardlink clone)..." >&2
-    git clone --local "$MAIN_REPO" "$dir" >/dev/null 2>&1 || die "clone failed"
+    # core.autocrlf=false: the host repo checks out CRLF (Windows), but this
+    # checkout is consumed by a LINUX container -- an autocrlf clone shows 1500+
+    # phantom-modified files in-container and forces git-add gymnastics.
+    git clone --local --config core.autocrlf=false "$MAIN_REPO" "$dir" >/dev/null 2>&1 || die "clone failed"
     local origin; origin="$(git -C "$MAIN_REPO" remote get-url origin)"
     git -C "$dir" remote set-url origin "$origin"   # push goes to GitHub, not the local main
+    # Base the task on origin/master, NOT whatever branch the shared tree is on
+    # (a shared-tree feature branch used to leak sibling commits into task pushes).
+    # TASK_BASE overrides when a task must build on an unmerged branch.
+    local base="${TASK_BASE:-master}"
+    if git -C "$dir" fetch origin "$base" >/dev/null 2>&1; then
+      git -C "$dir" checkout -B "$base" FETCH_HEAD >/dev/null 2>&1 || true
+      echo "[task] based on origin/$base @ $(git -C "$dir" rev-parse --short HEAD)" >&2
+    else
+      echo "[task] WARN: could not fetch origin/$base (offline?); using the local clone's HEAD" >&2
+    fi
+    # LF re-checkout so the worktree matches the index (kills CRLF noise at birth).
+    git -C "$dir" checkout -f -- . 2>/dev/null || true
     # gitignored config the clone won't carry:
     [ -f "$MAIN_REPO/.env" ] && cp "$MAIN_REPO/.env" "$dir/.env"
     [ -f "$MAIN_REPO/src/frontend/.env" ] && cp "$MAIN_REPO/src/frontend/.env" "$dir/src/frontend/.env"
-    echo "[task] checkout ready on master; the Claude session will branch per the workflow." >&2
+    echo "[task] checkout ready; the Claude session will branch per the workflow." >&2
   fi
   echo "$dir"
 }
@@ -119,10 +146,13 @@ up() {
   # one-time-ish bootstrap (idempotent): fix volume ownership, bypass settings, seed creds
   MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash /workspace/.devcontainer/task-bootstrap.sh || true
 
-  # frontend deps into the node_modules volume on first up (backend deps are baked)
-  if ! MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" test -d /workspace/src/frontend/node_modules/.bin; then
+  # frontend deps into the node_modules volume on first up (backend deps are baked).
+  # npm ci (not install): never mutates package-lock.json in the checkout. The
+  # .ready marker lets container-stack.sh / dev-verify.sh gate on completion.
+  if ! MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" test -f /workspace/src/frontend/node_modules/.ready; then
     echo "[task] installing frontend deps (one-time, ~1-2 min; runs in background)..." >&2
-    MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash -lc 'cd /workspace/src/frontend && npm install'
+    MSYS_NO_PATHCONV=1 docker exec -d -u dev "$cn" bash -lc \
+      'cd /workspace/src/frontend && npm ci --no-audit --no-fund && touch node_modules/.ready'
   fi
   echo "$cn"
 }
@@ -194,11 +224,14 @@ e2e_test() {
     echo "[task] servers did not come up in time; see /tmp/backend.log /tmp/frontend.log" >&2
     exit 1
   ' || die "stack failed to start; check logs with: bash scripts/task.sh claude $id  then reduce_log /tmp/backend.log"
-  # Self-heal the browser: the image bakes chromium for the pinned @playwright/test
-  # (1.57). If that version ever drifts, this downloads ONLY the matching browser
-  # (system libs are already baked, so it's fast); a no-op when it already matches.
-  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" \
-    bash -lc 'cd /workspace/src/frontend && npx playwright install chromium' >/dev/null 2>&1 || true
+  # Self-heal the browser ONLY when missing, capped: re-running `playwright install`
+  # re-validates over the network and can HANG in a network-restricted container
+  # (same guard as dev-verify.sh step 3).
+  MSYS_NO_PATHCONV=1 docker exec -u dev "$cn" bash -lc '
+    b="${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+    ls "$b"/chromium-* >/dev/null 2>&1 \
+      || ( cd /workspace/src/frontend && timeout 120 npx playwright install chromium )
+  ' >/dev/null 2>&1 || true
   echo "[task] running Playwright E2E (headless chromium) in $cn..." >&2
   # Pass through any extra args (e.g. --grep @smoke, a spec path).
   MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' docker exec -u dev "$cn" \
