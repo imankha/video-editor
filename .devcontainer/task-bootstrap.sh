@@ -59,6 +59,28 @@ if [ -f /workspace/.env ] && ! grep -q '^export DATABASE_URL=' "$HOME/.profile" 
   fi
 fi
 
+# Modal token provisioning (T4120 Gap 3, opt-in real-Modal verify). Modal is OFF by
+# default in-container; when creds are in the env (or /workspace/.env), write
+# ~/.modal.toml so `modal` is authed. Idempotent (never clobber an existing token),
+# created 0600 via umask, and the secret VALUES are never logged.
+if [ ! -f "$HOME/.modal.toml" ]; then
+  MODAL_ID="${MODAL_TOKEN_ID:-}"
+  MODAL_SECRET="${MODAL_TOKEN_SECRET:-}"
+  if [ -f /workspace/.env ]; then
+    [ -z "$MODAL_ID" ] && MODAL_ID="$(grep -E '^MODAL_TOKEN_ID=' /workspace/.env | head -1 | cut -d= -f2- | tr -d '\r')"
+    [ -z "$MODAL_SECRET" ] && MODAL_SECRET="$(grep -E '^MODAL_TOKEN_SECRET=' /workspace/.env | head -1 | cut -d= -f2- | tr -d '\r')"
+  fi
+  if [ -n "$MODAL_ID" ] && [ -n "$MODAL_SECRET" ]; then
+    ( umask 177; cat > "$HOME/.modal.toml" <<TOML
+[default]
+token_id = "$MODAL_ID"
+token_secret = "$MODAL_SECRET"
+TOML
+    )
+    chmod 600 "$HOME/.modal.toml" 2>/dev/null || true
+  fi
+fi
+
 # Container fact sheet: overrides the repo CLAUDE.md where the host docs are
 # wrong INSIDE this container (Windows venv paths, MCP-only tools, ...). Claude
 # Code auto-loads CLAUDE.local.md; rewritten on every bootstrap to stay current.
@@ -79,6 +101,8 @@ You are in a Linux /dotask task container. Facts that differ from the repo docs:
   container are backend :8000 / frontend :5173 (host offset ports don't concern you).
 - **No MCP tools here** (no `reduce_log`): to inspect logs use
   `grep -iE 'error|warn' /tmp/backend.log | tail -50` — never cat a whole log.
+- **Modal is OFF by default in-container**; real-Modal verification needs
+  `MODAL_TOKEN_ID`/`MODAL_TOKEN_SECRET` provisioned (bootstrap then writes `~/.modal.toml`).
 - **Git**: commit with EXPLICIT `git add <paths>` only, never `-A`/`-a`. Never
   commit `package-lock.json` unless you intentionally changed dependencies.
   Do not attempt `gh`/pushing — the supervisor pushes from the host.
