@@ -144,12 +144,38 @@ def _set_game_status(game_id: int, status: str) -> None:
         conn.commit()
 
 
+def _probe_aspect_ratio(output_path) -> str | None:
+    """Map the exported file's real dimensions to a ratio label.
+
+    width >= height -> '16:9', else '9:16'. Returns None if the probe fails —
+    NULL rows are excluded from ranking math by design, so we never guess a
+    ratio. A stream-copy of a game video is 16:9; stamping the auto project's
+    9:16 (the T4160 bug) is what routed raw wide footage into the 9:16 pool.
+    """
+    try:
+        probe = ffmpeg.probe(str(output_path))
+        stream = next(s for s in probe['streams'] if s.get('codec_type') == 'video')
+        width = int(stream['width'])
+        height = int(stream['height'])
+    except Exception as e:
+        logger.warning(
+            f"[AutoExport] Failed to probe {output_path} for aspect_ratio: {e} "
+            f"— aspect_ratio stays NULL"
+        )
+        return None
+    return '16:9' if width >= height else '9:16'
+
+
 def _export_brilliant_clip(
     user_id: str, profile_id: str, clip: dict, game_id: int
 ) -> None:
     """Export a single brilliant clip via FFmpeg stream-copy extract (original resolution).
 
-    If the clip was previously exported, replaces the old final_video and R2 file.
+    T4160: if the clip already has a published reel (framed content) with this
+    source_clip_id, skips entirely — never replaces framed content with a raw
+    stream-copy. Otherwise exports, stamping the real aspect ratio probed from
+    the output file and a derived name. An unpublished prior auto-export row for
+    the same auto project is still swapped out atomically (T4010).
     """
     if not clip['auto_project_id']:
         logger.warning(f"[AutoExport] Skipping clip {clip['id']} — no auto_project_id")
@@ -168,6 +194,26 @@ def _export_brilliant_clip(
     duration = end_time - start_time
     logger.info(f"[AutoExport] Brilliant clip={clip['id']} hash={video_hash[:12]} range={start_time:.1f}-{end_time:.1f}s")
 
+    # T4160: never replace an existing published reel for this clip. A published
+    # final_videos row with this source_clip_id means the highlight is already
+    # preserved in framed form — either the auto project's own prior export or a
+    # custom-project export of the same clip. Publishing a raw stream-copy over it
+    # would destroy framed content and reset its match history (the July-9 bomb).
+    # Skipping counts as SUCCESS for the game's export loop (only exceptions are
+    # treated as failures by the auto_export_attempts retry cap).
+    with get_db_connection() as conn:
+        existing = conn.execute(
+            "SELECT 1 FROM final_videos "
+            "WHERE source_clip_id = ? AND published_at IS NOT NULL",
+            (clip['id'],),
+        ).fetchone()
+    if existing:
+        logger.info(
+            f"[AutoExport] Clip {clip['id']} already has a published reel — "
+            f"skipping auto stream-copy export (framed content preserved)"
+        )
+        return
+
     video_url = generate_presigned_url_global(f"games/{video_hash}.mp4")
     if not video_url:
         raise RuntimeError(f"Failed to generate presigned URL for {video_hash}")
@@ -182,24 +228,32 @@ def _export_brilliant_clip(
         )
         logger.info(f"[AutoExport] Brilliant clip={clip['id']} ffmpeg stream-copy in {time.perf_counter() - t_ffmpeg:.2f}s")
 
+        # T4160: stamp the honest aspect ratio from the artifact itself, not the
+        # auto project. Must probe while the temp file still exists.
+        aspect_ratio = _probe_aspect_ratio(output_path)
+
         filename = f"auto_{game_id}_{clip['id']}_{uuid.uuid4().hex[:8]}.mp4"
         r2_key = f"final_videos/{filename}"
         upload_to_r2(user_id, r2_key, output_path)
         logger.info(f"[AutoExport] Brilliant clip={clip['id']} uploaded as {filename} in {time.perf_counter() - t0:.2f}s")
 
-    clip_name = clip['name'] or f"Clip {clip['id']}"
+    # T4160: derive the name the same way derive_project_name does, so unnamed
+    # clips publish as e.g. "Brilliant Goal" instead of "Clip 5". Falls back to
+    # "Clip {id}" only when nothing is derivable (documented last resort).
+    from ..queries import derive_clip_name
+    clip_name = derive_clip_name(
+        clip['name'], clip['rating'] or 0, decode_data(clip['tags']) or [],
+        clip['notes'] or '') or f"Clip {clip['id']}"
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # T3600: freeze collection metadata. duration stays the clip range
-        # computed above (the exported artifact IS the raw clip extract);
-        # aspect_ratio + tags come from the shared helper.
-        _, aspect_ratio, tags_blob = compute_project_metadata(
+        # computed above (the exported artifact IS the raw clip extract).
+        # T4160: compute_project_metadata is kept only for the tags blob; its
+        # aspect_ratio return is no longer used — the real ratio is probed from
+        # the output file above (a stream-copy of a game video is 16:9, not the
+        # auto project's 9:16).
+        _, _project_aspect, tags_blob = compute_project_metadata(
             cursor, clip['auto_project_id'])
-        if aspect_ratio is None:
-            logger.warning(
-                f"[AutoExport] Auto project {clip['auto_project_id']} missing for "
-                f"clip {clip['id']} — aspect_ratio stays NULL"
-            )
         # T4010: capture the prior export (re-export scenario) so we can swap it
         # out atomically: INSERT the new row first, then DELETE the old row BY id
         # (a project-wide DELETE would also remove the row we just inserted), and
