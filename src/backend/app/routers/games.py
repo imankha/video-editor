@@ -923,17 +923,7 @@ async def _list_games_impl(skip_presigned_urls=False):
             video_url = None if skip_presigned_urls else get_game_video_url(row['blake3_hash'], row['video_filename'])
 
             expires_at_val = expiry_by_hash.get(row['blake3_hash'])
-            if expires_at_val:
-                try:
-                    exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
-                    is_expired = exp_dt.replace(tzinfo=None) < datetime.utcnow()
-                except (ValueError, TypeError):
-                    is_expired = False
-                storage_status = 'expired' if is_expired else 'active'
-            elif row['auto_export_status']:
-                storage_status = 'expired'
-            else:
-                storage_status = 'active'
+            storage_status = _compute_storage_status(expires_at_val, row['auto_export_status'])
 
             blake3 = row['blake3_hash']
             can_extend = blake3 in all_ref_hashes or blake3 in grace_hashes
@@ -1778,6 +1768,25 @@ async def save_playhead(game_id: int, body: PlayheadRequest):
     return {"success": True}
 
 
+def _compute_storage_status(expires_at_val, auto_export_status) -> str:
+    """Storage status of a game's source video: 'expired' or 'active'.
+
+    Single source of truth shared by list_games and load_game so the two can't
+    diverge. Expired when the game_storage expiry has passed, OR when there is no
+    storage ref but the game was auto-exported (source deleted post-grace). An
+    unparseable expiry falls back to 'active' (treat as present, not gone).
+    """
+    if expires_at_val:
+        try:
+            exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
+            return 'expired' if exp_dt.replace(tzinfo=None) < datetime.utcnow() else 'active'
+        except (ValueError, TypeError):
+            return 'active'
+    if auto_export_status:
+        return 'expired'
+    return 'active'
+
+
 def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
     """Return True if a game's storage has expired.
 
@@ -2190,7 +2199,7 @@ async def load_game(game_id: int):
             SELECT id, name, blake3_hash, video_filename, created_at,
                    video_duration, video_width, video_height, video_size,
                    opponent_name, game_date, game_type, tournament_name,
-                   viewed_duration, last_playhead_position, status
+                   viewed_duration, last_playhead_position, status, auto_export_status
             FROM games
             WHERE id = ?
         """, (game_id,))
@@ -2198,6 +2207,19 @@ async def load_game(game_id: int):
 
         if not row:
             raise HTTPException(status_code=404, detail="Game not found")
+
+        # Storage status so Annotate can degrade gracefully when the source video
+        # has expired (bug 27p): the R2 source is gone post-grace, so the player
+        # must show a deliberate expired state instead of a broken/hanging <video>.
+        # Same lookup + semantics as list_games (per-profile game_storage by hash).
+        storage_row = cursor.execute(
+            "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (row['blake3_hash'],),
+        ).fetchone()
+        storage_status = _compute_storage_status(
+            storage_row['storage_expires_at'] if storage_row else None,
+            row['auto_export_status'],
+        )
 
         cursor.execute_local(
             "UPDATE games SET last_accessed_at = CURRENT_TIMESTAMP WHERE id = ?",
@@ -2243,6 +2265,7 @@ async def load_game(game_id: int):
             'video_width': video_width,
             'video_height': video_height,
             'video_size': row['video_size'],
+            'storage_status': storage_status,
         }
 
         # 2. Playback URL (same as get_game_playback_url)

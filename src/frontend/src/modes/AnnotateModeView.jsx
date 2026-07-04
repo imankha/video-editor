@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Share2, ArrowLeft, Minimize } from 'lucide-react';
+import { Play, Share2, ArrowLeft, Minimize, Clock } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { VideoLoadingOverlay } from '../components/shared/VideoLoadingOverlay';
 import ZoomControls from '../components/ZoomControls';
@@ -35,6 +35,10 @@ export function AnnotateModeView({
   error = null,
   isUrlExpiredError = () => false,
   onRetryVideo,
+  // bug 27p: game's source video expired (R2 source hard-deleted post-grace).
+  // Render a deliberate expired state instead of a broken/hanging player; the
+  // clips sidebar keeps the annotations readable.
+  isSourceExpired = false,
   handlers,
 
   // Fullscreen state
@@ -424,7 +428,23 @@ export function AnnotateModeView({
             <div
               className={annotateFullscreen ? (mobileFs ? 'absolute inset-0' : 'flex-1 min-h-0 relative') : 'contents'}
             >
-              {multiVideo ? (
+              {isSourceExpired ? (
+                /* bug 27p: source video expired — deliberate state, no <video>.
+                   Reuses the Games-menu expired language (yellow + Clock). */
+                <div className={annotateFullscreen
+                  ? 'absolute inset-0 flex items-center justify-center bg-yellow-950/20'
+                  : 'flex items-center justify-center h-[40vh] sm:h-[60vh] rounded-lg bg-yellow-950/20 border border-yellow-800/40'}
+                >
+                  <div className="text-center max-w-md px-6">
+                    <Clock size={40} className="mx-auto mb-3 text-yellow-500" />
+                    <p className="text-yellow-400 font-semibold mb-2">Source video expired</p>
+                    <p className="text-gray-400 text-sm">
+                      This game&apos;s source video is no longer available (storage expired).
+                      Your annotations are still listed.
+                    </p>
+                  </div>
+                </div>
+              ) : multiVideo ? (
                 /* T2750: Dual video elements for multi-video scrub */
                 <div className={annotateFullscreen ? 'absolute inset-0' : 'relative'}
                      style={annotateFullscreen ? undefined : { aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}` }}>
@@ -755,9 +775,10 @@ export function AnnotateModeView({
               <div className="flex gap-2">
                 <button
                   onClick={() => playback?.enterPlaybackMode()}
-                  disabled={!hasAnnotateClips}
+                  disabled={!hasAnnotateClips || isSourceExpired}
+                  title={isSourceExpired ? 'Source video expired — playback unavailable' : undefined}
                   className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
-                    !hasAnnotateClips
+                    !hasAnnotateClips || isSourceExpired
                       ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                       : 'bg-green-600 hover:bg-green-700 text-white'
                   }`}

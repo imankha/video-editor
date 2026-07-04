@@ -77,6 +77,8 @@ export function AnnotateContainer({
     setAnnotateGameId,
     annotateGameName,
     setAnnotateGameName,
+    annotateSourceExpired,
+    setAnnotateSourceExpired,
     isImportingToProjects,
     setIsImportingToProjects,
     // Note: isUploadingGameVideo and uploadProgress from local state are NOT used
@@ -524,6 +526,9 @@ export function AnnotateContainer({
       schedulePlaybackUrlRefresh(gameData.id, playbackUrlData.expires_in);
     }
     setAnnotateVideoMetadata(videoMetadata);
+    // bug 27p: authoritative expiry from /load. When expired, the video area
+    // renders a deliberate expired state instead of loading the dead source.
+    setAnnotateSourceExpired(gameData.storage_status === 'expired');
     annotateGameIdRef.current = gameData.id;
     setAnnotateGameId(gameData.id);
     setAnnotateGameName(gameData.name);
@@ -564,6 +569,10 @@ export function AnnotateContainer({
   const handleLoadGame = useCallback(async (gameId, pendingClipSeekTime = null) => {
     if (PROFILING_ENABLED) performance.mark('gesture:load-game:start');
     setWarmupPriority(WARMUP_PRIORITY.FOREGROUND_DIRECT);
+    // bug 27p: clear any prior game's expired flag before /load resolves so an
+    // expired->healthy switch doesn't briefly show the expired panel for the new
+    // game. Re-set authoritatively from storage_status in applyGameData.
+    setAnnotateSourceExpired(false);
 
     // T4000: revoke any prior in-memory blob src, then set the stable, gameId-only
     // first-paint src NOW and kick off /load. The src-set happens BEFORE awaiting
@@ -1313,6 +1322,7 @@ export function AnnotateContainer({
     annotateVideoUrl,
     annotateVideoMetadata,
     annotateGameName,
+    annotateSourceExpired,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
