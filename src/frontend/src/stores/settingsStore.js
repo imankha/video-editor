@@ -39,6 +39,16 @@ const DEFAULT_SETTINGS = {
   },
 };
 
+// projectFilters are SESSION-ONLY view state, never persisted: a saved filter
+// once hid every draft behind an invisible control (staging, 2026-07-04).
+// Server responses must never override the in-memory filters.
+function withSessionFilters(incoming, currentFilters) {
+  return {
+    ...deepMerge(DEFAULT_SETTINGS, incoming || {}),
+    projectFilters: currentFilters || DEFAULT_SETTINGS.projectFilters,
+  };
+}
+
 export const useSettingsStore = create((set, get) => ({
   // Settings state
   settings: DEFAULT_SETTINGS,
@@ -47,7 +57,11 @@ export const useSettingsStore = create((set, get) => ({
   error: null,
 
   setFromBootstrap: (settings) => {
-    set({ settings: { ...DEFAULT_SETTINGS, ...settings }, isLoading: false, isInitialized: true });
+    set({
+      settings: withSessionFilters(settings, get().settings.projectFilters),
+      isLoading: false,
+      isInitialized: true,
+    });
   },
 
   loadSettings: async () => {
@@ -70,7 +84,7 @@ export const useSettingsStore = create((set, get) => ({
         if (!response.ok) {
           throw new Error(`Failed to load settings: ${response.status}`);
         }
-        const settings = await response.json();
+        const settings = withSessionFilters(await response.json(), get().settings.projectFilters);
         set({ settings, isLoading: false, isInitialized: true });
         return settings;
       } catch (error) {
@@ -103,7 +117,7 @@ export const useSettingsStore = create((set, get) => ({
         throw new Error(`Failed to save settings: ${response.status}`);
       }
 
-      const savedSettings = await response.json();
+      const savedSettings = withSessionFilters(await response.json(), merged.projectFilters);
       set({ settings: savedSettings });
       return savedSettings;
     } catch (error) {
@@ -114,17 +128,17 @@ export const useSettingsStore = create((set, get) => ({
     }
   },
 
-  // Project filter setters (convenience methods)
+  // Project filter setters — SESSION-ONLY (in-memory), deliberately not saved.
   setStatusFilter: (value) => {
-    get().saveSettings({ projectFilters: { statusFilter: value } });
+    set(state => ({ settings: deepMerge(state.settings, { projectFilters: { statusFilter: value } }) }));
   },
 
   setAspectFilter: (value) => {
-    get().saveSettings({ projectFilters: { aspectFilter: value } });
+    set(state => ({ settings: deepMerge(state.settings, { projectFilters: { aspectFilter: value } }) }));
   },
 
   setCreationFilter: (value) => {
-    get().saveSettings({ projectFilters: { creationFilter: value } });
+    set(state => ({ settings: deepMerge(state.settings, { projectFilters: { creationFilter: value } }) }));
   },
 
   // Framing setters
@@ -167,7 +181,7 @@ export const useSettingsStore = create((set, get) => ({
         throw new Error(`Failed to reset settings: ${response.status}`);
       }
 
-      const settings = await response.json();
+      const settings = withSessionFilters(await response.json(), null);
       set({ settings, error: null });
       return settings;
     } catch (error) {

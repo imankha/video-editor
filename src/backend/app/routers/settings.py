@@ -20,13 +20,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 
-# Flat defaults — keys match DB rows exactly
+# Flat defaults — keys match DB rows exactly.
+# projectFilters (statusFilter/aspectFilter/creationFilter) were REMOVED
+# 2026-07-04: filters are session-only view state now. A persisted filter once
+# hid every draft behind an invisible control ("Showing 0 of 18"). Old pref.*
+# filter rows may still exist in user DBs; they are simply never read.
 DEFAULTS = {
-    # 'all', not the pre-T66 'uncompleted': that value no longer exists in the
-    # frontend's filter set (completed projects are archived out entirely)
-    "statusFilter": "all",
-    "aspectFilter": "all",
-    "creationFilter": "all",
     "includeAudio": "true",
     "defaultAspectRatio": "9:16",
     "defaultTransition": "cut",
@@ -36,7 +35,6 @@ DEFAULTS = {
 
 # Map from nested frontend shape to flat keys
 _SECTION_KEYS = {
-    "projectFilters": ["statusFilter", "aspectFilter", "creationFilter"],
     "framing": ["includeAudio", "defaultAspectRatio", "defaultTransition"],
     "overlay": ["highlightEffectType"],
     "ranking": ["rankSoundEnabled"],
@@ -60,9 +58,15 @@ def _to_nested(flat: dict) -> dict:
 
 
 def _flatten_updates(updates: dict) -> dict:
-    """Flatten nested update dict to flat key-value pairs (strings only)."""
+    """Flatten nested update dict to flat key-value pairs (strings only).
+
+    Only sections in _SECTION_KEYS are accepted — so legacy clients that still
+    PUT projectFilters can't re-create persisted filter rows.
+    """
     flat = {}
-    for section_value in updates.values():
+    for section, section_value in updates.items():
+        if section not in _SECTION_KEYS:
+            continue
         if isinstance(section_value, dict):
             for k, v in section_value.items():
                 # Convert booleans to strings for storage
@@ -74,7 +78,11 @@ def _flatten_updates(updates: dict) -> dict:
 
 
 class SettingsUpdate(BaseModel):
-    """Partial settings update - only include fields to change"""
+    """Partial settings update - only include fields to change.
+
+    projectFilters is still ACCEPTED (legacy clients send it) but ignored by
+    _flatten_updates — filters are session-only view state, never persisted.
+    """
     projectFilters: dict[str, Any] | None = None
     framing: dict[str, Any] | None = None
     overlay: dict[str, Any] | None = None
