@@ -1,11 +1,13 @@
 /**
  * tutorialCapture — shared kit for recording narrated tutorial footage with Playwright.
- * Used by e2e/tutorial-capture-<quest>.spec.js. See ReelBallersTutroials/WORKFLOW.md.
+ * SOURCE OF TRUTH lives in ReelBallersTutroials/workflow/capture_specs/ — copy into
+ * video-editor/src/frontend/e2e/helpers/ before running (untracked files in the app
+ * repo have been observed to get cleaned).
  *
  * Provides:
  *  - OVERLAY_INIT: page-injected viewer guidance — rendered cursor (Playwright records
  *    none), click ripples on every mousedown, and a pulsing highlight ring.
- *  - makeKit(page): { mark, ring, clearRing, act, drag, typeInto, dwell, step,
+ *  - makeKit(page): { marks, mark, ring, clearRing, act, drag, typeInto, dwell, step,
  *    videosReady } — mark() flashes a beacon square into the recording so
  *    workflow/from_capture.py can read frame-accurate anchor times out of the pixels
  *    (the recorder's wall clock drifts; never trust it).
@@ -50,7 +52,7 @@ export const OVERLAY_INIT = `(() => {
       cursor.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26">' +
         '<path d="M5 2 L5 19 L9.5 15.5 L12.5 22 L15.5 20.6 L12.6 14.2 L19 14 Z" ' +
         'fill="#fff" stroke="#111" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-      document.documentElement.appendChild(cursor);
+      (document.fullscreenElement || document.documentElement).appendChild(cursor);
     }
   };
   document.addEventListener('mousemove', (e) => {
@@ -64,7 +66,7 @@ export const OVERLAY_INIT = `(() => {
       const r = document.createElement('div');
       r.className = ('__tut-ripple ' + cls).trim();
       r.style.left = e.clientX + 'px'; r.style.top = e.clientY + 'px';
-      document.documentElement.appendChild(r);
+      (document.fullscreenElement || document.documentElement).appendChild(r);
       setTimeout(() => r.remove(), 800);
     }
   }, true);
@@ -75,7 +77,7 @@ export const OVERLAY_INIT = `(() => {
       ring = document.createElement('div');
       ring.className = '__tut-ring';
       ring.style.cssText += \`left:\${x}px;top:\${y}px;width:\${w}px;height:\${h}px;\`;
-      document.documentElement.appendChild(ring);
+      (document.fullscreenElement || document.documentElement).appendChild(ring);
     },
     clearRing() { if (ring) { ring.remove(); ring = null; } },
   };
@@ -85,15 +87,14 @@ export function makeKit(page) {
   const marks = [];
   const kit = {
     marks,
-    // line = talk_track.txt line index; word = spoken word the action lands on.
     async mark(line, word = null) {
       marks.push({ line, word, tMs: Date.now() });
       await page.evaluate(() => {
         const d = document.createElement('div');
-        d.style.cssText = 'position:fixed;left:4px;bottom:4px;width:22px;height:22px;' +
-          'background:#fff;z-index:2147483647;pointer-events:none;';
-        document.body.appendChild(d);
-        setTimeout(() => d.remove(), 200);
+        d.style.cssText = 'position:fixed;left:2px;bottom:2px;width:26px;height:26px;' +
+          'background:#f0f;z-index:2147483647;pointer-events:none;';
+        (document.fullscreenElement || document.body).appendChild(d);
+        setTimeout(() => d.remove(), 380);
       });
     },
     async ring(locator, pad = 10) {
@@ -102,24 +103,24 @@ export function makeKit(page) {
         { x: b.x - pad, y: b.y - pad, w: b.width + 2 * pad, h: b.height + 2 * pad });
     },
     clearRing: () => page.evaluate(() => window.__tut.clearRing()),
-    async act(locator) {                       // glide the cursor there, then click
+    async act(locator) {
       const b = await locator.boundingBox();
       if (b) await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 22 });
       await locator.click();
     },
-    async drag(x1, y1, x2, y2, steps = 25) {   // visible mouse drag (ripple on press)
+    async drag(x1, y1, x2, y2, steps = 25) {
       await page.mouse.move(x1, y1, { steps: 15 });
       await page.mouse.down();
       await page.mouse.move(x2, y2, { steps });
       await page.mouse.up();
     },
-    async typeInto(locator, text) {            // click + human-paced typing
+    async typeInto(locator, text) {
       await kit.act(locator);
       await locator.pressSequentially(text, { delay: 55 });
     },
     dwell: (s) => page.waitForTimeout(s * 1000),
     step: (s) => console.log(`[capture] ${s}`),
-    async videosReady(min = 1, timeout = 12000) {  // app videos buffer from R2
+    async videosReady(min = 1, timeout = 12000) {
       try {
         await page.waitForFunction((n) => {
           const vs = [...document.querySelectorAll('video')];
