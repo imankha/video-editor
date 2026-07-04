@@ -50,7 +50,9 @@ Turn planned task(s) into finished, pushed work — driven entirely from this on
    acts on directly — no placeholders. Include: tier + Stage-0 classification, agent table,
    applied/skipped stages, the knowledge doc path(s) to load FIRST, task-specific steps, key
    rules (explicit `git add`, no status changes, design-gate stop, update knowledge docs at
-   Stage 7). Write to `C:\tmp\kickoff-<SLUG>.md`.
+   Stage 7), AND the mandatory QA phase (spawn-worker step 4): live-drive the feature via
+   dev-verify.sh, full test matrix (happy path + edge cases + failure modes + regression),
+   evidence mapped to EVERY acceptance criterion. Write to `C:\tmp\kickoff-<SLUG>.md`.
 
 5. **Spawn workers:** apply [spawn-worker](../spawn-worker/SKILL.md) once per task. Run the
    container `up` steps SEQUENTIALLY (port-offset allocation races when parallel — see

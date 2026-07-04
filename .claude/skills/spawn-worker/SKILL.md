@@ -47,12 +47,25 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - The clone carries `.claude/settings.json`, so the eslint/ruff PostToolUse hook runs
      inside the container too — the worker gets lint feedback automatically.
 
-4. **Verify:** worker self-verifies in the live app from inside the container:
-   `bash scripts/dev-verify.sh e2e/<spec>` (see [drive-app-as-user](../drive-app-as-user/SKILL.md)).
+4. **QA phase (MANDATORY — never push without it):** implementation done is not task done.
+   The worker must close the feedback loop with evidence, not claims:
+   - **Drive the feature live**: exercise the changed flow end-to-end in the running app as a
+     real user (`bash scripts/dev-verify.sh e2e/<spec>` — see
+     [drive-app-as-user](../drive-app-as-user/SKILL.md)). For UI changes, assert on what the
+     user actually SEES (rendered text/state), not just API responses.
+   - **Write ALL meaningful tests**, not one smoke test: happy path, each edge case the task
+     names, each failure mode touched, and a regression test pinning the original bug. If a
+     case can't be tested, the report must say which and why — silence is not allowed.
+   - **Adversarial self-check**: re-read the task's acceptance criteria one by one and show
+     evidence per criterion (test name or live-drive observation). Unverified criterion =
+     task not done.
+   If the first `claude -p` run finished without this, the supervisor sends a continuation:
+   `claude -p -c "QA phase per kickoff: drive the feature live, complete the test matrix,
+   map every acceptance criterion to evidence. Report the evidence."`
    Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
 
-5. **Push for the user to test:** once implementation done + tests green + knowledge doc(s)
-   updated (Stage 7), sanity-check the diffstat, then:
+5. **Push for the user to test:** once implementation done + QA evidence per criterion +
+   tests green + knowledge doc(s) updated (Stage 7), sanity-check the diffstat, then:
    ```
    bash scripts/task.sh push <SLUG>
    ```
@@ -68,6 +81,8 @@ generated the kickoff, and checked file-ownership against other live workers. `S
 - Commit with EXPLICIT `git add <paths>` only — never `-A`/`-a`.
 - Do NOT change task statuses.
 - Update the task's `.claude/knowledge/` doc(s) before declaring done (Stage 7).
+- QA is part of the task (step 4): live-drive the feature, full test matrix, evidence per
+  acceptance criterion. "Tests pass" without the matrix + live drive is an incomplete task.
 - `/workspace/CLAUDE.local.md` already carries container facts (python path, test commands,
   DATABASE_URL, log fallback) — don't repeat them.
 
