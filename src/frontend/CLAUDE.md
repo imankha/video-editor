@@ -50,6 +50,34 @@ keyframe = {
 
 ## Testing Auth Bypass (Dev/Staging Only)
 
+Two bypasses, different jobs:
+
+| Use case | Endpoint | Data |
+|----------|----------|------|
+| **Drive a REAL account** (its real games/clips/recaps) | `POST /api/auth/dev-login` | Real R2 data via full session-init |
+| New-user flows / empty session | `POST /api/auth/test-login` + `X-User-ID` header | Empty `e2e@test.local` |
+
+### Real-account testing — `dev-login` (T3980)
+
+To faithfully reproduce a real user's screens, use the `loginAsRealUser` helper. It POSTs
+`/api/auth/dev-login`, which runs the SAME init path a real login runs (R2 download +
+profile selection) and mints an `rb_session` cookie — so the session sees the account's
+REAL data, not a blank profile. The `X-User-ID`/`test-login` bypass below does NOT load
+real data (it skips session-init), so use it only for new-user flows.
+
+```javascript
+import { loginAsRealUser } from './helpers/realAuth';
+
+// email only -> account's default profile; add a profile GUID to target a specific profile
+await loginAsRealUser(context, 'imankh@gmail.com', '9fa7378c');
+await page.goto('/');   // authenticated as the real account with real data
+```
+
+`dev-login` 404s in production and requires `X-Test-Mode` outside local dev (the helper
+sends it automatically). Accepts `{ email }` or `{ user_id }` plus optional `{ profile_id }`.
+
+### New-user / empty-session bypass
+
 When testing UI changes in the browser via Playwright MCP, bypass auth using the e2e test pattern:
 
 ```javascript

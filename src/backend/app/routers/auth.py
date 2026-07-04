@@ -44,6 +44,7 @@ from app.storage import (
 )
 from app.services.auth_db import (
     get_user_by_email,
+    get_user_by_id,
     create_user,
     create_session,
     validate_session,
@@ -883,39 +884,82 @@ async def test_login(request: Request):
 
 @router.post("/dev-login")
 async def dev_login(request: Request):
-    """DEV-ONLY faithful login as a REAL user by email (no OAuth).
+    """DEV/STAGING faithful login as a REAL user (no OAuth) for automated testing.
 
-    Mints a real session cookie so Playwright/automation (and the /dotask container
-    worker) can drive the app AS that account with its real data -- no httpOnly
-    cookie juggling, no direct DB writes. One HTTP call sets rb_session.
+    Mints a real session cookie AND runs the SAME session-init path a real login
+    runs, so Playwright/automation (and the /dotask container worker) drive the app
+    AS that account with its REAL R2 data -- not the empty/default profile the
+    X-User-ID header bypass leaves behind (T3980).
 
-    Hard-blocked outside local dev (never staging/prod): minting a session for an
-    ARBITRARY email is unsafe anywhere shared. Gate is APP_ENV in {dev,development}.
+    Resolve the real user by {email} OR {user_id} (+ optional {profile_id} hint) via
+    Postgres, then run user_session_init(user_id, hint_profile_id=profile_id) --
+    which downloads user.sqlite + the selected/hinted profile.sqlite from R2 and sets
+    profile context -- BEFORE issuing the session cookie. This init step is the whole
+    point: the sync middleware skips session_init whenever the client sends a valid
+    X-Profile-ID header (the normal case), so the cookie alone would never trigger
+    the R2 download and queries would hit an empty local profile.
 
-    Body: {"email": "..."}  (or X-Dev-Login-Email header).
+    Gating (mirrors test-login):
+      - APP_ENV == production            -> hard 404 (never mint a session in prod).
+      - staging / any shared non-dev env -> requires X-Test-Mode header.
+      - local dev {dev,development,local} -> X-Test-Mode optional (back-compat for
+        scripts/dev-verify.sh + the realAuth Playwright helper).
+
+    Body: {"email"|"user_id", "profile_id"?}  (email also via X-Dev-Login-Email header).
     """
-    if APP_ENV not in ("dev", "development", "local"):
+    if APP_ENV == "production":
         raise HTTPException(status_code=404, detail="Not found")
 
+    # Staging (and any shared non-dev env) additionally requires X-Test-Mode so a
+    # real session can't be minted by an unaware caller. Local dev stays exempt so
+    # existing verify tooling keeps working without the header.
+    is_local_dev = APP_ENV in ("dev", "development", "local")
+    if not is_local_dev and not request.headers.get("x-test-mode"):
+        raise HTTPException(status_code=403, detail="X-Test-Mode header required")
+
     email = None
+    user_id = None
+    profile_id = None
     try:
         body = await request.json()
         if isinstance(body, dict):
             email = body.get("email")
-    except Exception:
-        pass
+            user_id = body.get("user_id")
+            profile_id = body.get("profile_id")
+    except Exception as e:
+        # Body is optional (email may arrive via X-Dev-Login-Email header); keep the
+        # reason visible rather than silently swallowing it.
+        logger.debug(f"[Auth] dev-login body parse skipped: {e}")
     email = email or request.headers.get("x-dev-login-email")
-    if not email:
-        raise HTTPException(status_code=400, detail="email required (body {\"email\"} or X-Dev-Login-Email header)")
 
-    user = get_user_by_email(email)
-    if not user:
-        raise HTTPException(status_code=404, detail=f"No user with email {email} in {APP_ENV} Postgres")
-    user_id = user["user_id"]
+    # Resolve the real user via Postgres (never auth.sqlite). user_id wins if both given.
+    if user_id:
+        user = get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"No user with user_id {user_id} in {APP_ENV} Postgres")
+        email = user.get("email") or email
+    elif email:
+        user = get_user_by_email(email)
+        if not user:
+            raise HTTPException(status_code=404, detail=f"No user with email {email} in {APP_ENV} Postgres")
+        user_id = user["user_id"]
+    else:
+        raise HTTPException(status_code=400, detail="email or user_id required (body or X-Dev-Login-Email header)")
+
+    # Faithfulness (T3980): run the real init path so R2 data loads and the profile_id
+    # hint is honored (vs. the account's default selected profile). set_current_user_id
+    # first so ensure_user_database/ensure_database resolve the right per-user paths.
+    # Drop any cached init for this user so a repeat dev-login with a DIFFERENT
+    # profile_id re-runs selection instead of returning the previously-cached profile
+    # (user_session_init short-circuits on _init_cache and would ignore the new hint).
     set_current_user_id(user_id)
-    logger.info(f"[Auth] DEV-LOGIN as {email} ({user_id}) [env={APP_ENV}]")
+    invalidate_user_cache(user_id)
+    init = user_session_init(user_id, hint_profile_id=profile_id)
+    resolved_profile = init.get("profile_id")
+    logger.info(f"[Auth] DEV-LOGIN as {email} ({user_id}) profile={resolved_profile} "
+                f"hint={profile_id or '-'} [env={APP_ENV}]")
 
     return _issue_session_cookie(
         user_id,
-        {"email": email, "user_id": user_id, "dev_login": True},
+        {"email": email, "user_id": user_id, "profile_id": resolved_profile, "dev_login": True},
     )

@@ -29,6 +29,11 @@ Three databases, different access patterns:
 
 Binary blobs are msgpack via `app/utils/encoding.py` (`encode_data`/`decode_data`). Media files live in R2 under `{APP_ENV}/users/{user_id}/...`; game sources under `games/{blake3}.mp4` (no env prefix).
 
+## Auth bypasses for automated testing (dev/staging)
+- `POST /api/auth/test-login` (auth.py:852) — empty `e2e@test.local` user; new-user flows only. In SKIP_SESSION_INIT_PATHS, so no real data loads. Requires X-Test-Mode; `ENV==production` → 404.
+- `POST /api/auth/dev-login` (auth.py:884, T3980) — FAITHFUL impersonation of a REAL user. Body `{email|user_id, profile_id?}` (email also via X-Dev-Login-Email header); user_id wins over email. Resolves via Postgres (`get_user_by_id`/`get_user_by_email`), then runs `user_session_init(user_id, hint_profile_id=profile_id)` (R2 download of user.sqlite + selected/hinted profile.sqlite) BEFORE `_issue_session_cookie`. Payload: `{email,user_id,profile_id,dev_login:true}`. Gating: `APP_ENV=="production"` → 404; non-local-dev (staging) requires X-Test-Mode; local dev {dev,development,local} exempt (back-compat for scripts/dev-verify.sh + realAuth helper). **Init at login is REQUIRED, not redundant**: the sync middleware runs `user_session_init` only when X-Profile-ID header is absent/invalid (db_sync.py:549-559); when the client sends a valid X-Profile-ID (normal case) init is SKIPPED, so the cookie alone never triggers the R2 download → empty local profile (the original 2-blank-games bug). Playwright helper: `loginAsRealUser(pageOrContext, email, profileId?)` in src/frontend/e2e/helpers/realAuth.js (always sends X-Test-Mode). Verify: `bash scripts/dev-verify.sh e2e/T3980-dev-login-real-data.spec.js`.
+- Header bypass: middleware accepts `X-User-ID` only when `APP_ENV != production` or `/api/admin/` route (db_sync.py:492-502); sets user context but NOT session_init → no real data. `GET /api/games` returns a `{games:[...]}` envelope (not a bare array).
+
 ## Invariants & rules
 1. **User lookups always via Postgres `users` table**, never auth.sqlite (auth.sqlite is legacy; pg.py replaced it — T1960).
 2. **Backend tests hit the REAL dev Postgres** (conftest.py `pg_conn` deletes test users and TRUNCATEs shared tables, conftest.py:105-121). Guard refuses DSNs containing staging/prod keywords (conftest.py:95-99). Warn the user before running the suite.
