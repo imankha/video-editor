@@ -42,6 +42,12 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - First call: "Read /workspace/.dotask-kickoff.md and execute it. If design-gated, stop at
      the approval gate and summarize the design + open questions."
    - Continue the SAME worker session across stages with `claude -p -c "<next instruction>"`.
+     `-c` is safe because each container has its OWN ~/.claude volume (task.sh auth_volume);
+     in a container created before that fix (shared volume), `-c` resumes a RANDOM worker's
+     session — there, send a FRESH `claude -p` whose prompt is self-contained (name the
+     branch, commits, and kickoff path) instead of resuming.
+   - Workers share the user's subscription quota; a parallel wave can hit the session limit
+     mid-QA. On "session limit" output: wait, probe with a 1-word `claude -p`, then re-send.
    - **Relay gates to the user**: surface design/decisions in the supervisor chat, get the
      answer, pass it down with `-c`.
    - The clone carries `.claude/settings.json`, so the eslint/ruff PostToolUse hook runs
