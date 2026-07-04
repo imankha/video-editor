@@ -37,7 +37,12 @@ image_hash() {
       | git hash-object --stdin | cut -c1-12 )
 }
 IMAGE="${REEL_TASK_IMAGE:-reel-task:$(image_hash)}"
-AUTH_VOLUME="reel-claude-config"      # shared across ALL task containers -> sign in once
+# Per-task ~/.claude volume. Was one shared volume ("sign in once"), but Claude CLI
+# keys conversation sessions by cwd and every container's cwd is /workspace, so with
+# parallel workers `claude -p -c` resumed a RANDOM worker's session (observed: a QA
+# continuation for one task resuming another task's conversation). Credentials still
+# seed automatically per-volume from the read-only /host-claude mount (bootstrap).
+auth_volume() { echo "reel-claude-config-$(sanitize "$1")"; }
 DOCKERFILE_REL=".devcontainer/task.Dockerfile"
 INTERNAL_BACKEND=8000
 INTERNAL_FRONTEND=5173
@@ -134,7 +139,7 @@ up() {
       -p ${bp}:${INTERNAL_BACKEND} -p ${fp}:${INTERNAL_FRONTEND} \
       -e BACKEND_PORT=${INTERNAL_BACKEND} -e FRONTEND_PORT=${INTERNAL_FRONTEND} -e LOGDIR=/tmp \
       -v "$(winpath "$dir"):/workspace" \
-      -v "${AUTH_VOLUME}:/home/dev/.claude" \
+      -v "$(auth_volume "$id"):/home/dev/.claude" \
       -v "$(winpath "$HOME/.claude"):/host-claude:ro" \
       -v "${cn}-node:/workspace/src/frontend/node_modules" \
       "$IMAGE" >/dev/null || die "docker run failed"

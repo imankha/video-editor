@@ -110,6 +110,11 @@ fi
 # ruff isn't baked into the image; the hook degrades silently without it.
 command -v ruff >/dev/null 2>&1 || sudo pip install --quiet ruff 2>/dev/null || true
 
+# httpx 0.28 removed the app= kwarg that this image's starlette TestClient passes,
+# so backend endpoint tests fail to collect. Pin below 0.28 (idempotent, fast when
+# already satisfied) so workers can actually run their backend test suites.
+sudo pip install --quiet "httpx<0.28" 2>/dev/null || true
+
 # Container fact sheet: overrides the repo CLAUDE.md where the host docs are
 # wrong INSIDE this container (Windows venv paths, MCP-only tools, ...). Claude
 # Code auto-loads CLAUDE.local.md; rewritten on every bootstrap to stay current.
