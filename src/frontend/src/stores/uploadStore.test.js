@@ -108,3 +108,46 @@ describe('uploadStore — failure surfacing (bug26p)', () => {
     expect(uploadGame).toHaveBeenCalledTimes(2); // original + retry
   });
 });
+
+// T4100 fix 3: the honest message the manager emits (e.g. dedup's "Already
+// uploaded - finishing up") must reach activeUpload.message. The store used to
+// hardcode 'Uploading...' and discard every manager message, so the user-visible
+// indicator could never show it. These pin the passthrough (the store half of
+// the chain proven end-to-end by UploadProgressIndicator.test.jsx).
+describe('uploadStore — honest progress message passthrough (T4100)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUploadStore.getState().reset();
+  });
+
+  it('forwards the manager message into activeUpload.message', async () => {
+    // Drive the progressHandler like the real dedup path does, then stay pending
+    // so we can inspect the store mid-flight (before completion nulls it).
+    uploadGame.mockImplementationOnce((_file, onProgress) => {
+      onProgress({ phase: UPLOAD_PHASE.FINALIZING, percent: 100, message: 'Already uploaded - finishing up' });
+      return new Promise(() => {}); // never resolves
+    });
+
+    start();
+
+    await vi.waitFor(() =>
+      expect(useUploadStore.getState().activeUpload?.message).toBe('Already uploaded - finishing up'),
+    );
+    // Explicitly NOT the old hardcoded placeholder.
+    expect(useUploadStore.getState().activeUpload?.message).not.toBe('Uploading...');
+  });
+
+  it('falls back to "Uploading..." only when the manager omits a message', async () => {
+    uploadGame.mockImplementationOnce((_file, onProgress) => {
+      onProgress({ phase: UPLOAD_PHASE.UPLOADING, percent: 20 }); // no message field
+      return new Promise(() => {});
+    });
+
+    start();
+
+    await vi.waitFor(() =>
+      expect(useUploadStore.getState().activeUpload?.phase).toBe(UPLOAD_PHASE.UPLOADING),
+    );
+    expect(useUploadStore.getState().activeUpload?.message).toBe('Uploading...');
+  });
+});
