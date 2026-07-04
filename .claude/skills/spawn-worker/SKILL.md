@@ -65,6 +65,17 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    - **Adversarial self-check**: re-read the task's acceptance criteria one by one and show
      evidence per criterion (test name or live-drive observation). Unverified criterion =
      task not done.
+   - **Evidence artifacts, not prose**: use `src/frontend/e2e/helpers/qa.js` —
+     `saveEvidence(page, 'criterion-N-...')` screenshots each criterion's end state into
+     `<repo>/qa/` (gitignored; readable from the host at `C:\work\tasks\<SLUG>\qa\`).
+   - **Responsive check (any UI change)**: `responsiveSweep(page)` runs the changed screen at
+     375px + desktop, asserts no horizontal overflow, and saves both screenshots.
+   - **Perf guards (when queries/endpoints changed)**: backend — use the `query_counter`
+     pytest fixture (seed N rows, assert statement count stays flat; see
+     tests/test_query_counter.py); frontend — assert a sane timing budget in the e2e spec
+     (e.g. changed screen interactive < 3s on the local stack).
+   - **Pre-existing failures**: compare against docs/testing/known-failures.md instead of
+     re-proving them; a NEW failure not on that list is yours to fix or explain.
    If the first `claude -p` run finished without this, the supervisor sends a continuation:
    `claude -p -c "QA phase per kickoff: drive the feature live, complete the test matrix,
    map every acceptance criterion to evidence. Report the evidence."`

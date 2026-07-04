@@ -1,0 +1,97 @@
+name: Branch CI
+
+# Independent verification of every feature branch: converts "the worker says
+# tests pass" into "GitHub says tests pass". Runs unit tests + changed-file
+# lint on both layers. Known pre-existing failures are catalogued in
+# docs/testing/known-failures.md -- keep the deselect list below in sync.
+
+on:
+  push:
+    branches: ['feature/**']
+  workflow_dispatch:
+
+concurrency:
+  group: branch-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
+      - name: ESLint (changed files vs master)
+        run: |
+          git fetch origin master --quiet
+          CHANGED=$(git diff --name-only origin/master...HEAD -- 'src/frontend/**/*.js' 'src/frontend/**/*.jsx' | sed 's|^src/frontend/||')
+          if [ -n "$CHANGED" ]; then
+            echo "$CHANGED" | xargs npx eslint --no-warn-ignored
+          else
+            echo "no changed frontend JS files"
+          fi
+      - name: Unit tests (vitest, retry absorbs known flakes)
+        run: npx vitest run --retry=2
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # pg_conn fixture creates schema + runs migrations itself on this
+      # disposable DB, and its staging/prod DSN guard passes ("ci_test").
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ci_test
+      APP_ENV: dev
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: src/backend/requirements*.txt
+      - name: Install ffmpeg (metadata tests use ffprobe)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install deps (httpx pinned <0.28 for starlette TestClient)
+        run: pip install -r requirements.prod.txt -r requirements.test.txt "httpx<0.28" ruff
+      - name: Ruff (changed files vs master)
+        run: |
+          git fetch origin master --quiet
+          CHANGED=$(git diff --name-only origin/master...HEAD -- 'src/backend/**/*.py' | sed 's|^src/backend/||')
+          if [ -n "$CHANGED" ]; then
+            echo "$CHANGED" | xargs ruff check
+          else
+            echo "no changed backend py files"
+          fi
+      - name: Import check
+        run: python -c "from app.main import app"
+      - name: Pytest (deselects = docs/testing/known-failures.md)
+        run: >-
+          python -m pytest tests/ --tb=short
+          --deselect tests/test_shared_game_extension.py::TestStorageStatusDerivation

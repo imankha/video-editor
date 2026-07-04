@@ -359,3 +359,26 @@ Stage 4.5: Review Phase 1 (Solo Review)
             |
             +-- Unresolved disagreement --> ESCALATE to user
 ```
+
+## Scale & Cost Lens (apply when queries, storage, or per-item work changed)
+
+The dollar drivers are R2 operations and Modal GPU-seconds; the latency
+drivers are unbounded queries and per-item round-trips. For each changed
+read/write path, ask "what happens at 10x"?
+
+- [ ] No unbounded queries: every list endpoint has LIMIT/pagination or a
+      justified bound (a profile can reach hundreds of reels/clips)
+- [ ] No per-item R2 calls in a loop (batch, or derive from the DB); no NEW
+      per-request R2 read on a hot path
+- [ ] No N+1 SQLite/Postgres patterns (one query per collection, not per row
+      -- enforceable with the `query_counter` fixture, see
+      tests/test_query_counter.py)
+- [ ] Blobs that grow per-gesture (msgpack arrays, action logs) have a prune
+      or compaction story
+- [ ] New Modal work is bounded (timeout, no retry-forever) and doesn't widen
+      GPU-seconds per export
+- [ ] Frontend: no per-item fetch waterfalls; lists virtualize or paginate
+      past ~100 items
+
+Verdict impact: an unbounded query or R2-call-in-loop on a hot path is MAJOR;
+the rest default to MINOR with a named threshold ("fine until ~N games").

@@ -197,3 +197,41 @@ def sample_highlight_keyframes():
             ]
         }
     ]
+
+
+@pytest.fixture
+def query_counter(monkeypatch):
+    """Count every SQLite statement executed during the test.
+
+    Perf gate: catches N+1 query patterns at test time. Seed N rows, hit the
+    endpoint, assert the statement count stays flat as N grows (see
+    tests/test_query_counter.py for the pattern). Wraps sqlite3.connect
+    process-wide via set_trace_callback, so it sees every connection no
+    matter how the code under test obtained it.
+    """
+    import sqlite3 as _sqlite3
+
+    class _Counts:
+        def __init__(self):
+            self.statements = []
+
+        @property
+        def selects(self):
+            return [s for s in self.statements if s.lstrip().upper().startswith("SELECT")]
+
+        def __len__(self):
+            return len(self.statements)
+
+    counts = _Counts()
+    real_connect = _sqlite3.connect
+
+    def counting_connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        try:
+            conn.set_trace_callback(lambda stmt: counts.statements.append(stmt))
+        except Exception:
+            pass
+        return conn
+
+    monkeypatch.setattr(_sqlite3, "connect", counting_connect)
+    yield counts

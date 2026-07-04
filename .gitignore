@@ -107,3 +107,6 @@ myreels-volleyball.png
 .dotask-kickoff.md
 .task-env
 CLAUDE.local.md
+
+# QA evidence artifacts (screenshots per acceptance criterion; see e2e/helpers/qa.js)
+qa/
