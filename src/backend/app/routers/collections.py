@@ -142,6 +142,7 @@ def _pluralize(tag: str) -> str:
 
 class RatioBucketed(BaseModel):
     reel_count: int
+    unwatched_count: int = 0               # T4190: NEW (watched_at IS NULL) reels in this bucket
     ratio_counts: Dict[str, int]
     ratio_durations: Dict[str, float]      # NULL-excluded sums per ratio
     ratio_eligible: Dict[str, bool]        # ratio_durations[r] >= threshold
@@ -205,6 +206,7 @@ def _utc(ts: Optional[str]) -> Optional[str]:
 def _new_bucket() -> dict:
     return {
         "reel_count": 0,
+        "unwatched_count": 0,
         "ratio_counts": {},
         "ratio_durations": {},
         "total_duration": 0.0,
@@ -213,8 +215,11 @@ def _new_bucket() -> dict:
     }
 
 
-def _add_reel(bucket: dict, ratio: str, duration, published_at: Optional[str]) -> None:
+def _add_reel(bucket: dict, ratio: str, duration, published_at: Optional[str],
+              unwatched: bool = False) -> None:
     bucket["reel_count"] += 1
+    if unwatched:
+        bucket["unwatched_count"] += 1
     bucket["ratio_counts"][ratio] = bucket["ratio_counts"].get(ratio, 0) + 1
     if duration is None:
         bucket["has_null_durations"] = True
@@ -240,6 +245,7 @@ def _finalize_bucket(bucket: dict) -> dict:
     }
     return {
         "reel_count": bucket["reel_count"],
+        "unwatched_count": bucket["unwatched_count"],
         "ratio_counts": dict(bucket["ratio_counts"]),
         "ratio_durations": ratio_durations,
         "ratio_eligible": ratio_eligible,
@@ -298,7 +304,8 @@ async def collections_summary(sport: Optional[str] = None):
         cursor.execute(
             f"""
             SELECT fv.id, fv.game_ids, fv.aspect_ratio, fv.duration,
-                   fv.tags, fv.created_at, fv.published_at, fv.clip_count
+                   fv.tags, fv.created_at, fv.published_at, fv.clip_count,
+                   fv.watched_at
             FROM final_videos fv
             WHERE fv.id IN ({latest_final_videos_subquery()})
               AND fv.published_at IS NOT NULL
@@ -335,6 +342,7 @@ async def collections_summary(sport: Optional[str] = None):
                 "created_at": row["created_at"],
                 "game_id": game_id,
                 "single_clip": single_clip,
+                "unwatched": row["watched_at"] is None,
                 "tags": decode_data(row["tags"]) or [],
             })
 
@@ -372,16 +380,17 @@ async def collections_summary(sport: Optional[str] = None):
 
         for p in parsed:
             ratio, duration, gid = p["ratio"], p["duration"], p["game_id"]
+            unwatched = p["unwatched"]
 
             # Multi-clip reels are NOT collection-eligible (T3630): they only
             # count toward Mixes, never game/smart/season.
             if not p["single_clip"]:
-                _add_reel(mixes, ratio, duration, p["published_at"])
+                _add_reel(mixes, ratio, duration, p["published_at"], unwatched)
                 continue
 
             bucket = (game_buckets.setdefault(gid, _new_bucket())
                       if gid is not None else mixes)
-            _add_reel(bucket, ratio, duration, p["published_at"])
+            _add_reel(bucket, ratio, duration, p["published_at"], unwatched)
 
             # Season: the game's date when game-resolved, else the reel's created_at.
             date_src = (games_info.get(gid, {}).get("date")
@@ -394,13 +403,14 @@ async def collections_summary(sport: Optional[str] = None):
             for tag in reel_tags:
                 _add_total(tag_acc, (tag, ratio), duration)
                 _add_reel(tag_buckets.setdefault(tag, _new_bucket()),
-                          ratio, duration, p["published_at"])
+                          ratio, duration, p["published_at"], unwatched)
 
             # Curated collections: per-reel membership (tag-less group = all),
             # so a multi-tag reel is counted once per matching group.
             for d in curated_defs:
                 if d["tags"] is None or (reel_tags & d["tags"]):
-                    _add_reel(curated_buckets[d["key"]], ratio, duration, p["published_at"])
+                    _add_reel(curated_buckets[d["key"]], ratio, duration,
+                              p["published_at"], unwatched)
 
     games = [
         GameCollection(

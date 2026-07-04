@@ -8,6 +8,8 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
  *
  * @param {string} title - Group header title (e.g., game name)
  * @param {number} count - Number of items in the group
+ * @param {number} newCount - Optional count of NEW (unwatched) items; shows an
+ *   "N new" chip on the header so a collapsed group never hides new reels (T4190)
  * @param {Object} statusCounts - Optional status breakdown { done, inOverlay, inProgress, notStarted }
  * @param {boolean} defaultExpanded - Initial expanded state (default: false)
  * @param {React.ReactNode} children - Items to display when expanded
@@ -23,6 +25,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react';
 export function CollapsibleGroup({
   title,
   count,
+  newCount = 0,
   statusCounts,
   defaultExpanded = false,
   children,
@@ -103,6 +106,14 @@ export function CollapsibleGroup({
               </span>
             )}
           </div>
+        )}
+
+        {/* NEW chip: keeps a collapsed group from hiding unwatched reels — the
+            My Reels badge always has a visible on-screen counterpart (T4190). */}
+        {newCount > 0 && (
+          <span className="text-xs font-medium text-cyan-300 bg-cyan-900/40 px-2 py-0.5 rounded-full">
+            {newCount} new
+          </span>
         )}
 
         <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
