@@ -110,7 +110,9 @@ export const useUploadStore = create((set, get) => ({
           ...state.activeUpload,
           progress: overallPercent,
           phase: progress.phase,
-          message: 'Uploading...',
+          // Surface the manager's honest message (e.g. dedup's "Already uploaded
+          // - finishing up") instead of a blanket "Uploading...".
+          message: progress.message || 'Uploading...',
         } : null,
       }));
     };

@@ -29,7 +29,7 @@ vi.mock('../stores/gamesDataStore', () => ({
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 // Mock Worker
 class MockWorker {
@@ -58,19 +58,19 @@ class MockWorker {
 }
 
 // Mock URL.createObjectURL for Worker
-const originalURL = global.URL;
+const originalURL = globalThis.URL;
 
 describe('uploadManager', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    global.Worker = MockWorker;
-    global.URL = class extends originalURL {
+    globalThis.Worker = MockWorker;
+    globalThis.URL = class extends originalURL {
       static createObjectURL = vi.fn(() => 'blob:mock-url');
     };
   });
 
   afterEach(() => {
-    global.URL = originalURL;
+    globalThis.URL = originalURL;
   });
 
   describe('UPLOAD_PHASE constants', () => {
@@ -297,6 +297,181 @@ describe('uploadManager', () => {
       // Should have error phase
       expect(progressUpdates.some((p) => p.phase === 'error')).toBe(true);
     });
+  });
+});
+
+// T4100: upload-pipeline polish — resume-state surfacing, finalize messaging,
+// honest dedup progress. These exercise the multipart (upload_required) path, so
+// they need an XMLHttpRequest mock (part PUTs) plus URL-routed fetch (the fetch
+// order isn't strictly sequential — the batch part-save is fire-and-forget).
+describe('uploadManager — T4100 pipeline polish', () => {
+  const jsonResp = (status, body) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+
+  // A part PUT that immediately succeeds with an ETag.
+  class MockXHR {
+    constructor() {
+      this.upload = {};
+      this.status = 200;
+    }
+    open() {}
+    getResponseHeader(name) {
+      return name === 'ETag' ? '"mock-etag"' : null;
+    }
+    send() {
+      setTimeout(() => {
+        if (this.upload.onprogress) {
+          this.upload.onprogress({ lengthComputable: true, loaded: 4, total: 4 });
+        }
+        this.status = 200;
+        if (this.onload) this.onload();
+      }, 0);
+    }
+  }
+
+  // Route the multipart upload flow. Callers override `parts` and `finalize`
+  // responses to simulate the specific failure under test.
+  const routeUpload = ({ gameId = 555, partsResp, finalizeResp }) => {
+    mockFetch.mockImplementation(async (url, opts = {}) => {
+      const method = opts.method || 'GET';
+      if (url.includes('/prepare-upload')) {
+        return jsonResp(200, {
+          status: 'upload_required',
+          upload_session_id: 'sess_x',
+          parts: [{ part_number: 1, presigned_url: 'https://r2/put', start_byte: 0, end_byte: 3 }],
+        });
+      }
+      if (url.includes('/finalize-upload')) return finalizeResp;
+      if (url.includes('/activate')) return jsonResp(200, { game_id: gameId, status: 'ready' });
+      if (url.includes('/parts')) return partsResp;
+      if (/\/api\/games$/.test(url) && method === 'POST') {
+        return jsonResp(200, { status: 'created', game_id: gameId, name: 'Game' });
+      }
+      if (method === 'DELETE') return jsonResp(200, { status: 'deleted' });
+      return jsonResp(200, {});
+    });
+  };
+
+  let errorSpy;
+  let warnSpy;
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.Worker = MockWorker;
+    globalThis.XMLHttpRequest = MockXHR;
+    globalThis.URL = class extends originalURL {
+      static createObjectURL = vi.fn(() => 'blob:mock-url');
+    };
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+    globalThis.URL = originalURL;
+  });
+
+  const mockFile = () => new File(['test'], 'test.mp4', { type: 'video/mp4' });
+
+  it('surfaces a resume-state save failure loudly (fix 1) without failing the upload', async () => {
+    // PATCH parts returns 500 (HTTP error — previously swallowed because apiFetch
+    // does not reject on non-ok). Upload still succeeds; failure is surfaced.
+    routeUpload({
+      partsResp: jsonResp(500, {}),
+      finalizeResp: jsonResp(200, { blake3_hash: 'a'.repeat(64), file_size: 4 }),
+    });
+
+    const result = await uploadGame(mockFile(), () => {});
+    expect(result.game_id).toBe(555);
+
+    await vi.waitFor(() => {
+      const surfaced = errorSpy.mock.calls.some((c) =>
+        String(c[0]).includes('RESUME-STATE SAVE FAILED')
+      );
+      expect(surfaced).toBe(true);
+    });
+  });
+
+  it('gives an actionable finalize error and logs diagnostics when detail is absent (fix 2)', async () => {
+    routeUpload({
+      partsResp: jsonResp(200, {}),
+      finalizeResp: jsonResp(500, {}), // no .detail
+    });
+
+    await expect(uploadGame(mockFile(), () => {})).rejects.toThrow(/try uploading again/i);
+
+    const diagnosed = errorSpy.mock.calls.some((c) =>
+      String(c[0]).includes('finalize-upload FAILED')
+    );
+    expect(diagnosed).toBe(true);
+  });
+
+  it('prefers the backend detail message on finalize failure when present (fix 2)', async () => {
+    routeUpload({
+      partsResp: jsonResp(200, {}),
+      finalizeResp: jsonResp(409, { detail: 'Part 2 checksum mismatch' }),
+    });
+
+    await expect(uploadGame(mockFile(), () => {})).rejects.toThrow('Part 2 checksum mismatch');
+  });
+});
+
+describe('uploadManager — dedup honest progress (T4100 fix 3)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    globalThis.Worker = MockWorker;
+    globalThis.URL = class extends originalURL {
+      static createObjectURL = vi.fn(() => 'blob:mock-url');
+    };
+  });
+
+  afterEach(() => {
+    globalThis.URL = originalURL;
+  });
+
+  it('shows honest "already uploaded" messaging with no fake staged progress', async () => {
+    // createGame -> already_owned (dedup shortcut in uploadGame).
+    mockFetch.mockResolvedValueOnce(
+      { ok: true, json: async () => ({ status: 'already_owned', game_id: 321, name: 'Owned', video_url: 'u' }) }
+    );
+
+    const progressUpdates = [];
+    const result = await uploadGame(new File(['test'], 'test.mp4', { type: 'video/mp4' }), (p) => {
+      progressUpdates.push(p);
+    });
+
+    expect(result.deduplicated).toBe(true);
+    // Honest message reached the progress stream.
+    expect(progressUpdates.some((p) => /already uploaded/i.test(p.message || ''))).toBe(true);
+    // No fabricated 30%/70% "Uploading..." steps.
+    expect(progressUpdates.some((p) => p.phase === 'uploading' && (p.percent === 30 || p.percent === 70))).toBe(false);
+    // Still completes.
+    expect(progressUpdates.some((p) => p.phase === 'complete')).toBe(true);
+  });
+
+  it('shows honest messaging on the R2-exists dedup path (new game created)', async () => {
+    // createGame -> created, prepare-upload -> exists (ensureVideoInR2 dedup), activate.
+    mockFetch.mockResolvedValueOnce(
+      { ok: true, json: async () => ({ status: 'created', game_id: 654, name: 'New', video_url: 'u' }) }
+    );
+    mockFetch.mockResolvedValueOnce(
+      { ok: true, json: async () => ({ status: 'exists', blake3_hash: 'a'.repeat(64), file_size: 4 }) }
+    );
+    mockFetch.mockResolvedValueOnce(
+      { ok: true, json: async () => ({ game_id: 654, status: 'ready' }) }
+    );
+
+    const progressUpdates = [];
+    await uploadGame(new File(['test'], 'test.mp4', { type: 'video/mp4' }), (p) => {
+      progressUpdates.push(p);
+    });
+
+    expect(progressUpdates.some((p) => /already uploaded/i.test(p.message || ''))).toBe(true);
+    expect(progressUpdates.some((p) => p.phase === 'uploading' && (p.percent === 30 || p.percent === 70))).toBe(false);
   });
 });
 
