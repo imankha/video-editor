@@ -24,15 +24,14 @@ header so the frontend can show a warning indicator.
 """
 
 import asyncio
-import cProfile
 import contextlib
+import cProfile
 import logging
 import os
 import re
 import threading
 import time
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
 
 import psycopg2
 import psycopg2.pool
@@ -40,32 +39,31 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from ..profiling import (
-    dump_profile,
-    profile_on_breach_enabled,
-    profile_breach_ms,
-)
-
 from ..database import (
-    init_request_context,
     clear_request_context,
+    clear_sync_pending,
+    get_request_has_user_db_writes,
+    get_request_has_writes,
+    has_sync_pending,
+    init_request_context,
+    mark_sync_pending,
     sync_db_to_r2_explicit,
     sync_user_db_to_r2_explicit,
-    get_request_has_writes,
-    get_request_has_user_db_writes,
-    mark_sync_pending,
-    clear_sync_pending,
-    has_sync_pending,
 )
-from ..profile_context import set_current_profile_id, get_current_profile_id
-from ..session_init import user_session_init
+from ..profile_context import set_current_profile_id
+from ..profiling import (
+    dump_profile,
+    profile_breach_ms,
+    profile_on_breach_enabled,
+)
 from ..services.auth_db import validate_session
-from ..storage import R2_ENABLED, APP_ENV
+from ..session_init import user_session_init
+from ..storage import APP_ENV, R2_ENABLED
 from ..user_context import (
-    set_current_user_id,
-    set_current_req_id,
-    set_current_platform,
     set_current_impersonator_id,
+    set_current_platform,
+    set_current_req_id,
+    set_current_user_id,
 )
 from ..utils.cookies import set_cookie as _set_cookie
 
@@ -442,8 +440,6 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
     async def _dispatch_impl(self, request: Request, call_next, meta: dict) -> Response:
         """Set user context, process request, sync DB if writes occurred."""
-        t_dispatch_start = time.perf_counter()
-
         # --- T1190: Fly.io machine pinning ---
         should_set_machine_cookie = False
         if FLY_MACHINE_ID:
@@ -476,6 +472,11 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         # 1. Try session cookie → central auth DB
         session_id = request.cookies.get("rb_session")
+        # Distinguishes "cookie present but the DB was unreachable" (transient,
+        # retryable) from "no/invalid cookie" (genuinely unauthenticated). Only
+        # the latter is a 401; a DB blip must not read as "logged out" — the
+        # <video> element that receives a 401 renders MEDIA_ELEMENT_ERROR.
+        session_validation_unavailable = False
         if session_id:
             auth_start = time.perf_counter()
             try:
@@ -483,6 +484,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             except (psycopg2.OperationalError, psycopg2.InterfaceError, psycopg2.pool.PoolError) as e:
                 logger.warning(f"[AUTH] Postgres unavailable during session validation: {e}")
                 session = None
+                session_validation_unavailable = True
             meta["auth_ms"] = (time.perf_counter() - auth_start) * 1000
             if session:
                 user_id = session["user_id"]
@@ -511,6 +513,21 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     f"origin={request.headers.get('origin', '-')}"
                 )
                 return await call_next(request)
+            elif session_validation_unavailable:
+                # Cookie WAS present but the auth DB was unreachable — transient,
+                # not "logged out". 503 + Retry-After tells the client (and the
+                # <video> element) to retry instead of treating it as a hard auth
+                # failure that renders MEDIA_ELEMENT_ERROR / forces a re-login.
+                logger.warning(
+                    f"[REQ] {request.method} {request.url.path} | "
+                    f"503 — session cookie present but auth DB unavailable | "
+                    f"origin={request.headers.get('origin', '-')}"
+                )
+                return JSONResponse(
+                    status_code=503,
+                    headers={"Retry-After": "2"},
+                    content={"detail": "Service temporarily unavailable, please retry."},
+                )
             else:
                 logger.warning(
                     f"[REQ] {request.method} {request.url.path} | "
@@ -684,7 +701,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     # T3250: Fire sync as background task — response returns
                     # immediately. Write lock releases when _sync_aware_flow
                     # returns; background sync runs outside the lock.
-                    asyncio.create_task(
+                    # Intentionally fire-and-forget; _background_sync guards its
+                    # own lifecycle. noqa: don't change task-ref semantics here.
+                    asyncio.create_task(  # noqa: RUF006
                         self._background_sync(
                             user_id, profile_id, req_id, method, path,
                             had_writes, had_user_db_writes,
@@ -710,7 +729,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception as e:
+        except Exception:
             # On exception, still try to sync (changes may have been committed)
             try:
                 had_writes = get_request_has_writes()
@@ -718,7 +737,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 if had_writes or had_user_db_writes:
                     mark_sync_pending(user_id)
                     _begin_sync_attempt(user_id)
-                    asyncio.create_task(
+                    # Intentional fire-and-forget; see note on the success path above.
+                    asyncio.create_task(  # noqa: RUF006
                         self._background_sync(
                             user_id, profile_id, req_id, method, path,
                             had_writes, had_user_db_writes,
