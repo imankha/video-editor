@@ -68,14 +68,15 @@ export function GameCollectionGroup({
     <CollapsibleGroup
       title={name}
       count={collection.reel_count}
+      newCount={collection.unwatched_count}
       defaultExpanded={defaultExpanded}
       onToggle={(open) => { if (open) requestMembers(); }}
     >
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="space-y-2 mb-2">
           <CollectionCard
-            title="Game Highlights"
-            playTitle={`${name} Game Highlights`}
+            title={name}
+            playTitle={name}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
             ratioDuration={ratioDurations[ratio]}

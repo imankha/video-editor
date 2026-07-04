@@ -61,24 +61,36 @@ def _insert_game(cur, game_id, opponent="Carlsbad", date="2025-12-06"):
 def _insert_fv(cur, *, game_ids=None, ratio="9:16", duration=10.0, tags=None,
                published_at="2026-01-01 00:00:00", created_at="2026-01-01 00:00:00",
                source_type="custom_project", version=1, project_id=None,
-               quality_score=5.0, clip_count=1):
+               quality_score=5.0, clip_count=1, watched_at=None):
     """Insert one final_video with frozen columns. Each reel gets a distinct
     project_id by default so latest_final_videos_subquery keeps them all.
     clip_count defaults to 1 (T3630: collections are single-clip only); pass
-    clip_count=2 to seed a multi-clip (Mixes-only) reel."""
+    clip_count=2 to seed a multi-clip (Mixes-only) reel. watched_at defaults to
+    NULL (NEW/unwatched); pass a timestamp to seed a watched reel (T4190)."""
     if project_id is None:
         _next_project[0] += 1
         project_id = _next_project[0]
     cur.execute(
         "INSERT INTO final_videos (project_id, filename, version, duration, "
-        "source_type, name, aspect_ratio, tags, game_ids, quality_score, clip_count, published_at, created_at) "
-        "VALUES (?, 'f.mp4', ?, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?, ?)",
+        "source_type, name, aspect_ratio, tags, game_ids, quality_score, clip_count, published_at, created_at, watched_at) "
+        "VALUES (?, 'f.mp4', ?, ?, ?, 'Reel', ?, ?, ?, ?, ?, ?, ?, ?)",
         (project_id, version, duration, source_type, ratio,
          encode_data(tags) if tags else None,
          encode_game_ids(game_ids) if game_ids is not None else None,
-         quality_score, clip_count, published_at, created_at),
+         quality_score, clip_count, published_at, created_at, watched_at),
     )
     return cur.lastrowid, project_id
+
+
+def _insert_raw_clip(cur, *, game_id, auto_project_id):
+    """Seed the auto_project chain (raw_clips.auto_project_id -> game_id) used
+    as the brilliant-clip grouping fallback in list_downloads (T4190)."""
+    cur.execute(
+        "INSERT INTO raw_clips (filename, rating, start_time, end_time, "
+        "game_id, name, auto_project_id) VALUES ('c.mp4', 5, 0, 30, ?, 'Clip', ?)",
+        (game_id, auto_project_id),
+    )
+    return cur.lastrowid
 
 
 def _summary():
@@ -532,3 +544,96 @@ class TestMultiSportCollections:
         assert "soccer_goals_assists" not in smart   # no Goal/Assist reels
         assert "vb_kills_aces" not in smart           # soccer combo set in use
         assert smart["tag:Kill"].nudge_when_locked is False  # per-tag still works
+
+
+# ---------------------------------------------------------------------------
+# T4190: per-bucket unwatched (NEW) counts so a collapsed group never hides a
+# new reel -- the My Reels badge (SUM watched_at IS NULL) always has a visible
+# on-screen counterpart.
+# ---------------------------------------------------------------------------
+
+class TestUnwatchedCount:
+    def test_game_bucket_counts_only_unwatched(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], duration=20.0, watched_at=None)             # NEW
+        _insert_fv(cur, game_ids=[7], duration=15.0, watched_at=None)             # NEW
+        _insert_fv(cur, game_ids=[7], duration=15.0, watched_at="2026-02-01 00:00:00")  # watched
+        conn.commit(); conn.close()
+
+        g = _summary().games[0]
+        assert g.reel_count == 3
+        assert g.unwatched_count == 2
+
+    def test_fully_watched_game_has_zero(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], duration=20.0, watched_at="2026-02-01 00:00:00")
+        conn.commit(); conn.close()
+
+        assert _summary().games[0].unwatched_count == 0
+
+    def test_mixes_bucket_counts_unwatched(self, db):
+        conn = _connect(db)
+        cur = conn.cursor()
+        # multi-game reel -> mixes; unwatched.
+        _insert_game(cur, 3); _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[3, 7], duration=40.0, watched_at=None)
+        conn.commit(); conn.close()
+
+        assert _summary().mixes.unwatched_count == 1
+
+    def test_badge_parity_across_buckets(self, db):
+        """Every unwatched reel lands in exactly one game/mixes bucket, so the
+        buckets' unwatched sum equals the /count badge (SUM watched_at IS NULL)."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 7)
+        _insert_fv(cur, game_ids=[7], duration=20.0, watched_at=None)             # game NEW
+        _insert_fv(cur, game_ids=[3, 7], duration=40.0, watched_at=None)          # mixes NEW
+        _insert_fv(cur, game_ids=[7], duration=20.0, watched_at="2026-02-01 00:00:00")  # watched
+        conn.commit(); conn.close()
+
+        s = _summary()
+        bucket_unwatched = sum(g.unwatched_count for g in s.games) + s.mixes.unwatched_count
+        assert bucket_unwatched == 2  # matches the two watched_at IS NULL reels
+
+
+# ---------------------------------------------------------------------------
+# T4190: brilliant_clip reels group by their FROZEN game_ids (survives the
+# source clip's draft being re-created); the raw_clips auto_project chain is
+# only a fallback for pre-v008 reels whose frozen blob is empty.
+# ---------------------------------------------------------------------------
+
+class TestBrilliantFrozenGrouping:
+    def test_frozen_game_ids_are_primary(self, db):
+        """A brilliant reel keeps its game_names from the frozen blob even when
+        NO raw_clip points at its project (draft re-created -> chain broken)."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 6, opponent="Legends", date="2025-06-06")
+        _insert_fv(cur, game_ids=[6], source_type="brilliant_clip",
+                   project_id=53, duration=33.0)
+        # deliberately no raw_clips row with auto_project_id=53
+        conn.commit(); conn.close()
+
+        item = next(d for d in _downloads().downloads if d.project_id == 53)
+        assert item.game_ids == [6]
+        assert item.game_names == ["Vs Legends Jun 6"]
+
+    def test_auto_project_chain_is_fallback_when_frozen_empty(self, db):
+        """A pre-v008 brilliant reel (no frozen game_ids) still resolves its
+        game via the raw_clips auto_project chain."""
+        conn = _connect(db)
+        cur = conn.cursor()
+        _insert_game(cur, 6, opponent="Legends", date="2025-06-06")
+        _insert_fv(cur, game_ids=None, source_type="brilliant_clip",
+                   project_id=46, duration=33.0)
+        _insert_raw_clip(cur, game_id=6, auto_project_id=46)
+        conn.commit(); conn.close()
+
+        item = next(d for d in _downloads().downloads if d.project_id == 46)
+        assert item.game_ids == [6]
+        assert item.game_names == ["Vs Legends Jun 6"]

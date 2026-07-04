@@ -303,7 +303,11 @@ async def list_downloads(
                         if r["clip_count"] == 1
                         and (wanted & set(decode_data(r["tags"]) or []))]
 
-        # Collect unique game_ids and project_ids for batch lookups
+        # Collect unique game_ids and project_ids for batch lookups. For
+        # brilliant_clip reels also pull the reel's FROZEN game_ids (v008, T3605)
+        # -- T4190 makes those the PRIMARY grouping source since they survive the
+        # source clip's draft being re-created (auto_project_id repoints away,
+        # breaking the raw_clips chain below).
         game_ids_to_fetch = set()
         project_ids_to_fetch = set()
         for row in rows:
@@ -311,14 +315,18 @@ async def list_downloads(
                 game_ids_to_fetch.add(row['game_id'])
             if row['project_id']:
                 project_ids_to_fetch.add(row['project_id'])
+            if row['source_type'] == SourceType.BRILLIANT_CLIP.value:
+                for gid in decode_data(row['game_ids']) or []:
+                    game_ids_to_fetch.add(gid)
 
-        # Fetch game_id for brilliant_clip exports (needed for grouping)
+        # The auto_project chain (raw_clips.auto_project_id -> game_id) is kept
+        # only as a fallback for pre-v008 brilliant reels whose frozen blob is empty.
         brilliant_project_ids = [
             row['project_id'] for row in rows
             if row['source_type'] == SourceType.BRILLIANT_CLIP.value
             and row['project_id']
         ]
-        brilliant_clip_games = {}  # auto_project_id -> game_id (fv.game_id is NULL)
+        brilliant_clip_games = {}  # auto_project_id -> game_id (fallback only)
         if brilliant_project_ids:
             placeholders = ','.join(['?' for _ in brilliant_project_ids])
             cursor.execute(f"""
@@ -443,14 +451,21 @@ async def list_downloads(
                     game_names = [game_info['name']]
                     game_dates = [game_info['date']]
             elif row['source_type'] == SourceType.BRILLIANT_CLIP.value:
-                # Brilliant clips carry no fv.game_id; resolve via the auto_project's
-                # source raw_clip (T3920 needs the game name for the player header).
-                bgame_id = row['game_id'] or brilliant_clip_games.get(row['project_id'])
-                game_info = games_info.get(bgame_id) if bgame_id else None
-                if game_info:
-                    game_ids = [bgame_id]
-                    game_names = [game_info['name']]
-                    game_dates = [game_info['date']]
+                # T4190: prefer the reel's FROZEN game_ids (survives the clip's
+                # draft being re-created); fall back to the auto_project chain
+                # only for pre-v008 reels whose frozen blob is empty (T3920 needs
+                # the game name for the player header).
+                frozen_ids = decode_data(row['game_ids']) or []
+                bgame_ids = frozen_ids or (
+                    [brilliant_clip_games[row['project_id']]]
+                    if row['project_id'] in brilliant_clip_games else []
+                )
+                for bgame_id in bgame_ids:
+                    game_info = games_info.get(bgame_id)
+                    if game_info:
+                        game_ids.append(bgame_id)
+                        game_names.append(game_info['name'])
+                        game_dates.append(game_info['date'])
             elif row['project_id']:
                 # Custom project export: games from project's working_clips
                 pg = project_games.get(row['project_id'], {})
