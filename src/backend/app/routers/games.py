@@ -12,42 +12,39 @@ This router handles game storage and management:
 - PUT /api/games/{id}/annotations - Update annotations
 """
 
-from fastapi import APIRouter, Form, HTTPException, Body, Request
-from typing import Optional, List
-from math import isfinite
 import asyncio
-import os
-import logging
+import contextlib
 import json
-
-from app.analytics import record_milestone
-from app.utils.encoding import encode_data, decode_data
-from app.utils.clip_range import normalize_clip_range
-
+import logging
+import os
 from datetime import datetime
+from math import isfinite
+
+from fastapi import APIRouter, Body, Form, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.database import get_db_connection, get_raw_clips_path, ensure_directories
-from app.services.pg import get_pg
-from app.constants import GameType, GameCreateStatus, GameStatus
-from app.storage import (
-    generate_presigned_url_global,
-    generate_presigned_url,
-    r2_head_object_global,
-    download_from_r2,
-    file_exists_in_r2,
-)
-from app.user_context import get_current_user_id
+from app.analytics import record_milestone
+from app.constants import GameCreateStatus, GameStatus, GameType, get_rating_adjective
+from app.database import ensure_directories, get_db_connection, get_raw_clips_path
 from app.profile_context import get_current_profile_id
-from app.services.storage_credits import calculate_upload_cost, calculate_extension_cost, storage_expires_at
-from app.services.user_db import deduct_credits
 from app.services.auth_db import (
-    insert_game_storage_ref,
+    delete_ref,
     get_game_storage_ref,
     get_grace_deletion_hashes,
-    delete_ref,
+    insert_game_storage_ref,
 )
-
+from app.services.storage_credits import calculate_extension_cost, calculate_upload_cost, storage_expires_at
+from app.services.user_db import deduct_credits
+from app.storage import (
+    download_from_r2,
+    file_exists_in_r2,
+    generate_presigned_url,
+    generate_presigned_url_global,
+    r2_head_object_global,
+)
+from app.user_context import get_current_user_id
+from app.utils.clip_range import normalize_clip_range
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -81,11 +78,6 @@ def get_game_video_url(blake3_hash: str, video_filename: str) -> str:
         )
     return None
 
-# Import rating constants from shared module (single source of truth)
-from app.constants import (
-    RATING_ADJECTIVES,
-    get_rating_adjective,
-)
 
 
 def generate_clip_name(rating: int, tags: list) -> str:
@@ -109,10 +101,10 @@ def generate_clip_name(rating: int, tags: list) -> str:
 
 
 def generate_game_display_name(
-    opponent_name: Optional[str],
-    game_date: Optional[str],
-    game_type: Optional[str],
-    tournament_name: Optional[str],
+    opponent_name: str | None,
+    game_date: str | None,
+    game_type: str | None,
+    tournament_name: str | None,
     fallback_name: str
 ) -> str:
     """
@@ -141,7 +133,7 @@ def generate_game_display_name(
                 from datetime import datetime
                 dt = datetime.strptime(game_date, "%Y-%m-%d")
                 date_str = dt.strftime("%b %d").replace(" 0", " ")  # Remove leading zero
-            except:
+            except Exception:
                 date_str = game_date
 
     # Build the name based on game type
@@ -166,23 +158,23 @@ def generate_game_display_name(
 class VideoReference(BaseModel):
     blake3_hash: str = Field(..., description="BLAKE3 hash of the video file")
     sequence: int = Field(..., description="Video sequence number (1-based)")
-    duration: Optional[float] = Field(None, description="Video duration in seconds")
-    width: Optional[int] = Field(None, description="Video width in pixels")
-    height: Optional[int] = Field(None, description="Video height in pixels")
-    file_size: Optional[int] = Field(None, description="File size in bytes")
+    duration: float | None = Field(None, description="Video duration in seconds")
+    width: int | None = Field(None, description="Video width in pixels")
+    height: int | None = Field(None, description="Video height in pixels")
+    file_size: int | None = Field(None, description="File size in bytes")
 
 
 class CreateGameRequest(BaseModel):
-    opponent_name: Optional[str] = Field(None, description="Opponent team name")
-    game_date: Optional[str] = Field(None, description="Game date (YYYY-MM-DD)")
-    game_type: Optional[str] = Field(None, description="home, away, or tournament")
-    tournament_name: Optional[str] = Field(None, description="Tournament name")
-    videos: List[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
-    status: Optional[str] = Field(None, description="Game status: 'pending' (pre-upload) or 'ready' (default)")
+    opponent_name: str | None = Field(None, description="Opponent team name")
+    game_date: str | None = Field(None, description="Game date (YYYY-MM-DD)")
+    game_type: str | None = Field(None, description="home, away, or tournament")
+    tournament_name: str | None = Field(None, description="Tournament name")
+    videos: list[VideoReference] = Field(default_factory=list, description="Video references (0-N)")
+    status: str | None = Field(None, description="Game status: 'pending' (pre-upload) or 'ready' (default)")
 
 
 class AddVideosRequest(BaseModel):
-    videos: List[VideoReference] = Field(..., description="Video references to add")
+    videos: list[VideoReference] = Field(..., description="Video references to add")
 
 
 class FinishAnnotationRequest(BaseModel):
@@ -207,13 +199,13 @@ def _validate_video_in_r2(blake3_hash: str) -> None:
         )
 
 
-def _probe_video_metadata(blake3_hash: str) -> Optional[dict]:
+def _probe_video_metadata(blake3_hash: str) -> dict | None:
     """
     Probe a game video in R2 via ffprobe for fps, duration, width, height.
     Returns dict with all available fields, or None on failure.
     """
-    from app.storage import get_r2_client, R2_BUCKET
     from app.services.video_probe import probe_r2_video
+    from app.storage import R2_BUCKET, get_r2_client
     try:
         client = get_r2_client()
         if client is None:
@@ -224,7 +216,7 @@ def _probe_video_metadata(blake3_hash: str) -> Optional[dict]:
         return None
 
 
-def _insert_game_videos(cursor, game_id: int, videos: List[VideoReference], skip_fps_probe: bool = False) -> None:
+def _insert_game_videos(cursor, game_id: int, videos: list[VideoReference], skip_fps_probe: bool = False) -> None:
     """Insert game_videos rows for a game. Shared by create and add-videos.
 
     skip_fps_probe: True for pending games (video not in R2 yet). FPS is
@@ -855,9 +847,9 @@ async def list_games():
 
 
 async def _list_games_impl(skip_presigned_urls=False):
+    from app.database import get_database_path
     from app.profile_context import get_current_profile_id
     from app.user_context import get_current_user_id
-    from app.database import get_database_path
     _profile = get_current_profile_id()
     _db_path = get_database_path()
     logger.info(f"[list_games] user={get_current_user_id()} profile={_profile} db={_db_path}")
@@ -882,7 +874,7 @@ async def _list_games_impl(skip_presigned_urls=False):
         rows = cursor.fetchall()
 
         # Storage expiry from profile SQLite (per-user, single source of truth)
-        user_id = get_current_user_id()
+        get_current_user_id()
         storage_rows = cursor.execute(
             "SELECT blake3_hash, storage_expires_at FROM game_storage"
         ).fetchall()
@@ -1018,6 +1010,7 @@ def _try_load_recap_mapping(user_id: str, game_id: int):
 def _compute_recap_clips(game_id: int):
     """Compute recap clip positions from DB by summing durations in concat order."""
     from collections import defaultdict
+
     from app.services.auto_export import _get_annotated_clips
 
     clips = _get_annotated_clips(game_id)
@@ -1130,8 +1123,16 @@ async def get_recap_data(game_id: int):
     with get_db_connection() as conn:
         _cur = conn.cursor()
         for c in clips:
+            # in_drafts must mean "has a project currently IN the drafts list":
+            # archived (= published) projects don't count. Mirrors the
+            # archived-aware join used by the games list query below.
             rc = _cur.execute(
-                "SELECT start_time, auto_project_id FROM raw_clips WHERE id = ?", (c.get('id'),)
+                """SELECT rc.start_time,
+                          CASE WHEN p.id IS NOT NULL AND p.archived_at IS NULL
+                               THEN rc.auto_project_id ELSE NULL END AS auto_project_id
+                   FROM raw_clips rc
+                   LEFT JOIN projects p ON p.id = rc.auto_project_id
+                   WHERE rc.id = ?""", (c.get('id'),)
             ).fetchone()
             if rc:
                 if rc['start_time'] is not None:
@@ -1153,7 +1154,7 @@ async def get_brilliant_clips(game_id: int):
     """Get brilliant clip exports for a game (5-star or 4-star fallback auto-exports)."""
     from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 
-    user_id = get_current_user_id()
+    get_current_user_id()
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1341,11 +1342,11 @@ async def get_game(game_id: int):
 @router.put("/{game_id:int}")
 async def update_game(
     game_id: int,
-    name: Optional[str] = Form(None),
-    opponent_name: Optional[str] = Form(None),
-    game_date: Optional[str] = Form(None),
-    game_type: Optional[str] = Form(None),
-    tournament_name: Optional[str] = Form(None),
+    name: str | None = Form(None),
+    opponent_name: str | None = Form(None),
+    game_date: str | None = Form(None),
+    game_type: str | None = Form(None),
+    tournament_name: str | None = Form(None),
 ):
     """Update game metadata (opponent, date, type, tournament)."""
     with get_db_connection() as conn:
@@ -1388,7 +1389,7 @@ async def update_game(
             )
 
         set_clause = ", ".join(f"{k} = ?" for k in updates)
-        values = list(updates.values()) + [game_id]
+        values = [*list(updates.values()), game_id]
         cursor.execute(f"UPDATE games SET {set_clause} WHERE id = ?", values)
         conn.commit()
 
@@ -1426,7 +1427,7 @@ async def correct_game_duration(game_id: int, duration: float = Body(..., embed=
 @router.put("/{game_id:int}/annotations")
 async def update_annotations(
     game_id: int,
-    annotations: List = Body(...)
+    annotations: list = Body(...)
 ):
     """
     Update game annotations.
@@ -1819,16 +1820,20 @@ class ShareGameRequest(BaseModel):
 async def share_game(game_id: int, body: ShareGameRequest):
     """Share a game with recipients via email. Game-only sharing (no annotations)."""
     import asyncio
-    from app.services.email import send_game_share_email, _resolve_sender_name, _is_existing_user
-    from app.services.auth_db import get_user_by_id, get_user_by_email
+
+    from app.services.auth_db import get_user_by_email, get_user_by_id
+    from app.services.email import _is_existing_user, _resolve_sender_name, send_game_share_email
+    from app.services.materialization import (
+        materialize_game_share,
+        serialize_clip_data,
+    )
     from app.services.sharing_db import (
-        create_game_share, revoke_share, get_share_by_token,
+        create_game_share,
         create_pending_share,
+        get_share_by_token,
+        revoke_share,
     )
     from app.services.user_db import get_profiles
-    from app.services.materialization import (
-        materialize_game_share, serialize_clip_data,
-    )
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -1901,10 +1906,8 @@ async def share_game(game_id: int, body: ShareGameRequest):
             if not sent:
                 all_sent = False
                 if share:
-                    try:
+                    with contextlib.suppress(Exception):
                         revoke_share(share["share_token"], user_id)
-                    except Exception:
-                        pass
 
     if all_sent and email_results:
         for email, share in zip(body.emails, share_records):
@@ -1967,16 +1970,21 @@ class SharePlaybackRequest(BaseModel):
 async def share_playback(game_id: int, body: SharePlaybackRequest):
     """Share all annotated clips for a game with recipients via email."""
     import asyncio
-    from app.services.email import send_playback_share_email, _resolve_sender_name, _is_existing_user
-    from app.services.auth_db import get_user_by_id, get_user_by_email
+
+    from app.services.auth_db import get_user_by_email, get_user_by_id
+    from app.services.email import _is_existing_user, _resolve_sender_name, send_playback_share_email
+    from app.services.materialization import (
+        materialize_game_share,
+        serialize_clip_data,
+    )
     from app.services.sharing_db import (
-        create_game_share, revoke_share, get_share_by_token,
-        create_pending_share, list_shares_for_game,
+        create_game_share,
+        create_pending_share,
+        get_share_by_token,
+        list_shares_for_game,
+        revoke_share,
     )
     from app.services.user_db import get_profiles
-    from app.services.materialization import (
-        materialize_game_share, serialize_clip_data,
-    )
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -2091,10 +2099,8 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
             if not sent:
                 all_sent = False
                 if share:
-                    try:
+                    with contextlib.suppress(Exception):
                         revoke_share(share["share_token"], user_id)
-                    except Exception:
-                        pass
 
     if all_sent and email_results:
         clip_data_bytes = serialize_clip_data(clips)
@@ -2326,7 +2332,7 @@ async def load_game(game_id: int):
 async def stream_game_bounded(
     game_id: int,
     request: Request,
-    t: Optional[float] = None,
+    t: float | None = None,
 ):
     """
     Bounded streaming proxy for annotation playback. Serves byte ranges
@@ -2341,8 +2347,8 @@ async def stream_game_bounded(
     POST_PAD_SECONDS = 5.0
     MIN_PAD_BYTES = 5 * 1024 * 1024
     GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
-    from fastapi.responses import StreamingResponse
     import httpx
+    from fastapi.responses import StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2423,7 +2429,7 @@ async def stream_game_bounded(
                 if hi_s:
                     req_end = int(hi_s)
             except ValueError:
-                raise HTTPException(416, "Malformed Range header")
+                raise HTTPException(416, "Malformed Range header") from None
 
     window_kind = None
     window_end = None
@@ -2482,41 +2488,40 @@ async def stream_game_bounded(
     )
 
     async def stream_from_r2():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-            async with client.stream(
-                "GET",
-                presigned_url,
-                headers={"Range": f"bytes={req_start}-{req_end}"},
-            ) as response:
-                if response.status_code not in (200, 206):
-                    error_body = ""
-                    try:
-                        raw = await response.aread()
-                        error_body = raw[:500].decode("utf-8", errors="replace")
-                    except Exception:
-                        error_body = "(unreadable)"
-                    logger.error(
-                        f"[game-stream] R2 error game_id={game_id} "
-                        f"r2_status={response.status_code} blake3={blake3_hash} "
-                        f"range={req_start}-{req_end} window={window_kind} "
-                        f"body_snippet={error_body!r}"
-                    )
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=f"R2 returned {response.status_code}",
-                    )
-                bytes_streamed = 0
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
+            "GET",
+            presigned_url,
+            headers={"Range": f"bytes={req_start}-{req_end}"},
+        ) as response:
+            if response.status_code not in (200, 206):
+                error_body = ""
                 try:
-                    async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                        bytes_streamed += len(chunk)
-                        yield chunk
-                except Exception as e:
-                    logger.error(
-                        f"[game-stream] R2 stream interrupted game_id={game_id} "
-                        f"window={window_kind} range={req_start}-{req_end} "
-                        f"bytes_streamed={bytes_streamed}/{segment_len} "
-                        f"error={type(e).__name__}: {e}"
-                    )
+                    raw = await response.aread()
+                    error_body = raw[:500].decode("utf-8", errors="replace")
+                except Exception:
+                    error_body = "(unreadable)"
+                logger.error(
+                    f"[game-stream] R2 error game_id={game_id} "
+                    f"r2_status={response.status_code} blake3={blake3_hash} "
+                    f"range={req_start}-{req_end} window={window_kind} "
+                    f"body_snippet={error_body!r}"
+                )
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"R2 returned {response.status_code}",
+                )
+            bytes_streamed = 0
+            try:
+                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
+                    bytes_streamed += len(chunk)
+                    yield chunk
+            except Exception as e:
+                logger.error(
+                    f"[game-stream] R2 stream interrupted game_id={game_id} "
+                    f"window={window_kind} range={req_start}-{req_end} "
+                    f"bytes_streamed={bytes_streamed}/{segment_len} "
+                    f"error={type(e).__name__}: {e}"
+                )
 
     return StreamingResponse(
         stream_from_r2(),

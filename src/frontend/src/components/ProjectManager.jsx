@@ -248,8 +248,15 @@ export function ProjectManager({
     counts.showAspectFilter = Object.keys(counts.aspects).length > 1;
     counts.showCreationFilter = counts.auto > 0 && counts.custom > 0;
 
+    // A filter panel is also "useful" whenever its filter is ACTIVE (non-default):
+    // hiding the panel for a zero-match active filter leaves the user with an
+    // invisible filter they cannot see or clear (staging bug 2026-07-04).
+    counts.showStatusFilter = counts.showStatusFilter || statusFilter !== 'all';
+    counts.showAspectFilter = counts.showAspectFilter || aspectFilter !== 'all';
+    counts.showCreationFilter = counts.showCreationFilter || creationFilter !== 'all';
+
     return counts;
-  }, [projects]);
+  }, [projects, statusFilter, aspectFilter, creationFilter]);
 
   // Only show filters if we have more than 1 project and at least one filter is useful
   const showFilters = projects.length > 1 && (
@@ -870,7 +877,8 @@ export function ProjectManager({
                         { value: 'not_started', label: 'Not Started', color: 'gray' }
                       ].map(opt => {
                         const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
-                        if (count === 0 && opt.value !== 'all') return null;
+                        // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
+                        if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
                         return (
                           <button
                             key={opt.value}
@@ -978,7 +986,17 @@ export function ProjectManager({
             <div className="space-y-2">
               {filteredProjects.length === 0 ? (
                 <div className="text-gray-500 text-center py-4">
-                  {`No ${SECTION_NAMES.DRAFTS_LOWER} match the current filters`}
+                  <p>{`No ${SECTION_NAMES.DRAFTS_LOWER} match the current filters`}</p>
+                  <button
+                    onClick={() => {
+                      setStatusFilter('all');
+                      setAspectFilter('all');
+                      setCreationFilter('all');
+                    }}
+                    className="mt-2 px-3 py-1.5 text-xs rounded bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+                  >
+                    {`Clear filters (show all ${projects.length})`}
+                  </button>
                 </div>
               ) : (
                 <>

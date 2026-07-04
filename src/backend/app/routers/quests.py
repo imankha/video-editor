@@ -13,10 +13,15 @@ import time
 
 from fastapi import APIRouter, HTTPException
 
-from ..user_context import get_current_user_id
 from ..database import get_db_connection
-from ..services.user_db import grant_credits, get_credit_balance, mark_quest_completed, get_completed_and_claimed_quest_ids
-from ..quest_config import QUEST_DEFINITIONS, QUEST_BY_ID
+from ..quest_config import QUEST_DEFINITIONS
+from ..services.user_db import (
+    get_completed_and_claimed_quest_ids,
+    get_credit_balance,
+    grant_credits,
+    mark_quest_completed,
+)
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +91,7 @@ for _q in QUEST_DEFINITIONS:
         _STEP_TO_QUEST[_s] = _q["id"]
 
 
-def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
+def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> dict:
     """Compute every quest-step boolean from per-profile data.
 
     Steps derive from four cheap, batched sources: the games table, a raw_clips
@@ -122,6 +127,11 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set = None) -> dict:
     overlay_done = export_counts.get(('overlay', 'complete'), 0)
 
     # --- raw_clips aggregate (one query) ---
+    # NOTE: 'reels' deliberately counts auto_project_id regardless of the
+    # project's archived state — quest steps are LIFETIME achievements, and a
+    # published (archived) reel still counts. Do not add an archived_at gate
+    # here (it would un-complete quests on publish); drafts-list semantics
+    # live in projects.py/games.py instead.
     rc = cursor.execute(
         "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels FROM raw_clips"
     ).fetchone()

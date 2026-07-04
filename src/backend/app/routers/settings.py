@@ -7,12 +7,13 @@ Global per-user, not per-profile.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from app.services.user_db import get_all_preferences, set_preferences_bulk, clear_all_preferences
 from app.constants import DEFAULT_HIGHLIGHT_EFFECT
+from app.services.user_db import clear_all_preferences, get_all_preferences, set_preferences_bulk
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 # Flat defaults — keys match DB rows exactly
 DEFAULTS = {
-    "statusFilter": "uncompleted",
+    # 'all', not the pre-T66 'uncompleted': that value no longer exists in the
+    # frontend's filter set (completed projects are archived out entirely)
+    "statusFilter": "all",
     "aspectFilter": "all",
     "creationFilter": "all",
     "includeAudio": "true",
@@ -72,10 +75,10 @@ def _flatten_updates(updates: dict) -> dict:
 
 class SettingsUpdate(BaseModel):
     """Partial settings update - only include fields to change"""
-    projectFilters: Optional[Dict[str, Any]] = None
-    framing: Optional[Dict[str, Any]] = None
-    overlay: Optional[Dict[str, Any]] = None
-    ranking: Optional[Dict[str, Any]] = None
+    projectFilters: dict[str, Any] | None = None
+    framing: dict[str, Any] | None = None
+    overlay: dict[str, Any] | None = None
+    ranking: dict[str, Any] | None = None
 
 
 @router.get("")
