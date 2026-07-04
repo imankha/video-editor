@@ -6,10 +6,9 @@ _get_annotated_clips, and _set_game_status.
 """
 
 import sqlite3
-import time
+from unittest.mock import MagicMock, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, call
 
 from app.utils.encoding import encode_data
 
@@ -28,8 +27,8 @@ PROFILE_ID = "testdefault"
 def isolated_profile_db(tmp_path):
     """Create an isolated profile.sqlite with the games + raw_clips + final_videos
     tables so auto_export can run real SQL against it."""
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
@@ -99,6 +98,8 @@ def isolated_profile_db(tmp_path):
             name TEXT NOT NULL,
             aspect_ratio TEXT NOT NULL,
             is_auto_created INTEGER DEFAULT 0,
+            working_video_id INTEGER,
+            archived_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         CREATE TABLE working_clips (
@@ -381,6 +382,7 @@ class TestAutoExportGame:
     def test_timing_logged(self, mock_brilliant, mock_recap, isolated_profile_db, caplog):
         """Verify timing information is present in log output."""
         import logging
+
         from app.services.auto_export import auto_export_game
 
         db = isolated_profile_db["db_path"]
@@ -441,6 +443,39 @@ class TestExportBrilliantClip:
         assert call_args[1]["to"] == 15.0
         mock_upload.assert_called_once()
         assert _count_final_videos(db, game_id) == 1
+
+    @patch("app.services.project_archive.R2_ENABLED", False)
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/games/abc123.mp4?signed=1")
+    @patch(f"{M}.ffmpeg")
+    def test_publish_archives_auto_project(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db):
+        """A sweep-published reel must not linger in Reel Drafts.
+
+        The manual publish path archives the project (downloads.py ->
+        archive_project); the sweep path must honor the same contract. Bug:
+        auto-published reels stayed non-archived, so they showed under
+        Reel Drafts and bucketed into the "Not Started" filter.
+        """
+        from app.services.auto_export import _export_brilliant_clip
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+
+        db = isolated_profile_db["db_path"]
+        game_id = _insert_game(db)
+        _insert_project(db, 100)
+        clip = self._make_clip(auto_project_id=100)
+
+        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
+
+        conn = sqlite3.connect(db)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT archived_at FROM projects WHERE id = 100").fetchone()
+        conn.close()
+        assert row is not None
+        assert row["archived_at"] is not None, "published auto-project must be archived out of Reel Drafts"
 
     @patch(f"{M}.generate_presigned_url_global", return_value=None)
     def test_presigned_url_failure_raises(self, mock_presign, isolated_profile_db):
@@ -589,6 +624,7 @@ class TestExportBrilliantClip:
     def test_timing_logged(self, mock_ffmpeg, mock_presign, mock_upload, isolated_profile_db, caplog):
         """Verify timing info in log for brilliant clip export."""
         import logging
+
         from app.services.auto_export import _export_brilliant_clip
 
         mock_stream = MagicMock()
@@ -789,6 +825,7 @@ class TestGenerateRecap:
         """Bug 23p: a clip with end_time < start_time (inverted range) must be
         skipped so it doesn't fail the whole recap. The valid clips still export."""
         import json
+
         from app.services.auto_export import _generate_recap
 
         mock_stream = MagicMock()
@@ -874,6 +911,7 @@ class TestGenerateRecap:
     def test_recap_clip_mapping_includes_tags_and_notes(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db):
         """Verify clip_mapping JSON contains correct metadata."""
         import json
+
         from app.services.auto_export import _generate_recap
 
         mock_stream = MagicMock()
@@ -905,6 +943,7 @@ class TestGenerateRecap:
     @patch(f"{M}.ffmpeg")
     def test_recap_timing_logged(self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db, caplog):
         import logging
+
         from app.services.auto_export import _generate_recap
 
         mock_stream = MagicMock()

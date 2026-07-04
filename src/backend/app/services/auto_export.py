@@ -7,8 +7,6 @@ DB to R2 explicitly after every write.
 """
 
 import json
-
-from app.utils.encoding import decode_data
 import logging
 import tempfile
 import time
@@ -18,11 +16,13 @@ from pathlib import Path
 
 import ffmpeg
 
+from app.utils.encoding import decode_data
+
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from .collection_metadata import compute_project_metadata, encode_game_ids, compute_unified_clip_start
-from ..storage import delete_from_r2, generate_presigned_url_global, upload_to_r2, upload_bytes_to_r2
+from ..storage import delete_from_r2, generate_presigned_url_global, upload_bytes_to_r2, upload_to_r2
 from ..user_context import set_current_user_id
+from .collection_metadata import compute_project_metadata, compute_unified_clip_start, encode_game_ids
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,7 @@ def _export_brilliant_clip(
         # T3630: a brilliant clip IS a single clip -> clip_count=1, quality=its
         # rating, rating seeded from the star, rd=RD_MAX, source_clip_id = the
         # clip itself (links ratio twins), clip_start_time = its in-match start.
-        from .glicko import seed_rating, RD_MAX
+        from .glicko import RD_MAX, seed_rating
         quality_score = float(clip['rating']) if clip['rating'] is not None else None
         rating = seed_rating(quality_score)
         # T3920: unified two-half in-match start (file-relative + prior-half durations)
@@ -292,6 +292,18 @@ def _export_brilliant_clip(
         if old_id is not None:
             cursor.execute("DELETE FROM final_videos WHERE id = ?", (old_id,))
         conn.commit()
+
+    # Archive the auto-project, mirroring the manual publish contract
+    # (downloads.py publish -> archive_project): a published project must not
+    # remain in Reel Drafts. Post-commit and non-fatal like the R2 cleanup
+    # below -- an archive failure leaves the reel published, just still listed
+    # in drafts until the next sweep or a manual archive.
+    from .project_archive import archive_project
+    if not archive_project(clip['auto_project_id'], user_id):
+        logger.warning(
+            f"[AutoExport] Failed to archive auto-project {clip['auto_project_id']} "
+            f"after publishing clip {clip['id']}; reel will linger in Reel Drafts"
+        )
 
     # T4010: post-commit, best-effort cleanup of the prior R2 object. Never the
     # just-written object; a cleanup failure must not undo the committed swap.

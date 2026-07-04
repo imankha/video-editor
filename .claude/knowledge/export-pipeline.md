@@ -99,3 +99,11 @@ graph LR
 - **T3950** (TODO): "Made with Reel Ballers" outro, render-time FFmpeg concat in both single-clip and multi-clip paths — see modal-gpu.md.
 - **T2650** (TODO): move sweep auto-export compute to Modal.
 - DONE context (do not re-fix): T4010 atomic re-export, T4020 shadow-version guard, T4110 overlay sync-then-announce, T4160/T4170 sweep framed-reel preservation + metadata heal.
+
+- **Drafts-lingering sweep bug (fixed 2026-07-04):** `_export_brilliant_clip` published a
+  final_video but never archived the auto-project, unlike manual publish (`downloads.py` ->
+  `archive_project`). Non-archived projects ARE the Reel Drafts list (`projects.py`
+  `list_projects` filters only `archived_at IS NULL`), so sweep-published reels lingered in
+  Drafts and bucketed as "Not Started" (no working clips). INVARIANT: every publish path must
+  archive its project. Heal migration: profile_db v020 (brilliant_clip-scoped). Regression
+  test: `test_auto_export.py::test_publish_archives_auto_project`.
