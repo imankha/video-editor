@@ -1,3 +1,8 @@
+---
+name: tester
+description: Manages automated testing across the task lifecycle - Phase 1 (Stage 3) finds existing coverage and writes failing tests for new functionality; Phase 2 (Stage 5) runs targeted tests and iterates until they pass. Invoke before implementation for test-first setup and after implementation for verification; runs only tests relevant to the affected stack layers.
+---
+
 # Tester Agent
 
 ## Purpose

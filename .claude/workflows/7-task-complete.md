@@ -23,7 +23,22 @@ grep -r "console.log" src/frontend/src --include="*.jsx" --include="*.js" | grep
 grep -r "print(" src/backend/app --include="*.py" | grep -v "__pycache__"
 ```
 
-### 2. Commit Final Changes
+### 2. Test Evidence Gate
+
+Before declaring complete, show actual test output (pass/fail counts from the real run), not a claim that tests pass. If any test was skipped or is flaky, say so explicitly. A task without test evidence is not complete.
+
+### 3. Update the Knowledge Base
+
+Update the `.claude/knowledge/*.md` doc(s) for every domain this task touched:
+- [ ] New/moved entry points, changed data flow
+- [ ] Invariants added or removed
+- [ ] Landmines discovered during the task (the thing that cost you an hour goes here)
+- [ ] Move the task from "Active/upcoming work" to a one-line entry in "Landmines & history" if it changed behavior
+- [ ] Prune any lines the task made stale
+
+This is how the next agent skips re-exploration. Commit the knowledge-doc edits with the task.
+
+### 4. Commit Final Changes
 
 Stage explicit paths (never `git add -A` / `git add .` — the working tree is shared and may hold unrelated WIP).
 
@@ -40,6 +55,8 @@ EOF
 Do NOT mark the task DONE in this commit. DONE is a user promotion (see CLAUDE.md Task Status Rule).
 
 ### 5. Notify User
+
+
 
 ```
 T{id} complete. Branch `feature/T{id}-*` is ready to merge.

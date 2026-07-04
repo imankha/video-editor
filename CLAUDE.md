@@ -43,9 +43,22 @@ cd src/backend && pytest tests/test_clips.py -v          # Specific file
 
 | Step | When | Action |
 |------|------|--------|
-| Classify | Before starting | Determine stack layers, files, LOC, test scope, agent inclusion |
+| Classify | Before starting | Determine TIER first, then stack layers, files, LOC, test scope, agent inclusion |
+| Load knowledge | Before exploring | Read the relevant `.claude/knowledge/*.md` domain doc(s) instead of re-auditing the codebase |
 | Branch | Before first change | `git checkout -b feature/T{id}-{description}` (skip for <10 LOC single-file) |
 | Commit | After implementation | Commit with co-author line |
+
+### Task Tiers (pipeline scales with size)
+
+Classification starts by picking a tier. The tier sets the DEFAULT pipeline; classification can still add/remove agents with justification.
+
+| Tier | Trigger | Default pipeline |
+|------|---------|------------------|
+| **S** | <10 LOC, 1 file, no behavior-adjacent risk | Fix directly. Lint hooks + targeted test + commit. No agents. |
+| **M** | Bug fixes and small features: <~6 files, 1-2 layers, no new abstractions, no schema change | Load knowledge doc(s) -> plan briefly -> implement -> tests + lint hooks -> ONE fresh-context Reviewer on the diff -> commit. Skip Architect / Tester Phase 1 / Migration unless classification flags them. |
+| **L** | Epics, schema changes, new patterns/abstractions, 6+ files or 3+ layers, design-gated tasks | Full staged workflow (Stages 0-7) including Architect design gate; Reviewer runs as a parallel fan-out (see ORCHESTRATION.md). |
+
+Deterministic gates apply to ALL tiers automatically: eslint/ruff run via PostToolUse hook on every edit (`.claude/hooks/lint-changed.cjs`) and block until clean. Test evidence (actual output, not claims) is required before a task is called complete.
 
 ### Task Status Rule
 
@@ -66,10 +79,12 @@ Lifecycle: `TODO -> IN PROGRESS (AI) -> STAGING (AI) -> DONE (user gesture: Reso
 Before starting any task, produce:
 
 ```
+**Tier:** [S | M | L]
 **Stack Layers:** [Frontend | Backend | Modal | Database]
 **Files Affected:** ~{n} files
 **LOC Estimate:** ~{n} lines
 **Test Scope:** [Frontend Unit | Frontend E2E | Backend | None]
+**Knowledge Docs:** [.claude/knowledge/ docs relevant to this task]
 
 | Agent | Include? | Justification |
 |-------|----------|---------------|
@@ -102,7 +117,7 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | 6 | Test & Fix Agent Handoff | [6-manual-testing.md](.claude/workflows/6-manual-testing.md) | - | **New Conversation** |
 | 7 | Task Complete | [7-task-complete.md](.claude/workflows/7-task-complete.md) | - | - |
 
-**Note**: Classification determines which agents to include based on scope (stack layers, files, LOC). Default to full workflow; skip stages only with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
+**Note**: The task TIER (see Task Tiers above) sets the default path: S-tier skips all stages except implement+gates+commit; M-tier runs implement -> review; L-tier runs the full table. Classification can add/remove agents from the tier default with explicit justification. See [0-task-classification.md](.claude/workflows/0-task-classification.md).
 
 *\*Conversation: Reviewer conducts solo review, then engages in structured conversation with implementor on MAJOR findings. Implementor can push back; reviewer evaluates on merit. Unresolved disagreements escalate to user. Max 2 rounds. See [ORCHESTRATION.md](.claude/ORCHESTRATION.md).*
 
@@ -134,6 +149,24 @@ See [0-task-classification.md](.claude/workflows/0-task-classification.md) for f
 | **Merge Reviewer** | Pre-merge audit: sync strategy, state, architecture | [merge-reviewer.md](.claude/agents/merge-reviewer.md) |
 
 **Orchestration**: See [ORCHESTRATION.md](.claude/ORCHESTRATION.md) for agent spawning, handoffs, and skill access.
+
+## Knowledge Base (persistent domain expertise)
+
+`.claude/knowledge/` holds one doc per code domain (entry points, data flow, invariants, landmines, active work). These replace re-exploring the codebase per task — the "code expert swarm" as cached knowledge, not repeated computation.
+
+| Doc | Domain |
+|-----|--------|
+| [export-pipeline.md](.claude/knowledge/export-pipeline.md) | Export/publish flow, final videos, R2 refs |
+| [modal-gpu.md](.claude/knowledge/modal-gpu.md) | Modal functions, upscaling, local FFmpeg |
+| [keyframes-framing.md](.claude/knowledge/keyframes-framing.md) | Crop/highlight keyframes, splines, Framing |
+| [annotate.md](.claude/knowledge/annotate.md) | Annotate screen, clips/segments, recap |
+| [persistence-sync.md](.claude/knowledge/persistence-sync.md) | Gesture persistence, R2 sync, versioning |
+| [backend-services.md](.claude/knowledge/backend-services.md) | FastAPI structure, Postgres, migrations |
+
+**Rules:**
+1. **Load before exploring**: at task start, read the doc(s) matching the task's domain. Only fall back to Code Expert exploration for areas no doc covers.
+2. **Update at task complete**: Stage 7 includes updating the touched domain doc(s) with anything the task changed or revealed (new invariant, moved entry point, landmine found). Keep docs dense; prune stale lines when updating.
+3. **Docs are claims, code is truth**: if a doc contradicts the code, trust the code and fix the doc in the same commit.
 
 ## References
 

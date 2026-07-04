@@ -2,21 +2,31 @@
 
 ## Purpose
 
-Analyze task scope to determine which agents add value and which tests to run. Default to the full workflow; skip stages only with explicit justification.
+Pick the task TIER first (S/M/L — see CLAUDE.md § Task Tiers), then determine which agents add value and which tests to run. The tier sets the default pipeline; agent inclusion adjusts it with justification. The workflow scales with the task — a 20-LOC bug fix must not pay the full 8-stage pipeline, and an epic task must not skip its design gate.
 
----
+## Step 1: Tier
 
-## Classification Output
+| Tier | Trigger | Default pipeline |
+|------|---------|------------------|
+| **S** | <10 LOC, 1 file, no behavior-adjacent risk | Implement + lint hooks + targeted test + commit. No agents. |
+| **M** | Bug fix / small feature: <~6 files, 1-2 layers, no new abstractions, no schema change | Knowledge doc(s) -> brief plan -> implement -> tests -> ONE fresh-context reviewer -> commit |
+| **L** | Epic task, schema change, new pattern/abstraction, 6+ files, 3+ layers, or design-gated | Full staged workflow (0-7) with Architect approval gate and parallel review fan-out |
+
+Escalate the tier (never de-escalate silently) if during work you discover: schema changes, persistence/state-management changes, or 2x the estimated file count.
+
+## Step 2: Classification Output
 
 Before starting any task, produce this classification:
 
 ```
 ## Task Classification: T{id}
 
+**Tier:** [S | M | L]
 **Stack Layers:** [Frontend | Backend | Modal | Database]
 **Files Affected:** ~{n} files
 **LOC Estimate:** ~{n} lines
 **Test Scope:** [Frontend Unit | Frontend E2E | Backend | None]
+**Knowledge Docs:** [relevant .claude/knowledge/*.md]
 
 ### Agent Workflow
 | Agent | Include | Justification |
@@ -65,9 +75,12 @@ Before starting any task, produce this classification:
 - Need to understand existing patterns
 
 **Skip when:**
+- A `.claude/knowledge/` domain doc covers the affected area (read the doc instead — that's what it's for)
 - Single file change in familiar area
 - Exact same pattern exists elsewhere (can reference directly)
 - Pure styling/copy changes
+
+**When included, Code Expert also updates the knowledge doc:** its findings must be merged into the matching `.claude/knowledge/*.md` (or a new doc created) so the exploration is never repeated.
 
 ### Architect
 
@@ -159,7 +172,9 @@ cd src/backend && pytest -k "overlay" -v
 
 ## Scope-Based Workflow Selection
 
-### Minimal Scope (1-2 files, <20 LOC, single layer)
+(These map to the tiers: Minimal = S, Moderate = M, Large = L.)
+
+### Minimal Scope / Tier S (1-2 files, <20 LOC, single layer)
 
 ```
 Files: 1-2 | LOC: <20 | Layers: 1
@@ -178,7 +193,7 @@ Files: 1-2 | LOC: <20 | Layers: 1
 - Tester: Include if behavior changes
 - Reviewer: Skip
 
-### Moderate Scope (3-5 files, 20-100 LOC, 1-2 layers)
+### Moderate Scope / Tier M (3-5 files, 20-100 LOC, 1-2 layers)
 
 ```
 Files: 3-5 | LOC: 20-100 | Layers: 1-2
@@ -193,12 +208,12 @@ Files: 3-5 | LOC: 20-100 | Layers: 1-2
 6. Commit
 
 **Agent inclusion:**
-- Code Expert: Include (understand context)
+- Code Expert: Skip if a `.claude/knowledge/` doc covers the domain (read it instead); include only for uncovered areas
 - Architect: Skip unless new patterns needed
 - Tester: Include
-- Reviewer: Optional
+- Reviewer: Include (one fresh-context diff review — cheap, catches the most)
 
-### Large Scope (6+ files, 100+ LOC, or 3+ layers)
+### Large Scope / Tier L (6+ files, 100+ LOC, or 3+ layers)
 
 ```
 Files: 6+ | LOC: 100+ | Layers: 3+

@@ -1,3 +1,9 @@
+---
+name: reviewer
+description: High-scrutiny post-implementation code review (Stage 4.5) that catches bugs, architectural violations, and design deviations before testing, then holds a structured pushback conversation with the implementor. Invoke after implementation completes and before automated testing. Bash is for read-only verification (running builds/tests); this agent must never edit code.
+tools: Read, Grep, Glob, Bash
+---
+
 # Reviewer Agent
 
 ## Purpose
@@ -25,47 +31,13 @@ See [Task Classification](../workflows/0-task-classification.md) for inclusion c
 
 The reviewer must internalize these project rules before reviewing. These are not suggestions -- they are hard constraints. Violations are blocking issues.
 
-### Architecture Rules (from [Coding Standards](../references/coding-standards.md))
+### Architecture Rules
 
-**MVC + Data Always Ready:**
-```
-Screen (fetches data, guards readiness)
-  -> Container (state logic, event handlers)
-       -> View (presentational only, assumes data exists)
-```
-- Screens guard: `if (!data) return <Loading />`
-- Views NEVER null-check data -- if a View checks `if (!data)`, that's a bug
-- Props flow down, events flow up
-- State lives in Zustand stores or Screen-level hooks
+See [coding-standards.md](../references/coding-standards.md) -- single source of truth. Read it in FULL before reviewing. It defines: MVC + Data Always Ready, State Management (Single Source of Truth, Derive Don't Duplicate, API Data Architecture), Persistence (Gesture-Based, Never Reactive), Loose Coupling / Tight Cohesion, Type Safety, Data Guards, and Code Organization.
 
-**State Management -- Single Source of Truth:**
-- Every piece of data has ONE authoritative location
-- Derive, don't duplicate: compute from source instead of storing separately
-- Backend API data goes into Zustand stores as raw data (same shape as API returns)
-- Use backend IDs as canonical identifiers (never generate client-side IDs)
-- Derived values are computed via selector functions, never stored
-
-**Violations that cause sync bugs (BLOCKING):**
-1. `useState` for API data -- creates parallel store needing manual sync
-2. Transforming data on write -- creates stale snapshot diverging from backend
-3. Client-side IDs -- creates mapping layer that fails silently
-4. Stored derived flags -- `isX` booleans stored instead of computed
-
-**Persistence: Gesture-Based, Never Reactive (BLOCKING):**
-- Every DB write MUST trace to a named user gesture (click, drag, keypress)
-- No `useEffect` that watches state and writes to store or backend
-- Runtime fixups (ensurePermanentKeyframes, origin normalization) are memory-only
-- Restore from DB is read-only -- must NOT trigger write-back
-- Surgical API calls preferred over full-state saves
-- Single write path per piece of data
-
-**Loose Coupling, Tight Cohesion:**
-- Each module does ONE thing
-- Depend on abstractions, not concrete implementations
-
-**Type Safety:**
-- Magic strings < Enums < Typed objects
-- Use `str, Enum` classes in Python, const objects in JS/TS
+**Severity mapping (reviewer-specific):** violations of these coding-standards sections are always BLOCKING:
+- **API Data Architecture** -- any of its four listed violations (useState for API data, transforming on write, client-side IDs, stored derived flags)
+- **Persistence: Gesture-Based, Never Reactive** -- any write not traceable to a named user gesture, any reactive `useEffect` persistence
 
 ### Code Smells to Watch For (from [Code Smells](../references/code-smells.md))
 

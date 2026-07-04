@@ -2,6 +2,12 @@
 
 The main conversation AI (Claude) orchestrates the workflow by spawning specialized agents and managing handoffs.
 
+**Tier gate (read first):** the full pipeline below is the **L-tier** path. S-tier tasks spawn no agents; M-tier tasks spawn at most a Tester and one fresh-context Reviewer. See CLAUDE.md § Task Tiers.
+
+**Registered agents:** every file in `.claude/agents/` has frontmatter (name, description, tool scoping), so they are real subagents — spawn them with their own `subagent_type` (e.g. `code-expert`, `reviewer`) instead of pasting instructions into `general-purpose`. Tool scoping is enforced: reviewers physically cannot edit files.
+
+**Context loading:** before spawning anything, check `.claude/knowledge/` for the task's domain doc(s) and pass the doc path(s) in the spawn prompt. Agents read the knowledge doc first and only explore what it doesn't cover.
+
 ---
 
 ## Orchestrator Responsibilities
@@ -157,29 +163,31 @@ Which skills are relevant to each agent:
 
 ### Code Expert
 ```
-Task tool:
-  subagent_type: Explore
+Agent tool:
+  subagent_type: code-expert
   prompt: |
-    You are the Code Expert agent for task T{id}: {title}.
+    Task T{id}: {title}
 
     Task: {description}
 
-    Find:
+    Start from the knowledge doc(s): {.claude/knowledge/ paths for this domain}.
+    Only explore what they don't cover. Find:
     1. Entry points (files/lines to modify)
     2. Data flow through the system
     3. Similar patterns in codebase
     4. Existing state to reuse
     5. Dependencies and risks
 
-    Return structured findings per handoff schema.
+    Return structured findings per handoff schema, PLUS a "knowledge doc updates"
+    section: lines to add/fix in the domain doc so this exploration is never repeated.
 ```
 
 ### Architect
 ```
-Task tool:
-  subagent_type: Plan
+Agent tool:
+  subagent_type: architect
   prompt: |
-    You are the Architect agent for task T{id}: {title}.
+    Task T{id}: {title}
 
     Task: {description}
     Code Expert findings: {handoff from Code Expert}
@@ -196,10 +204,10 @@ Task tool:
 
 ### Tester (Phase 1)
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: tester
   prompt: |
-    You are the Tester agent (Phase 1) for task T{id}: {title}.
+    Phase 1 for task T{id}: {title}.
 
     Design doc: {content}
     Acceptance criteria: {list}
@@ -210,10 +218,10 @@ Task tool:
 
 ### Implementor
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: implementor
   prompt: |
-    You are the Implementor agent for task T{id}: {title}.
+    Task T{id}: {title}
 
     Approved design: {design doc content}
     Failing tests: {test files}
@@ -228,11 +236,25 @@ Task tool:
 ```
 
 ### Reviewer (Phase 1: Solo Review)
+
+**M-tier:** spawn ONE reviewer with the prompt below, scoped to correctness + requirements + persistence rules. Chasing every possible finding leads to over-engineering — the reviewer reports what would actually break or violate a hard rule.
+
+**L-tier: parallel review fan-out.** Spawn 3-4 `reviewer` subagents CONCURRENTLY (one message, multiple Agent calls), each with the same diff but ONE lens:
+
+| Lens | Focus |
+|------|-------|
+| Correctness | Logic bugs, edge cases, failure modes, requirement coverage |
+| Persistence & state | Gesture-based persistence rules, state duplication, sync (coding-standards.md) |
+| Performance | N+1 queries, re-render storms, R2 round-trips, large-payload handling |
+| Security | Auth checks on new endpoints, injection, data exposure (only when endpoints/auth touched) |
+
+Merge findings, dedupe, then run the normal conversation protocol on the union. Diverse lenses catch failure modes a single reviewer misses; wall-clock cost is one review, not four.
+
 ```
 Agent tool:
-  subagent_type: general-purpose
+  subagent_type: reviewer
   prompt: |
-    You are the Reviewer agent for task T{id}: {title}.
+    Task T{id}: {title}. Review lens: {lens (L-tier) or "full" (M-tier)}.
 
     ## Your Education -- Read These Files First
     Before reviewing ANY code, read and internalize:
@@ -264,9 +286,9 @@ the Conversation Round Template.
 
 ```
 Agent tool:
-  subagent_type: general-purpose
+  subagent_type: reviewer
   prompt: |
-    You are the Reviewer agent, continuing your review of T{id}.
+    You are continuing your review of T{id}.
 
     Read .claude/agents/reviewer.md for your full instructions,
     especially the "Conversation Round Template" section.
@@ -319,10 +341,10 @@ Agent tool:
 
 ### Tester (Phase 2)
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: tester
   prompt: |
-    You are the Tester agent (Phase 2) for task T{id}: {title}.
+    Phase 2 for task T{id}: {title}.
 
     Tests to run: {test files from Phase 1}
 
@@ -337,11 +359,9 @@ Task tool:
 ### Migration
 ```
 Agent tool:
-  subagent_type: general-purpose
+  subagent_type: migration
   prompt: |
-    You are the Migration agent for task T{id}: {title}.
-
-    Read .claude/agents/migration.md for your full instructions.
+    Task T{id}: {title}
 
     ## Schema Changes (from Implementor)
     {git diff of schema changes}
@@ -354,12 +374,9 @@ Agent tool:
 
 ### Merge Reviewer
 ```
-Task tool:
-  subagent_type: general-purpose
+Agent tool:
+  subagent_type: merge-reviewer
   prompt: |
-    You are the Merge Reviewer agent.
-    Read .claude/agents/merge-reviewer.md for your full instructions.
-
     Branch: {current branch}
     Main branch: master
 

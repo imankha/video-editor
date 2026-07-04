@@ -1,3 +1,9 @@
+---
+name: merge-reviewer
+description: Pre-merge audit of all branch changes against project coding standards - sync/persistence strategy, state management, architecture, and schema migration coverage. Invoke when the user asks whether a branch is ready to merge, push, or open a PR. Bash is for read-only git/test commands; this agent must never edit code.
+tools: Read, Grep, Glob, Bash
+---
+
 # Merge Reviewer Agent
 
 ## Purpose
@@ -28,6 +34,8 @@ Run: git diff master...HEAD to get the full diff of this branch.
 Also run: git log --oneline master..HEAD to see all commits.
 
 ## Review Checklist
+
+The rules behind these checks are defined in `.claude/references/coding-standards.md` — single source of truth. Read it first; the items below are merge-time checks, not rule definitions.
 
 Work through each checklist item. For each, state PASS or FAIL with specific file:line references.
 
@@ -78,19 +86,32 @@ The #1 priority. Every DB write MUST trace to a named user gesture. Scan ALL cha
 - [ ] No defensive fixes that mask bugs in code we control
 - [ ] No over-engineering (unnecessary abstractions, feature flags, backwards-compat shims)
 
-### 5. Schema Migrations (if database.py changed)
+### 5. Schema Migrations (if schema code changed)
 
-- [ ] Any new column in a CREATE TABLE statement has a matching entry in `scripts/migrate-schema.py` MIGRATIONS list
-- [ ] Any new index has a matching entry in the INDEXES list
-- [ ] Column definitions match exactly between database.py and migrate-schema.py (name, type, default)
+Schema lives in three tracks (see CLAUDE.md § Migration System and `.claude/agents/migration.md`):
 
-**Why this matters:** Existing user databases were created with older CREATE TABLE schemas. New columns only appear for new users unless we explicitly ALTER TABLE via the migration script. The deploy script runs pending migrations automatically -- but only if the entries are there.
+| Track | Schema location |
+|-------|-----------------|
+| `user_db` | `src/backend/app/services/user_db.py` (`_USER_DB_SCHEMA`) |
+| `profile_db` | `src/backend/app/database.py` (`ensure_database()`) |
+| `postgres` | `src/backend/app/services/pg.py` (`_SCHEMA_DDL`) |
+
+If the diff touches any of these (new column, table, or index) or changes stored data format:
+
+- [ ] A versioned migration file exists: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`
+- [ ] The migration is imported in the track's `__init__.py` and appended to its `MIGRATIONS` list
+- [ ] Version number is the next sequential integer (never reused, never skipped)
+- [ ] The base schema (`_SCHEMA_DDL` / `ensure_database()` / `_USER_DB_SCHEMA`) is updated too, so fresh databases match migrated ones
+- [ ] Migration follows the rules in `.claude/agents/migration.md` (no `conn.commit()`, idempotent where possible, schema-only, correct param style per track)
+
+**Why this matters:** Existing databases were created with older schemas; new columns only appear for new users unless a versioned migration ALTERs them. Migrations do NOT auto-run on deploy or startup -- they must be triggered explicitly after deploy via `POST /api/admin/migrate` (admin session) or fly ssh. If schema changed, flag in your report that a post-deploy migration run is required.
 
 ### 6. Keyframe Data Model (if keyframe code changed)
 
 - [ ] Frame-based (not time-based) keyframe values
-- [ ] Origin tracking preserved ('permanent' | 'user' | 'trim')
-- [ ] ensurePermanentKeyframes fixups stay memory-only (not persisted)
+- [ ] Flat-list model respected: NO permanent boundary keyframes reintroduced (model removed 2026-06-21; empty list = default centered crop; see .claude/knowledge/keyframes-framing.md)
+- [ ] Runtime fixups (sorting, origin normalization) stay memory-only (not persisted)
+- [ ] Keyframe edits persist via resolveTargetFrame identity (no raw frame/time near-duplicates)
 - [ ] trimRange in segments_data only (not in timing_data)
 
 ## Output Format

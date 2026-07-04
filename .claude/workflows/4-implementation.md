@@ -64,7 +64,7 @@ Spawn parallel `general-purpose` subagents for consumer files. Rules:
   1. Task ID + title (context)
   2. The plan section for ITS files only (copy from design doc)
   3. API contracts from foundation files (signatures, NOT full source)
-  4. Coding standards summary (inline — don't rely on file references)
+  4. Pointer to `.claude/references/coding-standards.md` (single source of truth — instruct the subagent to read it before editing)
   5. Instruction: "Read then edit ONLY your assigned files"
 - **Use the per-file subagent template** from `.claude/agents/implementor.md`
 
@@ -118,23 +118,7 @@ Context saved: ~60% less file content in main agent.
 
 ## Core Pattern: MVC + Data Always Ready
 
-All implementations must follow:
-
-```
-Screen (data fetching, guards data readiness)
-  └── Container (state logic, event handlers)
-        └── View (presentational only, assumes data exists)
-```
-
-**Data Always Ready**:
-- Parent guards: `{data && <Child data={data} />}`
-- Child assumes: `function Child({ data }) { /* data is never null */ }`
-- Views never fetch, never check for null
-
-**Reactive Updates**:
-- State lives in Zustand stores or Screen-level hooks
-- Views subscribe to state, re-render on changes
-- No imperative "refresh" or "update" calls
+See [coding-standards.md](../references/coding-standards.md) § MVC + Data Always Ready — single source of truth. All implementations must follow it.
 
 ## Primary Concerns
 
@@ -149,27 +133,7 @@ Screen (data fetching, guards data readiness)
 
 ## Derive, Don't Duplicate
 
-When multiple variables represent the same underlying state, bugs happen when they get out of sync.
-
-**Bad** - Multiple independent variables:
-```python
-def send_progress(phase, done, status, progress):  # 4 ways to say "complete"
-    if done or phase == 'complete' or status == 'complete' or progress >= 100:
-        ...  # Which one is right? They can disagree!
-```
-
-**Good** - One source of truth, derive the rest:
-```python
-def send_progress(phase):  # phase is the ONLY input
-    status = phase_to_status(phase)  # Derived - can't be wrong
-    done = phase in (Phase.COMPLETE, Phase.ERROR)  # Derived
-```
-
-**Rules:**
-1. Pick ONE authoritative variable (usually the most granular)
-2. Derive everything else via functions
-3. Never pass derived values as parameters
-4. Use enums, not strings
+See [coding-standards.md](../references/coding-standards.md) § State Management > Derive, Don't Duplicate — single source of truth (includes the never-pass-derived-values-as-parameters rule and backend example).
 
 ---
 
@@ -275,17 +239,8 @@ While writing code:
 
 ## Frontend Standards
 
-### Data Guards
-```jsx
-{selectedClip && <ClipEditor clip={selectedClip} />}
-```
-
-### MVC Structure
-```
-Screen (data fetching, hook initialization)
-  └── Container (state logic, event handlers)
-        └── View (presentational, props only)
-```
+### Data Guards + MVC Structure
+See [coding-standards.md](../references/coding-standards.md) § MVC + Data Always Ready and § Data Guards — single source of truth.
 
 ### State
 - Zustand stores for global state
@@ -293,12 +248,7 @@ Screen (data fetching, hook initialization)
 - No prop drilling from App.jsx
 
 ### Keyframes
-```javascript
-keyframe = {
-  frame: number,  // Frame-based, not time
-  origin: 'permanent' | 'user' | 'trim',
-}
-```
+Flat list, NO permanent boundary keyframes (model removed 2026-06-21): any keyframe may be deleted; empty list = default centered crop; trim is virtual. Frame-based (not time). See [.claude/knowledge/keyframes-framing.md](../knowledge/keyframes-framing.md) — single source of truth.
 
 ### Skills (load as needed)
 | Skill | Path |

@@ -81,6 +81,35 @@ TOML
   fi
 fi
 
+# Lint hooks: the host keeps these in .claude/settings.json, which is gitignored
+# (its permissions allowlist holds tokens), so the clone arrives without them.
+# Recreate just the hooks wiring here so the in-container Claude gets the same
+# eslint/ruff feedback loop. Never clobber an existing project settings file.
+if [ ! -f /workspace/.claude/settings.json ]; then
+  mkdir -p /workspace/.claude
+  cat > /workspace/.claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-changed.cjs\"",
+            "timeout": 60,
+            "statusMessage": "Linting changed file..."
+          }
+        ]
+      }
+    ]
+  }
+}
+JSON
+fi
+# ruff isn't baked into the image; the hook degrades silently without it.
+command -v ruff >/dev/null 2>&1 || sudo pip install --quiet ruff 2>/dev/null || true
+
 # Container fact sheet: overrides the repo CLAUDE.md where the host docs are
 # wrong INSIDE this container (Windows venv paths, MCP-only tools, ...). Claude
 # Code auto-loads CLAUDE.local.md; rewritten on every bootstrap to stay current.

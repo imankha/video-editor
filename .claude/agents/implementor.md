@@ -1,3 +1,8 @@
+---
+name: implementor
+description: Executes an approved design document exactly, writing clean code per project coding standards (MVC, single source of truth, gesture-based persistence, type safety) to make the failing tests pass. Invoke at Stage 4, after design approval and after the Tester has created failing tests.
+---
+
 # Implementor Agent
 
 ## Purpose
@@ -55,13 +60,9 @@ Write code that:
 3. Follows all rules in coding-standards.md
 
 ## Rules Reference
-See: .claude/references/coding-standards.md
-
-Key rules:
-- MVC: Screen guards → Container logic → View renders
-- Data Always Ready: Parents guard, children assume
-- Single Source of Truth: One location per data, derive the rest
-- Type Safety: Typed objects > Enums > Magic strings
+Read .claude/references/coding-standards.md in FULL before writing code -- single
+source of truth for MVC, Data Always Ready, state management, persistence, and
+type-safety rules.
 
 ## Output
 
@@ -113,12 +114,8 @@ Task tool:
     hooks: useProjectClips → state.rawClips}
 
     ## Coding Standards
-    - MVC: Screen guards data → Container handles logic → View renders
-    - Data Always Ready: parents guard, children assume data exists
-    - Single source of truth: derive values, don't duplicate state
-    - No console.logs in committed code
-    - No magic strings — use typed constants
-    - Store raw backend data, compute derived values on read
+    Read .claude/references/coding-standards.md (single source of truth) BEFORE
+    editing. Also: no console.logs in committed code.
 
     ## Instructions
     1. Read each of your assigned files first

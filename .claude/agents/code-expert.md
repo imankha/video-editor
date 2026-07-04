@@ -1,3 +1,9 @@
+---
+name: code-expert
+description: Audits the codebase before implementation begins, mapping entry points, data flow, similar patterns, dependencies, and bug smells for a task. Invoke at Task Start (Stage 1), before architecture or implementation, whenever a task needs a code audit. Read-only.
+tools: Read, Grep, Glob
+---
+
 # Code Expert Agent
 
 ## Purpose
@@ -73,14 +79,15 @@ If this is a bug fix, look for architectural red flags:
 - Would you need to "invalidate" or "reload" data?
 - Are there multiple sources of truth?
 
-**Persistence Smell (CRITICAL — see T280):**
-- Are there multiple save effects (unmount, clip-switch, gesture POST) writing the same data?
+**Persistence Smell (CRITICAL):**
+- Is there a `useEffect` that watches state and writes to a store or the backend? (reactive persistence — banned)
+- Are there multiple save paths (unmount save, clip-switch save, reactive effect) writing the same data?
 - Is there a save effect in a useEffect cleanup function (return () => save())?
 - Does a clip-switch effect save the "previous" clip before loading the new one?
 - Is the same data stored in multiple fields (e.g., trimRange in both timing_data and segments_data)?
-- Does a gesture handler call the backend directly instead of updating the Zustand store?
+- Is there a write that can't be traced to a named user gesture, or that sends more data than the gesture changed?
 
-**The correct pattern (established in T280):** ONE reactive sync effect writes hook state → Zustand store. No unmount saves, no clip-switch saves, no gesture POST calls. See [Coding Standards - Hook → Store Sync](../references/coding-standards.md).
+**The correct pattern:** gesture-based, never reactive — each user gesture fires a surgical API call from its handler; full-state saves only on explicit gestures like export. See [Coding Standards § Persistence: Gesture-Based, Never Reactive](../references/coding-standards.md) — single source of truth.
 
 **If you detect a bug smell:**
 - Flag it explicitly in your report

@@ -90,6 +90,26 @@ const isLoading = status === 'loading';  // Derived
 const isError = status === 'error';      // Derived
 ```
 
+Applies to backend code too, including function signatures — **never pass derived values as parameters**; derive them inside from the one authoritative input:
+
+```python
+# BAD: 4 ways to say "complete" — they can disagree
+def send_progress(phase, done, status, progress):
+    if done or phase == 'complete' or status == 'complete' or progress >= 100:
+        ...
+
+# GOOD: phase is the ONLY input, the rest is derived
+def send_progress(phase):
+    status = phase_to_status(phase)                # Derived - can't be wrong
+    done = phase in (Phase.COMPLETE, Phase.ERROR)  # Derived
+```
+
+Rules:
+1. Pick ONE authoritative variable (usually the most granular)
+2. Derive everything else via functions
+3. Never pass derived values as parameters
+4. Use enums, not strings
+
 ### State Location Guide
 
 | State Type | Location | Example |
@@ -285,13 +305,13 @@ function save() { api.save(data); }
 
 ### Persistence: Gesture-Based, Never Reactive
 
-React hooks hold ephemeral editing state that includes **runtime fixups** — internal corrections like `ensurePermanentKeyframes` (adds boundary keyframes) and origin normalization. These fixups are necessary for correct rendering but were never in the DB. They must not be persisted.
+React hooks hold ephemeral editing state that includes **runtime fixups** — internal corrections like keyframe sorting (`ensurePermanentKeyframes` — legacy name, now just a sort; the permanent-boundary model was removed 2026-06-21) and origin normalization. These fixups are necessary for correct rendering but were never in the DB. They must not be persisted.
 
 **The fundamental problem with reactive persistence:**
 
 A `useEffect` that watches hook state and writes it to a store or backend cannot distinguish between:
 - A user gesture (crop drag, keyframe delete) — should persist
-- An internal fixup (ensurePermanentKeyframes, origin correction) — should NOT persist
+- An internal fixup (sorting, origin correction) — should NOT persist
 - A restore operation (loading from DB) — should NOT persist
 
 All three change the same hook state. The effect sees "state changed" and writes it all back. This creates a feedback loop: load → fixup → persist fixup → next load restores fixup data → fixup runs again on already-fixed data → corruption compounds.
@@ -330,7 +350,7 @@ useEffect(() => {
 }, [keyframes, segments, clipId]);
 ```
 
-**Why this corrupts data:** `keyframes` includes runtime fixups from `ensurePermanentKeyframes`. This effect writes them to the store. On next load, the fixup data is treated as user data. The fixup runs again. Origins get corrupted, duplicate keyframes appear.
+**Why this corrupts data:** `keyframes` includes runtime fixups (sorting, normalization). This effect writes them to the store. On next load, the fixup data is treated as user data. The fixup runs again. Origins get corrupted, duplicate keyframes appear (this is exactly how T350 corrupted keyframe origins).
 
 **Full-state saves (saveCurrentClipState):**
 
@@ -339,7 +359,7 @@ Full-state persistence (PUT with all keyframes + segments) is allowed ONLY when 
 **Rules:**
 1. **Every DB write traces to a named user gesture** — if you can't name it, don't persist
 2. **No `useEffect` that writes to store or backend** — move persistence into the gesture handler
-3. **Runtime fixups are memory-only** — `ensurePermanentKeyframes`, origin correction, restore normalization stay in hooks
+3. **Runtime fixups are memory-only** — sorting, origin correction, restore normalization stay in hooks
 4. **Restore is read-only** — loading from DB must not trigger write-back
 5. **Surgical over full-state** — send only the changed field, not all hook state
 6. **Single write path per data** — each piece of data has exactly one code path that persists it

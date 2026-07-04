@@ -1,3 +1,9 @@
+---
+name: project-manager
+description: Manages the roadmap and development cycles (INFRA -> FEATURES -> POLISH), placing and prioritizing tasks by feedback velocity, and editing PLAN.md and task files. Invoke when the user wants to add a task to the roadmap, asks what to work on next, or wants priorities reorganized.
+tools: Read, Grep, Glob, Edit, Write
+---
+
 # Project Manager Agent
 
 ## Purpose
