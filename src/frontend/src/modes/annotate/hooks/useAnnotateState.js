@@ -41,6 +41,12 @@ export default function useAnnotateState() {
   const [annotateGameId, setAnnotateGameId] = useState(null);
   const [annotateGameName, setAnnotateGameName] = useState(null);
 
+  // bug 27p: true when the loaded game's source video has expired (R2 source
+  // hard-deleted post-grace). Drives a deliberate "source expired" state in the
+  // player instead of a broken/hanging <video>. Authoritative value comes from
+  // the /load response (game.storage_status); annotations stay readable.
+  const [annotateSourceExpired, setAnnotateSourceExpired] = useState(false);
+
   // Export/import loading states
   const [isCreatingAnnotatedVideo, setIsCreatingAnnotatedVideo] = useState(false);
   const [isImportingToProjects, setIsImportingToProjects] = useState(false);
@@ -124,6 +130,7 @@ export default function useAnnotateState() {
     setAnnotateVideoMetadata(null);
     setAnnotateGameId(null);
     setAnnotateGameName(null);
+    setAnnotateSourceExpired(false);
     setIsCreatingAnnotatedVideo(false);
     setIsImportingToProjects(false);
     setIsUploadingGameVideo(false);
@@ -183,6 +190,10 @@ export default function useAnnotateState() {
     setAnnotateGameId,
     annotateGameName,
     setAnnotateGameName,
+
+    // bug 27p: source-video expiry (graceful degradation)
+    annotateSourceExpired,
+    setAnnotateSourceExpired,
 
     // Loading states
     isCreatingAnnotatedVideo,

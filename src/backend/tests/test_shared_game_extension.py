@@ -510,17 +510,10 @@ class TestStorageStatusDerivation:
 
     @staticmethod
     def _derive_status(expires_at_val, auto_export_status=None):
-        if expires_at_val:
-            try:
-                exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
-                is_expired = exp_dt.replace(tzinfo=None) < datetime.utcnow()
-            except (ValueError, TypeError):
-                is_expired = False
-            return 'expired' if is_expired else 'active'
-        elif auto_export_status:
-            return 'expired'
-        else:
-            return 'active'
+        # Exercise the real shared helper so this test and the endpoints can't
+        # diverge (games.py list_games + load_game both use it).
+        from app.routers.games import _compute_storage_status
+        return _compute_storage_status(expires_at_val, auto_export_status)
 
     def test_active_ref_shows_active(self, pg_conn):
         future = (datetime.utcnow() + timedelta(days=10)).isoformat()

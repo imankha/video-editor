@@ -210,6 +210,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
     annotateVideoMetadata,
     annotateGameName,
     annotateGameId,
+    annotateSourceExpired,
     annotateFullscreen,
     showAnnotateOverlay,
     annotateSelectedLayer,
@@ -718,6 +719,7 @@ export function AnnotateScreen({ onClearSelection, onModeChange }) {
         error={videoError}
         isUrlExpiredError={isUrlExpiredError}
         onRetryVideo={handleRetryVideo}
+        isSourceExpired={annotateSourceExpired}
         handlers={multiVideo ? {} : handlers}
         // Fullscreen state
         annotateFullscreen={annotateFullscreen}

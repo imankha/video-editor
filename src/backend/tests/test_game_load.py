@@ -193,6 +193,55 @@ class TestGameLoad:
         assert body["teammate_shares"] == []
         assert body["game"]["annotations"] == []
 
+    def test_load_storage_status_active_when_no_ref(self, game_minimal):
+        """bug 27p: a game with a live source (no game_storage ref, no
+        auto-export) reports storage_status 'active' so Annotate plays normally."""
+        game_id = game_minimal
+
+        with patch(
+            "app.routers.games.get_game_video_url",
+            return_value="https://r2.example.com/games/min123hash.mp4?sig=test",
+        ):
+            r = client.get(f"/api/games/{game_id}/load")
+
+        assert r.status_code == 200
+        assert r.json()["game"]["storage_status"] == "active"
+
+    def test_load_storage_status_expired(self, game_minimal):
+        """bug 27p: when the game's game_storage ref has a past expiry, /load
+        reports storage_status 'expired' so Annotate can show the expired state
+        instead of a broken player."""
+        from datetime import datetime, timedelta
+
+        game_id = game_minimal
+        past = (datetime.utcnow() - timedelta(days=1)).isoformat()
+
+        set_current_user_id(TEST_USER_ID)
+        set_current_profile_id(TEST_PROFILE_ID)
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) "
+                "VALUES ('min123hash', 500000, ?)",
+                (past,),
+            )
+            conn.commit()
+
+        try:
+            with patch(
+                "app.routers.games.get_game_video_url",
+                return_value="https://r2.example.com/games/min123hash.mp4?sig=test",
+            ):
+                r = client.get(f"/api/games/{game_id}/load")
+
+            assert r.status_code == 200
+            assert r.json()["game"]["storage_status"] == "expired"
+        finally:
+            with get_db_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM game_storage WHERE blake3_hash = 'min123hash'")
+                conn.commit()
+
     def test_load_not_found(self):
         """Non-existent game_id returns 404."""
         r = client.get("/api/games/999999/load")

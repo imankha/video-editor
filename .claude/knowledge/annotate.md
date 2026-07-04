@@ -41,6 +41,10 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   → applyGameData: gameVideos from gameData.videos, playhead resume, sharedTagData
   → importAnnotations → clipRegions (each carries rawClipId)
 ```
+- **`/load` carries `game.storage_status`** (`'active'|'expired'`, bug 27p): computed by
+  `games.py:_compute_storage_status(expires_at_val, auto_export_status)` — the single source of
+  truth shared with `list_games` (game_storage expiry passed, OR no ref but `auto_export_status`
+  set = source deleted post-grace). `applyGameData` maps it to `annotateSourceExpired`.
 - **One annotation = one `raw_clips` row** (per-user SQLite, not Postgres). Region shape:
   `{id, rawClipId, startTime, endTime, name, tags, notes(≤280), rating(1-5, default 4),
   videoSequence, tagged_teammates, my_athlete, autoProjectId}` (useAnnotate.js:10-30, constants
@@ -92,6 +96,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   `updateClip(clipId, {create_project: true})` → `PUT /clips/raw/{id}`, optimistically flips
   `in_drafts`; button disabled while `in_drafts` is true. Clips have NO independent source video,
   so re-materializing clips from an expired game was deferred.
+- **Expired-game Annotate playback = graceful degradation (bug 27p).** When
+  `annotateSourceExpired` (from `/load`'s `game.storage_status === 'expired'`), `AnnotateModeView`
+  renders a deliberate yellow "Source video expired" panel in the video area INSTEAD of any
+  `<video>` (guards the single-video `VideoPlayer` AND the multi-video branch), so no
+  broken/hanging player mounts against the hard-deleted R2 source. The **"Playback Annotations"**
+  button is also disabled when expired (its `enterPlaybackMode` is the only entry to the separate
+  `isPlaybackMode` return tree, which mounts dual `<video>` A/B against the same dead source — the
+  video-area guard alone does NOT cover it). The clips sidebar (`ClipsSidePanel`) is unaffected —
+  annotations stay readable. State lives in `useAnnotateState` (`annotateSourceExpired`), set from
+  `storage_status` in `applyGameData` and cleared at the start of `handleLoadGame` (so an
+  expired->healthy switch doesn't flash the panel); reset in `resetAnnotateState`.
+  Re-materialization stays deferred (T4130). The recap viewer has separate expired handling
+  (`RecapPlayerModal` `recapVideoMissing`).
 - **Resume position**: `computeResumePosition` prefers `last_playhead_position`, falls back to
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
 
