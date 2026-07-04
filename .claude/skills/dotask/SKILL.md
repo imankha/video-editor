@@ -52,9 +52,10 @@ Turn planned task(s) into finished, pushed work — driven entirely from this on
    rules (explicit `git add`, no status changes, design-gate stop, update knowledge docs at
    Stage 7). Write to `C:\tmp\kickoff-<SLUG>.md`.
 
-5. **Spawn workers:** apply [spawn-worker](../spawn-worker/SKILL.md) once per task. Drive all
-   workers concurrently with `run_in_background: true`; report each worker's progress here as
-   notifications arrive. Relay any design gates to the user.
+5. **Spawn workers:** apply [spawn-worker](../spawn-worker/SKILL.md) once per task. Run the
+   container `up` steps SEQUENTIALLY (port-offset allocation races when parallel — see
+   spawn-worker), then drive all workers concurrently with `run_in_background: true`; report
+   each worker's progress here as notifications arrive. Relay any design gates to the user.
 
 6. **Land:** per worker, sanity-check diffstat -> `bash scripts/task.sh push <SLUG>` -> tell
    the user which branches are ready. Cleanup is automatic on merge (post-merge hook); see

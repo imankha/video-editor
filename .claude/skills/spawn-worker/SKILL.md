@@ -28,6 +28,11 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    docker exec -i -u dev reel-task-<SLUG> bash -c 'cat > /workspace/.dotask-kickoff.md' < /c/tmp/kickoff-<SLUG>.md
    ```
    First `up` builds the image (a few min); later runs are fast.
+   **`up` calls must run SEQUENTIALLY across workers** — `alloc_offset` in task.sh scans
+   ports then persists the offset to `<checkout>/.task-env` without a lock, so parallel
+   `up`s grab the same offset and the losers fail with "port is already allocated".
+   Recovery from a poisoned worker: `docker rm -f reel-task-<SLUG>`, delete
+   `C:\work\tasks\<SLUG>\.task-env`, re-run `up`. Only the step-3 drive calls parallelize.
 
 3. **Drive** with headless CLI calls; ALWAYS `run_in_background: true` so other workers and
    the supervisor keep moving:
