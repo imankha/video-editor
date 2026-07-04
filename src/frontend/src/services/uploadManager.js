@@ -196,7 +196,9 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
 
       if (!isRetryable || attempt === MAX_RETRIES) {
         if (sessionId && completedResults.length > 0) {
-          await saveCompletedParts(sessionId, completedResults.splice(0)).catch(() => {});
+          // saveCompletedParts surfaces its own failures (returns false, logs a
+          // RESUME-STATE marker) and never rejects — no swallowing catch needed.
+          await saveCompletedParts(sessionId, completedResults.splice(0));
         }
         throw error;
       }
@@ -208,20 +210,41 @@ async function uploadPartWithRetry(file, part, onProgress, faststartInfo, sessio
 }
 
 /**
- * Save completed parts to backend for resume support
+ * Save completed parts to backend for resume support.
+ *
+ * Non-fatal to the current upload, but NOT silent: if this fails, a browser
+ * crash mid-upload can't resume from these parts (they'll re-upload). The old
+ * version swallowed everything with a bare console.warn AND — because apiFetch
+ * doesn't reject on a non-ok response — never even noticed an HTTP 4xx/5xx. We
+ * now check res.ok, log a clear RESUME-STATE marker, and return whether resume
+ * state was actually persisted so the caller can flag unreliable resume.
+ *
  * @param {string} sessionId - Upload session ID
  * @param {Array} parts - Array of { part_number, etag }
+ * @returns {Promise<boolean>} - true if progress was persisted, false otherwise
  */
 async function saveCompletedParts(sessionId, parts) {
   try {
-    await apiFetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
+    const res = await apiFetch(`${API_BASE}/api/games/upload/${sessionId}/parts`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ parts }),
     });
+    if (!res.ok) {
+      console.error(
+        `[Upload] RESUME-STATE SAVE FAILED: session ${sessionId} returned ${res.status} ` +
+        `(${parts.length} part(s)). Resume will re-upload these parts if interrupted.`
+      );
+      return false;
+    }
+    return true;
   } catch (e) {
-    // Non-fatal - just means resume won't work if browser crashes
-    console.warn('Failed to save completed parts:', e);
+    console.error(
+      `[Upload] RESUME-STATE SAVE FAILED: session ${sessionId} network error ` +
+      `(${parts.length} part(s)). Resume will re-upload these parts if interrupted:`,
+      e
+    );
+    return false;
   }
 }
 
@@ -275,6 +298,14 @@ async function uploadParts(
 
   const partsToSave = [];
   const SAVE_BATCH_SIZE = 1;
+
+  // Track whether every resume-state save succeeded. If any failed, resume for
+  // this session is unreliable and we say so loudly at the end (see below).
+  // pendingSaves holds the fire-and-forget batch saves so the end-of-upload
+  // aggregate check can await them and be deterministic.
+  let resumeStateReliable = true;
+  const pendingSaves = [];
+  const recordSave = (ok) => { if (!ok) resumeStateReliable = false; };
 
   // Adaptive concurrency: track throughput per completed part
   const throughputSamples = [];
@@ -339,7 +370,10 @@ async function uploadParts(
 
           if (sessionId && partsToSave.length >= SAVE_BATCH_SIZE) {
             const batch = partsToSave.splice(0, partsToSave.length);
-            saveCompletedParts(sessionId, batch);
+            // Fire-and-forget so a slow save doesn't stall the upload, but record
+            // the outcome (and retain the promise) so we can flag unreliable
+            // resume once the upload ends.
+            pendingSaves.push(saveCompletedParts(sessionId, batch).then(recordSave));
           }
         })
         .catch((error) => {
@@ -357,7 +391,20 @@ async function uploadParts(
 
   // Save any remaining parts
   if (sessionId && partsToSave.length > 0) {
-    await saveCompletedParts(sessionId, partsToSave);
+    recordSave(await saveCompletedParts(sessionId, partsToSave));
+  }
+
+  // Let the fire-and-forget batch saves settle so the aggregate flag is
+  // deterministic (each also logs on its own failure). saveCompletedParts
+  // never rejects, so Promise.all can't reject here.
+  await Promise.all(pendingSaves);
+
+  // If any resume-state save failed, don't pretend resume is intact.
+  if (sessionId && !resumeStateReliable) {
+    console.warn(
+      `[Upload] Resume state for session ${sessionId} is INCOMPLETE — one or more ` +
+      `part-progress saves failed. If interrupted, resume will re-upload the affected parts.`
+    );
   }
 
   return results;
@@ -482,15 +529,11 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
   }
 
   // Video already exists in R2 - skip upload.
-  // Simulate upload progress so UX is identical to a real upload (dedup is invisible).
+  // Dedup is instant: don't fake a multi-second "upload". Show honest messaging
+  // and go straight to complete.
   if (prepareData.status === UPLOAD_STATUS.EXISTS) {
     console.log('[ensureVideoInR2] Dedup: video already in R2, skipping upload');
-    notify(UPLOAD_PHASE.UPLOADING, 30, 'Uploading...');
-    await new Promise(r => setTimeout(r, 400));
-    notify(UPLOAD_PHASE.UPLOADING, 70, 'Uploading...');
-    await new Promise(r => setTimeout(r, 400));
-    notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
-    await new Promise(r => setTimeout(r, 300));
+    notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
     notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
     return {
       blake3_hash: hash,
@@ -552,7 +595,18 @@ export async function ensureVideoInR2(file, onProgress, options = {}) {
 
   if (!finalizeRes.ok) {
     const error = await finalizeRes.json().catch(() => ({}));
-    throw new Error(error.detail || `Finalize failed: ${finalizeRes.status}`);
+    // Log enough to diagnose an R2 multipart-completion failure: which session,
+    // how many parts we sent, and the raw backend body.
+    console.error(
+      `[ensureVideoInR2] finalize-upload FAILED: ${finalizeRes.status}`,
+      { session: prepareData.upload_session_id, partCount: parts.length, body: error }
+    );
+    // Prefer the backend's actionable detail; otherwise give the user a concrete
+    // next step instead of a bare "Finalize failed: 500".
+    const message = error.detail
+      || `Couldn't finish saving your video (finalize failed, status ${finalizeRes.status}). `
+        + `The bytes uploaded but the final step didn't complete — please try uploading again.`;
+    throw new Error(message);
   }
 
   const finalizeData = await finalizeRes.json();
@@ -685,18 +739,14 @@ export async function uploadGame(file, onProgress, options = {}) {
     gameResult = await createGame(options, [videoRef], 'pending');
 
     // Dedup: if user already owns this video, game is already ready — skip upload.
-    // Simulate upload progress so UX is identical to a real upload (dedup is invisible).
+    // Dedup is instant: don't fake a multi-second "upload". Show honest messaging
+    // and go straight to complete.
     if (gameResult.status === 'already_owned') {
       console.log('[uploadGame] Dedup: user already owns this video, skipping upload');
       if (options.onGameCreated) {
         options.onGameCreated({ game_id: gameResult.game_id, name: gameResult.name });
       }
-      notify(UPLOAD_PHASE.UPLOADING, 30, 'Uploading...');
-      await new Promise(r => setTimeout(r, 400));
-      notify(UPLOAD_PHASE.UPLOADING, 70, 'Uploading...');
-      await new Promise(r => setTimeout(r, 400));
-      notify(UPLOAD_PHASE.FINALIZING, 0, 'Finalizing upload...');
-      await new Promise(r => setTimeout(r, 300));
+      notify(UPLOAD_PHASE.FINALIZING, 100, 'Already uploaded - finishing up');
       notify(UPLOAD_PHASE.COMPLETE, 100, 'Upload complete');
       return {
         status: gameResult.status,
