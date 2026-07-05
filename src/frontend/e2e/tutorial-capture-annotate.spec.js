@@ -29,7 +29,7 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const kit = makeKit(page);
-  const { mark, ring, clearRing, act, drag, typeInto, dwell, step, videosReady } = kit;
+  const { mark, ring, ringUnion, clearRing, act, drag, typeInto, dwell, step, videosReady } = kit;
 
   // --- line 0: home screen ----------------------------------------------------
   await page.goto('/');
@@ -46,23 +46,25 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   await dwell(1);
   await mark(1, 'sport');
   await act(sportBtn);
-  await dwell(1.4);
+  await clearRing();
+  // keep the dialog up for the WHOLE sentence ("here, I'm selecting soccer") —
+  // everything between mark(1) and mark(2) is compressed into this sentence, so
+  // the modal must dominate that span and post-modal actions must be minimal
   const profileRow = page.locator(
     'button[title="Active profile"], button[title="Switch to this profile"]').first();
+  try { await ring(profileRow, 8); } catch {}
+  await dwell(3.8);
   try { await act(profileRow); } catch {}
   await clearRing();
-  await dwell(1.2);
   await page.keyboard.press('Escape');
-  await dwell(0.5);
+  await page.getByRole('button', { name: /^Games/ }).first().click();
 
   // --- line 2: the game opens in Annotate ----------------------------------------
   step('open game');
-  await page.getByRole('button', { name: /^Games/ }).first().click();
-  await dwell(1);
   const gameCard = page.getByRole('button', { name: /at Sporting Mar 21/ }).first();
-  await ring(gameCard, 8);
-  await dwell(0.8);
   await mark(2, 'opens');
+  await ring(gameCard, 8);
+  await dwell(0.7);
   await act(gameCard);
   await clearRing();
   try {
@@ -111,13 +113,19 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   await nameInput.waitFor();
   await mark(6);
   const scrubRegion = page.locator('div.h-10.bg-gray-800').first();
-  try { await ring(scrubRegion, 12); } catch {}
+  // NOTE: .last() — soccer has a 'Save' TAG CHIP earlier in the form; the real
+  // Save button is in the form footer (last in DOM)
+  const saveBtnEarly = page.getByRole('button', { name: 'Save', exact: true }).last();
+  try { await ringUnion(scrubRegion, saveBtnEarly, 12); }  // ring the WHOLE editor panel
+  catch { try { await ring(scrubRegion, 12); } catch {} }
   await dwell(2.6);
   await clearRing();
 
   // --- line 7: drag the start/end handles -------------------------------------------------------
   step('trim handles');
   await mark(7, 'Drag');
+  try { await ring(scrubRegion, 10); } catch {}            // NOW the scrub region flashes
+  await dwell(1);
   try {
     const green = page.locator('[class*="bg-green-500/20"]').first();
     const g = await green.boundingBox({ timeout: 4000 });
@@ -127,6 +135,7 @@ test('capture annotate tutorial footage', async ({ browser }) => {
     const g2 = await green.boundingBox({ timeout: 4000 });
     await drag(g2.x + g2.width - 3, y, g2.x + g2.width + 22, y, 20);
   } catch { step('handle drag skipped'); }
+  await clearRing();
   await dwell(1.6);
 
   // --- line 8: describe the clip ------------------------------------------------------------------
@@ -167,10 +176,19 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   step('teammate');
   await mark(11, 'tag');
   try {
-    await typeInto(page.getByPlaceholder('Tag a teammate...'), 'Alex');
-    await page.keyboard.press('Enter');
+    const tagInput = page.getByPlaceholder('Tag a teammate...');
+    await typeInto(tagInput, 'Alex');
+    await tagInput.press('Enter');             // commits; the chip renders and the
+    await dwell(0.6);                          // 'Tag a teammate...' placeholder goes away
+    // verify: the committed chip is a text node 'Alex' (the placeholder locator
+    // no longer resolves after commit, so don't evaluate through it)
+    if (await page.getByText('Alex', { exact: true }).count() === 0) {
+      step('teammate chip not committed — pressing Enter again');
+      await page.keyboard.press('Enter');
+      await dwell(0.5);
+    }
   } catch { step('teammate skipped'); }
-  await dwell(2);
+  await dwell(1.4);
 
   // --- line 12: Create Reel ----------------------------------------------------------------------------------
   step('create reel');
@@ -186,7 +204,7 @@ test('capture annotate tutorial footage', async ({ browser }) => {
 
   // --- line 13: click Save ------------------------------------------------------------------------------------
   step('save');
-  const saveBtn = page.getByRole('button', { name: 'Save', exact: true }).first();
+  const saveBtn = page.getByRole('button', { name: 'Save', exact: true }).last();
   await ring(saveBtn, 8);
   await dwell(0.8);
   await mark(13, 'Save');
@@ -212,17 +230,35 @@ test('capture annotate tutorial footage', async ({ browser }) => {
 
   // --- line 16: clips play back with titles --------------------------------------------------------------------------
   await mark(16);
-  await dwell(6.5);
+  await dwell(5);
+  // leave playback so the tagged-teammates share button (main view) is reachable
+  try { await act(page.getByRole('button', { name: /Back to Annotate/ }).first()); } catch {}
+  await dwell(0.8);
 
-  // --- line 17: Share Annotations -----------------------------------------------------------------------------------------
+  // --- line 17: share with the teammates you tagged ---------------------------------------------------------------------
   step('share');
-  const share = page.getByRole('button', { name: /Share Annotations/ }).first();
+  let share = page.getByRole('button', { name: /Tagged Teammates/ }).first();
+  try { await share.waitFor({ timeout: 5000 }); }
+  catch {
+    step('tagged-teammates button absent — falling back to Share Annotations');
+    share = page.getByRole('button', { name: /Share Annotations/ }).first();
+  }
   await ring(share, 8);
   await dwell(0.8);
   await mark(17, 'Share');
   await act(share);
   await clearRing();
-  await dwell(3.5);
+  // privacy: blur real email addresses in the share modal (chips/text nodes)
+  await dwell(0.4);
+  await page.evaluate(() => {
+    const re = /\S+@\S+\.\S+/;
+    document.querySelectorAll('span,div,p,li,td').forEach(el => {
+      if (re.test(el.textContent || '') && el.offsetWidth > 40 && el.offsetWidth < 340) {
+        el.style.filter = 'blur(9px)';
+      }
+    });
+  }).catch(() => {});
+  await dwell(3.1);
 
   // --- end ----------------------------------------------------------------------
   await finishCapture(context, page, kit, QUEST_DIR, { width: W, height: H });

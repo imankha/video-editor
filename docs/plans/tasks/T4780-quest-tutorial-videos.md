@@ -1,0 +1,94 @@
+# T4780: New-User-Flow Quests — "Watch the tutorial" as Step 1 of every quest
+
+**Status:** TODO
+**Impact:** 8
+**Complexity:** 4
+**Priority:** P1
+**Created:** 2026-07-05
+**Updated:** 2026-07-05
+
+## What we're building (read this first)
+
+We now have four narrated tutorial videos — one per quest of the new-user flow
+(annotate → framing → overlay → publish). They are already produced and uploaded.
+Your job is to make **watching the right video the FIRST step of each quest**, with a
+player the user can launch directly from that quest step.
+
+You do NOT need to create or edit any videos. They already exist and get re-uploaded
+to the same URLs whenever they're re-recorded, so never hard-code anything about their
+content (lengths, thumbnails, etc.) — just play them.
+
+## The assets (already uploaded)
+
+R2 bucket `reelballers-assets`, one pair per quest:
+
+| Quest | Video | Subtitles (WebVTT) |
+|---|---|---|
+| annotate | `tutorials/annotate.mp4` | `tutorials/annotate.vtt` |
+| framing | `tutorials/framing.mp4` | `tutorials/framing.vtt` |
+| overlay | `tutorials/overlay.mp4` | `tutorials/overlay.vtt` |
+| publish | `tutorials/publish.mp4` | `tutorials/publish.vtt` |
+
+All MP4s are 1920×1080, H.264 + AAC, `+faststart` (they begin playing before fully
+downloaded). The `.vtt` files are the subtitle tracks — same base name as the video.
+
+**First sub-task:** figure out with the team how the app should serve these files
+(this bucket is separate from the user-data bucket `reel-ballers-users`). Two options —
+confirm which one we want before writing code:
+1. Make `reelballers-assets` public behind a domain (e.g. `assets.reelballers.com`)
+   and use plain URLs, or
+2. Add a tiny backend endpoint that 302-redirects/presigns `GET /api/assets/tutorials/{name}`.
+Do not copy the user-media presign helpers blindly — these are static shared assets, so
+long cache lifetimes and a public URL are fine (there is nothing private in them).
+
+## Step-by-step
+
+1. **Config.** Add a single source of truth mapping quest id → `{videoUrl, vttUrl, title}`
+   (e.g. in `src/frontend/src/config/questDefinitions.jsx`, where the quest steps live).
+2. **Player component.** Build `TutorialVideoModal` (one shared component):
+   - HTML5 `<video controls playsInline>` with the mp4 as `src` and
+     `<track kind="subtitles" srcLang="en" label="English" src={vttUrl} default>`.
+   - **Subtitles must be user-toggleable.** The native `controls` UI gives a CC toggle in
+     most browsers, but test Chrome/Safari/mobile; if the native toggle is missing or ugly,
+     add our own CC button that flips `video.textTracks[0].mode` between `'showing'`
+     and `'hidden'`. Default ON (`default` attribute) so a muted viewer still gets value.
+   - Fullscreen button (or rely on native controls), Escape/X to close.
+   - Mobile: the video is a 16:9 desktop-UI capture. Embedded at portrait width the text
+     is small — that's expected; make sure tap-to-fullscreen works (do NOT crop or zoom).
+   - Don't autoplay with sound (mobile browsers block it). Either wait for a tap on a
+     big play button, or autoplay muted with a "tap for sound" affordance.
+3. **Quest integration.** In the quest-step definitions, add a new FIRST step to each of
+   the four quests: "Watch the {quest} tutorial (60s)". The step renders a button/link
+   that opens `TutorialVideoModal` with that quest's entry.
+   - Mark the step complete when the user has opened the video and either watched ≥80%
+     (`timeupdate` listener) or closed it after at least 10s. Persist completion the same
+     way the other quest steps persist theirs (look at how existing steps record
+     completion in the quest state — copy that pattern, don't invent a new one).
+4. **Analytics (if the quest panel already logs step events)**: log open / complete with
+   the quest id, same shape as existing step events.
+
+## Acceptance criteria
+
+- [ ] Each of the 4 quests shows "Watch the tutorial" as its first step, launchable from
+      the quest panel.
+- [ ] Video plays in the modal on desktop Chrome + Safari and on a phone (fullscreen OK).
+- [ ] Subtitles render and can be toggled on/off by the user; default is ON.
+- [ ] Step completion persists (revisit the quest → step still checked).
+- [ ] No hard-coded video durations/thumbnails; URLs come from the single config map.
+- [ ] Videos still play when re-uploaded (no cache-busting bugs — assets are served with
+      `Cache-Control: public, max-age=3600`).
+
+## Context
+
+### Relevant files
+- `src/frontend/src/config/questDefinitions.jsx` — quest step definitions (the NUF copy
+  already references UI like the Add Clip button; add the watch-step here)
+- `src/frontend/src/components/QuestPanel.jsx` — quest step rendering
+- `src/frontend/src/components/MediaPlayer.jsx` — existing video modal to crib from
+  (but note it has no subtitle/track support — that's the new part)
+
+### How the videos are made (background only)
+The tutorials are generated by Playwright capture specs + a build pipeline in
+`ReelBallersTutroials/` (see its WORKFLOW.md). Re-recording re-uploads to the same R2
+keys via `workflow/upload_r2.py`, so this feature never needs code changes when the
+videos change.

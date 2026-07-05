@@ -45,9 +45,12 @@ test('capture publish tutorial footage', async ({ browser }) => {
   await dwell(4);
 
   // --- line 1: the draft is marked Done -----------------------------------------
-  const moveBtn = page.getByRole('button', { name: 'Move to My Reels' });
+  // target the staged 'Brilliant Pass' card specifically (other Done drafts may exist)
+  const card = page.locator('[data-testid="project-card"]')
+    .filter({ hasText: 'Brilliant Pass' })
+    .filter({ has: page.getByRole('button', { name: 'Move to My Reels' }) }).first();
+  const moveBtn = card.getByRole('button', { name: 'Move to My Reels' });
   await moveBtn.waitFor({ timeout: 20000 });
-  const card = page.locator('[data-testid="project-card"]').filter({ has: moveBtn }).first();
   await card.scrollIntoViewIfNeeded();
   await card.hover();
   await mark(1);
@@ -103,12 +106,13 @@ test('capture publish tutorial footage', async ({ browser }) => {
   const moreBtn = page.getByRole('button', { name: 'More actions' }).locator('visible=true').last();
   await mark(5, 'play');
   await act(moreBtn);
-  await dwell(1.2);
+  // the words land ~1.0s ('download') and ~1.9s ('share') after 'play' — ring on cue
+  await dwell(0.4);
   try {
     await ring(page.getByText('Download', { exact: true }).locator('visible=true').last(), 6);
-    await dwell(1.2);
+    await dwell(0.9);
     await ring(page.getByText('Share', { exact: true }).locator('visible=true').last(), 6);
-    await dwell(1.2);
+    await dwell(1.3);
   } catch {}
   await clearRing();
   await page.keyboard.press('Escape');

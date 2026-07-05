@@ -120,6 +120,17 @@ export function makeKit(page) {
     },
     dwell: (s) => page.waitForTimeout(s * 1000),
     step: (s) => console.log(`[capture] ${s}`),
+    pauseVideos: () => page.evaluate(() =>
+      document.querySelectorAll('video').forEach(v => v.pause())).catch(() => {}),
+    async ringUnion(locA, locB, pad = 10) {    // ring spanning two elements (e.g. a panel)
+      const a = await locA.boundingBox(); const b = await locB.boundingBox();
+      if (!a || !b) return;
+      const x = Math.min(a.x, b.x) - pad, y = Math.min(a.y, b.y) - pad;
+      const x2 = Math.max(a.x + a.width, b.x + b.width) + pad;
+      const y2 = Math.max(a.y + a.height, b.y + b.height) + pad;
+      await page.evaluate(({ x, y, w, h }) => window.__tut.ringAt(x, y, w, h),
+        { x, y, w: x2 - x, h: y2 - y });
+    },
     async videosReady(min = 1, timeout = 12000) {
       try {
         await page.waitForFunction((n) => {

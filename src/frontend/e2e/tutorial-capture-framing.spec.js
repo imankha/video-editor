@@ -45,10 +45,12 @@ test('capture framing tutorial footage', async ({ browser }) => {
   await dwell(4);
 
   // --- line 3: each card shows progress -----------------------------------------
-  step('filter + target card');
-  try { await page.getByRole('button', { name: /^Not Started \(/ }).click(); } catch {}
-  await dwell(0.8);
-  const framingChip = page.getByTitle(/: Not Started \(click to open\)/).first();
+  step('target card');
+  // the FRAMING chip's title carries the clip tag in brackets ("Name [Pass]: Not
+  // Started (click to open)" or "... [Pass]: Started - ... (click to open)");
+  // the Overlay chip has no bracket — don't match it. No status filter: a draft
+  // left in "Framing started" by a previous take is still a valid subject.
+  const framingChip = page.getByTitle(/\[.+\]: .*\(click to open\)/).first();
   await framingChip.waitFor();
   await mark(3, 'card');
   await ring(framingChip, 10);
@@ -76,19 +78,38 @@ test('capture framing tutorial footage', async ({ browser }) => {
 
   // --- line 6: drag and resize the box --------------------------------------------------
   step('drag crop box');
+  // seek to an ARBITRARY time first, so the keyframes we create sit mid-clip
+  // (not at the start/middle/end)
+  await page.evaluate(() => {
+    const v = document.querySelector('video');
+    if (v && v.duration) { v.currentTime = v.duration * 0.41; v.pause(); }
+  }).catch(() => {});
+  await dwell(0.6);
   await mark(6, 'Drag');
   try {
     const b = await cropBox.boundingBox({ timeout: 5000 });
     const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
     await drag(cx, cy, cx + 110, cy - 30, 30);            // reposition
     await dwell(0.8);
-    const h = await page.locator('.crop-handle').last().boundingBox({ timeout: 5000 });
-    await drag(h.x + h.width / 2, h.y + h.height / 2,
-               h.x + h.width / 2 + 35, h.y + h.height / 2 + 35, 22);  // resize corner
+    // grow the box: pick the handle farthest to the bottom-right and pull OUTWARD
+    const handles = page.locator('.crop-handle');
+    const n = await handles.count();
+    let best = null;
+    for (let i = 0; i < n; i++) {
+      const h = await handles.nth(i).boundingBox();
+      if (h && (!best || (h.x + h.y) > (best.x + best.y))) best = h;
+    }
+    if (best) await drag(best.x + best.width / 2, best.y + best.height / 2,
+                         best.x + best.width / 2 + 55, best.y + best.height / 2 + 55, 22);
   } catch { step('crop drag skipped'); }
   await dwell(1.5);
 
   // --- line 7: reposition when the player drifts ------------------------------------------
+  await page.evaluate(() => {                              // another arbitrary spot
+    const v = document.querySelector('video');
+    if (v && v.duration) { v.currentTime = v.duration * 0.66; v.pause(); }
+  }).catch(() => {});
+  await dwell(0.4);
   await mark(7);
   try {
     const b = await cropBox.boundingBox({ timeout: 5000 });
@@ -98,16 +119,26 @@ test('capture framing tutorial footage', async ({ browser }) => {
   await dwell(3);
 
   // --- line 8: each move sets a keyframe ----------------------------------------------------
+  // scroll so the timeline layers (keyframes + split segments) are on screen
+  step('scroll to timeline layers');
+  await page.mouse.move(960, 560);
+  for (let i = 0; i < 3; i++) { await page.mouse.wheel(0, 220); await dwell(0.25); }
+  await dwell(0.5);
   await mark(8);
   const segLabel = page.getByText('Split Segments to trim or control speed').first();
-  try { await ring(segLabel.locator('xpath=ancestor::div[2]'), 8); } catch {}
+  const keyframe = page.getByTitle(/^Keyframe at frame/).first();
+  try { await keyframe.scrollIntoViewIfNeeded({ timeout: 3000 }); await ring(keyframe, 40); }
+  catch { try { await ring(segLabel.locator('xpath=ancestor::div[2]'), 8); } catch {} }
   await dwell(4.2);
   await clearRing();
 
   // --- lines 9-10: split segments + half speed ------------------------------------------------
   step('split segments');
   await mark(9, 'Split');
-  try { await ring(segLabel.locator('xpath=ancestor::div[2]'), 8); } catch {}
+  try {
+    await segLabel.scrollIntoViewIfNeeded({ timeout: 3000 });
+    await ring(segLabel.locator('xpath=ancestor::div[2]'), 8);
+  } catch {}
   await dwell(3);
   await clearRing();
   await mark(10, 'Mark');
@@ -120,7 +151,10 @@ test('capture framing tutorial footage', async ({ browser }) => {
     await page.mouse.move(sb.x + sb.width * 0.62, y, { steps: 15 });
     await page.mouse.click(sb.x + sb.width * 0.62, y);
     await dwell(1);
-    await act(page.getByTitle('Set speed to 0.5x').first());
+    // two splits -> three sections; set the MIDDLE one to half speed
+    const speedBtns = page.getByTitle('Set speed to 0.5x');
+    const nBtns = await speedBtns.count();
+    await act(nBtns >= 2 ? speedBtns.nth(1) : speedBtns.first());
   } catch { step('split skipped'); }
   await dwell(1.6);
 
@@ -132,7 +166,13 @@ test('capture framing tutorial footage', async ({ browser }) => {
   await mark(11, 'Dim');
   try { await act(dimToggle); } catch { step('dim skipped'); }
   await clearRing();
-  await videosReady(1, 8000);                  // watch it through (force-plays)
+  // "watch it through once" — restart and VISIBLY hit play
+  await page.evaluate(() => {
+    const v = document.querySelector('video');
+    if (v) { v.currentTime = 0; v.muted = true; v.pause(); }
+  }).catch(() => {});
+  try { await act(page.getByTitle(/^Play \(Space\)/).first()); }
+  catch { await videosReady(1, 6000); }
   await dwell(2);
 
   // --- line 12: dimmed edges ----------------------------------------------------------------------
@@ -142,6 +182,7 @@ test('capture framing tutorial footage', async ({ browser }) => {
   // --- line 13: click Export ----------------------------------------------------------------------
   step('export');
   const exportBtn = page.getByRole('button', { name: 'Export', exact: true }).first();
+  try { await exportBtn.scrollIntoViewIfNeeded({ timeout: 3000 }); } catch {}
   await ring(exportBtn, 8);
   await dwell(1);
   await mark(13, 'Export');
