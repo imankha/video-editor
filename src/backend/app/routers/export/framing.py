@@ -29,7 +29,7 @@ from ...websocket import export_progress, manager
 from ...interpolation import generate_crop_filter
 from ...database import get_db_connection
 from ...queries import latest_working_clips_subquery
-from ...storage import generate_presigned_url, generate_presigned_url_global, upload_bytes_to_r2, download_from_r2
+from ...storage import generate_presigned_url, upload_bytes_to_r2
 from ...services.ffmpeg_service import get_video_duration, get_video_info
 from ...highlight_transform import get_output_duration, canonicalize_segments_data
 from .multi_clip import ClipExportData, BytesFile, _export_clips
@@ -546,14 +546,18 @@ async def _run_render_background(
     try:
         crop_keyframes = decode_data(clip['crop_data']) if clip['crop_data'] else []
 
+        # T4175: resolve the clip's editable source once — the game video while
+        # it exists, else the preserved per-clip extract (raw_clips.filename),
+        # else the recap (T4140 stub). Both the fps probe and the extract below
+        # read this same URL and offsets. resolve_clip_source raises
+        # SourceUnavailable on a total miss (no silent fallback).
+        from ...services.export_helpers import resolve_clip_source
+        source_url, source_in, source_out, source_flexible = resolve_clip_source(clip)
+
         # ffprobe for actual fps (framing uses real fps, not default 30)
         framerate = 30.0
         source_info = {}
         try:
-            if clip['game_id']:
-                source_url = generate_presigned_url_global(f"games/{clip['game_blake3_hash']}.mp4")
-            else:
-                source_url = generate_presigned_url(user_id, f"raw_clips/{clip['raw_filename']}")
             if source_url:
                 _t0 = time_module.monotonic()
                 source_info = await asyncio.to_thread(get_video_info, source_url)
@@ -580,74 +584,49 @@ async def _run_render_background(
                 for kf in crop_keyframes
             ]
 
-        # Extract clip source video
-        if clip['game_id']:
-            if not clip['game_blake3_hash']:
-                raise RuntimeError(
-                    f"Clip references game_id={clip['game_id']} but game_videos has no row for (game_id, video_sequence={clip.get('video_sequence')})",
-                )
-            source_key = f"games/{clip['game_blake3_hash']}.mp4"
-            source_url = generate_presigned_url_global(source_key)
-            clip_path = Path(temp_dir) / "clip_0.mp4"
-            # T4050: trace the source-resolution decision branch. The
-            # reframe-never-materializes bug bites HERE when the game's source
-            # mp4 has been reclaimed/expired -- the ffmpeg extract below fails
-            # (moov parse / head fetch) and the whole re-export aborts with no
-            # new working video. Log the exact key so a future failing run is
-            # traceable from the logs alone.
-            logger.info(
-                f"[ReExport] source=game project={project_id} clip={clip['id']} "
-                f"raw_clip={clip['raw_clip_id']} game={clip['game_id']} "
-                f"seq={clip.get('video_sequence')} key={source_key} "
-                f"url_resolved={bool(source_url)} range={clip['raw_start_time']}s-{clip['raw_end_time']}s"
+        # Extract clip source video. T4175: source_url/offsets come from the
+        # shared resolver above — a game clip streams its raw_start..raw_end
+        # range from the game video (full trim flexibility), a post-expiry draft
+        # streams 0..duration from its preserved raw_clips/ extract. One extract
+        # path, not four inline source branches.
+        clip_path = Path(temp_dir) / "clip_0.mp4"
+        # T4050: trace the source-resolution decision. The
+        # reframe-never-materializes bug bites HERE when the source object has
+        # been reclaimed/expired AND no preserved extract exists -- the ffmpeg
+        # extract fails and the re-export aborts with no new working video.
+        logger.info(
+            f"[ReExport] source project={project_id} clip={clip['id']} "
+            f"raw_clip={clip['raw_clip_id']} game={clip['game_id']} "
+            f"seq={clip.get('video_sequence')} range={source_in}s-{source_out}s "
+            f"flexible={source_flexible} url_resolved={bool(source_url)}"
+        )
+
+        def _extract_clip():
+            (
+                ffmpeg
+                .input(source_url, ss=source_in, to=source_out)
+                .output(str(clip_path), c='copy')
+                .overwrite_output()
+                .run(quiet=True)
             )
-
-            def _extract_clip():
-                (
-                    ffmpeg
-                    .input(source_url, ss=clip['raw_start_time'], to=clip['raw_end_time'])
-                    .output(str(clip_path), c='copy')
-                    .overwrite_output()
-                    .run(quiet=True)
-                )
-            _t0 = time_module.monotonic()
-            try:
-                await asyncio.to_thread(_extract_clip)
-            except Exception as extract_err:
-                # T4050: make the "source object missing/unreadable" branch loud
-                # and unambiguous. This is the prod signature for clip 56
-                # (moov parse failed / head fetch failed) -> no working video
-                # produced -> draft card with no preview, nothing to republish.
-                logger.error(
-                    f"[ReExport] SOURCE EXTRACT FAILED project={project_id} "
-                    f"clip={clip['id']} key={source_key} -- re-frame cannot render "
-                    f"(reclaimed/expired game source object?). No new working "
-                    f"video will be produced. err={type(extract_err).__name__}: {extract_err}"
-                )
-                raise
-            logger.info(f"[Render] ffmpeg extract took {time_module.monotonic() - _t0:.2f}s")
-
-            with open(clip_path, 'rb') as f:
-                video_file = BytesFile(f.read())
-        else:
-            r2_key = f"raw_clips/{clip['raw_filename']}"
-            clip_path = Path(temp_dir) / "clip_0.mp4"
-            logger.info(
-                f"[ReExport] source=raw_clip project={project_id} clip={clip['id']} "
-                f"raw_clip={clip['raw_clip_id']} key={r2_key}"
+        _t0 = time_module.monotonic()
+        try:
+            await asyncio.to_thread(_extract_clip)
+        except Exception as extract_err:
+            # T4050: make the "source object missing/unreadable" branch loud and
+            # unambiguous -> no working video produced -> draft card with no
+            # preview, nothing to republish.
+            logger.error(
+                f"[ReExport] SOURCE EXTRACT FAILED project={project_id} "
+                f"clip={clip['id']} -- re-frame cannot render (reclaimed/expired "
+                f"source object with no preserved extract?). No new working video "
+                f"will be produced. err={type(extract_err).__name__}: {extract_err}"
             )
-            _t0 = time_module.monotonic()
-            if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
-                logger.error(
-                    f"[ReExport] SOURCE DOWNLOAD FAILED project={project_id} "
-                    f"clip={clip['id']} key={r2_key} -- re-frame cannot render "
-                    f"(missing raw clip object?). No new working video will be produced."
-                )
-                raise RuntimeError("Failed to download source clip from R2")
-            logger.info(f"[Render] download_from_r2 took {time_module.monotonic() - _t0:.2f}s")
+            raise
+        logger.info(f"[Render] ffmpeg extract took {time_module.monotonic() - _t0:.2f}s")
 
-            with open(clip_path, 'rb') as f:
-                video_file = BytesFile(f.read())
+        with open(clip_path, 'rb') as f:
+            video_file = BytesFile(f.read())
 
         clip_export = ClipExportData(
             clip_index=0,

@@ -196,60 +196,12 @@ class TestOverlayFinalizeStamps:
         assert fv["source_type"] == "custom_project"
 
 
-# ---------------------------------------------------------------------------
-# Stamping: auto_export _export_brilliant_clip
-# ---------------------------------------------------------------------------
-
-class TestAutoExportStamps:
-    def _make_clip(self, clip_id, auto_project_id, tags_blob):
-        return {
-            "id": clip_id,
-            "name": "Goal",
-            "rating": 5,
-            "video_hash": "abc123",
-            "start_time": 10.0,
-            "end_time": 15.0,
-            "auto_project_id": auto_project_id,
-            "video_sequence": 1,
-            "tags": tags_blob,
-            "notes": None,
-        }
-
-    @patch("app.services.auto_export.upload_to_r2", return_value=True)
-    @patch("app.services.auto_export.generate_presigned_url_global",
-           return_value="https://r2.example.com/signed")
-    @patch("app.services.auto_export.ffmpeg")
-    def test_stamps_aspect_ratio_and_tags(self, mock_ffmpeg, mock_presign,
-                                          mock_upload, full_schema_db):
-        from app.services.auto_export import _export_brilliant_clip
-
-        mock_stream = MagicMock()
-        mock_ffmpeg.input.return_value = mock_stream
-        mock_stream.output.return_value = mock_stream
-        mock_stream.run.return_value = None
-
-        db = full_schema_db["db_path"]
-        conn = _connect(db)
-        cur = conn.cursor()
-        cur.execute("INSERT INTO games (name) VALUES ('G1')")
-        game_id = cur.lastrowid
-        cur.execute("INSERT INTO projects (name, aspect_ratio, is_auto_created) "
-                    "VALUES ('Auto', '16:9', 1)")
-        project_id = cur.lastrowid
-        cur.execute(
-            "INSERT INTO raw_clips (filename, rating, tags, start_time, end_time, "
-            "game_id, auto_project_id) VALUES ('c.mp4', 5, ?, 10, 15, ?, ?)",
-            (encode_data(["Goal", "Assist"]), game_id, project_id))
-        conn.commit()
-        conn.close()
-
-        clip = self._make_clip(1, project_id, encode_data(["Goal", "Assist"]))
-        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
-
-        fv = _get_final_video(db)
-        assert fv["duration"] == 5.0
-        assert fv["aspect_ratio"] == "16:9"
-        assert decode_data(fv["tags"]) == ["Goal", "Assist"]
+# T4175: the sweep (_export_brilliant_clip) no longer publishes a final_videos
+# row — it preserves the extract and leaves a frameable draft (covered by
+# test_auto_export.py::TestExportBrilliantClip). aspect_ratio/tags/game-start
+# stamping now happens only at the user's frame+publish, exercised by
+# TestOverlayFinalizeStamps above. The former TestAutoExportStamps /
+# TestExportStampsGameStart sweep-publish assertions were removed with T4175.
 
 
 # ---------------------------------------------------------------------------
@@ -650,48 +602,10 @@ class TestComputeUnifiedClipStart:
         assert result == 300.0
 
 
-class TestExportStampsGameStart:
-    @patch("app.services.auto_export.upload_to_r2", return_value=True)
-    @patch("app.services.auto_export.generate_presigned_url_global",
-           return_value="https://r2.example.com/signed")
-    @patch("app.services.auto_export.ffmpeg")
-    def test_brilliant_clip_freezes_unified_game_start(
-            self, mock_ffmpeg, mock_presign, mock_upload, full_schema_db):
-        from app.services.auto_export import _export_brilliant_clip
-
-        mock_stream = MagicMock()
-        mock_ffmpeg.input.return_value = mock_stream
-        mock_stream.output.return_value = mock_stream
-        mock_stream.run.return_value = None
-
-        db = full_schema_db["db_path"]
-        game_id = _seed_two_half_game(db, first_half_duration=2715.0)
-        conn = _connect(db)
-        cur = conn.cursor()
-        cur.execute("INSERT INTO projects (name, aspect_ratio, is_auto_created) "
-                    "VALUES ('Auto', '16:9', 1)")
-        project_id = cur.lastrowid
-        # 2nd-half brilliant clip 300s in
-        cur.execute(
-            "INSERT INTO raw_clips (filename, rating, tags, start_time, end_time, "
-            "game_id, video_sequence, auto_project_id) "
-            "VALUES ('c.mp4', 5, ?, 300, 305, ?, 2, ?)",
-            (encode_data(["Goal"]), game_id, project_id))
-        rc_id = cur.lastrowid
-        conn.commit()
-        conn.close()
-
-        clip = {
-            "id": rc_id, "name": "Goal", "rating": 5, "video_hash": "abc",
-            "start_time": 300.0, "end_time": 305.0,
-            "auto_project_id": project_id, "video_sequence": 2,
-            "tags": encode_data(["Goal"]), "notes": None,
-        }
-        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
-
-        fv = _get_final_video(db)
-        assert fv["clip_start_time"] == 300.0       # file-relative, frozen
-        assert fv["clip_game_start_time"] == 3015.0  # unified (2715 + 300)
+# T4175: TestExportStampsGameStart removed — the sweep no longer publishes a
+# final_videos row, so clip_start_time / clip_game_start_time are frozen only at
+# the user's frame+publish (compute_unified_clip_start is still covered directly
+# by TestComputeUnifiedClipStart above).
 
 
 @pytest.fixture()

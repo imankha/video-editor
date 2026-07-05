@@ -20,9 +20,8 @@ from app.utils.encoding import decode_data
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from ..storage import delete_from_r2, generate_presigned_url_global, upload_bytes_to_r2, upload_to_r2
+from ..storage import generate_presigned_url_global, upload_bytes_to_r2, upload_to_r2
 from ..user_context import set_current_user_id
-from .collection_metadata import compute_project_metadata, compute_unified_clip_start, encode_game_ids
 
 logger = logging.getLogger(__name__)
 
@@ -144,38 +143,22 @@ def _set_game_status(game_id: int, status: str) -> None:
         conn.commit()
 
 
-def _probe_aspect_ratio(output_path) -> str | None:
-    """Map the exported file's real dimensions to a ratio label.
-
-    width >= height -> '16:9', else '9:16'. Returns None if the probe fails —
-    NULL rows are excluded from ranking math by design, so we never guess a
-    ratio. A stream-copy of a game video is 16:9; stamping the auto project's
-    9:16 (the T4160 bug) is what routed raw wide footage into the 9:16 pool.
-    """
-    try:
-        probe = ffmpeg.probe(str(output_path))
-        stream = next(s for s in probe['streams'] if s.get('codec_type') == 'video')
-        width = int(stream['width'])
-        height = int(stream['height'])
-    except Exception as e:
-        logger.warning(
-            f"[AutoExport] Failed to probe {output_path} for aspect_ratio: {e} "
-            f"— aspect_ratio stays NULL"
-        )
-        return None
-    return '16:9' if width >= height else '9:16'
-
-
 def _export_brilliant_clip(
     user_id: str, profile_id: str, clip: dict, game_id: int
 ) -> None:
-    """Export a single brilliant clip via FFmpeg stream-copy extract (original resolution).
+    """Preserve a single brilliant clip as a frameable Reel Draft (T4175).
+
+    Stream-copies the clip range out of the game video (original resolution)
+    before the game source is reclaimed, uploads it to raw_clips/ as the clip's
+    independent source, wires raw_clips.filename, and leaves the auto-project as
+    a non-archived draft. It does NOT publish a final_videos row and does NOT
+    archive the project — an unframed clip must never enter My Reels; the user
+    frames it later and resolve_clip_source finds this extract once the game is
+    gone.
 
     T4160: if the clip already has a published reel (framed content) with this
-    source_clip_id, skips entirely — never replaces framed content with a raw
-    stream-copy. Otherwise exports, stamping the real aspect ratio probed from
-    the output file and a derived name. An unpublished prior auto-export row for
-    the same auto project is still swapped out atomically (T4010).
+    source_clip_id, skips entirely — the highlight is already preserved in
+    framed form and must not be touched.
     """
     if not clip['auto_project_id']:
         logger.warning(f"[AutoExport] Skipping clip {clip['id']} — no auto_project_id")
@@ -228,91 +211,55 @@ def _export_brilliant_clip(
         )
         logger.info(f"[AutoExport] Brilliant clip={clip['id']} ffmpeg stream-copy in {time.perf_counter() - t_ffmpeg:.2f}s")
 
-        # T4160: stamp the honest aspect ratio from the artifact itself, not the
-        # auto project. Must probe while the temp file still exists.
-        aspect_ratio = _probe_aspect_ratio(output_path)
-
+        # T4175: preserve the extract as the clip's INDEPENDENT source, not as a
+        # published reel. The key lands in raw_clips/ (the per-clip source
+        # namespace the framing/multi-clip resolver already reads), and the
+        # filename is wired onto the clip's own raw_clips row so
+        # resolve_clip_source finds it once the game video is reclaimed. NO
+        # aspect-ratio probe: nothing is published, so there is no ratio to
+        # stamp — the label is settled when the user actually frames+publishes.
         filename = f"auto_{game_id}_{clip['id']}_{uuid.uuid4().hex[:8]}.mp4"
-        r2_key = f"final_videos/{filename}"
+        r2_key = f"raw_clips/{filename}"
         upload_to_r2(user_id, r2_key, output_path)
         logger.info(f"[AutoExport] Brilliant clip={clip['id']} uploaded as {filename} in {time.perf_counter() - t0:.2f}s")
 
-    # T4160: derive the name the same way derive_project_name does, so unnamed
-    # clips publish as e.g. "Brilliant Goal" instead of "Clip 5". Falls back to
-    # "Clip {id}" only when nothing is derivable (documented last resort).
-    from ..queries import derive_clip_name
-    clip_name = derive_clip_name(
-        clip['name'], clip['rating'] or 0, decode_data(clip['tags']) or [],
-        clip['notes'] or '') or f"Clip {clip['id']}"
+    # T4175: leave a frameable Reel Draft. An unframed clip must NEVER be
+    # published or archived — it stays in Reel Drafts so the user can frame it
+    # later from the preserved extract. This reverses the old sweep behavior
+    # (publish raw 16:9 + archive) that put raw wide footage into My Reels.
+    from ..routers.clips import _insert_working_clip_with_dims
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        # T3600: freeze collection metadata. duration stays the clip range
-        # computed above (the exported artifact IS the raw clip extract).
-        # T4160: compute_project_metadata is kept only for the tags blob; its
-        # aspect_ratio return is no longer used — the real ratio is probed from
-        # the output file above (a stream-copy of a game video is 16:9, not the
-        # auto project's 9:16).
-        _, _project_aspect, tags_blob = compute_project_metadata(
-            cursor, clip['auto_project_id'])
-        # T4010: capture the prior export (re-export scenario) so we can swap it
-        # out atomically: INSERT the new row first, then DELETE the old row BY id
-        # (a project-wide DELETE would also remove the row we just inserted), and
-        # only delete the old R2 object AFTER the commit. This removes the
-        # zero-row / object-deleted-before-commit window.
+        # Wire the extract as the clip's own source.
         cursor.execute(
-            """SELECT id, filename FROM final_videos
-               WHERE source_type = 'brilliant_clip' AND project_id = ?""",
+            "UPDATE raw_clips SET filename = ? WHERE id = ?",
+            (filename, clip['id']),
+        )
+        # Ensure the auto-project is a frameable draft. It normally already
+        # carries a working_clip from annotate-time _create_auto_project_for_clip;
+        # the sweep only needs to NOT delete it (i.e. not archive). Rebuild via
+        # the same blueprint only in the degenerate no-working-clip case so the
+        # draft is always renderable.
+        has_working_clip = cursor.execute(
+            "SELECT 1 FROM working_clips WHERE project_id = ? LIMIT 1",
             (clip['auto_project_id'],),
-        )
-        old_row = cursor.fetchone()
-        old_id = old_row['id'] if old_row else None
-        old_filename = old_row['filename'] if old_row else None
-
-        # T3605: brilliant clip belongs to exactly one game -> [game_id]
-        game_ids_blob = encode_game_ids([game_id])
-        # T3630: a brilliant clip IS a single clip -> clip_count=1, quality=its
-        # rating, rating seeded from the star, rd=RD_MAX, source_clip_id = the
-        # clip itself (links ratio twins), clip_start_time = its in-match start.
-        from .glicko import RD_MAX, seed_rating
-        quality_score = float(clip['rating']) if clip['rating'] is not None else None
-        rating = seed_rating(quality_score)
-        # T3920: unified two-half in-match start (file-relative + prior-half durations)
-        clip_game_start_time = compute_unified_clip_start(
-            cursor, clip['id'], clip['start_time'])
-        cursor.execute(
-            """INSERT INTO final_videos
-               (project_id, filename, version, source_type, game_id, name,
-                published_at, duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
-               VALUES (?, ?, 1, 'brilliant_clip', ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?, ?, ?)""",
-            (clip['auto_project_id'], filename, game_id, clip_name, duration,
-             aspect_ratio, tags_blob, game_ids_blob, quality_score,
-             rating, RD_MAX, clip['id'], clip['start_time'], clip_game_start_time),
-        )
-        if old_id is not None:
-            cursor.execute("DELETE FROM final_videos WHERE id = ?", (old_id,))
+        ).fetchone()
+        if not has_working_clip:
+            _insert_working_clip_with_dims(
+                cursor, project_id=clip['auto_project_id'],
+                raw_clip_id=clip['id'], sort_order=0,
+            )
+            logger.info(
+                f"[AutoExport] Rebuilt working_clip for auto-project "
+                f"{clip['auto_project_id']} (clip {clip['id']}) — was missing"
+            )
+        # NO publish (no final_videos row), NO archive (archived_at stays NULL).
         conn.commit()
 
-    # Archive the auto-project, mirroring the manual publish contract
-    # (downloads.py publish -> archive_project): a published project must not
-    # remain in Reel Drafts. Post-commit and non-fatal like the R2 cleanup
-    # below -- an archive failure leaves the reel published, just still listed
-    # in drafts until the next sweep or a manual archive.
-    from .project_archive import archive_project
-    if not archive_project(clip['auto_project_id'], user_id):
-        logger.warning(
-            f"[AutoExport] Failed to archive auto-project {clip['auto_project_id']} "
-            f"after publishing clip {clip['id']}; reel will linger in Reel Drafts"
-        )
-
-    # T4010: post-commit, best-effort cleanup of the prior R2 object. Never the
-    # just-written object; a cleanup failure must not undo the committed swap.
-    if old_filename and old_filename != filename:
-        old_r2_key = f"final_videos/{old_filename}"
-        try:
-            delete_from_r2(user_id, old_r2_key)
-        except Exception as e:
-            logger.warning(f"[AutoExport] Failed to delete old R2 file {old_r2_key}: {e}")
+    logger.info(
+        f"[AutoExport] Clip {clip['id']} preserved as frameable draft "
+        f"(project {clip['auto_project_id']}, source raw_clips/{filename})"
+    )
 
 
 def _generate_recap(

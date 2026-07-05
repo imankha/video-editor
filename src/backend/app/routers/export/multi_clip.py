@@ -39,7 +39,7 @@ from ...services.clip_pipeline import process_clip_with_pipeline
 from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
 from ...services.ffmpeg_service import get_video_duration
 from ...database import get_db_connection
-from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2, generate_presigned_url_global
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
 from ...queries import latest_working_clips_subquery
 from ...user_context import get_current_user_id, set_current_user_id
 from ...profile_context import get_current_profile_id, set_current_profile_id
@@ -2094,13 +2094,11 @@ async def _run_multi_clip_background(
                             clip_data.get('duration'),
                         )
 
-                    # Resolve video source
-                    if db_clip['game_id']:
-                        if not db_clip['game_blake3_hash']:
-                            raise RuntimeError(
-                                f"Clip references game_id={db_clip['game_id']} but game_videos has no row "
-                                f"for (game_id, video_sequence={db_clip['video_sequence']})"
-                            )
+                    # Resolve video source. T4175: game clips and post-expiry
+                    # drafts share resolve_clip_source (game video while it
+                    # exists, else the preserved raw_clips/ extract, else recap).
+                    # Uploaded clips keep their own download path below.
+                    if db_clip['game_id'] or db_clip['raw_filename']:
                         # Game clip: stream clip range from R2 via presigned URL (no full download)
                         extract_progress = 5 + int(((i + 0.5) / resolve_total) * 5)
                         progress_data = {
@@ -2114,11 +2112,13 @@ async def _run_multi_clip_background(
                         export_progress[export_id] = progress_data
                         await manager.send_progress(export_id, progress_data)
 
-                        source_url = generate_presigned_url_global(f"games/{db_clip['game_blake3_hash']}.mp4")
+                        from ...services.export_helpers import resolve_clip_source
+                        source_url, start_time, end_time, source_flexible = resolve_clip_source(db_clip)
                         clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                        start_time = db_clip['raw_start_time']
-                        end_time = db_clip['raw_end_time']
-                        logger.info(f"[Multi-Clip Export] Streaming clip {i} range: {start_time}s - {end_time}s")
+                        logger.info(
+                            f"[Multi-Clip Export] Streaming clip {i} range: "
+                            f"{start_time}s - {end_time}s (flexible={source_flexible})"
+                        )
 
                         try:
                             def _extract_clip():
@@ -2159,30 +2159,6 @@ async def _run_multi_clip_background(
                         if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
                             raise RuntimeError(f"Failed to download uploaded clip {i}")
                         logger.info(f"[T1110] download_from_r2 uploaded clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
-                        with open(clip_path, 'rb') as f:
-                            video_files[i] = BytesFile(f.read())
-
-                    elif db_clip['raw_filename']:
-                        # Extracted clip: download from user's R2 storage
-                        dl_progress = 5 + int((i / resolve_total) * 5)
-                        progress_data = {
-                            "progress": dl_progress,
-                            "message": f"Downloading clip {i + 1}/{resolve_total}...",
-                            "status": "processing",
-                            "projectId": project_id,
-                            "projectName": project_name,
-                            "type": "multi_clip"
-                        }
-                        export_progress[export_id] = progress_data
-                        await manager.send_progress(export_id, progress_data)
-
-                        r2_key = f"raw_clips/{db_clip['raw_filename']}"
-                        clip_path = Path(resolve_temp_dir) / f"clip_{i}.mp4"
-                        logger.info(f"[Multi-Clip Export] Downloading raw clip: {r2_key}")
-                        _t0 = time_module.monotonic()
-                        if not await asyncio.to_thread(download_from_r2, user_id, r2_key, clip_path):
-                            raise RuntimeError(f"Failed to download raw clip {i}")
-                        logger.info(f"[T1110] download_from_r2 raw clip {i} took {time_module.monotonic() - _t0:.2f}s (threaded)")
                         with open(clip_path, 'rb') as f:
                             video_files[i] = BytesFile(f.read())
 

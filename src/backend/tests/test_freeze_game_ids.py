@@ -202,36 +202,10 @@ class TestStamping:
         assert fv["source_type"] == "brilliant_clip"
         assert decode_data(fv["game_ids"]) == [game_id]
 
-    @patch("app.services.auto_export.upload_to_r2", return_value=True)
-    @patch("app.services.auto_export.generate_presigned_url_global",
-           return_value="https://r2.example.com/signed")
-    @patch("app.services.auto_export.ffmpeg")
-    def test_brilliant_clip_stamps_single_game(self, mock_ffmpeg, mock_presign,
-                                               mock_upload, full_schema_db):
-        from app.services.auto_export import _export_brilliant_clip
-        mock_stream = MagicMock()
-        mock_ffmpeg.input.return_value = mock_stream
-        mock_stream.output.return_value = mock_stream
-
-        db = full_schema_db["db_path"]
-        conn = _connect(db); cur = conn.cursor()
-        game_id = _seed_game(cur, "G1")
-        cur.execute("INSERT INTO projects (name, aspect_ratio, is_auto_created) "
-                    "VALUES ('Auto', '16:9', 1)")
-        project_id = cur.lastrowid
-        cur.execute(
-            "INSERT INTO raw_clips (filename, rating, tags, start_time, end_time, "
-            "game_id, auto_project_id) VALUES ('c.mp4', 5, ?, 10, 15, ?, ?)",
-            (encode_data(["Goal"]), game_id, project_id))
-        conn.commit(); conn.close()
-
-        clip = {"id": 1, "name": "Goal", "video_hash": "abc123", "rating": 5,
-                "start_time": 10.0, "end_time": 15.0, "auto_project_id": project_id,
-                "tags": encode_data(["Goal"])}
-        _export_brilliant_clip(USER_ID, PROFILE_ID, clip, game_id)
-
-        fv = _get_final_video(db)
-        assert decode_data(fv["game_ids"]) == [game_id]
+    # T4175: test_brilliant_clip_stamps_single_game removed — the sweep no longer
+    # publishes a final_videos row, so game_ids is frozen only at the user's
+    # frame+publish (test_overlay_finalize_brilliant_clip_resolves_single_game
+    # above still covers brilliant-clip game_ids freezing on the publish path).
 
 
 # ---------------------------------------------------------------------------

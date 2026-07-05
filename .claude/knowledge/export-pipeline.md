@@ -22,7 +22,7 @@ updated: 2026-07-03 (initial version, workflow setup)
 | `POST /api/export/final` | `overlay.py:1150 export_final` | Save frontend-rendered final video; request-scoped `durable_sync` dependency (`:1155`) |
 | `POST /api/exports` + `/api/exports/framing` | `exports.py:436/:475` | BackgroundTasks path → `export_worker.process_export_job` (`export_worker.py:146`) |
 | `GET /api/exports/{job_id}/modal-status` | `exports.py:797` | Recovery source of truth; may call `finalize_modal_export` (`exports.py:191`) |
-| Sweep (no route) | `auto_export.py _export_brilliant_clip` | Pre-expiry auto-export; writes `final_videos` directly (`auto_export.py:283`), publishes at insert |
+| Sweep (no route) | `auto_export.py _export_brilliant_clip` | **T4175**: pre-expiry, preserves each never-framed clip's extract to `raw_clips/auto_*.mp4` + wires `raw_clips.filename` + leaves a frameable draft. NO publish, NO archive (was: `final_videos` insert + `archive_project`). Already-framed reels still skipped (T4160). |
 | `POST /api/downloads/publish/{project_id}` etc. | `downloads.py:818` publish, `:923` restore | Both use `durable_sync` dependency |
 
 **The 6 export triggers** (T4370 harness must snapshot all of them): single-clip render (`/render`), multi-clip Modal branch, multi-clip local branch (`_export_clips:1236` vs `:1463`), overlay final (`render_overlay`/`/final`), durable worker (`export_worker.process_export_job`), sweep auto-export (`auto_export._export_brilliant_clip`).
@@ -45,8 +45,8 @@ graph LR
   DB --> SYNC[sync_export_db_to_r2]
   SYNC -->|overlay only: gate| WS[WS COMPLETE]
 ```
-- **Source resolution:**
-  - Game clips are keyed `games/{blake3_hash}.mp4` in a GLOBAL (env-prefix-free, not per-user) R2 namespace, fetched via `generate_presigned_url_global` + ffmpeg `-ss/-to -c copy` extraction (`framing.py:554,589-628`; `multi_clip.py:2117-2139`).
+- **Source resolution (T4175 `resolve_clip_source`, `export_helpers.py`):** framing (`_run_render_background`) and multi-clip both call the shared `resolve_clip_source(clip) -> (url, in_off, out_off, flexible)` instead of inlining the game key. Order, first hit wins, visible-fail on total miss (`SourceUnavailable`, no silent fallback): (1) game video present -> `(game_url, raw_start, raw_end, flexible=True)`; HEAD-probed only when a preserved extract can back a miss (else used directly — unchanged loud-fail); (2) preserved per-clip extract (`raw_clips.filename` set) -> `(raw_clips/{filename}, 0.0, duration, flexible=False)`; (3) recap — **T4140 stub** (`_resolve_recap_source` returns None until T4140 lands). Uploaded multi-clip clips keep their own `raw_clips/{uploaded_filename}` download path. `flexible=False` = frozen bounds (reframe-only, no wider trims).
+  - Game clips are keyed `games/{blake3_hash}.mp4` in a GLOBAL (env-prefix-free, not per-user) R2 namespace, fetched via `generate_presigned_url_global` + ffmpeg `-ss/-to -c copy` extraction (now via the resolver; `multi_clip.py` game branch unchanged mechanics).
   - Hash resolved as `COALESCE(gv.blake3_hash, g.blake3_hash)` joining `game_videos`→`games` (`framing.py:399`, `multi_clip.py:2044`, `auto_export.py:125-129`).
   - Per-user artifacts: `raw_clips/`, `working_videos/`, `final_videos/`, `temp/multi_clip_{export_id}/`.
   - Export routers never touch `storage_refs`/`game_storage_refs` — the ref-count/reclaim lifecycle that can delete a `games/{hash}.mp4` lives in `materialization.py` / `sweep_scheduler.py` / `games.py`; `auto_export.py` is the pre-reclaim export hook.
@@ -100,10 +100,20 @@ graph LR
 - **T2650** (TODO): move sweep auto-export compute to Modal.
 - DONE context (do not re-fix): T4010 atomic re-export, T4020 shadow-version guard, T4110 overlay sync-then-announce, T4160/T4170 sweep framed-reel preservation + metadata heal.
 
-- **Drafts-lingering sweep bug (fixed 2026-07-04):** `_export_brilliant_clip` published a
-  final_video but never archived the auto-project, unlike manual publish (`downloads.py` ->
-  `archive_project`). Non-archived projects ARE the Reel Drafts list (`projects.py`
-  `list_projects` filters only `archived_at IS NULL`), so sweep-published reels lingered in
-  Drafts and bucketed as "Not Started" (no working clips). INVARIANT: every publish path must
-  archive its project. Heal migration: profile_db v020 (brilliant_clip-scoped). Regression
-  test: `test_auto_export.py::test_publish_archives_auto_project`.
+- **Drafts-lingering sweep bug (fixed 2026-07-04, then SUPERSEDED by T4175):** `_export_brilliant_clip`
+  published a final_video but never archived the auto-project; v020 archived those rows. INVARIANT
+  (still true for *manual* publish): every publish path must archive its project.
+- **T4175 — sweep drafts instead of publishing (2026-07-05):** the sweep no longer publishes raw 16:9
+  stream-copies as reels at all. It preserves the extract to `raw_clips/auto_*.mp4`, wires
+  `raw_clips.filename`, and leaves the auto-project as a frameable draft (`archived_at` + `final_video_id`
+  stay NULL; working_clip kept, rebuilt via `_insert_working_clip_with_dims` only if missing). An
+  unframed clip must NEVER enter My Reels. The user frames it later; `resolve_clip_source` step 2 finds
+  the extract once `games/{hash}.mp4` is reclaimed. "Needs-framing draft" is derivable state
+  (`archived_at IS NULL` + working_clip exists + no published final_video) — NO marker column,
+  `_SCHEMA_DDL` untouched. Remediation: **profile_db v021** reverses BOTH the publish and the v020
+  archive for already-written `auto_%`/`brilliant_clip` published rows — copies `final_videos/{filename}`
+  -> `raw_clips/{filename}` (before delete; copy-fail aborts that row), restores the draft (restore_project
+  or rebuild), nulls `projects.final_video_id`, sweeps dangling `before_after_tracks`, deletes the reel
+  row (dropping its seeded Glicko `rating`/`rd`/`match_count` — these are columns ON `final_videos`, there
+  is NO separate match-history table). Idempotent, tuple-row-factory safe. Tests:
+  `test_auto_export.py::TestExportBrilliantClip`, `test_resolve_clip_source.py`, `test_v021_migration.py`.
