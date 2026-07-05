@@ -122,15 +122,19 @@ export function CollectionsTab({
         </div>
       ))}
 
-      {/* Game by game */}
-      {games.map((g, i) => {
+      {/* Game by game. Every group starts collapsed: the panel unmounts on close,
+          so a forced default-expand (previously the first game) re-expanded that
+          same game on every reopen and silently discarded whatever the user had
+          expanded. Collapsed-by-default is neutral; in-session expansions persist
+          because playing a reel no longer closes the panel. */}
+      {games.map((g) => {
         const key = `game:${g.game_id}`;
         return (
           <GameCollectionGroup
             key={key}
             name={g.game_name}
             collection={g}
-            defaultExpanded={i === 0}
+            defaultExpanded={false}
             members={members[key]}
             memberState={memberStates[key]}
             requestMembers={reqGame(g.game_id)}

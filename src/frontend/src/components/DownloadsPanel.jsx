@@ -246,7 +246,11 @@ export function DownloadsPanel({
       title: download.project_name,
       downloadId: download.id,
     });
-    close();
+    // Do NOT close the panel here: the player renders above it (z-[70] vs the
+    // panel's z-50), and collection playback (onPlayCollection) already leaves
+    // My Reels open. Closing only on single-reel play made the panel vanish
+    // "sometimes" — exiting the player dropped the user back to the app instead
+    // of My Reels. Only the X button closes the panel now.
     // T540: Record achievements for viewing gallery video
     useQuestStore.getState().recordAchievement('viewed_gallery_video');
     // Custom project video gets a separate achievement for Quest 3
