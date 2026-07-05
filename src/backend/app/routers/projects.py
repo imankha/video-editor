@@ -806,6 +806,17 @@ async def delete_project(project_id: int):
             UPDATE raw_clips SET auto_project_id = NULL WHERE auto_project_id = ?
         """, (project_id,))
 
+        # Remove any final videos this project produced. A draft (archived_at NULL)
+        # can carry an UNPUBLISHED final video — published exports live on archived
+        # projects, never in Drafts, and the gallery only lists published_at rows.
+        # final_videos.project_id lacks ON DELETE CASCADE (unlike working_clips /
+        # working_videos / export_jobs), so with foreign_keys=ON the project delete
+        # below would raise "FOREIGN KEY constraint failed" and surface to the user
+        # as a failed delete. Clear the child rows explicitly, same as raw_clips above.
+        cursor.execute("""
+            DELETE FROM final_videos WHERE project_id = ?
+        """, (project_id,))
+
         # Delete project — cascades to working_clips, working_videos, export_jobs
         # projects.working_video_id and final_video_id use ON DELETE SET NULL
         # so deleting working_videos/final_videos first would auto-null them,
