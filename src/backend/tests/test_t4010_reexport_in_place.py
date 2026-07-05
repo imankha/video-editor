@@ -142,12 +142,25 @@ class TestFramingRenderPreservesPointers:
 
         project_id, wv, fv = _seed_project_with_final(db)
 
-        def _fake_download(user_id, r2_key, dest_path):
-            # Produce a real (tiny) file so extraction "succeeds" and we reach
-            # the pipeline stage.
-            from pathlib import Path
-            Path(dest_path).write_bytes(b"\x00\x00")
-            return True
+        # T4175: the render now pulls its source via resolve_clip_source + an
+        # ffmpeg extract (not download_from_r2). Fake ffmpeg to write a tiny real
+        # file at the extract output path so we reach the pipeline stage.
+        from pathlib import Path as _Path
+        _captured = {}
+
+        def _fake_output(path, **kw):
+            _captured["path"] = path
+            return _ff_stream
+
+        def _fake_run(**kw):
+            _Path(_captured["path"]).write_bytes(b"\x00\x00")
+
+        _ff_stream = MagicMock()
+        _ff_stream.output.side_effect = _fake_output
+        _ff_stream.overwrite_output.return_value = _ff_stream
+        _ff_stream.run.side_effect = _fake_run
+        _ff = MagicMock()
+        _ff.input.return_value = _ff_stream
 
         async def _fake_export_clips(**kwargs):
             # Mimic a partial advance: new working video committed + final nulled,
@@ -172,9 +185,10 @@ class TestFramingRenderPreservesPointers:
             "raw_duration": 5.0, "game_blake3_hash": None, "video_sequence": None,
         }
 
-        with patch.object(framing, "generate_presigned_url", return_value="https://r2/raw"), \
+        with patch("app.services.export_helpers.resolve_clip_source",
+                   return_value=("https://r2/raw", 0.0, 5.0, False)), \
              patch.object(framing, "get_video_info", return_value={"fps": 30.0, "width": 1080, "height": 1920}), \
-             patch.object(framing, "download_from_r2", side_effect=_fake_download), \
+             patch.object(framing, "ffmpeg", _ff), \
              patch.object(framing, "_export_clips", side_effect=_fake_export_clips), \
              patch.object(framing.manager, "send_progress", new=AsyncMock()), \
              patch("app.services.export_helpers.sync_export_db_to_r2", return_value=True), \

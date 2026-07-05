@@ -378,6 +378,102 @@ def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> bool:
 
 
 # =============================================================================
+# Clip Source Resolution (shared across framing + multi-clip render paths)
+# =============================================================================
+
+class SourceUnavailable(Exception):
+    """No editable source could be resolved for a clip.
+
+    Raised when the game video is gone, no preserved per-clip extract exists,
+    and no recap segment covers the clip. A visible failure — never a silent
+    fallback (CLAUDE.md: no silent fallbacks for internal data).
+    """
+
+    def __init__(self, clip_id):
+        self.clip_id = clip_id
+        super().__init__(f"No editable source available for clip {clip_id}")
+
+
+def _resolve_recap_source(clip: dict):
+    """T4140 seam: resolve a clip to its surviving recap segment.
+
+    Stubbed until T4140 lands the recap mapping (recaps/{game_id}_clips.json ->
+    recap_start/recap_end). Returns None so resolution falls through to the
+    preserved extract or a visible failure. T4140 fills this in; the resolver
+    signature and ordering are fixed now so it slots in without a rewrite.
+    """
+    return None
+
+
+def resolve_clip_source(clip: dict) -> tuple:
+    """Resolve a clip's editable source for a framing/multi-clip render.
+
+    Returns (source_url, in_offset, out_offset, flexible) where in/out are the
+    seconds to extract out of source_url and flexible is True only when the
+    full game video backs the clip (wider trims possible). Resolution order,
+    first hit wins, visible-fail on total miss:
+
+      1. game video present -> (game_url, raw_start, raw_end, flexible=True)
+      2. T4175 preserved per-clip extract (raw_clips.filename set)
+                            -> (extract_url, 0.0, duration, flexible=False)
+      3. T4140 recap (stub) -> (recap_url, recap_start, recap_end, flexible=False)
+      4. none               -> raise SourceUnavailable (no silent fallback)
+
+    The game video is preferred while it exists (best quality, full trim
+    flexibility). After the game is reclaimed the preserved extract is the
+    surviving native-resolution single-clip source (frozen bounds, reframe-only).
+
+    clip must carry: game_id, game_blake3_hash, raw_start_time, raw_end_time,
+    raw_filename (and, once T4140 lands, id + game_id for the recap mapping).
+    """
+    from app.storage import (
+        generate_presigned_url,
+        generate_presigned_url_global,
+        r2_head_object_global,
+    )
+    from app.user_context import get_current_user_id
+
+    clip_id = clip.get('id') or clip.get('raw_clip_id')
+
+    # 1. Game video — best quality, full trim flexibility.
+    game_id = clip.get('game_id')
+    game_hash = clip.get('game_blake3_hash')
+    if game_id and game_hash:
+        game_key = f"games/{game_hash}.mp4"
+        has_extract_fallback = bool(clip.get('raw_filename'))
+        # Only HEAD-probe the game object when a preserved extract can back a
+        # miss. With no fallback the game video is the sole source, so use it
+        # directly and let a reclaimed/expired object fail loudly at extract
+        # time (unchanged behavior — no new transient-blip failure mode).
+        if not has_extract_fallback or r2_head_object_global(game_key) is not None:
+            url = generate_presigned_url_global(game_key)
+            if url:
+                return (url, clip['raw_start_time'], clip['raw_end_time'], True)
+
+    # 2. T4175 preserved per-clip extract (native-res single clip; whole-file range).
+    raw_filename = clip.get('raw_filename')
+    if raw_filename:
+        user_id = get_current_user_id()
+        url = generate_presigned_url(user_id, f"raw_clips/{raw_filename}")
+        if url:
+            start = clip.get('raw_start_time') or 0.0
+            end = clip.get('raw_end_time')
+            if end is not None:
+                duration = end - start
+            else:
+                duration = clip.get('raw_duration') or 0.0
+            return (url, 0.0, float(duration), False)
+
+    # 3. T4140 recap fallback (stubbed until T4140 lands).
+    recap = _resolve_recap_source(clip)
+    if recap is not None:
+        return recap
+
+    # 4. Visible failure — no silent fallback.
+    raise SourceUnavailable(clip_id)
+
+
+# =============================================================================
 # Cleanup Utilities
 # =============================================================================
 
