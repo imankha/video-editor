@@ -1,6 +1,6 @@
 # T4175: Sweep Preserves Never-Framed Clips as Reel Drafts (Not Raw Published Reels)
 
-**Status:** IN PROGRESS
+**Status:** DONE (deployed 2026-07-06 prod)
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-07-05
