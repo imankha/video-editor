@@ -75,6 +75,16 @@ function TagBadges({ tagBadges }) {
  * - Projects: List of existing projects with progress bars
  * - Buttons to add new game or create new project
  */
+
+/**
+ * T4800: a draft with zero source clips is a dead orphan — its last source clip
+ * was deleted, so it can no longer be edited and must never appear in Reel Drafts.
+ * The backend filters these out of GET /api/projects (the real fix); this predicate
+ * is the client-side belt-and-suspenders used by the drafts filter. A missing
+ * clip_count is treated as empty (fail closed).
+ */
+export const isEmptyDraft = (project) => (project?.clip_count || 0) === 0;
+
 export function ProjectManager({
   projects,
   loading,
@@ -174,6 +184,12 @@ export function ProjectManager({
   // Filter projects based on selected filters
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
+      // T4800: never render a 0-clip draft. Such a project is an orphan left when
+      // its last source clip was deleted; it can no longer be edited. The backend
+      // already filters these out of GET /api/projects (the real fix) — this is the
+      // client-side belt-and-suspenders so a stale cached project can't slip through.
+      if (isEmptyDraft(project)) return false;
+
       // Status filter - matches counting logic
       // T66: 'complete' and 'uncompleted' removed - completed projects are archived
       if (statusFilter !== 'all') {

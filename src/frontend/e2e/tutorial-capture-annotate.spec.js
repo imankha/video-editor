@@ -267,13 +267,16 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   const api = await browser.newContext({ baseURL: BASE });
   try {
     await loginAsRealUser(api, 'imankh@gmail.com');
-    const projects = await (await api.request.get('/api/projects')).json();
-    for (const p of (Array.isArray(projects) ? projects : []).filter(p => p.name === CLIP_NAME)) {
-      await api.request.delete(`/api/projects/${p.id}`);
-      console.log(`[cleanup] deleted reel draft ${p.id} (${p.name})`);
-    }
+    // Delete the demo clip AND the auto-reel it created. Match the reel by the
+    // clip's auto_project_id (the reel THIS run created), never by name — a name
+    // match could nuke a pre-existing user reel that happens to share CLIP_NAME.
+    // This runs against the REAL imankh account.
     const clips = await (await api.request.get('/api/clips/raw')).json();
     for (const c of (Array.isArray(clips) ? clips : []).filter(c => c.name === CLIP_NAME)) {
+      if (c.auto_project_id) {
+        await api.request.delete(`/api/projects/${c.auto_project_id}`);
+        console.log(`[cleanup] deleted reel draft ${c.auto_project_id} (auto-reel for clip ${c.id})`);
+      }
       await api.request.delete(`/api/clips/raw/${c.id}`);
       console.log(`[cleanup] deleted raw clip ${c.id} (${c.name})`);
     }

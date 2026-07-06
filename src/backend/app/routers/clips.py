@@ -868,11 +868,30 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
 
 
 def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
-    """Delete an auto-created project if it hasn't been modified."""
-    # Check if project has been modified (has working video, final video, or multiple clips)
+    """Delete an auto-created reel draft when its source clip is being deleted.
+
+    Called from delete_raw_clip BEFORE the raw clip row is removed, so a
+    working_clip still exists for the clip under deletion (clip_count includes it).
+
+    A draft is dropped when the clip being deleted is its ONLY source clip — the
+    draft can no longer be edited once its source is gone, so it must not linger as
+    a 0-clip orphan in the Reel Drafts feed (T4800). This deletes even a draft that
+    was exported (unpublished final_video / working_video) — its source is gone.
+
+    Two things are preserved:
+    - Multi-clip projects (clip_count > 1): other source clips remain, keep it.
+    - PUBLISHED reels (a final_video with published_at set): the reel lives in My
+      Reels independently of its source clip; the published reel MUST survive. Its
+      project is normally already archived (archived_at set), but guard on the
+      published state itself rather than archival so the reel is never destroyed.
+    """
     cursor.execute("""
-        SELECT p.working_video_id, p.final_video_id,
-               (SELECT COUNT(*) FROM working_clips WHERE project_id = p.id) as clip_count
+        SELECT
+            (SELECT COUNT(*) FROM working_clips WHERE project_id = p.id) AS clip_count,
+            EXISTS(
+                SELECT 1 FROM final_videos
+                WHERE project_id = p.id AND published_at IS NOT NULL
+            ) AS is_published
         FROM projects p WHERE p.id = ?
     """, (project_id,))
     project = cursor.fetchone()
@@ -880,10 +899,22 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
     if not project:
         return False
 
-    # Don't delete if project has been worked on
-    if project['working_video_id'] or project['final_video_id'] or project['clip_count'] > 1:
-        logger.info(f"Keeping modified auto-project {project_id}")
+    # The clip being deleted is not this draft's only source — keep the project.
+    if project['clip_count'] > 1:
+        logger.info(f"Keeping multi-clip auto-project {project_id} (other clips remain)")
         return False
+
+    # Published reel — preserve it; only the source clip goes away.
+    if project['is_published']:
+        logger.info(f"Keeping published auto-project {project_id} (reel preserved in My Reels)")
+        return False
+
+    # Dead draft: its only source clip is being deleted. Remove it so it can't
+    # linger as a 0-clip orphan. final_videos.project_id lacks ON DELETE CASCADE
+    # (unlike working_clips/working_videos/export_jobs), so with foreign_keys=ON
+    # we must clear any unpublished final video before deleting the project —
+    # mirrors delete_project in projects.py.
+    cursor.execute("DELETE FROM final_videos WHERE project_id = ?", (project_id,))
 
     # Delete the project — cascades to working_clips, working_videos, export_jobs
     cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
@@ -893,7 +924,7 @@ def _delete_auto_project(cursor, project_id: int, raw_clip_id: int) -> bool:
         UPDATE raw_clips SET auto_project_id = NULL WHERE id = ?
     """, (raw_clip_id,))
 
-    logger.info(f"Deleted unmodified auto-project {project_id}")
+    logger.info(f"Deleted dead auto-project draft {project_id} (last source clip removed)")
     return True
 
 

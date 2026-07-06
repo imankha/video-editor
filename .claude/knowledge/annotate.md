@@ -58,7 +58,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
     clip means "post-expiry preserved extract," read by `resolve_clip_source`.
   - update → `PUT /api/clips/raw/{id}` (clips.py:1052).
   - delete → `DELETE /api/clips/raw/{id}` (clips.py:1184) — cascades to working_clips via FK,
-    deletes R2 `raw_clips/{filename}`.
+    deletes R2 `raw_clips/{filename}`. **T4800**: also calls `_delete_auto_project` (clips.py:870)
+    which now DELETES the clip's auto-reel draft when this was its LAST source clip — even an
+    exported one (unpublished working_video/final_video) — because the draft's source is gone and
+    it can no longer be edited. It PRESERVES a PUBLISHED reel (`final_videos.published_at` set) and
+    a multi-clip project (clip_count>1). Deletes `final_videos` first (no ON DELETE CASCADE on
+    `final_videos.project_id`), mirroring `projects.delete_project`.
   - Scrub drags persist on drag-end only. "Create Reel" sends `create_project: true` on the same
     save/update.
 - **Multi-video**: `buildFullVideoTimeline(gameVideos)` (useVirtualTimeline.js:136-217)
@@ -89,6 +94,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   L295-319) has ZERO callers — orphaned pair slated for deletion (T4270).
 - **Selection state machine**: `useClipSelection()` is the single source of truth for selection +
   overlay (AnnotateContainer:188-201); `useAnnotate` delegates selection out via `onSelect`.
+- **Auto-reel draft dies with its last source clip (T4800).** Deleting a raw clip deletes its
+  auto-created reel draft when no other source clip remains (unless the reel is PUBLISHED). The
+  Reel Drafts feed (`GET /api/projects`, projects.py) additionally hides any `clip_count == 0`
+  project as belt-and-suspenders, and `ProjectManager.isEmptyDraft` guards the client. Root cause
+  of the old orphan: `_delete_auto_project` used to KEEP any project with
+  `working_video_id OR final_video_id`, so an exported auto-reel survived clip-delete with 0 clips.
 - **Clip-level deletes do NOT archive.** `DELETE /raw/{id}` and `remove_clip_from_project`
   hard-delete rows. R2 archiving is project-level only:
   `src/backend/app/services/project_archive.py:archive_project` serializes project + ALL

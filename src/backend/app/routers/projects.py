@@ -440,6 +440,19 @@ async def list_projects():
 
         result = []
         for row in rows:
+            # T4800: a draft with zero source clips is a dead orphan — its last
+            # source clip was deleted, so it can no longer be edited. Never surface
+            # it in the Reel Drafts feed. The root-cause fix deletes such orphans on
+            # clip-delete (_delete_auto_project in clips.py); this filter is the
+            # belt-and-suspenders guard for any that predate the fix or arrive via
+            # another path. No reachable UI path lands a 0-clip draft in the feed
+            # (create-from-clips rejects an empty clip set; the empty create_project
+            # endpoint is not wired to any live UI), so this hides only orphans, never
+            # a valid draft. Skipping here also avoids the per-row compute_unified_clip_start
+            # query below for orphans — no added queries.
+            if row['clip_count'] == 0:
+                continue
+
             project_id = row['id']
             game_info = project_games.get(project_id, {
                 'game_ids': [],
