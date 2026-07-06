@@ -6,7 +6,6 @@ published reel (dropping its seeded Glicko). Idempotent, tuple-row-factory safe.
 """
 
 import sqlite3
-
 from unittest.mock import patch
 
 from app.migrations.profile_db.v021_unpublish_unframed_sweep_reels import (
@@ -165,6 +164,45 @@ def test_unpublishes_and_restores_draft(tmp_path):
     assert rc["filename"] == "auto_6_50_abcd.mp4"
     conn.close()
     assert fv_id  # sanity
+
+
+def test_repoints_to_surviving_real_export(tmp_path):
+    """A project framed BEFORE the sweep detonation still has a real 9:16 export
+    (a non-auto final_videos row) even though the sweep's auto_ reel overwrote
+    its final_video_id. v021 must re-point the pointer to that surviving export
+    rather than orphaning it -- the proj-48 "Done card, no preview button" bug."""
+    db = _make_db(tmp_path)
+    # The sweep's auto_ reel currently owns the project's final_video_id.
+    auto_fv = _seed_sweep_reel(db, project_id=100, raw_clip_id=50,
+                               fv_filename="auto_6_50_abcd.mp4",
+                               archived=False, with_working_clip=True)
+    # The user's real framed 9:16 export that predates the sweep (non-auto,
+    # unpublished draft -> published_at NULL, like dev fv 27).
+    conn = sqlite3.connect(str(db))
+    cur = conn.execute(
+        "INSERT INTO final_videos (project_id, filename, source_type, game_id, "
+        "published_at, aspect_ratio, source_clip_id) "
+        "VALUES (?, 'final_100_real.mp4', 'brilliant_clip', 6, NULL, '9:16', 50)",
+        (100,),
+    )
+    real_fv = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    _run_v021(db)
+
+    conn = sqlite3.connect(str(db))
+    conn.row_factory = sqlite3.Row
+    # auto_ reel un-published; the real export survives.
+    survivors = [r["filename"] for r in conn.execute(
+        "SELECT filename FROM final_videos").fetchall()]
+    assert survivors == ["final_100_real.mp4"]
+    # Pointer re-pointed to the real export -> preview button returns.
+    proj = conn.execute(
+        "SELECT final_video_id FROM projects WHERE id = 100").fetchone()
+    assert proj["final_video_id"] == real_fv
+    conn.close()
+    assert auto_fv  # sanity
 
 
 def test_idempotent_second_run_is_noop(tmp_path):

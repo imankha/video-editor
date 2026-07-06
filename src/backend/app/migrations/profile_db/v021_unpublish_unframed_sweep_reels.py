@@ -24,7 +24,10 @@ filename — the sweep's writer, matching dev fv 37-57 and prod sarkarati 16-22)
       prefer restore_project (re-hydrate working_clips from archive/{id}.msgpack);
       if the msgpack is missing, rebuild via _insert_working_clip_with_dims from
       the surviving raw_clip — never a bare archived_at=NULL (the T4050 empty-draft
-      signature). Clear projects.final_video_id if it pointed at the deleted reel.
+      signature). Re-point projects.final_video_id (when it pointed at the deleted
+      reel) to the project's surviving real export — a non-auto final_videos row
+      from framing done before the sweep detonated — so a framed reel keeps its
+      preview; fall back to NULL only when no real export survives.
   (c) DELETE the published final_videos row so it leaves My Reels. This also
       drops the seeded Glicko rating + match_count that lived ON that row
       (rating/rd/match_count are columns on final_videos; there is NO separate
@@ -93,9 +96,9 @@ class V021UnpublishUnframedSweepReels(BaseMigration):
             logger.info("[v021] no published sweep reels to un-publish")
             return
 
-        from ...user_context import get_current_user_id
-        from ...services.project_archive import restore_project, is_project_archived
         from ...routers.clips import _insert_working_clip_with_dims
+        from ...services.project_archive import is_project_archived, restore_project
+        from ...user_context import get_current_user_id
 
         user_id = get_current_user_id()
         healed = 0
@@ -148,10 +151,26 @@ class V021UnpublishUnframedSweepReels(BaseMigration):
                     )
 
             # Referential integrity: FK enforcement is off during migration, so
-            # clear/cascade the references to the reel we are about to delete.
+            # re-point/clear the reference to the reel we are about to delete.
+            # A project framed BEFORE the sweep detonation still has its real
+            # export (a non-auto final_videos row) -- the sweep's auto_ reel just
+            # overwrote final_video_id on top of it. Re-point to that surviving
+            # export so the framed reel keeps a preview, rather than orphaning it
+            # (the proj-48 "Done card, no preview button" bug). Fall back to NULL
+            # for a genuine never-framed draft (no real export survives).
+            surviving = cursor.execute(
+                r"""
+                SELECT id FROM final_videos
+                WHERE project_id = ? AND id != ?
+                  AND filename NOT LIKE 'auto\_%' ESCAPE '\'
+                ORDER BY version DESC, id DESC LIMIT 1
+                """,
+                (project_id, fv_id),
+            ).fetchone()
+            new_pointer = surviving[0] if surviving else None
             cursor.execute(
-                "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?",
-                (fv_id,),
+                "UPDATE projects SET final_video_id = ? WHERE final_video_id = ?",
+                (new_pointer, fv_id),
             )
             if "before_after_tracks" in tables:
                 cursor.execute(
@@ -177,7 +196,11 @@ class V021UnpublishUnframedSweepReels(BaseMigration):
         True on success or when R2 is disabled (nothing to copy in that mode).
         """
         from ...storage import (
-            R2_ENABLED, get_r2_client, r2_key, R2_BUCKET, file_exists_in_r2,
+            R2_BUCKET,
+            R2_ENABLED,
+            file_exists_in_r2,
+            get_r2_client,
+            r2_key,
         )
 
         if not R2_ENABLED:
@@ -194,7 +217,7 @@ class V021UnpublishUnframedSweepReels(BaseMigration):
         source_key = r2_key(user_id, f"final_videos/{filename}")
         dest_key = r2_key(user_id, f"raw_clips/{filename}")
         try:
-            from ...utils.retry import retry_r2_call, TIER_3
+            from ...utils.retry import TIER_3, retry_r2_call
             retry_r2_call(
                 client.copy_object,
                 Bucket=R2_BUCKET,
