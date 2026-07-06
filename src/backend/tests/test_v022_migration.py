@@ -143,21 +143,22 @@ def test_ignores_auto_only_final(tmp_path):
     assert proj[0] is None
 
 
-def test_leaves_deleted_current_reel_with_published_survivor_untouched(tmp_path):
-    """Not every NULL-pointer + surviving-final is a v021 orphan. A shared
-    project re-exported with keep_prior holds two non-auto finals; deleting the
-    current one nulls the pointer while the older PUBLISHED share survives. That
-    null is the user's delete gesture -- v022 must NOT resurrect the share."""
+def test_repoints_published_survivor_too(tmp_path):
+    """A real orphan's export can itself be published (dev proj 48's fv 27 was
+    published after the fact), so v022 must NOT filter on published_at -- it
+    re-points to the latest surviving non-auto final regardless of published
+    state. This also re-points the rarer keep_prior-share-then-delete case, which
+    is intentional and harmless (the share is served by its own id)."""
     db = _make_db(tmp_path)
     _add_project(db, project_id=70, final_video_id=None)
-    _add_final(db, project_id=70, filename="final_70_share.mp4", published=True)
+    fv = _add_final(db, project_id=70, filename="final_70_pub.mp4", published=True)
 
     _run_v022(db)
 
     conn = sqlite3.connect(str(db))
     proj = conn.execute("SELECT final_video_id FROM projects WHERE id = 70").fetchone()
     conn.close()
-    assert proj[0] is None  # published survivor left alone
+    assert proj[0] == fv  # published survivor re-pointed, not skipped
 
 
 def test_idempotent_second_run_is_noop(tmp_path):

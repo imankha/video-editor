@@ -12,26 +12,27 @@ button + stream key off final_video_id — a Done card with no preview button
 accounts already past v021 keep the orphaned pointer; this heals them.
 
 Predicate: a project with final_video_id IS NULL that still owns a real (non-
-auto), UNPUBLISHED (published_at IS NULL) final_videos row. Re-point to the
-latest such row (version DESC, id DESC).
+auto) final_videos row. Re-point to the latest such row (version DESC, id DESC).
 
-The `published_at IS NULL` filter is what makes the predicate provenance-safe.
-v022 runs after the fact and cannot see which projects v021 touched, so it must
-key off the shape of the orphan, not the event. The orphaned survivor is a draft
-export — framed + exported but never published (dev proj 48's fv 27) — so
-published_at IS NULL. A NULL final_video_id sitting over a PUBLISHED survivor is
-a different, legitimate state we must NOT touch: a shared project re-exported
-with keep_prior (overlay.py) holds two non-auto finals, and deleting the current
-one (downloads.py) nulls the pointer while the older PUBLISHED share survives —
-that null is the user's delete gesture, and re-pointing would resurrect a reel
-they removed. Restricting to unpublished survivors heals the orphan and leaves
-the delete-gesture case alone.
+Provenance note (why the predicate is deliberately broad, not v021-exact). v022
+runs after the fact and cannot see which projects v021 touched, so it keys off
+the resulting state. NULL-pointer + surviving real final is *almost* always the
+v021 orphan: every export path sets final_video_id when it writes a final row,
+and downloads.py's delete nulls the pointer AND deletes the row together, so a
+normal delete leaves no surviving final. The one non-v021 way to reach this
+state is a shared project re-exported with keep_prior (overlay.py keeps the old
+shared final) whose current reel is then deleted (downloads.py) -- the older
+PUBLISHED share survives under a now-NULL pointer. v022 re-points that case too,
+intentionally: re-pointing is never destructive (the share is served by its own
+id, independent of the project pointer), and the alternative -- a filter on
+published_at -- is WRONG, because a genuine v021 orphan's real export can itself
+be published (dev proj 48's fv 27 was published after the fact). Failing to heal
+a real orphan (broken Done card, no preview button) is the worse outcome than
+re-pointing a lingering share to a project that still legitimately owns it.
 
 A never-framed draft owns no final row and is left untouched; a project whose
 only surviving final is an auto_ reel (a v021 copy-failure retry) keeps
-final_video_id set — not NULL — so it never matches here. (v021's own re-point
-stays broad: it fires only when the pointer references the reel it is deleting,
-so it is already provenance-safe and needs no published_at filter.)
+final_video_id set -- not NULL -- so it never matches here.
 
 Positional tuple row-factory (the runner hands up(conn) plain tuples). Table-
 guarded. Idempotent: a re-run finds no NULL-pointer projects with a real final.
@@ -62,13 +63,13 @@ class V022RepointOrphanedFinalVideo(BaseMigration):
             logger.info("[v022] projects/final_videos missing; nothing to heal")
             return
 
-        # Candidate survivor = the project's latest real export: a non-auto
-        # (`_` is a LIKE wildcard, so escape it -- an `auto_` prefix marks a raw
-        # sweep reel), UNPUBLISHED (published_at IS NULL -> a draft export, the
-        # orphan shape; a PUBLISHED survivor under a NULL pointer is the user's
-        # delete gesture and must be left alone) final_videos row. The outer
-        # WHERE keeps only rows where such a survivor exists, so latest_fv is
-        # never NULL in the loop below.
+        # Candidate survivor = the project's latest real export: the newest
+        # non-auto final_videos row (`_` is a LIKE wildcard, so escape it -- an
+        # `auto_` prefix marks a raw sweep reel, never a real export). Published
+        # or not: a genuine orphan's export can itself be published, so filtering
+        # on published_at would miss real orphans (see module docstring). The
+        # outer WHERE keeps only rows where such a survivor exists, so latest_fv
+        # is never NULL in the loop below.
         orphans = cursor.execute(
             r"""
             SELECT id, latest_fv FROM (
@@ -76,7 +77,6 @@ class V022RepointOrphanedFinalVideo(BaseMigration):
                        (SELECT fv.id FROM final_videos fv
                         WHERE fv.project_id = p.id
                           AND fv.filename NOT LIKE 'auto\_%' ESCAPE '\'
-                          AND fv.published_at IS NULL
                         ORDER BY fv.version DESC, fv.id DESC LIMIT 1) AS latest_fv
                 FROM projects p
                 WHERE p.final_video_id IS NULL
