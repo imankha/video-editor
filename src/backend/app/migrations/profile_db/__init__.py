@@ -20,6 +20,7 @@ from .v018_heal_lost_publish_proj41 import V018HealLostPublishProj41
 from .v019_heal_sweep_reel_metadata import V019HealSweepReelMetadata
 from .v020_archive_published_auto_projects import V020ArchivePublishedAutoProjects
 from .v021_unpublish_unframed_sweep_reels import V021UnpublishUnframedSweepReels
+from .v022_repoint_orphaned_final_video import V022RepointOrphanedFinalVideo
 
 MIGRATIONS = [
     V001Baseline(),
@@ -43,6 +44,7 @@ MIGRATIONS = [
     V019HealSweepReelMetadata(),
     V020ArchivePublishedAutoProjects(),
     V021UnpublishUnframedSweepReels(),
+    V022RepointOrphanedFinalVideo(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
