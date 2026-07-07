@@ -9,7 +9,9 @@ const GAME_UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
  * "game highlights" now render as the shared amber LockedCollectionCard (tap for
  * the reason), followed by the ratio's individually-playable reels.
  *
- * @param {string}   name        - the group/game name (for the card + popup)
+ * @param {string}   name        - the locked collection's display name (already
+ *                                 final: "Game Highlights" for a game, the mix
+ *                                 name for Mixes) — shown on the card + popup
  * @param {string}   ratio       - '9:16' | '16:9'
  * @param {number}   currentSec  - this ratio's duration so far
  * @param {Array}    reels       - this ratio's members
@@ -17,7 +19,7 @@ const GAME_UNLOCK_CAPTION = 'Build more reels to unlock game highlights';
  */
 export function RatioUnlockGroup({ name, ratio, currentSec, reels, renderCard }) {
   const [showReason, setShowReason] = useState(false);
-  const cardName = `${name || 'Game'} highlights`;
+  const cardName = name || 'Game Highlights';
 
   return (
     <div className="mt-3">

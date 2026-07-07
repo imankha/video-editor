@@ -49,6 +49,13 @@ export function GameCollectionGroup({
     (r) => !ratioEligible[r] && (ratioCounts[r] || 0) > 0,
   );
 
+  // Inside a GAME group the play-all collection reads "Game Highlights" (T4810);
+  // the CollapsibleGroup header still shows the game name, so two games stay
+  // distinguishable (the T4190 disambiguation lives in the header, not the card).
+  // The player/share title keeps the game name (playTitle=name). Mixes keeps its
+  // own name for both.
+  const cardTitle = shareScope?.type === 'game' ? 'Game Highlights' : name;
+
   // The default-expanded group never fires onToggle for its initial open state,
   // so trigger its first member fetch on mount.
   useEffect(() => {
@@ -75,7 +82,7 @@ export function GameCollectionGroup({
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="space-y-2 mb-2">
           <CollectionCard
-            title={name}
+            title={cardTitle}
             playTitle={name}
             ratio={ratio}
             reelCount={ratioCounts[ratio]}
@@ -100,7 +107,7 @@ export function GameCollectionGroup({
       {subThresholdRatios.map((ratio) => (
         <RatioUnlockGroup
           key={`sub-${ratio}`}
-          name={name}
+          name={cardTitle}
           ratio={ratio}
           currentSec={ratioDurations[ratio]}
           reels={members ? membersFor(ratio) : []}
