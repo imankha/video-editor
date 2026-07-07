@@ -81,10 +81,14 @@ test('T4190: My Reels group headers show real game names + collapsed-group new c
   await firstHeader.waitFor({ timeout: 30000 });
 
   // --- Criterion 1: real game name in the header, never "Game Highlights" ----
+  // T4810 note: the play-all CARD inside an expanded game group now legitimately
+  // reads "Game Highlights" (the collection type). T4190's guarantee is narrower
+  // and survives: no group HEADER is the anonymous "Game Highlights" - every
+  // header shows its game name. Assert on the header buttons, not the whole panel.
   await expect(firstHeader, 'first group header shows the real game name').toBeVisible();
   await expect(
-    panel.getByText('Game Highlights', { exact: true }),
-    'the anonymous "Game Highlights" label is gone from the My Reels view',
+    panel.getByRole('button').filter({ hasText: /^\s*Game Highlights\s*$/ }),
+    'no game-group header is the anonymous "Game Highlights"',
   ).toHaveCount(0);
 
   // --- Criterion 2: collapsed group with unwatched reels shows the "N new" chip ---
@@ -111,6 +115,6 @@ test('T4190: My Reels group headers show real game names + collapsed-group new c
 
   console.log(
     `[T4190] PASS: "${collapsedNewGroup.game_name}" renders collapsed with a ` +
-      `"${collapsedNewGroup.unwatched_count} new" chip; no "Game Highlights" labels in the panel.`,
+      `"${collapsedNewGroup.unwatched_count} new" chip; no anonymous "Game Highlights" group headers.`,
   );
 });
