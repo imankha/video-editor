@@ -179,39 +179,8 @@ def test_delete_clip_keeps_multi_clip_project():
 
 
 # ---------------------------------------------------------------------------
-# (b) GET /api/projects never returns clip_count == 0 projects
+# The Reel Drafts feed contains only project rows (never smart collections)
 # ---------------------------------------------------------------------------
-
-def test_projects_feed_excludes_zero_clip_orphan():
-    """Regression pin: GET /api/projects never returns a clip_count == 0 project,
-    even one seeded directly (e.g. an orphan that predates the delete fix)."""
-    uid = _new_user()
-    client = TestClient(app, headers={"X-User-ID": uid})
-    _ctx(uid)
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        # A healthy single-clip draft (must appear).
-        _, healthy_project, _ = _make_clip_with_auto_reel(cur, name="Healthy Draft")
-        # A 0-clip orphan: project + final_video but NO working_clips (must NOT appear).
-        cur.execute(
-            "INSERT INTO projects (name, aspect_ratio, is_auto_created) VALUES ('Orphan', '9:16', 1)"
-        )
-        orphan_project = cur.lastrowid
-        cur.execute(
-            "INSERT INTO final_videos (project_id, filename, version, published_at) VALUES (?, 'o.mp4', 1, NULL)",
-            (orphan_project,),
-        )
-        conn.commit()
-
-    resp = client.get("/api/projects")
-    assert resp.status_code == 200, resp.text
-    items = resp.json()
-    ids = {p["id"] for p in items}
-
-    assert healthy_project in ids, "healthy single-clip draft should be listed"
-    assert orphan_project not in ids, "0-clip orphan must be filtered out of the drafts feed"
-    assert all(p["clip_count"] > 0 for p in items), "feed must never contain a clip_count == 0 project"
-
 
 def test_projects_feed_returns_only_projects_not_smart_collections():
     """The Reel Drafts feed returns only real project rows (drafts) — never smart
@@ -244,37 +213,3 @@ def test_projects_feed_returns_only_projects_not_smart_collections():
             f"drafts feed returned id {p['id']} ({p.get('name')!r}) that is not a "
             f"project row — smart collections must never appear in Reel Drafts"
         )
-
-
-# ---------------------------------------------------------------------------
-# Perf guard: the clip_count filter adds no per-orphan query
-# ---------------------------------------------------------------------------
-
-def test_projects_feed_query_count_flat_under_orphan_growth(query_counter):
-    """The drafts filter must not add per-row queries. Orphans are skipped BEFORE
-    the per-single-clip compute_unified_clip_start query, so the total query count
-    is invariant to how many 0-clip orphans exist."""
-    def seed_and_count(num_orphans):
-        uid = _new_user()
-        client = TestClient(app, headers={"X-User-ID": uid})
-        _ctx(uid)
-        with get_db_connection() as conn:
-            cur = conn.cursor()
-            _make_clip_with_auto_reel(cur, name="Healthy")  # one valid draft
-            for i in range(num_orphans):
-                cur.execute(
-                    "INSERT INTO projects (name, aspect_ratio, is_auto_created) VALUES (?, '9:16', 1)",
-                    (f"Orphan {i}",),
-                )
-            conn.commit()
-        before = len(query_counter.selects)
-        resp = client.get("/api/projects")
-        assert resp.status_code == 200, resp.text
-        return len(query_counter.selects) - before
-
-    few = seed_and_count(2)
-    many = seed_and_count(20)
-    assert few == many, (
-        f"GET /api/projects query count grew with orphan count ({few} -> {many}); "
-        f"the clip_count filter must skip orphans before any per-row query"
-    )

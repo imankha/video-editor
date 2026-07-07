@@ -95,11 +95,12 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
 - **Selection state machine**: `useClipSelection()` is the single source of truth for selection +
   overlay (AnnotateContainer:188-201); `useAnnotate` delegates selection out via `onSelect`.
 - **Auto-reel draft dies with its last source clip (T4800).** Deleting a raw clip deletes its
-  auto-created reel draft when no other source clip remains (unless the reel is PUBLISHED). The
-  Reel Drafts feed (`GET /api/projects`, projects.py) additionally hides any `clip_count == 0`
-  project as belt-and-suspenders, and `ProjectManager.isEmptyDraft` guards the client. Root cause
-  of the old orphan: `_delete_auto_project` used to KEEP any project with
-  `working_video_id OR final_video_id`, so an exported auto-reel survived clip-delete with 0 clips.
+  auto-created reel draft when no other source clip remains (unless the reel is PUBLISHED). This is
+  the ONLY orphan producer, so it's fixed at the root — there is deliberately NO read-time
+  `clip_count == 0` filter in the feed and NO client guard (they would hide the bug; a 0-clip draft
+  appearing in Reel Drafts is a visible signal that a producer was missed). Root cause of the old
+  orphan: `_delete_auto_project` used to KEEP any project with `working_video_id OR final_video_id`,
+  so an exported auto-reel survived clip-delete with 0 clips.
 - **Clip-level deletes do NOT archive.** `DELETE /raw/{id}` and `remove_clip_from_project`
   hard-delete rows. R2 archiving is project-level only:
   `src/backend/app/services/project_archive.py:archive_project` serializes project + ALL

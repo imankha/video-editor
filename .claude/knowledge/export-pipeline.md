@@ -125,5 +125,7 @@ graph LR
   exported — but guards on `final_videos.published_at IS NOT NULL` to keep published reels (My Reels)
   intact (invariant #2 / T4010). It deletes the unpublished `final_videos` row first because
   `final_videos.project_id` has NO ON DELETE CASCADE (same reason `projects.delete_project` does).
-  Belt-and-suspenders: `GET /api/projects` (projects.py `list_projects`) hides `clip_count == 0`.
-  Tests: `test_t4800_orphan_drafts.py`.
+  Root-cause fix ONLY — no read-time `clip_count == 0` filter and no client guard (they'd hide the
+  bug; a visible 0-clip draft signals a missed producer). No cleanup migration (no evidence any real
+  account has a pre-existing orphan). The tutorial-capture spec also deletes the auto-reel it creates
+  (was leaking orphans onto the live imankh account). Tests: `test_t4800_orphan_drafts.py`.
