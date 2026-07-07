@@ -75,6 +75,7 @@ function TagBadges({ tagBadges }) {
  * - Projects: List of existing projects with progress bars
  * - Buttons to add new game or create new project
  */
+
 export function ProjectManager({
   projects,
   loading,

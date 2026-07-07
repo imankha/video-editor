@@ -118,3 +118,15 @@ graph LR
   row (dropping its seeded Glicko `rating`/`rd`/`match_count` — these are columns ON `final_videos`, there
   is NO separate match-history table). Idempotent, tuple-row-factory safe. Tests:
   `test_auto_export.py::TestExportBrilliantClip`, `test_resolve_clip_source.py`, `test_v021_migration.py`.
+
+- **T4800 — clip-delete drops the dead draft, preserves the published reel (2026-07-06):** deleting a
+  raw clip whose auto-reel had a `final_video` used to leave a 0-clip orphan draft in Reel Drafts
+  (`_delete_auto_project` kept anything with `working_video_id OR final_video_id`). Now
+  `_delete_auto_project` (clips.py:870) deletes the draft when it was the clip's LAST source — even if
+  exported — but guards on `final_videos.published_at IS NOT NULL` to keep published reels (My Reels)
+  intact (invariant #2 / T4010). It deletes the unpublished `final_videos` row first because
+  `final_videos.project_id` has NO ON DELETE CASCADE (same reason `projects.delete_project` does).
+  Root-cause fix ONLY — no read-time `clip_count == 0` filter and no client guard (they'd hide the
+  bug; a visible 0-clip draft signals a missed producer). No cleanup migration (no evidence any real
+  account has a pre-existing orphan). The tutorial-capture spec also deletes the auto-reel it creates
+  (was leaking orphans onto the live imankh account). Tests: `test_t4800_orphan_drafts.py`.
