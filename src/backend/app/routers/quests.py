@@ -49,6 +49,11 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_shape_set",
     # Publish-quest step event (Move to My Reels button)
     "moved_to_my_reels",
+    # T4780: tutorial-watch step events (one per quest, fires at 80% watch or 10s+close)
+    "watched_annotate_tutorial",
+    "watched_framing_tutorial",
+    "watched_overlay_tutorial",
+    "watched_publish_tutorial",
 }
 
 ACHIEVEMENT_TO_MILESTONE = {
@@ -67,6 +72,11 @@ ACHIEVEMENT_TO_MILESTONE = {
     "overlay_color_set": "overlay_color_set",
     "overlay_shape_set": "overlay_shape_set",
     "moved_to_my_reels": "moved_to_my_reels",
+    # T4780: tutorial-watch milestones (bridge to analytics for funnel tracking)
+    "watched_annotate_tutorial": "watched_annotate_tutorial",
+    "watched_framing_tutorial": "watched_framing_tutorial",
+    "watched_overlay_tutorial": "watched_overlay_tutorial",
+    "watched_publish_tutorial": "watched_publish_tutorial",
 }
 
 # All achievement keys consumed by quest-step computation (batched in one query).
@@ -82,6 +92,11 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_shape_set",
     "moved_to_my_reels",
     "watched_gallery_video_1s",
+    # T4780: tutorial-watch steps (ride the same batched IN query — no new DB queries)
+    "watched_annotate_tutorial",
+    "watched_framing_tutorial",
+    "watched_overlay_tutorial",
+    "watched_publish_tutorial",
 ]
 
 # Map step_id -> quest_id for skip lookups
@@ -139,6 +154,12 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     steps = {}
 
     # --- Quest 1: Get Started ---
+    # T4780: tutorial-watch steps — derived purely from their achievement keys
+    steps["watch_annotate_tutorial"] = 'watched_annotate_tutorial' in achieved
+    steps["watch_framing_tutorial"]  = 'watched_framing_tutorial' in achieved
+    steps["watch_overlay_tutorial"]  = 'watched_overlay_tutorial' in achieved
+    steps["watch_publish_tutorial"]  = 'watched_publish_tutorial' in achieved
+
     steps["upload_game"] = cursor.execute("SELECT 1 FROM games LIMIT 1").fetchone() is not None
     # add_clip: completed when the user opens the Add Clip form (achievement). Backfilled
     # by "any clip exists" so it auto-completes on save and for users who clipped before
