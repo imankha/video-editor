@@ -25,12 +25,20 @@ test('capture publish tutorial footage', async ({ browser }) => {
   });
   await context.addInitScript(OVERLAY_INIT);
   await loginAsRealUser(context, 'imankh@gmail.com');
-  // Stage in-session: un-publish reel 34 -> Done+unpublished draft (project 53).
-  // A fresh session re-syncs the profile DB from R2, reverting out-of-session restores.
-  const staged = await context.request.post('/api/downloads/34/restore-project');
-  if (!staged.ok() && staged.status() !== 404) {
-    throw new Error(`restore-project failed: ${staged.status()} ${await staged.text()}`);
-  }
+  // Stage in-session: if project 53's 'Brilliant Pass' reel is currently published,
+  // un-publish it back to a Done draft (the download id changes on every publish, so
+  // look it up). A fresh session re-syncs the profile DB from R2, reverting
+  // out-of-session restores — that's why this runs here.
+  try {
+    const dl = await (await context.request.get('/api/downloads')).json();
+    const reel = (dl.downloads || []).find(x => x.project_id === 53);
+    if (reel) {
+      const staged = await context.request.post(`/api/downloads/${reel.id}/restore-project`);
+      console.log(`[stage] restore-project on download ${reel.id}: ${staged.status()}`);
+    } else {
+      console.log('[stage] project 53 not published — already a Done draft');
+    }
+  } catch (e) { console.log(`[stage] lookup failed: ${e.message}`); }
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const kit = makeKit(page);
@@ -88,13 +96,17 @@ test('capture publish tutorial footage', async ({ browser }) => {
     await page.getByRole('button', { name: /^My Reels/ }).first().click();
     await drawerHeading.waitFor();
   }
-  await dwell(2);
-  step('scroll drawer to reel rows');
+  await dwell(1.2);
+  step('open the game group');
   await page.mouse.move(1700, 540);
-  for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, 900); await dwell(0.3); }
-  await dwell(0.5);
+  // the game groups are collapsed — open 'at Sporting Mar 21' to reveal the new
+  // reel "under the game name" (probe: any visible reel row at all)
+  if (await page.getByRole('button', { name: 'Play video' }).locator('visible=true').count() === 0) {
+    const header = page.getByText('at Sporting Mar 21', { exact: true }).locator('visible=true').last();
+    try { await act(header); await dwell(0.8); } catch { step('group expand failed'); }
+  }
   const reelPlay = page.getByRole('button', { name: 'Play video' }).locator('visible=true').last();
-  await reelPlay.waitFor();
+  await reelPlay.waitFor({ timeout: 10000 });
   await reelPlay.hover();
   const reelTitle = page.getByText('Brilliant Pass', { exact: true }).locator('visible=true').last();
   try { await ring(reelTitle, 14); } catch { await ring(reelPlay, 12); }
@@ -115,18 +127,36 @@ test('capture publish tutorial footage', async ({ browser }) => {
     await dwell(1.3);
   } catch {}
   await clearRing();
-  await page.keyboard.press('Escape');
+  await page.mouse.click(1700, 950);         // click-away closes the menu (Esc doesn't)
   await dwell(1.5);
   await dwell(2);                            // line 6 (mobile) continues this shot
 
   // --- line 7: collections --------------------------------------------------------------
   step('scroll back to collections');
   await mark(7, 'collections');
-  await page.mouse.move(1700, 540);
-  for (let i = 0; i < 8; i++) { await page.mouse.wheel(0, -900); await dwell(0.25); }
-  await dwell(0.5);
+  await page.mouse.move(1700, 300);
+  await dwell(0.3);
   try { await ring(page.getByText('Top Plays').first(), 10); } catch {}
-  await dwell(3);
+  await dwell(1.4);
+  await clearRing();
+  // "...and Game Highlights" — open a game header and emphasize its Game Highlights
+  // card. Target the LEGENDS game (per user 2026-07-06: it has enough reels for an
+  // UNLOCKED highlights card; the demo reel's own game, Sporting, is still locked).
+  // NOTE: until T4810 lands the card reads "at Legends Mar 28 highlights" rather than
+  // "Game Highlights" — the final reshoot happens after T4810 so the label matches.
+  const GH_GAME = 'at Legends Mar 28';
+  try {
+    const header = page.getByText(GH_GAME, { exact: true }).locator('visible=true').last();
+    await header.scrollIntoViewIfNeeded({ timeout: 4000 });
+    await act(header);                          // expand the game group (ripple)
+    await dwell(0.8);
+    // ring the game's highlights card (or the header itself if the card isn't found)
+    let target = page.getByText(new RegExp(`${GH_GAME} highlights`)).locator('visible=true').first();
+    if (!(await target.isVisible().catch(() => false))) target = header;
+    await target.scrollIntoViewIfNeeded({ timeout: 4000 });
+    await ring(target, 10);
+  } catch { step('game highlights card not found'); }
+  await dwell(2.2);
   await clearRing();
 
   // --- line 8: click the first entry (Ranking banner) --------------------------------------
