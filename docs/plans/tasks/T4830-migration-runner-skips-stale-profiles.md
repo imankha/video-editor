@@ -28,7 +28,33 @@ These profiles have therefore missed **every** migration between their stuck ver
 e.g. v012 (inverted-clip range fix), v014 (keyframe dedup), v017–v022 heals, v023. That is a
 latent data-integrity problem for any multi-profile user, not just this one.
 
-## Investigation (do this first — root cause is unknown)
+## Confirmed findings (host-side prod investigation, 2026-07-08)
+
+Severity is **lower than first assumed**: no active-user data loss. Specifics for `1b842983`:
+
+- **Only ONE profile is registered.** `user.sqlite.profiles` lists a single row: `a8428823`
+  (is_default=1). The other 4 R2 `profile.sqlite` objects (`01ae6a94`, `1c844a0b`, `7ea71e41`,
+  `8a9bd070`) are **orphans** — the app never loads them. Game 5 (the T4820 residual) is in
+  `7ea71e41` → **unreachable, zero user impact.**
+- **Dormant user.** ALL of this user's profiles — including the live `a8428823` — have **empty
+  `db-version` R2 metadata and LastModified 2026-05-27**. They haven't opened the app in ~6 weeks,
+  since before the db-version metadata scheme and migrations v7–v23. The live profile sits at
+  `user_version=6` (head 23).
+- **The runner does not advance these.** `run_all_migrations` reported this user "migrated", yet
+  `a8428823`'s R2 object was NOT re-synced (still May-27, empty metadata) — contrast a freshly
+  migrated profile (`aee3e218/806fb6aa`: `db-version=1263`, LastModified today). So the
+  download→migrate→sync did not persist for the dormant user's profiles.
+
+Net: the latent bug is **dormant-user profiles silently not advancing** (a returning user would
+load an under-migrated profile) **plus orphan `profile.sqlite` cruft** the runner wastes effort on.
+NOT active-user corruption. Priority reduced accordingly (keep as a robustness fix, not urgent).
+
+## Investigation (pin the exact mechanism — supervisor does the prod-data half)
+
+The container worker has NO prod R2/fly creds, so it cannot reproduce on real data. The
+**supervisor** pins the exact download-vs-sync mechanism on prod (fly-side tracing of
+`_migrate_profile_db` for a dormant user). The **worker** does the code half below and builds the
+robust fix + synthetic-fixture tests that reproduce each suspect deterministically.
 
 Read `src/backend/app/migrations/__init__.py`:
 - `_get_profile_ids(user_id)` — lists profiles via R2 `list_objects_v2(Prefix=…/profiles/, Delimiter='/')`
