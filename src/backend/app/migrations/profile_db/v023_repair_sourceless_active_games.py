@@ -12,12 +12,18 @@ Root cause: two classes of bad state in game_storage:
    _compute_storage_status(None, None) → 'active' (no ref, no auto_export_status).
 
 Fix: for every game that currently shows 'active', collect its source hashes
-(game_videos.blake3_hash for multi-video games, else games.blake3_hash), issue an
-R2 head_object for each.  If any source is absent:
-  - UPDATE game_storage SET storage_expires_at = <past sentinel> for known rows.
-  - INSERT a past-expiry row for game_storage rows that don't exist yet (case 2).
+(game_videos.blake3_hash for multi-video games, else games.blake3_hash), issue a
+direct HEAD for each.  Only a CONFIRMED-absent response (HTTP 404 / NoSuchKey
+ClientError) triggers a repair.  Any other error is indeterminate — skip that
+game and log a warning (fail visibly, never silently produce wrong results).
 
-The past sentinel is 2000-01-01T00:00:00 — well before any real upload.
+Expire rules (per game):
+  - ANY source check errored ambiguously → SKIP game entirely; log warning.
+  - At least one source CONFIRMED-absent AND no indeterminate errors → expire all
+    related game_storage rows (UPDATE existing / INSERT missing).
+
+This is sticky (re-run skips already-past rows), so false positives from transient
+errors are NEVER written.
 
 Row-factory note: the migration runner hands up(conn) a PLAIN sqlite3 connection
 (default tuple row factory).  Index all rows POSITIONALLY (r[0], r[1] …) — string
@@ -31,12 +37,17 @@ import logging
 from datetime import datetime, timezone
 
 from ..base import BaseMigration
-from app.storage import r2_head_object_global
+from app.storage import get_r2_client, R2_BUCKET
 
 logger = logging.getLogger(__name__)
 
 # Well in the past — any fromisoformat parse returns an expired datetime.
 _PAST_SENTINEL = "2000-01-01T00:00:00+00:00"
+
+# Sentinel values returned by _check_source.
+_PRESENT = "present"
+_ABSENT = "absent"   # Confirmed 404 / NoSuchKey
+_ERROR = "error"     # Indeterminate — do not act on this
 
 
 def _compute_status(expires_at_val, auto_export_status) -> str:
@@ -56,6 +67,35 @@ def _compute_status(expires_at_val, auto_export_status) -> str:
     return "active"
 
 
+def _check_source(client, key: str) -> str:
+    """HEAD one R2 key and classify the result.
+
+    Returns:
+        _PRESENT  — object confirmed present (HEAD succeeded)
+        _ABSENT   — object confirmed absent (HTTP 404 / NoSuchKey ClientError)
+        _ERROR    — indeterminate: transient error, throttle, permission, network, etc.
+
+    Never returns _ABSENT on ambiguous failures; callers must treat _ERROR as
+    "skip, do not expire" to prevent false-positive expirations.
+    """
+    try:
+        client.head_object(Bucket=R2_BUCKET, Key=key)
+        return _PRESENT
+    except Exception as exc:
+        # Detect a confirmed-absent response from a botocore ClientError.
+        # HEAD on a missing S3/R2 key raises ClientError with Code "404" or "NoSuchKey".
+        try:
+            code = exc.response["Error"]["Code"]  # type: ignore[attr-defined]
+            if code in ("404", "NoSuchKey"):
+                return _ABSENT
+        except (AttributeError, KeyError, TypeError):
+            pass
+        logger.warning(
+            "[v023] R2 HEAD %r returned indeterminate error — skipping: %r", key, exc
+        )
+        return _ERROR
+
+
 class V023RepairSourcelessActiveGames(BaseMigration):
     version = 23
     description = (
@@ -66,6 +106,7 @@ class V023RepairSourcelessActiveGames(BaseMigration):
         cursor = conn.cursor()
 
         # Guard: required tables — absent on fresh / empty profile DBs.
+        # Check tables BEFORE R2 to avoid unnecessary client initialisation.
         tables = {
             r[0]
             for r in cursor.execute(
@@ -74,6 +115,12 @@ class V023RepairSourcelessActiveGames(BaseMigration):
         }
         if not {"games", "game_storage"} <= tables:
             logger.info("[v023] games/game_storage absent; nothing to repair")
+            return
+
+        # Guard: R2 must be configured — never mass-expire when R2 is unavailable.
+        client = get_r2_client()
+        if not client:
+            logger.info("[v023] R2 not configured; skipping source checks")
             return
 
         has_game_videos = "game_videos" in tables
@@ -123,15 +170,30 @@ class V023RepairSourcelessActiveGames(BaseMigration):
             if not source_hashes:
                 continue  # No trackable source; skip.
 
-            # Check R2 for each source — any missing → force expired.
-            any_missing = False
+            # Check R2 for each source, distinguishing 404 from other errors.
+            #
+            # Rules (per game):
+            #   _ERROR on any source  → skip the whole game (do NOT expire).
+            #   _ABSENT on any source → expire (once all checks pass cleanly).
+            #   All _PRESENT          → no repair needed.
+            any_absent = False
+            skip_game = False
             for h in source_hashes:
-                result = r2_head_object_global(f"games/{h}.mp4")
-                if result is None:
-                    any_missing = True
-                    break
+                result = _check_source(client, f"games/{h}.mp4")
+                if result == _ERROR:
+                    skip_game = True
+                    break  # No point checking more — we will skip this game.
+                if result == _ABSENT:
+                    any_absent = True
+                # _PRESENT: continue checking remaining sources.
 
-            if not any_missing:
+            if skip_game:
+                logger.warning(
+                    "[v023] skipping game_id=%s — indeterminate R2 check", game_id
+                )
+                continue
+
+            if not any_absent:
                 continue  # All sources present; no repair needed.
 
             # Force expired for all relevant game_storage rows.
@@ -180,6 +242,6 @@ class V023RepairSourcelessActiveGames(BaseMigration):
             uid = pid = "?"
 
         logger.info(
-            f"[v023] repaired {repaired} game(s) with absent R2 source "
-            f"user={uid} profile={pid}"
+            "[v023] repaired %d game(s) with absent R2 source user=%s profile=%s",
+            repaired, uid, pid,
         )

@@ -15,6 +15,26 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+# Patch-path prefix for the v023 migration module.
+_V023 = "app.migrations.profile_db.v023_repair_sourceless_active_games"
+
+
+def _absent_client():
+    """Mock R2 client whose head_object raises a confirmed-404 ClientError."""
+    from botocore.exceptions import ClientError
+    mock = MagicMock()
+    mock.head_object.side_effect = ClientError(
+        {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+    )
+    return mock
+
+
+def _present_client():
+    """Mock R2 client whose head_object returns success (source present)."""
+    mock = MagicMock()
+    mock.head_object.return_value = {"ContentLength": 12345}
+    return mock
+
 
 # ---------------------------------------------------------------------------
 # Helpers (repeated across test classes to keep them self-contained)
@@ -155,7 +175,11 @@ def _run_v023(db_path):
 
 class TestV023MigrationRepairSourcelessActiveGames:
     """v023: sets game_storage.storage_expires_at to a past sentinel when the
-    game shows 'active' but its R2 source is gone.
+    game shows 'active' but its R2 source is confirmed absent.
+
+    Source-check correctness: the migration distinguishes a confirmed-absent
+    response (HTTP 404 / NoSuchKey ClientError) from ambiguous errors (throttle,
+    network blip, permission).  Only confirmed-absent triggers a repair.
 
     Row-factory note: the migration runner passes a PLAIN sqlite3 connection
     (tuple row factory, not sqlite3.Row). Tests here reproduce that exactly:
@@ -165,13 +189,12 @@ class TestV023MigrationRepairSourcelessActiveGames:
     """
 
     def test_future_expiry_missing_r2_source_is_repaired(self, tmp_path):
-        """Core bug: FUTURE game_storage expiry + absent R2 source → force expired."""
+        """Core bug: FUTURE game_storage expiry + confirmed-absent R2 source → expired."""
         db = _make_profile_db(tmp_path)
         _add_game(db, "abc123")
         _add_storage(db, "abc123", _future())
 
-        # R2 head_object returns None → source is missing
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", return_value=None):
+        with patch(f"{_V023}.get_r2_client", return_value=_absent_client()):
             _run_v023(db)
 
         expiry = _get_storage_expiry(db, "abc123")
@@ -180,7 +203,7 @@ class TestV023MigrationRepairSourcelessActiveGames:
         assert exp_dt < datetime.now(timezone.utc), f"Expected past expiry, got {expiry}"
 
     def test_never_tracked_game_missing_source_inserts_past_row(self, tmp_path):
-        """The 1b842983 game 5 case: no game_storage row + absent R2 source.
+        """The 1b842983 game 5 case: no game_storage row + confirmed-absent R2 source.
         Migration must INSERT a row with past expiry so _compute_storage_status
         sees expires_at_val and returns 'expired'.
         """
@@ -188,7 +211,7 @@ class TestV023MigrationRepairSourcelessActiveGames:
         _add_game(db, "newgame_hash")
         # No game_storage row exists for "newgame_hash"
 
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", return_value=None):
+        with patch(f"{_V023}.get_r2_client", return_value=_absent_client()):
             _run_v023(db)
 
         expiry = _get_storage_expiry(db, "newgame_hash")
@@ -203,11 +226,11 @@ class TestV023MigrationRepairSourcelessActiveGames:
         original_past = _past()
         _add_storage(db, "old_hash", original_past)
 
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games"
-                   ".r2_head_object_global") as mock_head:
+        mock_client = MagicMock()
+        with patch(f"{_V023}.get_r2_client", return_value=mock_client):
             _run_v023(db)
-            mock_head.assert_not_called()  # Already expired: no R2 check needed
 
+        mock_client.head_object.assert_not_called()  # Already expired: no R2 check needed
         assert _get_storage_expiry(db, "old_hash") == original_past
 
     def test_auto_exported_game_no_ref_is_skipped(self, tmp_path):
@@ -216,10 +239,11 @@ class TestV023MigrationRepairSourcelessActiveGames:
         db = _make_profile_db(tmp_path)
         _add_game(db, None, auto_export_status="complete")
 
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games"
-                   ".r2_head_object_global") as mock_head:
+        mock_client = MagicMock()
+        with patch(f"{_V023}.get_r2_client", return_value=mock_client):
             _run_v023(db)
-            mock_head.assert_not_called()
+
+        mock_client.head_object.assert_not_called()
 
     def test_active_game_with_present_r2_source_is_untouched(self, tmp_path):
         """If R2 source exists, game_storage is not modified."""
@@ -227,8 +251,7 @@ class TestV023MigrationRepairSourcelessActiveGames:
         _add_game(db, "live_hash")
         _add_storage(db, "live_hash", _future())
 
-        mock_meta = {"ContentLength": 12345678}
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", return_value=mock_meta):
+        with patch(f"{_V023}.get_r2_client", return_value=_present_client()):
             _run_v023(db)
 
         expiry = _get_storage_expiry(db, "live_hash")
@@ -236,12 +259,12 @@ class TestV023MigrationRepairSourcelessActiveGames:
         assert exp_dt > datetime.now(timezone.utc), "Live game expiry should remain future"
 
     def test_idempotent_on_second_run(self, tmp_path):
-        """Running v023 twice must be a no-op on the second run."""
+        """Running v023 twice must be a no-op on the second run (already past)."""
         db = _make_profile_db(tmp_path)
         _add_game(db, "idem_hash")
         _add_storage(db, "idem_hash", _future())
 
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", return_value=None):
+        with patch(f"{_V023}.get_r2_client", return_value=_absent_client()):
             _run_v023(db)
             _run_v023(db)
 
@@ -249,7 +272,9 @@ class TestV023MigrationRepairSourcelessActiveGames:
         assert datetime.fromisoformat(expiry) < datetime.now(timezone.utc)
 
     def test_guard_returns_early_on_missing_tables(self, tmp_path):
-        """If games or game_storage tables are absent (fresh profile), early return."""
+        """If games or game_storage tables are absent (fresh profile), early return.
+        Table guard fires before R2 is consulted so no R2 mock needed.
+        """
         db_path = tmp_path / "empty.sqlite"
         conn = sqlite3.connect(str(db_path))
         conn.execute("CREATE TABLE games (id INTEGER PRIMARY KEY)")
@@ -268,35 +293,107 @@ class TestV023MigrationRepairSourcelessActiveGames:
         _add_game(db, "tuple_hash")
         _add_storage(db, "tuple_hash", _future())
 
-        # With R2 absent the head returns None; run must not raise TypeError.
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", return_value=None):
+        with patch(f"{_V023}.get_r2_client", return_value=_absent_client()):
             # Would raise "tuple indices must be integers or slices, not str"
             # if migration uses row['col'] instead of row[0].
             _run_v023(db)
 
     def test_multi_video_game_missing_source_is_repaired(self, tmp_path):
-        """Multi-video game: sources come from game_videos table."""
+        """Multi-video game: one confirmed-absent source → expire all source rows."""
+        from botocore.exceptions import ClientError
         db = _make_profile_db(tmp_path)
-        # Multi-video: games.blake3_hash is null
-        game_id = _add_game(db, None)
+        game_id = _add_game(db, None)  # Multi-video: games.blake3_hash is null
         _add_game_video(db, game_id, "vid_hash_a", sequence=1)
         _add_game_video(db, game_id, "vid_hash_b", sequence=2)
         _add_storage(db, "vid_hash_a", _future())
         _add_storage(db, "vid_hash_b", _future())
 
-        # One video hash is missing from R2
-        def mock_head(key):
-            if "vid_hash_a" in key:
-                return None  # missing
+        # vid_hash_a is confirmed absent (404); vid_hash_b is present.
+        def head_side_effect(Bucket=None, Key=None):
+            if "vid_hash_a" in (Key or ""):
+                raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
             return {"ContentLength": 100}
 
-        with patch("app.migrations.profile_db.v023_repair_sourceless_active_games.r2_head_object_global", side_effect=mock_head):
+        mock_client = MagicMock()
+        mock_client.head_object.side_effect = head_side_effect
+        with patch(f"{_V023}.get_r2_client", return_value=mock_client):
             _run_v023(db)
 
-        # Both video hash game_storage rows should be expired
         expiry_a = _get_storage_expiry(db, "vid_hash_a")
         assert expiry_a is not None
         assert datetime.fromisoformat(expiry_a) < datetime.now(timezone.utc)
+
+    # ----- New cases required by .fix-t4820.md -----
+
+    def test_transient_error_does_not_expire_game(self, tmp_path, caplog):
+        """A non-404 / transient R2 error must NOT expire the game.
+
+        r2_head_object_global used to collapse ALL errors (including throttle /
+        network blip) to None, causing false-positive expirations.  Now only a
+        confirmed 404 / NoSuchKey expiry is acted on; anything else skips the game
+        and logs a warning so ops can investigate.
+        """
+        from botocore.exceptions import ClientError
+        db = _make_profile_db(tmp_path)
+        _add_game(db, "flaky_hash")
+        _add_storage(db, "flaky_hash", _future())
+        original_expiry = _get_storage_expiry(db, "flaky_hash")
+
+        mock_client = MagicMock()
+        mock_client.head_object.side_effect = ClientError(
+            {"Error": {"Code": "503", "Message": "Slow Down"}}, "HeadObject"
+        )
+        with caplog.at_level(logging.WARNING, logger="app.migrations.profile_db.v023_repair_sourceless_active_games"):
+            with patch(f"{_V023}.get_r2_client", return_value=mock_client):
+                _run_v023(db)
+
+        expiry = _get_storage_expiry(db, "flaky_hash")
+        assert expiry == original_expiry, "Transient error must NOT change expiry"
+        assert any("indeterminate" in r.message.lower() for r in caplog.records), (
+            "Expected an 'indeterminate' warning to be logged"
+        )
+
+    def test_r2_not_configured_is_noop(self, tmp_path):
+        """If get_r2_client() returns None, the migration must be a no-op.
+
+        Never mass-expire games when R2 is unavailable — we can't distinguish
+        'source is gone' from 'R2 is unreachable'.
+        """
+        db = _make_profile_db(tmp_path)
+        _add_game(db, "some_hash")
+        _add_storage(db, "some_hash", _future())
+        original_expiry = _get_storage_expiry(db, "some_hash")
+
+        with patch(f"{_V023}.get_r2_client", return_value=None):
+            _run_v023(db)
+
+        assert _get_storage_expiry(db, "some_hash") == original_expiry, (
+            "Migration must be a no-op when R2 is not configured"
+        )
+
+    def test_confirmed_404_expires_game(self, tmp_path):
+        """A genuine HTTP-404 ClientError (confirmed absent) must still expire.
+
+        Regression guard: ensures the botocore ClientError path correctly
+        identifies the confirmed-absent case and writes the past sentinel.
+        """
+        from botocore.exceptions import ClientError
+        db = _make_profile_db(tmp_path)
+        _add_game(db, "dead_hash")
+        _add_storage(db, "dead_hash", _future())
+
+        mock_client = MagicMock()
+        mock_client.head_object.side_effect = ClientError(
+            {"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject"
+        )
+        with patch(f"{_V023}.get_r2_client", return_value=mock_client):
+            _run_v023(db)
+
+        expiry = _get_storage_expiry(db, "dead_hash")
+        assert expiry is not None
+        assert datetime.fromisoformat(expiry) < datetime.now(timezone.utc), (
+            "Confirmed-404 must write a past sentinel"
+        )
 
 
 # ---------------------------------------------------------------------------
