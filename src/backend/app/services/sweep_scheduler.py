@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from .auth_db import (
     delete_grace_deletion,
     delete_ref,
+    expire_game_storage,
     get_expired_grace_deletions,
     get_expired_refs_for_profile,
     get_next_expiry,
@@ -21,7 +22,7 @@ from .auth_db import (
     insert_grace_deletion,
 )
 from .auto_export import auto_export_game, MAX_AUTO_EXPORT_ATTEMPTS
-from ..database import ensure_database, get_db_connection
+from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
 from ..storage import r2_delete_object_global
 from ..user_context import set_current_user_id
@@ -165,9 +166,55 @@ def do_sweep():
         r2_delete_object_global(f"games/{blake3_hash}.mp4")
         delete_grace_deletion(blake3_hash)
         logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
+        # Belt-and-suspenders: expire any lingering game_storage rows for this
+        # hash across all initialized profiles.  Normally Phase 1 deletes all
+        # refs before Phase 2 runs; this catches edge cases such as refs with a
+        # future expiry that Phase 1 didn't touch (bug 27p class).
+        n_expired = _expire_game_storage_all_profiles(blake3_hash, users)
+        if n_expired:
+            logger.info(
+                f"[Sweep] Expired {n_expired} lingering game_storage ref(s) "
+                f"after deletion of hash={blake3_hash[:12]}"
+            )
 
     elapsed = time.perf_counter() - t0
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
+
+
+def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:
+    """Expire any remaining game_storage rows for this hash across local profiles.
+
+    Called after Phase 2 R2 deletion.  Normal flow: Phase 1 deletes all refs via
+    delete_ref() before Phase 2 runs, so this is usually a no-op.  It catches the
+    edge case where a profile has a future-expiry ref (bug 27p class) that Phase 1
+    didn't pick up because the ref wasn't expired yet.
+
+    Only touches profiles whose DB file already exists locally to avoid downloading
+    from R2 purely for this belt-and-suspenders step.
+    """
+    from ..migrations import _get_profile_ids
+    from ..database import USER_DATA_BASE
+
+    total = 0
+    for user in users:
+        user_id = user["user_id"]
+        for profile_id in _get_profile_ids(user_id):
+            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+            if not db_path.exists():
+                continue
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+            try:
+                n = expire_game_storage(blake3_hash)
+                total += n
+                if n:
+                    sync_db_to_r2_explicit(user_id, profile_id)
+            except Exception:
+                logger.exception(
+                    f"[Sweep] expire_game_storage failed for "
+                    f"user={user_id[:8]} profile={profile_id[:8]}"
+                )
+    return total
 
 
 def _find_games_for_hash(

@@ -40,6 +40,7 @@ from app.storage import (
     file_exists_in_r2,
     generate_presigned_url,
     generate_presigned_url_global,
+    get_r2_client,
     r2_head_object_global,
 )
 from app.user_context import get_current_user_id
@@ -552,6 +553,16 @@ def _ensure_game_storage_refs(cursor, game_id, user_id, profile_id, expires_str)
     for vr in video_rows:
         h = vr["blake3_hash"]
         if h and h not in existing:
+            # Only insert a future-expiry ref if the R2 source actually exists.
+            # Writing a ref for a deleted source would resurrect the game as
+            # 'active' even though playback is impossible (bug 27p root cause).
+            # When R2 is not configured (local dev / tests), skip the check.
+            if get_r2_client() and not r2_head_object_global(f"games/{h}.mp4"):
+                logger.warning(
+                    f"[activate] skipping storage ref for absent R2 source "
+                    f"game={game_id} hash={h[:12]}"
+                )
+                continue
             insert_game_storage_ref(user_id, profile_id, h, vr["video_size"] or 0, expires_str)
             inserted += 1
     return inserted

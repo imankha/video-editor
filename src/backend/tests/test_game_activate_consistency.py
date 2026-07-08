@@ -132,13 +132,21 @@ async def test_activate_failure_after_refs_leaves_pending_not_ready(profile_db):
 
 @pytest.mark.asyncio
 async def test_idempotent_early_return_self_heals_missing_ref(profile_db):
-    """A game already ready but missing its storage ref is self-healed on re-activate."""
+    """A game already ready but missing its storage ref is self-healed on re-activate.
+
+    Part 2b (T4820): the heal path now checks R2 before writing a ref.  Mock R2
+    to confirm the source exists so the ref write proceeds as before.
+    """
     from app.routers import games as games_router
+    from unittest.mock import patch, MagicMock
 
     game_id = _seed_game(profile_db, status="ready", with_ref=False)
     assert _ref_count(profile_db) == 0  # the bad state (games 8/9/10)
 
-    result = await games_router.activate_game(game_id)
+    with patch.object(games_router, "get_r2_client", return_value=MagicMock()), \
+         patch.object(games_router, "r2_head_object_global",
+                      return_value={"ContentLength": 12345}):
+        result = await games_router.activate_game(game_id)
 
     assert result["status"] == "ready"
     assert _ref_count(profile_db) == 1  # healed

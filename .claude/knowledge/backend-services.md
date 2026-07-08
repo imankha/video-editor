@@ -49,7 +49,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
 | `postgres` | Fly Postgres | `schema_migrations` table | v018 |
-| `profile_db` | profile.sqlite | `PRAGMA user_version` | v019 |
+| `profile_db` | profile.sqlite | `PRAGMA user_version` | v023 |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
 - Only versions `> current` are applied (base.py:38-40) — never reuse or renumber a version.
@@ -58,7 +58,9 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 - Status check: `get_migration_status()` (migrations/__init__.py:11); admin dashboard exposes it.
 
 ## Landmines & history
-- v017 profile_db migration crashed on `row['col']` under the tuple row factory; fixed positionally and re-migrated — all prod users at v18+ (now v019 exists: heal_sweep_reel_metadata).
+- v017 profile_db migration crashed on `row['col']` under the tuple row factory; fixed positionally and re-migrated — all prod users at v18+ (v023 now latest: repair_sourceless_active_games, T4820). v023 uses `r2_head_object_global` at module level (not inside `up()`) so it's patchable in tests.
+- **`game_storage.storage_expires_at` write authority**: `auth_db.expire_game_storage()` marks a row as expired (past sentinel `2000-01-01T00:00:00+00:00`). Called by sweep Phase 2 via `_expire_game_storage_all_profiles()` after R2 deletion; each call is followed immediately by `sync_db_to_r2_explicit(user_id, profile_id)` — without that sync the write is lost on next cold-load from R2.
+- **Heal path must not resurrect deleted sources**: `_ensure_game_storage_refs` in `games.py` guards ref insertion with an R2 head_object check when R2 is configured. Skipping this guard re-creates a storage ref with a future expiry for a game whose source is gone, making `_compute_storage_status` return 'active' again (bug 27p/29p, T4820).
 - Live bugs mapped by the 2026-07-03 audit (docs/plans/audit-2026-07-03-code-quality.md): `exports.py:279` NameError (recovery reports failure after success — T4240); overlay blob decode failure silently becomes `[]` (overlay.py:308-313) then the next gesture's whole-blob RMW persists it = permanent highlight loss (T4210); `clips.py:483-497` remove_segment_split wipes segmentSpeeds (T4220); `projects.py:1275` catch-all NULLs crop_data (T4230).
 - `routers/export/` is 5,878 lines with ~300 raw `cursor.execute` across routers; the service split never happened — Export Write-Path epic (T4370-T4410) is the plan. Don't add new pipeline logic to routers.
 - `export_worker.py:28-33` imports from a router (inversion, fixed in T4380/E1). Two competing export-job create helpers exist (exports.py:86 vs export_helpers.py:37) with different initial statuses.
