@@ -1,6 +1,8 @@
 ---
 name: refactor
 description: Cleans up the files an upcoming task will touch so they conform to coding standards before implementation, using existing/new tests as a safety net and committing the refactor to the task branch. Invoke at Stage 1.5, after Code Expert identifies affected files and before Architecture design.
+model: sonnet
+effort: low
 ---
 
 # Refactor Agent

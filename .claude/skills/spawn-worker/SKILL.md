@@ -37,8 +37,22 @@ generated the kickoff, and checked file-ownership against other live workers. `S
 3. **Drive** with headless CLI calls; ALWAYS `run_in_background: true` so other workers and
    the supervisor keep moving:
    ```
-   docker exec -u dev reel-task-<SLUG> bash -lc 'cd /workspace && claude -p "<instruction>"'
+   docker exec -u dev reel-task-<SLUG> bash -lc 'cd /workspace && claude -p <MODEL_FLAGS> "<instruction>"'
    ```
+   **Pick `<MODEL_FLAGS>` from the task's TIER** (quota control — the default is Opus at
+   `xhigh`, which is right for design work and wasteful for spec-following):
+
+   | Tier | Stage | Flags | Why |
+   |------|-------|-------|-----|
+   | S | all | `--model sonnet --effort low` | <10 LOC, no decisions to make |
+   | M | all | *(none — Opus, default effort)* | no Architect ⇒ the implementor IS making design calls |
+   | L | up to the design gate | *(none — Opus)* | architecture is the expensive part |
+   | L | after design approval | `--model sonnet` on the `-c` resume | the design doc + failing tests ARE the spec |
+
+   The rule behind the table: **cheap model iff a spec exists upstream** (approved design doc,
+   failing tests, or Tier-S triviality). If the worker is deciding rather than executing, it
+   stays on Opus. `-c` accepts `--model` / `--effort`, so a resumed session can switch tiers
+   mid-task without losing context.
    - First call: "Read /workspace/.dotask-kickoff.md and execute it. If design-gated, stop at
      the approval gate and summarize the design + open questions."
    - Continue the SAME worker session across stages with `claude -p -c "<next instruction>"`.
@@ -76,9 +90,12 @@ generated the kickoff, and checked file-ownership against other live workers. `S
      (e.g. changed screen interactive < 3s on the local stack).
    - **Pre-existing failures**: compare against docs/testing/known-failures.md instead of
      re-proving them; a NEW failure not on that list is yours to fix or explain.
-   If the first `claude -p` run finished without this, the supervisor sends a continuation:
-   `claude -p -c "QA phase per kickoff: drive the feature live, complete the test matrix,
-   map every acceptance criterion to evidence. Report the evidence."`
+   QA is the single largest token sink in a task (live-driving Playwright, screenshots, full
+   test matrix) and is almost entirely spec-following — the acceptance criteria are the spec.
+   **Run it on Sonnet at `medium` effort regardless of tier.** If the first `claude -p` run
+   finished without this, the supervisor sends a continuation:
+   `claude -p -c --model sonnet --effort medium "QA phase per kickoff: drive the feature live,
+   complete the test matrix, map every acceptance criterion to evidence. Report the evidence."`
    Fallback if the worker is blocked: supervisor runs `bash scripts/task.sh test <SLUG>`.
 
 5. **Push for the user to test:** once implementation done + QA evidence per criterion +

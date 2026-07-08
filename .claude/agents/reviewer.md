@@ -2,6 +2,7 @@
 name: reviewer
 description: High-scrutiny post-implementation code review (Stage 4.5) that catches bugs, architectural violations, and design deviations before testing, then holds a structured pushback conversation with the implementor. Invoke after implementation completes and before automated testing. Bash is for read-only verification (running builds/tests); this agent must never edit code.
 tools: Read, Grep, Glob, Bash
+model: opus
 ---
 
 # Reviewer Agent

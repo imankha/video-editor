@@ -14,6 +14,38 @@ Pick the task TIER first (S/M/L — see CLAUDE.md § Task Tiers), then determine
 
 Escalate the tier (never de-escalate silently) if during work you discover: schema changes, persistence/state-management changes, or 2x the estimated file count.
 
+## Step 1.5: Model Selection
+
+Everything defaults to Opus at `xhigh` effort. That is correct when the agent is *deciding*
+and wasteful when it is *executing*. The predicate is not "does this look easy" — it is:
+
+> **Does an approved spec exist upstream of this stage?**
+> (approved design doc, failing tests, or Tier-S triviality)
+
+If yes, the work is transcription and a cheap model suffices. If no, the agent is making
+design calls and stays on Opus. Tier M is the trap: it has no Architect, so its implementor
+*is* the designer.
+
+| Stage / agent | Model | Effort | Spec upstream? |
+|---|---|---|---|
+| Tier S, any stage | `sonnet` | `low` | nothing to specify |
+| Tier M implementation | *(Opus)* | *(default)* | **no** — no Architect ran |
+| Tier L, up to design gate | *(Opus)* | *(default)* | no — this stage writes the spec |
+| Tier L, after design approval | `sonnet` | *(default)* | yes — design doc + failing tests |
+| QA phase (all tiers) | `sonnet` | `medium` | yes — acceptance criteria |
+| tester / migration / refactor | `sonnet` | pinned in frontmatter | yes |
+| architect / code-expert | *(inherit)* | *(default)* | no |
+| **reviewer / merge-reviewer** | **`opus` (pinned)** | *(default)* | **must not degrade** |
+
+The reviewer is pinned to Opus on purpose. Cheapening implementation raises what the review
+gate has to catch — a weaker model following a spec fails precisely at this repo's landmines
+(reactive persistence, silent fallbacks, redundant state). Cheapen one end of the barbell,
+never both.
+
+Container workers take these as CLI flags (`claude -p --model sonnet --effort low`); `-c`
+resumes accept them too, so an L-tier worker can switch to Sonnet after its design gate
+without losing session context. See [spawn-worker](../skills/spawn-worker/SKILL.md) step 3.
+
 ## Step 2: Classification Output
 
 Before starting any task, produce this classification:
@@ -27,6 +59,7 @@ Before starting any task, produce this classification:
 **LOC Estimate:** ~{n} lines
 **Test Scope:** [Frontend Unit | Frontend E2E | Backend | None]
 **Knowledge Docs:** [relevant .claude/knowledge/*.md]
+**Model/Effort:** [see Model Selection below]
 
 ### Agent Workflow
 | Agent | Include | Justification |

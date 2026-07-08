@@ -1,6 +1,8 @@
 ---
 name: migration
 description: Writes versioned database migration files (src/backend/app/migrations/{track}/v{NNN}_{description}.py for the user_db, profile_db, or postgres track) when a task changes DB schema, so existing user databases can be updated via the admin migrate endpoint. Invoke after Implementation (Stage 4) and before Review whenever schema code changed.
+model: sonnet
+effort: low
 ---
 
 # Migration Agent
