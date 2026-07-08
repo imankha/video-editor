@@ -40,7 +40,7 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 2. Runtime fixups (keyframe normalization etc.) are memory-only, never persisted; restore is read-only; one write path per piece of data.
 3. Writers must commit BEFORE the write lock releases (middleware relies on this for read-your-writes).
 4. `SKIP_SYNC_PATHS` (db_sync.py:309) and `AUTH_ALLOWLIST_PREFIXES` (db_sync.py:322) are the only sync/auth bypasses — check them before assuming a route syncs.
-5. Background workers (export_worker etc.) must use the `*_explicit(user_id, profile_id)` sync functions — ContextVars are dead outside the request.
+5. Background workers (export_worker, sweep_scheduler etc.) must use the `*_explicit(user_id, profile_id)` sync functions — ContextVars are dead outside the request. **Sweep corollary**: after `expire_game_storage()` updates ≥1 row in a profile.sqlite during Phase 2 deletion, `sync_db_to_r2_explicit(user_id, profile_id)` MUST be called immediately. Skipping it means the expiry is lost on next cold-load from R2, resurrecting the game as 'active' (T4820).
 6. Action-endpoint RMW atomicity is currently an *accident* of "no `await` between read and commit" (audit B8) — do not insert awaits into `POST /actions` handlers.
 7. **Fire-and-forget persistence changes are deferred** until sessions are reliably pinned to a single machine (memory: blocked T1537). Machine pinning exists (T1190) but the constraint stands.
 

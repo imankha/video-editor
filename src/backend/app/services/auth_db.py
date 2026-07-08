@@ -325,6 +325,31 @@ def log_impersonation(
 # T2930: Game storage — per-user expiry in SQLite, global ref counts in Postgres
 # ---------------------------------------------------------------------------
 
+def expire_game_storage(blake3_hash: str) -> int:
+    """Mark a game_storage entry as expired in the current profile.
+
+    Sets storage_expires_at to a past sentinel so _compute_storage_status
+    returns 'expired' on next read.  Returns the number of rows updated (0 if
+    no row exists for this hash — a no-op in that case).
+
+    Called by the sweep Phase 2 after R2 deletion to expire any lingering refs
+    that Phase 1 didn't clean up (e.g. future-expiry refs from the bug 27p class
+    of issue, or refs created after Phase 1 ran).
+    """
+    from ..database import get_db_connection
+
+    _PAST = "2000-01-01T00:00:00+00:00"
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE game_storage SET storage_expires_at = ? WHERE blake3_hash = ?",
+            (_PAST, blake3_hash),
+        )
+        rows_updated = cursor.rowcount
+        conn.commit()
+    return rows_updated
+
+
 def insert_game_storage_ref(
     user_id: str,
     profile_id: str,
