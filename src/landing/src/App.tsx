@@ -144,7 +144,7 @@ function App() {
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="w-full md:w-[40%] text-center md:text-left">
                 <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent pb-1 mb-4">
-                  Learn
+                  Educate
                 </h3>
                 <p className="text-lg text-gray-300 leading-relaxed mb-5">
                   Leave notes on the moments that matter. Your athlete reviews at their own pace — no sideline lectures, no pressure.
