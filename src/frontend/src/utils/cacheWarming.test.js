@@ -248,7 +248,7 @@ describe('cacheWarming — concurrent workers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('spawns multiple concurrent workers processing items in parallel', async () => {
+  it('serializes warming to one clip range at a time (T4772 concurrency cap = 1)', async () => {
     cacheWarming.pushClipRanges([
       { url: '/stream/g1.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
       { url: '/stream/g2.mp4', startTime: 0, endTime: 10, videoDuration: 100, videoSize: 1_000_000 },
@@ -259,10 +259,13 @@ describe('cacheWarming — concurrent workers', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    // 4 workers × 2 fetches per clip range (head + body) = 8 concurrent pending fetches
-    expect(pending.length).toBe(8);
+    // T4772: a single worker processes one clip range at a time. One clip range =
+    // 2 concurrent fetches (head 0-1MB + body range), so exactly 2 are in flight
+    // and only ONE distinct video is warmed — the other 3 stay queued. This keeps
+    // concurrent warm streams from starving the foreground on the 1-vCPU Fly box.
+    expect(pending.length).toBe(2);
     const urls = new Set(pending.map(e => e.url));
-    expect(urls.size).toBe(4);
+    expect(urls.size).toBe(1);
   });
 
   it('FOREGROUND_DIRECT aborts all concurrent in-flight warm fetches', async () => {
@@ -275,7 +278,8 @@ describe('cacheWarming — concurrent workers', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(pending.length).toBeGreaterThanOrEqual(3);
+    // With the concurrency cap only one clip range is in flight (head + body = 2).
+    expect(pending.length).toBeGreaterThanOrEqual(2);
     for (const entry of pending) {
       expect(entry.signal.aborted).toBe(false);
     }
@@ -287,11 +291,13 @@ describe('cacheWarming — concurrent workers', () => {
     }
   });
 
-  it('adjusts worker count for slow connections', async () => {
+  it('caps warm concurrency to 1 regardless of connection type (T4772)', async () => {
     vi.resetModules();
     const origConnection = navigator.connection;
+    // A fast connection used to fan out to 4 workers; the cap must hold anyway,
+    // because the bottleneck is the shared 1-vCPU Fly box, not client bandwidth.
     Object.defineProperty(navigator, 'connection', {
-      value: { effectiveType: '3g' },
+      value: { effectiveType: '4g' },
       configurable: true,
     });
 
@@ -309,8 +315,8 @@ describe('cacheWarming — concurrent workers', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    // 3g: 2 workers × 2 fetches per clip range = 4 (not 8)
-    expect(pending.length).toBe(4);
+    // Even on 4g: one clip range at a time (head + body = 2 fetches), not 8.
+    expect(pending.length).toBe(2);
 
     Object.defineProperty(navigator, 'connection', {
       value: origConnection,
@@ -369,6 +375,57 @@ describe('cacheWarming — cross-queue dedup', () => {
     // tier1 has clip range for game1, games should only have game2 (game1 deduped)
     expect(diag.tier1).toBe(1);
     expect(diag.games).toBe(1);
+
+    vi.doUnmock('../stores/authStore');
+  });
+
+  it('T4772: does NOT warm off-screen working (draft) videos from home', async () => {
+    vi.resetModules();
+    vi.doMock('../stores/authStore', () => ({
+      useAuthStore: { getState: () => ({ isAuthenticated: true }) },
+    }));
+    cacheWarming = await import('./cacheWarming');
+
+    // Disable warmer so queues stay populated for inspection
+    cacheWarming.setWarmupPriority(cacheWarming.WARMUP_PRIORITY.FOREGROUND_DIRECT);
+
+    let isApiCall = true;
+    vi.stubGlobal('fetch', vi.fn(() => {
+      if (isApiCall) {
+        isApiCall = false;
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            r2_enabled: true,
+            // A drafted project WITH a working video: the pre-T4772 storm source.
+            project_clips: [{
+              has_working_video: true,
+              working_video_url: '/api/projects/47/working_video/stream',
+              clips: [{
+                id: 'clipA', game_url: '/stream/gameA.mp4',
+                start_time: 0, end_time: 10, video_duration: 100, video_size: 1_000_000,
+              }],
+            }],
+            game_urls: [],
+            gallery_urls: [],
+            // Off-screen working videos from the library — must be ignored.
+            working_urls: [
+              '/api/projects/49/working_video/stream',
+              '/api/projects/50/working_video/stream',
+            ],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true });
+    }));
+
+    await cacheWarming.warmAllUserVideos();
+
+    const diag = cacheWarming.getWarmingDiag();
+    // working_urls are dropped entirely; the has_working_video project is skipped
+    // (not even its clip ranges are warmed) — no working_video/stream is enqueued.
+    expect(diag.working).toBe(0);
+    expect(diag.tier1).toBe(0);
 
     vi.doUnmock('../stores/authStore');
   });
@@ -441,5 +498,44 @@ describe('cacheWarming — prioritizeUrls', () => {
     expect(pending[0].url).toBe('/stream/c.mp4');
 
     vi.doUnmock('../stores/authStore');
+  });
+});
+
+describe('cacheWarming — scheduleWarmAllUserVideos (T4772 deferral)', () => {
+  beforeEach(async () => {
+    await loadModule();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('defers to requestIdleCallback instead of warming synchronously on the critical path', async () => {
+    let idleCb = null;
+    vi.stubGlobal('requestIdleCallback', vi.fn((cb) => { idleCb = cb; return 1; }));
+    // Fail loudly if warming ran synchronously (it must not touch the network yet).
+    const fetchMock = vi.fn(() => Promise.resolve({ ok: true, json: () => Promise.resolve({}) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    cacheWarming.scheduleWarmAllUserVideos();
+
+    // Scheduled, not executed: requestIdleCallback was registered, no fetch yet.
+    expect(globalThis.requestIdleCallback).toHaveBeenCalledTimes(1);
+    expect(idleCb).toBeTypeOf('function');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to setTimeout when requestIdleCallback is unavailable', async () => {
+    // jsdom has no requestIdleCallback by default; stub it away to be explicit.
+    vi.stubGlobal('requestIdleCallback', undefined);
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    cacheWarming.scheduleWarmAllUserVideos();
+
+    // A deferred timer was scheduled (not an immediate synchronous warm).
+    expect(timeoutSpy).toHaveBeenCalled();
+    const delay = timeoutSpy.mock.calls[0][1];
+    expect(delay).toBeGreaterThan(0);
+    timeoutSpy.mockRestore();
   });
 });
