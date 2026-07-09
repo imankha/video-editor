@@ -181,6 +181,25 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   @~1594ms warm vs ~1743ms cold) → home is server-bound, not asset-bound. Fix fan-out: T4771 (skeleton +
   split bootstrap), T4772 (tame the warm storm).
 
+## Cache warming (post-T4772, 2026-07-09)
+- **`warmAllUserVideos()` is NO LONGER called synchronously** on home mount / login. App.jsx uses
+  `scheduleWarmAllUserVideos()` (cacheWarming.js), which defers the whole warm-all to
+  `requestIdleCallback` (timeout 3s; `setTimeout` 1.5s fallback) so warming never competes with
+  bootstrap + first paint + the user's first navigation.
+- **Warm concurrency is hard-capped at 1** (`MAX_WARM_CONCURRENCY`, `getWorkerCount()` returns 1).
+  Every same-origin warm streams THROUGH the 1-vCPU Fly bounded proxy; N-at-once starves the
+  foreground. Was up to 4 (connection-type dependent); now always serialized.
+- **Off-screen working (draft) videos are NOT warmed from home.** `warmAllUserVideos` no longer
+  enqueues `data.working_urls` (workingQueue stays `[]`) and skips the tier-1 `has_working_video`
+  branch (`continue`). Only targeted **clip ranges** (1MB head + clip region on the active game),
+  `game_urls`, and `gallery_urls` warm. A draft's `working_video/stream` is fetched by the player
+  when the user actually opens it; the 1KB pre-warm bought marginal edge-priming at the cost of the
+  systemic storm. Working-video byte-path speed itself is T4773 (proxy TTFB / 302→R2).
+- **Evidence (T4772 walkthrough, medians of 3):** warm `working_video/stream` overlapping the
+  Annotate/Overlay/My-Reels foreground windows dropped **3→0** (16→0 total in HAR); overlay foreground
+  stream TTFB 848→626ms. FOREGROUND_PROXY/DIRECT abort + `clearForegroundActive` resume machinery is
+  unchanged — a warmed foreground video (game clip ranges / gallery) still starts fast.
+
 ## Active/upcoming work
 - **T4220**: fix remove_segment_split speed wipe — re-index the speeds dict (deterministic merge
   rule); align useSegments.js.

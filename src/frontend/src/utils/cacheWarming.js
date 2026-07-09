@@ -18,7 +18,7 @@
  * - Call setWarmupPriority('games') when games/annotate is accessed
  */
 
-import { API_BASE, resolveApiUrl } from '../config';
+import { API_BASE } from '../config';
 import apiFetch from './apiFetch';
 
 // ── Fetch mode ──────────────────────────────────────────────────────────────
@@ -447,11 +447,16 @@ async function warmClipRange(url, startTime, endTime, videoDuration, videoSize, 
 
 // ── Worker ──────────────────────────────────────────────────────────────────
 
+// T4772: every same-origin warm fetch streams THROUGH the Fly bounded proxy on a
+// single shared-1vCPU box. Running N warm streams at once starves the foreground
+// video the user is actually waiting on (observed: 3-4 concurrent working_video
+// streams inflating foreground TTFBs by 0.5-1.5s). Warming is a background nicety,
+// so serialize it hard — one in-flight warm fetch at a time keeps the count of
+// concurrent warm streams during a foreground load bounded at <=1.
+const MAX_WARM_CONCURRENCY = 1;
+
 function getWorkerCount() {
-  const type = typeof navigator !== 'undefined' && navigator.connection?.effectiveType;
-  if (type === '2g' || type === 'slow-2g') return 1;
-  if (type === '3g') return 2;
-  return 4;
+  return MAX_WARM_CONCURRENCY;
 }
 
 async function worker() {
@@ -511,6 +516,30 @@ export function clearWarmingCache() {
   previousPriority = null;
 }
 
+// T4772: warming must never start on the critical path (bootstrap + first paint +
+// the user's first navigation). requestIdleCallback yields until the main thread
+// is quiet; the timeout guarantees it still runs under sustained load, just after
+// the initial render settles rather than competing with it.
+const WARMUP_IDLE_TIMEOUT_MS = 3000;
+const WARMUP_IDLE_FALLBACK_MS = 1500;
+
+/**
+ * Schedule warmAllUserVideos() to run when the browser is idle rather than
+ * synchronously on the critical path. Call this instead of warmAllUserVideos()
+ * from app init / login so the warm storm cannot contend with the foreground the
+ * user is looking at (T4772). No reactive persistence — warming is a read.
+ */
+export function scheduleWarmAllUserVideos() {
+  const run = () => { warmAllUserVideos(); };
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: WARMUP_IDLE_TIMEOUT_MS });
+  } else if (typeof setTimeout === 'function') {
+    setTimeout(run, WARMUP_IDLE_FALLBACK_MS);
+  } else {
+    run();
+  }
+}
+
 /**
  * Warm all videos for the current user.
  * Fetches URLs from backend and starts priority-based warming.
@@ -541,23 +570,29 @@ export async function warmAllUserVideos() {
       return { warmed: 0, total: 0 };
     }
 
-    // Populate tier 1: project clips (highest priority)
+    // Populate tier 1: project clips (highest priority).
+    // T4772: do NOT eagerly warm full working (draft) videos here. Each draft's
+    // working_video/stream is a multi-MB proxy-path stream through the single-vCPU
+    // Fly box; warming the whole library of off-screen drafts on home mount is the
+    // storm that starved the foreground (observed: projects 47/49/50 streaming
+    // during Annotate/Overlay/My Reels opens). We only warm targeted clip RANGES
+    // (small 1MB-head + clip-region reads on the active game) — the foreground the
+    // user is about to edit. A draft's working video is fetched by the player when
+    // the user actually opens it; a 1KB pre-warm bought marginal edge-priming at
+    // the cost of systemic contention (working-video byte-path speed is T4773).
     tier1Queue = [];
     for (const project of (data.project_clips || [])) {
-      if (project.has_working_video && project.working_video_url) {
-        tier1Queue.push({ url: resolveApiUrl(project.working_video_url), warmTail: true });
-      } else {
-        for (const clip of (project.clips || [])) {
-          tier1Queue.push({
-            type: 'clipRange',
-            clipId: clip.id ?? null,
-            url: clip.game_url,
-            startTime: clip.start_time,
-            endTime: clip.end_time,
-            videoDuration: clip.video_duration,
-            videoSize: clip.video_size,
-          });
-        }
+      if (project.has_working_video) continue; // off-screen draft — warm on open, not from home
+      for (const clip of (project.clips || [])) {
+        tier1Queue.push({
+          type: 'clipRange',
+          clipId: clip.id ?? null,
+          url: clip.game_url,
+          startTime: clip.start_time,
+          endTime: clip.end_time,
+          videoDuration: clip.video_duration,
+          videoSize: clip.video_size,
+        });
       }
     }
 
@@ -582,15 +617,10 @@ export async function warmAllUserVideos() {
       seenKeys.add(key);
       return true;
     });
-    workingQueue = (data.working_urls || [])
-      .map(url => resolveApiUrl(url))
-      .filter(url => {
-        if (!url || warmedUrls.has(url)) return false;
-        const key = stableUrlKey(url);
-        if (seenKeys.has(key)) return false;
-        seenKeys.add(key);
-        return true;
-      });
+    // T4772: off-screen working (draft) videos are intentionally NOT warmed from
+    // home — they are the proxy-path storm (see the tier-1 note above). The queue
+    // stays defined so on-open/prioritize paths and clearWarmingCache keep working.
+    workingQueue = [];
 
     const total = tier1Queue.length + galleryQueue.length + gamesQueue.length + workingQueue.length;
 
