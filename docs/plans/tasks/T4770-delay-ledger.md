@@ -51,6 +51,21 @@ Ranked by user-perceived cost (wall-clock × how-early-in-funnel). All rows carr
 | 6 | "Opening a game to annotate — video takes a couple seconds" | Annotate | navStart→first frame **~2560ms** | `GET /api/games/6/load` + `GET /api/games/6/video` (302→R2) run **concurrently** (T4000's early-src fix is working — good). HAR TTFBs were 1100–1450ms **but ~100ms live**; the 302→R2 R2 fetch itself is 170ms. | Mostly **row 2 contention** + the concurrent-load window; the endpoints are fast. `VideoLoadingOverlay` already covers the wait. | Largely resolved by T4772 (kill the storm). No dedicated endpoint fix — verified fast live. Tracked under **T4772**. |
 | 7 | "Playing a finished reel / recap" | Play | navStart→playing **~615ms** | `GET /api/downloads/6/stream` 206 bounded proxy (`wait(TTFB)=441ms`, `receive=174ms`, 4.8MB) + `downloads/count` 52ms. Plays quickly. | **No problem** — the bounded stream proxy performs well for reels here. | **No action.** Recorded to close the funnel. |
 
+### Row 4 CORRECTION (T4774, Stage B — profiled, verdict DROP)
+
+Row 4's classification was wrong: there is **no ~1.5s main-thread gap** after `videoReady`.
+The `framing/overlay:videoReady → settled` numbers are the walkthrough instrument's own
+`await page.waitForTimeout(1500)` between those two stamps — a fixed sleep, not measured work.
+The overlap step correctly saw "no request in flight" (the test is sleeping) but wrongly
+inferred JS/main-thread cost. A CDP CPU profile + longtask observer over the post-`videoReady`
+window (`e2e/T4774-mainthread-profile.spec.js`) shows **0 long tasks and ~0ms main-thread busy
+after `videoReady`** on both screens; the main thread is **81–84% idle** over the whole leg,
+and the screen (video element + crop reticule + highlight regions) is committed ~500ms *before*
+the first frame. Full evidence: `qa/T4774/REPORT.md`. No editor code changed — a defer/idle or
+progress-state fix would decorate a non-problem and risk the T350 hydration landmine. The real,
+pre-`videoReady` video-load wait is already covered by `VideoLoadingOverlay`. **Do not re-open
+row 4 as a main-thread task.**
+
 ### Ruled OUT (HAR-misread guards — T3760 lesson)
 
 - **"Presigning every game up front is slow" (the task's initial suspect).** Home does NOT call `list_games` — bootstrap uses `list_games_metadata()` (no presigning). And `GET /api/games` (which DOES presign all 6) re-times **88–162ms live**. At this account's scale, presigning is not a measurable cost. Do **not** build a "defer presign" fix — it addresses nothing here.

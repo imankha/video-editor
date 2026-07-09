@@ -36,5 +36,21 @@ Re-run the T4770 walkthrough; diff `framing:videoReady→settled` and `overlay:v
 
 ## Acceptance criteria
 
-- [ ] The post-video main-thread gap in Framing and Overlay drops materially (or is covered by a determinate progress state).
-- [ ] No functional regression in crop/highlight hydration; no reactive persistence introduced.
+- [x] The post-video main-thread gap in Framing and Overlay drops materially (or is covered by a determinate progress state). — **N/A: the gap does not exist.** Profiled post-`videoReady` main-thread busy time is **0ms** on both screens (see Findings). The real pre-`videoReady` load wait is already covered by `VideoLoadingOverlay`.
+- [x] No functional regression in crop/highlight hydration; no reactive persistence introduced. — **No application code changed.** Crop reticule + highlight regions render correctly at settle (`qa/T4774/settle-*.png`); framing/overlay unit tests 86/86 pass.
+
+## Findings (Stage B — profiled first, verdict DROP)
+
+The premise is a **measurement artifact**. `videoReady → settled` in the T4770 walkthrough is a
+hardcoded `await page.waitForTimeout(1500)`, so the "~1.5s gap" is a fixed sleep, not JS work.
+A dedicated profiler (`src/frontend/e2e/T4774-mainthread-profile.spec.js`, CDP CPU profile +
+`longtask` observer) measured the *actual* post-`videoReady` window:
+
+- Framing: **0 long tasks, 0ms main-thread busy, true settle 0ms**
+- Overlay: **0 long tasks, 0ms main-thread busy, true settle 0ms**
+- Main thread **81–84% idle** across the whole leg; screen committed ~500ms before first frame.
+
+Per the keep-or-drop rule, **no fix was implemented** — there is no cost to reduce, and a
+defer/idle reorder or a decorative progress state would risk the T350 hydration landmine for
+zero benefit. Committed: profiler spec + `qa/T4774/` evidence + ledger/knowledge-doc
+corrections. No editor source touched. Full report: `qa/T4774/REPORT.md`.
