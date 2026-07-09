@@ -112,7 +112,7 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Learn from, elevate, and celebrate your athlete's moments.
+            Educate, elevate, and celebrate your athlete's moments.
           </p>
 
           <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
