@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Volume2, VolumeX, Trophy, Undo2 } from 'lucide-react';
 import { API_BASE } from '../../config';
-import apiFetch from '../../utils/apiFetch';
+import { fetchRankConfidence } from '../../utils/rankConfidence';
 import { Button } from '../shared/Button';
 import { RATIO, RATIO_ORDER, ratioLabel } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
@@ -57,13 +57,8 @@ export function RankingGame({ onClose, onReEdit }) {
     (async () => {
       const avail = [];
       for (const r of RATIO_ORDER) {
-        try {
-          const res = await apiFetch(`${API_BASE}/api/rank/confidence?aspect_ratio=${encodeURIComponent(r)}`);
-          if (res.ok) {
-            const d = await res.json();
-            if (d.eligible) avail.push(r);
-          }
-        } catch { /* ignore; ratio just won't be offered */ }
+        const d = await fetchRankConfidence(r);
+        if (d && d.eligible) avail.push(r);
       }
       if (cancelled) return;
       setRatios(avail);
