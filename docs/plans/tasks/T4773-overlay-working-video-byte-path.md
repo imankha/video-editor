@@ -1,6 +1,44 @@
 # T4773: Overlay/Working-Video Byte Path — Proxy TTFB (pooled-httpx) or 302→R2
 
-**Status:** TODO
+**Status:** STAGING — KEEP (pooled-httpx, lever 1). Storm-isolated re-measure confirmed a real residual proxy-TTFB cost.
+
+## Outcome (2026-07-09, post-T4772 storm fix, in-container dev stack)
+
+**STEP 0 verdict: PROCEED (not DROP).** Re-measured on the storm-free base first: live isolated
+`working_video/stream` TTFB median **245ms** while co-timed `/health` was flat at ~2ms → not a
+contention artifact; the endpoint was paying **two** fresh-TLS R2 round-trips per request (a 1-byte
+size probe + the stream). Real residual cost → proceeded with **lever 1 only** (pooled-httpx +
+single round-trip). Lever 2 (302→presigned-R2) was NOT needed.
+
+**Fix:** `src/backend/app/routers/projects.py:stream_working_video` — module-level pooled httpx client
+`_get_working_video_r2_client()` (keepalive, mirrors `downloads.py:_get_r2_stream_client`, T4630) and
+dropped the size-probe: GET forwards the client's Range to R2 in one round-trip and passes R2's
+status/Content-Range/Content-Length through unchanged (working_videos aren't byte-windowed, so R2's 206
+is authoritative). HEAD keeps a 1-byte probe. Scoped to this endpoint only (four-proxy unification is a
+separate task).
+
+**Before → after (medians):**
+
+| Metric | Base | After | Δ |
+|---|---|---|---|
+| overlay `clicked→videoReady` (walkthrough ×3) | 3474ms | 2136ms | **-39%** |
+| HAR main-stream first-byte (ssl+wait, under overlay burst) | 1037ms | 408ms | **-61%** |
+| HAR all-request first-byte median | 1334ms | 682ms | **-49%** |
+| live isolated single-request TTFB (×5, co-timed `/health` ~2ms) | 245ms | 224ms | -9% |
+
+The isolated single-request number barely moves (a lone request has no warm pool to reuse; its only
+saving is the eliminated probe round-trip, small vs in-container R2 RTT). The win is under the
+concurrent Range burst Chrome fires when overlay opens — exactly where fresh-TLS-per-request stacked.
+
+**Correctness (verified live vs real app):** GET 200 full (9638173B); 206 with correct Content-Range for
+head-range and mid-file seek; HEAD 200 with Content-Length; 416 for unsatisfiable range; byte-integrity
+(full file md5 == concatenated ranges md5); valid faststart MP4 (ftyp→moov→mdat). Ranged playback intact.
+
+**Test note:** `tests/test_stream_auth.py` / `test_t1690_stream_proxy_probe.py` can't collect in-container
+(pre-existing starlette `TestClient(app=...)` vs installed httpx mismatch — fail identically with the edit
+stashed). Verification is the live integration evidence above.
+
+**Original status:** TODO
 **Impact:** 7
 **Complexity:** 5
 **Parent:** T4770 (Stage B fan-out). Evidence: [T4770-delay-ledger.md](T4770-delay-ledger.md) row 3.
@@ -39,7 +77,7 @@ Re-run the T4770 walkthrough (after T4772) and diff `overlay:clicked → overlay
 
 ## Acceptance criteria
 
-- [ ] Overlay first-video-paint (`overlay:clicked→videoReady`) drops materially vs the T4770 baseline.
-- [ ] `working_video/stream` proxy TTFB improved (evidence: live before/after, co-timed with `/health`) OR working video seeds from 302→R2 direct.
-- [ ] Bounded-window/ranged playback still correct.
-- [ ] No reactive persistence; read-path only.
+- [x] Overlay first-video-paint (`overlay:clicked→videoReady`) drops materially vs the T4770 baseline. — 3474→2136ms (-39%), ×3 walkthrough medians.
+- [x] `working_video/stream` proxy TTFB improved (evidence: live before/after, co-timed with `/health`) — HAR main-stream first-byte 1037→408ms (-61%) under the overlay burst; live isolated 245→224ms; `/health` flat ~2ms. (Kept lever 1; 302→R2 not needed.)
+- [x] Bounded-window/ranged playback still correct. — live: 206 Content-Range for head+mid-file seek, 416 unsatisfiable, byte-integrity match, faststart MP4 (ftyp→moov→mdat).
+- [x] No reactive persistence; read-path only. — pure GET/HEAD proxy; no writes.

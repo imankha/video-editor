@@ -973,6 +973,27 @@ async def get_working_video(project_id: int):
         )
 
 
+# Pooled R2 client for the working-video streaming proxy — reused across
+# requests so the TLS / connection handshake to R2 is paid ONCE (kept warm),
+# not on every range fetch. A fresh httpx.AsyncClient per request was paying a
+# full R2 connection + TLS handshake each time (HAR showed ssl=500–1200ms per
+# working_video/stream request). Mirrors downloads.py:_get_r2_stream_client
+# (T4630 pooled-httpx precedent). Deliberately scoped to THIS endpoint only —
+# unifying all four streaming proxies onto one shared client is its own task.
+_working_video_r2_client = None
+
+
+def _get_working_video_r2_client():
+    import httpx
+    global _working_video_r2_client
+    if _working_video_r2_client is None or _working_video_r2_client.is_closed:
+        _working_video_r2_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(60.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=24, keepalive_expiry=30.0),
+        )
+    return _working_video_r2_client
+
+
 @router.api_route("/{project_id}/working_video/stream", methods=["GET", "HEAD"])
 async def stream_working_video(project_id: int, request: Request):
     """
@@ -985,14 +1006,20 @@ async def stream_working_video(project_id: int, request: Request):
     browser request off the R2 origin entirely (the backend's httpx pool
     talks to R2 separately).
 
-    Pass-through behavior: forwards the client's Range header to R2 and
-    returns whatever R2 returned (200 for full file, 206 for partial). No
-    byte windowing — working_videos are self-contained MP4s that are small
-    enough to stream fully on demand. (Compare with stream_working_clip_bounded
-    in clips.py, which clamps bytes because clips are slices of GB-scale games.)
+    Pass-through behavior: forwards the client's Range header to R2 in a SINGLE
+    round-trip on a POOLED client and returns R2's status / Content-Range /
+    Content-Length unchanged (200 for full file, 206 for partial). No byte
+    windowing — working_videos are self-contained MP4s, so R2's own 206 +
+    Content-Range is already correct. (Compare stream_working_clip_bounded in
+    clips.py, which clamps bytes because clips are slices of GB-scale games.)
+
+    T4773: previously this paid two R2 round-trips per request (a 1-byte size
+    probe to compute Content-Length ourselves, then the stream) each on a fresh
+    AsyncClient. Since we don't window, R2's own range headers are authoritative,
+    so we drop the probe and reuse a pooled connection — the fresh-TLS + extra
+    round-trip were most of the proxy TTFB.
     """
-    from fastapi.responses import StreamingResponse
-    import httpx
+    from fastapi.responses import StreamingResponse, Response
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1011,113 +1038,89 @@ async def stream_working_video(project_id: int, request: Request):
     if not presigned_url:
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
 
-    # Learn upstream size with a 1-byte Range GET so we can compute
-    # Content-Length / Content-Range ourselves. We can't HEAD because
-    # generate_presigned_url signs for get_object — sig v4 binds the HTTP
-    # method, so HEAD on a GET-signed URL returns 403 SignatureDoesNotMatch.
-    # The 1-byte GET reuses the same signature and the Content-Range header
-    # ("bytes 0-0/TOTAL") tells us the full size.
-    #
-    # Mirrors clips.py:stream_working_clip_bounded — opening client.stream()
-    # OUTSIDE the body generator (so we can peek at headers) leaves httpx's
-    # response in a half-closed state and the body iterator ends early,
-    # causing uvicorn's "Response content shorter than Content-Length".
-    # Keeping the AsyncClient + stream inside `async with` is the proven pattern.
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as probe:
-        size_probe = await probe.get(presigned_url, headers={"Range": "bytes=0-0"})
-    if size_probe.status_code not in (200, 206):
-        raise HTTPException(
-            status_code=size_probe.status_code,
-            detail=f"R2 size probe returned {size_probe.status_code}",
-        )
-    cr = size_probe.headers.get("content-range")
-    total_size: Optional[int] = None
-    if cr:
-        # "bytes 0-0/12345"
-        m = cr.rsplit("/", 1)
-        if len(m) == 2 and m[1].isdigit():
-            total_size = int(m[1])
-    if total_size is None:
-        # Fallback: full GET (200) with Content-Length
-        try:
-            total_size = int(size_probe.headers["content-length"])
-        except (KeyError, ValueError):
-            raise HTTPException(status_code=502, detail="R2 probe missing size")
-
+    client = _get_working_video_r2_client()
     range_hdr = request.headers.get("range") or request.headers.get("Range")
-    if range_hdr:
-        # Parse "bytes=START-END" (END optional → to EOF)
+    base_headers = {"Accept-Ranges": "bytes", "Cache-Control": "no-store"}
+
+    # HEAD (videoMetadata.js) — return size headers only, via a 1-byte GET probe
+    # on the pooled client. We can't HEAD upstream directly: generate_presigned_url
+    # signs for get_object and sig v4 binds the method, so HEAD on a GET-signed
+    # URL returns 403 SignatureDoesNotMatch. The Content-Range ("bytes 0-0/TOTAL")
+    # yields the full size.
+    if request.method == "HEAD":
+        probe = await client.get(presigned_url, headers={"Range": "bytes=0-0"})
+        if probe.status_code not in (200, 206):
+            raise HTTPException(
+                status_code=probe.status_code,
+                detail=f"R2 probe returned {probe.status_code}",
+            )
+        headers = dict(base_headers)
+        cr = probe.headers.get("content-range")
+        if cr and "/" in cr and cr.rsplit("/", 1)[1].isdigit():
+            headers["Content-Length"] = cr.rsplit("/", 1)[1]
+        elif probe.headers.get("content-length"):
+            headers["Content-Length"] = probe.headers["content-length"]
+        logger.info(
+            f"[working-video-stream] project_id={project_id} method=HEAD "
+            f"status=200 content_length={headers.get('Content-Length', '?')}"
+        )
+        return Response(status_code=200, headers=headers, media_type="video/mp4")
+
+    # GET: forward the client's Range straight to R2 in ONE round-trip and pass
+    # R2's status / Content-Range / Content-Length back unchanged. Opening the
+    # stream via build_request + send(stream=True) (not `async with .stream()`)
+    # lets us peek at headers before returning while keeping the body iterable;
+    # we close the upstream response in the generator's finally.
+    upstream_headers = {"Range": range_hdr} if range_hdr else {}
+    r2 = await client.send(
+        client.build_request("GET", presigned_url, headers=upstream_headers),
+        stream=True,
+    )
+    if r2.status_code not in (200, 206):
+        error_body = ""
         try:
-            spec = range_hdr.split("=", 1)[1]
-            start_s, end_s = spec.split("-", 1)
-            req_start = int(start_s)
-            req_end = int(end_s) if end_s else total_size - 1
-        except (IndexError, ValueError):
-            raise HTTPException(status_code=400, detail=f"Invalid Range header: {range_hdr}")
-        req_end = min(req_end, total_size - 1)
-        if req_start > req_end:
-            raise HTTPException(status_code=416, detail="Range Not Satisfiable")
-        status_code = 206
-        content_length = req_end - req_start + 1
-        response_headers = {
-            "Content-Range": f"bytes {req_start}-{req_end}/{total_size}",
-            "Content-Length": str(content_length),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
-        }
-        upstream_range = f"bytes={req_start}-{req_end}"
-    else:
-        status_code = 200
-        response_headers = {
-            "Content-Length": str(total_size),
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "no-store",
-        }
-        upstream_range = None
+            raw = await r2.aread()
+            error_body = raw[:500].decode("utf-8", errors="replace")
+        except Exception:
+            error_body = "(unreadable)"
+        await r2.aclose()
+        logger.error(
+            f"[working-video-stream] R2 error project_id={project_id} "
+            f"r2_status={r2.status_code} "
+            f"r2_content_type={r2.headers.get('content-type', 'unknown')} "
+            f"filename={row['filename']} range={range_hdr or 'full'} "
+            f"body_snippet={error_body!r}"
+        )
+        raise HTTPException(
+            status_code=r2.status_code,
+            detail=f"R2 returned {r2.status_code}",
+        )
+
+    headers = dict(base_headers)
+    for h in ("Content-Range", "Content-Length"):
+        v = r2.headers.get(h.lower())
+        if v:
+            headers[h] = v
+    media_type = r2.headers.get("content-type", "video/mp4")
 
     logger.info(
-        f"[working-video-stream] project_id={project_id} method={request.method} "
-        f"range={range_hdr or 'none'} status={status_code} "
-        f"content_length={response_headers['Content-Length']}"
+        f"[working-video-stream] project_id={project_id} method=GET "
+        f"range={range_hdr or 'none'} status={r2.status_code} "
+        f"content_length={headers.get('Content-Length', '?')}"
     )
 
-    # HEAD probe (videoMetadata.js:50) — return headers only, no body. Avoids
-    # opening a second R2 GET that we'd immediately discard.
-    if request.method == "HEAD":
-        from fastapi.responses import Response
-        return Response(status_code=status_code, headers=response_headers, media_type="video/mp4")
-
     async def stream_body():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-            stream_headers = {"Range": upstream_range} if upstream_range else {}
-            async with client.stream("GET", presigned_url, headers=stream_headers) as response:
-                if response.status_code not in (200, 206):
-                    error_body = ""
-                    try:
-                        raw = await response.aread()
-                        error_body = raw[:500].decode("utf-8", errors="replace")
-                    except Exception:
-                        error_body = "(unreadable)"
-                    logger.error(
-                        f"[working-video-stream] R2 error project_id={project_id} "
-                        f"r2_status={response.status_code} "
-                        f"r2_content_type={response.headers.get('content-type', 'unknown')} "
-                        f"filename={row['filename']} "
-                        f"range={upstream_range or 'full'} "
-                        f"body_snippet={error_body!r}"
-                    )
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=f"R2 returned {response.status_code}",
-                    )
-                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
-                    yield chunk
+        try:
+            async for chunk in r2.aiter_bytes(chunk_size=1024 * 1024):
+                yield chunk
+        finally:
+            await r2.aclose()
 
     return StreamingResponse(
         stream_body(),
-        status_code=status_code,
-        media_type="video/mp4",
-        headers=response_headers,
+        status_code=r2.status_code,
+        media_type=media_type,
+        headers=headers,
     )
 
 
