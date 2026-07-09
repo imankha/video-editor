@@ -167,6 +167,20 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
 - **Upload duplicates game state**: one-time upload-store restore effect (`[]` deps, L280-298) +
   active-upload video restore (L323-333) re-hydrate state when navigating back mid-upload.
 
+## Perf attribution (T4770, 2026-07-09)
+- **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and
+  `GET /api/games/{id}/video` (302→presigned R2) both re-time ~90–150ms in isolation (co-timed
+  `/api/health` ~80ms). In a session HAR they can show 1100–1450ms TTFB — that is **contention
+  from `warmAllUserVideos()` (App.jsx:233,336)** streaming many `working_video/stream` through the
+  1-vCPU Fly box concurrently, NOT endpoint work. Classic T4000 trap: re-time live before "fixing"
+  `/load`/`/video`. T4000's early-src parallelization (load ∥ video) is confirmed working.
+- **Home games are gated on `GET /api/bootstrap`** (`setFromBootstrap(data.games)`, App.jsx:210),
+  a stable ~1s serial aggregate (profiles+quests+list_projects+**list_games_metadata**+exports+uploads,
+  bootstrap.py:24–150). It uses `list_games_metadata` (no presign) — the "defer presigning" suspect is
+  ruled out (`GET /api/games` presigns all 6 in ~100ms live). Warm cache barely helps home (games
+  @~1594ms warm vs ~1743ms cold) → home is server-bound, not asset-bound. Fix fan-out: T4771 (skeleton +
+  split bootstrap), T4772 (tame the warm storm).
+
 ## Active/upcoming work
 - **T4220**: fix remove_segment_split speed wipe — re-index the speeds dict (deterministic merge
   rule); align useSegments.js.

@@ -92,6 +92,20 @@ graph LR
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
 - T4370 will add `tests/export_golden/`-style DB-delta snapshots; until it lands there is NO characterization safety net over this pipeline — prefer surgical diffs.
 
+## Perf attribution (T4770, 2026-07-09)
+- **`working_video/stream` takes the Fly bounded-proxy byte path (contended), unlike game video's
+  302→R2-direct.** Overlay first video paint ~3233ms: `GET /api/projects/{id}/working_video/stream`
+  is a 9.4MB fetch THROUGH the 1-vCPU Fly box (TTFB 490–900ms, receive 523ms). Two levers (T4773):
+  T4630 `R2StreamProxy` pooled-httpx for proxy TTFB, and/or seed overlay `<video>` from 302→presigned-R2
+  (bytes bypass Fly) — quantify the bounded-window trade-off (T4000 method) before committing.
+- **`warmAllUserVideos()` (App.jsx:233,336) is a contention villain.** It streams `working_video/stream`
+  for MANY projects at once through the Fly proxy on every home mount (Annotate/Overlay/My Reels opens
+  all show the storm), inflating foreground TTFBs 0.5–1.5s. Fix = foreground-first + bounded concurrency
+  (T4772); reuse `utils/cacheWarming.js` priority/abort machinery. The reel playback path
+  (`GET /api/downloads/{id}/stream`, bounded proxy) is FAST (~615ms to playing, TTFB 441ms) — no issue.
+- Editor post-video "settle" (`videoReady→settled` ~1.5s in framing AND overlay) is a **main-thread JS
+  gap** (no request in flight) = crop/highlight/canvas hydration, not latency (T4774).
+
 ## Active/upcoming work
 - **T4200** (TODO, audit B1): extend sync-then-announce to framing (`framing.py:718-722` ungated finally-sync) + multi-clip (`multi_clip.py:2298-2301`; COMPLETE sites `:1440-1448`, `:1737`); DB-save failure becomes terminal. Copy overlay's pattern; share `_export_sync_failed_data` via `export_helpers` (no router→router imports).
 - **T4240** (TODO, audit A1+A10): the four recovery bugs above. Surgical; do not start the repository refactor there.
