@@ -25,20 +25,6 @@ function Player({ cx, cy, jersey, shorts, scale = 1, opacity = 1, shadow = false
   );
 }
 
-function StarIcon({ cx, cy, size, filled }: { cx: number; cy: number; size: number; filled: boolean }) {
-  const r = size / 2;
-  const points = Array.from({ length: 5 }, (_, i) => {
-    const outerAngle = (i * 72 - 90) * Math.PI / 180;
-    const innerAngle = ((i * 72) + 36 - 90) * Math.PI / 180;
-    const ox = cx + r * Math.cos(outerAngle);
-    const oy = cy + r * Math.sin(outerAngle);
-    const ix = cx + r * 0.4 * Math.cos(innerAngle);
-    const iy = cy + r * 0.4 * Math.sin(innerAngle);
-    return `${ox},${oy} ${ix},${iy}`;
-  }).join(' ');
-  return <polygon points={points} fill={filled ? '#fbbf24' : '#475569'} opacity={filled ? 0.9 : 0.3} />;
-}
-
 export function LearnIllustration({ className = '' }: IllustrationProps) {
   return (
     <div className={`relative w-full aspect-[16/10] bg-slate-800/60 rounded-2xl border border-white/10 overflow-hidden ${className}`}>
@@ -159,145 +145,7 @@ export function LearnIllustration({ className = '' }: IllustrationProps) {
   );
 }
 
-export function OrganizeIllustration({ className = '' }: IllustrationProps) {
-  const clips = [
-    { x: 40, y: 100, selected: true, stars: 3, tagW: 55, fieldColor: '#166534', playerX: 85, playerY: 40 },
-    { x: 235, y: 100, selected: true, stars: 4, tagW: 45, fieldColor: '#15803d', playerX: 100, playerY: 35 },
-    { x: 430, y: 100, selected: false, stars: 2, tagW: 60, fieldColor: '#166534', playerX: 70, playerY: 45 },
-    { x: 40, y: 252, selected: false, stars: 1, tagW: 50, fieldColor: '#14532d', playerX: 95, playerY: 38 },
-    { x: 235, y: 252, selected: true, stars: 5, tagW: 40, fieldColor: '#166534', playerX: 80, playerY: 42 },
-    { x: 430, y: 252, selected: false, stars: 3, tagW: 55, fieldColor: '#15803d', playerX: 90, playerY: 36 },
-  ];
-
-  return (
-    <div className={`relative w-full aspect-[16/10] bg-slate-800/60 rounded-2xl border border-white/10 overflow-hidden ${className}`}>
-      <svg viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-        <defs>
-          <linearGradient id="orgBtnGrad" x1="180" y1="0" x2="460" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#b45309" />
-            <stop offset="50%" stopColor="#d97706" />
-            <stop offset="100%" stopColor="#f59e0b" />
-          </linearGradient>
-          <filter id="selectedGlow" x="-10%" y="-10%" width="120%" height="120%">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
-          <clipPath id="thumbClip0"><rect x="46" y="106" width="163" height="82" rx="6" /></clipPath>
-          <clipPath id="thumbClip1"><rect x="241" y="106" width="163" height="82" rx="6" /></clipPath>
-          <clipPath id="thumbClip2"><rect x="436" y="106" width="163" height="82" rx="6" /></clipPath>
-          <clipPath id="thumbClip3"><rect x="46" y="258" width="163" height="82" rx="6" /></clipPath>
-          <clipPath id="thumbClip4"><rect x="241" y="258" width="163" height="82" rx="6" /></clipPath>
-          <clipPath id="thumbClip5"><rect x="436" y="258" width="163" height="82" rx="6" /></clipPath>
-        </defs>
-
-        {/* Header bar */}
-        <rect x="30" y="22" width="580" height="56" rx="12" fill="#1e293b" stroke="#334155" strokeWidth="1" />
-
-        {/* Search icon */}
-        <circle cx="52" cy="50" r="7" stroke="#64748b" strokeWidth="1.5" fill="none" />
-        <line x1="57" y1="55" x2="62" y2="60" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" />
-        {/* Search text */}
-        <rect x="68" y="46" width="60" height="7" rx="3" fill="#475569" opacity="0.4" />
-
-        {/* Divider */}
-        <line x1="140" y1="34" x2="140" y2="66" stroke="#334155" strokeWidth="1" />
-
-        {/* Filter chips */}
-        <rect x="154" y="37" width="82" height="26" rx="13" fill="#d97706" fillOpacity="0.2" stroke="#d97706" strokeWidth="1.5" />
-        <text x="195" y="54" textAnchor="middle" fill="#fbbf24" fontSize="10" fontFamily="system-ui" fontWeight="600">Dribbling</text>
-
-        <rect x="244" y="37" width="62" height="26" rx="13" fill="#334155" />
-        <text x="275" y="54" textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="system-ui">Goals</text>
-
-        <rect x="314" y="37" width="72" height="26" rx="13" fill="#334155" />
-        <text x="350" y="54" textAnchor="middle" fill="#94a3b8" fontSize="10" fontFamily="system-ui">Defense</text>
-
-        {/* Star filter */}
-        <line x1="400" y1="34" x2="400" y2="66" stroke="#334155" strokeWidth="1" />
-        {[416, 432, 448, 464, 480].map((x, i) => (
-          <StarIcon key={i} cx={x} cy={50} size={12} filled={i < 3} />
-        ))}
-        <text x="498" y="54" fill="#64748b" fontSize="9" fontFamily="system-ui">+</text>
-
-        {/* Sort dropdown */}
-        <rect x="520" y="37" width="78" height="26" rx="8" fill="#1e293b" stroke="#475569" strokeWidth="1" />
-        <text x="545" y="54" fill="#94a3b8" fontSize="9" fontFamily="system-ui">Newest</text>
-        <path d="M586,47 l4,6 4,-6" fill="#64748b" />
-
-        {/* Clip cards */}
-        {clips.map((card, i) => (
-          <g key={i}>
-            <rect x={card.x} y={card.y} width="175" height="135" rx="10"
-              fill="#131a2b"
-              stroke={card.selected ? '#d97706' : '#1e293b'}
-              strokeWidth={card.selected ? 2 : 1}
-              filter={card.selected ? 'url(#selectedGlow)' : undefined}
-            />
-            {/* Thumbnail */}
-            <g clipPath={`url(#thumbClip${i})`}>
-              <rect x={card.x + 6} y={card.y + 6} width="163" height="82" fill={card.fieldColor} />
-              {/* Grass stripes */}
-              {[0, 1, 2, 3].map(j => (
-                <rect key={j} x={card.x + 6} y={card.y + 6 + j * 21} width="163" height="10" fill="white" opacity="0.04" />
-              ))}
-              {/* Field line */}
-              <line x1={card.x + 6} y1={card.y + 47} x2={card.x + 169} y2={card.y + 47}
-                stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
-              {/* Mini players */}
-              <circle cx={card.x + card.playerX} cy={card.y + card.playerY} r="5" fill="#e2e8f0" opacity="0.5" />
-              <circle cx={card.x + card.playerX + 25} cy={card.y + card.playerY + 10} r="4" fill="#e2e8f0" opacity="0.35" />
-              <circle cx={card.x + card.playerX - 20} cy={card.y + card.playerY + 15} r="4" fill="#e2e8f0" opacity="0.35" />
-              {/* Duration badge */}
-              <rect x={card.x + 130} y={card.y + 68} width="34" height="16" rx="4" fill="black" fillOpacity="0.6" />
-              <text x={card.x + 147} y={card.y + 80} textAnchor="middle" fill="white" fontSize="8" fontFamily="system-ui">0:{12 + i * 3}</text>
-            </g>
-
-            {/* Bottom info */}
-            {/* Tag pill */}
-            <rect x={card.x + 10} y={card.y + 95} width={card.tagW} height="18" rx="9"
-              fill={card.selected ? '#92400e' : '#1e293b'}
-              stroke={card.selected ? '#d97706' : '#334155'}
-              strokeWidth="0.5" />
-            <rect x={card.x + 17} y={card.y + 101} width={card.tagW - 14} height="6" rx="3"
-              fill={card.selected ? '#fbbf24' : '#64748b'} opacity="0.6" />
-
-            {/* Stars */}
-            {[0, 1, 2, 3, 4].map(s => (
-              <StarIcon key={s} cx={card.x + 130 + s * 10} cy={card.y + 104} size={8} filled={s < card.stars} />
-            ))}
-
-            {/* Clip title placeholder */}
-            <rect x={card.x + 10} y={card.y + 120} width="90" height="5" rx="2.5" fill="#475569" opacity="0.4" />
-
-            {/* Checkmark for selected */}
-            {card.selected && (
-              <g>
-                <circle cx={card.x + 161} cy={card.y + 14} r="11" fill="#d97706" />
-                <path d={`M${card.x + 155},${card.y + 14} l4,4 7,-8`}
-                  stroke="white" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            )}
-          </g>
-        ))}
-
-        {/* Bottom bar with CTA */}
-        <rect x="30" y="370" width="580" height="1" fill="#1e293b" />
-
-        {/* Selected count */}
-        <text x="100" y="392" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">3 clips selected</text>
-
-        {/* Generate button */}
-        <rect x="220" y="378" width="200" height="18" rx="9" fill="url(#orgBtnGrad)" />
-        <text x="320" y="391" textAnchor="middle" fill="white" fontSize="10" fontWeight="700" fontFamily="system-ui">Generate Highlight Reel</text>
-
-        {/* Arrow icon on button */}
-        <path d="M408,387 l6,-4 -6,-4" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      </svg>
-    </div>
-  );
-}
-
-export function CelebrateIllustration({ className = '' }: IllustrationProps) {
+export function ElevateIllustration({ className = '' }: IllustrationProps) {
   return (
     <div className={`relative w-full aspect-[16/10] bg-slate-800/60 rounded-2xl border border-white/10 overflow-hidden ${className}`}>
       <svg viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
@@ -453,6 +301,136 @@ export function CelebrateIllustration({ className = '' }: IllustrationProps) {
 
         {/* Result label */}
         <text x="490" y="393" textAnchor="middle" fill="#94a3b8" fontSize="11" fontFamily="system-ui">Social-ready vertical reel</text>
+      </svg>
+    </div>
+  );
+}
+
+export function CelebrateIllustration({ className = '' }: IllustrationProps) {
+  return (
+    <div className={`relative w-full aspect-[16/10] bg-slate-800/60 rounded-2xl border border-white/10 overflow-hidden ${className}`}>
+      <svg viewBox="0 0 640 400" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+        <defs>
+          <linearGradient id="shareFieldGrad" x1="0" y1="50" x2="0" y2="360" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#15803d" />
+            <stop offset="100%" stopColor="#14532d" />
+          </linearGradient>
+          <linearGradient id="shareIgGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#f9ce34" />
+            <stop offset="50%" stopColor="#ee2a7b" />
+            <stop offset="100%" stopColor="#6228d7" />
+          </linearGradient>
+          <clipPath id="shareScreenClip"><rect x="262" y="58" width="116" height="270" rx="14" /></clipPath>
+          <filter id="shareGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="4" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="shareCardShadow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="4" />
+          </filter>
+        </defs>
+
+        {/* Dotted share lines from phone to targets (behind everything) */}
+        <path d="M262,150 C200,150 170,110 118,110" stroke="#f472b6" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" fill="none" />
+        <path d="M262,235 C200,235 170,275 118,275" stroke="#f472b6" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" fill="none" />
+        <path d="M378,130 C450,130 470,95 512,95" stroke="#f472b6" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" fill="none" />
+        <path d="M378,193 C450,193 480,193 512,193" stroke="#f472b6" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" fill="none" />
+        <path d="M378,256 C450,256 470,291 512,291" stroke="#f472b6" strokeWidth="1.5" strokeDasharray="4 4" opacity="0.5" fill="none" />
+
+        {/* === CENTER: phone with finished reel === */}
+        <rect x="248" y="38" width="144" height="316" rx="22" fill="black" opacity="0.35" filter="url(#shareCardShadow)" />
+        <rect x="250" y="36" width="140" height="316" rx="22" fill="#0f172a" stroke="#f472b6" strokeWidth="1.5" />
+        <rect x="300" y="42" width="40" height="7" rx="3.5" fill="#1e293b" />
+
+        <g clipPath="url(#shareScreenClip)">
+          <rect x="262" y="58" width="116" height="270" fill="url(#shareFieldGrad)" />
+          {[0, 1, 2, 3, 4, 5, 6].map(i => (
+            <rect key={i} x="262" y={58 + i * 38} width="116" height="19" fill="white" opacity="0.04" />
+          ))}
+          <line x1="262" y1="200" x2="378" y2="200" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+          <circle cx="320" cy="200" r="18" stroke="rgba(255,255,255,0.12)" strokeWidth="1" fill="none" />
+          {/* The player, centered + glowing */}
+          <Player cx={320} cy={190} jersey="#f472b6" shorts="#9d174d" scale={1.7} shadow />
+          <circle cx={320} cy={188} r={26} stroke="#f472b6" strokeWidth="2" fill="none" opacity="0.45" filter="url(#shareGlow)" />
+          <circle cx={330} cy={214} r="4.5" fill="white" />
+          {/* Name/overlay lower third */}
+          <rect x="262" y="288" width="116" height="40" fill="black" fillOpacity="0.4" />
+          <rect x="272" y="296" width="70" height="7" rx="3.5" fill="white" opacity="0.85" />
+          <rect x="272" y="308" width="44" height="5" rx="2.5" fill="white" opacity="0.35" />
+        </g>
+        <rect x="306" y="340" width="28" height="4" rx="2" fill="#475569" />
+
+        {/* Floating like hearts rising from the phone */}
+        {[
+          { x: 340, y: 120, s: 1, o: 0.9 },
+          { x: 360, y: 90, s: 0.7, o: 0.6 },
+          { x: 300, y: 100, s: 0.55, o: 0.5 },
+        ].map((h, i) => (
+          <path
+            key={i}
+            d={`M${h.x},${h.y} c${-4 * h.s},${-5 * h.s} ${-12 * h.s},${1 * h.s} 0,${9 * h.s} c${12 * h.s},${-8 * h.s} ${4 * h.s},${-14 * h.s} 0,${-9 * h.s} z`}
+            fill="#fb7185"
+            opacity={h.o}
+          />
+        ))}
+
+        {/* === LEFT: people receiving it === */}
+        {[
+          { cx: 90, cy: 110, label: 'Grandma', ring: '#f472b6' },
+          { cx: 90, cy: 275, label: 'Coach', ring: '#a78bfa' },
+        ].map((p, i) => (
+          <g key={i}>
+            <circle cx={p.cx} cy={p.cy} r="24" fill="#1e293b" stroke={p.ring} strokeWidth="1.5" />
+            <circle cx={p.cx} cy={p.cy - 5} r="8" fill="#94a3b8" />
+            <path d={`M${p.cx - 13},${p.cy + 16} a13,11 0 0,1 26,0`} fill="#94a3b8" />
+            {/* Heart reaction badge */}
+            <circle cx={p.cx + 18} cy={p.cy - 16} r="9" fill="#0f172a" stroke={p.ring} strokeWidth="1" />
+            <path d={`M${p.cx + 18},${p.cy - 18} c-2,-2.5 -6,0.5 0,4.5 c6,-4 2,-7 0,-4.5 z`} fill="#fb7185" />
+            <text x={p.cx} y={p.cy + 40} textAnchor="middle" fill="#cbd5e1" fontSize="11" fontFamily="system-ui" fontWeight="600">{p.label}</text>
+          </g>
+        ))}
+
+        {/* === RIGHT: share destinations === */}
+        {/* Instagram */}
+        <g>
+          <rect x="512" y="72" width="46" height="46" rx="12" fill="url(#shareIgGrad)" />
+          <rect x="522" y="82" width="26" height="26" rx="8" fill="none" stroke="white" strokeWidth="2" />
+          <circle cx="535" cy="95" r="6.5" fill="none" stroke="white" strokeWidth="2" />
+          <circle cx="544" cy="86" r="1.8" fill="white" />
+          <text x="570" y="99" fill="#e2e8f0" fontSize="12" fontFamily="system-ui" fontWeight="600">Instagram</text>
+        </g>
+        {/* TikTok */}
+        <g>
+          <rect x="512" y="170" width="46" height="46" rx="12" fill="#0b0b0f" stroke="#334155" strokeWidth="1" />
+          <path d="M540,180 c1,6 5,9 10,9 v7 c-4,0 -7,-1 -10,-3 v11 a11,11 0 1,1 -11,-11 v7 a4,4 0 1,0 4,4 v-31 z" fill="#f472b6" />
+          <path d="M538,180 c1,6 5,9 10,9 v7 c-4,0 -7,-1 -10,-3 v11 a11,11 0 1,1 -11,-11 v7 a4,4 0 1,0 4,4 v-31 z" fill="#22d3ee" opacity="0.8" />
+          <path d="M539,180 c1,6 5,9 10,9 v7 c-4,0 -7,-1 -10,-3 v11 a11,11 0 1,1 -11,-11 v7 a4,4 0 1,0 4,4 v-31 z" fill="white" />
+          <text x="570" y="197" fill="#e2e8f0" fontSize="12" fontFamily="system-ui" fontWeight="600">TikTok</text>
+        </g>
+        {/* Copy link */}
+        <g>
+          <rect x="512" y="268" width="46" height="46" rx="12" fill="#4c1d95" stroke="#7c3aed" strokeWidth="1" />
+          <g stroke="#c4b5fd" strokeWidth="2.5" fill="none" strokeLinecap="round">
+            <path d="M530,286 a6,6 0 0,1 8,-8 l4,4 a6,6 0 0,1 0,8" />
+            <path d="M540,296 a6,6 0 0,1 -8,8 l-4,-4 a6,6 0 0,1 0,-8" />
+          </g>
+          <text x="570" y="288" fill="#e2e8f0" fontSize="12" fontFamily="system-ui" fontWeight="600">Copy link</text>
+          <text x="570" y="303" fill="#64748b" fontSize="9" fontFamily="system-ui">rb.link/aiden</text>
+        </g>
+
+        {/* Sparkles */}
+        <g opacity="0.8">
+          <path d="M410,70 l2,-8 2,8 -8,-2 8,0 -8,2z" fill="#fbbf24" />
+          <path d="M230,60 l2,-7 2,7 -7,-2 7,0 -7,2z" fill="#f472b6" opacity="0.6" />
+          <path d="M420,330 l2,-7 2,7 -7,-2 7,0 -7,2z" fill="#a78bfa" opacity="0.7" />
+        </g>
+
+        {/* Views counter chip under phone */}
+        <rect x="266" y="366" width="108" height="24" rx="12" fill="#1e293b" stroke="#f472b6" strokeWidth="0.75" />
+        <path d="M282,378 c-2.5,-3 -7,0.5 0,5 c7,-4.5 2.5,-8 0,-5 z" fill="#fb7185" />
+        <text x="300" y="382" fill="#f9a8d4" fontSize="10" fontFamily="system-ui" fontWeight="600">1.2k</text>
+        <circle cx="322" cy="378" r="1.5" fill="#64748b" />
+        <text x="352" y="382" textAnchor="middle" fill="#cbd5e1" fontSize="10" fontFamily="system-ui">340 shares</text>
       </svg>
     </div>
   );

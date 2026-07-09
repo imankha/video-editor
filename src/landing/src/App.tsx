@@ -1,11 +1,59 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { LogoWithText } from './components/Logo'
-import { LearnIllustration, OrganizeIllustration, CelebrateIllustration } from './components/Illustrations'
+import { LearnIllustration, ElevateIllustration, CelebrateIllustration } from './components/Illustrations'
 import { BeforeAfterSlider } from './components/BeforeAfterSlider'
+import { TutorialModal } from './components/TutorialModal'
+import {
+  LEARN_PLAYLIST,
+  ELEVATE_PLAYLIST,
+  CELEBRATE_PLAYLIST,
+  FULL_WALKTHROUGH,
+  type TutorialAsset,
+} from './config/tutorials'
 import { TbFocusCentered } from 'react-icons/tb'
-import { HiSparkles, HiTag, HiStar, HiPlay, HiUsers } from 'react-icons/hi2'
+import { HiSparkles, HiTag, HiStar, HiPlay, HiUsers, HiFilm, HiLink } from 'react-icons/hi2'
 import { FaInstagram, FaTiktok } from 'react-icons/fa'
-import { MdVideoLibrary, MdSearch, MdFilterList } from 'react-icons/md'
+
+// Illustration wrapped as a clickable video thumbnail: hover reveals a play badge
+// and the whole panel opens the section's tutorial in the modal player.
+function PlayableIllustration({
+  onClick,
+  ariaLabel,
+  children,
+}: {
+  onClick: () => void
+  ariaLabel: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className="group relative block w-full rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+    >
+      {children}
+      <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/0 group-hover:bg-black/25 transition-colors">
+        <span className="w-16 h-16 rounded-full bg-purple-600/85 group-hover:bg-purple-600 flex items-center justify-center scale-90 group-hover:scale-100 opacity-90 group-hover:opacity-100 transition-all shadow-lg shadow-purple-900/40">
+          <HiPlay className="w-8 h-8 text-white ml-1" />
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function WatchLink({ onClick, label, color }: { onClick: () => void; label: string; color: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold ${color} hover:opacity-80 transition-opacity`}
+    >
+      <HiPlay className="w-4 h-4" />
+      {label}
+    </button>
+  )
+}
 
 function FeaturePill({ icon, label, color }: { icon: React.ReactNode; label: string; color: string }) {
   return (
@@ -41,6 +89,16 @@ function App() {
       : 'https://app.reelballers.com';
   }, [])
 
+  const [playlist, setPlaylist] = useState<TutorialAsset[] | null>(null)
+
+  // Lock background scroll while the tutorial modal is open.
+  useEffect(() => {
+    if (!playlist) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [playlist])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Hero Section */}
@@ -54,16 +112,24 @@ function App() {
             Share Your Player's Brilliance
           </h2>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Learn from, organize, and celebrate your athlete's moments.
+            Learn from, elevate, and celebrate your athlete's moments.
           </p>
 
-          <div className="flex justify-center mb-12">
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
             <a
               href={ctaHref}
               className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
             >
-              Get Started
+              Get Started Free
             </a>
+            <button
+              type="button"
+              onClick={() => setPlaylist(FULL_WALKTHROUGH)}
+              className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg flex items-center gap-2 transition-all"
+            >
+              <HiPlay className="w-5 h-5 text-purple-300" />
+              See how it works
+            </button>
           </div>
 
           {/* Before/After Slider */}
@@ -88,29 +154,35 @@ function App() {
                   <FeaturePill icon={<><HiTag className="w-4 h-4 text-white" /><HiStar className="w-3.5 h-3.5 text-white" /></>} label="Rate & tag by play type" color="from-violet-400 to-purple-500" />
                   <FeaturePill icon={<HiUsers className="w-5 h-5 text-white" />} label="Tag teammates" color="from-emerald-400 to-teal-500" />
                 </div>
+                <WatchLink onClick={() => setPlaylist(LEARN_PLAYLIST)} label="Watch the tutorial" color="text-cyan-400" />
               </div>
               <div className="w-full md:w-[60%] md:order-first">
-                <LearnIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
+                <PlayableIllustration onClick={() => setPlaylist(LEARN_PLAYLIST)} ariaLabel="Play the Annotate tutorial">
+                  <LearnIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
+                </PlayableIllustration>
               </div>
             </div>
 
-            {/* Organize */}
+            {/* Elevate */}
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
               <div className="w-full md:w-[40%] text-center md:text-left">
-                <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-yellow-500 bg-clip-text text-transparent pb-1 mb-4">
-                  Organize
+                <h3 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent pb-1 mb-4">
+                  Elevate
                 </h3>
                 <p className="text-lg text-gray-300 leading-relaxed mb-5">
-                  Every clip tagged, rated, and searchable. Filter by skill, pick your best, and generate a highlight reel in one click.
+                  Lift raw game film into something that looks pro. AI upscales your footage to crisp 4K, auto-frames to follow your player across the field, and adds animated highlights that make every play pop.
                 </p>
                 <div className="flex flex-wrap gap-2.5">
-                  <FeaturePill icon={<MdVideoLibrary className="w-5 h-5 text-white" />} label="Clip Library" color="from-emerald-400 to-teal-500" />
-                  <FeaturePill icon={<MdSearch className="w-5 h-5 text-white" />} label="Find clips in seconds" color="from-amber-400 to-orange-500" />
-                  <FeaturePill icon={<MdFilterList className="w-5 h-5 text-white" />} label="Powerful filtering" color="from-purple-500 to-pink-500" />
+                  <FeaturePill icon={<TbFocusCentered className="w-5 h-5 text-white" />} label="Auto-Follow Framing" color="from-amber-400 to-orange-500" />
+                  <FeaturePill icon={<HiSparkles className="w-5 h-5 text-white" />} label="AI 4K Upscaling" color="from-yellow-400 to-orange-500" />
+                  <FeaturePill icon={<HiStar className="w-5 h-5 text-white" />} label="Highlight Graphics" color="from-purple-500 to-pink-500" />
                 </div>
+                <WatchLink onClick={() => setPlaylist(ELEVATE_PLAYLIST)} label="Watch the tutorials" color="text-amber-400" />
               </div>
               <div className="w-full md:w-[60%]">
-                <OrganizeIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
+                <PlayableIllustration onClick={() => setPlaylist(ELEVATE_PLAYLIST)} ariaLabel="Play the Framing and Highlights tutorials">
+                  <ElevateIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
+                </PlayableIllustration>
               </div>
             </div>
 
@@ -121,16 +193,19 @@ function App() {
                   Celebrate
                 </h3>
                 <p className="text-lg text-gray-300 leading-relaxed mb-5">
-                  Turn sideline footage into a pro-quality vertical reel. AI upscaling and animated framing keeps your player centered and sharp.
+                  Share the finished reel with one link. Grandma watches in full resolution on her phone, coaches get the highlights, and it's ready to post to Instagram or TikTok in a tap.
                 </p>
                 <div className="flex flex-wrap gap-2.5">
-                  <FeaturePill icon={<TbFocusCentered className="w-5 h-5 text-white" />} label="Dynamic Crop Window" color="from-purple-500 to-pink-500" />
-                  <FeaturePill icon={<HiSparkles className="w-5 h-5 text-white" />} label="AI-Enhanced Quality" color="from-yellow-400 to-orange-500" />
+                  <FeaturePill icon={<HiLink className="w-5 h-5 text-white" />} label="One shareable link" color="from-purple-500 to-pink-500" />
+                  <FeaturePill icon={<HiFilm className="w-5 h-5 text-white" />} label="Full-Resolution Playback" color="from-cyan-400 to-blue-500" />
                   <FeaturePill icon={<><FaInstagram className="w-4 h-4 text-white" /><FaTiktok className="w-3.5 h-3.5 text-white" /></>} label="Social-Ready Formats" color="from-pink-500 to-rose-500" />
                 </div>
+                <WatchLink onClick={() => setPlaylist(CELEBRATE_PLAYLIST)} label="Watch the tutorial" color="text-pink-400" />
               </div>
               <div className="w-full md:w-[60%] md:order-first">
-                <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 hover:scale-[1.02] transition-transform duration-300" />
+                <PlayableIllustration onClick={() => setPlaylist(CELEBRATE_PLAYLIST)} ariaLabel="Play the Share tutorial">
+                  <CelebrateIllustration className="shadow-2xl shadow-purple-500/10 group-hover:scale-[1.02] transition-transform duration-300" />
+                </PlayableIllustration>
               </div>
             </div>
           </div>
@@ -216,8 +291,36 @@ function App() {
               ))}
             </div>
           </div>
+
+          {/* Closing CTA */}
+          <div className="relative overflow-hidden bg-gradient-to-br from-purple-600/20 to-indigo-600/10 border border-white/10 rounded-2xl p-10 mb-16 text-center">
+            <h3 className="text-2xl md:text-3xl font-bold text-white mb-3">
+              Your player's next highlight reel is minutes away
+            </h3>
+            <p className="text-gray-300 mb-8 max-w-xl mx-auto">
+              Upload a game, clip the best moments, and share a pro-quality reel today. Free to start.
+            </p>
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+              <a
+                href={ctaHref}
+                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+              >
+                Get Started Free
+              </a>
+              <button
+                type="button"
+                onClick={() => setPlaylist(FULL_WALKTHROUGH)}
+                className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg flex items-center gap-2 transition-all"
+              >
+                <HiPlay className="w-5 h-5 text-purple-300" />
+                Watch the full walkthrough
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      {playlist && <TutorialModal items={playlist} onClose={() => setPlaylist(null)} />}
 
       {/* Footer */}
       <footer className="container mx-auto px-4 py-8 text-center text-gray-500 space-y-2">
