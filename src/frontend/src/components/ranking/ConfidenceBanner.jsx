@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trophy, ChevronRight, Lock } from 'lucide-react';
-import { API_BASE } from '../../config';
-import apiFetch from '../../utils/apiFetch';
+import { fetchRankConfidence } from '../../utils/rankConfidence';
 import { RATIO_ORDER, COLLECTION_MIN_DURATION_SEC } from '../../constants/aspectRatios';
 import { REEL } from '../../config/themeColors';
 import { formatDurationHuman } from '../collections/format';
@@ -53,14 +52,7 @@ export function ConfidenceBanner({ onRank, refreshKey = 0 }) {
 
   const fetchState = useCallback(async () => {
     try {
-      const results = await Promise.all(
-        RATIO_ORDER.map(async (r) => {
-          const res = await apiFetch(
-            `${API_BASE}/api/rank/confidence?aspect_ratio=${encodeURIComponent(r)}`,
-          );
-          return res.ok ? res.json() : null;
-        }),
-      );
+      const results = await Promise.all(RATIO_ORDER.map((r) => fetchRankConfidence(r)));
       const valid = results.filter((d) => d && d.total > 0);
       if (valid.length === 0) { setState(null); return; } // nothing rankable -> hide
 

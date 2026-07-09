@@ -180,6 +180,19 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   ruled out (`GET /api/games` presigns all 6 in ~100ms live). Warm cache barely helps home (games
   @~1594ms warm vs ~1743ms cold) → home is server-bound, not asset-bound. Fix fan-out: T4771 (skeleton +
   split bootstrap), T4772 (tame the warm storm).
+- **My Reels `rank/confidence` dedup (T4775).** `GET /api/rank/confidence` is read via one shared
+  in-flight guard: `src/frontend/src/utils/rankConfidence.js` (`fetchRankConfidence(ratio)`, a
+  `Map<ratio,Promise>` cleared on settle — mirrors `gamesDataStore._getGameInflight`). All confidence
+  reads route through it: `ConfidenceBanner` (My Reels open, both ratios via `Promise.all`),
+  `RankingGame` (ratio probe), `useRanking` (in-game refresh). Opening My Reels mounts only the
+  banner; it reads BOTH ratios (portrait+landscape) — **2 distinct calls, both needed** (not a dup).
+  The "3× rank/confidence" in the T4770 ledger was the StrictMode dev double-invoke (2 ratios × 2
+  mounts = 4 in the HAR); the guard collapses each ratio's concurrent dup to one in-flight fetch,
+  measured 4→2 per My Reels open (portrait once, landscape once, every run). **Prod single-mount cold
+  open had no dup to remove (already 2);** the guard's prod value is defensive coalescing of genuinely
+  concurrent callers (banner `refreshKey` refetch racing, banner+ranker overlap) + a single read path.
+  Note: the T4770 walkthrough's `myreels:clicked→settled` is a fixed `waitForTimeout(2500)` (spec
+  line 291), so it can't move with this fix — the request count is the real signal.
 
 ## Active/upcoming work
 - **T4220**: fix remove_segment_split speed wipe — re-index the speeds dict (deterministic merge

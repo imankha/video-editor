@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { fetchRankConfidence } from '../utils/rankConfidence';
 
 const RANK_BASE = `${API_BASE}/api/rank`;
 
@@ -47,12 +48,10 @@ export function useRanking(ratio, active = true) {
   }, [ratio]);
 
   const fetchConfidence = useCallback(async () => {
-    try {
-      const res = await apiFetch(`${RANK_BASE}/confidence?aspect_ratio=${encodeURIComponent(ratio)}`);
-      if (res.ok) setConfidence(await res.json());
-    } catch {
-      /* confidence is non-critical; leave the last value */
-    }
+    // Shared in-flight guard (T4775). Returns null on failure -> leave the last
+    // value (confidence is non-critical).
+    const d = await fetchRankConfidence(ratio);
+    if (d) setConfidence(d);
   }, [ratio]);
 
   // (Re)start the loop for the current ratio.
