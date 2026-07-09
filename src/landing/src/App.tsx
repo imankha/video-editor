@@ -42,19 +42,6 @@ function PlayableIllustration({
   )
 }
 
-function WatchLink({ onClick, label, color }: { onClick: () => void; label: string; color: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`mt-5 inline-flex items-center gap-2 text-sm font-semibold ${color} hover:opacity-80 transition-opacity`}
-    >
-      <HiPlay className="w-4 h-4" />
-      {label}
-    </button>
-  )
-}
-
 function FeaturePill({ icon, label, color }: { icon: React.ReactNode; label: string; color: string }) {
   return (
     <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
@@ -111,17 +98,13 @@ function App() {
           <h2 className="text-4xl md:text-6xl font-bold text-white mb-6">
             Share Your Player's Brilliance
           </h2>
-          <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Educate, Elevate, Celebrate.
-          </p>
+          {/* Before/After Slider */}
+          <BeforeAfterSlider
+            beforeSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/before.mp4"
+            afterSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/after.mp4"
+          />
 
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mb-12">
-            <a
-              href={ctaHref}
-              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
-            >
-              Get Started Free
-            </a>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-12">
             <button
               type="button"
               onClick={() => setPlaylist(FULL_WALKTHROUGH)}
@@ -130,13 +113,13 @@ function App() {
               <HiPlay className="w-5 h-5 text-purple-300" />
               See how it works
             </button>
+            <a
+              href={ctaHref}
+              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+            >
+              Get Started Free
+            </a>
           </div>
-
-          {/* Before/After Slider */}
-          <BeforeAfterSlider
-            beforeSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/before.mp4"
-            afterSrc="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev/after.mp4"
-          />
 
           {/* Product Showcase */}
           <div className="mt-24 md:mt-32 space-y-20 md:space-y-28 mb-24 md:mb-32 text-left">
@@ -154,7 +137,6 @@ function App() {
                   <FeaturePill icon={<><HiTag className="w-4 h-4 text-white" /><HiStar className="w-3.5 h-3.5 text-white" /></>} label="Rate & tag by play type" color="from-violet-400 to-purple-500" />
                   <FeaturePill icon={<HiUsers className="w-5 h-5 text-white" />} label="Tag teammates" color="from-emerald-400 to-teal-500" />
                 </div>
-                <WatchLink onClick={() => setPlaylist(LEARN_PLAYLIST)} label="Watch the tutorial" color="text-cyan-400" />
               </div>
               <div className="w-full md:w-[60%] md:order-first">
                 <PlayableIllustration onClick={() => setPlaylist(LEARN_PLAYLIST)} ariaLabel="Play the Annotate tutorial">
@@ -177,7 +159,6 @@ function App() {
                   <FeaturePill icon={<HiSparkles className="w-5 h-5 text-white" />} label="AI 4K Upscaling" color="from-yellow-400 to-orange-500" />
                   <FeaturePill icon={<HiStar className="w-5 h-5 text-white" />} label="Highlight Graphics" color="from-purple-500 to-pink-500" />
                 </div>
-                <WatchLink onClick={() => setPlaylist(ELEVATE_PLAYLIST)} label="Watch the tutorials" color="text-amber-400" />
               </div>
               <div className="w-full md:w-[60%]">
                 <PlayableIllustration onClick={() => setPlaylist(ELEVATE_PLAYLIST)} ariaLabel="Play the Framing and Highlights tutorials">
@@ -200,7 +181,6 @@ function App() {
                   <FeaturePill icon={<HiFilm className="w-5 h-5 text-white" />} label="Full-Resolution Playback" color="from-cyan-400 to-blue-500" />
                   <FeaturePill icon={<><FaInstagram className="w-4 h-4 text-white" /><FaTiktok className="w-3.5 h-3.5 text-white" /></>} label="Social-Ready Formats" color="from-pink-500 to-rose-500" />
                 </div>
-                <WatchLink onClick={() => setPlaylist(CELEBRATE_PLAYLIST)} label="Watch the tutorial" color="text-pink-400" />
               </div>
               <div className="w-full md:w-[60%] md:order-first">
                 <PlayableIllustration onClick={() => setPlaylist(CELEBRATE_PLAYLIST)} ariaLabel="Play the Share tutorial">
@@ -301,12 +281,6 @@ function App() {
               Upload a game, clip the best moments, and share a pro-quality reel today. Free to start.
             </p>
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-              <a
-                href={ctaHref}
-                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
-              >
-                Get Started Free
-              </a>
               <button
                 type="button"
                 onClick={() => setPlaylist(FULL_WALKTHROUGH)}
@@ -315,6 +289,12 @@ function App() {
                 <HiPlay className="w-5 h-5 text-purple-300" />
                 Watch the full walkthrough
               </button>
+              <a
+                href={ctaHref}
+                className="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+              >
+                Get Started Free
+              </a>
             </div>
           </div>
         </div>
