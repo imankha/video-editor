@@ -1,6 +1,6 @@
 ---
 domain: persistence-sync
-updated: 2026-07-03 (initial version, workflow setup)
+updated: 2026-07-09 (T4830 robust migration runner)
 ---
 # Persistence & R2 Sync — Domain Knowledge
 
@@ -54,6 +54,18 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 - Shutdown sync (main.py:255-276) covers profile DBs only, not user.sqlite.
 - `overlay_version` on working_videos is bumped by surgical overlay actions; the orphaned `PUT /overlay-data` (overlay.py:1383) does NOT bump it — deletion pending in T4210.
 - `segments_data` has two formats on disk (splits-only from gestures vs full-list from PUT); always `canonicalize_segments_data` before walking pairs — until T4340 canonicalizes at write time.
+
+## Migration runner invariants (T4830)
+
+`run_all_migrations` (`app/migrations/__init__.py`) follows these rules:
+
+1. **Registry is authoritative.** Only profiles listed in `user.sqlite.profiles` (`get_profiles`) are migrated. R2 profile dirs not in the registry are **orphans**: logged, collected in `results["users"]["orphans"]`, never migrated, never errored.
+2. **Always migrate the canonical R2 copy.** `_migrate_profile_db` force-downloads the R2 profile.sqlite each run. Guard: if the local copy is **ahead** of R2 (local `user_version > R2 user_version`), the local copy is synced up to R2 first (to preserve unsynced local writes), then migration continues from the local. If local is at-or-behind R2, R2 overwrites local (R2 is canonical).
+3. **Fail loud on upload failure.** `sync_db_to_r2_explicit` return value is checked; False → `MigrateResult(status="sync_failed")` → errors[]. A profile that failed to sync is NOT counted as migrated.
+4. **Always verify in R2.** After every run (whether or not migrations were applied), `_read_r2_profile_user_version` re-downloads from R2 and asserts `PRAGMA user_version == PROFILE_DB_RUNNER.latest_version`. Mismatch → `MigrateResult(status="not_at_head")` → errors[]. No opt-out flag.
+5. **User-level migrated/skipped only when ALL registered profiles verify.** If any registered profile lands in errors[], the user's failing profiles are reported in errors[] and the user is NOT counted as migrated or skipped.
+6. **Orphan cleanup is opt-in.** `scripts/cleanup_orphan_profiles.py` archives orphan R2 objects (copies to `orphans/` prefix, then deletes originals). Dry-run by default; `--apply` + manual confirmation required. Never auto-invoked by the runner.
+7. **`MigrateResult` status values:** `"ok"` (profile verified at head), `"sync_failed"` (upload returned False), `"not_at_head"` (R2 user_version ≠ head after sync), `"missing"` (registered profile has no R2 object), `"download_failed"` (transient R2 download error).
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310** R2 CAS conflict detection; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync; **T4330** unified action client (per-entity FIFO, version threading, 409 — overlay's `expected_version` check at overlay.py:384-391 is commented out today); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360** BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
