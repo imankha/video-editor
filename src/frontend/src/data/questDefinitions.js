@@ -4,6 +4,7 @@ export const QUEST_DEFINITIONS = [
     title: 'Get Started',
     reward: 15,
     step_ids: [
+      'watch_annotate_tutorial',
       'upload_game',
       'add_clip',
       'annotate_brilliant',
@@ -15,6 +16,7 @@ export const QUEST_DEFINITIONS = [
     title: 'Frame Your Highlight',
     reward: 25,
     step_ids: [
+      'watch_framing_tutorial',
       'open_framing',
       'position_crop',
       'add_slowmo',
@@ -27,6 +29,7 @@ export const QUEST_DEFINITIONS = [
     title: 'Configure Your Spotlight',
     reward: 25,
     step_ids: [
+      'watch_overlay_tutorial',
       'open_overlay',
       'select_players',
       'choose_color',
@@ -38,6 +41,7 @@ export const QUEST_DEFINITIONS = [
     title: 'Publish Your Reel',
     reward: 15,
     step_ids: [
+      'watch_publish_tutorial',
       'export_overlay',
       'wait_for_overlay',
       'move_to_my_reels',

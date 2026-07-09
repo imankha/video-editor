@@ -1,6 +1,92 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Volume2, VolumeX, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, RotateCcw, Volume2, VolumeX, Maximize, Minimize, List } from 'lucide-react';
 import { formatTimeCompact } from '../../utils/timeFormat';
+
+/** Speed picker — tap-friendly popup above the button */
+function SpeedMenu({ rates, playbackRate, onPlaybackRate }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex items-center">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5 text-sm' : 'p-1.5 text-xs'} font-bold tabular-nums`}
+        title="Playback speed"
+      >
+        {playbackRate}x
+      </button>
+      {open && (
+        <div
+          className="absolute bottom-full right-0 mb-1 bg-black/90 rounded-lg overflow-hidden z-50 min-w-[72px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {rates.map((r) => (
+            <button
+              key={r}
+              onClick={() => { onPlaybackRate?.(r); setOpen(false); }}
+              className={`block w-full text-right px-3 py-2 text-sm tabular-nums transition-colors
+                ${r === playbackRate ? 'text-purple-400 font-bold' : 'text-white hover:bg-white/10'}`}
+            >
+              {r}x
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Chapter menu — tap-friendly popup list of chapter titles */
+function ChapterMenu({ chapters, onSeekChapter, formatTime = formatTimeCompact }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative flex items-center">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        className={`text-white hover:text-white/80 transition-colors ${IS_COARSE ? 'p-2.5' : 'p-1.5'}`}
+        title="Chapters"
+      >
+        <List size={IS_COARSE ? 24 : 20} />
+      </button>
+      {open && (
+        <div
+          className="absolute bottom-full right-0 mb-1 bg-black/90 rounded-lg overflow-hidden z-50 max-h-64 overflow-y-auto min-w-[180px] max-w-[260px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {chapters.map((ch, i) => (
+            <button
+              key={i}
+              onClick={() => { onSeekChapter?.(ch.startTime); setOpen(false); }}
+              className="block w-full text-left px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors truncate"
+            >
+              <span className="text-white/50 mr-2 tabular-nums">{formatTime(ch.startTime)}</span>
+              {ch.title}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const IS_COARSE = window.matchMedia?.('(pointer: coarse)').matches;
 
@@ -26,6 +112,16 @@ export function VideoControls({
   visible = true,
   isFullscreen = false,
   onToggleFullscreen,
+  // Optional tutorial-player extensions — absent = renders identically to today
+  rates,             // number[] — speed menu options; absent = no speed button
+  playbackRate,      // number — active rate shown on button
+  onPlaybackRate,    // (rate) => void
+  hasSubtitles,      // boolean — show CC toggle
+  subtitlesOn,       // boolean — CC active state
+  onToggleSubtitles, // () => void
+  chapters,          // [{startTime, title}] — absent or [] = no chapter UI
+  onSeekChapter,     // (startTime) => void
+  formatTime = formatTimeCompact, // time display formatter; default keeps existing decimal-seconds
 }) {
   const videoProgress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const timelineRef = useRef(null);
@@ -121,7 +217,12 @@ export function VideoControls({
     volumeTimeoutRef.current = setTimeout(() => setShowVolumeSlider(false), 300);
   };
 
-  const hoverTime = duration > 0 ? formatTimeCompact((hoverPercent / 100) * duration) : '0:00';
+  const hoverSeconds = duration > 0 ? (hoverPercent / 100) * duration : 0;
+  const hoverTime = formatTime(hoverSeconds);
+  // Chapter the hovered position falls into = last chapter starting at/before it
+  const hoverChapter = chapters?.length > 0
+    ? chapters.reduce((acc, ch) => (hoverSeconds >= ch.startTime ? ch : acc), null)
+    : null;
   const active = isHovering || isDragging;
 
   return (
@@ -172,18 +273,32 @@ export function VideoControls({
               left: `calc(${progress}% - ${IS_COARSE ? 10 : (active ? 7 : 6)}px)`,
             }}
           />
+
+          {/* Chapter tick marks (only when chapters present) */}
+          {chapters?.length > 0 && chapters.map((ch, i) => (
+            <div
+              key={i}
+              className="absolute top-0 bottom-0 w-0.5 bg-white/60 cursor-pointer z-20"
+              style={{ left: `${duration > 0 ? (ch.startTime / duration) * 100 : 0}%` }}
+              title={ch.title}
+              onClick={(e) => { e.stopPropagation(); onSeekChapter?.(ch.startTime); }}
+            />
+          ))}
         </div>
 
-        {/* Hover time tooltip */}
+        {/* Hover tooltip — chapter name (when present) above the time */}
         {active && !isDragging && (
           <div
-            className="absolute bottom-full mb-1 px-2 py-0.5 bg-black/90 text-white text-xs rounded pointer-events-none whitespace-nowrap"
+            className="absolute bottom-full mb-1 px-2 py-0.5 bg-black/90 text-white text-xs rounded pointer-events-none flex flex-col items-center gap-0.5"
             style={{
               left: `clamp(24px, ${hoverPercent}%, calc(100% - 24px))`,
               transform: 'translateX(-50%)',
             }}
           >
-            {hoverTime}
+            {hoverChapter && (
+              <span className="max-w-[220px] truncate text-white/90">{hoverChapter.title}</span>
+            )}
+            <span className="tabular-nums whitespace-nowrap">{hoverTime}</span>
           </div>
         )}
       </div>
@@ -253,12 +368,33 @@ export function VideoControls({
 
           {/* Time */}
           <span className={`text-white font-mono select-none ${IS_COARSE ? 'text-xs ml-1' : 'text-sm ml-2'}`}>
-            {formatTimeCompact(currentTime)}<span className="text-white/60"> / {formatTimeCompact(duration)}</span>
+            {formatTime(currentTime)}<span className="text-white/60"> / {formatTime(duration)}</span>
           </span>
         </div>
 
         {/* Right group */}
         <div className={`flex items-center ${IS_COARSE ? 'gap-3' : 'gap-1'}`}>
+          {/* Chapter menu (only when chapters present) */}
+          {chapters?.length > 0 && (
+            <ChapterMenu chapters={chapters} onSeekChapter={onSeekChapter} formatTime={formatTime} />
+          )}
+
+          {/* CC toggle (only when hasSubtitles) */}
+          {hasSubtitles && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleSubtitles?.(); }}
+              className={`font-bold transition-colors ${IS_COARSE ? 'p-2.5 text-sm' : 'p-1.5 text-xs'} ${subtitlesOn ? 'text-white' : 'text-white/40'}`}
+              title={subtitlesOn ? 'Subtitles on (C)' : 'Subtitles off (C)'}
+            >
+              CC
+            </button>
+          )}
+
+          {/* Playback speed (only when rates provided) */}
+          {rates?.length > 0 && (
+            <SpeedMenu rates={rates} playbackRate={playbackRate} onPlaybackRate={onPlaybackRate} />
+          )}
+
           {onToggleFullscreen && (
             <button
               onClick={onToggleFullscreen}

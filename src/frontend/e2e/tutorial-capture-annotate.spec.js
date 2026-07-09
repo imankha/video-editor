@@ -9,12 +9,31 @@
 import { test } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 import { OVERLAY_INIT, makeKit, finishCapture } from './helpers/tutorialCapture';
+import fs from 'fs';
 
 const QUEST_DIR = 'C:/Users/imank/Videos/Captures/ReelBallersTutroials/annotate';
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const W = 1920, H = 1080;
-const CLIP_NAME = 'Brilliant Scan and Pass';
-const GAME_ID = 7;                            // 'at Sporting Mar 21'
+// The demo RECONSTITUTES a real clip that was deleted for the shoot — its exact
+// settings live in annotate/reconstitute_clip.json (name, rating, tags, notes,
+// start/end). After the recording, the new clip is corrected to those exact values.
+const ORIG = JSON.parse(fs.readFileSync(`${QUEST_DIR}/reconstitute_clip.json`, 'utf-8'));
+const CLIP_NAME = ORIG.name;                  // 'Brilliant Assist'
+const GAME_ID = 6;                            // 'at Legends Mar 28'
+// SUPPORTED_SPORTS mirror (frontend tagRegistry.js) for the fake sport dropdown —
+// the real picker is a native <select> whose OS popup can't be screen-recorded.
+const SPORTS = [
+  { id: 'soccer', name: 'Soccer', emoji: '⚽' },
+  { id: 'flag_football', name: 'Flag Football', emoji: '🏈' },
+  { id: 'american_football', name: 'American Football', emoji: '🏈' },
+  { id: 'basketball', name: 'Basketball', emoji: '🏀' },
+  { id: 'lacrosse', name: 'Lacrosse', emoji: '🥍' },
+  { id: 'rugby', name: 'Rugby', emoji: '🏉' },
+  { id: 'volleyball', name: 'Volleyball', emoji: '🏐' },
+  { id: 'hockey', name: 'Hockey', emoji: '🏒' },
+  { id: 'tennis', name: 'Tennis', emoji: '🎾' },
+  { id: 'baseball', name: 'Baseball', emoji: '⚾' },
+];
 
 test('capture annotate tutorial footage', async ({ browser }) => {
   test.setTimeout(300_000);
@@ -29,12 +48,24 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
   const kit = makeKit(page);
-  const { mark, ring, ringUnion, clearRing, act, drag, typeInto, dwell, step, videosReady } = kit;
+  const { mark, ring, ringUnion, clearRing, act, drag, typeInto, dwell, step, videosReady,
+          openSportMenu, pickSportRow, closeSportMenu } = kit;
 
-  // --- line 0: home screen ----------------------------------------------------
+  // --- PRE-ROLL (excluded from the roughcut: everything before mark(0) is cut) --
+  // stage the sport to BASKETBALL so the shoot shows a real basketball->soccer pick
+  step('pre-roll: set sport to basketball');
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: /^Games/ }).first().waitFor();
+  await page.getByRole('button', { name: /Switch sport or profile/ }).first().click();
+  const sportSelect = page.getByLabel('Change sport').first();
+  await sportSelect.waitFor();
+  await sportSelect.selectOption('basketball');
+  await dwell(1);
+  await page.locator('div.fixed.z-50 button').first().click();  // the modal's X
+  await dwell(1.2);
+
+  // --- line 0: home screen ----------------------------------------------------
   await page.mouse.move(960, 400);
   await mark(0);
   await dwell(3);
@@ -47,21 +78,29 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   await mark(1, 'sport');
   await act(sportBtn);
   await clearRing();
-  // keep the dialog up for the WHOLE sentence ("here, I'm selecting soccer") —
-  // everything between mark(1) and mark(2) is compressed into this sentence, so
-  // the modal must dominate that span and post-modal actions must be minimal
-  const profileRow = page.locator(
-    'button[title="Active profile"], button[title="Switch to this profile"]').first();
-  try { await ring(profileRow, 8); } catch {}
-  await dwell(3.8);
-  try { await act(profileRow); } catch {}
+  // show soccer being SELECTED for the WHOLE sentence. The real picker is a native
+  // <select> whose OS popup can't be recorded, so we render a faithful in-page
+  // replica of the dropdown (openSportMenu), point the cursor at Soccer, then commit.
+  const sportPill = page.getByLabel('Change sport').first();
+  await sportPill.waitFor();
+  await ring(sportPill, 8);
+  await dwell(0.9);
+  await act(sportPill);                        // click the pill -> menu opens
+  await openSportMenu(sportPill, SPORTS, 'basketball');
   await clearRing();
-  await page.keyboard.press('Escape');
+  await dwell(1.5);                            // let the viewer read the option list
+  await pickSportRow('soccer');                // cursor glides to Soccer + ripple + highlight
+  await dwell(0.7);
+  await sportPill.selectOption('soccer');      // commit the real value behind the menu
+  await closeSportMenu();                      // menu closes -> pill now reads Soccer
+  await dwell(1.4);
+  await page.locator('div.fixed.z-50 button').first().click();  // the modal's X
+  await dwell(0.4);
   await page.getByRole('button', { name: /^Games/ }).first().click();
 
   // --- line 2: the game opens in Annotate ----------------------------------------
   step('open game');
-  const gameCard = page.getByRole('button', { name: /at Sporting Mar 21/ }).first();
+  const gameCard = page.getByText('at Legends Mar 28').locator('visible=true').first();
   await mark(2, 'opens');
   await ring(gameCard, 8);
   await dwell(0.7);
@@ -93,10 +132,20 @@ test('capture annotate tutorial footage', async ({ browser }) => {
     const vb = await vid.boundingBox();
     await page.mouse.move(vb.x + vb.width / 2, vb.y + vb.height / 2, { steps: 10 });
     await dwell(0.4);
+    // scrub toward the play we're reconstituting, then snap to its exact start
+    const frac = await page.evaluate((t) => {
+      const v = document.querySelector('video');
+      return v && v.duration ? t / v.duration : 0.2;
+    }, ORIG.start_time);
     const bar = page.locator('div.bg-gray-700.cursor-pointer').first();  // TimelineBase track
     const bb = await bar.boundingBox({ timeout: 5000 });
     const y = bb.y + bb.height / 2;
-    await drag(bb.x + bb.width * 0.30, y, bb.x + bb.width * 0.48, y, 35);
+    await drag(bb.x + bb.width * Math.max(0.02, frac - 0.08), y,
+               bb.x + bb.width * frac, y, 35);
+    await page.evaluate((t) => {
+      const v = document.querySelector('video');
+      if (v) { v.currentTime = t; v.pause(); }
+    }, ORIG.start_time);
   } catch { step('scrub skipped'); }
   await dwell(3);
 
@@ -147,15 +196,14 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   // --- line 9: rating, tags, note ---------------------------------------------------------------------
   step('rating/tags/note');
   await mark(9, 'rating');
-  try { await act(page.locator('button[title="4 stars"]').first()); } catch {}
+  try { await act(page.locator(`button[title="${ORIG.rating} stars"]`).first()); } catch {}
   await dwell(0.5);
-  for (const tag of ['Pass', 'Dribble']) {
+  for (const tag of ORIG.tags) {
     try { await act(page.getByRole('button', { name: tag, exact: true }).first()); } catch {}
     await dwell(0.4);
   }
   try {
-    await typeInto(page.getByPlaceholder('Add a note about this clip...'),
-      'Great vision to start the counter');
+    await typeInto(page.getByPlaceholder('Add a note about this clip...'), ORIG.notes);
   } catch { step('note skipped'); }
   await dwell(0.8);
 
@@ -263,25 +311,39 @@ test('capture annotate tutorial footage', async ({ browser }) => {
   // --- end ----------------------------------------------------------------------
   await finishCapture(context, page, kit, QUEST_DIR, { width: W, height: H });
 
-  // --- cleanup: delete the demo clip + its reel draft (not recorded) ---------------
+  // --- teardown: NO FOOTPRINT (restore the account to its pre-shoot state) --------
+  // The demo creates a fresh "Brilliant Assist" clip via Add Clip on every run (the
+  // original 17'33 clip was removed for the shoot). Delete every such clip + its
+  // auto-project so nothing accumulates, and drop any 0-clip "Brilliant Assist"
+  // orphan draft. Idempotent: 404s from already-clean state are ignored.
   const api = await browser.newContext({ baseURL: BASE });
   try {
     await loginAsRealUser(api, 'imankh@gmail.com');
-    // Delete the demo clip AND the auto-reel it created. Match the reel by the
-    // clip's auto_project_id (the reel THIS run created), never by name — a name
-    // match could nuke a pre-existing user reel that happens to share CLIP_NAME.
-    // This runs against the REAL imankh account.
-    const clips = await (await api.request.get('/api/clips/raw')).json();
+    // 1. delete the demo raw clip(s) for THIS shoot game and the auto-reel each made.
+    //    Match the reel by the clip's auto_project_id (never by name — a name match
+    //    could nuke a pre-existing user reel). Deleting an un-exported clip also
+    //    cascades to its pristine auto-project (see clips.py _delete_auto_project), but
+    //    the explicit by-id delete also covers an exported reel the cascade would skip.
+    const clips = await (await api.request.get(`/api/clips/raw?game_id=${GAME_ID}`)).json();
     for (const c of (Array.isArray(clips) ? clips : []).filter(c => c.name === CLIP_NAME)) {
       if (c.auto_project_id) {
-        await api.request.delete(`/api/projects/${c.auto_project_id}`);
-        console.log(`[cleanup] deleted reel draft ${c.auto_project_id} (auto-reel for clip ${c.id})`);
+        const rp = await api.request.delete(`/api/projects/${c.auto_project_id}`);
+        console.log(`[teardown] deleted auto-reel ${c.auto_project_id} for clip ${c.id} (${rp.status()})`);
       }
-      await api.request.delete(`/api/clips/raw/${c.id}`);
-      console.log(`[cleanup] deleted raw clip ${c.id} (${c.name})`);
+      const r = await api.request.delete(`/api/clips/raw/${c.id}`);
+      console.log(`[teardown] deleted demo clip ${c.id} (${r.status()})`);
     }
+    // 2. drop any leftover 0-clip "Brilliant Assist" draft (e.g. legacy orphan 34).
+    //    Harmless if T4800 already cleaned it.
+    const projects = await (await api.request.get('/api/projects')).json();
+    for (const p of (Array.isArray(projects) ? projects : [])
+      .filter(p => p.name === CLIP_NAME && (p.clip_count ?? 0) === 0)) {
+      const r = await api.request.delete(`/api/projects/${p.id}`);
+      console.log(`[teardown] deleted 0-clip orphan draft ${p.id} (${r.status()})`);
+    }
+    console.log('[teardown] account restored to pre-shoot state');
   } catch (e) {
-    console.log(`[cleanup] skipped: ${e.message}`);
+    console.log(`[teardown] failed: ${e.message}`);
   } finally {
     await api.close();
   }

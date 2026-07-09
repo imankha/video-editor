@@ -8,6 +8,9 @@ import { SharedVideoOverlay } from './components/SharedVideoOverlay';
 import { SharedAnnotationView } from './components/SharedAnnotationView';
 import { SharedCollectionView } from './components/SharedCollectionView';
 import { QuestPanel } from './components/QuestPanel';
+import { TutorialVideoModal } from './components/TutorialVideoModal';
+import { useTutorialStore } from './stores/useTutorialStore';
+import { getTutorialAssets } from './config/tutorialVideos';
 import { ReportProblemButton } from './components/ReportProblemButton';
 import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
@@ -102,6 +105,11 @@ function App() {
   const overlayChangedSinceExport = useOverlayStore(state => state.overlayChangedSinceExport);
 
   const isMobile = useIsMobile();
+
+  // T4780: Tutorial video modal — read open quest from store, derive assets
+  const openQuestId = useTutorialStore((s) => s.openQuestId);
+  const closeTutorial = useTutorialStore((s) => s.closeTutorial);
+  const tutorialAssets = openQuestId ? getTutorialAssets(openQuestId) : null;
 
   // Clip data for "Edit in Annotate" button - single source of truth from projectDataStore
   const selectedClipId = useProjectDataStore(state => state.selectedClipId);
@@ -703,6 +711,10 @@ function App() {
         {isAdmin && <AdminButton onClick={() => setEditorMode(EDITOR_MODES.ADMIN)} />}
         {/* T1780: Shared video overlay */}
         {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
+        {/* T4780: Tutorial video modal — also available on home screen */}
+        {openQuestId && tutorialAssets && (
+          <TutorialVideoModal questId={openQuestId} assets={tutorialAssets} onClose={closeTutorial} />
+        )}
       </>
     );
   }
@@ -828,6 +840,15 @@ function App() {
 
       {/* T1780: Shared video overlay */}
       {sharedToken && <SharedVideoOverlay shareToken={sharedToken} onClose={handleCloseShared} />}
+
+      {/* T4780: Tutorial video modal — mounted once here, opened via useTutorialStore */}
+      {openQuestId && tutorialAssets && (
+        <TutorialVideoModal
+          questId={openQuestId}
+          assets={tutorialAssets}
+          onClose={closeTutorial}
+        />
+      )}
 
     </div>
     </AppStateProvider>

@@ -80,6 +80,52 @@ export const OVERLAY_INIT = `(() => {
       (document.fullscreenElement || document.documentElement).appendChild(ring);
     },
     clearRing() { if (ring) { ring.remove(); ring = null; } },
+    // Fake native-<select> dropdown (the OS popup can't be screen-recorded). Renders
+    // a white option list anchored above a pill, matching the browser's own styling.
+    // sports: [{id,name,emoji}], currentId marks the checked row. Returns nothing;
+    // query row centers with sportRowXY(id).
+    openSportMenu(pill, sports, currentId) {
+      this.closeSportMenu();
+      const W = 232, ROW = 38, PAD = 6;
+      const menuH = PAD * 2 + sports.length * ROW + ROW;   // +1 for "Other..."
+      const right = pill.x + pill.w;
+      const left = right - W;
+      const bottom = pill.y - 4;                            // opens upward, above the pill
+      const top = Math.max(4, bottom - menuH);
+      const m = document.createElement('div');
+      m.id = '__tut-sportmenu';
+      m.style.cssText = 'position:fixed;z-index:2147482700;pointer-events:none;' +
+        \`left:\${left}px;top:\${top}px;width:\${W}px;background:#fff;\` +
+        'border:1px solid #b0b0b0;border-radius:5px;box-shadow:0 6px 22px rgba(0,0,0,.45);' +
+        \`padding:\${PAD}px 0;font-family:Arial,system-ui,sans-serif;overflow:hidden;\`;
+      const mkRow = (emoji, name, id, isOther) => {
+        const r = document.createElement('div');
+        r.dataset.sid = id || '';
+        r.style.cssText = 'display:flex;align-items:center;gap:11px;' +
+          \`height:\${ROW}px;padding:0 16px;font-size:18px;color:#1a1a1a;white-space:nowrap;\`;
+        if (isOther) { r.style.background = '#2f6fed'; r.style.color = '#fff'; r.textContent = name; }
+        else { r.innerHTML = '<span style="font-size:19px;width:22px;text-align:center">' +
+          emoji + '</span><span>' + name + '</span>'; }
+        return r;
+      };
+      for (const s of sports) m.appendChild(mkRow(s.emoji, s.name, s.id, false));
+      m.appendChild(mkRow('', 'Other...', '__other', true));
+      (document.fullscreenElement || document.documentElement).appendChild(m);
+    },
+    sportRowXY(id) {
+      const m = document.getElementById('__tut-sportmenu'); if (!m) return null;
+      const r = m.querySelector('[data-sid="' + id + '"]'); if (!r) return null;
+      const b = r.getBoundingClientRect();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    },
+    highlightSportRow(id) {
+      const m = document.getElementById('__tut-sportmenu'); if (!m) return;
+      const r = m.querySelector('[data-sid="' + id + '"]');
+      if (r) r.style.background = '#e6effc';
+    },
+    closeSportMenu() {
+      const m = document.getElementById('__tut-sportmenu'); if (m) m.remove();
+    },
   };
 })();`;
 
@@ -103,6 +149,23 @@ export function makeKit(page) {
         { x: b.x - pad, y: b.y - pad, w: b.width + 2 * pad, h: b.height + 2 * pad });
     },
     clearRing: () => page.evaluate(() => window.__tut.clearRing()),
+    // Fake sport dropdown driver (see OVERLAY_INIT). `pill` is the pill locator.
+    async openSportMenu(pillLocator, sports, currentId) {
+      const b = await pillLocator.boundingBox();
+      await page.evaluate(({ pill, sports, currentId }) =>
+        window.__tut.openSportMenu(pill, sports, currentId),
+        { pill: { x: b.x, y: b.y, w: b.width, h: b.height }, sports, currentId });
+    },
+    async pickSportRow(id) {                    // move cursor to a row + ripple + highlight
+      const xy = await page.evaluate((i) => window.__tut.sportRowXY(i), id);
+      if (xy) {
+        await page.mouse.move(xy.x, xy.y, { steps: 20 });
+        await page.mouse.down(); await page.mouse.up();   // ripple, no real target
+        await page.evaluate((i) => window.__tut.highlightSportRow(i), id);
+      }
+      return xy;
+    },
+    closeSportMenu: () => page.evaluate(() => window.__tut.closeSportMenu()),
     async act(locator) {
       const b = await locator.boundingBox();
       if (b) await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 22 });

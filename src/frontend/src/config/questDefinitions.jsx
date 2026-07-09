@@ -10,8 +10,9 @@
  * terminal buttons: "Export" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle } from 'lucide-react';
+import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle, Video } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
+import { useTutorialStore } from '../stores/useTutorialStore';
 
 /** Inline icon — small version of the actual UI icon, styled to sit inline with text */
 function QIcon({ icon: IconComponent, className = 'text-gray-300' }) {
@@ -43,6 +44,29 @@ function navigateToReelDrafts() {
     window.history.pushState({ mode: 'project-manager' }, '', '/home');
   }
   window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/** Maps each tutorial "watch" step to its quest so the modal can be relaunched
+ *  after the step is already complete (see QuestPanel "Watch again"). */
+export const TUTORIAL_STEP_QUEST = {
+  watch_annotate_tutorial: 'quest_1',
+  watch_framing_tutorial: 'quest_2',
+  watch_overlay_tutorial: 'quest_3',
+  watch_publish_tutorial: 'quest_4',
+};
+
+/** "Watch tutorial" button — opens TutorialVideoModal for the quest's video */
+export function WatchTutorialButton({ questId, label = 'Watch tutorial' }) {
+  return (
+    <button
+      type="button"
+      onClick={() => useTutorialStore.getState().openTutorial(questId)}
+      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-purple-400 border border-purple-500/50 hover:bg-purple-500/10 transition-colors cursor-pointer"
+    >
+      <QIcon icon={Video} className="text-purple-400" />
+      {label}
+    </button>
+  );
 }
 
 /** Clickable "Open your reel" pill — styled like the cyan section buttons */
@@ -105,6 +129,11 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
+  // Quest tutorial steps — T4780
+  watch_annotate_tutorial: 'Watch Annotate Tutorial',
+  watch_framing_tutorial: 'Watch Framing Tutorial',
+  watch_overlay_tutorial: 'Watch Overlay Tutorial',
+  watch_publish_tutorial: 'Watch Publish Tutorial',
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
   add_clip: 'Find an Amazing Play',
@@ -130,6 +159,11 @@ export const STEP_TITLES = {
 
 /** Step descriptions keyed by step ID — JSX with inline icons */
 export const STEP_DESCRIPTIONS = {
+  // Quest tutorial steps — T4780
+  watch_annotate_tutorial: <><WatchTutorialButton questId="quest_1" /> Watch how to clip your best plays from a game.</>,
+  watch_framing_tutorial: <><WatchTutorialButton questId="quest_2" /> Watch how to crop and upscale your highlight.</>,
+  watch_overlay_tutorial: <><WatchTutorialButton questId="quest_3" /> Watch how to spotlight your player on the highlight.</>,
+  watch_publish_tutorial: <><WatchTutorialButton questId="quest_4" /> Watch how to publish your finished reel.</>,
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
   add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,

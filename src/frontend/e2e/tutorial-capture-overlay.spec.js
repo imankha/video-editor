@@ -30,49 +30,62 @@ test('capture overlay tutorial footage', async ({ browser }) => {
   const { mark, ring, clearRing, act, drag, dwell, step, videosReady, pauseVideos } = kit;
   let playerPos = null;                        // where the assigned player is on screen
 
-  // --- line 0: intro -------------------------------------------------------------
+  // --- PRE-ROLL (excluded from the roughcut: everything before mark(0) is cut) --
+  // stage the highlight shape to BODY (persists per draft) and warm the editor
+  step('pre-roll: set shape to Body');
   await page.goto('/');
   await page.waitForLoadState('domcontentloaded');
   await page.getByRole('button', { name: 'Reel Drafts' }).click();
+  const overlayChip = page.getByTitle(/^Overlay: .*\(click to open\)/).first();
+  const openBtn = page.getByTitle('Open in Overlay').first();
+  let target = overlayChip;
+  try { await overlayChip.waitFor({ timeout: 4000 }); } catch { target = openBtn; }
+  await target.click();
+  const marker = page.getByTitle(/Click to (assign|revisit)/).first();
+  await marker.waitFor({ timeout: 90000 });
+  try {
+    const bodyBtn = page.getByRole('button', { name: 'Body', exact: true }).first();
+    await bodyBtn.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await bodyBtn.click();
+    await dwell(0.8);
+  } catch { step('pre-roll Body click failed'); }
+  await page.getByText('Reel Drafts', { exact: true }).first().click();  // breadcrumb home
+  await page.getByRole('button', { name: /^In Overlay \(|^All \(/ }).first()
+    .waitFor({ timeout: 15000 }).catch(() => {});
+  await dwell(1);
+
+  // --- line 0: intro -------------------------------------------------------------
   await page.mouse.move(960, 420);
   await mark(0);                               // "Next, add a spotlight..."
   await dwell(2.5);
 
   // --- line 1: open your reel in Overlay mode ---------------------------------------
   step('open overlay');
-  try { await page.getByRole('button', { name: /^In Overlay \(/ }).click(); } catch {}
-  await dwell(1);
-  const overlayChip = page.getByTitle(/^Overlay: .*\(click to open\)/).first();
-  const openBtn = page.getByTitle('Open in Overlay').first();
-  let target = overlayChip;
-  try { await overlayChip.waitFor({ timeout: 4000 }); } catch { target = openBtn; }
+  await target.waitFor({ timeout: 8000 });
   await ring(target, 10);
   await dwell(1);
   await mark(1, 'Overlay');
   await act(target);
   await clearRing();
   step('waiting for overlay editor + detection');
-  const marker = page.getByTitle(/Click to (assign|revisit)/).first();
   await marker.waitFor({ timeout: 90000 });
   await videosReady(1, 45000);
   await pauseVideos();                        // boxes only render while ON a detection frame
-  // scroll so the video AND the tracker/timeline layers are both on screen
-  await page.mouse.move(960, 500);
-  for (let i = 0; i < 2; i++) { await page.mouse.wheel(0, 180); await dwell(0.25); }
-  await dwell(0.5);
-
-  // land on a detection frame BEFORE the line starts, so the green boxes are
-  // already visible while "automatically detects the players" is narrated
-  const boxSel = '[class*="pointer-events-auto"][class*="cursor-pointer"]';
-  try {
-    await act(marker);                         // seeks to the frame; boxes guaranteed
-    await page.locator(boxSel).first().waitFor({ timeout: 8000 });
-    await dwell(0.6);
-  } catch { step('detection frame seek failed'); }
 
   // --- line 2: loads working video + auto-detects players -----------------------------
+  // show the TOP first (the "Overlay" tab is visible), then scroll just enough to
+  // see the video + the player-tracker layer together — no more scrolling until line 8
+  const boxSel = '[class*="pointer-events-auto"][class*="cursor-pointer"]';
   await mark(2);
-  await dwell(4.2);
+  await dwell(1.2);
+  await page.mouse.move(960, 500);
+  await page.mouse.wheel(0, 240);
+  await dwell(0.4);
+  try {
+    await act(marker);                         // land on a detection frame -> green boxes
+    await page.locator(boxSel).first().waitFor({ timeout: 8000 });
+  } catch { step('detection frame seek failed'); }
+  await dwell(2.2);
 
   // --- line 3: green markers along the timeline ----------------------------------------
   await mark(3, 'markers');
@@ -111,7 +124,6 @@ test('capture overlay tutorial footage', async ({ browser }) => {
   await mark(6, 'tracker');
   try {                                        // the tracker layer's crosshair toggle
     const trackerToggle = page.getByTitle('Hide player boxes').first();
-    await trackerToggle.scrollIntoViewIfNeeded({ timeout: 4000 });
     await ring(trackerToggle, 8);
     await dwell(1);
     await act(trackerToggle);
@@ -133,14 +145,15 @@ test('capture overlay tutorial footage', async ({ browser }) => {
   await pauseVideos();
 
   // --- line 8: overlay settings -------------------------------------------------------------------
+  // second (and last) scroll: bottom of the video + the Add Spotlight button visible
   step('settings');
   await mark(8);
+  await page.mouse.move(960, 500);
+  await page.mouse.wheel(0, 380);
+  await dwell(0.5);
   const settings = page.getByText('Overlay Settings').first();
-  try {
-    await settings.scrollIntoViewIfNeeded({ timeout: 4000 });
-    await ring(settings, 14);
-  } catch {}
-  await dwell(2.5);
+  try { await ring(settings, 14); } catch {}
+  await dwell(2);
   await clearRing();
 
   // --- line 9: pick a highlight color ------------------------------------------------------------------

@@ -50,6 +50,21 @@ export function formatTimeCompact(seconds) {
 }
 
 /**
+ * Format seconds to clock notation M:SS (or H:MM:SS past an hour) for player
+ * time displays — e.g. 62.3 -> "1:02". No decimals, unlike formatTimeCompact.
+ */
+export function formatClock(seconds) {
+  if (isNaN(seconds) || seconds < 0) return '0:00';
+  const total = Math.floor(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const ss = String(s).padStart(2, '0');
+  if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${ss}`;
+  return `${m}:${ss}`;
+}
+
+/**
  * Soccer game-clock notation: MM'SS" from a clip's unified in-match start (T3920).
  *
  * True elapsed time, NOT the "Nth minute" floor()+1 form used for minute-only
