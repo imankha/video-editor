@@ -4,6 +4,7 @@ import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';
 import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
 import { useQuestStore } from '../stores/questStore';
+import { formatClock } from '../utils/timeFormat';
 
 const QUEST_ACHIEVEMENT_KEY = {
   quest_1: 'watched_annotate_tutorial',
@@ -12,7 +13,8 @@ const QUEST_ACHIEVEMENT_KEY = {
   quest_4: 'watched_publish_tutorial',
 };
 
-const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const PLAYBACK_RATES = [0.5, 0.85, 1, 1.25, 1.5, 2];
+const DEFAULT_RATE = 0.85;
 
 // Minimum leftover viewport height (video box already subtracted) needed to
 // place the caption strip below the player instead of overlaying the video.
@@ -58,7 +60,7 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
 
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(0.75);
+  const [playbackRate, setPlaybackRate] = useState(DEFAULT_RATE);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [chapters, setChapters] = useState([]);
   const [captionText, setCaptionText] = useState('');
@@ -256,9 +258,9 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     handlers.onLoadedMetadata(e);
     const v = videoRef.current;
     if (!v) return;
-    // Set default playback rate to 0.75
-    v.playbackRate = 0.75;
-    setPlaybackRate(0.75);
+    // Set default playback rate
+    v.playbackRate = DEFAULT_RATE;
+    setPlaybackRate(DEFAULT_RATE);
     // Subtitles: keep the track 'hidden' so the browser parses cues (populating
     // activeCues) WITHOUT rendering them natively — we render captions ourselves
     // so they can sit below the video or clear the control bar when overlaid.
@@ -403,6 +405,7 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
           onToggleSubtitles={handleToggleSubtitles}
           chapters={chapters}
           onSeekChapter={handleSeekChapter}
+          formatTime={formatClock}
         />
 
         {/* Big play button (when paused and loaded) */}

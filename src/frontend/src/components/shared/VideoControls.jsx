@@ -46,7 +46,7 @@ function SpeedMenu({ rates, playbackRate, onPlaybackRate }) {
 }
 
 /** Chapter menu — tap-friendly popup list of chapter titles */
-function ChapterMenu({ chapters, onSeekChapter }) {
+function ChapterMenu({ chapters, onSeekChapter, formatTime = formatTimeCompact }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -78,7 +78,7 @@ function ChapterMenu({ chapters, onSeekChapter }) {
               onClick={() => { onSeekChapter?.(ch.startTime); setOpen(false); }}
               className="block w-full text-left px-3 py-2 text-sm text-white hover:bg-white/10 transition-colors truncate"
             >
-              <span className="text-white/50 mr-2 tabular-nums">{formatTimeCompact(ch.startTime)}</span>
+              <span className="text-white/50 mr-2 tabular-nums">{formatTime(ch.startTime)}</span>
               {ch.title}
             </button>
           ))}
@@ -121,6 +121,7 @@ export function VideoControls({
   onToggleSubtitles, // () => void
   chapters,          // [{startTime, title}] — absent or [] = no chapter UI
   onSeekChapter,     // (startTime) => void
+  formatTime = formatTimeCompact, // time display formatter; default keeps existing decimal-seconds
 }) {
   const videoProgress = duration > 0 ? (currentTime / duration) * 100 : 0;
   const timelineRef = useRef(null);
@@ -217,7 +218,7 @@ export function VideoControls({
   };
 
   const hoverSeconds = duration > 0 ? (hoverPercent / 100) * duration : 0;
-  const hoverTime = formatTimeCompact(hoverSeconds);
+  const hoverTime = formatTime(hoverSeconds);
   // Chapter the hovered position falls into = last chapter starting at/before it
   const hoverChapter = chapters?.length > 0
     ? chapters.reduce((acc, ch) => (hoverSeconds >= ch.startTime ? ch : acc), null)
@@ -367,7 +368,7 @@ export function VideoControls({
 
           {/* Time */}
           <span className={`text-white font-mono select-none ${IS_COARSE ? 'text-xs ml-1' : 'text-sm ml-2'}`}>
-            {formatTimeCompact(currentTime)}<span className="text-white/60"> / {formatTimeCompact(duration)}</span>
+            {formatTime(currentTime)}<span className="text-white/60"> / {formatTime(duration)}</span>
           </span>
         </div>
 
@@ -375,7 +376,7 @@ export function VideoControls({
         <div className={`flex items-center ${IS_COARSE ? 'gap-3' : 'gap-1'}`}>
           {/* Chapter menu (only when chapters present) */}
           {chapters?.length > 0 && (
-            <ChapterMenu chapters={chapters} onSeekChapter={onSeekChapter} />
+            <ChapterMenu chapters={chapters} onSeekChapter={onSeekChapter} formatTime={formatTime} />
           )}
 
           {/* CC toggle (only when hasSubtitles) */}
