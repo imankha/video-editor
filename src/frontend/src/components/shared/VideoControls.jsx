@@ -216,7 +216,12 @@ export function VideoControls({
     volumeTimeoutRef.current = setTimeout(() => setShowVolumeSlider(false), 300);
   };
 
-  const hoverTime = duration > 0 ? formatTimeCompact((hoverPercent / 100) * duration) : '0:00';
+  const hoverSeconds = duration > 0 ? (hoverPercent / 100) * duration : 0;
+  const hoverTime = formatTimeCompact(hoverSeconds);
+  // Chapter the hovered position falls into = last chapter starting at/before it
+  const hoverChapter = chapters?.length > 0
+    ? chapters.reduce((acc, ch) => (hoverSeconds >= ch.startTime ? ch : acc), null)
+    : null;
   const active = isHovering || isDragging;
 
   return (
@@ -280,16 +285,19 @@ export function VideoControls({
           ))}
         </div>
 
-        {/* Hover time tooltip */}
+        {/* Hover tooltip — chapter name (when present) above the time */}
         {active && !isDragging && (
           <div
-            className="absolute bottom-full mb-1 px-2 py-0.5 bg-black/90 text-white text-xs rounded pointer-events-none whitespace-nowrap"
+            className="absolute bottom-full mb-1 px-2 py-0.5 bg-black/90 text-white text-xs rounded pointer-events-none flex flex-col items-center gap-0.5"
             style={{
               left: `clamp(24px, ${hoverPercent}%, calc(100% - 24px))`,
               transform: 'translateX(-50%)',
             }}
           >
-            {hoverTime}
+            {hoverChapter && (
+              <span className="max-w-[220px] truncate text-white/90">{hoverChapter.title}</span>
+            )}
+            <span className="tabular-nums whitespace-nowrap">{hoverTime}</span>
           </div>
         )}
       </div>

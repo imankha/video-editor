@@ -3,7 +3,7 @@ import { ListChecks, Check, Gem, ChevronRight, ChevronDown, ChevronUp } from 'lu
 import { useQuestStore } from '../stores/questStore';
 import { useEditorStore } from '../stores/editorStore';
 import { useAuthStore } from '../stores/authStore';
-import { STEP_TITLES, STEP_DESCRIPTIONS } from '../config/questDefinitions.jsx';
+import { STEP_TITLES, STEP_DESCRIPTIONS, WatchTutorialButton, TUTORIAL_STEP_QUEST } from '../config/questDefinitions.jsx';
 import { toast } from './shared/Toast';
 
 import exportWebSocketManager from '../services/ExportWebSocketManager';
@@ -322,6 +322,12 @@ export function QuestPanel({ inline = false }) {
                         <p className="quest-step-description text-sm mt-1 leading-snug">
                           {STEP_DESCRIPTIONS[stepId]}
                         </p>
+                      )}
+                      {/* Tutorial steps stay relaunchable even after completion */}
+                      {done && TUTORIAL_STEP_QUEST[stepId] && (
+                        <div className="mt-1">
+                          <WatchTutorialButton questId={TUTORIAL_STEP_QUEST[stepId]} label="Watch again" />
+                        </div>
                       )}
                       {/* Per-detection progress: one box per detected frame, ordered left-to-right
                           to match the timeline markers so a gap shows which one was missed. */}

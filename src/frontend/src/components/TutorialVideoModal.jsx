@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Play, X } from 'lucide-react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';
@@ -14,6 +14,10 @@ const QUEST_ACHIEVEMENT_KEY = {
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
+// Minimum leftover viewport height (video box already subtracted) needed to
+// place the caption strip below the player instead of overlaying the video.
+const CAPTION_ROOM_THRESHOLD = 120;
+
 function findTrackByKind(video, kind) {
   for (let i = 0; i < video.textTracks.length; i++) {
     if (video.textTracks[i].kind === kind) return video.textTracks[i];
@@ -25,6 +29,13 @@ function readChapterCues(video) {
   const chapTrack = findTrackByKind(video, 'chapters');
   if (!chapTrack || !chapTrack.cues || chapTrack.cues.length === 0) return [];
   return Array.from(chapTrack.cues).map((c) => ({ startTime: c.startTime, title: c.text }));
+}
+
+/** Active subtitle text, tags stripped, cues joined by newline. */
+function readActiveCaption(track) {
+  const cues = track?.activeCues;
+  if (!cues || cues.length === 0) return '';
+  return Array.from(cues).map((c) => c.text).join('\n').replace(/<[^>]+>/g, '');
 }
 
 /**
@@ -42,12 +53,16 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
   const isTouchRef = useRef(false);
   const hideControlsTimeoutRef = useRef(null);
   const chapCleanupRef = useRef(null);
+  const subCleanupRef = useRef(null);
+  const autoPlayedRef = useRef(false);
 
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(0.75);
   const [subtitlesOn, setSubtitlesOn] = useState(true);
   const [chapters, setChapters] = useState([]);
+  const [captionText, setCaptionText] = useState('');
+  const [roomBelow, setRoomBelow] = useState(false);
 
   // videoRef comes from the hook — all playback controls (togglePlay, seek, etc.)
   // read this same ref internally. Attaching it to <video> wires everything together.
@@ -60,6 +75,7 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     isMuted,
     hasAudio,
     isLoading,
+    play,
     togglePlay,
     seek,
     seekForward,
@@ -153,6 +169,22 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Place subtitles below the player when the viewport has vertical room for a
+  // caption strip; otherwise overlay them on the video (above the controls).
+  // Never below in fullscreen — the strip lives outside the fullscreened box.
+  useLayoutEffect(() => {
+    if (isFullscreen) { setRoomBelow(false); return; }
+    const measure = () => {
+      const box = containerRef.current;
+      if (!box) return;
+      const boxHeight = box.getBoundingClientRect().height;
+      setRoomBelow(window.innerHeight - boxHeight >= CAPTION_ROOM_THRESHOLD);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [isFullscreen]);
+
   // Auto-hide controls during playback
   const scheduleHideControls = useCallback(() => {
     if (hideControlsTimeoutRef.current) clearTimeout(hideControlsTimeoutRef.current);
@@ -189,16 +221,22 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     togglePlay();
   }, [togglePlay, showControls, scheduleHideControls]);
 
-  // Subtitles toggle
+  // Subtitles toggle — the track stays 'hidden' (so cues keep parsing); this
+  // only flips whether we render our own caption element.
   const handleToggleSubtitles = useCallback(() => {
-    if (!videoRef.current) return;
-    const track = findTrackByKind(videoRef.current, 'subtitles');
-    if (track) {
-      const next = !subtitlesOn;
-      track.mode = next ? 'showing' : 'hidden';
-      setSubtitlesOn(next);
+    setSubtitlesOn((on) => !on);
+  }, []);
+
+  // Autoplay once the video is ready. The modal opens from a user click, so this
+  // play() is within the activation window; if the browser still blocks it, the
+  // big play button remains for the user to start it manually.
+  const handleCanPlay = useCallback((e) => {
+    handlers.onCanPlay(e);
+    if (!autoPlayedRef.current) {
+      autoPlayedRef.current = true;
+      play();
     }
-  }, [subtitlesOn]);
+  }, [handlers, play]);
 
   // Playback rate change
   const handlePlaybackRate = useCallback((rate) => {
@@ -221,10 +259,16 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     // Set default playback rate to 0.75
     v.playbackRate = 0.75;
     setPlaybackRate(0.75);
-    // Enable subtitles
+    // Subtitles: keep the track 'hidden' so the browser parses cues (populating
+    // activeCues) WITHOUT rendering them natively — we render captions ourselves
+    // so they can sit below the video or clear the control bar when overlaid.
     const subTrack = findTrackByKind(v, 'subtitles');
     if (subTrack) {
-      subTrack.mode = 'showing';
+      subTrack.mode = 'hidden';
+      const onSubCue = () => setCaptionText(readActiveCaption(subTrack));
+      subTrack.addEventListener('cuechange', onSubCue);
+      onSubCue();
+      subCleanupRef.current = () => subTrack.removeEventListener('cuechange', onSubCue);
     }
     setSubtitlesOn(true);
     // Read chapter cues (may not be loaded yet)
@@ -253,9 +297,9 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     }
   }, [handlers]);
 
-  // Cleanup chapter cuechange listener on unmount
+  // Cleanup chapter + subtitle cuechange listeners on unmount
   useEffect(() => {
-    return () => { chapCleanupRef.current?.(); };
+    return () => { chapCleanupRef.current?.(); subCleanupRef.current?.(); };
   }, []);
 
   // onTimeUpdate: call original + check 80% completion
@@ -275,10 +319,15 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
       className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
       onClick={handleClose}
     >
-      {/* Modal container — stops backdrop click from propagating through */}
+      {/* Column wrapper: player + optional caption strip below it */}
+      <div
+        className="w-full max-w-4xl mx-4 flex flex-col items-stretch"
+        onClick={(e) => e.stopPropagation()}
+      >
+      {/* Modal container — the fullscreen target */}
       <div
         ref={containerRef}
-        className="relative w-full max-w-4xl mx-4 aspect-video bg-black rounded-lg overflow-hidden shadow-2xl"
+        className="relative w-full aspect-video bg-black rounded-lg overflow-hidden shadow-2xl"
         style={{ WebkitTapHighlightColor: 'transparent' }}
         onClick={(e) => {
           e.stopPropagation();
@@ -311,10 +360,20 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
           {...handlers}
           onLoadedMetadata={handleLoadedMetadata}
           onTimeUpdate={handleTimeUpdate}
+          onCanPlay={handleCanPlay}
         >
-          <track kind="subtitles" srcLang="en" label="English" src={assets.vttUrl} default />
+          <track kind="subtitles" srcLang="en" label="English" src={assets.vttUrl} />
           <track kind="chapters" src={assets.chaptersUrl} />
         </video>
+
+        {/* Overlaid captions — only when there's no room for a strip below */}
+        {subtitlesOn && captionText && !roomBelow && (
+          <div className="absolute inset-x-0 bottom-16 flex justify-center px-4 pointer-events-none z-30">
+            <span className="max-w-[90%] text-center text-white text-sm sm:text-base bg-black/70 rounded px-2 py-1 whitespace-pre-line leading-snug">
+              {captionText}
+            </span>
+          </div>
+        )}
 
         {/* Loading overlay */}
         {isLoading && <VideoLoadingOverlay simple />}
@@ -361,6 +420,16 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Caption strip below the player — reserves a stable line when there's room */}
+      {subtitlesOn && roomBelow && (
+        <div className="mt-2 rounded-lg bg-black/90 px-4 py-3 min-h-[3.25rem] flex items-center justify-center">
+          <span className="text-center text-white text-sm sm:text-base whitespace-pre-line leading-snug">
+            {captionText}
+          </span>
+        </div>
+      )}
       </div>
     </div>
   );

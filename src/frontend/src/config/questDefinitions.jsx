@@ -46,8 +46,17 @@ function navigateToReelDrafts() {
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
+/** Maps each tutorial "watch" step to its quest so the modal can be relaunched
+ *  after the step is already complete (see QuestPanel "Watch again"). */
+export const TUTORIAL_STEP_QUEST = {
+  watch_annotate_tutorial: 'quest_1',
+  watch_framing_tutorial: 'quest_2',
+  watch_overlay_tutorial: 'quest_3',
+  watch_publish_tutorial: 'quest_4',
+};
+
 /** "Watch tutorial" button — opens TutorialVideoModal for the quest's video */
-function WatchTutorialButton({ questId }) {
+export function WatchTutorialButton({ questId, label = 'Watch tutorial' }) {
   return (
     <button
       type="button"
@@ -55,7 +64,7 @@ function WatchTutorialButton({ questId }) {
       className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-purple-400 border border-purple-500/50 hover:bg-purple-500/10 transition-colors cursor-pointer"
     >
       <QIcon icon={Video} className="text-purple-400" />
-      Watch tutorial
+      {label}
     </button>
   );
 }
@@ -121,10 +130,10 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
 /** Step titles keyed by step ID — plain strings */
 export const STEP_TITLES = {
   // Quest tutorial steps — T4780
-  watch_annotate_tutorial: 'Watch the tutorial',
-  watch_framing_tutorial: 'Watch the tutorial',
-  watch_overlay_tutorial: 'Watch the tutorial',
-  watch_publish_tutorial: 'Watch the tutorial',
+  watch_annotate_tutorial: 'Watch Annotate Tutorial',
+  watch_framing_tutorial: 'Watch Framing Tutorial',
+  watch_overlay_tutorial: 'Watch Overlay Tutorial',
+  watch_publish_tutorial: 'Watch Publish Tutorial',
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
   add_clip: 'Find an Amazing Play',
