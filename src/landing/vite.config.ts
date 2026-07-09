@@ -12,6 +12,12 @@ export default defineConfig({
       // would drag the editor's graph into this bundle.
       '@editor': fileURLToPath(new URL('../frontend/src', import.meta.url)),
     },
+    // The @editor files live under src/frontend and import bare deps (react,
+    // lucide-react). Node resolves those relative to the importer, i.e. from
+    // src/frontend/node_modules — which does NOT exist in CI (only src/landing
+    // gets `npm ci`). Dedupe forces them to resolve from THIS app's node_modules
+    // regardless of importer location, so the shared player builds in CI.
+    dedupe: ['react', 'react-dom', 'lucide-react'],
   },
   build: {
     outDir: 'dist',
