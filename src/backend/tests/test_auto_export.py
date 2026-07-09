@@ -5,6 +5,7 @@ Covers every branch in auto_export_game, _export_brilliant_clip, _generate_recap
 _get_annotated_clips, and _set_game_status.
 """
 
+import json
 import sqlite3
 from unittest.mock import MagicMock, patch
 
@@ -842,6 +843,205 @@ class TestGenerateRecap:
         assert "unique video sources" in log_text
         assert "extracted" in log_text
         assert "complete in" in log_text
+
+    @patch(f"{M}.upload_bytes_to_r2", return_value=True)
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_recap_encodes_native_resolution_master_quality(
+        self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
+    ):
+        """T4140: recap segments encode at NATIVE resolution (no 854x480 scale) at
+        master-grade quality (crf 18, non-ultrafast preset), still producing the
+        recap_start/recap_end mapping."""
+        from app.services.auto_export import RECAP_CRF, RECAP_PRESET, _generate_recap
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.filter.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        mock_ffmpeg.probe.return_value = {
+            "format": {"duration": "5.0"},
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}],
+        }
+
+        _generate_recap(USER_ID, PROFILE_ID, 1, self._make_clips())
+
+        # No 480p downscale filter anywhere (uniform native-res -> no normalization).
+        for call in mock_stream.filter.call_args_list:
+            assert call.args[:1] != ("scale",) or call.args[1:] != (854, 480), \
+                f"unexpected 854x480 scale: {call}"
+
+        # The per-clip extract output uses master-grade params, not ultrafast/crf32.
+        extract_kwargs = [
+            c.kwargs for c in mock_stream.output.call_args_list
+            if c.kwargs.get("vcodec") == "libx264"
+        ]
+        assert extract_kwargs, "expected a libx264 extract output"
+        for kw in extract_kwargs:
+            assert kw["crf"] == RECAP_CRF == 18
+            assert kw["preset"] == RECAP_PRESET
+            assert kw["preset"] != "ultrafast"
+            assert kw["movflags"] == "+faststart"
+
+        # Mapping still written with recap offsets.
+        clip_json = json.loads(mock_upload_bytes.call_args[0][2].decode())
+        assert [(c["id"], c["recap_start"], c["recap_end"]) for c in clip_json] == [
+            (1, 0.0, 5.0), (2, 5.0, 10.0),
+        ]
+
+    @patch(f"{M}.upload_bytes_to_r2", return_value=True)
+    @patch(f"{M}.upload_to_r2", return_value=True)
+    @patch(f"{M}.generate_presigned_url_global", return_value="https://r2.example.com/signed")
+    @patch(f"{M}.ffmpeg")
+    def test_recap_mixed_resolution_normalizes_minority_segment(
+        self, mock_ffmpeg, mock_presign, mock_upload, mock_upload_bytes, isolated_profile_db
+    ):
+        """Mixed-resolution multi-source game: concat c=copy needs a uniform
+        resolution, so the minority segment is scaled to the canonical (majority /
+        larger) resolution before concat. Two 1080p clips + one 720p clip ->
+        the 720p clip is scaled to 1920x1080."""
+        from app.services.auto_export import _generate_recap
+
+        mock_stream = MagicMock()
+        mock_ffmpeg.input.return_value = mock_stream
+        mock_stream.filter.return_value = mock_stream
+        mock_stream.output.return_value = mock_stream
+        mock_stream.run.return_value = None
+        # Two 1080p sources (majority) then one 720p source.
+        mock_ffmpeg.probe.side_effect = [
+            {"format": {"duration": "5.0"},
+             "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]},
+            {"format": {"duration": "5.0"},
+             "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]},
+            {"format": {"duration": "3.0"},
+             "streams": [{"codec_type": "video", "width": 1280, "height": 720}]},
+        ]
+        clips = [
+            {"id": 1, "video_hash": "hash_a", "start_time": 0.0, "end_time": 5.0,
+             "name": "A", "rating": 5, "tags": None, "notes": None},
+            {"id": 2, "video_hash": "hash_a", "start_time": 6.0, "end_time": 11.0,
+             "name": "B", "rating": 5, "tags": None, "notes": None},
+            {"id": 3, "video_hash": "hash_b", "start_time": 0.0, "end_time": 3.0,
+             "name": "C", "rating": 4, "tags": None, "notes": None},
+        ]
+
+        _generate_recap(USER_ID, PROFILE_ID, 1, clips)
+
+        scale_calls = [
+            c for c in mock_stream.filter.call_args_list if c.args[:1] == ("scale",)
+        ]
+        # Exactly one segment normalized (the lone 720p clip), scaled to canonical 1080p.
+        assert len(scale_calls) == 1
+        assert scale_calls[0].args == ("scale", 1920, 1080)
+
+    @patch(f"{M}.ffmpeg")
+    @patch(f"{M}.generate_presigned_url", return_value="RECAP_URL")
+    def test_recap_is_legacy_480p_signature(self, mock_presign, mock_ffmpeg, isolated_profile_db):
+        """The backfill's idempotency probe: 854x480 -> legacy (upgrade), native ->
+        already hi-q, unreadable/missing -> None (skip, never crash)."""
+        from app.services.auto_export import _recap_is_legacy_480p
+
+        mock_ffmpeg.probe.return_value = {
+            "streams": [{"codec_type": "video", "width": 854, "height": 480}]}
+        assert _recap_is_legacy_480p(USER_ID, 1) is True
+
+        mock_ffmpeg.probe.return_value = {
+            "streams": [{"codec_type": "video", "width": 1920, "height": 1080}]}
+        assert _recap_is_legacy_480p(USER_ID, 1) is False
+
+        mock_ffmpeg.probe.side_effect = Exception("boom")
+        assert _recap_is_legacy_480p(USER_ID, 1) is None
+
+    def test_recap_is_legacy_480p_missing_recap_returns_none(self, isolated_profile_db):
+        from app.services.auto_export import _recap_is_legacy_480p
+        with patch(f"{M}.generate_presigned_url", return_value=None):
+            assert _recap_is_legacy_480p(USER_ID, 1) is None
+
+
+# ---------------------------------------------------------------------------
+# backfill_hiq_recaps tests
+# ---------------------------------------------------------------------------
+
+class TestBackfillHiqRecaps:
+    def _prepare_game(self, db_path, recap_status="complete", recap_url="recaps/1.mp4"):
+        game_id = _insert_game(db_path, status=recap_status)
+        _insert_clip(db_path, game_id, rating=5)
+        conn = sqlite3.connect(str(db_path))
+        conn.execute(
+            "UPDATE games SET recap_video_url = ? WHERE id = ?", (recap_url, game_id)
+        )
+        conn.commit()
+        conn.close()
+        return game_id
+
+    def _run(self, **kwargs):
+        from app.services.auto_export import backfill_hiq_recaps
+        with patch("app.services.auth_db.get_all_users_for_admin",
+                   return_value=[{"user_id": USER_ID}]), \
+             patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
+             patch("app.database.ensure_database"):
+            return backfill_hiq_recaps(**kwargs)
+
+    @patch(f"{M}._generate_recap", return_value="recaps/1.mp4")
+    @patch(f"{M}._recap_is_legacy_480p", return_value=True)
+    @patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1})
+    def test_upgrades_legacy_recap_when_source_present(
+        self, mock_head, mock_legacy, mock_regen, isolated_profile_db
+    ):
+        game_id = self._prepare_game(isolated_profile_db["db_path"])
+        result = self._run()
+        assert result["upgraded"] == [game_id]
+        assert result["partial"] is False
+        mock_regen.assert_called_once()
+
+    @patch(f"{M}._generate_recap")
+    @patch("app.storage.r2_head_object_global", return_value=None)
+    def test_skips_and_does_not_crash_when_source_gone(
+        self, mock_head, mock_regen, isolated_profile_db
+    ):
+        game_id = self._prepare_game(isolated_profile_db["db_path"])
+        result = self._run()
+        assert result["skipped_gone"] == [game_id]
+        assert result["upgraded"] == []
+        mock_regen.assert_not_called()
+
+    @patch(f"{M}._generate_recap")
+    @patch(f"{M}._recap_is_legacy_480p", return_value=False)
+    @patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1})
+    def test_skips_already_hiq_recap(
+        self, mock_head, mock_legacy, mock_regen, isolated_profile_db
+    ):
+        game_id = self._prepare_game(isolated_profile_db["db_path"])
+        result = self._run()
+        assert result["already_hiq"] == [game_id]
+        mock_regen.assert_not_called()
+
+    @patch(f"{M}._generate_recap", return_value="recaps/x.mp4")
+    @patch(f"{M}._recap_is_legacy_480p", return_value=True)
+    @patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1})
+    def test_limit_throttles_and_reports_partial(
+        self, mock_head, mock_legacy, mock_regen, isolated_profile_db
+    ):
+        self._prepare_game(isolated_profile_db["db_path"])
+        self._prepare_game(isolated_profile_db["db_path"])
+        result = self._run(limit=1)
+        assert len(result["upgraded"]) == 1
+        assert result["partial"] is True
+        assert mock_regen.call_count == 1
+
+    @patch(f"{M}._generate_recap")
+    @patch(f"{M}._recap_is_legacy_480p", return_value=True)
+    @patch("app.storage.r2_head_object_global", return_value={"ContentLength": 1})
+    def test_dry_run_counts_without_regenerating(
+        self, mock_head, mock_legacy, mock_regen, isolated_profile_db
+    ):
+        game_id = self._prepare_game(isolated_profile_db["db_path"])
+        result = self._run(dry_run=True)
+        assert result["upgraded"] == [game_id]
+        assert result["dry_run"] is True
+        mock_regen.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

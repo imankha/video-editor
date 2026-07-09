@@ -45,7 +45,7 @@ graph LR
   DB --> SYNC[sync_export_db_to_r2]
   SYNC -->|overlay only: gate| WS[WS COMPLETE]
 ```
-- **Source resolution (T4175 `resolve_clip_source`, `export_helpers.py`):** framing (`_run_render_background`) and multi-clip both call the shared `resolve_clip_source(clip) -> (url, in_off, out_off, flexible)` instead of inlining the game key. Order, first hit wins, visible-fail on total miss (`SourceUnavailable`, no silent fallback): (1) game video present -> `(game_url, raw_start, raw_end, flexible=True)`; HEAD-probed only when a preserved extract can back a miss (else used directly — unchanged loud-fail); (2) preserved per-clip extract (`raw_clips.filename` set) -> `(raw_clips/{filename}, 0.0, duration, flexible=False)`; (3) recap — **T4140 stub** (`_resolve_recap_source` returns None until T4140 lands). Uploaded multi-clip clips keep their own `raw_clips/{uploaded_filename}` download path. `flexible=False` = frozen bounds (reframe-only, no wider trims).
+- **Source resolution (T4175 `resolve_clip_source`, `export_helpers.py`):** framing (`_run_render_background`) and multi-clip both call the shared `resolve_clip_source(clip) -> (url, in_off, out_off, flexible)` instead of inlining the game key. Order, first hit wins, visible-fail on total miss (`SourceUnavailable`, no silent fallback): (1) game video present -> `(game_url, raw_start, raw_end, flexible=True)`; **T4140: HEAD-probed for EVERY game clip** (the recap is now a universal fallback, so a reclaimed game must fall through — the old "no extract -> skip probe" shortcut is gone; `r2_head_object_global` retries transient blips internally); (2) preserved per-clip extract (`raw_clips.filename` set) -> `(raw_clips/{filename}, 0.0, duration, flexible=False)`; (3) **T4140 recap** (`_resolve_recap_source`, FILLED): downloads `recaps/{game_id}_clips.json`, matches the entry by **raw_clip id** (`clip['raw_clip_id']`, the recap-mapping key — a recap entry's `id` is the raw_clips.id, see games.py `_compute_recap_clips`), returns `(presign(recaps/{game_id}.mp4), recap_start, recap_end, flexible=False)`; None (-> `SourceUnavailable`) when game_id/mapping/entry/recap object missing. Uploaded multi-clip clips keep their own `raw_clips/{uploaded_filename}` download path. `flexible=False` = frozen bounds (reframe-only, no wider trims). This is what lets a T4130 Create-Clip draft (no preserved extract) re-export after the game video is reclaimed.
   - Game clips are keyed `games/{blake3_hash}.mp4` in a GLOBAL (env-prefix-free, not per-user) R2 namespace, fetched via `generate_presigned_url_global` + ffmpeg `-ss/-to -c copy` extraction (now via the resolver; `multi_clip.py` game branch unchanged mechanics).
   - Hash resolved as `COALESCE(gv.blake3_hash, g.blake3_hash)` joining `game_videos`→`games` (`framing.py:399`, `multi_clip.py:2044`, `auto_export.py:125-129`).
   - Per-user artifacts: `raw_clips/`, `working_videos/`, `final_videos/`, `temp/multi_clip_{export_id}/`.
@@ -130,3 +130,29 @@ graph LR
   bug; a visible 0-clip draft signals a missed producer). No cleanup migration (no evidence any real
   account has a pre-existing orphan). The tutorial-capture spec also deletes the auto-reel it creates
   (was leaking orphans onto the live imankh account). Tests: `test_t4800_orphan_drafts.py`.
+
+- **T4140 — recap as full-quality re-edit source (2026-07-09):** the recap is now a re-edit master, not a
+  480p review proxy. `auto_export._generate_recap` encodes each segment at its **NATIVE resolution**
+  (dropped `.filter("scale",854,480)`) at master-grade quality (`RECAP_CRF=18`, `RECAP_PRESET="fast"`,
+  module consts). Crop keyframes are stored in **source pixels** (default_crop.py `DEFAULT_CROP_SIZES` are
+  pixel dims), so native-res keeps every single-source clip's framing valid for re-edit. `concat c=copy`
+  needs a uniform resolution: single-source games already are; mixed-resolution multi-source games are
+  normalized to a canonical resolution (`_pick_canonical_resolution` = most-common, tie->larger area),
+  scaling **only** the minority segments (`scale`+`setsar=1`) — those clips' crop keyframes shift
+  (documented, frozen-bounds only). Mapping shape unchanged. This FILLED `_resolve_recap_source` (see the
+  Source-resolution bullet). **Backfill:** `backfill_hiq_recaps(limit, dry_run)` (admin-triggered
+  `POST /api/admin/backfill-hiq-recaps?limit=&dry_run=`, `_require_admin`; NOT on startup) upgrades legacy
+  recaps for games whose game video still exists; iterates users+profiles like the sweep
+  (`get_all_users_for_admin` + `_get_profile_ids` + `ensure_database`), HEAD-probes every source hash
+  (any half gone -> `skipped_gone`, past-grace stays 480p, never crashes), and is **idempotent via the
+  854x480 legacy signature** (`_recap_is_legacy_480p` probes the recap; hi-q recaps aren't 854x480 so
+  re-runs skip them) — no schema column, so no versioned migration. `limit` throttles re-encodes per call;
+  `partial=True` means call again. **Accounting:** recap storage is **prepaid in the game upload cost**
+  (T1582 flat +1 credit, no expiry, no per-byte recap charge, no prefix-sum) — hi-q recaps are materially
+  larger but the model still counts them ONCE at upload with **no double-count** vs the game video; the
+  flat prepay margin is a product/economy tuning call, not a code path. **Frozen bounds:** a recap-sourced
+  draft returns `flexible=False` (reframe/re-crop OK, trim can't widen past annotated in/out); the frontend
+  "widen the trim" guard is a follow-up (backend already returns `flexible`). Tests:
+  `test_resolve_clip_source.py` (recap branch), `test_auto_export.py::TestGenerateRecap` (native res / mixed
+  normalize) + `::TestBackfillHiqRecaps`, `test_t4140_recap_reexport.py` (Create-Clip draft re-exports from
+  recap after game delete).

@@ -395,14 +395,59 @@ class SourceUnavailable(Exception):
 
 
 def _resolve_recap_source(clip: dict):
-    """T4140 seam: resolve a clip to its surviving recap segment.
+    """Resolve a clip to its surviving recap segment (T4140).
 
-    Stubbed until T4140 lands the recap mapping (recaps/{game_id}_clips.json ->
-    recap_start/recap_end). Returns None so resolution falls through to the
-    preserved extract or a visible failure. T4140 fills this in; the resolver
-    signature and ordering are fixed now so it slots in without a rewrite.
+    The recap (recaps/{game_id}.mp4) is a full-quality re-edit master that
+    outlives the game video (auto_export._generate_recap). Its per-clip mapping
+    recaps/{game_id}_clips.json keys each clip's frozen recap_start/recap_end by
+    the RAW clip id (a recap entry's 'id' is the raw_clips.id — see games.py
+    _compute_recap_clips). Returns:
+
+      (recap_url, recap_start, recap_end, flexible=False)   # frozen bounds
+
+    or None (falls through to a visible SourceUnavailable in resolve_clip_source)
+    when the game_id, the recap mapping, the matching entry, or the recap object
+    is missing. No silent fallback (CLAUDE.md): a missing recap fails visibly
+    rather than pretending a source exists.
     """
-    return None
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from app.storage import download_from_r2, generate_presigned_url
+    from app.user_context import get_current_user_id
+
+    game_id = clip.get('game_id')
+    if not game_id:
+        return None
+    # In the framing/multi-clip clip dict `id` is the working_clip id and
+    # `raw_clip_id` is the raw_clips.id the recap mapping is keyed by; prefer the
+    # raw id, falling back to `id` for callers that pass the raw id directly.
+    raw_clip_id = clip.get('raw_clip_id') or clip.get('id')
+    if raw_clip_id is None:
+        return None
+
+    user_id = get_current_user_id()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        local_path = Path(tmp) / "clips.json"
+        if not download_from_r2(user_id, f"recaps/{game_id}_clips.json", local_path):
+            return None
+        with open(local_path) as f:
+            mapping = json.load(f)
+
+    entry = next((e for e in mapping if e.get('id') == raw_clip_id), None)
+    if entry is None:
+        return None
+    recap_start = entry.get('recap_start')
+    recap_end = entry.get('recap_end')
+    if recap_start is None or recap_end is None:
+        return None
+
+    recap_url = generate_presigned_url(user_id, f"recaps/{game_id}.mp4")
+    if not recap_url:
+        return None
+    return (recap_url, float(recap_start), float(recap_end), False)
 
 
 def resolve_clip_source(clip: dict) -> tuple:
@@ -416,15 +461,17 @@ def resolve_clip_source(clip: dict) -> tuple:
       1. game video present -> (game_url, raw_start, raw_end, flexible=True)
       2. T4175 preserved per-clip extract (raw_clips.filename set)
                             -> (extract_url, 0.0, duration, flexible=False)
-      3. T4140 recap (stub) -> (recap_url, recap_start, recap_end, flexible=False)
+      3. T4140 recap segment -> (recap_url, recap_start, recap_end, flexible=False)
       4. none               -> raise SourceUnavailable (no silent fallback)
 
     The game video is preferred while it exists (best quality, full trim
     flexibility). After the game is reclaimed the preserved extract is the
-    surviving native-resolution single-clip source (frozen bounds, reframe-only).
+    surviving native-resolution single-clip source; the hi-q recap is the
+    fallback for clips that were never given a preserved extract (both frozen
+    bounds, reframe-only).
 
     clip must carry: game_id, game_blake3_hash, raw_start_time, raw_end_time,
-    raw_filename (and, once T4140 lands, id + game_id for the recap mapping).
+    raw_filename, and raw_clip_id (the raw_clips.id keying the recap mapping).
     """
     from app.storage import (
         generate_presigned_url,
@@ -440,12 +487,14 @@ def resolve_clip_source(clip: dict) -> tuple:
     game_hash = clip.get('game_blake3_hash')
     if game_id and game_hash:
         game_key = f"games/{game_hash}.mp4"
-        has_extract_fallback = bool(clip.get('raw_filename'))
-        # Only HEAD-probe the game object when a preserved extract can back a
-        # miss. With no fallback the game video is the sole source, so use it
-        # directly and let a reclaimed/expired object fail loudly at extract
-        # time (unchanged behavior — no new transient-blip failure mode).
-        if not has_extract_fallback or r2_head_object_global(game_key) is not None:
+        # T4140: HEAD-probe the game before using it. Since the recap
+        # (recaps/{game_id}.mp4) is now a universal fallback for any game clip —
+        # not just clips with a preserved extract — a reclaimed game must fall
+        # through to the extract/recap rather than hand back a dead presigned URL.
+        # r2_head_object_global retries transient errors internally, so a brief
+        # blip does not spuriously demote a present game; a sustained miss falls
+        # through to a real fallback or a visible SourceUnavailable.
+        if r2_head_object_global(game_key) is not None:
             url = generate_presigned_url_global(game_key)
             if url:
                 return (url, clip['raw_start_time'], clip['raw_end_time'], True)

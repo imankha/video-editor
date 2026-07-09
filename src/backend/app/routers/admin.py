@@ -392,6 +392,26 @@ def _run_all_migrations() -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Recap backfill (T4140)
+# ---------------------------------------------------------------------------
+
+@router.post("/backfill-hiq-recaps")
+async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
+                              dry_run: bool = Query(False)):
+    """Upgrade legacy 480p recaps to full-quality hi-q re-edit masters (T4140).
+
+    Heavy per-game re-encode, so it is throttled/batched by `limit` and NOT run
+    on startup. Only games whose game video still exists (in-grace) are upgraded;
+    already-reclaimed games keep their 480p recap. Call repeatedly until the
+    response's `partial` is False. Pass `dry_run=true` to count candidates
+    without re-encoding.
+    """
+    _require_admin()
+    from ..services.auto_export import backfill_hiq_recaps as _backfill
+    return await asyncio.to_thread(_backfill, limit, dry_run)
+
+
+# ---------------------------------------------------------------------------
 # Analytics dashboards (T3030)
 # ---------------------------------------------------------------------------
 

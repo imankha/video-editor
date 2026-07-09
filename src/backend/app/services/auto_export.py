@@ -20,7 +20,12 @@ from app.utils.encoding import decode_data
 
 from ..database import get_db_connection, sync_db_to_r2_explicit
 from ..profile_context import set_current_profile_id
-from ..storage import generate_presigned_url_global, upload_bytes_to_r2, upload_to_r2
+from ..storage import (
+    generate_presigned_url,
+    generate_presigned_url_global,
+    upload_bytes_to_r2,
+    upload_to_r2,
+)
 from ..user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -31,6 +36,22 @@ EXPORT_TIMEOUT_SECONDS = 300
 # letting the source be reclaimed. The counter lives in games.auto_export_attempts
 # and is read by sweep_scheduler._find_games_for_hash.
 MAX_AUTO_EXPORT_ATTEMPTS = 3
+
+# T4140: the recap doubles as a full-quality re-edit master. Create Clip (T4130)
+# and edit-reel re-export must keep working after the game video is reclaimed, so
+# resolve_clip_source falls back to the recap at each clip's frozen bounds. That
+# only works if the recap holds real pixels: encode at NATIVE resolution (no 480p
+# downscale) at master-grade quality. crf 18 is near-visually-lossless; "fast"
+# keeps the inline (still-CPU, pre-T2650) sweep encode within budget (Risk 3).
+# Both are tunable here without touching the pipeline.
+RECAP_CRF = 18
+RECAP_PRESET = "fast"
+
+# Signature of the legacy 480p recap encoder that T4140 replaced: the old code
+# hardcoded `.filter("scale", 854, 480)`, so any recap that probes to exactly
+# 854x480 is a legacy proxy the backfill should upgrade. Native game footage is
+# ~never exactly 854x480, which makes this a clean, idempotent upgrade signal.
+_LEGACY_RECAP_DIMENSIONS = (854, 480)
 
 
 def auto_export_game(user_id: str, profile_id: str, game_id: int) -> str:
@@ -262,10 +283,55 @@ def _export_brilliant_clip(
     )
 
 
+def _video_dimensions(probe: dict):
+    """(width, height) of the first video stream in an ffprobe result, or None.
+
+    None when the probe carries no video stream dimensions (e.g. a mocked probe);
+    callers treat that as "resolution unknown" and skip concat normalization.
+    """
+    for stream in probe.get('streams', []) or []:
+        if stream.get('codec_type') == 'video':
+            width, height = stream.get('width'), stream.get('height')
+            if width and height:
+                return (int(width), int(height))
+    return None
+
+
+def _pick_canonical_resolution(resolutions: list[tuple]) -> tuple:
+    """Choose the concat-normalization target for a mixed-resolution recap.
+
+    Prefers the resolution shared by the MOST clips (fewest clips get rescaled ->
+    fewest crop-keyframe regions shifted, per Risk 1), tie-broken toward the
+    larger frame (preserve pixels for reframe/upscale). resolutions must be
+    non-empty and contain no None.
+    """
+    from collections import Counter
+    counts = Counter(resolutions)
+    return max(counts, key=lambda r: (counts[r], r[0] * r[1]))
+
+
 def _generate_recap(
     user_id: str, profile_id: str, game_id: int, clips: list[dict]
 ) -> str:
-    """Generate a 480p recap video by concatenating all annotated clips."""
+    """Generate a full-quality recap master by concatenating all annotated clips.
+
+    T4140: the recap is the surviving re-edit source once the game video is
+    reclaimed, so each clip is encoded at its NATIVE resolution at master-grade
+    quality (RECAP_CRF/RECAP_PRESET) — no 480p downscale. Crop keyframes are
+    stored in SOURCE pixels (see default_crop.py / keyframes-framing.md), so
+    rescaling a clip would shift its crop region; native-res encoding keeps every
+    single-source clip's framing valid for re-edit.
+
+    `concat c=copy` requires uniform codec/resolution. Single-source games are
+    already uniform. Mixed-resolution multi-source games (two halves / different
+    cameras) are normalized to a single canonical resolution, scaling ONLY the
+    non-conforming segments — the unavoidable case where those clips' crop
+    keyframes shift (documented tradeoff, frozen-bounds re-edit only).
+
+    The recap_start/recap_end mapping (recaps/{game_id}_clips.json) is written in
+    the same shape as before; resolve_clip_source reads it to re-materialize a
+    clip from the recap at its frozen bounds.
+    """
     t0 = time.perf_counter()
     logger.info(f"[AutoExport] Recap game={game_id} starting with {len(clips)} clips")
 
@@ -276,6 +342,7 @@ def _generate_recap(
         logger.info(f"[AutoExport] Recap game={game_id} {len(clips_by_hash)} unique video sources")
 
         extracted_paths = []
+        clip_resolutions = []  # aligned with extracted_paths; (w,h) or None
         clip_mapping = []
         recap_offset = 0.0
         for video_hash, hash_clips in clips_by_hash.items():
@@ -299,18 +366,18 @@ def _generate_recap(
                     )
                     continue
                 out_path = Path(temp_dir) / f"clip_{clip['id']}.mp4"
+                # T4140: NATIVE resolution (no scale filter) at master-grade quality.
                 (
                     ffmpeg.input(
                         video_url,
                         ss=clip['start_time'],
                         to=clip['end_time'],
                     )
-                    .filter("scale", 854, 480)
                     .output(
                         str(out_path),
                         vcodec="libx264",
-                        preset="ultrafast",
-                        crf=32,
+                        preset=RECAP_PRESET,
+                        crf=RECAP_CRF,
                         acodec="aac",
                         movflags="+faststart",
                     )
@@ -320,6 +387,7 @@ def _generate_recap(
 
                 probe = ffmpeg.probe(str(out_path))
                 duration = float(probe['format']['duration'])
+                clip_resolutions.append(_video_dimensions(probe))
                 clip_mapping.append({
                     'id': clip['id'],
                     'name': clip['name'],
@@ -334,6 +402,39 @@ def _generate_recap(
         if not extracted_paths:
             logger.error(f"[AutoExport] Recap game={game_id} no clips extracted after {time.perf_counter() - t0:.2f}s")
             raise RuntimeError("No clips extracted for recap")
+
+        # T4140: concat demuxer (c=copy) requires a uniform resolution. Native-res
+        # encoding leaves mixed-resolution multi-source games non-uniform, so scale
+        # ONLY the minority segments up/down to a shared canonical resolution.
+        known_res = [r for r in clip_resolutions if r is not None]
+        if len(set(known_res)) > 1:
+            canonical = _pick_canonical_resolution(known_res)
+            cw, ch = canonical
+            logger.info(
+                f"[AutoExport] Recap game={game_id} mixed resolutions "
+                f"{sorted(set(known_res))} -> canonical {cw}x{ch}; normalizing "
+                f"non-conforming segments (crop keyframes on those clips shift)"
+            )
+            for idx, res in enumerate(clip_resolutions):
+                if res is None or res == canonical:
+                    continue
+                src = extracted_paths[idx]
+                normalized = src.with_name(f"norm_{src.name}")
+                (
+                    ffmpeg.input(str(src))
+                    .filter("scale", cw, ch)
+                    .filter("setsar", "1")
+                    .output(
+                        str(normalized),
+                        vcodec="libx264",
+                        preset=RECAP_PRESET,
+                        crf=RECAP_CRF,
+                        acodec="aac",
+                        movflags="+faststart",
+                    )
+                    .run(quiet=True, overwrite_output=True)
+                )
+                extracted_paths[idx] = normalized
 
         logger.info(f"[AutoExport] Recap game={game_id} extracted {len(extracted_paths)} clips in {time.perf_counter() - t0:.2f}s, concatenating")
         concat_list = Path(temp_dir) / "concat.txt"
@@ -360,3 +461,138 @@ def _generate_recap(
     elapsed = time.perf_counter() - t0
     logger.info(f"[AutoExport] Recap game={game_id} complete in {elapsed:.2f}s ({len(extracted_paths)} clips, {recap_offset:.1f}s duration)")
     return recap_r2_key
+
+
+def _recap_is_legacy_480p(user_id: str, game_id: int) -> bool | None:
+    """True if game_id's recap is a legacy 854x480 proxy that needs upgrading.
+
+    Probes the stored recap once. Returns None when the recap is missing or the
+    probe is unreadable (can't decide -> caller skips, never crashes). Hi-q
+    (native-res) recaps probe to something other than 854x480, so a re-run of the
+    backfill skips them -- this is the idempotency signal that makes batching work
+    without a schema column.
+    """
+    recap_url = generate_presigned_url(user_id, f"recaps/{game_id}.mp4")
+    if not recap_url:
+        return None
+    try:
+        dims = _video_dimensions(ffmpeg.probe(recap_url))
+    except Exception as e:
+        logger.warning(f"[Backfill] game={game_id} recap probe failed: {e}")
+        return None
+    if dims is None:
+        return None
+    return dims == _LEGACY_RECAP_DIMENSIONS
+
+
+def backfill_hiq_recaps(limit: int = 25, dry_run: bool = False) -> dict:
+    """Admin-triggered: upgrade legacy 480p recaps to hi-q for games whose game
+    video still exists (in-grace / not-yet-reclaimed).
+
+    Heavy per-game re-encode, so it is throttled by `limit` (max games upgraded
+    per call) and batched: call repeatedly until `partial` is False. NOT run on
+    startup or deploy. Games whose source is already gone (past grace) keep their
+    480p recap and are reported in `skipped_gone`, never crashed (documented
+    cutoff, Risk 4 / criterion "already-gone games handled, not crashed").
+
+    Idempotent via the 854x480 legacy signature (_recap_is_legacy_480p): recaps
+    already at native resolution are counted in `already_hiq` and skipped, so
+    repeated calls make forward progress without a schema marker.
+
+    Returns a dict with the per-game outcome lists and `partial` (True when the
+    `limit` budget was exhausted before scanning finished).
+    """
+    from .auth_db import get_all_users_for_admin
+    from ..database import ensure_database
+    from ..migrations import _get_profile_ids
+    from ..storage import r2_head_object_global
+
+    result = {
+        "limit": limit,
+        "dry_run": dry_run,
+        "scanned": 0,
+        "upgraded": [],
+        "already_hiq": [],
+        "skipped_gone": [],
+        "skipped_unknown": [],
+        "failed": [],
+        "partial": False,
+    }
+    budget = limit
+    t0 = time.perf_counter()
+
+    users = get_all_users_for_admin()
+    for user in users:
+        if budget <= 0:
+            result["partial"] = True
+            break
+        user_id = user["user_id"]
+        for profile_id in _get_profile_ids(user_id):
+            if budget <= 0:
+                result["partial"] = True
+                break
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+            ensure_database()
+
+            with get_db_connection() as conn:
+                games = [
+                    dict(g) for g in conn.execute(
+                        "SELECT id FROM games "
+                        "WHERE auto_export_status = 'complete' "
+                        "AND recap_video_url IS NOT NULL"
+                    ).fetchall()
+                ]
+
+            for game in games:
+                if budget <= 0:
+                    result["partial"] = True
+                    break
+                game_id = game["id"]
+                clips = _get_annotated_clips(game_id)
+                if not clips:
+                    continue
+                result["scanned"] += 1
+
+                # Source present iff every source hash is still in R2. A multi-
+                # source game with even one reclaimed half can't be faithfully
+                # regenerated -> treat as gone (past grace), keep the 480p recap.
+                hashes = {c['video_hash'] for c in clips if c['video_hash']}
+                if not hashes or not all(
+                    r2_head_object_global(f"games/{h}.mp4") is not None for h in hashes
+                ):
+                    result["skipped_gone"].append(game_id)
+                    logger.info(
+                        f"[Backfill] game={game_id} source gone (past grace) — "
+                        f"recap stays 480p"
+                    )
+                    continue
+
+                is_legacy = _recap_is_legacy_480p(user_id, game_id)
+                if is_legacy is None:
+                    result["skipped_unknown"].append(game_id)
+                    continue
+                if not is_legacy:
+                    result["already_hiq"].append(game_id)
+                    continue
+
+                if dry_run:
+                    result["upgraded"].append(game_id)
+                    budget -= 1
+                    continue
+                try:
+                    _generate_recap(user_id, profile_id, game_id, clips)
+                    result["upgraded"].append(game_id)
+                    budget -= 1
+                    logger.info(f"[Backfill] game={game_id} recap upgraded to hi-q")
+                except Exception as e:
+                    result["failed"].append({"game_id": game_id, "error": str(e)})
+                    logger.error(f"[Backfill] game={game_id} recap upgrade failed: {e}")
+
+    logger.info(
+        f"[Backfill] complete in {time.perf_counter() - t0:.2f}s "
+        f"upgraded={len(result['upgraded'])} already_hiq={len(result['already_hiq'])} "
+        f"gone={len(result['skipped_gone'])} failed={len(result['failed'])} "
+        f"partial={result['partial']} dry_run={dry_run}"
+    )
+    return result
