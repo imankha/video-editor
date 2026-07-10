@@ -1,9 +1,13 @@
 """
 Bootstrap endpoint -- single GET that replaces 9+ individual data fetch calls
-on page load. Eliminates thread pool contention by running all queries
-sequentially in a single request handler.
+on page load. The two independent read groups (user.sqlite + profile.sqlite) run
+concurrently: the user-scoped group on a worker thread, the profile-scoped group
+on the event loop (T4771). Single logical read path, single response shape, no
+writes.
 """
 
+import asyncio
+import contextvars
 import logging
 import time
 from fastapi import APIRouter
@@ -20,12 +24,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["bootstrap"])
 
 
-@router.get("/bootstrap")
-async def bootstrap():
-    t_start = time.perf_counter()
-    user_id = get_current_user_id()
+def _read_user_scoped(user_id: str) -> dict:
+    """Read everything sourced from user.sqlite (profiles, credits, settings,
+    quests). Pure synchronous reads — run on a worker thread so they overlap the
+    profile.sqlite reads (see bootstrap()). No writes: safe to run concurrently
+    with the profile-scoped reads (different DB file; quests' read of
+    profile.sqlite is a concurrent WAL reader, which SQLite allows)."""
+    t0 = time.perf_counter()
 
-    # --- User-scoped data (user.sqlite) ---
     profiles_raw = get_profiles(user_id)
     selected_profile = get_selected_profile_id(user_id)
     profiles = [
@@ -39,15 +45,12 @@ async def bootstrap():
         }
         for p in profiles_raw
     ]
-    t_profiles = time.perf_counter()
 
     credits = get_credit_balance(user_id)
-    t_credits = time.perf_counter()
 
     from ..routers.settings import get_all_preferences, DEFAULTS, _to_nested
     stored = get_all_preferences()
     settings = _to_nested({**DEFAULTS, **stored})
-    t_settings = time.perf_counter()
 
     # Quest progress
     from ..quest_config import QUEST_DEFINITIONS
@@ -77,17 +80,19 @@ async def bootstrap():
                 "completed": all(quest_steps.values()),
                 "reward_claimed": quest_id in claimed_quest_ids,
             })
-    t_quests = time.perf_counter()
 
-    # --- Profile-scoped data (profile.sqlite) ---
-    from ..routers.projects import list_projects
-    projects_response = await list_projects()
-    t_projects = time.perf_counter()
+    return {
+        "profiles": profiles,
+        "credits": credits,
+        "settings": settings,
+        "quests_progress": quests_progress,
+        "_ms": int((time.perf_counter() - t0) * 1000),
+    }
 
-    from ..routers.games import list_games_metadata
-    games_response = await list_games_metadata()
-    t_games = time.perf_counter()
 
+def _read_profile_misc() -> dict:
+    """Read downloads count + active/unacknowledged exports + pending uploads
+    from profile.sqlite in a single connection. Synchronous reads."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -109,7 +114,6 @@ async def bootstrap():
             "count": dl_row['count'] if dl_row else 0,
             "unwatched_count": dl_row['unwatched_count'] if dl_row else 0,
         }
-        t_downloads = time.perf_counter()
 
         # Active exports
         cursor.execute("""
@@ -138,7 +142,6 @@ async def bootstrap():
             ORDER BY e.completed_at DESC
         """)
         unacknowledged_exports = [dict(row) for row in cursor.fetchall()]
-        t_exports = time.perf_counter()
 
         # Pending uploads (raw list, no R2 validation for speed)
         cursor.execute("""
@@ -148,32 +151,77 @@ async def bootstrap():
             ORDER BY created_at DESC
         """)
         pending_uploads = [dict(row) for row in cursor.fetchall()]
-    t_pending = time.perf_counter()
-
-    logger.info(
-        f"[PROFILE bootstrap] profiles={int((t_profiles-t_start)*1000)}ms "
-        f"credits={int((t_credits-t_profiles)*1000)}ms "
-        f"settings={int((t_settings-t_credits)*1000)}ms "
-        f"quests={int((t_quests-t_settings)*1000)}ms "
-        f"projects={int((t_projects-t_quests)*1000)}ms "
-        f"games={int((t_games-t_projects)*1000)}ms "
-        f"downloads={int((t_downloads-t_games)*1000)}ms "
-        f"exports={int((t_exports-t_downloads)*1000)}ms "
-        f"pending={int((t_pending-t_exports)*1000)}ms "
-        f"total={int((t_pending-t_start)*1000)}ms"
-    )
 
     return {
-        "profiles": profiles,
-        "credits": credits,
-        "settings": settings,
-        "quests_progress": quests_progress,
-        "projects": projects_response,
-        "games": games_response,
         "downloads": downloads,
         "exports": {
             "active": active_exports,
             "unacknowledged": unacknowledged_exports,
         },
         "pending_uploads": pending_uploads,
+    }
+
+
+async def _read_profile_scoped():
+    """Profile-scoped group (profile.sqlite): projects + games (async, sync-bodied)
+    + downloads/exports/pending. Runs on the event loop concurrently with the
+    user-scoped worker thread. Returns (projects_response, games_response, misc)
+    where misc carries the group's own wall time under `_ms` (internal only)."""
+    t0 = time.perf_counter()
+    from ..routers.projects import list_projects
+    from ..routers.games import list_games_metadata
+    projects_response = await list_projects()
+    games_response = await list_games_metadata()
+    misc = _read_profile_misc()
+    misc["_ms"] = int((time.perf_counter() - t0) * 1000)
+    return projects_response, games_response, misc
+
+
+@router.get("/bootstrap")
+async def bootstrap():
+    """Single GET that replaces 9+ page-load fetches.
+
+    T4771: the two independent read groups run concurrently instead of serially.
+    The user.sqlite group (profiles/credits/settings/quests) runs on a worker
+    thread while the profile.sqlite group (projects/games/downloads/exports/
+    pending) runs on the event loop; wall-clock becomes ~max(group) instead of
+    the sum. Still a single logical read path -- one endpoint, one response,
+    no writes.
+    """
+    t_start = time.perf_counter()
+    user_id = get_current_user_id()
+
+    # Kick the user-scoped reads onto a worker thread. run_in_executor submits to
+    # the pool synchronously, so the thread starts NOW, concurrently with the
+    # profile-scoped coroutine below. copy_context() propagates the request
+    # contextvars (user id, profile id, req id) into the thread so
+    # get_current_*() resolve there -- a bare run_in_executor would raise
+    # "No user context set" inside the thread.
+    loop = asyncio.get_running_loop()
+    ctx = contextvars.copy_context()
+    user_future = loop.run_in_executor(None, lambda: ctx.run(_read_user_scoped, user_id))
+
+    # gather joins BOTH groups; if one raises, gather retrieves the other's
+    # result/exception too (no orphaned "future exception never retrieved").
+    user_scoped, (projects_response, games_response, misc) = await asyncio.gather(
+        user_future, _read_profile_scoped(),
+    )
+    t_end = time.perf_counter()
+
+    logger.info(
+        f"[PROFILE bootstrap] user_group={user_scoped['_ms']}ms "
+        f"profile_group={misc['_ms']}ms "
+        f"wall={int((t_end-t_start)*1000)}ms"
+    )
+
+    return {
+        "profiles": user_scoped["profiles"],
+        "credits": user_scoped["credits"],
+        "settings": user_scoped["settings"],
+        "quests_progress": user_scoped["quests_progress"],
+        "projects": projects_response,
+        "games": games_response,
+        "downloads": misc["downloads"],
+        "exports": misc["exports"],
+        "pending_uploads": misc["pending_uploads"],
     }

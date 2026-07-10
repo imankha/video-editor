@@ -31,7 +31,10 @@ export const useGamesDataStore = create((set, get) => ({
   readyGames: [],  // Derived: games with status != 'pending' (cached to avoid infinite re-renders)
   pendingGameIds: new Set(),
   selectedGame: null,
-  isLoading: false,
+  // T4771: default true so the Games tab shows a skeleton (not bare "Loading
+  // games..." text or an empty flash) until the first bootstrap/fetch populates
+  // the list. setFromBootstrap / fetchGames flip it false once data lands.
+  isLoading: true,
   error: null,
 
   // Version counter — incremented when games list should be refreshed.

@@ -174,12 +174,21 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   from `warmAllUserVideos()` (App.jsx:233,336)** streaming many `working_video/stream` through the
   1-vCPU Fly box concurrently, NOT endpoint work. Classic T4000 trap: re-time live before "fixing"
   `/load`/`/video`. T4000's early-src parallelization (load ∥ video) is confirmed working.
-- **Home games are gated on `GET /api/bootstrap`** (`setFromBootstrap(data.games)`, App.jsx:210),
-  a stable ~1s serial aggregate (profiles+quests+list_projects+**list_games_metadata**+exports+uploads,
-  bootstrap.py:24–150). It uses `list_games_metadata` (no presign) — the "defer presigning" suspect is
-  ruled out (`GET /api/games` presigns all 6 in ~100ms live). Warm cache barely helps home (games
-  @~1594ms warm vs ~1743ms cold) → home is server-bound, not asset-bound. Fix fan-out: T4771 (skeleton +
-  split bootstrap), T4772 (tame the warm storm).
+- **Home games are gated on `GET /api/bootstrap`** (`setFromBootstrap(data.games)`, App.jsx:212),
+  which uses `list_games_metadata` (no presign) — the "defer presigning" suspect is ruled out
+  (`GET /api/games` presigns all 6 in ~100ms live). Warm cache barely helps home → server-bound.
+- **T4771 landed (2026-07-09): bootstrap PARALLELIZED, not split.** The two read groups now run
+  concurrently (user.sqlite on a worker thread, profile.sqlite on the loop) — live TTFB **~657ms→~360ms
+  median** (co-timed `/health` ~8ms). Single endpoint, single response shape, read-only. See
+  backend-services.md § Landmines for the contextvars-into-thread detail.
+- **T4771 games skeleton (perceived-perf).** `gamesDataStore.isLoading` defaults **true**; the Games tab
+  renders `<GamesListSkeleton>` (ProjectManager.jsx, GameCard-shaped `animate-pulse` cards) instead of
+  bare "Loading games..." text until the first bootstrap/fetch lands. NOTE: the opaque index.html
+  preloader (App.jsx `dismissPreloader`, fires AFTER bootstrap) covers the true first paint, so the
+  skeleton is seen on non-preloader games-loading transitions (profile switch, empty refetch, fallback),
+  not the very first paint — the first-paint latency win comes from the shorter bootstrap. Preloader
+  timing deliberately NOT moved (revealing the shell early would flash an empty header/continue-cards).
+  Fix fan-out sibling: T4772 (tame the warm storm).
 - **My Reels `rank/confidence` dedup (T4775).** `GET /api/rank/confidence` is read via one shared
   in-flight guard: `src/frontend/src/utils/rankConfidence.js` (`fetchRankConfidence(ratio)`, a
   `Map<ratio,Promise>` cleared on settle — mirrors `gamesDataStore._getGameInflight`). All confidence
