@@ -25,6 +25,7 @@ USAGE:
 import logging
 import re
 import subprocess
+from collections.abc import Callable
 from enum import Enum
 from typing import Union
 
@@ -280,7 +281,7 @@ def run_ffmpeg(
 
 def run_ffmpeg_with_progress(
     cmd: list[str],
-    progress_callback: callable | None = None,
+    progress_callback: Callable | None = None,
     timeout: int | None = None
 ) -> subprocess.CompletedProcess:
     """
