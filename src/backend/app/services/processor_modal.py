@@ -17,17 +17,16 @@ Usage:
 """
 
 import logging
-import os
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+from .modal_client import call_modal_overlay, modal_enabled
 from .video_processor import (
-    VideoProcessor,
     ProcessingBackend,
     ProcessingConfig,
     ProcessingResult,
     ProgressCallback,
+    VideoProcessor,
 )
-from .modal_client import modal_enabled, call_modal_overlay
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +53,7 @@ class ModalProcessor(VideoProcessor):
     async def process_clip(
         self,
         config: ProcessingConfig,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Process a video clip using Modal GPU.
@@ -69,12 +68,12 @@ class ModalProcessor(VideoProcessor):
 
     async def concatenate_clips(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         transition_type: str = "cut",
         transition_duration: float = 0.5,
         include_audio: bool = True,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Concatenate clips using Modal.
@@ -90,9 +89,9 @@ class ModalProcessor(VideoProcessor):
         self,
         input_path: str,
         output_path: str,
-        highlight_regions: List[Dict[str, Any]],
+        highlight_regions: list[dict[str, Any]],
         effect_type: str = "dark_overlay",
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Apply highlight overlay using Modal GPU.
@@ -164,7 +163,7 @@ class ModalProcessor(VideoProcessor):
 
 # Auto-register with factory when imported
 def _register():
-    from .video_processor import ProcessorFactory, ProcessingBackend
+    from .video_processor import ProcessingBackend, ProcessorFactory
     ProcessorFactory.register(ProcessingBackend.MODAL, ModalProcessor)
 
 

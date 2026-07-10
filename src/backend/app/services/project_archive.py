@@ -9,23 +9,23 @@ Archive location: {user_id}/archive/{project_id}.msgpack
 """
 
 import logging
+from datetime import datetime
+from typing import Any
 
 import msgpack
-from datetime import datetime
-from typing import Optional, Dict, Any
 
 from app.database import (
-    get_db_connection,
-    get_database_path,
     DB_SIZE_WARNING_THRESHOLD,
+    get_database_path,
+    get_db_connection,
 )
 from app.queries import latest_working_clips_subquery
 from app.storage import (
-    R2_ENABLED,
-    upload_bytes_to_r2,
-    get_r2_client,
     R2_BUCKET,
+    R2_ENABLED,
+    get_r2_client,
     r2_key,
+    upload_bytes_to_r2,
 )
 from app.user_context import get_current_user_id
 
@@ -39,12 +39,12 @@ def _get_archive_r2_key(project_id: int) -> str:
     return f"archive/{project_id}.msgpack"
 
 
-def _row_to_dict(row) -> Dict[str, Any]:
+def _row_to_dict(row) -> dict[str, Any]:
     """Convert a sqlite3.Row to a dictionary. Binary columns stay as raw bytes for msgpack."""
     return {key: row[key] for key in row.keys()}
 
 
-def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
+def archive_project(project_id: int, user_id: str | None = None) -> bool:
     """
     Archive a completed project to R2 as msgpack.
 
@@ -147,7 +147,7 @@ def archive_project(project_id: int, user_id: Optional[str] = None) -> bool:
         return False
 
 
-def load_archive(project_id: int, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def load_archive(project_id: int, user_id: str | None = None) -> dict[str, Any] | None:
     """
     Download and decode a project's msgpack archive from R2.
 
@@ -190,7 +190,7 @@ def load_archive(project_id: int, user_id: Optional[str] = None) -> Optional[Dic
     return archive
 
 
-def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
+def restore_project(project_id: int, user_id: str | None = None) -> bool:
     """
     Restore a project from R2 archive back to the database.
 
@@ -300,7 +300,7 @@ def restore_project(project_id: int, user_id: Optional[str] = None) -> bool:
 
 
 
-def archive_completed_projects(user_id: Optional[str] = None) -> int:
+def archive_completed_projects(user_id: str | None = None) -> int:
     """
     Archive all published projects that haven't been archived yet.
 
@@ -511,7 +511,7 @@ def cleanup_database_bloat() -> dict:
         return result
 
 
-def is_project_archived(project_id: int, user_id: Optional[str] = None) -> bool:
+def is_project_archived(project_id: int, user_id: str | None = None) -> bool:
     """
     Check if a project has an archive in R2.
 

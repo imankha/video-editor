@@ -7,7 +7,6 @@ This module replaces the SQLite-based auth_db and sharing_db connection manageme
 
 import logging
 import os
-import time
 from contextlib import contextmanager
 
 import psycopg2

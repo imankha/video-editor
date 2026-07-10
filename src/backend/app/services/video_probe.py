@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ HEAD_BYTES = 1024 * 1024   # 1 MB head fetch (moov for faststart MP4s)
 TAIL_BYTES = 512 * 1024    # 512 KB tail fetch (moov-at-end fallback)
 
 
-def ffprobe_bytes(data: bytes) -> Optional[dict]:
+def ffprobe_bytes(data: bytes) -> dict | None:
     """Probe a raw byte blob via ffprobe stdin. Returns width/height/fps or None."""
     try:
         result = subprocess.run(
@@ -52,7 +51,7 @@ def ffprobe_bytes(data: bytes) -> Optional[dict]:
         return None
 
 
-def probe_r2_video(s3_client, bucket: str, key: str) -> Optional[dict]:
+def probe_r2_video(s3_client, bucket: str, key: str) -> dict | None:
     """
     Probe a video in R2 via presigned URL + ffprobe. ffprobe natively uses HTTP
     byte-range requests, pulling only the bytes it needs (moov atom + a handful
@@ -65,7 +64,8 @@ def probe_r2_video(s3_client, bucket: str, key: str) -> Optional[dict]:
             Params={"Bucket": bucket, "Key": key},
             ExpiresIn=300,
         )
-        import subprocess, json
+        import json
+        import subprocess
         result = subprocess.run(
             [
                 "ffprobe", "-v", "error",

@@ -15,13 +15,13 @@ Currently no task types are enqueued (clip extraction was removed in T740/T800).
 The infrastructure is kept for future GPU task types.
 """
 
+import asyncio
 import json
 import logging
-import asyncio
 
 from app.database import get_db_connection
-from app.user_context import set_current_user_id
 from app.profile_context import set_current_profile_id
+from app.user_context import set_current_user_id
 
 logger = logging.getLogger(__name__)
 

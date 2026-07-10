@@ -13,24 +13,20 @@ Future implementations (WebGPU, RunPod) will follow the same interface.
 import asyncio
 import logging
 import os
-import tempfile
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
+from app.services.ffmpeg_service import (
+    concatenate_clips,
+    get_video_info,
+    is_ffmpeg_available,
+)
 from app.services.video_processor import (
-    VideoProcessor,
     ProcessingBackend,
     ProcessingConfig,
     ProcessingResult,
-    ProgressCallback,
     ProcessorFactory,
-)
-from app.services.ffmpeg_service import (
-    is_ffmpeg_available,
-    get_video_info,
-    concatenate_clips,
-    create_chapter_metadata_file,
-    add_chapters_to_video,
+    ProgressCallback,
+    VideoProcessor,
 )
 
 logger = logging.getLogger(__name__)
@@ -100,7 +96,7 @@ class LocalGPUProcessor(VideoProcessor):
     async def process_clip(
         self,
         config: ProcessingConfig,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Process a single video clip with the given configuration.
@@ -216,7 +212,6 @@ class LocalGPUProcessor(VideoProcessor):
         progress: ProgressCallback
     ) -> ProcessingResult:
         """Process clip using FFmpeg only (no AI upscaling)."""
-        from app.services.ffmpeg_service import extract_clip
 
         progress.report(50, 100, "Processing with FFmpeg", "encoding")
 
@@ -244,12 +239,12 @@ class LocalGPUProcessor(VideoProcessor):
 
     async def concatenate_clips(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         transition_type: str = "cut",
         transition_duration: float = 0.5,
         include_audio: bool = True,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Concatenate multiple processed clips with transitions.
@@ -317,9 +312,9 @@ class LocalGPUProcessor(VideoProcessor):
         self,
         input_path: str,
         output_path: str,
-        highlight_regions: List[Dict[str, Any]],
+        highlight_regions: list[dict[str, Any]],
         effect_type: str = "original",
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Apply highlight overlay effects to a video.

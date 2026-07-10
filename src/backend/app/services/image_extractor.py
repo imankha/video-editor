@@ -10,12 +10,12 @@ Images are stored in the user's highlights directory and can be viewed
 directly via the /api/highlights/<filename> endpoint.
 """
 
-import cv2
 import logging
 from pathlib import Path
-from typing import Optional, Dict
 
-from ..database import get_highlights_path, get_raw_clips_path
+import cv2
+
+from ..database import get_highlights_path
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 def extract_player_image(
     video_path: str,
     frame_number: int,
-    bbox: Dict,
+    bbox: dict,
     raw_clip_id: int,
     keyframe_index: int,
     padding_percent: float = 0.1
-) -> Optional[str]:
+) -> str | None:
     """
     Extract and save the player image from a video frame.
 
@@ -185,7 +185,7 @@ def extract_player_images_for_region(
     return updated_keyframes
 
 
-def get_image_url(image_path: Optional[str]) -> Optional[str]:
+def get_image_url(image_path: str | None) -> str | None:
     """
     Convert a relative image path to an API URL.
 
@@ -203,7 +203,7 @@ def get_image_url(image_path: Optional[str]) -> Optional[str]:
     return f"/api/highlights/{filename}"
 
 
-def list_highlight_images(raw_clip_id: Optional[int] = None) -> list:
+def list_highlight_images(raw_clip_id: int | None = None) -> list:
     """
     List all highlight images, optionally filtered by raw_clip_id.
 

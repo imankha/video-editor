@@ -11,12 +11,12 @@ The interface design allows the export system to be agnostic to where
 processing happens, enabling easy migration between processing backends.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import List, Dict, Any, Optional, Callable
-from enum import Enum
-from pathlib import Path
 import logging
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,14 @@ class ProcessingConfig:
     output_path: str
 
     # Resolution
-    target_width: Optional[int] = None
-    target_height: Optional[int] = None
+    target_width: int | None = None
+    target_height: int | None = None
 
     # Crop keyframes (list of {time, x, y, width, height})
-    crop_keyframes: Optional[List[Dict[str, Any]]] = None
+    crop_keyframes: list[dict[str, Any]] | None = None
 
     # Segments with speed changes
-    segment_data: Optional[Dict[str, Any]] = None
+    segment_data: dict[str, Any] | None = None
 
     # Quality settings
     export_mode: str = "quality"  # "quality" | "speed"
@@ -61,17 +61,17 @@ class ProcessingConfig:
 class ProcessingResult:
     """Result of a video processing operation."""
     success: bool
-    output_path: Optional[str] = None
-    error_message: Optional[str] = None
-    duration_seconds: Optional[float] = None
-    output_width: Optional[int] = None
-    output_height: Optional[int] = None
+    output_path: str | None = None
+    error_message: str | None = None
+    duration_seconds: float | None = None
+    output_width: int | None = None
+    output_height: int | None = None
 
 
 class ProgressCallback:
     """Callback interface for progress reporting."""
 
-    def __init__(self, callback: Optional[Callable[[int, int, str, str], None]] = None):
+    def __init__(self, callback: Callable[[int, int, str, str], None] | None = None):
         """
         Initialize progress callback.
 
@@ -117,7 +117,7 @@ class VideoProcessor(ABC):
     async def process_clip(
         self,
         config: ProcessingConfig,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Process a single video clip with the given configuration.
@@ -140,12 +140,12 @@ class VideoProcessor(ABC):
     @abstractmethod
     async def concatenate_clips(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         transition_type: str = "cut",
         transition_duration: float = 0.5,
         include_audio: bool = True,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Concatenate multiple processed clips with transitions.
@@ -168,9 +168,9 @@ class VideoProcessor(ABC):
         self,
         input_path: str,
         output_path: str,
-        highlight_regions: List[Dict[str, Any]],
+        highlight_regions: list[dict[str, Any]],
         effect_type: str = "original",
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Apply highlight overlay effects to a video.
@@ -191,7 +191,7 @@ class VideoProcessor(ABC):
 class ProcessorFactory:
     """Factory for creating video processors."""
 
-    _processors: Dict[ProcessingBackend, type] = {}
+    _processors: dict[ProcessingBackend, type] = {}
 
     @classmethod
     def register(cls, backend: ProcessingBackend, processor_class: type):
@@ -222,7 +222,7 @@ class ProcessorFactory:
         raise RuntimeError("No video processor available")
 
     @classmethod
-    def get_available_backends(cls) -> List[ProcessingBackend]:
+    def get_available_backends(cls) -> list[ProcessingBackend]:
         """Get list of available processing backends."""
         available = []
         for backend, processor_class in cls._processors.items():

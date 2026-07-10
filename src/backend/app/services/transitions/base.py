@@ -5,9 +5,8 @@ This module defines the abstract interface that all transition types must implem
 Each transition type (cut, fade, dissolve) provides a different way to combine clips.
 """
 
-from abc import ABC, abstractmethod
-from typing import List, Optional
 import logging
+from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class TransitionStrategy(ABC):
     @abstractmethod
     def concatenate(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         duration: float,
         include_audio: bool = True
@@ -90,6 +89,6 @@ class TransitionFactory:
         return strategy_class()
 
     @classmethod
-    def get_available(cls) -> List[str]:
+    def get_available(cls) -> list[str]:
         """Return list of registered transition types."""
         return list(cls._registry.keys())

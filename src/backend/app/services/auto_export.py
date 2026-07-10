@@ -502,10 +502,10 @@ def backfill_hiq_recaps(limit: int = 25, dry_run: bool = False) -> dict:
     Returns a dict with the per-game outcome lists and `partial` (True when the
     `limit` budget was exhausted before scanning finished).
     """
-    from .auth_db import get_all_users_for_admin
     from ..database import ensure_database
     from ..migrations import _get_profile_ids
     from ..storage import r2_head_object_global
+    from .auth_db import get_all_users_for_admin
 
     result = {
         "limit": limit,

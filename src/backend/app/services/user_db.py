@@ -20,9 +20,7 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +139,8 @@ def ensure_user_database(user_id: str) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     # R2 restore on first access (before schema creation so restored DB is used)
-    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
     from ..database import get_local_user_db_version, set_local_user_db_version
+    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
 
     if R2_ENABLED:
         local_version = get_local_user_db_version(user_id)
@@ -217,7 +215,7 @@ def get_user_db_connection(user_id: str = None):
     ensure_user_database(user_id)
     db_path = _get_user_db_path(user_id)
 
-    from ..database import TrackedConnection, _request_context
+    from ..database import TrackedConnection
 
     raw_conn = sqlite3.connect(str(db_path), timeout=30)
     raw_conn.row_factory = sqlite3.Row
@@ -248,7 +246,7 @@ def get_credit_balance(user_id: str) -> dict:
         return {"balance": row["balance"]}
 
 
-def grant_credits(user_id: str, amount: int, source: str, reference_id: Optional[str] = None) -> int:
+def grant_credits(user_id: str, amount: int, source: str, reference_id: str | None = None) -> int:
     """Grant credits to a user. Returns new balance."""
     with get_user_db_connection(user_id) as conn:
         # Ensure credits row exists
@@ -277,8 +275,8 @@ def deduct_credits(
     user_id: str,
     amount: int,
     source: str,
-    reference_id: Optional[str] = None,
-    video_seconds: Optional[float] = None,
+    reference_id: str | None = None,
+    video_seconds: float | None = None,
 ) -> dict:
     """
     Deduct credits atomically. Returns {success, balance, required}.
@@ -335,7 +333,7 @@ def refund_credits(
     user_id: str,
     amount: int,
     reference_id: str,
-    video_seconds: Optional[float] = None,
+    video_seconds: float | None = None,
     source: str = "framing_refund",
 ) -> int:
     """Refund credits for a failed operation. Returns new balance."""
@@ -420,7 +418,7 @@ def has_processed_payment(user_id: str, reference_id: str) -> bool:
 # Stripe customer management
 # ---------------------------------------------------------------------------
 
-def get_stripe_customer_id(user_id: str) -> Optional[str]:
+def get_stripe_customer_id(user_id: str) -> str | None:
     """Get Stripe customer ID for a user."""
     with get_user_db_connection(user_id) as conn:
         row = conn.execute(
@@ -742,7 +740,7 @@ def get_default_profile_sport(user_id: str) -> str | None:
         return None
 
 
-def get_selected_profile_id(user_id: str) -> Optional[str]:
+def get_selected_profile_id(user_id: str) -> str | None:
     """Return the selected profile ID from user_settings, or None."""
     with get_user_db_connection(user_id) as conn:
         row = conn.execute(
@@ -818,6 +816,7 @@ def backfill_preferences_from_profile(user_id: str) -> bool:
 
     # Try to read from the active profile's profile.sqlite
     import json
+
     from ..database import get_db_connection
     try:
         with get_db_connection() as conn:
@@ -852,7 +851,7 @@ def create_profile(user_id: str, profile_id: str, name: str, color: str, is_defa
     logger.info(f"[UserDB] Created profile {profile_id} ({name}) for user {user_id}")
 
 
-def update_profile(user_id: str, profile_id: str, name: Optional[str] = None, color: Optional[str] = None, sport: Optional[str] = None) -> None:
+def update_profile(user_id: str, profile_id: str, name: str | None = None, color: str | None = None, sport: str | None = None) -> None:
     """Update profile fields."""
     with get_user_db_connection(user_id) as conn:
         if name is not None:

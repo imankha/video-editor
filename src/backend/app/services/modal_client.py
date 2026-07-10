@@ -25,13 +25,13 @@ Usage:
     )
 """
 
-import os
 import asyncio
 import logging
 import multiprocessing
 import multiprocessing.managers
-import time
+import os
 import socket
+import time
 from concurrent.futures import ProcessPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -228,7 +228,7 @@ def _log_modal_job_start(
 ):
     """Log structured context at Modal job start."""
     parts = [
-        f"[Modal Job Start]",
+        "[Modal Job Start]",
         f"type={job_type}",
         f"job={job_id}",
         f"user={user_id}",
@@ -352,7 +352,7 @@ def _resolve_modal_user_id(user_id: str) -> str:
     caller (7 sites across 5 files), eliminating a recurring bug class where
     callers forgot to convert and Modal couldn't find files in R2.
     """
-    from app.storage import r2_user_prefix, R2_ENABLED
+    from app.storage import R2_ENABLED, r2_user_prefix
     return r2_user_prefix(user_id) if R2_ENABLED else user_id
 
 
@@ -641,9 +641,9 @@ async def call_modal_framing_ai(
                 # Use sequential processing
                 process_fn = _get_process_framing_ai_fn()
                 if segment_data:
-                    logger.info(f"[Modal] Using sequential processing (segment_data present)")
+                    logger.info("[Modal] Using sequential processing (segment_data present)")
                 else:
-                    logger.info(f"[Modal] Using sequential processing (short video)")
+                    logger.info("[Modal] Using sequential processing (short video)")
 
                 def get_generator():
                     return process_fn.remote_gen(

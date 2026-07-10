@@ -13,8 +13,7 @@ Postgres instance for all users. It stores:
 import logging
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from .pg import get_pg
 
@@ -30,7 +29,7 @@ def get_auth_db():
 # User operations
 # ---------------------------------------------------------------------------
 
-def get_user_by_email(email: str) -> Optional[dict]:
+def get_user_by_email(email: str) -> dict | None:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -40,7 +39,7 @@ def get_user_by_email(email: str) -> Optional[dict]:
         return cur.fetchone()
 
 
-def get_user_by_google_id(google_id: str) -> Optional[dict]:
+def get_user_by_google_id(google_id: str) -> dict | None:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -50,7 +49,7 @@ def get_user_by_google_id(google_id: str) -> Optional[dict]:
         return cur.fetchone()
 
 
-def get_user_by_id(user_id: str) -> Optional[dict]:
+def get_user_by_id(user_id: str) -> dict | None:
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -62,9 +61,9 @@ def get_user_by_id(user_id: str) -> Optional[dict]:
 
 def create_user(
     user_id: str,
-    email: Optional[str] = None,
-    google_id: Optional[str] = None,
-    verified_at: Optional[str] = None,
+    email: str | None = None,
+    google_id: str | None = None,
+    verified_at: str | None = None,
 ) -> dict:
     with get_auth_db() as conn:
         cur = conn.cursor()
@@ -125,7 +124,7 @@ def generate_user_id() -> str:
 
 def create_session(user_id: str, ttl_days: int = 30) -> str:
     session_id = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=ttl_days)
+    expires_at = datetime.now(UTC) + timedelta(days=ttl_days)
 
     with get_auth_db() as conn:
         cur = conn.cursor()
@@ -138,7 +137,7 @@ def create_session(user_id: str, ttl_days: int = 30) -> str:
     return session_id
 
 
-def validate_session(session_id: str) -> Optional[dict]:
+def validate_session(session_id: str) -> dict | None:
     """Validate a session cookie. Returns {user_id, email, ...} or None.
 
     T1510: if the session has impersonation_expires_at set and it has
@@ -168,7 +167,7 @@ def validate_session(session_id: str) -> Optional[dict]:
 
     # T1510: impersonation TTL enforcement
     if impersonator_user_id and impersonation_expires_at:
-        if impersonation_expires_at < datetime.now(timezone.utc):
+        if impersonation_expires_at < datetime.now(UTC):
             try:
                 log_impersonation(impersonator_user_id, user_id, "expire", None, None)
             except Exception:
@@ -264,7 +263,7 @@ def create_impersonation_session(
     ttl_minutes: int = IMPERSONATION_TTL_MINUTES,
 ) -> str:
     session_id = secrets.token_urlsafe(32)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = now + timedelta(days=30)
     impersonation_expires_at = now + timedelta(minutes=ttl_minutes)
 
@@ -308,8 +307,8 @@ def log_impersonation(
     admin_user_id: str,
     target_user_id: str,
     action: str,
-    ip: Optional[str],
-    user_agent: Optional[str],
+    ip: str | None,
+    user_agent: str | None,
 ) -> None:
     with get_auth_db() as conn:
         cur = conn.cursor()
@@ -403,7 +402,7 @@ def insert_game_storage_ref(
 
 def get_game_storage_ref(
     user_id: str, profile_id: str, blake3_hash: str
-) -> Optional[dict]:
+) -> dict | None:
     from ..database import get_db_connection
 
     with get_db_connection() as conn:
@@ -481,7 +480,7 @@ def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
         return {r["blake3_hash"] for r in rows}
 
 
-def get_next_expiry() -> Optional[datetime]:
+def get_next_expiry() -> datetime | None:
     with get_pg() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -504,7 +503,7 @@ def get_next_expiry() -> Optional[datetime]:
 # ---------------------------------------------------------------------------
 
 def insert_grace_deletion(blake3_hash: str, grace_days: int = 14) -> None:
-    grace_expires_at = datetime.now(timezone.utc) + timedelta(days=grace_days)
+    grace_expires_at = datetime.now(UTC) + timedelta(days=grace_days)
     with get_auth_db() as conn:
         cur = conn.cursor()
         cur.execute(
