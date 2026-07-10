@@ -64,7 +64,9 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     setIsDragging(true)
-    updateSlider(e.clientX)
+    // On touch, don't jump on contact -- the gesture may be a vertical page
+    // scroll (touch-pan-y hands those to the browser via pointercancel)
+    if (e.pointerType !== 'touch') updateSlider(e.clientX)
     containerRef.current?.setPointerCapture(e.pointerId)
   }, [updateSlider])
 
@@ -83,7 +85,7 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
         <div className="bg-gray-900 rounded-[1.5rem] md:rounded-[3rem] p-1.5 md:p-3 shadow-2xl border md:border-4 border-gray-700 mx-2 md:mx-0">
           <div
             ref={containerRef}
-            className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px] relative select-none touch-none"
+            className="bg-black rounded-[1rem] md:rounded-[2.25rem] overflow-hidden w-full aspect-[9/16] md:w-[405px] md:h-[720px] relative select-none touch-pan-y"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
