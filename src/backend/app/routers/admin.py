@@ -11,31 +11,31 @@ downloads or SQLite counting.
 import asyncio
 import logging
 import math
-from typing import Optional
-
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from ..storage import APP_ENV
-from ..user_context import get_current_user_id
 from ..services.auth_db import (
-    is_admin,
-    get_user_by_id,
+    IMPERSONATION_TTL_MINUTES,
     create_impersonation_session,
     find_or_create_admin_restore_session,
-    log_impersonation,
+    get_user_by_id,
     invalidate_session,
+    is_admin,
+    log_impersonation,
     validate_session,
-    IMPERSONATION_TTL_MINUTES,
 )
+from ..services.pg import get_pg
 from ..services.user_db import (
     get_credit_stats_for_admin,
     grant_credits,
 )
-from ..services.pg import get_pg
+from ..storage import APP_ENV
+from ..user_context import get_current_user_id
+from ..utils.cookies import delete_cookie as _delete_cookie_raw
+from ..utils.cookies import set_cookie as _set_cookie_raw
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
 
 
 def _compute_last_step(actions: set[str]) -> str:
-    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
     for step in reversed(FUNNEL_STEPS):
         if step in actions:
             return FLOW_EVENTS[step]["label"]
@@ -131,7 +131,7 @@ async def list_users(
             {where_clause}
             ORDER BY s.last_active_at DESC NULLS LAST
             LIMIT %s OFFSET %s
-        """, params + [page_size, offset])
+        """, [*params, page_size, offset])
 
         rows = cur.fetchall()
         page_user_ids = [row["user_id"] for row in rows]
@@ -151,7 +151,7 @@ async def list_users(
         for ar in action_rows:
             actions_by_user.setdefault(ar["user_id"], {})[ar["action"]] = ar["count"]
 
-        from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+        from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
         funnel_join = f"JOIN user_segments s ON a.user_id = s.user_id {where_clause}" if where_parts else ""
         funnel_params = list(params) if where_parts else []
@@ -186,7 +186,7 @@ async def list_users(
 
         effective_usage = row["total_usage_seconds"] or 0
         if row["current_session_start"] and row["last_active_at"]:
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
             if (now_utc - row["last_active_at"]).total_seconds() < 1800:
                 unclosed = int((now_utc - row["current_session_start"]).total_seconds())
                 effective_usage += min(unclosed, 1800)
@@ -272,8 +272,6 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
 # T1510: Impersonation
 # ---------------------------------------------------------------------------
 
-from app.utils.cookies import set_cookie as _set_cookie_raw, delete_cookie as _delete_cookie_raw
-
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
     _set_cookie_raw(response, "rb_session", session_id)
@@ -358,9 +356,9 @@ async def cleanup_shares():
     _require_admin()
 
     from ..services.sharing_db import (
+        cleanup_old_shares,
         cleanup_resolved_pending_shares,
         expire_stale_pending_shares,
-        cleanup_old_shares,
     )
 
     resolved = cleanup_resolved_pending_shares()
@@ -395,6 +393,15 @@ def _run_all_migrations() -> dict:
 # Recap backfill (T4140)
 # ---------------------------------------------------------------------------
 
+# Single-flight state for the recap backfill. The real run is dispatched to a
+# background thread and the request returns immediately: the db_sync middleware
+# holds the caller's per-user WRITE lock for the whole request, so a synchronous
+# multi-minute re-encode starves every other write from that user (observed:
+# 13 minutes of queued Copy Link clicks in dev). The backfill itself only
+# reads the profile DB and writes R2 objects, so it does not need the lock.
+_BACKFILL_STATE: dict = {"running": False, "last_result": None, "task": None}
+
+
 @router.post("/backfill-hiq-recaps")
 async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
                               dry_run: bool = Query(False)):
@@ -402,13 +409,45 @@ async def backfill_hiq_recaps(limit: int = Query(25, ge=1, le=500),
 
     Heavy per-game re-encode, so it is throttled/batched by `limit` and NOT run
     on startup. Only games whose game video still exists (in-grace) are upgraded;
-    already-reclaimed games keep their 480p recap. Call repeatedly until the
-    response's `partial` is False. Pass `dry_run=true` to count candidates
-    without re-encoding.
+    already-reclaimed games keep their 480p recap. Pass `dry_run=true` for a
+    fast synchronous candidate count. The real run returns 202-style
+    `{"started": true}` immediately and executes in the background — GET this
+    same path to poll `running`/`last_result` (a repeat POST while idle would
+    start ANOTHER run).
     """
     _require_admin()
     from ..services.auto_export import backfill_hiq_recaps as _backfill
-    return await asyncio.to_thread(_backfill, limit, dry_run)
+
+    if dry_run:
+        return await asyncio.to_thread(_backfill, limit, True)
+
+    if _BACKFILL_STATE["running"]:
+        return {"started": False, "already_running": True,
+                "last_result": _BACKFILL_STATE["last_result"]}
+
+    _BACKFILL_STATE["running"] = True
+
+    async def _run_in_background():
+        try:
+            _BACKFILL_STATE["last_result"] = await asyncio.to_thread(_backfill, limit, False)
+        except Exception as exc:
+            logger.exception("[Backfill] background run failed")
+            _BACKFILL_STATE["last_result"] = {"error": str(exc)}
+        finally:
+            _BACKFILL_STATE["running"] = False
+
+    _BACKFILL_STATE["task"] = asyncio.create_task(_run_in_background())
+    return {"started": True, "limit": limit,
+            "note": "running in background; GET this path to poll "
+                    "running/last_result"}
+
+
+@router.get("/backfill-hiq-recaps")
+async def backfill_hiq_recaps_status():
+    """Read-only status of the recap backfill (see POST above)."""
+    _require_admin()
+    return {"running": _BACKFILL_STATE["running"],
+            "last_result": _BACKFILL_STATE["last_result"]}
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +465,7 @@ async def analytics_funnel(
     d_from = date.fromisoformat(date_from) if date_from else date.today() - timedelta(days=365)
     d_to = date.fromisoformat(date_to) if date_to else date.today()
 
-    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
     with get_pg() as conn:
         cur = conn.cursor()
@@ -481,7 +520,7 @@ async def analytics_funnel(
                 label = FLOW_EVENTS[step]["label"]
                 key = label.lower().replace(" ", "_")
                 totals[key] = sum(r.get(key, 0) for r in rows)
-            rows = [totals] + rows
+            rows = [totals, *rows]
 
     return {"funnel": rows, "from": str(d_from), "to": str(d_to)}
 
@@ -541,7 +580,7 @@ async def analytics_cohorts(
     granularity: str = Query("week"),
     origin: str = Query("all"),
 ):
-    from ..analytics import FUNNEL_STEPS, FLOW_EVENTS
+    from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
 
     _require_admin()
     trunc = "week" if granularity == "week" else "month"
@@ -564,7 +603,7 @@ async def analytics_cohorts(
             {origin_filter}
             GROUP BY cohort_period
             ORDER BY cohort_period DESC
-        """, [trunc] + params)
+        """, [trunc, *params])
         signup_data = {}
         for r in cur.fetchall():
             cp = str(r["cohort_period"])
@@ -580,7 +619,7 @@ async def analytics_cohorts(
             {origin_filter}
             GROUP BY cohort_period, a.action
             ORDER BY cohort_period DESC
-        """, [trunc] + params)
+        """, [trunc, *params])
         action_rows = cur.fetchall()
 
         cur.execute(f"""
@@ -593,7 +632,7 @@ async def analytics_cohorts(
             JOIN user_actions a ON s.user_id = a.user_id AND a.action = 'export_completed'
             {origin_filter}
             GROUP BY cohort_period
-        """, [trunc] + params)
+        """, [trunc, *params])
         tte_rows = {str(r["cohort_period"]): round(float(r["median_days_to_export"]), 1) if r["median_days_to_export"] else None for r in cur.fetchall()}
 
         cur.execute(f"""
@@ -605,7 +644,7 @@ async def analytics_cohorts(
             FROM user_segments s
             {origin_filter}
             GROUP BY cohort_period
-        """, [trunc] + params)
+        """, [trunc, *params])
         return_rows = {str(r["cohort_period"]): r["returned"] for r in cur.fetchall()}
 
     by_cohort: dict[str, dict] = {}
@@ -724,6 +763,7 @@ async def analytics_user_actions(
             raise HTTPException(status_code=404, detail="User not found")
 
     import json
+
     from ..services.user_db import get_user_db_connection
     with get_user_db_connection(user_id) as conn:
         total_row = conn.execute("SELECT COUNT(*) as cnt FROM user_action_log").fetchone()
@@ -808,7 +848,7 @@ async def analytics_pulse(
                 FROM user_segments s
                 {seg_where} AND s.acquired_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
-            """, filter_params + [start, today])
+            """, [*filter_params, start, today])
             signup_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
             cur.execute(f"""
@@ -817,7 +857,7 @@ async def analytics_pulse(
                 JOIN user_segments s ON a.user_id = s.user_id
                 {seg_where} AND a.action = 'export_completed' AND a.first_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
-            """, filter_params + [start, today])
+            """, [*filter_params, start, today])
             export_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
             if origin and not acquired_from and not acquired_to and not filter:
@@ -834,7 +874,7 @@ async def analytics_pulse(
                     FROM user_segments s
                     {seg_where} AND s.last_active_at::date BETWEEN %s AND %s
                     GROUP BY d ORDER BY d
-                """, filter_params + [start, today])
+                """, [*filter_params, start, today])
                 active_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
             cur.execute(f"""
@@ -862,7 +902,7 @@ async def analytics_pulse(
                 {seg_where} AND a.action = 'credit_purchased'
                     AND a.first_at::date BETWEEN %s AND %s
                 GROUP BY d ORDER BY d
-            """, filter_params + [start, today])
+            """, [*filter_params, start, today])
             revenue_by_date = {r["d"]: r["cnt"] for r in cur.fetchall()}
 
             cur.execute(f"""
@@ -873,7 +913,7 @@ async def analytics_pulse(
                 {seg_where} AND a.action IN ('share_completed', 'share_viewed')
                     AND a.first_at::date BETWEEN %s AND %s
                 GROUP BY d, a.action ORDER BY d
-            """, filter_params + [start, today])
+            """, [*filter_params, start, today])
             shares_by_date = {}
             views_by_date = {}
             for r in cur.fetchall():
@@ -1036,7 +1076,7 @@ async def referral_tree(user_id: str):
 
 @router.get("/analytics/platforms")
 async def analytics_platforms(
-    action: Optional[str] = Query(None),
+    action: str | None = Query(None),
 ):
     """Platform breakdown: % of users and actions on mobile/desktop/pwa."""
     _require_admin()
@@ -1115,7 +1155,7 @@ BUG_STATUSES = {"new", "testing", "done", "duplicate"}
 
 @router.get("/bugs")
 async def list_bugs(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
 ):
@@ -1145,7 +1185,7 @@ async def list_bugs(
             FROM bug_reports {where_clause}
             ORDER BY created_at DESC
             LIMIT %s OFFSET %s
-        """, params + [page_size, offset])
+        """, [*params, page_size, offset])
         rows = cur.fetchall()
 
     bugs = []
@@ -1288,9 +1328,9 @@ async def get_correlated_bugs(bug_id: int):
 
 
 class BugUpdateRequest(BaseModel):
-    status: Optional[str] = None
-    admin_notes: Optional[str] = None
-    duplicate_of: Optional[int] = None
+    status: str | None = None
+    admin_notes: str | None = None
+    duplicate_of: int | None = None
 
 
 @router.patch("/bugs/{bug_id}")
