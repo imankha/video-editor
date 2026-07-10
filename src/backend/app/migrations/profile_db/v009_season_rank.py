@@ -96,13 +96,13 @@ class V009SeasonRank(BaseMigration):
 
     def _backfill_row(self, conn, cursor, row) -> None:
         from app.services.collection_metadata import (
-            compute_project_clip_stats,
+            compute_archive_clip_identity,
             compute_archive_clip_stats,
             compute_project_clip_identity,
-            compute_archive_clip_identity,
+            compute_project_clip_stats,
         )
+        from app.services.glicko import RD_MAX, seed_rating
         from app.services.project_archive import load_archive
-        from app.services.glicko import seed_rating, RD_MAX
 
         fv_id = row["id"]
         project_id = row["project_id"]

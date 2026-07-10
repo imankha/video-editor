@@ -66,9 +66,9 @@ class V008FreezeGameIds(BaseMigration):
 
     def _backfill_row(self, conn, cursor, row) -> None:
         from app.services.collection_metadata import (
-            encode_game_ids,
             compute_archive_game_ids,
             compute_project_game_ids,
+            encode_game_ids,
         )
         from app.services.project_archive import load_archive
 

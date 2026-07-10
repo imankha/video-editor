@@ -1,4 +1,5 @@
 import msgpack
+
 from ..base import BaseMigration
 
 
