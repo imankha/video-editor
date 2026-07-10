@@ -12,13 +12,12 @@ GPU Encoding Support:
 - CPU fallback (libx264) - Always available
 """
 
+import logging
+import os
 import subprocess
 import tempfile
-import os
-import logging
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
 from functools import lru_cache
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +47,7 @@ def _test_encoder_works(encoder: str) -> bool:
 
 
 @lru_cache(maxsize=1)
-def get_available_encoders() -> Dict[str, bool]:
+def get_available_encoders() -> dict[str, bool]:
     """
     Check which hardware encoders are available AND working.
     Results are cached for the lifetime of the process.
@@ -98,7 +97,7 @@ def get_available_encoders() -> Dict[str, bool]:
         return {'libx264': True}
 
 
-def get_best_encoder(prefer_quality: bool = True) -> Tuple[str, Dict[str, str]]:
+def get_best_encoder(prefer_quality: bool = True) -> tuple[str, dict[str, str]]:
     """
     Get the best available H.264 encoder with optimal settings.
 
@@ -193,9 +192,9 @@ def get_best_encoder(prefer_quality: bool = True) -> Tuple[str, Dict[str, str]]:
 
 def build_video_encoding_params(
     encoder: str,
-    params: Dict[str, str],
+    params: dict[str, str],
     pixel_format: str = 'yuv420p'
-) -> List[str]:
+) -> list[str]:
     """
     Build FFmpeg command-line parameters for video encoding.
 
@@ -241,7 +240,7 @@ def build_video_encoding_params(
     return cmd
 
 
-def get_encoding_command_parts(prefer_quality: bool = True) -> List[str]:
+def get_encoding_command_parts(prefer_quality: bool = True) -> list[str]:
     """
     Get video encoding command parts using best available encoder.
     Convenience function that combines get_best_encoder and build_video_encoding_params.
@@ -277,7 +276,7 @@ def get_video_duration(video_path: str) -> float:
         return 0.0
 
 
-def get_video_info(video_path: str) -> Dict[str, Any]:
+def get_video_info(video_path: str) -> dict[str, Any]:
     """
     Get comprehensive video information using FFprobe.
 
@@ -321,7 +320,7 @@ def get_video_info(video_path: str) -> Dict[str, Any]:
 
 
 def create_chapter_metadata_file(
-    chapters: List[Dict[str, Any]],
+    chapters: list[dict[str, Any]],
     output_path: str
 ) -> str:
     """
@@ -387,7 +386,7 @@ def add_chapters_to_video(
 
 
 def concatenate_with_cut(
-    clip_paths: List[str],
+    clip_paths: list[str],
     output_path: str,
     include_audio: bool = True
 ) -> bool:
@@ -444,7 +443,7 @@ def concatenate_with_cut(
 
 
 def concatenate_with_fade(
-    clip_paths: List[str],
+    clip_paths: list[str],
     output_path: str,
     fade_duration: float = 0.5,
     include_audio: bool = True
@@ -537,7 +536,7 @@ def concatenate_with_fade(
 
 
 def concatenate_with_dissolve(
-    clip_paths: List[str],
+    clip_paths: list[str],
     output_path: str,
     dissolve_duration: float = 0.5,
     include_audio: bool = True
@@ -623,7 +622,7 @@ def concatenate_with_dissolve(
 
 
 def concatenate_clips(
-    clip_paths: List[str],
+    clip_paths: list[str],
     output_path: str,
     transition_type: str = "cut",
     transition_duration: float = 0.5,
@@ -710,7 +709,7 @@ def is_ffmpeg_available() -> bool:
         return False
 
 
-def get_ffmpeg_version() -> Optional[str]:
+def get_ffmpeg_version() -> str | None:
     """Get FFmpeg version string."""
     try:
         result = subprocess.run(

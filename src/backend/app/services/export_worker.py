@@ -12,27 +12,17 @@ Key design:
 """
 
 import asyncio
-import json
 import logging
 import os
-import tempfile
-import shutil
-from pathlib import Path
-from typing import Optional, Callable
 
-from ..database import get_db_connection, get_working_videos_path
 from ..analytics import record_milestone
-from ..utils.encoding import decode_data
-from ..websocket import manager, export_progress
-from .ffmpeg_service import get_video_duration
-from ..routers.exports import (
-    get_export_job,
-    update_job_started,
-    update_job_complete,
-    update_job_error
-)
-from .modal_client import modal_enabled, call_modal_overlay
 from ..constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
+from ..database import get_db_connection, get_working_videos_path
+from ..routers.exports import get_export_job, update_job_complete, update_job_error, update_job_started
+from ..utils.encoding import decode_data
+from ..websocket import export_progress, manager
+from .ffmpeg_service import get_video_duration
+from .modal_client import call_modal_overlay, modal_enabled
 
 logger = logging.getLogger(__name__)
 

@@ -19,16 +19,16 @@ multi-clip reels live in Mixes and never rank.
 import logging
 import math
 import random
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional, List
 
 from app.database import get_db_connection
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.routers.collections import COLLECTION_MIN_DURATION_SEC
 from app.services.collection_metadata import route_collection
-from app.services.glicko import update_one, RD_MAX
+from app.services.glicko import RD_MAX, update_one
 from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
@@ -43,11 +43,11 @@ router = APIRouter(prefix="/api/rank", tags=["ranking"])
 class MatchupSide(BaseModel):
     id: int
     name: str
-    aspect_ratio: Optional[str] = None
-    project_id: Optional[int] = None      # editable project behind the reel (re-edit; T3940)
-    opponent_line: Optional[str] = None   # "vs Carlsbad - Dec 6" (None when game-less)
-    minute: Optional[int] = None          # floor(clip_game_start_time/60)+1, soccer `33'` (2nd-half offset applied, T3930)
-    tags: List[str] = []
+    aspect_ratio: str | None = None
+    project_id: int | None = None      # editable project behind the reel (re-edit; T3940)
+    opponent_line: str | None = None   # "vs Carlsbad - Dec 6" (None when game-less)
+    minute: int | None = None          # floor(clip_game_start_time/60)+1, soccer `33'` (2nd-half offset applied, T3930)
+    tags: list[str] = []
     stream_url: str                       # same-origin proxy (tap-to-replay)
 
 
@@ -79,8 +79,8 @@ class UndoInfo(BaseModel):
     the last one and POSTs it back to /restore to undo an accidental pick."""
     winner_id: int
     loser_id: int
-    winner_source_clip_id: Optional[int] = None
-    loser_source_clip_id: Optional[int] = None
+    winner_source_clip_id: int | None = None
+    loser_source_clip_id: int | None = None
     winner_rating: float
     winner_rd: float
     winner_match_count: int
@@ -152,7 +152,7 @@ def _games_info(cursor, rows) -> dict:
     return info
 
 
-def _opponent_line(opponent_name, game_date) -> Optional[str]:
+def _opponent_line(opponent_name, game_date) -> str | None:
     """"vs Carlsbad - Dec 6" from a game's opponent + date (date optional)."""
     if not opponent_name:
         return None
@@ -167,7 +167,7 @@ def _opponent_line(opponent_name, game_date) -> Optional[str]:
     return f"vs {opponent_name}" + (f" - {date_str}" if date_str else "")
 
 
-def _minute(clip_start_time) -> Optional[int]:
+def _minute(clip_start_time) -> int | None:
     """Soccer-notation in-match minute: floor(sec/60)+1. None when unknown."""
     if clip_start_time is None:
         return None
@@ -193,7 +193,7 @@ def _side(row, games_info: dict) -> MatchupSide:
 # Pairing (spec §4.3)
 # ---------------------------------------------------------------------------
 
-def _pick_pair(pool: list, exclude_id: Optional[int]):
+def _pick_pair(pool: list, exclude_id: int | None):
     """(candidate, opponent) from a rankable pool. candidate = lowest match_count
     (ties random); opponent = nearest rating (ties prefer lower match_count, then
     random), excluding the candidate and -- when possible -- `exclude_id` (the
@@ -293,7 +293,7 @@ def _confidence_stats(cursor, aspect_ratio: str) -> ConfidenceResponse:
 # ---------------------------------------------------------------------------
 
 @router.get("/next", response_model=Optional[MatchupResponse])
-async def rank_next(aspect_ratio: str, exclude_id: Optional[int] = None):
+async def rank_next(aspect_ratio: str, exclude_id: int | None = None):
     """Next matchup for a ratio. 204 (null body) when the pool has < 2 rankable
     reels. `exclude_id` (optional) is the previous opponent to avoid repeating."""
     with get_db_connection() as conn:

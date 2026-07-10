@@ -20,12 +20,11 @@ Usage:
 import json
 import logging
 import re
-from typing import Optional
 
+from app.constants import ExportPhase, ExportStatus
 from app.database import get_db_connection
-from app.constants import ExportStatus, ExportPhase
-from app.utils.encoding import encode_data, decode_data
-from app.websocket import manager, export_progress, make_progress_data
+from app.utils.encoding import decode_data, encode_data
+from app.websocket import export_progress, make_progress_data, manager
 
 logger = logging.getLogger(__name__)
 
@@ -248,7 +247,7 @@ def create_progress_callback(
 # Project Name Derivation
 # =============================================================================
 
-def derive_project_name(project_id: int, cursor) -> Optional[str]:
+def derive_project_name(project_id: int, cursor) -> str | None:
     """
     Derive a better project name from raw_clip data if project has generic name.
 
@@ -330,7 +329,7 @@ def get_project_info(project_id: int) -> dict:
 # Background Task R2 Sync
 # =============================================================================
 
-def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> bool:
+def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     """
     Explicit, durable R2 sync for background export tasks (T940 pattern).
 
@@ -351,9 +350,9 @@ def sync_export_db_to_r2(user_id: str, profile_id: Optional[str]) -> bool:
     pending on failure as the secondary recovery path.
     """
     from app.database import (
+        mark_sync_pending,
         sync_db_to_r2_explicit,
         sync_user_db_to_r2_explicit,
-        mark_sync_pending,
     )
 
     ok = True
@@ -410,7 +409,6 @@ def _resolve_recap_source(clip: dict):
     is missing. No silent fallback (CLAUDE.md): a missing recap fails visibly
     rather than pretending a source exists.
     """
-    import json
     import tempfile
     from pathlib import Path
 
@@ -532,8 +530,8 @@ def cleanup_temp_dir(temp_dir: str):
 
     Safe to call even if directory doesn't exist.
     """
-    import shutil
     import os
+    import shutil
 
     try:
         if os.path.exists(temp_dir):

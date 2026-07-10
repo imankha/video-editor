@@ -40,6 +40,11 @@ jobs:
           else
             echo "no changed frontend JS files"
           fi
+      - name: ESLint regression gate (whole src must not regrow the backlog)
+        # T4790: froze the eslint backlog at 0 errors / 1019 warnings. Any new
+        # error, or warnings past the baseline, fails the branch. Ratchet these
+        # numbers DOWN as the warning backlog is cleared; never up.
+        run: npx eslint src --max-warnings 1019
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
 
@@ -88,6 +93,18 @@ jobs:
             echo "$CHANGED" | xargs ruff check
           else
             echo "no changed backend py files"
+          fi
+      - name: Ruff regression gate (whole app must not regrow the backlog)
+        # T4790: froze the ruff backlog at 261 errors (all remaining are
+        # unsafe-autofix or manual-only rules; see the T4790 report). Fail if the
+        # count grows. Ratchet the baseline DOWN as the remainder is cleared.
+        run: |
+          OUT=$(ruff check app --output-format=concise || true)
+          COUNT=$(printf '%s\n' "$OUT" | grep -c '^app/' || true)
+          echo "ruff error count: $COUNT (baseline 261)"
+          if [ "$COUNT" -gt 261 ]; then
+            echo "::error::ruff errors grew past the T4790 baseline of 261 (now $COUNT). Fix the new errors or lower the baseline only if you reduced the backlog."
+            exit 1
           fi
       - name: Import check
         run: python -c "from app.main import app"

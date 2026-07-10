@@ -6,12 +6,11 @@ of records, avoiding duplication of complex window function logic across
 multiple files.
 """
 
-from typing import List, Optional
 
-from app.constants import RATING_ADJECTIVES, get_rating_adjective
+from app.constants import get_rating_adjective
 
 
-def derive_clip_name(stored_name: Optional[str], rating: int, tags: List[str], notes: str = '', generated_title: str = '') -> str:
+def derive_clip_name(stored_name: str | None, rating: int, tags: list[str], notes: str = '', generated_title: str = '') -> str:
     """
     Derive a clip name from rating and tags if no custom name is stored.
 

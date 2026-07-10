@@ -70,10 +70,10 @@ class V017BackfillMissingStorageRefs(BaseMigration):
         # incremented too. insert_game_storage_ref opens its OWN connection; this
         # migration's `conn` has only issued reads so far (no open write txn), so
         # there is no SQLite writer-lock contention.
+        from app.profile_context import get_current_profile_id
         from app.services.auth_db import insert_game_storage_ref
         from app.services.storage_credits import storage_expires_at
         from app.user_context import get_current_user_id
-        from app.profile_context import get_current_profile_id
 
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()

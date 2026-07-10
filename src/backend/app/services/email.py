@@ -10,7 +10,7 @@ import os
 
 import httpx
 
-from app.utils.retry import retry_async_call, TIER_1
+from app.utils.retry import TIER_1, retry_async_call
 
 logger = logging.getLogger(__name__)
 

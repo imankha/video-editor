@@ -13,9 +13,9 @@ Each function:
 - Accepts progress_callback with same signature
 """
 
-import os
 import asyncio
 import logging
+import os
 import tempfile
 import time
 from pathlib import Path
@@ -175,8 +175,8 @@ async def local_overlay(
     Same interface as call_modal_overlay - takes R2 keys, returns same format.
     Downloads from R2, processes with local FFmpeg, uploads result to R2.
     """
-    from app.storage import download_from_r2, upload_to_r2
     from app.routers.export.overlay import _process_frames_to_ffmpeg
+    from app.storage import download_from_r2, upload_to_r2
 
     logger.info(f"[LocalProcessor] Overlay job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
@@ -188,7 +188,7 @@ async def local_overlay(
         if first_region.get('keyframes'):
             logger.info(f"[LocalProcessor] DEBUG - First region keyframes sample: {first_region['keyframes'][:3]}")
     else:
-        logger.warning(f"[LocalProcessor] DEBUG - highlight_regions is EMPTY!")
+        logger.warning("[LocalProcessor] DEBUG - highlight_regions is EMPTY!")
 
     start_time = time.time()
 
@@ -302,8 +302,9 @@ async def local_framing(
     Same interface as call_modal_framing_ai - takes R2 keys, returns same format.
     Downloads from R2, processes with local Real-ESRGAN/FFmpeg, uploads result to R2.
     """
-    from app.storage import download_from_r2, generate_presigned_url_global, generate_presigned_url, upload_to_r2
     import ffmpeg as ffmpeg_lib
+
+    from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
 
     logger.info(f"[LocalProcessor] Framing job {job_id} starting")
     logger.info(f"[LocalProcessor] User: {user_id}, Input: {input_key} -> Output: {output_key}")
@@ -342,7 +343,7 @@ async def local_framing(
             elif input_key.startswith("games/"):
                 # No range specified — fall back to presigned URL streaming full file
                 source_url = generate_presigned_url_global(input_key)
-                logger.info(f"[LocalProcessor] Streaming full game video via presigned URL (no range)")
+                logger.info("[LocalProcessor] Streaming full game video via presigned URL (no range)")
                 try:
                     (
                         ffmpeg_lib
@@ -509,8 +510,8 @@ def _overlay_sync(
     progress_callback=None,
     overlay_settings: dict = None,
 ) -> dict:
-    from app.storage import download_from_r2, upload_to_r2
     from app.routers.export.overlay import _process_frames_to_ffmpeg
+    from app.storage import download_from_r2, upload_to_r2
 
     logger.info(f"[Subprocess] Overlay job {job_id} starting")
     start_time = time.time()
@@ -589,8 +590,9 @@ def _framing_sync(
     source_end_time: float = None,
     progress_callback=None,
 ) -> dict:
-    from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
     import ffmpeg as ffmpeg_lib
+
+    from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
 
     logger.info(f"[Subprocess] Framing job {job_id} starting")
     logger.info(f"[Subprocess] Source range: {source_start_time}s - {source_end_time}s")
@@ -623,7 +625,7 @@ def _framing_sync(
                     return {"status": "error", "error": f"Failed to extract clip range from R2: {stderr[-500:]}"}
             elif input_key.startswith("games/"):
                 source_url = generate_presigned_url_global(input_key)
-                logger.info(f"[Subprocess] Streaming full game video via presigned URL (no range)")
+                logger.info("[Subprocess] Streaming full game video via presigned URL (no range)")
                 try:
                     (
                         ffmpeg_lib
@@ -752,8 +754,9 @@ async def local_framing_mock(
     Same interface as local_framing but skips AI upscaling entirely.
     Uses fast FFmpeg crop+resize to produce a valid working video in seconds.
     """
-    from app.storage import download_from_r2, generate_presigned_url_global, generate_presigned_url, upload_to_r2
     import ffmpeg as ffmpeg_lib
+
+    from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
 
     logger.info(f"[LocalProcessor] Mock framing job {job_id} starting (test mode)")
     logger.info(f"[LocalProcessor] Source range: {source_start_time}s - {source_end_time}s")
@@ -787,7 +790,7 @@ async def local_framing_mock(
                     return {"status": "error", "error": f"Failed to extract clip range from R2: {e}"}
             elif input_key.startswith("games/"):
                 source_url = generate_presigned_url_global(input_key)
-                logger.info(f"[LocalProcessor] Mock: streaming full game video via presigned URL")
+                logger.info("[LocalProcessor] Mock: streaming full game video via presigned URL")
                 try:
                     (
                         ffmpeg_lib

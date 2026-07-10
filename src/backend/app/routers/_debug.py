@@ -6,7 +6,6 @@ for access control; the endpoints expose server-side file listings.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse
@@ -62,7 +61,7 @@ async def debug_list_logs():
 async def debug_read_log(
     filename: str,
     tail: int = Query(200, ge=1),
-    grep: Optional[str] = Query(None),
+    grep: str | None = Query(None),
 ):
     _require_enabled()
     if "/" in filename or "\\" in filename or ".." in filename:

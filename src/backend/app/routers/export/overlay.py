@@ -10,48 +10,61 @@ This module handles exports related to the Overlay editing mode:
 These endpoints handle highlight regions, effect types, and final output.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request, Depends
+import asyncio
+import json
+import logging
+import os
+import re
+import subprocess
+import tempfile
+import threading
+import time as time_module
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
 
-from ...middleware.db_sync import durable_sync, DURABLE_SYNC_FAILED_RESPONSE
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 from starlette.background import BackgroundTask
-from datetime import datetime
-from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-import threading
-import json
-import os
-import re
-import time as time_module
-import tempfile
-import uuid
-import subprocess
-import logging
+
+from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 
 # Thread pool for CPU-intensive frame processing (prevents blocking event loop)
 _frame_processor_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="overlay_")
 
-from ...websocket import export_progress, manager
-from ...database import get_db_connection, get_final_videos_path, get_highlights_path, get_raw_clips_path, get_uploads_path
-from ...services.ffmpeg_service import get_encoding_command_parts
-from ...storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2, download_from_r2, download_from_r2_with_progress, delete_from_r2
-from ...user_context import get_current_user_id
-from ...profile_context import get_current_profile_id
+from ...constants import DEFAULT_HIGHLIGHT_EFFECT, ExportStatus, normalize_effect_type
+from ...database import (
+    get_db_connection,
+    get_raw_clips_path,
+    get_uploads_path,
+)
 from ...highlight_transform import (
     transform_all_regions_to_raw,
     transform_all_regions_to_working,
 )
+from ...profile_context import get_current_profile_id
+from ...services.collection_metadata import (
+    compute_project_game_ids,
+    compute_project_metadata,
+    compute_project_ranking_freeze,
+    compute_unified_clip_start,
+)
+from ...services.ffmpeg_service import get_encoding_command_parts
 from ...services.image_extractor import (
     extract_player_images_for_region,
     list_highlight_images,
 )
-from ...services.modal_client import modal_enabled, call_modal_overlay, call_modal_overlay_auto
-from ...constants import ExportStatus, HighlightEffect, DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ...services.collection_metadata import compute_project_metadata, compute_project_game_ids, compute_project_ranking_freeze, compute_unified_clip_start
-from ...utils.encoding import encode_data, decode_data
+from ...services.modal_client import call_modal_overlay_auto, modal_enabled
+from ...storage import (
+    delete_from_r2,
+    generate_presigned_url,
+    upload_bytes_to_r2,
+)
+from ...user_context import get_current_user_id
+from ...utils.encoding import decode_data, encode_data
+from ...websocket import export_progress, manager
 
 logger = logging.getLogger(__name__)
 
@@ -221,43 +234,43 @@ def _export_sync_failed_data(export_type: str, project_id: int, project_name: st
 
 class OverlayActionTarget(BaseModel):
     """Target specifier for actions that modify existing items."""
-    region_id: Optional[str] = None
-    keyframe_time: Optional[float] = None  # Time in seconds
+    region_id: str | None = None
+    keyframe_time: float | None = None  # Time in seconds
 
 
 class OverlayActionData(BaseModel):
     """Data payload for overlay actions. Fields used depend on action type."""
     # Region fields
-    region_id: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    enabled: Optional[bool] = None
+    region_id: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+    enabled: bool | None = None
 
     # Keyframe fields
-    time: Optional[float] = None
-    x: Optional[float] = None
-    y: Optional[float] = None
-    radiusX: Optional[float] = None
-    radiusY: Optional[float] = None
-    strokeOpacity: Optional[float] = None
-    fillOpacity: Optional[float] = None
-    color: Optional[str] = None
+    time: float | None = None
+    x: float | None = None
+    y: float | None = None
+    radiusX: float | None = None
+    radiusY: float | None = None
+    strokeOpacity: float | None = None
+    fillOpacity: float | None = None
+    color: str | None = None
 
     # Detection data (for auto-created keyframes)
-    fromDetection: Optional[bool] = None
+    fromDetection: bool | None = None
 
     # Effect type
-    effect_type: Optional[str] = None
+    effect_type: str | None = None
 
     # Highlight color
-    highlight_color: Optional[str] = None
+    highlight_color: str | None = None
 
     # Overlay tuning settings
-    highlight_shape: Optional[str] = None
-    stroke_width: Optional[float] = None
-    fill_enabled: Optional[bool] = None
-    fill_opacity: Optional[float] = None
-    dim_strength: Optional[float] = None
+    highlight_shape: str | None = None
+    stroke_width: float | None = None
+    fill_enabled: bool | None = None
+    fill_opacity: float | None = None
+    dim_strength: float | None = None
 
 
 class OverlayAction(BaseModel):
@@ -276,17 +289,17 @@ class OverlayAction(BaseModel):
     - set_highlight_color: Change the highlight color for new highlights
     """
     action: str
-    target: Optional[OverlayActionTarget] = None
-    data: Optional[OverlayActionData] = None
-    expected_version: Optional[int] = None  # For conflict detection (future)
+    target: OverlayActionTarget | None = None
+    data: OverlayActionData | None = None
+    expected_version: int | None = None  # For conflict detection (future)
 
 
 class OverlayActionResponse(BaseModel):
     """Response from an overlay action."""
     success: bool
     version: int
-    region_id: Optional[str] = None  # Returned for create_region
-    error: Optional[str] = None
+    region_id: str | None = None  # Returned for create_region
+    error: str | None = None
 
 
 def _get_overlay_data(cursor, project_id: int) -> tuple:
@@ -660,6 +673,7 @@ def _process_frames_to_ffmpeg(
     Returns the total number of frames processed.
     """
     import cv2
+
     from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
     # DEBUG: Log what we received
@@ -680,7 +694,7 @@ def _process_frames_to_ffmpeg(
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
     logger.info(f"[Overlay Export] Video: {width}x{height} @ {fps}fps, {frame_count} frames")
-    logger.info(f"[Overlay Export] Piping frames directly to FFmpeg (no disk I/O)")
+    logger.info("[Overlay Export] Piping frames directly to FFmpeg (no disk I/O)")
 
     # Get GPU encoding params
     encoding_params = get_encoding_command_parts(prefer_quality=True)
@@ -848,8 +862,6 @@ async def export_overlay_only(
         ...
     ]
     """
-    import cv2
-    from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
     # Fetch project name for progress messages
     project_name = None
@@ -920,7 +932,7 @@ async def export_overlay_only(
             for region in highlight_regions:
                 logger.info(f"  Region {region['id']}: {region['start_time']:.2f}s - {region['end_time']:.2f}s, {len(region['keyframes'])} keyframes")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid highlight regions JSON: {e!s}")
     elif highlight_keyframes_json:
         # Legacy flat keyframe format - convert to single region
         try:
@@ -947,7 +959,7 @@ async def export_overlay_only(
                 })
             logger.info(f"[Overlay Export] Legacy format: {len(keyframes)} keyframes converted to 1 region")
         except (json.JSONDecodeError, KeyError) as e:
-            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid highlight keyframes JSON: {e!s}")
 
     # Create temp directory (no frames_dir needed - we pipe directly to FFmpeg)
     temp_dir = tempfile.mkdtemp()
@@ -1004,7 +1016,7 @@ async def export_overlay_only(
         # Run frame processing in thread pool to avoid blocking event loop
         # Frames are piped directly to FFmpeg - no disk I/O for individual frames!
         loop = asyncio.get_event_loop()
-        logger.info(f"[Overlay Export] Processing frames with direct FFmpeg pipe...")
+        logger.info("[Overlay Export] Processing frames with direct FFmpeg pipe...")
 
         # Start a task to send progress updates
         async def send_progress_updates():
@@ -1019,7 +1031,7 @@ async def export_overlay_only(
                         "projectName": project_name,
                         "type": "overlay"
                     })
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 except asyncio.CancelledError:
                     break
@@ -1114,7 +1126,7 @@ async def export_overlay_only(
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
         raise
     except Exception as e:
-        logger.error(f"[Overlay Export] Failed: {str(e)}", exc_info=True)
+        logger.error(f"[Overlay Export] Failed: {e!s}", exc_info=True)
         # Update export_jobs record to error
         if project_id:
             try:
@@ -1130,7 +1142,7 @@ async def export_overlay_only(
         from app.websocket import make_progress_data
         error_data = make_progress_data(
             current=0, total=100, phase='error',
-            message=f"Export failed: {str(e)}",
+            message=f"Export failed: {e!s}",
             export_type='overlay',
             project_id=project_id, project_name=project_name,
         )
@@ -1144,7 +1156,7 @@ async def export_overlay_only(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception as cleanup_error:
             logger.warning(f"[Overlay Export] Cleanup failed: {cleanup_error}")
-        raise HTTPException(status_code=500, detail=f"Overlay export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Overlay export failed: {e!s}")
 
 
 @router.post("/final")
@@ -1507,6 +1519,7 @@ async def _save_highlights_to_raw_clips(
     if wv_result:
         # Try to get actual dimensions from the working video file
         import cv2
+
         from ...database import get_working_videos_path
         wv_path = get_working_videos_path() / wv_result['filename']
         if wv_path.exists():
@@ -1620,6 +1633,7 @@ async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:
 
     if wv_result:
         import cv2
+
         from ...database import get_working_videos_path
         wv_path = get_working_videos_path() / wv_result['filename']
         if wv_path.exists():
@@ -1845,7 +1859,8 @@ async def _run_overlay_export_background(
     All progress is reported via WebSocket.
     """
     try:
-        from app.services.export_helpers import send_progress, create_progress_callback, store_modal_call_id as store_call_id
+        from app.services.export_helpers import create_progress_callback, send_progress
+        from app.services.export_helpers import store_modal_call_id as store_call_id
 
         logger.info(f"[Overlay Background] Starting export for project {project_id}")
 
@@ -2052,7 +2067,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         except Exception as e:
             logger.error(f"[Overlay Render] DEBUG - decode error: {e}")
     else:
-        logger.warning(f"[Overlay Render] DEBUG - highlights_data is empty/None!")
+        logger.warning("[Overlay Render] DEBUG - highlights_data is empty/None!")
 
     # Apply global highlight_color to all keyframes if set
     # This allows users to change the highlight color without re-editing each keyframe
@@ -2082,7 +2097,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
     if not has_keyframes:
         # No overlays to render - just copy working video to final video
-        logger.info(f"[Overlay Render] Skipping GPU processing (no keyframes to render)")
+        logger.info("[Overlay Render] Skipping GPU processing (no keyframes to render)")
         logger.info("[Overlay Render] Copying working video to final video directly")
 
         progress_data = {
@@ -2157,7 +2172,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     is_test_mode = http_request.headers.get('X-Test-Mode', '').lower() == 'true'
 
     if is_test_mode and not modal_enabled():
-        logger.info(f"[Overlay Render] TEST MODE: Skipping overlay rendering, copying working video as final")
+        logger.info("[Overlay Render] TEST MODE: Skipping overlay rendering, copying working video as final")
 
         try:
             from app.services.export_helpers import send_progress

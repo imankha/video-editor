@@ -10,14 +10,13 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
 
-from ..user_context import get_current_user_id
 from ..services.user_db import (
     get_credit_balance,
-    grant_credits,
     get_credit_transactions,
+    grant_credits,
 )
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,7 @@ router = APIRouter(prefix="/credits", tags=["credits"])
 class GrantRequest(BaseModel):
     amount: int
     source: str
-    reference_id: Optional[str] = None
+    reference_id: str | None = None
 
 
 @router.get("")

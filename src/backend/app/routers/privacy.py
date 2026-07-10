@@ -10,22 +10,21 @@ import logging
 import shutil
 import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
 
 from app.database import USER_DATA_BASE
+from app.services.auth_db import (
+    get_user_by_id,
+    invalidate_user_sessions,
+)
 from app.storage import (
     APP_ENV,
     R2_BUCKET,
     R2_ENABLED,
     generate_presigned_url,
     get_r2_client,
-)
-from app.services.auth_db import (
-    get_user_by_id,
-    invalidate_user_sessions,
 )
 from app.user_context import get_current_user_id
 from app.utils.cookies import delete_cookie as _delete_cookie

@@ -9,8 +9,12 @@ get_next_expiry() and sleeps until then (capped at 24h).
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
+from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
+from ..profile_context import set_current_profile_id
+from ..storage import r2_delete_object_global
+from ..user_context import set_current_user_id
 from .auth_db import (
     delete_grace_deletion,
     delete_ref,
@@ -21,11 +25,7 @@ from .auth_db import (
     has_remaining_refs,
     insert_grace_deletion,
 )
-from .auto_export import auto_export_game, MAX_AUTO_EXPORT_ATTEMPTS
-from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
-from ..profile_context import set_current_profile_id
-from ..storage import r2_delete_object_global
-from ..user_context import set_current_user_id
+from .auto_export import MAX_AUTO_EXPORT_ATTEMPTS, auto_export_game
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ async def _run_sweep_loop():
             if next_expiry is None:
                 delay = MAX_DELAY
             else:
-                delay = (next_expiry - datetime.now(timezone.utc)).total_seconds()
+                delay = (next_expiry - datetime.now(UTC)).total_seconds()
                 delay = max(delay, MIN_DELAY)
                 delay = min(delay, MAX_DELAY)
 
@@ -106,8 +106,8 @@ def do_sweep():
     total_expired = 0
 
     # Phase 1: iterate all users' profiles for expired storage refs
-    from .auth_db import get_all_users_for_admin
     from ..migrations import _get_profile_ids
+    from .auth_db import get_all_users_for_admin
 
     users = get_all_users_for_admin()
     for user in users:
@@ -192,8 +192,8 @@ def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:
     Only touches profiles whose DB file already exists locally to avoid downloading
     from R2 purely for this belt-and-suspenders step.
     """
-    from ..migrations import _get_profile_ids
     from ..database import USER_DATA_BASE
+    from ..migrations import _get_profile_ids
 
     total = 0
     for user in users:

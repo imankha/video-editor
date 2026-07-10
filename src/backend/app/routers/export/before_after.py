@@ -9,14 +9,15 @@ Output format is 9x16 (1080x1920) with optional text overlays.
 Supports merged (single file) or separate (zip with before.mp4 + after.mp4) output.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import FileResponse, JSONResponse
-from pathlib import Path
-import subprocess
-import tempfile
 import logging
 import os
+import subprocess
+import tempfile
 import zipfile
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, JSONResponse
 
 from ...database import get_db_connection, get_final_videos_path
 from ...services.ffmpeg_service import get_encoding_command_parts
@@ -87,8 +88,8 @@ def generate_before_clip(source_path: str, start_frame: int, end_frame: int,
     )
     if overlays:
         filter_complex += (
-            f",drawtext=text='Before':fontsize=72:fontcolor=white:"
-            f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+            ",drawtext=text='Before':fontsize=72:fontcolor=white:"
+            "x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
         )
 
     # Use GPU encoding if available
@@ -129,8 +130,8 @@ def generate_after_clip(final_video_path: str, output_path: str,
     )
     if overlays:
         filter_complex += (
-            f",drawtext=text='After':fontsize=72:fontcolor=white:"
-            f"x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
+            ",drawtext=text='After':fontsize=72:fontcolor=white:"
+            "x=(w-text_w)/2:y=80:borderw=3:bordercolor=black"
         )
 
     # Use GPU encoding if available

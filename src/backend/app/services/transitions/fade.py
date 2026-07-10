@@ -6,12 +6,11 @@ and a fade-in at the start of each clip (except the first), creating a
 "fade through black" effect.
 """
 
-import subprocess
 import logging
-from typing import List
+import subprocess
 
-from .base import TransitionStrategy, TransitionFactory
 from ..ffmpeg_service import get_video_duration
+from .base import TransitionFactory, TransitionStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class FadeTransition(TransitionStrategy):
 
     def concatenate(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         duration: float = 0.5,
         include_audio: bool = True

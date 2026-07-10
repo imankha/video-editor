@@ -6,9 +6,10 @@ Usage:
 
 This script handles the Windows encoding issues with Modal CLI Unicode output.
 """
-import subprocess
 import os
+import subprocess
 import sys
+
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))

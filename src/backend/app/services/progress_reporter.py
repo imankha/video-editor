@@ -29,9 +29,9 @@ USAGE:
 """
 
 import logging
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional, Dict, Any
-from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,8 @@ class ProgressReporter:
 
     def __init__(
         self,
-        callback: Optional[Callable[[int, int, str, str], None]] = None,
-        phase_weights: Optional[Dict[ProgressPhase, float]] = None,
+        callback: Callable[[int, int, str, str], None] | None = None,
+        phase_weights: dict[ProgressPhase, float] | None = None,
         throttle_ms: int = 100
     ):
         """
@@ -120,8 +120,8 @@ class ProgressReporter:
     def set_phase(
         self,
         phase: ProgressPhase,
-        weight: Optional[float] = None,
-        message: Optional[str] = None
+        weight: float | None = None,
+        message: str | None = None
     ) -> None:
         """
         Start a new progress phase.
@@ -148,7 +148,7 @@ class ProgressReporter:
         current: int,
         total: int,
         message: str = "",
-        phase: Optional[ProgressPhase] = None
+        phase: ProgressPhase | None = None
     ) -> None:
         """
         Update progress within the current phase.
@@ -241,7 +241,7 @@ class ProgressReporter:
     @classmethod
     def from_callback(
         cls,
-        callback: Optional[Callable[[int, int, str, str], None]]
+        callback: Callable[[int, int, str, str], None] | None
     ) -> 'ProgressReporter':
         """
         Create a ProgressReporter from a legacy callback.
@@ -260,7 +260,7 @@ class ProgressReporter:
 def create_clip_progress_reporter(
     clip_index: int,
     total_clips: int,
-    base_callback: Optional[Callable[[int, int, str, str], None]] = None,
+    base_callback: Callable[[int, int, str, str], None] | None = None,
     clip_weight: float = 0.7
 ) -> ProgressReporter:
     """

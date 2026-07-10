@@ -7,7 +7,6 @@ The real implementation would come from: https://github.com/XPixelGroup/HAT
 For now, this allows the ModelManager to load without errors.
 """
 
-import torch
 import torch.nn as nn
 
 

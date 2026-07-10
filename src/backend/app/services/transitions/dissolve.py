@@ -5,13 +5,12 @@ This transition uses FFmpeg's xfade filter to create a smooth
 cross-dissolve effect where clips overlap and blend into each other.
 """
 
-import subprocess
-import shutil
 import logging
-from typing import List
+import shutil
+import subprocess
 
-from .base import TransitionStrategy, TransitionFactory
 from ..ffmpeg_service import get_video_duration
+from .base import TransitionFactory, TransitionStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class DissolveTransition(TransitionStrategy):
 
     def concatenate(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         duration: float = 0.5,
         include_audio: bool = True

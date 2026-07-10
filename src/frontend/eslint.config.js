@@ -17,6 +17,9 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.es2021,
+        // Vite build-time defines (statically replaced in the client bundle):
+        __COMMIT_HASH__: "readonly", // vite.config.js `define`
+        process: "readonly", // process.env.NODE_ENV is replaced by Vite/esbuild at build
       },
       parserOptions: {
         ecmaFeatures: {
@@ -45,6 +48,9 @@ export default [
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "no-console": "off", // Project uses console for debugging
       "no-debugger": "warn",
+      // Empty catch is allowed for best-effort calls to unreliable browser APIs
+      // (video.currentTime/play, wakeLock) where failure is safely ignorable.
+      "no-empty": ["error", { allowEmptyCatch: true }],
       "no-duplicate-imports": "error",
       "no-self-compare": "error",
       "no-template-curly-in-string": "warn",
@@ -58,6 +64,7 @@ export default [
       globals: {
         ...globals.jest,
         ...globals.vitest,
+        ...globals.node, // vitest tests use Node globals (e.g. `global` for fetch mocking)
       },
     },
   },

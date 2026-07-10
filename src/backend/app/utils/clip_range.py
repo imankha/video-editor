@@ -6,12 +6,11 @@ breaks downstream ffmpeg extraction (`-ss start -to end` reads nothing), so we
 normalize at every DB write so that start_time <= end_time is always true.
 """
 
-from typing import Optional, Tuple
 
 
 def normalize_clip_range(
-    start_time: Optional[float], end_time: Optional[float]
-) -> Tuple[Optional[float], Optional[float]]:
+    start_time: float | None, end_time: float | None
+) -> tuple[float | None, float | None]:
     """Return (start, end) ordered so start <= end.
 
     If either value is None, both are returned unchanged (the caller decides how

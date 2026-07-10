@@ -10,18 +10,17 @@ already has annotations on the same game.
 import logging
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
 from app.database import USER_DATA_BASE
-from app.services.auth_db import insert_game_storage_ref, get_game_storage_ref
-from app.services.sharing_db import mark_game_share_materialized
+from app.services.auth_db import get_game_storage_ref, insert_game_storage_ref
 from app.services.pg import get_pg
-from app.utils.encoding import encode_data, decode_data
+from app.services.sharing_db import mark_game_share_materialized
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
 
-def _open_profile_db(user_id: str, profile_id: str) -> Optional[sqlite3.Connection]:
+def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None:
     """Open a profile SQLite database directly (bypasses ContextVar).
     Only opens locally-cached DBs -- does NOT download from R2."""
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
@@ -35,7 +34,7 @@ def _open_profile_db(user_id: str, profile_id: str) -> Optional[sqlite3.Connecti
     return conn
 
 
-def ensure_profile_db_local(user_id: str, profile_id: str) -> Optional[Path]:
+def ensure_profile_db_local(user_id: str, profile_id: str) -> Path | None:
     """Guarantee a profile's SQLite DB is present in the local cache, downloading
     it from R2 if missing/stale, then return its path (or None if R2 has none).
 
@@ -51,7 +50,7 @@ def ensure_profile_db_local(user_id: str, profile_id: str) -> Optional[Path]:
     background workers use: auto_export, modal_queue, sweep_scheduler).
     """
     from app.database import get_local_db_version, set_local_db_version
-    from app.profile_context import set_current_profile_id, reset_profile_id_token
+    from app.profile_context import reset_profile_id_token, set_current_profile_id
     from app.storage import sync_database_from_r2_if_newer
 
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
@@ -76,7 +75,7 @@ def ensure_profile_db_local(user_id: str, profile_id: str) -> Optional[Path]:
     return db_path if db_path.exists() else None
 
 
-def open_profile_db_readonly(user_id: str, profile_id: str) -> Optional[sqlite3.Connection]:
+def open_profile_db_readonly(user_id: str, profile_id: str) -> sqlite3.Connection | None:
     """Ensure the sharer's profile DB is local (R2 fallback) and open it read-only.
     Returns None if the DB cannot be obtained. Caller must close the connection."""
     path = ensure_profile_db_local(user_id, profile_id)
@@ -108,7 +107,7 @@ def _collect_video_hashes(conn: sqlite3.Connection, game_id: int) -> list[str]:
 
 def _find_existing_game_by_hashes(
     conn: sqlite3.Connection, hashes: list[str]
-) -> Optional[int]:
+) -> int | None:
     """Find a game in the recipient's DB that shares the same video hashes."""
     if not hashes:
         return None
@@ -525,7 +524,7 @@ def materialize_game_share(
         mark_game_share_materialized(share_id, recipient_profile_id)
 
         try:
-            from app.services.sharing_db import record_referral, SHARE_TYPE_TO_CHANNEL
+            from app.services.sharing_db import SHARE_TYPE_TO_CHANNEL, record_referral
             with get_pg() as pg_conn:
                 pg_cur = pg_conn.cursor()
                 pg_cur.execute(

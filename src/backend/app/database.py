@@ -13,26 +13,22 @@ in tests). Every visitor gets a UUID via /api/auth/init-guest. If no user
 context is set, get_current_user_id() raises RuntimeError.
 """
 
-import sqlite3
 import logging
+import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from contextlib import contextmanager
-from typing import Optional, Any
+from typing import Any
 
-from .user_context import get_current_user_id
 from .profile_context import get_current_profile_id
 from .storage import (
     R2_ENABLED,
-    R2VersionResult,
-    sync_database_from_r2,
-    sync_database_to_r2,
     sync_database_from_r2_if_newer,
     sync_database_to_r2_with_version,
-    get_db_version_from_r2,
 )
+from .user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +87,8 @@ SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
 # ContextVar changes in the handler (setting bool to True) are NOT visible to
 # the outer middleware. But a mutable dict IS shared across the context copy —
 # mutations to the dict object are visible to both sides.
-_request_context: ContextVar[Optional[dict]] = ContextVar('request_context', default=None)
-_request_user_id: ContextVar[Optional[str]] = ContextVar('request_user_id', default=None)
+_request_context: ContextVar[dict | None] = ContextVar('request_context', default=None)
+_request_user_id: ContextVar[str | None] = ContextVar('request_user_id', default=None)
 
 
 class TrackedCursor:
@@ -286,7 +282,7 @@ def check_database_size(db_path: Path) -> None:
         logger.debug(f"Could not check database size: {e}")
 
 
-def get_local_db_version(user_id: str, profile_id: str) -> Optional[int]:
+def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     """
     Get the locally cached database version for a user+profile.
 
@@ -327,7 +323,7 @@ def get_local_db_version(user_id: str, profile_id: str) -> Optional[int]:
     return None
 
 
-def set_local_db_version(user_id: str, profile_id: str, version: Optional[int]) -> None:
+def set_local_db_version(user_id: str, profile_id: str, version: int | None) -> None:
     """
     Set the locally cached database version for a user+profile.
 
@@ -1295,13 +1291,13 @@ _user_sqlite_versions: dict = {}  # user_id -> version number
 _user_sqlite_version_lock = threading.Lock()
 
 
-def get_local_user_db_version(user_id: str) -> Optional[int]:
+def get_local_user_db_version(user_id: str) -> int | None:
     """Get locally cached version for a user's user.sqlite."""
     with _user_sqlite_version_lock:
         return _user_sqlite_versions.get(user_id)
 
 
-def set_local_user_db_version(user_id: str, version: Optional[int]) -> None:
+def set_local_user_db_version(user_id: str, version: int | None) -> None:
     """Set locally cached version for a user's user.sqlite."""
     with _user_sqlite_version_lock:
         if version is None:

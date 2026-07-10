@@ -8,13 +8,13 @@ Handles single frame processing operations:
 - Multi-GPU parallel frame processing
 """
 
-import cv2
-import torch
-import numpy as np
+import contextlib
 import logging
 import os
-import contextlib
-from typing import Dict, Tuple, Optional
+
+import cv2
+import numpy as np
+import torch
 
 from app.ai_upscaler.keyframe_interpolator import KeyframeInterpolator
 
@@ -64,7 +64,7 @@ class FrameProcessor:
         self,
         video_path: str,
         frame_number: int,
-        crop: Optional[Dict[str, float]] = None
+        crop: dict[str, float] | None = None
     ) -> np.ndarray:
         """
         Extract a single frame from video and apply crop (de-zoom)
@@ -117,8 +117,8 @@ class FrameProcessor:
 
     def process_single_frame(
         self,
-        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]] | Tuple[int, int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int], str]
-    ) -> Tuple[int, np.ndarray, bool]:
+        frame_data: tuple[int, str, dict, tuple[int, int], int, float, dict | None, tuple[int, int]] | tuple[int, int, str, dict, tuple[int, int], int, float, dict | None, tuple[int, int]] | tuple[int, int, str, dict, tuple[int, int], int, float, dict | None, tuple[int, int], str]
+    ) -> tuple[int, np.ndarray, bool]:
         """
         Process a single frame with AI upscaling on a specific GPU
 

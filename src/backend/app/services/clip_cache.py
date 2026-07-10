@@ -30,9 +30,9 @@ import logging
 import os
 import shutil
 import time
-from pathlib import Path
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class CacheStats:
     total_entries: int
     total_size_bytes: int
     oldest_entry_age_days: float
-    cache_types: Dict[str, int]  # Count per cache type
+    cache_types: dict[str, int]  # Count per cache type
 
 
 class ClipCache:
@@ -132,7 +132,7 @@ class ClipCache:
             # File doesn't exist or can't be accessed
             return f"{video_path}|0|0"
 
-    def get(self, cache_key: str) -> Optional[Path]:
+    def get(self, cache_key: str) -> Path | None:
         """
         Get cached clip path if it exists.
 
@@ -201,7 +201,7 @@ class ClipCache:
 
         return False
 
-    def clear(self, cache_type: Optional[str] = None) -> int:
+    def clear(self, cache_type: str | None = None) -> int:
         """
         Clear cache entries.
 
@@ -313,7 +313,7 @@ class ClipCache:
 
 
 # Per-user cache instances - initialized lazily
-_clip_caches: Dict[str, ClipCache] = {}
+_clip_caches: dict[str, ClipCache] = {}
 
 
 def get_clip_cache() -> ClipCache:

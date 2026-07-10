@@ -13,7 +13,7 @@ convention as final_videos.rating_counts) via utils/encoding.py.
 import logging
 
 from app.queries import latest_working_clips_subquery
-from app.utils.encoding import encode_data, decode_data
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +210,7 @@ def compute_project_ranking_freeze(cursor, project_id: int):
     (it routes to Mixes and never ranks). rating is seeded from the frozen star
     (quality_score) so ordering is sane before any matchup. Shared by all three
     export-finalize sites so the freeze can never drift between them."""
-    from app.services.glicko import seed_rating, RD_MAX
+    from app.services.glicko import RD_MAX, seed_rating
     count, quality = compute_project_clip_stats(cursor, project_id)
     if count == 1:
         source_clip_id, clip_start_time = compute_project_clip_identity(

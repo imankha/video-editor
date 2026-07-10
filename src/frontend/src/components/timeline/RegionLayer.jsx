@@ -107,6 +107,28 @@ export default function RegionLayer({
     };
   }, [draggingLever, regions, onMoveRegionStart, onMoveRegionEnd, pixelToTimeValue]);
 
+  /**
+   * Determine which keyframe is "selected" based on selectedKeyframeIndex
+   * Returns the keyframe time if a keyframe is selected (within tolerance)
+   */
+  const getSelectedKeyframeTime = () => {
+    if (mode !== 'highlight' || keyframes.length === 0) return null;
+    if (selectedKeyframeIndex === null || selectedKeyframeIndex < 0 || selectedKeyframeIndex >= keyframes.length) return null;
+
+    const keyframe = keyframes[selectedKeyframeIndex];
+    return frameToTime(keyframe.frame, framerate);
+  };
+
+  const selectedKeyframeTime = getSelectedKeyframeTime();
+
+  // Notify parent when selected keyframe changes. Declared before the early
+  // return below so the hook runs unconditionally per rules-of-hooks.
+  useEffect(() => {
+    if (mode === 'highlight' && onSelectedKeyframeChange) {
+      onSelectedKeyframeChange(selectedKeyframeTime);
+    }
+  }, [mode, selectedKeyframeTime, onSelectedKeyframeChange]);
+
   if (!duration) return null;
 
   const effectiveDuration = visualDuration || duration;
@@ -257,27 +279,6 @@ export default function RegionLayer({
     }
     return null;
   };
-
-  /**
-   * Determine which keyframe is "selected" based on selectedKeyframeIndex
-   * Returns the keyframe time if a keyframe is selected (within tolerance)
-   */
-  const getSelectedKeyframeTime = () => {
-    if (mode !== 'highlight' || keyframes.length === 0) return null;
-    if (selectedKeyframeIndex === null || selectedKeyframeIndex < 0 || selectedKeyframeIndex >= keyframes.length) return null;
-
-    const keyframe = keyframes[selectedKeyframeIndex];
-    return frameToTime(keyframe.frame, framerate);
-  };
-
-  const selectedKeyframeTime = getSelectedKeyframeTime();
-
-  // Notify parent when selected keyframe changes
-  useEffect(() => {
-    if (mode === 'highlight' && onSelectedKeyframeChange) {
-      onSelectedKeyframeChange(selectedKeyframeTime);
-    }
-  }, [mode, selectedKeyframeTime, onSelectedKeyframeChange]);
 
   /**
    * Render keyframes for highlight mode

@@ -13,12 +13,12 @@ Usage:
     resp = await retry_async_call(client.get, url, max_attempts=3)
 """
 
-import time
 import asyncio
-import random
 import logging
+import random
 import socket
 import ssl
+import time
 
 logger = logging.getLogger(__name__)
 

@@ -8,13 +8,14 @@ Handles AI-powered frame enhancement with:
 - Pre-upscaling source frames
 """
 
-import cv2
-import torch
-import numpy as np
+import contextlib
 import logging
 import os
-import contextlib
-from typing import Dict, Tuple, Optional, Any
+from typing import Any
+
+import cv2
+import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ class FrameEnhancer:
         device: torch.device,
         export_mode: str = 'quality',
         enable_multipass: bool = True,
-        custom_enhance_params: Optional[Dict] = None,
+        custom_enhance_params: dict | None = None,
         pre_enhance_source: bool = False,
-        pre_enhance_params: Optional[Dict] = None,
+        pre_enhance_params: dict | None = None,
         enable_diffusion_sr: bool = False,
         diffusion_model: Any = None
     ):
@@ -71,7 +72,7 @@ class FrameEnhancer:
         self.swinir_model = None
         self.hat_model = None
 
-    def get_adaptive_enhancement_params(self, scale_factor: float) -> Dict:
+    def get_adaptive_enhancement_params(self, scale_factor: float) -> dict:
         """
         Get adaptive enhancement parameters based on upscale factor.
 
@@ -249,7 +250,7 @@ class FrameEnhancer:
                     enhanced = pass2
             return enhanced
 
-    def pre_upscale_source_frame(self, frame: np.ndarray, crop: Dict, scale: float = 2.0) -> Tuple[np.ndarray, Dict]:
+    def pre_upscale_source_frame(self, frame: np.ndarray, crop: dict, scale: float = 2.0) -> tuple[np.ndarray, dict]:
         """
         Pre-upscale the entire source frame before cropping.
 
@@ -283,7 +284,7 @@ class FrameEnhancer:
 
         return upscaled_frame, adjusted_crop
 
-    def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
+    def enhance_frame_ai(self, frame: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
         """
         Enhance a single frame using Real-ESRGAN AI model
 

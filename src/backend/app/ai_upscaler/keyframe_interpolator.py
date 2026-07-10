@@ -7,9 +7,10 @@ Handles interpolation of crop and highlight keyframes:
 - Coordinate system conversions
 """
 
+from typing import Any
+
 import cv2
 import numpy as np
-from typing import List, Dict, Any, Optional, Tuple
 
 
 def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
@@ -81,9 +82,9 @@ class KeyframeInterpolator:
 
     @staticmethod
     def interpolate_crop(
-        keyframes: List[Dict[str, Any]],
+        keyframes: list[dict[str, Any]],
         time: float
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """
         Interpolate crop values between keyframes using Catmull-Rom cubic spline.
 
@@ -123,9 +124,9 @@ class KeyframeInterpolator:
 
     @staticmethod
     def interpolate_highlight(
-        keyframes: List[Dict[str, Any]],
+        keyframes: list[dict[str, Any]],
         time: float
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Interpolate highlight values between keyframes using Catmull-Rom cubic spline.
 
@@ -180,9 +181,9 @@ class KeyframeInterpolator:
 
     @staticmethod
     def interpolate_highlight_from_regions(
-        regions: List[Dict[str, Any]],
+        regions: list[dict[str, Any]],
         time: float
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         Find the active region for a given time and interpolate highlight.
 
@@ -219,11 +220,11 @@ class KeyframeInterpolator:
     @staticmethod
     def render_highlight_on_frame(
         frame: np.ndarray,
-        highlight: Dict[str, Any],
-        original_video_size: Tuple[int, int],
-        crop: Optional[Dict[str, float]] = None,
+        highlight: dict[str, Any],
+        original_video_size: tuple[int, int],
+        crop: dict[str, float] | None = None,
         effect_type: str = "original",
-        overlay_settings: Optional[Dict[str, Any]] = None,
+        overlay_settings: dict[str, Any] | None = None,
     ) -> np.ndarray:
         if highlight is None:
             return frame

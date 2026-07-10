@@ -10,29 +10,29 @@ Files are stored in:
 - uploads/ - Clips uploaded directly to projects
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks, Request
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-from typing import Any, Optional, List
-import os
-import uuid
 import json
 import logging
+import os
+import uuid
+from typing import Any
 
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+
+from app.analytics import record_milestone
 from app.database import (
     get_db_connection,
     get_raw_clips_path,
-    get_uploads_path,
 )
-from app.queries import latest_working_clips_subquery, derive_clip_name
+from app.queries import derive_clip_name, latest_working_clips_subquery
+from app.services.default_crop import refit_crop_keyframes
+from app.services.pg import get_pg
+from app.storage import generate_presigned_url, upload_bytes_to_r2
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
-from app.storage import generate_presigned_url, upload_to_r2, upload_bytes_to_r2
-from app.services.pg import get_pg
-from app.analytics import record_milestone
-from app.utils.encoding import encode_data, decode_data
 from app.utils.clip_range import normalize_clip_range
-from app.services.default_crop import refit_crop_keyframes
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ def _compute_tfidf_title(notes: str, corpus: list[str]) -> str:
     return extract_keywords_tfidf(notes, corpus)
 
 
-def get_raw_clip_url(filename: str) -> Optional[str]:
+def get_raw_clip_url(filename: str) -> str | None:
     """
     Get presigned URL for raw clip.
     """
@@ -66,7 +66,7 @@ def get_raw_clip_url(filename: str) -> Optional[str]:
     )
 
 
-def get_working_clip_url(filename: str, source_type: str) -> Optional[str]:
+def get_working_clip_url(filename: str, source_type: str) -> str | None:
     """
     Get presigned URL for working clip.
     Working clips can come from raw_clips or uploads directory.
@@ -118,19 +118,19 @@ def normalize_and_encode(value) -> bytes | None:
 class RawClipResponse(BaseModel):
     id: int
     filename: str
-    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
+    file_url: str | None = None  # Presigned R2 URL or None (use local proxy)
     rating: int
-    tags: List[str]
-    name: Optional[str] = None
-    notes: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    game_id: Optional[int] = None
-    tagged_teammates: Optional[List[str]] = None
-    my_athlete: Optional[bool] = None
-    auto_project_id: Optional[int] = None
+    tags: list[str]
+    name: str | None = None
+    notes: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+    game_id: int | None = None
+    tagged_teammates: list[str] | None = None
+    my_athlete: bool | None = None
+    auto_project_id: int | None = None
     created_at: str
-    shared_by: Optional[str] = None
+    shared_by: str | None = None
 
 
 class RawClipCreate(BaseModel):
@@ -140,26 +140,26 @@ class RawClipCreate(BaseModel):
     end_time: float
     name: str = ""
     rating: int = 3
-    tags: List[str] = []
+    tags: list[str] = []
     notes: str = ""
-    video_sequence: Optional[int] = None  # T82: which video in multi-video game (1-based)
-    create_project: Optional[bool] = None
-    tagged_teammates: Optional[List[str]] = None
-    my_athlete: Optional[bool] = None
+    video_sequence: int | None = None  # T82: which video in multi-video game (1-based)
+    create_project: bool | None = None
+    tagged_teammates: list[str] | None = None
+    my_athlete: bool | None = None
 
 
 class RawClipUpdate(BaseModel):
     """Request body for updating a raw clip."""
-    name: Optional[str] = None
-    rating: Optional[int] = None
-    tags: Optional[List[str]] = None
-    notes: Optional[str] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    video_sequence: Optional[int] = None
-    create_project: Optional[bool] = None
-    tagged_teammates: Optional[List[str]] = None
-    my_athlete: Optional[bool] = None
+    name: str | None = None
+    rating: int | None = None
+    tags: list[str] | None = None
+    notes: str | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+    video_sequence: int | None = None
+    create_project: bool | None = None
+    tagged_teammates: list[str] | None = None
+    my_athlete: bool | None = None
 
 
 class RawClipSaveResponse(BaseModel):
@@ -167,49 +167,49 @@ class RawClipSaveResponse(BaseModel):
     raw_clip_id: int
     filename: str
     project_created: bool = False
-    project_id: Optional[int] = None
+    project_id: int | None = None
 
 
 class WorkingClipCreate(BaseModel):
-    raw_clip_id: Optional[int] = None  # If adding from library
+    raw_clip_id: int | None = None  # If adding from library
 
 
 class WorkingClipResponse(BaseModel):
     id: int
     project_id: int
-    raw_clip_id: Optional[int]
-    uploaded_filename: Optional[str]
-    filename: Optional[str] = None
-    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
-    name: Optional[str] = None
-    notes: Optional[str] = None
-    exported_at: Optional[str] = None  # ISO timestamp when clip was exported (NULL = not exported)
+    raw_clip_id: int | None
+    uploaded_filename: str | None
+    filename: str | None = None
+    file_url: str | None = None  # Presigned R2 URL or None (use local proxy)
+    name: str | None = None
+    notes: str | None = None
+    exported_at: str | None = None  # ISO timestamp when clip was exported (NULL = not exported)
     sort_order: int
-    crop_data: Optional[Any] = None
-    timing_data: Optional[Any] = None
-    segments_data: Optional[Any] = None
+    crop_data: Any | None = None
+    timing_data: Any | None = None
+    segments_data: Any | None = None
     # Fields from raw_clips for Annotate navigation and framing
-    game_id: Optional[int] = None
-    start_time: Optional[float] = None
-    end_time: Optional[float] = None
-    duration: Optional[float] = None
-    game_video_url: Optional[str] = None  # Presigned URL for source game video (for framing preview)
+    game_id: int | None = None
+    start_time: float | None = None
+    end_time: float | None = None
+    duration: float | None = None
+    game_video_url: str | None = None  # Presigned URL for source game video (for framing preview)
     # T1460: needed client-side for pushClipRanges proportional byte estimation
-    video_duration: Optional[float] = None
-    video_size: Optional[int] = None
-    tags: Optional[List[str]] = None
-    rating: Optional[int] = None
+    video_duration: float | None = None
+    video_size: int | None = None
+    tags: list[str] | None = None
+    rating: int | None = None
     # T1500: source video dimensions persisted on working_clips to eliminate per-load metadata probe
-    width: Optional[int] = None
-    height: Optional[int] = None
-    fps: Optional[float] = None
+    width: int | None = None
+    height: int | None = None
+    fps: float | None = None
 
 
 class WorkingClipUpdate(BaseModel):
-    sort_order: Optional[int] = None
-    crop_data: Optional[Any] = None
-    timing_data: Optional[Any] = None
-    segments_data: Optional[Any] = None
+    sort_order: int | None = None
+    crop_data: Any | None = None
+    timing_data: Any | None = None
+    segments_data: Any | None = None
 
 
 # =============================================================================
@@ -220,27 +220,27 @@ class WorkingClipUpdate(BaseModel):
 
 class FramingActionTarget(BaseModel):
     """Target specifier for framing actions."""
-    frame: Optional[int] = None  # Frame number for keyframe operations
-    segment_index: Optional[int] = None  # Segment index for speed operations
+    frame: int | None = None  # Frame number for keyframe operations
+    segment_index: int | None = None  # Segment index for speed operations
 
 
 class FramingActionData(BaseModel):
     """Data payload for framing actions."""
     # Crop keyframe fields
-    frame: Optional[int] = None
-    x: Optional[float] = None
-    y: Optional[float] = None
-    width: Optional[float] = None
-    height: Optional[float] = None
-    origin: Optional[str] = None  # 'permanent', 'user', 'trim'
+    frame: int | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
+    origin: str | None = None  # 'permanent', 'user', 'trim'
 
     # Segment fields
-    time: Optional[float] = None  # For split_segment
-    speed: Optional[float] = None  # For set_segment_speed
+    time: float | None = None  # For split_segment
+    speed: float | None = None  # For set_segment_speed
 
     # Trim fields
-    start: Optional[float] = None
-    end: Optional[float] = None
+    start: float | None = None
+    end: float | None = None
 
 
 class FramingAction(BaseModel):
@@ -259,9 +259,9 @@ class FramingAction(BaseModel):
     - clear_trim_range: Remove trim
     """
     action: str
-    target: Optional[FramingActionTarget] = None
-    data: Optional[FramingActionData] = None
-    expected_version: Optional[int] = None  # For conflict detection (future)
+    target: FramingActionTarget | None = None
+    data: FramingActionData | None = None
+    expected_version: int | None = None  # For conflict detection (future)
 
 
 def _get_clip_framing_data(cursor, clip_id: int, project_id: int) -> tuple:
@@ -525,7 +525,7 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
             elif action.action == "clear_trim_range":
                 # Clear trim range
                 segments_data['trimRange'] = None
-                logger.info(f"[Framing Action] Cleared trim range")
+                logger.info("[Framing Action] Cleared trim range")
 
             else:
                 raise ValueError(f"Unknown action: {action.action}")
@@ -654,8 +654,8 @@ async def set_project_aspect_ratio(project_id: int, body: AspectRatioChange):
 
 # ============ RAW CLIPS (LIBRARY) ============
 
-@router.get("/raw", response_model=List[RawClipResponse])
-async def list_raw_clips(game_id: Optional[int] = None, min_rating: Optional[int] = None, my_athlete: Optional[bool] = None):
+@router.get("/raw", response_model=list[RawClipResponse])
+async def list_raw_clips(game_id: int | None = None, min_rating: int | None = None, my_athlete: bool | None = None):
     """List all raw clips in the library, optionally filtered by game, rating, and/or my_athlete."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -778,7 +778,7 @@ async def get_raw_clip_file(clip_id: int):
 
 
 
-def _get_dims_from_raw_clip(cursor, raw_clip_id: int) -> tuple[Optional[int], Optional[int], Optional[float]]:
+def _get_dims_from_raw_clip(cursor, raw_clip_id: int) -> tuple[int | None, int | None, float | None]:
     """
     T1500: Look up source video dimensions for a raw_clip via its parent game_video.
     Returns (width, height, fps); any or all may be None for legacy rows.
@@ -803,7 +803,7 @@ def _insert_working_clip_with_dims(
     raw_clip_id: int,
     sort_order: int,
     version: int = 1,
-    raw_clip_version: Optional[int] = None,
+    raw_clip_version: int | None = None,
 ) -> int:
     """
     T1500: INSERT a working_clips row with width/height/fps copied from the parent
@@ -1251,7 +1251,7 @@ async def delete_raw_clip(clip_id: int):
 
             # Try R2 first (cloud storage)
             try:
-                from app.storage import delete_from_r2, R2_ENABLED
+                from app.storage import R2_ENABLED, delete_from_r2
                 if R2_ENABLED:
                     delete_from_r2(user_id, r2_key)
                     logger.info(f"Deleted clip from R2: {r2_key}")
@@ -1270,7 +1270,7 @@ async def delete_raw_clip(clip_id: int):
 
 # ============ WORKING CLIPS (PROJECT CLIPS) ============
 
-@router.get("/projects/{project_id}/clips", response_model=List[WorkingClipResponse])
+@router.get("/projects/{project_id}/clips", response_model=list[WorkingClipResponse])
 async def list_project_clips(project_id: int, background_tasks: BackgroundTasks):
     """List all working clips for a project."""
     with get_db_connection() as conn:
@@ -1394,8 +1394,8 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
 @router.post("/projects/{project_id}/clips", response_model=WorkingClipResponse)
 async def add_clip_to_project(
     project_id: int,
-    raw_clip_id: Optional[int] = Form(None),
-    file: Optional[UploadFile] = File(None),
+    raw_clip_id: int | None = Form(None),
+    file: UploadFile | None = File(None),
     background_tasks: BackgroundTasks = None
 ):
     """
@@ -1407,7 +1407,6 @@ async def add_clip_to_project(
     """
     from fastapi import BackgroundTasks as BT
     if background_tasks is None:
-        from fastapi import Request
         background_tasks = BT()
 
     if raw_clip_id is None and file is None:
@@ -1495,11 +1494,12 @@ async def add_clip_to_project(
                 raise HTTPException(status_code=500, detail="Failed to upload clip to R2")
 
             # T1500: probe uploaded file for width/height/fps so project loads skip the metadata probe
-            upload_width: Optional[int] = None
-            upload_height: Optional[int] = None
-            upload_fps: Optional[float] = None
+            upload_width: int | None = None
+            upload_height: int | None = None
+            upload_fps: float | None = None
             try:
                 import tempfile as _tempfile
+
                 from app.ai_upscaler import get_video_metadata_ffprobe
                 with _tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tf:
                     tf.write(content)
@@ -1657,7 +1657,7 @@ async def upload_clip_with_metadata(
 
 
 @router.put("/projects/{project_id}/clips/reorder")
-async def reorder_clips(project_id: int, clip_ids: List[int]):
+async def reorder_clips(project_id: int, clip_ids: list[int]):
     """Reorder clips by providing the new order of clip IDs."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1681,8 +1681,8 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
     By default, redirects to R2 presigned URL for better performance with video elements.
     Use ?stream=true to proxy the content through the backend (avoids CORS for fetch API).
     """
-    from fastapi.responses import RedirectResponse, StreamingResponse
     import httpx
+    from fastapi.responses import RedirectResponse, StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1714,9 +1714,10 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
             logger.info(f"Streaming clip {clip_id} through backend proxy")
 
             async def stream_from_r2():
-                from app.utils.retry import is_transient_error, TIER_2
                 import asyncio as _asyncio
                 import random as _random
+
+                from app.utils.retry import TIER_2, is_transient_error
 
                 last_exc = None
                 for attempt in range(TIER_2["max_attempts"]):
@@ -1846,8 +1847,8 @@ async def stream_working_clip_bounded(
     # Chrome abandons forward-buffering once it gets a short 206, so one extra
     # window is enough to break the retry loop without serving the whole file.
     GAP_OVERRUN_EXTRA = 20 * 1024 * 1024
-    from fastapi.responses import StreamingResponse
     import httpx
+    from fastapi.responses import StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1987,34 +1988,33 @@ async def stream_working_clip_bounded(
     )
 
     async def stream_from_r2():
-        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-            async with client.stream(
-                "GET",
-                presigned_url,
-                headers={"Range": f"bytes={req_start}-{req_end}"},
-            ) as response:
-                if response.status_code not in (200, 206):
-                    # Read a snippet of R2's error body for diagnostics
-                    error_body = ""
-                    try:
-                        raw = await response.aread()
-                        error_body = raw[:500].decode("utf-8", errors="replace")
-                    except Exception:
-                        error_body = "(unreadable)"
-                    logger.error(
-                        f"[clip-stream] R2 error clip_id={clip_id} project_id={project_id} "
-                        f"r2_status={response.status_code} "
-                        f"r2_content_type={response.headers.get('content-type', 'unknown')} "
-                        f"blake3={row['blake3_hash']} filename={row['video_filename']} "
-                        f"range={req_start}-{req_end} window={window_kind} "
-                        f"body_snippet={error_body!r}"
-                    )
-                    raise HTTPException(
-                        status_code=response.status_code,
-                        detail=f"R2 returned {response.status_code}",
-                    )
-                async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
-                    yield chunk
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client, client.stream(
+            "GET",
+            presigned_url,
+            headers={"Range": f"bytes={req_start}-{req_end}"},
+        ) as response:
+            if response.status_code not in (200, 206):
+                # Read a snippet of R2's error body for diagnostics
+                error_body = ""
+                try:
+                    raw = await response.aread()
+                    error_body = raw[:500].decode("utf-8", errors="replace")
+                except Exception:
+                    error_body = "(unreadable)"
+                logger.error(
+                    f"[clip-stream] R2 error clip_id={clip_id} project_id={project_id} "
+                    f"r2_status={response.status_code} "
+                    f"r2_content_type={response.headers.get('content-type', 'unknown')} "
+                    f"blake3={row['blake3_hash']} filename={row['video_filename']} "
+                    f"range={req_start}-{req_end} window={window_kind} "
+                    f"body_snippet={error_body!r}"
+                )
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"R2 returned {response.status_code}",
+                )
+            async for chunk in response.aiter_bytes(chunk_size=4 * 1024 * 1024):
+                yield chunk
 
     return StreamingResponse(
         stream_from_r2(),
@@ -2225,7 +2225,7 @@ async def get_teammate_emails():
 
 
 @router.put("/teammate-emails")
-async def upsert_teammate_emails(mappings: List[TeammateEmailMapping]):
+async def upsert_teammate_emails(mappings: list[TeammateEmailMapping]):
     """Upsert tag_name -> email mappings. Duplicates are silently ignored."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -2257,12 +2257,12 @@ async def delete_teammate_email(mapping_id: int):
 
 class TeammateShareRecipient(BaseModel):
     tag_name: str
-    emails: List[str]
+    emails: list[str]
 
 
 class ShareWithTeammatesRequest(BaseModel):
     game_id: int
-    recipients: List[TeammateShareRecipient]
+    recipients: list[TeammateShareRecipient]
 
 
 @router.get("/teammate-shares/{game_id}")
@@ -2300,17 +2300,17 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
     """
     import asyncio
     import json
-    from app.services.email import send_teammate_share_email, _resolve_sender_name, _is_existing_user
-    from app.services.auth_db import get_user_by_id, get_user_by_email
-    from app.services.sharing_db import (
-        create_game_share, revoke_share, get_share_by_token,
-        create_pending_share,
-    )
-    from app.services.user_db import get_profiles
-    from app.services.materialization import (
-        materialize_game_share, _filter_clips_for_tag, serialize_clip_data,
-    )
+
     from app.profile_context import get_current_profile_id
+    from app.services.auth_db import get_user_by_id
+    from app.services.email import _is_existing_user, _resolve_sender_name, send_teammate_share_email
+    from app.services.materialization import (
+        _filter_clips_for_tag,
+    )
+    from app.services.sharing_db import (
+        create_game_share,
+        revoke_share,
+    )
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
@@ -2467,13 +2467,16 @@ def _materialize_or_pend(
 ):
     """Materialize immediately for single-profile users, or create pending share."""
     from app.services.auth_db import get_user_by_email
-    from app.services.user_db import get_profiles
-    from app.services.sharing_db import (
-        create_pending_share, get_share_by_token,
-    )
     from app.services.materialization import (
-        materialize_game_share, _filter_clips_for_tag, serialize_clip_data,
+        _filter_clips_for_tag,
+        materialize_game_share,
+        serialize_clip_data,
     )
+    from app.services.sharing_db import (
+        create_pending_share,
+        get_share_by_token,
+    )
+    from app.services.user_db import get_profiles
 
     recipient_user = get_user_by_email(email)
     if not recipient_user:
@@ -2534,7 +2537,7 @@ def _materialize_or_pend(
 
 
 class ResolvePendingSharesRequest(BaseModel):
-    pending_ids: List[int]
+    pending_ids: list[int]
     profile_id: str
 
 
@@ -2545,10 +2548,9 @@ async def resolve_pending_shares(request: ResolvePendingSharesRequest):
     Called when a multi-profile user picks which profile should receive
     shared content, or on signup for new users (T2840).
     """
-    import json
-    from app.services.sharing_db import get_pending_shares_for_email, resolve_pending_share
-    from app.services.materialization import materialize_game_share
     from app.services.auth_db import get_user_by_id
+    from app.services.materialization import materialize_game_share
+    from app.services.sharing_db import resolve_pending_share
 
     user_id = get_current_user_id()
     materialized = []

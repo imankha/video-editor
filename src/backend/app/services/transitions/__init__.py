@@ -32,26 +32,26 @@ Usage:
     )
 """
 
-from .base import TransitionStrategy, TransitionFactory
-
-# Import implementations to register them with the factory
-from . import cut  # noqa: F401
-from . import fade  # noqa: F401
-from . import dissolve  # noqa: F401
-
-from .cut import CutTransition
-from .fade import FadeTransition
-from .dissolve import DissolveTransition
-
 import logging
 from typing import List
+
+# Import implementations to register them with the factory
+from . import (
+    cut,  # noqa: F401
+    dissolve,  # noqa: F401
+    fade,  # noqa: F401
+)
+from .base import TransitionFactory, TransitionStrategy
+from .cut import CutTransition
+from .dissolve import DissolveTransition
+from .fade import FadeTransition
 
 logger = logging.getLogger(__name__)
 
 
 def apply_transition(
     transition_type: str,
-    clip_paths: List[str],
+    clip_paths: list[str],
     output_path: str,
     duration: float = 0.5,
     include_audio: bool = True
@@ -83,7 +83,7 @@ def apply_transition(
     except ValueError as e:
         logger.error(f"Invalid transition type: {e}")
         # Fall back to cut transition
-        logger.warning(f"Falling back to 'cut' transition")
+        logger.warning("Falling back to 'cut' transition")
         strategy = TransitionFactory.create('cut')
         return strategy.concatenate(
             clip_paths=clip_paths,

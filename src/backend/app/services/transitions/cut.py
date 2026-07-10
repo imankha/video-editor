@@ -5,13 +5,12 @@ This is the fastest transition option as it uses FFmpeg's concat demuxer
 for direct concatenation without re-encoding (when possible).
 """
 
+import logging
 import os
 import subprocess
 import tempfile
-import logging
-from typing import List
 
-from .base import TransitionStrategy, TransitionFactory
+from .base import TransitionFactory, TransitionStrategy
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class CutTransition(TransitionStrategy):
 
     def concatenate(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         duration: float = 0.0,  # Ignored for cut
         include_audio: bool = True

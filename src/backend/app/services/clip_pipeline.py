@@ -26,14 +26,14 @@ USAGE:
     return output
 """
 
-import os
 import hashlib
-import shutil
 import logging
-from enum import Enum, auto
+import os
+import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional, List, Callable
-from pathlib import Path
+from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -63,26 +63,26 @@ class ClipProcessingContext:
     """
     # Input data (set at INIT)
     clip_index: int
-    clip_data: Dict[str, Any]
+    clip_data: dict[str, Any]
     video_content: bytes
     temp_dir: str
 
     # Paths (set at SAVED)
-    input_path: Optional[str] = None
-    output_path: Optional[str] = None
-    content_identity: Optional[str] = None
+    input_path: str | None = None
+    output_path: str | None = None
+    content_identity: str | None = None
 
     # Processing config (set at CONFIGURED)
-    keyframes: List[Dict[str, Any]] = field(default_factory=list)
-    segment_data: Optional[Dict[str, Any]] = None
+    keyframes: list[dict[str, Any]] = field(default_factory=list)
+    segment_data: dict[str, Any] | None = None
     target_fps: int = 30
     export_mode: str = "quality"
     include_audio: bool = True
 
     # Cache data (set at CACHE_CHECKED)
-    cache_key: Optional[str] = None
+    cache_key: str | None = None
     cache_hit: bool = False
-    cached_path: Optional[str] = None
+    cached_path: str | None = None
 
 
 class ClipProcessingPipeline:
@@ -112,7 +112,7 @@ class ClipProcessingPipeline:
 
     def __init__(
         self,
-        clip_data: Dict[str, Any],
+        clip_data: dict[str, Any],
         video_content: bytes,
         temp_dir: str
     ):
@@ -138,7 +138,7 @@ class ClipProcessingPipeline:
         return self._stage
 
     @property
-    def output_path(self) -> Optional[str]:
+    def output_path(self) -> str | None:
         """Output path (available after CACHE_CHECKED or PROCESSED)."""
         return self._context.output_path
 
@@ -304,7 +304,7 @@ class ClipProcessingPipeline:
     async def process(
         self,
         upscaler,
-        progress_callback: Optional[Callable] = None
+        progress_callback: Callable | None = None
     ) -> str:
         """
         Stage 4: Process the video (only if cache miss).
@@ -394,7 +394,7 @@ class ClipProcessingPipeline:
 
 
 async def process_clip_with_pipeline(
-    clip_data: Dict[str, Any],
+    clip_data: dict[str, Any],
     video_content: bytes,
     temp_dir: str,
     target_fps: int,
@@ -402,7 +402,7 @@ async def process_clip_with_pipeline(
     include_audio: bool,
     cache,
     upscaler,
-    progress_callback: Optional[Callable] = None
+    progress_callback: Callable | None = None
 ) -> str:
     """
     High-level function to process a clip using the pipeline.
@@ -450,8 +450,8 @@ async def process_clip_with_pipeline(
 
     except Exception as e:
         # Log the full exception before re-raising
-        import traceback
         import sys
+        import traceback
         logger.error(f"[Pipeline] FATAL ERROR during clip processing: {e}")
         logger.error(f"[Pipeline] Exception type: {type(e).__name__}")
         logger.error(f"[Pipeline] Full traceback:\n{traceback.format_exc()}")

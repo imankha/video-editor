@@ -7,16 +7,14 @@ Provides high-quality frame interpolation for slow motion effects with tiered fa
 3. FFmpeg minterpolate (fallback, CPU-based)
 """
 
-import subprocess
-import shutil
 import logging
-import os
 import math
-import tempfile
-from pathlib import Path
-from typing import Optional, Tuple, List, Callable
+import shutil
+import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +31,8 @@ class GPUCapabilities:
     """Detected GPU capabilities for frame interpolation"""
     has_cuda: bool = False
     has_vulkan: bool = False
-    cuda_device_name: Optional[str] = None
-    vulkan_device_name: Optional[str] = None
+    cuda_device_name: str | None = None
+    vulkan_device_name: str | None = None
     rife_cuda_available: bool = False
     rife_ncnn_available: bool = False
 
@@ -50,8 +48,8 @@ class FrameInterpolator:
     3. minterpolate - Fallback, CPU-based FFmpeg filter
     """
 
-    _capabilities: Optional[GPUCapabilities] = None
-    _selected_backend: Optional[InterpolationBackend] = None
+    _capabilities: GPUCapabilities | None = None
+    _selected_backend: InterpolationBackend | None = None
 
     def __init__(self):
         """Initialize frame interpolator and detect capabilities"""
@@ -80,7 +78,7 @@ class FrameInterpolator:
         return caps
 
     @staticmethod
-    def _check_cuda() -> Tuple[bool, Optional[str]]:
+    def _check_cuda() -> tuple[bool, str | None]:
         """Check if CUDA is available"""
         try:
             import torch
@@ -109,7 +107,7 @@ class FrameInterpolator:
         return False, None
 
     @staticmethod
-    def _check_vulkan() -> Tuple[bool, Optional[str]]:
+    def _check_vulkan() -> tuple[bool, str | None]:
         """Check if Vulkan is available"""
         # Try vulkaninfo command
         try:
@@ -241,9 +239,9 @@ class FrameInterpolator:
             logger.warning("=" * 60)
             logger.warning("⚠ CUDA NOT AVAILABLE - Using RIFE ncnn (Vulkan) fallback")
             logger.warning("=" * 60)
-            logger.warning(f"  Missing: NVIDIA GPU with CUDA support")
+            logger.warning("  Missing: NVIDIA GPU with CUDA support")
             logger.warning(f"  Fallback: RIFE ncnn with Vulkan ({caps.vulkan_device_name})")
-            logger.warning(f"  Impact: Slightly slower than CUDA, same quality")
+            logger.warning("  Impact: Slightly slower than CUDA, same quality")
             logger.warning("  To enable CUDA:")
             logger.warning("    1. Install NVIDIA GPU drivers")
             logger.warning("    2. Install PyTorch with CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu121")
@@ -267,8 +265,8 @@ class FrameInterpolator:
                 missing.append("rife-ncnn-vulkan binary")
 
             logger.warning(f"  Missing: {', '.join(missing)}")
-            logger.warning(f"  Fallback: FFmpeg minterpolate (CPU-based)")
-            logger.warning(f"  Impact: Lower quality, significantly slower for long videos")
+            logger.warning("  Fallback: FFmpeg minterpolate (CPU-based)")
+            logger.warning("  Impact: Lower quality, significantly slower for long videos")
             logger.warning("  To enable GPU interpolation:")
             logger.warning("    For CUDA (best):")
             logger.warning("      1. Install NVIDIA drivers")
@@ -315,8 +313,8 @@ class FrameInterpolator:
         input_frames_dir: Path,
         output_frames_dir: Path,
         multiplier: int = 2,
-        fps: Optional[float] = None,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
+        fps: float | None = None,
+        progress_callback: Callable[[int, int, str], None] | None = None
     ) -> bool:
         """
         Interpolate frames to increase frame count.
@@ -351,7 +349,7 @@ class FrameInterpolator:
         input_dir: Path,
         output_dir: Path,
         multiplier: int,
-        progress_callback: Optional[Callable]
+        progress_callback: Callable | None
     ) -> bool:
         """Interpolate using RIFE with CUDA"""
         try:
@@ -370,13 +368,14 @@ class FrameInterpolator:
         input_dir: Path,
         output_dir: Path,
         multiplier: int,
-        progress_callback: Optional[Callable]
+        progress_callback: Callable | None
     ) -> bool:
         """Interpolate using RIFE Python API"""
-        import torch
+        from pathlib import Path
+
         import cv2
         import numpy as np
-        from pathlib import Path
+        import torch
 
         # Lazy import RIFE model
         try:
@@ -455,7 +454,7 @@ class FrameInterpolator:
         input_dir: Path,
         output_dir: Path,
         multiplier: int,
-        progress_callback: Optional[Callable]
+        progress_callback: Callable | None
     ) -> bool:
         """Interpolate using RIFE inference script"""
         rife_script = Path(__file__).parent / 'rife' / 'inference_img.py'
@@ -485,7 +484,7 @@ class FrameInterpolator:
         input_dir: Path,
         output_dir: Path,
         multiplier: int,
-        progress_callback: Optional[Callable]
+        progress_callback: Callable | None
     ) -> bool:
         """Interpolate using RIFE ncnn (Vulkan)"""
         rife_ncnn = shutil.which('rife-ncnn-vulkan')
@@ -590,7 +589,7 @@ class FrameInterpolator:
 
 
 # Singleton instance for easy access
-_interpolator: Optional[FrameInterpolator] = None
+_interpolator: FrameInterpolator | None = None
 
 
 def get_frame_interpolator() -> FrameInterpolator:

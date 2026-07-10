@@ -10,6 +10,6 @@ Available functions:
     - process_clips_ai: Unified multi-clip AI upscaling (GPU)
 """
 
-from .video_processing import app, render_overlay, process_framing_ai
+from .video_processing import app, process_framing_ai, render_overlay
 
-__all__ = ["app", "render_overlay", "process_framing_ai"]
+__all__ = ["app", "process_framing_ai", "render_overlay"]

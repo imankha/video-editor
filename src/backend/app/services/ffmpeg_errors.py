@@ -22,12 +22,12 @@ USAGE:
             # Handle corrupt input
 """
 
-import subprocess
 import logging
 import re
+import subprocess
+from collections.abc import Callable
 from enum import Enum
-from typing import List, Optional, Union
-from pathlib import Path
+from typing import Union
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ class FFmpegError(Exception):
         error_type: FFmpegErrorType = FFmpegErrorType.UNKNOWN,
         stderr: str = "",
         returncode: int = 1,
-        command: Optional[List[str]] = None
+        command: list[str] | None = None
     ):
         super().__init__(message)
         self.error_type = error_type
@@ -127,7 +127,7 @@ class FFmpegError(Exception):
         cls,
         stderr: str,
         returncode: int = 1,
-        command: Optional[List[str]] = None
+        command: list[str] | None = None
     ) -> "FFmpegError":
         """
         Create an FFmpegError by analyzing stderr output.
@@ -198,8 +198,8 @@ def extract_error_message(stderr: str) -> str:
 
 
 def run_ffmpeg(
-    cmd: Union[List[str], str],
-    timeout: Optional[int] = None,
+    cmd: Union[list[str], str],
+    timeout: int | None = None,
     capture_output: bool = True,
     check: bool = True
 ) -> subprocess.CompletedProcess:
@@ -280,9 +280,9 @@ def run_ffmpeg(
 
 
 def run_ffmpeg_with_progress(
-    cmd: List[str],
-    progress_callback: Optional[callable] = None,
-    timeout: Optional[int] = None
+    cmd: list[str],
+    progress_callback: Callable | None = None,
+    timeout: int | None = None
 ) -> subprocess.CompletedProcess:
     """
     Run FFmpeg with progress reporting via stderr parsing.

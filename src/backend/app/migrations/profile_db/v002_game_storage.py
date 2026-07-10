@@ -20,9 +20,9 @@ class V002GameStorage(BaseMigration):
             )
         """)
 
+        from app.profile_context import get_current_profile_id
         from app.services.pg import get_pg
         from app.user_context import get_current_user_id
-        from app.profile_context import get_current_profile_id
 
         user_id = get_current_user_id()
         profile_id = get_current_profile_id()

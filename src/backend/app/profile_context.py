@@ -16,12 +16,11 @@ Usage:
 """
 
 from contextvars import ContextVar, Token
-from typing import Optional
 
 # Context variable for current profile ID
 # Default is None — get_current_profile_id() raises if not set,
 # ensuring any code path that runs before /api/auth/init fails loudly.
-_current_profile_id: ContextVar[Optional[str]] = ContextVar('current_profile_id', default=None)
+_current_profile_id: ContextVar[str | None] = ContextVar('current_profile_id', default=None)
 
 
 def get_current_profile_id() -> str:

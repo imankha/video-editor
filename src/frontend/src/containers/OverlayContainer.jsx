@@ -592,6 +592,8 @@ export function OverlayVideoOverlays({
   // Player detection (auto-detected during framing export - U8)
   playerDetectionEnabled,
   playerDetections,
+  detectionVideoWidth,
+  detectionVideoHeight,
   isDetectionLoading,
   showPlayerBoxes,
   onPlayerSelect,
@@ -626,8 +628,8 @@ export function OverlayVideoOverlays({
           videoRef={videoRef}
           videoMetadata={effectiveOverlayMetadata}
           detections={playerDetections}
-          detectionVideoWidth={regionDetectionData.videoWidth}
-          detectionVideoHeight={regionDetectionData.videoHeight}
+          detectionVideoWidth={detectionVideoWidth}
+          detectionVideoHeight={detectionVideoHeight}
           isLoading={isDetectionLoading}
           onPlayerSelect={onPlayerSelect}
           zoom={zoom}

@@ -34,10 +34,11 @@ Idempotent: re-running finds no 'active' games with missing sources (already pas
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
+
+from app.storage import R2_BUCKET, get_r2_client
 
 from ..base import BaseMigration
-from app.storage import get_r2_client, R2_BUCKET
 
 logger = logging.getLogger(__name__)
 
@@ -233,8 +234,8 @@ class V023RepairSourcelessActiveGames(BaseMigration):
 
         conn.commit()
 
-        from app.user_context import get_current_user_id
         from app.profile_context import get_current_profile_id
+        from app.user_context import get_current_user_id
         try:
             uid = get_current_user_id()[:8]
             pid = get_current_profile_id()[:8]

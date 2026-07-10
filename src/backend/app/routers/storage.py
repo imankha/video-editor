@@ -6,23 +6,23 @@ to access files directly from R2 without proxying through the backend.
 This reduces latency and backend bandwidth usage for video streaming.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional, List
 import logging
 import mimetypes
 
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
-from ..user_context import get_current_user_id
+from ..queries import latest_working_clips_subquery
 from ..storage import (
     R2_ENABLED,
+    file_exists_in_r2,
+    generate_presigned_upload_url,
     generate_presigned_url,
     generate_presigned_url_global,
-    generate_presigned_upload_url,
-    file_exists_in_r2,
 )
-from ..queries import latest_working_clips_subquery
+from ..user_context import get_current_user_id
 
 router = APIRouter(prefix="/storage", tags=["storage"])
 
@@ -42,7 +42,7 @@ class PresignedUrlRequest(BaseModel):
 
 class BatchPresignedUrlRequest(BaseModel):
     """Request for generating multiple presigned URLs."""
-    paths: List[str]
+    paths: list[str]
     expires_in: int = 3600
 
 
@@ -52,7 +52,7 @@ class BatchPresignedUrlResponse(BaseModel):
     r2_enabled: bool = True
 
 
-def get_content_type(path: str) -> Optional[str]:
+def get_content_type(path: str) -> str | None:
     """Guess content type from file path."""
     content_type, _ = mimetypes.guess_type(path)
     return content_type
@@ -397,7 +397,7 @@ async def get_warmup_urls(
 async def get_upload_url(
     file_type: str,
     filename: str,
-    content_type: Optional[str] = Query(default=None),
+    content_type: str | None = Query(default=None),
     expires_in: int = Query(default=3600, ge=60, le=86400)
 ) -> PresignedUrlResponse:
     """

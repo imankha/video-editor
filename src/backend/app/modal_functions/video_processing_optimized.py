@@ -10,11 +10,11 @@ Deploy with:
     modal deploy app/modal_functions/video_processing_optimized.py
 """
 
-import modal
+import logging
 import os
 import tempfile
-import logging
-import time
+
+import modal
 
 app = modal.App("reel-ballers-video-optimized")
 

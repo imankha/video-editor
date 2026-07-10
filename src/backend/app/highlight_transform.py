@@ -20,7 +20,6 @@ TRANSFORMATION FLOW:
 - Load: raw_frame -> source_time (subtract trim offset) -> working_time (apply speed)
 """
 
-from typing import Dict, List, Optional, Tuple, Any
 import logging
 import uuid
 
@@ -31,7 +30,7 @@ logger = logging.getLogger(__name__)
 # TIME MAPPING FUNCTIONS
 # =============================================================================
 
-def get_trim_range(segments_data: Optional[Dict]) -> Tuple[float, float]:
+def get_trim_range(segments_data: dict | None) -> tuple[float, float]:
     """
     Extract trim range from segments_data.
 
@@ -65,7 +64,7 @@ def get_trim_range(segments_data: Optional[Dict]) -> Tuple[float, float]:
     return (0.0, float('inf'))
 
 
-def get_segment_speed(segments_data: Optional[Dict], segment_index: int) -> float:
+def get_segment_speed(segments_data: dict | None, segment_index: int) -> float:
     """
     Get the speed multiplier for a segment.
 
@@ -85,9 +84,9 @@ def get_segment_speed(segments_data: Optional[Dict], segment_index: int) -> floa
 
 
 def canonicalize_segments_data(
-    segments_data: Optional[Dict],
-    source_duration: Optional[float],
-) -> Optional[Dict]:
+    segments_data: dict | None,
+    source_duration: float | None,
+) -> dict | None:
     """
     Normalize segments_data['boundaries'] to the full-boundary format.
 
@@ -131,7 +130,7 @@ def canonicalize_segments_data(
     return result
 
 
-def get_output_duration(segments_data: Optional[Dict], source_duration: float = None) -> float:
+def get_output_duration(segments_data: dict | None, source_duration: float = None) -> float:
     """
     Calculate the effective output duration accounting for trim and speed changes.
 
@@ -188,8 +187,8 @@ def get_output_duration(segments_data: Optional[Dict], source_duration: float = 
 
 def get_segment_at_source_time(
     source_time: float,
-    segments_data: Optional[Dict]
-) -> Tuple[int, float, float]:
+    segments_data: dict | None
+) -> tuple[int, float, float]:
     """
     Find which segment contains a given source time.
 
@@ -226,7 +225,7 @@ def get_segment_at_source_time(
 
 def working_time_to_source_time(
     working_time: float,
-    segments_data: Optional[Dict]
+    segments_data: dict | None
 ) -> float:
     """
     Convert working video time to source time (undo speed changes).
@@ -286,8 +285,8 @@ def working_time_to_source_time(
 
 def source_time_to_working_time(
     source_time: float,
-    segments_data: Optional[Dict]
-) -> Optional[float]:
+    segments_data: dict | None
+) -> float | None:
     """
     Convert source time to working video time (apply speed changes).
 
@@ -350,9 +349,9 @@ def source_time_to_working_time(
 
 def working_time_to_raw_frame(
     working_time: float,
-    segments_data: Optional[Dict],
+    segments_data: dict | None,
     framerate: float = 30.0
-) -> Optional[int]:
+) -> int | None:
     """
     Convert working video time to raw clip frame number.
 
@@ -384,9 +383,9 @@ def working_time_to_raw_frame(
 
 def raw_frame_to_working_time(
     raw_frame: int,
-    segments_data: Optional[Dict],
+    segments_data: dict | None,
     framerate: float = 30.0
-) -> Optional[float]:
+) -> float | None:
     """
     Convert raw clip frame number to working video time.
 
@@ -415,9 +414,9 @@ def raw_frame_to_working_time(
 # =============================================================================
 
 def interpolate_crop_at_frame(
-    crop_keyframes: List[Dict],
+    crop_keyframes: list[dict],
     frame: int
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Get the interpolated crop rectangle at a specific frame.
 
@@ -486,9 +485,9 @@ def working_coords_to_raw_coords(
     working_y: float,
     working_radiusX: float,
     working_radiusY: float,
-    crop: Dict,
-    working_video_dims: Dict
-) -> Dict:
+    crop: dict,
+    working_video_dims: dict
+) -> dict:
     """
     Transform coordinates from working video space to raw clip space.
 
@@ -546,9 +545,9 @@ def raw_coords_to_working_coords(
     raw_y: float,
     raw_radiusX: float,
     raw_radiusY: float,
-    crop: Dict,
-    working_video_dims: Dict
-) -> Dict:
+    crop: dict,
+    working_video_dims: dict
+) -> dict:
     """
     Transform coordinates from raw clip space to working video space.
 
@@ -611,12 +610,12 @@ def raw_coords_to_working_coords(
 # =============================================================================
 
 def transform_keyframe_to_raw(
-    keyframe: Dict,
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    keyframe: dict,
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Transform a single highlight keyframe from working video space to raw clip space.
 
@@ -671,12 +670,12 @@ def transform_keyframe_to_raw(
 
 
 def transform_keyframe_to_working(
-    raw_keyframe: Dict,
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    raw_keyframe: dict,
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Transform a single highlight keyframe from raw clip space to working video space.
 
@@ -739,12 +738,12 @@ def transform_keyframe_to_working(
 
 
 def transform_highlight_region_to_raw(
-    region: Dict,
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    region: dict,
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Transform a complete highlight region from working video space to raw clip space.
 
@@ -804,12 +803,12 @@ def transform_highlight_region_to_raw(
 
 
 def transform_highlight_region_to_working(
-    raw_region: Dict,
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    raw_region: dict,
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> Optional[Dict]:
+) -> dict | None:
     """
     Transform a highlight region from raw clip space to working video space.
 
@@ -872,12 +871,12 @@ def transform_highlight_region_to_working(
 
 
 def transform_all_regions_to_raw(
-    regions: List[Dict],
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    regions: list[dict],
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> List[Dict]:
+) -> list[dict]:
     """
     Transform all highlight regions from working video space to raw clip space.
 
@@ -898,12 +897,12 @@ def transform_all_regions_to_raw(
 
 
 def transform_all_regions_to_working(
-    raw_regions: List[Dict],
-    crop_keyframes: List[Dict],
-    segments_data: Optional[Dict],
-    working_video_dims: Dict,
+    raw_regions: list[dict],
+    crop_keyframes: list[dict],
+    segments_data: dict | None,
+    working_video_dims: dict,
     framerate: float = 30.0
-) -> List[Dict]:
+) -> list[dict]:
     """
     Transform all highlight regions from raw clip space to working video space.
 

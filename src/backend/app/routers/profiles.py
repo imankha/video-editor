@@ -15,27 +15,32 @@ Endpoints:
 
 import logging
 from uuid import uuid4
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.user_context import get_current_user_id
 from app.profile_context import set_current_profile_id
-from app.session_init import invalidate_user_cache
-from app.storage import (
-    delete_profile_r2_data,
-    delete_local_profile_data,
+from app.services.user_db import (
+    create_profile as db_create_profile,
+)
+from app.services.user_db import (
+    delete_profile as db_delete_profile,
 )
 from app.services.user_db import (
     get_profiles,
     get_selected_profile_id,
-    set_selected_profile_id,
-    create_profile as db_create_profile,
-    update_profile as db_update_profile,
-    delete_profile as db_delete_profile,
     set_default_profile,
+    set_selected_profile_id,
 )
+from app.services.user_db import (
+    update_profile as db_update_profile,
+)
+from app.session_init import invalidate_user_cache
+from app.storage import (
+    delete_local_profile_data,
+    delete_profile_r2_data,
+)
+from app.user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -49,13 +54,13 @@ router = APIRouter(prefix="/api/profiles", tags=["profiles"])
 class CreateProfileRequest(BaseModel):
     name: str
     color: str
-    sport: Optional[str] = None
+    sport: str | None = None
 
 
 class UpdateProfileRequest(BaseModel):
-    name: Optional[str] = None
-    color: Optional[str] = None
-    sport: Optional[str] = None
+    name: str | None = None
+    color: str | None = None
+    sport: str | None = None
 
 
 class SwitchProfileRequest(BaseModel):

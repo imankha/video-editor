@@ -17,11 +17,11 @@ Note: Parallel overlay processing was tested (E7) but costs 3-4x MORE than
 sequential. All overlay processing uses sequential mode.
 """
 
-import modal
+import logging
 import os
 import tempfile
-import logging
-import json
+
+import modal
 
 # Define the Modal app
 app = modal.App("reel-ballers-video-v2")
@@ -291,8 +291,8 @@ def _process_overlay_gen(job_id: str, input_path: str, output_path: str, params:
     # _process_overlay is blocking, so we can't yield during it.
     # Instead, refactor: inline the processing loop here as a generator.
     import subprocess
+
     import cv2
-    import numpy as np
 
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
@@ -422,8 +422,8 @@ def _process_overlay(job_id: str, input_path: str, output_path: str, params: dic
     Uses frame-by-frame processing with OpenCV, piped directly to FFmpeg.
     """
     import subprocess
+
     import cv2
-    import numpy as np
 
     highlight_regions = params.get("highlight_regions", [])
     effect_type = params.get("effect_type", "dark_overlay")
@@ -1077,9 +1077,9 @@ def _get_realesrgan_model():
     """Load Real-ESRGAN model (cached per container)."""
     global _realesrgan_model
     if _realesrgan_model is None:
+        import torch
         from realesrgan import RealESRGANer
         from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-        import torch
 
         logger.info("Loading Real-ESRGAN model (realesr-general-x4v3)...")
 
@@ -1200,9 +1200,9 @@ def process_framing_ai(
         Progress updates: {"progress": 0-100, "phase": "...", "message": "..."}
         Final result: {"status": "success", "output_key": "..."} or {"status": "error", "error": "..."}
     """
-    import cv2
     import subprocess
-    import numpy as np
+
+    import cv2
 
     try:
         logger.info(f"[{job_id}] Starting AI upscaling for user {user_id}")
@@ -1653,9 +1653,9 @@ def process_framing_ai_l4(
     Args: Same as process_framing_ai
     Returns: Same as process_framing_ai
     """
-    import cv2
     import subprocess
-    import numpy as np
+
+    import cv2
 
     try:
         logger.info(f"[{job_id}] Starting AI upscaling (L4 GPU) for user {user_id}")
@@ -1884,9 +1884,9 @@ def process_framing_ai_chunk(
     Returns:
         {"status": "success", "output_chunk_key": "...", "frames_processed": N}
     """
-    import cv2
     import subprocess
-    import numpy as np
+
+    import cv2
 
     chunk_id = f"{job_id}_chunk{chunk_index}"
 
@@ -2426,9 +2426,9 @@ def process_clips_ai(
         Progress: {"progress": 0-100, "phase": "...", "message": "...", "clip": N, "total_clips": N}
         Final: {"status": "success", "output_key": "...", "clips_processed": N}
     """
-    import cv2
     import subprocess
-    import numpy as np
+
+    import cv2
 
     total_clips = len(clips_data)
 

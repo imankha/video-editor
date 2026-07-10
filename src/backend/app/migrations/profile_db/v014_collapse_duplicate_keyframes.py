@@ -23,8 +23,9 @@ matches nothing.
 
 import logging
 
+from app.utils.encoding import decode_data, encode_data
+
 from ..base import BaseMigration
-from app.utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 

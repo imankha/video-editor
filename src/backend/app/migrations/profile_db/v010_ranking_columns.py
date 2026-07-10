@@ -72,7 +72,7 @@ class V010RankingColumns(BaseMigration):
                 )
 
     def _backfill_row(self, conn, cursor, row) -> None:
-        from app.services.glicko import seed_rating, RD_MAX
+        from app.services.glicko import RD_MAX, seed_rating
 
         # Only single-clip reels are in the ranking pool; leave the rest NULL.
         if row["clip_count"] != 1:
@@ -95,8 +95,8 @@ class V010RankingColumns(BaseMigration):
         if project_id is None:
             return None, None
         from app.services.collection_metadata import (
-            compute_project_clip_identity,
             compute_archive_clip_identity,
+            compute_project_clip_identity,
         )
         from app.services.project_archive import load_archive
 

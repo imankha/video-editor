@@ -7,12 +7,12 @@ This module contains:
 - Fallback OpenCV enhancement
 """
 
-import cv2
-import numpy as np
 import logging
 import sys
 import types
-from typing import Tuple
+
+import cv2
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ def setup_torchvision_compatibility():
             )
 
 
-def detect_aspect_ratio(width: int, height: int) -> Tuple[str, Tuple[int, int]]:
+def detect_aspect_ratio(width: int, height: int) -> tuple[str, tuple[int, int]]:
     """
     Detect aspect ratio and determine target resolution
 
@@ -93,12 +93,12 @@ def detect_aspect_ratio(width: int, height: int) -> Tuple[str, Tuple[int, int]]:
 
     # 16:9 (horizontal) - target 4K (3840x2160)
     if 1.7 <= ratio <= 1.8:  # 16/9 ≈ 1.778
-        logger.info(f"✓ Detected 16:9 aspect ratio → Target: 4K (3840x2160)")
+        logger.info("✓ Detected 16:9 aspect ratio → Target: 4K (3840x2160)")
         return ('16:9', (3840, 2160))
 
     # 9:16 (vertical) - target 1080x1920
     elif 0.55 <= ratio <= 0.6:  # 9/16 ≈ 0.5625
-        logger.info(f"✓ Detected 9:16 aspect ratio → Target: 1080x1920 (vertical)")
+        logger.info("✓ Detected 9:16 aspect ratio → Target: 1080x1920 (vertical)")
         return ('9:16', (1080, 1920))
 
     # Other ratios - upscale proportionally to closest standard
@@ -113,7 +113,7 @@ def detect_aspect_ratio(width: int, height: int) -> Tuple[str, Tuple[int, int]]:
             return ('other', target)
 
 
-def enhance_frame_opencv(frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
+def enhance_frame_opencv(frame: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
     """
     Fallback enhancement using OpenCV (if Real-ESRGAN not available)
 

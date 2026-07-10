@@ -30,9 +30,9 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..storage import _test_seams_enabled, set_force_r2_sync_failure, R2_ENABLED
-from ..user_context import get_current_user_id
 from ..profile_context import get_current_profile_id
+from ..storage import R2_ENABLED, _test_seams_enabled, set_force_r2_sync_failure
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +95,13 @@ async def simulate_machine_cycle():
 
     from ..database import (
         USER_DATA_BASE,
+        ensure_database,
         get_user_data_path_explicit,
+        reset_initialized_flag,
         set_local_db_version,
         set_local_user_db_version,
-        ensure_database,
-        reset_initialized_flag,
     )
-    from ..services.user_db import ensure_user_database, _initialized_user_dbs, _init_lock
+    from ..services.user_db import _init_lock, _initialized_user_dbs, ensure_user_database
 
     # 1. Clear version caches (so the re-pull is treated as a cold first access).
     set_local_db_version(user_id, profile_id, None)

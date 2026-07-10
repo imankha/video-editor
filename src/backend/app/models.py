@@ -4,8 +4,8 @@ Pydantic models for the Video Editor API.
 This module contains all data models used for request/response validation.
 """
 
+
 from pydantic import BaseModel
-from typing import List, Optional
 
 
 # Health/Hello endpoint models
@@ -29,7 +29,7 @@ class CropKeyframe(BaseModel):
 
 class CropExportRequest(BaseModel):
     """Request model for crop export"""
-    keyframes: List[CropKeyframe]
+    keyframes: list[CropKeyframe]
 
 
 # Highlight Export Models
@@ -46,7 +46,7 @@ class HighlightKeyframe(BaseModel):
 
 class HighlightExportRequest(BaseModel):
     """Request model for highlight export"""
-    keyframes: List[HighlightKeyframe]
+    keyframes: list[HighlightKeyframe]
 
 
 # Detection Models (YOLO)
@@ -68,21 +68,21 @@ class Detection(BaseModel):
 
 class PlayerDetectionRequest(BaseModel):
     """Request model for player detection on a single frame"""
-    video_path: Optional[str] = None  # Direct file path (for testing/local)
-    video_id: Optional[str] = None    # ID from /api/detect/upload (for frontend)
+    video_path: str | None = None  # Direct file path (for testing/local)
+    video_id: str | None = None    # ID from /api/detect/upload (for frontend)
     # R2 video support (for Modal GPU processing)
-    user_id: Optional[str] = None     # User folder in R2
-    input_key: Optional[str] = None   # R2 key for video (relative to user folder)
+    user_id: str | None = None     # User folder in R2
+    input_key: str | None = None   # R2 key for video (relative to user folder)
     # Project-based detection (backend looks up R2 path from working_video)
-    project_id: Optional[int] = None  # Project ID to look up working video
+    project_id: int | None = None  # Project ID to look up working video
     frame_number: int
-    confidence_threshold: Optional[float] = 0.5
+    confidence_threshold: float | None = 0.5
 
 
 class PlayerDetectionResponse(BaseModel):
     """Response model for player detection"""
     frame_number: int
-    detections: List[Detection]
+    detections: list[Detection]
     video_width: int
     video_height: int
 

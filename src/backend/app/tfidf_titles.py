@@ -6,7 +6,7 @@ to build a meaningful corpus. Falls back to simple stop-word removal for
 small corpora.
 """
 
-from sklearn.feature_extraction.text import TfidfVectorizer, ENGLISH_STOP_WORDS
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 
 # Additional stop words common in coaching notes
 COACHING_STOP_WORDS = ENGLISH_STOP_WORDS.union({

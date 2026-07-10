@@ -4,9 +4,9 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .user_db import RUNNER as USER_DB_RUNNER
-from .profile_db import RUNNER as PROFILE_DB_RUNNER
 from .postgres import RUNNER as PG_RUNNER
+from .profile_db import RUNNER as PROFILE_DB_RUNNER
+from .user_db import RUNNER as USER_DB_RUNNER
 
 logger = logging.getLogger(__name__)
 
@@ -139,8 +139,8 @@ def _migrate_user(user_id: str) -> dict:
 
 
 def _migrate_user_db(user_id: str) -> list:
-    from ..services.user_db import ensure_user_database, _get_user_db_path
     from ..database import sync_user_db_to_r2_explicit
+    from ..services.user_db import _get_user_db_path, ensure_user_database
 
     ensure_user_database(user_id)
     db_path = _get_user_db_path(user_id)
@@ -170,9 +170,9 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
     the profile verified at head in R2.
     """
     from ..database import USER_DATA_BASE, sync_db_to_r2_explicit
-    from ..user_context import set_current_user_id
     from ..profile_context import set_current_profile_id
     from ..storage import get_r2_client
+    from ..user_context import set_current_user_id
 
     db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -243,7 +243,7 @@ def _migrate_profile_db(user_id: str, profile_id: str) -> MigrateResult:
 
 def _get_profile_ids(user_id: str) -> list[str]:
     from ..database import USER_DATA_BASE
-    from ..storage import get_r2_client, R2_BUCKET, APP_ENV
+    from ..storage import APP_ENV, R2_BUCKET, get_r2_client
 
     client = get_r2_client()
     if not client:
@@ -276,7 +276,7 @@ def _download_profile_db(user_id: str, profile_id: str, local_path) -> bool:
     (or if no R2 client is available).  Raises on other download errors (fail loud).
     Accepts both Path and str for local_path.
     """
-    from ..storage import get_r2_client, R2_BUCKET, APP_ENV
+    from ..storage import APP_ENV, R2_BUCKET, get_r2_client
 
     local_path = Path(local_path)  # fix Path/str bug: ensure .parent works
     client = get_r2_client()

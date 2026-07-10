@@ -4,18 +4,17 @@ WebSocket connection management for real-time export progress updates.
 This module handles WebSocket connections and progress tracking for video export operations.
 """
 
-from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List, Optional
 import logging
-import os
 
-from app.constants import ExportStatus, ExportPhase, phase_to_status
+from fastapi import WebSocket, WebSocketDisconnect
+
+from app.constants import ExportPhase, phase_to_status
 
 logger = logging.getLogger(__name__)
 
 # Global progress tracking for exports
 # Format: {export_id: {"progress": 0-100, "message": "...", "status": "processing|complete|error"}}
-export_progress: Dict[str, dict] = {}
+export_progress: dict[str, dict] = {}
 
 
 def make_progress_data(
@@ -24,10 +23,10 @@ def make_progress_data(
     phase: str,
     message: str,
     export_type: str,
-    project_id: Optional[int] = None,
-    project_name: Optional[str] = None,
-    game_id: Optional[int] = None,
-    game_name: Optional[str] = None,
+    project_id: int | None = None,
+    project_name: str | None = None,
+    game_id: int | None = None,
+    game_name: str | None = None,
 ) -> dict:
     """
     Create a properly formatted progress data object for WebSocket updates.
@@ -84,7 +83,7 @@ class ConnectionManager:
 
     def __init__(self):
         # Store active connections by export_id (multiple connections per export supported)
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.active_connections: dict[str, list[WebSocket]] = {}
 
     async def connect(self, export_id: str, websocket: WebSocket):
         """Accept a WebSocket connection and add it to the list for this export_id"""

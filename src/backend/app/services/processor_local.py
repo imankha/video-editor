@@ -17,15 +17,14 @@ import asyncio
 import logging
 import os
 import tempfile
-from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 from .video_processor import (
-    VideoProcessor,
     ProcessingBackend,
     ProcessingConfig,
     ProcessingResult,
     ProgressCallback,
+    VideoProcessor,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,7 +61,7 @@ class LocalGPUProcessor(VideoProcessor):
     async def process_clip(
         self,
         config: ProcessingConfig,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Process a video clip using local CUDA GPU.
@@ -139,12 +138,12 @@ class LocalGPUProcessor(VideoProcessor):
 
     async def concatenate_clips(
         self,
-        clip_paths: List[str],
+        clip_paths: list[str],
         output_path: str,
         transition_type: str = "cut",
         transition_duration: float = 0.5,
         include_audio: bool = True,
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Concatenate clips using FFmpeg.
@@ -199,18 +198,18 @@ class LocalGPUProcessor(VideoProcessor):
         self,
         input_path: str,
         output_path: str,
-        highlight_regions: List[Dict[str, Any]],
+        highlight_regions: list[dict[str, Any]],
         effect_type: str = "dark_overlay",
-        progress: Optional[ProgressCallback] = None
+        progress: ProgressCallback | None = None
     ) -> ProcessingResult:
         """
         Apply highlight overlay using local processing.
 
         Uses frame-by-frame rendering with OpenCV, piped to FFmpeg.
         """
-        import cv2
         import subprocess
-        import numpy as np
+
+        import cv2
 
         try:
             # If no highlights, just copy
@@ -325,7 +324,7 @@ class LocalGPUProcessor(VideoProcessor):
 
 # Auto-register with factory when imported
 def _register():
-    from .video_processor import ProcessorFactory, ProcessingBackend
+    from .video_processor import ProcessingBackend, ProcessorFactory
     ProcessorFactory.register(ProcessingBackend.LOCAL_GPU, LocalGPUProcessor)
 
 
