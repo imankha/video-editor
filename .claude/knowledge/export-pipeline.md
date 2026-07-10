@@ -79,7 +79,7 @@ graph LR
 - **Rank-sweep incident (T4160/T4170):** sweep auto-export published raw 1080p stream-copies into the 9:16 ranking pool (its own `final_videos` writer, instant publish, hardcoded metadata). Sweep is still a parallel universe: no `export_jobs` row, own ffmpeg/R2/status literals (audit E8; unified in T4410).
 - **Live bugs (audit 2026-07-03, tasked):**
   - Multi-clip swallows DB-save exceptions and still announces success (`multi_clip.py:1436-1448` — phantom export; T4200 makes it terminal).
-  - `exports.py:279` returns undefined `presigned_url` → every successful Modal recovery commits then reports `finalized: False` (T4240).
+  - ~~`exports.py` returned undefined `presigned_url`~~ FIXED by T4790 (2026-07-10, regression test in test_t4790_undefined_name_bugs.py); T4240's remaining scope: bare-except narrowing + the other 3 recovery bugs.
   - Modal API error treated as "not running" → `cleanup_stale_exports` can kill a live paid job (`exports.py:290-309`, T4240).
   - Fabricated `recovered_{job_id}.mp4` filename when a Modal result lacks `output_key` (`exports.py:216`, T4240).
   - Two competing job-create helpers with different initial status: `exports.py:86` (`'pending'`) vs `export_helpers.py:37` (`'processing'`, swallows insert failure) — T4380 unifies.

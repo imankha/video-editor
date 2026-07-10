@@ -12,7 +12,7 @@
 
 Four related defects in the Modal export recovery chain, all in the "silent fallback / swallowed error" family:
 
-1. **Every successful recovery reports failure.** `finalize_modal_export` commits the recovered export to the DB, then crashes with `NameError` on an undefined variable — which the function's own `except Exception` converts into `{"finalized": False, "error": "name 'presigned_url' is not defined"}`. Callers treat a **committed** recovery as failed, and the `record_milestone` call never fires.
+1. **[FIXED by T4790, 2026-07-10]** ~~Every successful recovery reports failure.~~ The undefined `presigned_url` key was removed (URLs are generated on-the-fly, not stored) with a regression test (`tests/test_t4790_undefined_name_bugs.py`). The bare `except Exception` narrowing below is still open. Original finding: `finalize_modal_export` commits the recovered export to the DB, then crashes with `NameError` on an undefined variable — which the function's own `except Exception` converts into `{"finalized": False, "error": "name 'presigned_url' is not defined"}`. Callers treat a **committed** recovery as failed, and the `record_milestone` call never fires.
 2. **A Modal API hiccup can kill a LIVE export.** The is-it-running check returns `False` (= "not running") on any Modal API error, and `cleanup_stale_exports` then marks the live job as error.
 3. **Fabricated output filename.** When a Modal result lacks `output_key`, recovery invents `recovered_{job_id}.mp4` — a working_videos row pointing at an R2 object that doesn't exist.
 4. **The error handler itself can NameError.** `export_worker`'s except block reads variables (`config`/`job_type`/`project_id`) that are assigned inside the `try` — a decode failure crashes the error handler.
