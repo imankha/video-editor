@@ -2007,6 +2007,7 @@ async def _run_multi_clip_background(
     Runs via asyncio.create_task after /multi-clip returns 202; all progress
     and errors are reported via WebSocket."""
     from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
+    from ...highlight_transform import canonicalize_segments_data
 
     # T4010: snapshot the pre-job pointers so a failed export restores the project
     # to exactly its prior state (the success path repoints working_video_id itself).
