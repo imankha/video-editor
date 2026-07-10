@@ -9,43 +9,42 @@ This module handles exports involving multiple video clips:
 Uses the transition strategy pattern for different transition types.
 """
 
-import asyncio
-import base64
-import json
-import logging
-import math
-import os
-import shutil
-import tempfile
-import time as time_module
-import uuid
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-
-import ffmpeg
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from dataclasses import dataclass, field
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
-
+from pathlib import Path
+from typing import List, Tuple, Dict, Any, Optional
+import json
+import os
+import tempfile
+import uuid
+import asyncio
+import logging
+import ffmpeg
+import shutil
+import time as time_module
+import hashlib
+import base64
+import math
 try:
     import torch
 except ImportError:
     torch = None
 
-from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStatus
-from ...database import get_db_connection
-from ...profile_context import get_current_profile_id, set_current_profile_id
-from ...queries import latest_working_clips_subquery
-from ...services.clip_cache import get_clip_cache
-from ...services.clip_pipeline import process_clip_with_pipeline
-from ...services.ffmpeg_service import get_video_duration
-from ...services.modal_client import call_modal_clips_ai, call_modal_detect_players_batch, modal_enabled
-from ...services.transitions import apply_transition
-from ...storage import delete_from_r2, download_from_r2, generate_presigned_url, upload_bytes_to_r2, upload_to_r2
-from ...user_context import get_current_user_id, set_current_user_id
-from ...utils.encoding import decode_data, encode_data
 from ...websocket import export_progress, manager
+from ...services.clip_cache import get_clip_cache
+from ...services.transitions import apply_transition
+from ...services.clip_pipeline import process_clip_with_pipeline
+from ...constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR, ExportStatus
+from ...services.ffmpeg_service import get_video_duration
+from ...database import get_db_connection
+from ...storage import upload_to_r2, upload_bytes_to_r2, delete_from_r2, generate_presigned_url, download_from_r2
+from ...queries import latest_working_clips_subquery
+from ...user_context import get_current_user_id, set_current_user_id
+from ...profile_context import get_current_profile_id, set_current_profile_id
+from ...services.modal_client import modal_enabled, call_modal_clips_ai, call_modal_detect_players_batch
+from ...utils.encoding import encode_data, decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +132,7 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
 
     model = get_yolo_model()
     if model is None:
-        logger.error("[Detection] YOLO model is None - ultralytics may not be installed")
+        logger.error(f"[Detection] YOLO model is None - ultralytics may not be installed")
         return {'timestamp': timestamp, 'boxes': []}
 
     cap = cv2.VideoCapture(video_path)
@@ -207,7 +206,7 @@ def run_local_detection_on_frame(video_path: str, timestamp: float, confidence_t
 async def run_local_batch_detection(
     user_id: str,
     output_key: str,
-    timestamps: list[float],
+    timestamps: List[float],
     confidence_threshold: float = 0.5,
     progress_callback=None,
     local_video_path: str = None,
@@ -232,7 +231,7 @@ async def run_local_batch_detection(
         success = download_from_r2(user_id, output_key, temp_video)
 
         if not success:
-            logger.error("[Local Detection] Failed to download video from R2")
+            logger.error(f"[Local Detection] Failed to download video from R2")
             return {"status": "error", "error": "Failed to download video"}
 
     try:
@@ -281,10 +280,10 @@ async def run_local_batch_detection(
 
 async def run_local_detection_on_video_file(
     video_path: str,
-    source_clips: list[dict[str, Any]],
+    source_clips: List[Dict[str, Any]],
     confidence_threshold: float = 0.5,
     fps: int = 30,
-) -> list[dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """
     Run local YOLO detection directly on a video file (no R2 download needed).
 
@@ -395,7 +394,7 @@ async def run_local_detection_on_video_file(
     return regions
 
 
-def normalize_clip_data_for_modal(clip_data: dict[str, Any]) -> dict[str, Any]:
+def normalize_clip_data_for_modal(clip_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Normalize clip data format for Modal processing.
 
@@ -457,7 +456,7 @@ def normalize_clip_data_for_modal(clip_data: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def calculate_effective_duration(clip_data: dict[str, Any], raw_duration: float) -> float:
+def calculate_effective_duration(clip_data: Dict[str, Any], raw_duration: float) -> float:
     """
     Calculate the effective duration of a clip after applying trim and speed changes.
 
@@ -559,10 +558,10 @@ def calculate_effective_duration(clip_data: dict[str, Any], raw_duration: float)
 
 
 def build_clip_boundaries_from_durations(
-    clips_data: list[dict[str, Any]],
-    actual_durations: list[float],
-    transition: dict[str, Any] | None = None
-) -> list[dict[str, Any]]:
+    clips_data: List[Dict[str, Any]],
+    actual_durations: List[float],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     """
     Build clip boundary metadata using actual measured durations of processed clips.
 
@@ -603,9 +602,9 @@ def build_clip_boundaries_from_durations(
 
 
 def build_clip_boundaries_from_input(
-    clips_data: list[dict[str, Any]],
-    transition: dict[str, Any] | None = None
-) -> list[dict[str, Any]]:
+    clips_data: List[Dict[str, Any]],
+    transition: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     """
     Build clip boundary metadata by calculating durations from input data.
     This is a FALLBACK for Modal processing where we don't have access to processed clips.
@@ -654,7 +653,7 @@ def build_clip_boundaries_from_input(
     return source_clips
 
 
-def generate_default_highlight_regions(source_clips: list[dict[str, Any]], fps: int = 30) -> list[dict[str, Any]]:
+def generate_default_highlight_regions(source_clips: List[Dict[str, Any]], fps: int = 30) -> List[Dict[str, Any]]:
     """
     Generate default highlight regions at the start of each clip.
     Creates a 2-second region at the beginning of each clip in the concatenated video.
@@ -696,7 +695,7 @@ def generate_default_highlight_regions(source_clips: list[dict[str, Any]], fps: 
     return regions
 
 
-def calculate_detection_timestamps(source_clips: list[dict[str, Any]], fps: int = 30) -> list[dict[str, Any]]:
+def calculate_detection_timestamps(source_clips: List[Dict[str, Any]], fps: int = 30) -> List[Dict[str, Any]]:
     """
     Calculate timestamps and frame numbers for player detection within each clip's overlay region.
 
@@ -741,10 +740,10 @@ def calculate_detection_timestamps(source_clips: list[dict[str, Any]], fps: int 
 async def run_player_detection_for_highlights(
     user_id: str,
     output_key: str,
-    source_clips: list[dict[str, Any]],
+    source_clips: List[Dict[str, Any]],
     progress_callback=None,
     fps: int = 30,
-) -> list[dict[str, Any]]:
+) -> List[Dict[str, Any]]:
     """
     Run batch player detection and enhance highlight regions with detected player boxes.
 
@@ -776,7 +775,7 @@ async def run_player_detection_for_highlights(
     # Run batch detection - use Modal if enabled, otherwise local YOLO
     try:
         if modal_enabled():
-            logger.info("[Player Detection] Using Modal GPU for detection")
+            logger.info(f"[Player Detection] Using Modal GPU for detection")
             if progress_callback:
                 await progress_callback(92, "Detecting players...", "detecting_players")
 
@@ -900,9 +899,9 @@ async def run_player_detection_for_highlights(
 
 
 def calculate_multi_clip_resolution(
-    clips_data: list[dict[str, Any]],
+    clips_data: List[Dict[str, Any]],
     global_aspect_ratio: str
-) -> tuple[int, int]:
+) -> Tuple[int, int]:
     """
     Calculate target resolution for all clips based on the global aspect ratio.
 
@@ -966,7 +965,7 @@ def calculate_multi_clip_resolution(
 
 
 async def process_single_clip(
-    clip_data: dict[str, Any],
+    clip_data: Dict[str, Any],
     video_file: UploadFile,
     temp_dir: str,
     target_fps: int,
@@ -1008,7 +1007,7 @@ async def process_single_clip(
 
     # Note: MockVideoUpscaler sets upsampler=True to pass this check
     if upscaler.upsampler is None:
-        logger.error("[process_single_clip] upscaler.upsampler is None — if using MockVideoUpscaler, its interface may be out of sync")
+        logger.error(f"[process_single_clip] upscaler.upsampler is None — if using MockVideoUpscaler, its interface may be out of sync")
         raise HTTPException(
             status_code=503,
             detail={"error": "AI SR model failed to load"}
@@ -1034,7 +1033,7 @@ async def process_single_clip(
 
 
 def create_chapter_metadata_file(
-    clip_info: list[dict[str, Any]],
+    clip_info: List[Dict[str, Any]],
     output_path: str
 ) -> str:
     """
@@ -1090,20 +1089,20 @@ def add_chapters_to_video(
         output_path
     ]
 
-    logger.info("[Chapters] Adding chapters to video")
+    logger.info(f"[Chapters] Adding chapters to video")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         logger.error(f"[Chapters] Failed to add chapters: {result.stderr}")
     else:
-        logger.info("[Chapters] Successfully added chapters")
+        logger.info(f"[Chapters] Successfully added chapters")
 
 
 def concatenate_clips_with_transition(
-    clip_paths: list[str],
+    clip_paths: List[str],
     output_path: str,
-    transition: dict[str, Any],
+    transition: Dict[str, Any],
     include_audio: bool = True,
-    clip_info: list[dict[str, Any]] | None = None
+    clip_info: Optional[List[Dict[str, Any]]] = None
 ) -> None:
     """
     Concatenate processed clips with transitions and embed chapter markers.
@@ -1209,7 +1208,7 @@ async def _export_clips(
     logger.info(f"[T1116] _export_clips entered: export_id={export_id}, clips={len(clips)}, modal={modal_enabled()}")
     # Reconstruct legacy formats for internal functions
     clips_data = []
-    video_files: dict[int, Any] = {}
+    video_files: Dict[int, Any] = {}
     for clip in clips:
         clips_data.append({
             'clipIndex': clip.clip_index,
@@ -1221,7 +1220,7 @@ async def _export_clips(
         video_files[clip.clip_index] = clip.video_file
 
     temp_dir = tempfile.mkdtemp()
-    processed_paths: list[str] = []
+    processed_paths: List[str] = []
 
     logger.info(f"[Multi-Clip Export] User context: {user_id}, profile: {profile_id}")
 
@@ -1466,7 +1465,7 @@ async def _export_clips(
         if is_test_mode:
             from app.services.local_processors import MockVideoUpscaler
             shared_upscaler = MockVideoUpscaler()
-            logger.info("[Multi-Clip Export] TEST MODE: Using MockVideoUpscaler (no AI)")
+            logger.info(f"[Multi-Clip Export] TEST MODE: Using MockVideoUpscaler (no AI)")
         elif (AIVideoUpscaler is None or not torch or not torch.cuda.is_available()) and not modal_enabled():
             # T4120 D1(b): CPU container with Modal disabled -> CPU scale-only verify
             # (ffmpeg crop+resize, NO AI upscale), mirroring the framing-AI fallback.
@@ -1531,7 +1530,7 @@ async def _export_clips(
                     detail={"error": "AI SR model failed to load"}
                 )
 
-            logger.info("[Multi-Clip Export] Initialized shared AI upscaler")
+            logger.info(f"[Multi-Clip Export] Initialized shared AI upscaler")
 
         # Process each clip
         total_clips = len(clips_data)
@@ -1778,10 +1777,10 @@ async def _export_clips(
             from ...services.user_db import refund_credits
             refund_credits(user_id, credits_deducted, export_id, total_video_seconds)
             logger.info(f"[Multi-Clip Export] Refunded {credits_deducted} credits to {user_id}")
-        import socket
         import traceback
+        import socket
         full_traceback = traceback.format_exc()
-        logger.error(f"[Multi-Clip Export] Failed: {e!s}")
+        logger.error(f"[Multi-Clip Export] Failed: {str(e)}")
         logger.error(f"[Multi-Clip Export] Full traceback:\n{full_traceback}")
 
         error_str = str(e)
@@ -1894,7 +1893,7 @@ async def export_multi_clip(
     # Extract video files (video_0, video_1, etc.). Read into memory now —
     # UploadFile spools are closed when the request ends, but the pipeline
     # runs in a background task that outlives the request.
-    video_files: dict[int, Any] = {}
+    video_files: Dict[int, Any] = {}
     for key, value in form.items():
         if key.startswith('video_'):
             try:
@@ -1913,7 +1912,7 @@ async def export_multi_clip(
 
         logger.info(f"[Multi-Clip Export] {len(clips_data)} clips, aspect ratio: {global_aspect_ratio}, transition: {transition}")
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid multi-clip data JSON: {e!s}")
+        raise HTTPException(status_code=400, detail=f"Invalid multi-clip data JSON: {str(e)}")
 
     include_audio_bool = include_audio.lower() == "true"
 
@@ -1922,8 +1921,8 @@ async def export_multi_clip(
     captured_profile_id = get_current_profile_id()
 
     # T890: Credit reservation — calculate total duration from clips_data
-    from ...highlight_transform import get_output_duration
-    from ...services.user_db import confirm_reservation, release_reservation, reserve_credits
+    from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
+    from ...highlight_transform import get_output_duration, canonicalize_segments_data
 
     total_video_seconds = 0
     for clip_cfg in clips_data:
@@ -1990,7 +1989,7 @@ async def export_multi_clip(
 async def _run_multi_clip_background(
     export_id: str,
     clips_data: list,
-    video_files: dict[int, Any],
+    video_files: Dict[int, Any],
     global_aspect_ratio: str,
     transition: dict,
     include_audio: bool,
@@ -2007,7 +2006,6 @@ async def _run_multi_clip_background(
     """Resolve clip sources from the DB, then run the shared export pipeline.
     Runs via asyncio.create_task after /multi-clip returns 202; all progress
     and errors are reported via WebSocket."""
-    from ...highlight_transform import canonicalize_segments_data
     from ...services.export_helpers import fail_export_job, sync_export_db_to_r2
 
     # T4010: snapshot the pre-job pointers so a failed export restores the project
@@ -2349,7 +2347,7 @@ async def concat_for_overlay(
     form = await request.form()
 
     # Extract video files (video_0, video_1, etc.)
-    video_files: dict[int, UploadFile] = {}
+    video_files: Dict[int, UploadFile] = {}
     for key, value in form.items():
         if key.startswith('video_'):
             try:
@@ -2467,7 +2465,7 @@ async def concat_for_overlay(
             pass
         raise
     except Exception as e:
-        logger.error(f"[Concat for Overlay] Failed: {e!s}", exc_info=True)
+        logger.error(f"[Concat for Overlay] Failed: {str(e)}", exc_info=True)
         import time
         time.sleep(0.5)
         try:
@@ -2475,4 +2473,4 @@ async def concat_for_overlay(
                 shutil.rmtree(temp_dir, ignore_errors=True)
         except Exception:
             pass
-        raise HTTPException(status_code=500, detail=f"Concatenation failed: {e!s}")
+        raise HTTPException(status_code=500, detail=f"Concatenation failed: {str(e)}")

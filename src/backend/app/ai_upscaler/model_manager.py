@@ -14,13 +14,14 @@ Architecture:
 - ModelManager: Coordinates model lifecycle and multi-GPU support
 """
 
-import torch
 import logging
 import os
 import traceback
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, Tuple
+from typing import Any
+
 import numpy as np
+import torch
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ class BaseModelBackend(ABC):
         pass
 
     @abstractmethod
-    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """
         Enhance a frame
 
@@ -69,8 +70,8 @@ class RealESRGANBackend(BaseModelBackend):
         """Setup Real-ESRGAN model"""
         try:
             from basicsr.archs.rrdbnet_arch import RRDBNet
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
             from realesrgan import RealESRGANer
+            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
 
             logger.info(f"Initializing Real-ESRGAN model: {self.model_variant}")
 
@@ -137,7 +138,7 @@ class RealESRGANBackend(BaseModelBackend):
             logger.error(f"Failed to setup Real-ESRGAN: {e}")
             raise
 
-    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """Enhance frame using Real-ESRGAN"""
         if self.upsampler is None:
             raise RuntimeError("Model not initialized. Call setup() first.")
@@ -208,7 +209,7 @@ class SwinIRBackend(BaseModelBackend):
             logger.error(f"Failed to setup SwinIR: {e}")
             raise
 
-    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """Enhance frame using SwinIR"""
         if self.model is None:
             raise RuntimeError("Model not initialized. Call setup() first.")
@@ -303,7 +304,7 @@ class HATBackend(BaseModelBackend):
             logger.error(f"Failed to setup HAT: {e}")
             raise
 
-    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """Enhance frame using HAT"""
         if self.model is None:
             raise RuntimeError("Model not initialized. Call setup() first.")
@@ -338,9 +339,6 @@ class RealBasicVSRBackend(BaseModelBackend):
     def setup(self, device: torch.device, **kwargs):
         """Setup RealBasicVSR model"""
         try:
-            from basicsr.archs.rrdbnet_arch import RRDBNet
-            from realesrgan.archs.srvgg_arch import SRVGGNetCompact
-            from basicsr.archs.realbasicvsr_arch import RealBasicVSRNet
 
             logger.info("Initializing RealBasicVSR model for video SR")
 
@@ -353,7 +351,7 @@ class RealBasicVSRBackend(BaseModelBackend):
             logger.error(f"Failed to setup RealBasicVSR: {e}")
             raise
 
-    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """RealBasicVSR processes video sequences, not single frames"""
         raise NotImplementedError("RealBasicVSR requires video sequence processing")
 
@@ -404,7 +402,7 @@ class ModelManager:
             logger.info("=" * 60)
             logger.info("GPU DETECTION")
             logger.info("=" * 60)
-            logger.info(f"CUDA available: Yes")
+            logger.info("CUDA available: Yes")
             logger.info(f"CUDA version: {torch.version.cuda}")
             logger.info(f"Number of GPUs detected: {self.num_gpus}")
 
@@ -415,16 +413,16 @@ class ModelManager:
             if self.num_gpus > 1 and enable_multi_gpu:
                 logger.info(f"✓ Multi-GPU mode ENABLED - will use all {self.num_gpus} GPUs in parallel")
             elif self.num_gpus > 1:
-                logger.info(f"Multi-GPU mode DISABLED - will use only GPU 0")
+                logger.info("Multi-GPU mode DISABLED - will use only GPU 0")
             else:
-                logger.info(f"Single GPU mode - using GPU 0")
+                logger.info("Single GPU mode - using GPU 0")
             logger.info("=" * 60)
         else:
             self.num_gpus = 0
             self.device = torch.device('cpu')
             if device == 'cuda':
                 logger.warning("CUDA requested but not available. Falling back to CPU.")
-            logger.info(f"Using device: cpu")
+            logger.info("Using device: cpu")
 
         # Create primary backend
         self.backend = self._create_backend(model_name)
@@ -502,13 +500,13 @@ class ModelManager:
                 logger.error(f"Failed to setup backend for GPU {gpu_id}: {e}")
                 logger.error(traceback.format_exc())
 
-    def get_backend_for_gpu(self, gpu_id: int) -> Optional[BaseModelBackend]:
+    def get_backend_for_gpu(self, gpu_id: int) -> BaseModelBackend | None:
         """Get model backend for specific GPU"""
         if self.num_gpus > 1 and self.enable_multi_gpu and gpu_id in self.backends:
             return self.backends[gpu_id]
         return self.backend
 
-    def enhance(self, frame: np.ndarray, gpu_id: int = 0, outscale: float = 4.0) -> Tuple[np.ndarray, Any]:
+    def enhance(self, frame: np.ndarray, gpu_id: int = 0, outscale: float = 4.0) -> tuple[np.ndarray, Any]:
         """
         Enhance a frame using the appropriate backend
 

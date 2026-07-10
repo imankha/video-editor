@@ -12,21 +12,25 @@ Key design principles:
 - Only state transitions are persisted (pending -> processing -> complete/error)
 """
 
+from fastapi import APIRouter, HTTPException, Form, UploadFile, File, BackgroundTasks, Query
+from pydantic import BaseModel
+from typing import Optional, List
+import uuid
 import json
 import logging
 import math
-import uuid
-from datetime import datetime
+import os
+import tempfile
+import shutil
 from pathlib import Path
-
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Query, UploadFile
-from pydantic import BaseModel
+from datetime import datetime, timedelta
 
 from ..analytics import record_milestone
-from ..constants import ExportStatus
 from ..database import get_db_connection, get_user_data_path
-from ..profile_context import get_current_profile_id
+from ..storage import generate_presigned_url
 from ..user_context import get_current_user_id
+from ..profile_context import get_current_profile_id
+from ..constants import ExportStatus
 from ..utils.encoding import encode_data
 
 logger = logging.getLogger(__name__)
@@ -55,24 +59,24 @@ class ExportJobCreate(BaseModel):
 class ExportJobResponse(BaseModel):
     """Response model for export job status."""
     job_id: str
-    project_id: int | None = None
-    project_name: str | None = None
+    project_id: Optional[int] = None
+    project_name: Optional[str] = None
     type: str
     status: str  # 'pending' | 'processing' | 'complete' | 'error'
-    error: str | None = None
-    output_video_id: int | None = None
-    output_filename: str | None = None
+    error: Optional[str] = None
+    output_video_id: Optional[int] = None
+    output_filename: Optional[str] = None
     created_at: str
-    started_at: str | None = None
-    completed_at: str | None = None
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
     # T12: Annotate exports use game_id instead of project_id
-    game_id: int | None = None
-    game_name: str | None = None
+    game_id: Optional[int] = None
+    game_name: Optional[str] = None
 
 
 class ExportJobListResponse(BaseModel):
     """Response model for listing exports."""
-    exports: list[ExportJobResponse]
+    exports: List[ExportJobResponse]
 
 
 # ============================================================================
@@ -96,7 +100,7 @@ def create_export_job(project_id: int, job_type: str, config: dict) -> str:
     return job_id
 
 
-def get_export_job(job_id: str) -> dict | None:
+def get_export_job(job_id: str) -> Optional[dict]:
     """Get an export job by ID, including project name."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -115,7 +119,7 @@ def get_export_job(job_id: str) -> dict | None:
     return None
 
 
-def get_project_exports(project_id: int) -> list[dict]:
+def get_project_exports(project_id: int) -> List[dict]:
     """Get all exports for a project, ordered by creation time desc."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -268,14 +272,11 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
         record_milestone(user_id, "export_completed", {"export_id": job_id, "type": "recovered"})
         logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
 
-        # T4790: presigned_url was an undefined name here (NameError) — working
-        # videos generate URLs on-the-fly (see comment above), they are not stored,
-        # so the finalize response omits it. The idempotency path already omits it
-        # and the caller reads it with .get(), so consumers already tolerate absence.
         return {
             "finalized": True,
             "working_video_id": working_video_id,
             "output_filename": output_filename,
+            "presigned_url": presigned_url
         }
 
     except Exception as e:
@@ -365,7 +366,7 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
             logger.info(f"[ExportJobs] {still_running_count} exports still running on Modal")
 
 
-def get_active_exports() -> list[dict]:
+def get_active_exports() -> List[dict]:
     """Get all currently active (pending or processing) exports.
 
     Also cleans up stale exports that have been processing too long.
@@ -391,7 +392,7 @@ def get_active_exports() -> list[dict]:
         return [dict(row) for row in rows]
 
 
-def get_recent_exports(hours: int = 24) -> list[dict]:
+def get_recent_exports(hours: int = 24) -> List[dict]:
     """Get exports from the last N hours."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -408,7 +409,7 @@ def get_recent_exports(hours: int = 24) -> list[dict]:
         return [dict(row) for row in rows]
 
 
-def get_exports_by_status(statuses: list[str]) -> list[dict]:
+def get_exports_by_status(statuses: List[str]) -> List[dict]:
     """Get exports filtered by status list."""
     if not statuses:
         return []
@@ -533,8 +534,8 @@ async def start_framing_export(
         raise HTTPException(status_code=500, detail=f"Failed to stage video: {e}")
 
     # T890: Credit reservation — reserve before job creation, confirm after
+    from ..services.user_db import reserve_credits, confirm_reservation, release_reservation
     from ..services.ffmpeg_service import get_video_duration
-    from ..services.user_db import confirm_reservation, release_reservation, reserve_credits
 
     user_id = get_current_user_id()
     video_seconds = get_video_duration(str(staged_video_path))
@@ -730,7 +731,7 @@ async def list_unacknowledged_exports():
 
 
 @router.post("/acknowledge")
-async def acknowledge_exports(job_ids: list[str] = None):
+async def acknowledge_exports(job_ids: List[str] = None):
     """
     T12: Mark exports as acknowledged (notification shown).
 

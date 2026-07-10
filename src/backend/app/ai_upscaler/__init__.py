@@ -4,9 +4,10 @@ AI Video Upscaler Package
 Modular implementation of AI-powered video upscaling with Real-ESRGAN support.
 """
 
-__all__ = ['utils', 'VideoEncoder', 'KeyframeInterpolator', 'ModelManager', 'FrameEnhancer', 'FrameProcessor', 'AIVideoUpscaler']
+__all__ = ['AIVideoUpscaler', 'FrameEnhancer', 'FrameProcessor', 'KeyframeInterpolator', 'ModelManager', 'VideoEncoder', 'utils']
 
 import cv2
+
 # T4120: torch is GPU-only and intentionally absent from the lean prod/CPU image
 # (requirements.prod.txt). It's used ONLY inside AIVideoUpscaler methods (never at
 # module/class-definition level), so make the import optional: a CPU container
@@ -17,35 +18,37 @@ try:
     import torch
 except ImportError:
     torch = None
-import numpy as np
-from pathlib import Path
-import os
-import subprocess
-import logging
 import contextlib
-from typing import List, Dict, Any, Tuple, Optional
-import tempfile
-import shutil
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
-from datetime import datetime
 import json
+import logging
+import os
+import shutil
+import subprocess
+import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from ..constants import VIDEO_MAX_WIDTH, VIDEO_MAX_HEIGHT, AI_UPSCALE_FACTOR
+import numpy as np
+
+from ..constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH
 
 # Import utilities
 from . import utils
-from .utils import setup_torchvision_compatibility, detect_aspect_ratio, enhance_frame_opencv
-from .video_encoder import VideoEncoder
 from .keyframe_interpolator import KeyframeInterpolator  # torch-free (cv2/numpy) — overlay uses this
+from .utils import detect_aspect_ratio, enhance_frame_opencv, setup_torchvision_compatibility
+from .video_encoder import VideoEncoder
+
 # T4120: these submodules import torch at module top; guard them so a CPU container
 # can still import the package (and KeyframeInterpolator above). The GPU upscaler
 # (AIVideoUpscaler) needs them, but it is never instantiated on CPU — MockVideoUpscaler
 # is used instead. On prod/Modal (torch present) these import normally.
 try:
-    from .model_manager import ModelManager
     from .frame_enhancer import FrameEnhancer
     from .frame_processor import FrameProcessor
+    from .model_manager import ModelManager
 except ImportError:
     ModelManager = FrameEnhancer = FrameProcessor = None
 
@@ -67,7 +70,7 @@ os.environ['REALESRGAN_VERBOSE'] = '0'
 logger = logging.getLogger(__name__)
 
 
-def get_video_metadata_ffprobe(video_path: str) -> Optional[Dict[str, Any]]:
+def get_video_metadata_ffprobe(video_path: str) -> dict[str, Any] | None:
     """
     Get accurate video metadata using ffprobe.
     This reads container metadata which matches what browsers report.
@@ -145,7 +148,7 @@ class AIVideoUpscaler:
     - Target resolution based on aspect ratio
     """
 
-    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: Optional[Dict] = None, pre_enhance_source: bool = False, pre_enhance_params: Optional[Dict] = None, tile_size: int = 0, ffmpeg_codec: Optional[str] = None, ffmpeg_preset: Optional[str] = None, ffmpeg_crf: Optional[str] = None, sr_model_name: Optional[str] = None):
+    def __init__(self, model_name: str = 'RealESRGAN_x4plus', device: str = 'cuda', enable_multi_gpu: bool = True, export_mode: str = 'quality', sr_backend: str = 'realesrgan', enable_source_preupscale: bool = False, enable_diffusion_sr: bool = False, enable_multipass: bool = True, custom_enhance_params: dict | None = None, pre_enhance_source: bool = False, pre_enhance_params: dict | None = None, tile_size: int = 0, ffmpeg_codec: str | None = None, ffmpeg_preset: str | None = None, ffmpeg_crf: str | None = None, sr_model_name: str | None = None):
         """
         Initialize the AI upscaler
 
@@ -249,11 +252,11 @@ class AIVideoUpscaler:
             enable_source_preupscale=enable_source_preupscale
         )
 
-    def detect_aspect_ratio(self, width: int, height: int) -> Tuple[str, Tuple[int, int]]:
+    def detect_aspect_ratio(self, width: int, height: int) -> tuple[str, tuple[int, int]]:
         """Wrapper for utils.detect_aspect_ratio - kept for backward compatibility"""
         return detect_aspect_ratio(width, height)
 
-    def enhance_frame_opencv(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
+    def enhance_frame_opencv(self, frame: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
         """Wrapper for utils.enhance_frame_opencv - kept for backward compatibility"""
         return enhance_frame_opencv(frame, target_size)
 
@@ -269,7 +272,7 @@ class AIVideoUpscaler:
         """Reset peak VRAM tracking - delegates to ModelManager"""
         self.model_manager.reset_peak_vram()
 
-    def get_adaptive_enhancement_params(self, scale_factor: float) -> Dict:
+    def get_adaptive_enhancement_params(self, scale_factor: float) -> dict:
         """Wrapper for frame_enhancer.get_adaptive_enhancement_params - kept for backward compatibility"""
         return self.frame_enhancer.get_adaptive_enhancement_params(scale_factor)
 
@@ -285,7 +288,7 @@ class AIVideoUpscaler:
         """Wrapper for frame_enhancer.multi_pass_upscale - kept for backward compatibility"""
         return self.frame_enhancer.multi_pass_upscale(frame, target_scale)
 
-    def enhance_frame_ai(self, frame: np.ndarray, target_size: Tuple[int, int]) -> np.ndarray:
+    def enhance_frame_ai(self, frame: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
         """Wrapper for frame_enhancer.enhance_frame_ai - kept for backward compatibility"""
         return self.frame_enhancer.enhance_frame_ai(frame, target_size)
 
@@ -301,14 +304,14 @@ class AIVideoUpscaler:
         """
         return self.model_manager.get_backend_for_gpu(gpu_id)
 
-    def pre_upscale_source_frame(self, frame: np.ndarray, crop: Dict, scale: float = 2.0) -> Tuple[np.ndarray, Dict]:
+    def pre_upscale_source_frame(self, frame: np.ndarray, crop: dict, scale: float = 2.0) -> tuple[np.ndarray, dict]:
         """Wrapper for frame_enhancer.pre_upscale_source_frame - kept for backward compatibility"""
         return self.frame_enhancer.pre_upscale_source_frame(frame, crop, scale)
 
     def process_single_frame(
         self,
-        frame_data: Tuple[int, str, Dict, Tuple[int, int], int, float, Optional[Dict], Tuple[int, int]]
-    ) -> Tuple[int, np.ndarray, bool]:
+        frame_data: tuple[int, str, dict, tuple[int, int], int, float, dict | None, tuple[int, int]]
+    ) -> tuple[int, np.ndarray, bool]:
         """Wrapper for frame_processor.process_single_frame - kept for backward compatibility"""
         return self.frame_processor.process_single_frame(frame_data)
 
@@ -316,7 +319,7 @@ class AIVideoUpscaler:
         self,
         video_path: str,
         frame_number: int,
-        crop: Optional[Dict[str, float]] = None
+        crop: dict[str, float] | None = None
     ) -> np.ndarray:
         """Wrapper for frame_processor.extract_frame_with_crop - kept for backward compatibility"""
         return self.frame_processor.extract_frame_with_crop(video_path, frame_number, crop)
@@ -324,8 +327,8 @@ class AIVideoUpscaler:
     def process_with_realbasicvsr(
         self,
         input_path: str,
-        keyframes_sorted: List[Dict[str, Any]],
-        target_resolution: Tuple[int, int],
+        keyframes_sorted: list[dict[str, Any]],
+        target_resolution: tuple[int, int],
         total_frames: int,
         original_fps: float,
         frames_dir: Path,
@@ -406,7 +409,7 @@ class AIVideoUpscaler:
                     video=frame_list,
                     result_out_dir=str(frames_dir)
                 )
-                logger.info(f"RealBasicVSR processing complete")
+                logger.info("RealBasicVSR processing complete")
 
             else:
                 # MMEdit API (older) - use inference_video
@@ -460,26 +463,26 @@ class AIVideoUpscaler:
 
     def interpolate_crop(
         self,
-        keyframes: List[Dict[str, Any]],
+        keyframes: list[dict[str, Any]],
         time: float
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Wrapper for KeyframeInterpolator.interpolate_crop - kept for backward compatibility"""
         return KeyframeInterpolator.interpolate_crop(keyframes, time)
 
     def interpolate_highlight(
         self,
-        keyframes: List[Dict[str, Any]],
+        keyframes: list[dict[str, Any]],
         time: float
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """Wrapper for KeyframeInterpolator.interpolate_highlight - kept for backward compatibility"""
         return KeyframeInterpolator.interpolate_highlight(keyframes, time)
 
     def render_highlight_on_frame(
         self,
         frame: np.ndarray,
-        highlight: Dict[str, Any],
-        original_video_size: Tuple[int, int],
-        crop: Optional[Dict[str, float]] = None,
+        highlight: dict[str, Any],
+        original_video_size: tuple[int, int],
+        crop: dict[str, float] | None = None,
         effect_type: str = "original"
     ) -> np.ndarray:
         """Wrapper for KeyframeInterpolator.render_highlight_on_frame - kept for backward compatibility"""
@@ -489,15 +492,15 @@ class AIVideoUpscaler:
         self,
         input_path: str,
         output_path: str,
-        keyframes: List[Dict[str, Any]],
+        keyframes: list[dict[str, Any]],
         target_fps: int = 30,
         export_mode: str = "quality",
         progress_callback=None,
-        segment_data: Optional[Dict[str, Any]] = None,
+        segment_data: dict[str, Any] | None = None,
         include_audio: bool = True,
-        highlight_keyframes: Optional[List[Dict[str, Any]]] = None,
+        highlight_keyframes: list[dict[str, Any]] | None = None,
         highlight_effect_type: str = "original"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Process video with de-zoom and AI upscaling
 
@@ -651,7 +654,7 @@ class AIVideoUpscaler:
                     speed = seg['speed']
                     logger.info(f"  {seg['start']:.2f}s - {seg['end']:.2f}s: {speed}x speed")
                     if speed == 0.5:
-                        logger.info(f"    → Will generate AI interpolated frames (2x frame count)")
+                        logger.info("    → Will generate AI interpolated frames (2x frame count)")
             if 'trim_start' in segment_data or 'trim_end' in segment_data:
                 trim_start = segment_data.get('trim_start', 0)
                 trim_end = segment_data.get('trim_end', duration)
@@ -706,7 +709,7 @@ class AIVideoUpscaler:
             logger.info("=" * 60)
             logger.info("PROCESSING PIPELINE - MAXIMUM QUALITY MODE")
             logger.info("=" * 60)
-            logger.info(f"✓ Real-ESRGAN AI model active")
+            logger.info("✓ Real-ESRGAN AI model active")
             logger.info(f"✓ Device: {self.device}")
             logger.info(f"✓ Target resolution: {target_resolution[0]}x{target_resolution[1]}")
 
@@ -735,7 +738,7 @@ class AIVideoUpscaler:
                 logger.info(f"✓ Multi-GPU parallel processing with {num_workers} workers")
                 logger.info(f"  Frames will be distributed across {self.num_gpus} GPUs")
             else:
-                logger.info(f"Sequential processing on single device")
+                logger.info("Sequential processing on single device")
 
             logger.info("=" * 60)
 
@@ -971,7 +974,7 @@ class AIVideoUpscaler:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-    def parse_ffmpeg_progress(self, line: str) -> Optional[int]:
+    def parse_ffmpeg_progress(self, line: str) -> int | None:
         """Wrapper for VideoEncoder.parse_ffmpeg_progress - kept for backward compatibility"""
         return VideoEncoder.parse_ffmpeg_progress(line)
 
@@ -988,7 +991,7 @@ class AIVideoUpscaler:
         input_video_path: str,
         export_mode: str = "quality",
         progress_callback=None,
-        segment_data: Optional[Dict[str, Any]] = None,
+        segment_data: dict[str, Any] | None = None,
         include_audio: bool = True
     ):
         """

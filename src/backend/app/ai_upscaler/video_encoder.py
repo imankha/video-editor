@@ -8,28 +8,20 @@ Handles FFmpeg-based video encoding with:
 - Multi-pass encoding
 """
 
-import cv2
-import subprocess
 import logging
 import os
 import re
 import shutil
-from pathlib import Path
-from typing import Optional, Dict, Any
+import subprocess
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
-from .frame_interpolator import (
-    get_frame_interpolator,
-    InterpolationBackend,
-    FrameInterpolator
-)
+import cv2
 
 # Import GPU encoder detection from ffmpeg_service
-from ..services.ffmpeg_service import (
-    get_best_encoder,
-    get_available_encoders,
-    build_video_encoding_params
-)
+from ..services.ffmpeg_service import build_video_encoding_params, get_best_encoder
+from .frame_interpolator import InterpolationBackend, get_frame_interpolator
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +40,9 @@ class VideoEncoder:
 
     def __init__(
         self,
-        codec: Optional[str] = None,
-        preset: Optional[str] = None,
-        crf: Optional[str] = None
+        codec: str | None = None,
+        preset: str | None = None,
+        crf: str | None = None
     ):
         """
         Initialize video encoder
@@ -65,7 +57,7 @@ class VideoEncoder:
         self.ffmpeg_crf = crf
 
     @staticmethod
-    def parse_ffmpeg_progress(line: str) -> Optional[int]:
+    def parse_ffmpeg_progress(line: str) -> int | None:
         """
         Parse FFmpeg progress output to extract current frame number
 
@@ -201,7 +193,7 @@ class VideoEncoder:
         input_video_path: str,
         export_mode: str = "quality",
         progress_callback=None,
-        segment_data: Optional[Dict[str, Any]] = None,
+        segment_data: dict[str, Any] | None = None,
         include_audio: bool = True
     ):
         """
@@ -349,11 +341,11 @@ class VideoEncoder:
                         logger.info(f"  → Interpolation backend: {backend_info['backend']} (quality: {backend_info['quality_tier']})")
 
                         if backend_info['is_fallback']:
-                            logger.info(f"  → Using minterpolate with enhanced motion compensation")
+                            logger.info("  → Using minterpolate with enhanced motion compensation")
                         else:
-                            logger.info(f"  → Note: RIFE available for higher quality (use pre-processing for best results)")
+                            logger.info("  → Note: RIFE available for higher quality (use pre-processing for best results)")
 
-                        logger.info(f"  → Applying atempo=0.5 to audio for slow motion")
+                        logger.info("  → Applying atempo=0.5 to audio for slow motion")
 
                         # Get the minterpolate filter with improved settings
                         minterpolate_filter = self._get_minterpolate_filter(fps * 2)
@@ -525,7 +517,7 @@ class VideoEncoder:
             logger.info("=" * 60)
             logger.info("APPLYING FRAME INTERPOLATION WITH TRIM")
             logger.info("=" * 60)
-            logger.info(f"Combining trim and interpolation filters")
+            logger.info("Combining trim and interpolation filters")
 
             # Get improved minterpolate settings
             minterpolate_filter = self._get_minterpolate_filter(fps)
