@@ -20,7 +20,9 @@ ignore = [
     "B008",   # Do not perform function call in argument defaults (common in FastAPI)
     "B905",   # `zip()` without `strict=` (too noisy)
     "SIM108", # Use ternary operator (readability preference)
+    "SIM105", # contextlib.suppress (readability preference; same rationale as SIM108)
     "UP007",  # Use X | Y for union types (keep Optional for clarity)
+    "UP042",  # str+Enum -> StrEnum: `str, Enum` is the documented pattern (see backend type-safety skill)
     "RUF012", # Mutable class variables (false positives with SQLAlchemy/Pydantic)
 ]
 
