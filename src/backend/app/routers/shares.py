@@ -12,35 +12,35 @@ shared_router (/api/shared):
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime
-from typing import Optional, Union
+from typing import Union
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
-from ..user_context import get_current_user_id
-from ..profile_context import get_current_profile_id
 from ..database import get_db_connection
-from ..storage import APP_ENV, generate_presigned_url_global
-from ..services.sharing_db import (
-    create_shares,
-    get_share_by_token,
-    get_collection_share_by_token,
-    get_game_share_by_token,
-    get_pending_shares_for_email,
-    list_contacts_for_user,
-    list_shares_for_video,
-    update_share_visibility,
-    revoke_share,
-)
+from ..profile_context import get_current_profile_id
 from ..services.auth_db import (
     get_user_by_email,
     get_user_by_id,
     validate_session,
 )
+from ..services.sharing_db import (
+    create_shares,
+    get_active_public_share_for_video,
+    get_collection_share_by_token,
+    get_game_share_by_token,
+    get_pending_shares_for_email,
+    get_share_by_token,
+    list_contacts_for_user,
+    list_shares_for_video,
+    revoke_share,
+    update_share_visibility,
+)
+from ..storage import APP_ENV, generate_presigned_url_global
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class ShareCreateRecipient(BaseModel):
     share_token: str
     recipient_email: str
     is_existing_user: bool
-    email_sent: Optional[bool] = None
+    email_sent: bool | None = None
 
 
 class ShareCreateResponse(BaseModel):
@@ -70,9 +70,9 @@ class ShareCreateResponse(BaseModel):
 
 class ShareDetailResponse(BaseModel):
     share_token: str
-    video_name: Optional[str]
-    video_duration: Optional[float]
-    video_url: Optional[str]
+    video_name: str | None
+    video_duration: float | None
+    video_url: str | None
     is_public: bool
     shared_at: Union[str, datetime]
 
@@ -83,7 +83,7 @@ class ShareListItem(BaseModel):
     recipient_email: str
     is_public: bool
     shared_at: Union[str, datetime]
-    revoked_at: Optional[Union[str, datetime]]
+    revoked_at: Union[str, datetime] | None
 
 
 class ContactsResponse(BaseModel):
@@ -98,7 +98,7 @@ class ShareVisibilityRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_email_from_request(request: Request) -> Optional[str]:
+def _get_email_from_request(request: Request) -> str | None:
     session_id = request.cookies.get("rb_session")
     if session_id:
         session = validate_session(session_id)
@@ -113,7 +113,7 @@ def _get_email_from_request(request: Request) -> Optional[str]:
     return None
 
 
-def _get_user_id_from_request(request: Request) -> Optional[str]:
+def _get_user_id_from_request(request: Request) -> str | None:
     session_id = request.cookies.get("rb_session")
     if session_id:
         session = validate_session(session_id)
@@ -165,6 +165,22 @@ async def create_share(video_id: int, body: ShareCreateRequest):
     if not recipient_emails:
         if not body.is_public:
             raise HTTPException(400, "At least one recipient email is required")
+        # Idempotent public link: repeated "Copy Link" clicks must return the
+        # SAME active share instead of piling up rows. Only reuse a share that
+        # snapshots the video's CURRENT filename (a re-export invalidates old
+        # shares' snapshots, so those correctly get a fresh link).
+        existing = get_active_public_share_for_video(
+            video_id, user_id, video["filename"]
+        )
+        if existing:
+            return ShareCreateResponse(shares=[
+                ShareCreateRecipient(
+                    share_token=existing["share_token"],
+                    recipient_email=existing["recipient_email"],
+                    is_existing_user=True,
+                    email_sent=None,
+                )
+            ])
         sharer = get_user_by_id(user_id)
         recipient_emails = [sharer["email"] if sharer else user_id]
 
@@ -192,7 +208,7 @@ async def create_share(video_id: int, body: ShareCreateRequest):
 
     email_results = {}
     if not is_self_share:
-        from ..services.email import send_share_email, _resolve_sender_name, _is_existing_user
+        from ..services.email import _is_existing_user, _resolve_sender_name, send_share_email
         sender_name = _resolve_sender_name(sharer_email)
         tasks = {}
         for s in shares:

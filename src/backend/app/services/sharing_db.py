@@ -7,7 +7,6 @@ Uses the same Postgres instance as auth_db.py (shared pool from pg.py).
 import json
 import logging
 import uuid
-from typing import Optional
 
 import psycopg2
 
@@ -60,8 +59,8 @@ def create_shares(
     sharer_user_id: str,
     sharer_profile_id: str,
     video_filename: str,
-    video_name: Optional[str],
-    video_duration: Optional[float],
+    video_name: str | None,
+    video_duration: float | None,
     recipient_emails: list[str],
     is_public: bool,
 ) -> list[dict]:
@@ -94,7 +93,31 @@ def create_shares(
     return shares
 
 
-def get_share_by_token(token: str) -> Optional[dict]:
+def get_active_public_share_for_video(
+    video_id: int, sharer_user_id: str, video_filename: str
+) -> dict | None:
+    """Most recent non-revoked PUBLIC share for this video, but only if it still
+    snapshots the video's CURRENT filename -- shares serve playback from the
+    snapshotted R2 object, so after a re-export the old share points at the old
+    file and must NOT be reused. Makes public link creation idempotent: repeated
+    "Copy Link" clicks return the same token instead of piling up share rows."""
+    with get_sharing_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT s.share_token, s.recipient_email
+                 FROM shares s
+                 JOIN share_videos sv ON sv.share_id = s.id
+                WHERE sv.video_id = %s AND s.sharer_user_id = %s
+                  AND sv.video_filename = %s
+                  AND sv.is_public AND s.revoked_at IS NULL
+                ORDER BY s.shared_at DESC
+                LIMIT 1""",
+            (video_id, sharer_user_id, video_filename),
+        )
+        return cur.fetchone()
+
+
+def get_share_by_token(token: str) -> dict | None:
     with get_sharing_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -202,7 +225,7 @@ def find_collection_share(
     recipient_email: str,
     definition: dict,
     is_public: bool,
-) -> Optional[str]:
+) -> str | None:
     """Return the token of an existing, non-revoked collection share with the
     same canonicalized definition + visibility + recipient for this sharer, or
     None. Lets re-sharing the same card surface the existing link."""
@@ -225,7 +248,7 @@ def find_collection_share(
         return row["share_token"] if row else None
 
 
-def get_collection_share_by_token(token: str) -> Optional[dict]:
+def get_collection_share_by_token(token: str) -> dict | None:
     """Fetch a collection share row (definition + visibility + sharer ids)."""
     with get_sharing_db() as conn:
         cur = conn.cursor()
@@ -250,10 +273,10 @@ def create_game_share(
     sharer_user_id: str,
     sharer_profile_id: str,
     recipient_email: str,
-    game_name: Optional[str] = None,
-    game_blake3: Optional[str] = None,
-    first_clip_start: Optional[float] = None,
-    clip_names: Optional[list[str]] = None,
+    game_name: str | None = None,
+    game_blake3: str | None = None,
+    first_clip_start: float | None = None,
+    clip_names: list[str] | None = None,
     share_type: str = "game",
 ) -> dict:
     sharer_sport = _sharer_default_sport(sharer_user_id)
@@ -284,7 +307,7 @@ def create_game_share(
     }
 
 
-def get_game_share_by_token(token: str) -> Optional[dict]:
+def get_game_share_by_token(token: str) -> dict | None:
     with get_sharing_db() as conn:
         cur = conn.cursor()
         cur.execute(
