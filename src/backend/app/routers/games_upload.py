@@ -33,6 +33,7 @@ from app.storage import (
     r2_is_multipart_upload_valid,
     r2_set_object_metadata_global,
     generate_multipart_urls,
+    generate_presigned_url_global,
 )
 
 logger = logging.getLogger(__name__)
