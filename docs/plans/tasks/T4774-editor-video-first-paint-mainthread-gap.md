@@ -43,8 +43,8 @@ Re-run the T4770 walkthrough; diff `framing:videoReady→settled` and `overlay:v
 
 The premise is a **measurement artifact**. `videoReady → settled` in the T4770 walkthrough is a
 hardcoded `await page.waitForTimeout(1500)`, so the "~1.5s gap" is a fixed sleep, not JS work.
-A dedicated profiler (`src/frontend/e2e/T4774-mainthread-profile.spec.js`, CDP CPU profile +
-`longtask` observer) measured the *actual* post-`videoReady` window:
+A dedicated profiler (CDP CPU profile + `longtask` observer; spec retained on branch
+`feature/T4774-editor-mainthread-gap`) measured the *actual* post-`videoReady` window:
 
 - Framing: **0 long tasks, 0ms main-thread busy, true settle 0ms**
 - Overlay: **0 long tasks, 0ms main-thread busy, true settle 0ms**

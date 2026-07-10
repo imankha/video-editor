@@ -98,7 +98,7 @@ gesture (drag/resize/delete) in FramingContainer
 - **T4774 "post-video settle gap" is a measurement artifact (profiled, DROP).** The T4770
   ledger's `framing/overlay:videoReady → settled ≈ 1.5s` is the walkthrough's own
   `waitForTimeout(1500)`, not main-thread work. A CDP CPU profile + longtask observer
-  (`src/frontend/e2e/T4774-mainthread-profile.spec.js`) shows **~0ms main-thread busy and 0 long
+  (CDP profiler, retained on branch `feature/T4774-editor-mainthread-gap`) shows **~0ms main-thread busy and 0 long
   tasks after `videoReady`**; the main thread is 81–84% idle across the leg and the screen
   (video element, crop reticule, highlight regions) is committed ~500ms *before* first frame.
   Framing/overlay hydration is NOT a first-paint cost center. Don't defer/idle it or add a fake

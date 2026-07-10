@@ -58,7 +58,7 @@ The `framing/overlay:videoReady → settled` numbers are the walkthrough instrum
 `await page.waitForTimeout(1500)` between those two stamps — a fixed sleep, not measured work.
 The overlap step correctly saw "no request in flight" (the test is sleeping) but wrongly
 inferred JS/main-thread cost. A CDP CPU profile + longtask observer over the post-`videoReady`
-window (`e2e/T4774-mainthread-profile.spec.js`) shows **0 long tasks and ~0ms main-thread busy
+window (CDP profiler, retained on branch `feature/T4774-editor-mainthread-gap`) shows **0 long tasks and ~0ms main-thread busy
 after `videoReady`** on both screens; the main thread is **81–84% idle** over the whole leg,
 and the screen (video element + crop reticule + highlight regions) is committed ~500ms *before*
 the first frame. Full evidence: `qa/T4774/REPORT.md`. No editor code changed — a defer/idle or
