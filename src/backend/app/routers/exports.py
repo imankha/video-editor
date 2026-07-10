@@ -272,11 +272,14 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
         record_milestone(user_id, "export_completed", {"export_id": job_id, "type": "recovered"})
         logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
 
+        # T4790: presigned_url was an undefined name here (NameError) — working
+        # videos generate URLs on-the-fly (see comment above), they are not stored,
+        # so the finalize response omits it. The idempotency path already omits it
+        # and the caller reads it with .get(), so consumers already tolerate absence.
         return {
             "finalized": True,
             "working_video_id": working_video_id,
             "output_filename": output_filename,
-            "presigned_url": presigned_url
         }
 
     except Exception as e:
