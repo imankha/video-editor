@@ -4,10 +4,10 @@ import logging
 import re
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.services.pg import get_pg
-from app.user_context import get_current_platform, get_current_impersonator_id
+from app.user_context import get_current_impersonator_id, get_current_platform
 
 logger = logging.getLogger(__name__)
 
@@ -273,7 +273,7 @@ def record_milestone(user_id: str, event: str, context: dict | None = None):
     try:
         from app.services.user_db import get_user_db_connection
         with get_user_db_connection(user_id) as conn:
-            now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             conn.execute(
                 "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
                 (event, json.dumps(context) if context else None, now),
@@ -394,7 +394,7 @@ def update_session(user_id: str, is_pwa: bool = False):
         try:
             from app.services.user_db import get_user_db_connection
             with get_user_db_connection(user_id) as conn:
-                now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+                now = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 conn.execute(
                     "INSERT INTO user_action_log (action, context, created_at) VALUES (?, ?, ?)",
                     ("session_started", json.dumps({"is_pwa": is_pwa}), now),

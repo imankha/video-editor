@@ -7,8 +7,6 @@ should be imported from here to avoid duplication and inconsistencies.
 """
 
 from enum import Enum
-from typing import Dict
-
 
 # =============================================================================
 # Export Status Constants
@@ -74,7 +72,7 @@ def phase_to_status(phase: str) -> ExportStatus:
 
 # Rating adjectives for clip name generation (1-5 stars)
 # Used to generate names like "Brilliant Goal and Dribble"
-RATING_ADJECTIVES: Dict[int, str] = {
+RATING_ADJECTIVES: dict[int, str] = {
     5: 'Brilliant',
     4: 'Good',
     3: 'Interesting',
@@ -84,7 +82,7 @@ RATING_ADJECTIVES: Dict[int, str] = {
 
 # Rating notation symbols (chess-inspired, for display overlays)
 # Used in video overlays and exports
-RATING_NOTATION: Dict[int, str] = {
+RATING_NOTATION: dict[int, str] = {
     1: '??',   # Blunder
     2: '?',    # Mistake
     3: '!?',   # Interesting
@@ -94,7 +92,7 @@ RATING_NOTATION: Dict[int, str] = {
 
 # Rating colors (color-blind safe palette) for FFmpeg overlays
 # Format: 0xRRGGBB for FFmpeg compatibility
-RATING_COLORS_HEX: Dict[int, str] = {
+RATING_COLORS_HEX: dict[int, str] = {
     1: '0xC62828',  # Brick Red - Blunder
     2: '0xF9A825',  # Amber Yellow - Mistake
     3: '0x1565C0',  # Strong Blue - Interesting
@@ -103,7 +101,7 @@ RATING_COLORS_HEX: Dict[int, str] = {
 }
 
 # Rating colors as CSS hex (without 0x prefix) for frontend consistency
-RATING_COLORS_CSS: Dict[int, str] = {
+RATING_COLORS_CSS: dict[int, str] = {
     1: '#C62828',  # Brick Red - Blunder
     2: '#F9A825',  # Amber Yellow - Mistake
     3: '#1565C0',  # Strong Blue - Interesting
@@ -213,7 +211,7 @@ class SourceType(str, Enum):
             SourceType.CUSTOM_PROJECT: "Custom Project",
             SourceType.ANNOTATED_GAME: "Annotated Game",
         }
-        return labels.get(self, f"Video")
+        return labels.get(self, "Video")
 
 
 # =============================================================================

@@ -18,9 +18,9 @@ USAGE:
         print(kf.x, kf.y, kf.width, kf.height)
 """
 
-from typing import Dict, List, Literal, Optional, Tuple, Union
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
 
+from pydantic import BaseModel, Field, field_validator
 
 # =============================================================================
 # CROP DATA SCHEMA
@@ -55,17 +55,17 @@ class CropData(BaseModel):
     Stored as JSON array in working_clips.crop_data.
     Frontend generates this via useCrop hook.
     """
-    keyframes: List[CropKeyframe] = Field(
+    keyframes: list[CropKeyframe] = Field(
         default_factory=list,
         description="Array of crop keyframes sorted by frame"
     )
 
     @classmethod
-    def from_json_list(cls, json_list: List[dict]) -> 'CropData':
+    def from_json_list(cls, json_list: list[dict]) -> 'CropData':
         """Create CropData from a raw JSON list (the format stored in DB)."""
         return cls(keyframes=[CropKeyframe(**kf) for kf in json_list])
 
-    def to_json_list(self) -> List[dict]:
+    def to_json_list(self) -> list[dict]:
         """Convert to raw JSON list format for DB storage."""
         return [kf.model_dump() for kf in self.keyframes]
 
@@ -81,7 +81,7 @@ class TimingData(BaseModel):
 
     Stored as JSON object in working_clips.timing_data.
     """
-    trimRange: Optional[Tuple[float, float]] = Field(
+    trimRange: tuple[float, float] | None = Field(
         default=None,
         description="[start_time, end_time] in seconds, or null for no trim"
     )
@@ -109,20 +109,20 @@ class SegmentsData(BaseModel):
     Segments divide a clip into regions that can have different playback speeds.
     Stored as JSON object in working_clips.segments_data.
     """
-    boundaries: List[float] = Field(
+    boundaries: list[float] = Field(
         default_factory=lambda: [0.0],
         description="Sorted list of segment boundary times in seconds. "
                     "First element is always 0, last is video duration."
     )
-    userSplits: List[float] = Field(
+    userSplits: list[float] = Field(
         default_factory=list,
         description="User-created split points (subset of boundaries)"
     )
-    trimRange: Optional[Tuple[float, float]] = Field(
+    trimRange: tuple[float, float] | None = Field(
         default=None,
         description="Active trim range [start, end] in seconds"
     )
-    segmentSpeeds: Dict[str, float] = Field(
+    segmentSpeeds: dict[str, float] = Field(
         default_factory=dict,
         description="Speed multiplier per segment. Keys are segment indices as strings. "
                     "Missing keys default to 1.0x speed."
@@ -156,11 +156,11 @@ class HighlightKeyframe(BaseModel):
     Values between keyframes are interpolated using Catmull-Rom splines.
     """
     # Position can be specified by time (export format) or frame (internal format)
-    time: Optional[float] = Field(
+    time: float | None = Field(
         default=None,
         description="Time in seconds (used in export/storage format)"
     )
-    frame: Optional[int] = Field(
+    frame: int | None = Field(
         default=None,
         description="Frame number (used in internal format, converted to time for export)"
     )
@@ -201,21 +201,21 @@ class HighlightRegion(BaseModel):
     id: str = Field(..., description="Unique region identifier")
 
     # Time range (stored format uses snake_case)
-    start_time: Optional[float] = Field(
+    start_time: float | None = Field(
         default=None,
         description="Region start time in seconds (snake_case for storage)"
     )
-    end_time: Optional[float] = Field(
+    end_time: float | None = Field(
         default=None,
         description="Region end time in seconds (snake_case for storage)"
     )
 
     # Alternative camelCase format (for internal/frontend format)
-    startTime: Optional[float] = Field(
+    startTime: float | None = Field(
         default=None,
         description="Region start time in seconds (camelCase for frontend)"
     )
-    endTime: Optional[float] = Field(
+    endTime: float | None = Field(
         default=None,
         description="Region end time in seconds (camelCase for frontend)"
     )
@@ -225,7 +225,7 @@ class HighlightRegion(BaseModel):
         description="Whether this region's highlight effect is active"
     )
 
-    keyframes: List[HighlightKeyframe] = Field(
+    keyframes: list[HighlightKeyframe] = Field(
         default_factory=list,
         description="Keyframes within this region, sorted by time/frame"
     )
@@ -246,21 +246,21 @@ class HighlightsData(BaseModel):
     Stored as JSON array in working_videos.highlights_data.
     Frontend generates this via useHighlightRegions hook.
     """
-    regions: List[HighlightRegion] = Field(
+    regions: list[HighlightRegion] = Field(
         default_factory=list,
         description="Array of highlight regions"
     )
 
     @classmethod
-    def from_json_list(cls, json_list: List[dict]) -> 'HighlightsData':
+    def from_json_list(cls, json_list: list[dict]) -> 'HighlightsData':
         """Create HighlightsData from a raw JSON list (the format stored in DB)."""
         return cls(regions=[HighlightRegion(**r) for r in json_list])
 
-    def to_json_list(self) -> List[dict]:
+    def to_json_list(self) -> list[dict]:
         """Convert to raw JSON list format for DB storage."""
         return [r.model_dump(exclude_none=True) for r in self.regions]
 
-    def get_enabled_regions(self) -> List[HighlightRegion]:
+    def get_enabled_regions(self) -> list[HighlightRegion]:
         """Get only enabled regions."""
         return [r for r in self.regions if r.enabled]
 
@@ -291,17 +291,17 @@ class TextOverlaysData(BaseModel):
 
     Stored as JSON array in working_videos.text_overlays.
     """
-    overlays: List[TextOverlay] = Field(
+    overlays: list[TextOverlay] = Field(
         default_factory=list,
         description="Array of text overlay configurations"
     )
 
     @classmethod
-    def from_json_list(cls, json_list: List[dict]) -> 'TextOverlaysData':
+    def from_json_list(cls, json_list: list[dict]) -> 'TextOverlaysData':
         """Create TextOverlaysData from a raw JSON list."""
         return cls(overlays=[TextOverlay(**t) for t in json_list])
 
-    def to_json_list(self) -> List[dict]:
+    def to_json_list(self) -> list[dict]:
         """Convert to raw JSON list format for DB storage."""
         return [o.model_dump() for o in self.overlays]
 
@@ -318,7 +318,7 @@ EffectType = Literal['original', 'brightness_boost', 'dark_overlay']
 # HELPER FUNCTIONS
 # =============================================================================
 
-def parse_crop_data(raw) -> Optional[CropData]:
+def parse_crop_data(raw) -> CropData | None:
     """Safely parse crop_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
@@ -332,7 +332,7 @@ def parse_crop_data(raw) -> Optional[CropData]:
         return None
 
 
-def parse_timing_data(raw) -> Optional[TimingData]:
+def parse_timing_data(raw) -> TimingData | None:
     """Safely parse timing_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
@@ -346,7 +346,7 @@ def parse_timing_data(raw) -> Optional[TimingData]:
         return None
 
 
-def parse_segments_data(raw) -> Optional[SegmentsData]:
+def parse_segments_data(raw) -> SegmentsData | None:
     """Safely parse segments_data from DB (msgpack bytes or None)."""
     if not raw:
         return None
@@ -360,7 +360,7 @@ def parse_segments_data(raw) -> Optional[SegmentsData]:
         return None
 
 
-def parse_highlights_data(raw) -> Optional[HighlightsData]:
+def parse_highlights_data(raw) -> HighlightsData | None:
     """Safely parse highlights_data from DB (msgpack bytes or None)."""
     if not raw:
         return None

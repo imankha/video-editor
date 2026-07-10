@@ -38,7 +38,6 @@ import pstats
 import re
 import time
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +128,9 @@ def dump_profile(
     *,
     tag: str,
     elapsed_ms: float,
-    extra: Optional[str] = None,
-    req_id: Optional[str] = None,
-) -> Optional[Path]:
+    extra: str | None = None,
+    req_id: str | None = None,
+) -> Path | None:
     """Write `{dir}/{ts}_{tag}_{ms}ms_{req_id}[.{extra}].prof` plus a sibling .txt.
 
     Returns the .prof path (absolute) or None on failure. Errors are logged
@@ -188,7 +187,7 @@ def list_profiles() -> list[dict]:
     return out
 
 
-def read_profile_text(name: str) -> Optional[str]:
+def read_profile_text(name: str) -> str | None:
     """Read the human-readable .txt sibling for a given .prof filename.
 
     Path traversal protection: only basenames matching our dump pattern are

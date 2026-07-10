@@ -15,24 +15,24 @@ Architecture:
 - routers/detection.py: YOLO-based object detection endpoints
 """
 
-from fastapi import FastAPI, WebSocket, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-import traceback
-import sys
-import os
-import re
-import signal
-import subprocess
 import logging
 import logging.handlers
+import os
+import signal
+import subprocess
+import sys
 import time
-from dotenv import load_dotenv
+import traceback
 
 # Load environment variables from .env file (if exists)
 # Look in project root (two levels up from app/)
 from pathlib import Path
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 _project_root = Path(__file__).parent.parent.parent.parent
 _env_file = _project_root / ".env"
 if _env_file.exists():
@@ -78,14 +78,34 @@ logging.getLogger("boto3").setLevel(logging.WARNING)
 logging.getLogger("s3transfer").setLevel(logging.WARNING)
 
 # Import routers and websocket handler
-from app.routers import health_router, export_router, detection_router, projects_router, clips_router, games_router, games_upload_router, downloads_router, collections_router, auth_router, storage_router, settings_router, profiles_router, credits_router, quests_router, admin_router, payments_router, gallery_shares_router, shared_router, users_router, bootstrap_router
+from app.middleware import RequestContextMiddleware
+from app.routers import (
+    admin_router,
+    auth_router,
+    bootstrap_router,
+    clips_router,
+    collections_router,
+    credits_router,
+    detection_router,
+    downloads_router,
+    export_router,
+    gallery_shares_router,
+    games_router,
+    games_upload_router,
+    health_router,
+    payments_router,
+    profiles_router,
+    projects_router,
+    quests_router,
+    settings_router,
+    shared_router,
+    storage_router,
+    users_router,
+)
 from app.routers.exports import router as exports_router
 from app.routers.privacy import router as privacy_router
 from app.routers.rank import router as rank_router
 from app.websocket import websocket_export_progress
-from app.user_context import set_current_user_id, get_current_user_id
-from app.session_init import user_session_init
-from app.middleware import RequestContextMiddleware
 
 # Environment detection
 ENV = os.getenv("ENV", "development")
@@ -127,6 +147,7 @@ app.add_middleware(RequestContextMiddleware)
 # so it becomes the outermost middleware (last added = outermost in Starlette).
 # HTTP scopes pass through; only WebSocket scopes are checked for fly_machine_id.
 from app.middleware.fly_replay import FlyReplayMiddleware
+
 app.add_middleware(FlyReplayMiddleware)
 
 # T1740: Log Global Privacy Control signal for CCPA compliance records
@@ -165,12 +186,14 @@ app.include_router(privacy_router)
 # T1530/T1531: debug endpoints (profile listing/reading). Gated internally
 # by DEBUG_ENDPOINTS_ENABLED=true.
 from app.routers._debug import router as _debug_router
+
 app.include_router(_debug_router, prefix="/api")
 
 # T4120: durability test seams — mounted ONLY in dev/development/local/test, never
 # production/staging (layer 2 of the prod-impossibility gate). The router prefixes
 # its own /api/test. See app/routers/test_seams.py.
 from app.storage import _test_seams_enabled
+
 if _test_seams_enabled():
     from app.routers.test_seams import router as test_seams_router
     app.include_router(test_seams_router)
@@ -249,8 +272,9 @@ def _graceful_shutdown(signum, frame):
         failed = 0
         if USER_DATA_BASE.exists():
             import sqlite3
+
+            from app.database import get_local_db_version
             from app.storage import sync_database_to_r2_with_version
-            from app.database import get_local_db_version, set_local_db_version
 
             for db_file in USER_DATA_BASE.glob("*/profiles/*/profile.sqlite"):
                 parts = db_file.relative_to(USER_DATA_BASE).parts

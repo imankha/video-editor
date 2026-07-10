@@ -15,7 +15,6 @@ RuntimeError. This prevents silent fallback to a phantom shared user.
 """
 
 from contextvars import ContextVar
-from typing import Optional
 
 # Context variable for current user ID — NO default.
 # Must be explicitly set by middleware before any route handler runs.
@@ -31,17 +30,17 @@ _current_platform: ContextVar[str] = ContextVar('current_platform', default='unk
 # T1515: when an admin is impersonating a user ("Login as User"), this holds the
 # admin's user_id for the request. Analytics writers check it to skip recording so
 # impersonation leaves no footprint on the impersonated user's activity data.
-_current_impersonator_id: ContextVar[Optional[str]] = ContextVar(
+_current_impersonator_id: ContextVar[str | None] = ContextVar(
     'current_impersonator_id', default=None
 )
 
 
-def get_current_impersonator_id() -> Optional[str]:
+def get_current_impersonator_id() -> str | None:
     """Return the impersonating admin's user_id, or None if not impersonating."""
     return _current_impersonator_id.get()
 
 
-def set_current_impersonator_id(impersonator_id: Optional[str]) -> None:
+def set_current_impersonator_id(impersonator_id: str | None) -> None:
     """Set (or clear) the impersonator id for this request context."""
     _current_impersonator_id.set(impersonator_id or None)
 

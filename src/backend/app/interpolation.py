@@ -4,7 +4,7 @@ Crop interpolation utilities for FFmpeg filter generation.
 Uses Catmull-Rom cubic spline to match frontend interpolation.
 """
 
-from typing import List, Dict, Any
+from typing import Any
 
 
 def _catmull_rom(p0: float, p1: float, p2: float, p3: float, t: float) -> float:
@@ -48,7 +48,7 @@ def _spline_prop(sorted_kf, indices, prop):
     )
 
 
-def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, float]:
+def interpolate_crop(keyframes: list[dict[str, Any]], time: float) -> dict[str, float]:
     """
     Interpolate crop values between keyframes using Catmull-Rom cubic spline.
 
@@ -87,7 +87,7 @@ def interpolate_crop(keyframes: List[Dict[str, Any]], time: float) -> Dict[str, 
     }
 
 
-def generate_crop_filter(keyframes: List[Dict[str, Any]], duration: float, fps: float = 30.0) -> Dict[str, Any]:
+def generate_crop_filter(keyframes: list[dict[str, Any]], duration: float, fps: float = 30.0) -> dict[str, Any]:
     """
     Generate FFmpeg crop filter with keyframe interpolation.
 

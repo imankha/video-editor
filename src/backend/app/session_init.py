@@ -94,12 +94,13 @@ def _ensure_database_with_context(user_id: str, profile_id: str) -> None:
 
 
 def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
-    from .services.user_db import ensure_user_database
-    from .services.user_db import (
-        get_selected_profile_id,
-        create_profile, set_selected_profile_id,
-    )
     from .database import ensure_database
+    from .services.user_db import (
+        create_profile,
+        ensure_user_database,
+        get_selected_profile_id,
+        set_selected_profile_id,
+    )
 
     profile_id = None
     is_new_user = False
@@ -161,13 +162,14 @@ def _init_slow_path(user_id: str, hint_profile_id: str | None = None) -> dict:
     # T3230: Auto-materialize pending teammate shares for single-profile users
     try:
         from .services.auth_db import get_user_by_id
-        from .services.sharing_db import (
-            get_pending_shares_for_email, resolve_pending_share,
-            mark_game_share_materialized,
-        )
         from .services.materialization import materialize_game_share
-        from .utils.encoding import decode_data
+        from .services.sharing_db import (
+            get_pending_shares_for_email,
+            mark_game_share_materialized,
+            resolve_pending_share,
+        )
         from .services.user_db import get_profiles
+        from .utils.encoding import decode_data
 
         user = get_user_by_id(user_id)
         if user and user["email"]:
