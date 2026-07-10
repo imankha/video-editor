@@ -9,15 +9,17 @@ import { getUserId } from '../utils/sessionInit';
  */
 export default function DebugInfo() {
   const [isExpanded, setIsExpanded] = useState(false);
+  // Hook must run unconditionally (rules-of-hooks) — call it before the
+  // production early-return below.
+  const currentProfile = useProfileStore(state =>
+    state.profiles.find(p => p.id === state.currentProfileId) || null
+  );
 
   // Don't render in production
   if (import.meta.env.PROD) {
     return null;
   }
 
-  const currentProfile = useProfileStore(state =>
-    state.profiles.find(p => p.id === state.currentProfileId) || null
-  );
   const profileName = currentProfile?.name || 'No profile';
   const profileId = currentProfile?.id || '—';
   const userId = getUserId() || '—';

@@ -83,6 +83,15 @@ export function ReportProblemButton({ className = '' }) {
   const screenshotRef = useRef(null);
   const textareaRef = useRef(null);
 
+  // Focus textarea when modal opens. Declared here (before the early return
+  // below) so the hook runs unconditionally per rules-of-hooks.
+  useEffect(() => {
+    if (open && textareaRef.current) {
+      const timer = setTimeout(() => textareaRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
   if (!ENABLE_PROBLEM_REPORT) return null;
 
   const handleOpen = async () => {
@@ -147,14 +156,6 @@ export function ReportProblemButton({ className = '' }) {
       setState('error');
     }
   };
-
-  // Focus textarea when modal opens
-  useEffect(() => {
-    if (open && textareaRef.current) {
-      const timer = setTimeout(() => textareaRef.current?.focus(), 50);
-      return () => clearTimeout(timer);
-    }
-  }, [open]);
 
   if (!open) {
     return (
