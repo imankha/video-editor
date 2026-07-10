@@ -19,14 +19,14 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ..analytics import record_milestone, increment_total_spent, CREDIT_AMOUNT_TO_CENTS
-from ..user_context import get_current_user_id
+from ..analytics import increment_total_spent, record_milestone
 from ..services.user_db import (
     get_stripe_customer_id,
-    set_stripe_customer_id,
-    has_processed_payment,
     grant_credits,
+    has_processed_payment,
+    set_stripe_customer_id,
 )
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 

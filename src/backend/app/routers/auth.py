@@ -15,46 +15,44 @@ has a non-null email. Unauthenticated visitors have no user_id; mutating
 actions must go through the auth modal first.
 """
 
-from typing import Optional
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
-import httpx
 import logging
 import os
 import re
 import secrets
 import shutil
+import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import sqlite3
+import httpx
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from app.analytics import create_user_segment, _determine_origin, record_milestone, update_session, close_session
-from app.user_context import get_current_user_id, set_current_user_id
-from app.profile_context import set_current_profile_id
+from app.analytics import _determine_origin, close_session, create_user_segment, record_milestone, update_session
 from app.database import USER_DATA_BASE
-from app.session_init import user_session_init, invalidate_user_cache
-from app.storage import (
-    R2_ENABLED,
-    get_r2_client,
-    R2_BUCKET,
-    APP_ENV,
-)
 from app.services.auth_db import (
+    create_session,
+    create_user,
+    generate_user_id,
+    get_auth_db,
     get_user_by_email,
     get_user_by_id,
-    create_user,
-    create_session,
-    validate_session,
     invalidate_session,
     invalidate_user_sessions,
-    generate_user_id,
     update_last_seen,
     update_picture_url,
-    get_auth_db,
+    validate_session,
 )
+from app.session_init import invalidate_user_cache, user_session_init
+from app.storage import (
+    APP_ENV,
+    R2_BUCKET,
+    R2_ENABLED,
+    get_r2_client,
+)
+from app.user_context import get_current_user_id, set_current_user_id
+
 
 # Test accounts that auto-reset on every login (fresh new-user experience).
 # Read from nuf-reset-emails.txt at module load time.
@@ -120,11 +118,12 @@ def _reset_test_account(user_id: str, email: str) -> None:
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-from app.utils.cookies import set_cookie as _set_cookie, delete_cookie as _delete_cookie
+from app.utils.cookies import delete_cookie as _delete_cookie
+from app.utils.cookies import set_cookie as _set_cookie
 
 
 class InitRequest(BaseModel):
-    profile_id: Optional[str] = None
+    profile_id: str | None = None
 
 
 class InitResponse(BaseModel):
@@ -214,14 +213,14 @@ async def delete_user():
 
 class GoogleAuthRequest(BaseModel):
     token: str
-    ref: Optional[str] = None
-    ref_sport: Optional[str] = None  # T2915: inviter's sport snapshot carried on the invite link
-    utm_source: Optional[str] = None
-    utm_medium: Optional[str] = None
-    utm_campaign: Optional[str] = None
-    utm_content: Optional[str] = None
-    utm_term: Optional[str] = None
-    click_source: Optional[str] = None
+    ref: str | None = None
+    ref_sport: str | None = None  # T2915: inviter's sport snapshot carried on the invite link
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    click_source: str | None = None
 
 
 class AuthResponse(BaseModel):
@@ -235,7 +234,7 @@ async def _verify_google_token(token: str) -> dict:
     Raises HTTPException on any verification failure.
     """
     try:
-        from app.utils.retry import retry_async_call, TIER_1
+        from app.utils.retry import TIER_1, retry_async_call
 
         async def _call():
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -292,7 +291,7 @@ def _find_or_create_user(email: str, *, google_id: str | None = None, ref: str |
     if ref:
         logger.info(f"[Auth] login — created user: {user_id} ({email}) referred_by={ref}")
         try:
-            from app.services.sharing_db import resolve_invite_code, record_referral
+            from app.services.sharing_db import record_referral, resolve_invite_code
             referrer_id = resolve_invite_code(ref)
             if referrer_id:
                 attributed = record_referral(referrer_id, user_id, "invite_link", ref, inherited_sport=ref_sport)
@@ -485,14 +484,14 @@ class SendOtpRequest(BaseModel):
 class VerifyOtpRequest(BaseModel):
     email: str
     code: str
-    ref: Optional[str] = None
-    ref_sport: Optional[str] = None  # T2915: inviter's sport snapshot carried on the invite link
-    utm_source: Optional[str] = None
-    utm_medium: Optional[str] = None
-    utm_campaign: Optional[str] = None
-    utm_content: Optional[str] = None
-    utm_term: Optional[str] = None
-    click_source: Optional[str] = None
+    ref: str | None = None
+    ref_sport: str | None = None  # T2915: inviter's sport snapshot carried on the invite link
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    click_source: str | None = None
 
 
 @router.post("/send-otp")
@@ -518,7 +517,7 @@ async def send_otp(body: SendOtpRequest, request: Request):
             )
 
     code = str(secrets.randbelow(900000) + 100000)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=_OTP_EXPIRY_MINUTES)
+    expires_at = datetime.now(UTC) + timedelta(minutes=_OTP_EXPIRY_MINUTES)
 
     with get_auth_db() as conn:
         cur = conn.cursor()
@@ -571,7 +570,7 @@ async def verify_otp(body: VerifyOtpRequest, request: Request):
     if not row:
         raise HTTPException(status_code=400, detail="No pending code. Please request a new one.")
 
-    if row["expires_at"] < datetime.now(timezone.utc):
+    if row["expires_at"] < datetime.now(UTC):
         raise HTTPException(status_code=400, detail="Code expired. Please request a new one.")
 
     if row["attempts"] >= _MAX_ATTEMPTS_PER_CODE:
@@ -728,7 +727,9 @@ async def report_problem(body: ProblemReportRequest, request: Request):
 
     # 1. Insert bug into Postgres
     import base64 as _b64
+
     from psycopg2.extras import Json
+
     from app.services.pg import get_pg
 
     with get_pg() as conn:
@@ -752,9 +753,10 @@ async def report_problem(body: ProblemReportRequest, request: Request):
         bug_id = cur.fetchone()["id"]
 
         # 2. Upload screenshot to R2 if present
-        from app.storage import get_r2_client, r2_global_key, R2_BUCKET
-        from app.utils.retry import retry_r2_call, TIER_2
         import binascii
+
+        from app.storage import R2_BUCKET, get_r2_client, r2_global_key
+        from app.utils.retry import TIER_2, retry_r2_call
 
         screenshot_r2_key = None
         if body.screenshot and body.screenshot.startswith("data:image/"):
@@ -766,8 +768,9 @@ async def report_problem(body: ProblemReportRequest, request: Request):
                     screenshot_bytes = _b64.b64decode(parts[1])
                     max_bytes = 10 * 1024 * 1024
                     if len(screenshot_bytes) > max_bytes:
-                        from PIL import Image
                         from io import BytesIO
+
+                        from PIL import Image
                         img = Image.open(BytesIO(screenshot_bytes))
                         quality = 60
                         while len(screenshot_bytes) > max_bytes and quality >= 10:

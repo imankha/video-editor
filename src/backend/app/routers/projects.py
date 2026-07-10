@@ -5,24 +5,24 @@ Projects organize clips for editing through Framing and Overlay modes.
 Each project has an aspect ratio (16:9 or 9:16) and contains working clips.
 """
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Request
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
 import json
 import logging
+from datetime import datetime
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from pydantic import BaseModel
 
 from app.database import get_db_connection
-from app.queries import latest_working_clips_subquery, derive_clip_name
-from app.user_context import get_current_user_id
-from app.storage import R2_ENABLED, generate_presigned_url
-from app.utils.encoding import encode_data, decode_data
+from app.queries import derive_clip_name, latest_working_clips_subquery
 from app.services.collection_metadata import compute_unified_clip_start
+from app.storage import R2_ENABLED, generate_presigned_url
+from app.user_context import get_current_user_id
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
 
-def get_working_video_url(project_id: int, filename: str) -> Optional[str]:
+def get_working_video_url(project_id: int, filename: str) -> str | None:
     """
     Return the URL the frontend should hand to its <video> element for a
     project's working video.
@@ -42,7 +42,7 @@ def get_working_video_url(project_id: int, filename: str) -> Optional[str]:
     return f"/api/projects/{project_id}/working_video/stream"
 
 
-def _generate_working_video_presigned_url(filename: str) -> Optional[str]:
+def _generate_working_video_presigned_url(filename: str) -> str | None:
     """Internal: presigned R2 URL the proxy fetches from."""
     if not R2_ENABLED or not filename:
         return None
@@ -66,10 +66,10 @@ def _get_season_for_month(month: int) -> str:
 
 
 def _generate_game_display_name(
-    opponent_name: Optional[str],
-    game_date: Optional[str],
-    game_type: Optional[str],
-    tournament_name: Optional[str],
+    opponent_name: str | None,
+    game_date: str | None,
+    game_type: str | None,
+    tournament_name: str | None,
     fallback_name: str
 ) -> str:
     """
@@ -107,7 +107,7 @@ def _generate_game_display_name(
     return " ".join(parts)
 
 
-def _generate_group_key(game_names: List[str], game_dates: List[str]) -> Optional[str]:
+def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | None:
     """
     Generate a group key for a project based on its games.
 
@@ -172,41 +172,41 @@ class ProjectFromClipsCreate(BaseModel):
     """Create a project pre-populated with filtered clips."""
     name: str
     aspect_ratio: str = "16:9"
-    game_ids: List[int] = []  # Empty = all games
+    game_ids: list[int] = []  # Empty = all games
     min_rating: int = 1
-    tags: List[str] = []  # Empty = all tags
-    clip_ids: Optional[List[int]] = None  # If provided, use these specific clips instead of filters
+    tags: list[str] = []  # Empty = all tags
+    clip_ids: list[int] | None = None  # If provided, use these specific clips instead of filters
 
 
 class ClipsPreviewRequest(BaseModel):
     """Request body for previewing clips that would be included in a project."""
-    game_ids: List[int] = []
+    game_ids: list[int] = []
     min_rating: int = 1
-    tags: List[str] = []
+    tags: list[str] = []
 
 
 class ClipsPreviewResponse(BaseModel):
     """Preview of clips matching the filter criteria."""
     clip_count: int
     total_duration: float  # In seconds
-    clips: List[dict]  # Brief clip info for display
+    clips: list[dict]  # Brief clip info for display
 
 
 class ProjectResponse(BaseModel):
     id: int
     name: str
     aspect_ratio: str
-    working_video_id: Optional[int]
-    final_video_id: Optional[int]
+    working_video_id: int | None
+    final_video_id: int | None
     created_at: str
 
 
 class ClipSummary(BaseModel):
     """Summary info for a clip in a project (for project card display)."""
     id: int
-    name: Optional[str] = None
-    tags: List[str] = []
-    rating: Optional[int] = None
+    name: str | None = None
+    tags: list[str] = []
+    rating: int | None = None
 
 
 class ProjectListItem(BaseModel):
@@ -217,39 +217,39 @@ class ProjectListItem(BaseModel):
     clips_exported: int  # Clips with exported_at IS NOT NULL (included in working video)
     clips_in_progress: int  # Clips with edits but not yet exported
     has_working_video: bool
-    working_video_created_at: Optional[str] = None
+    working_video_created_at: str | None = None
     has_overlay_edits: bool
     has_final_video: bool
-    final_video_created_at: Optional[str] = None
-    final_video_id: Optional[int] = None
+    final_video_created_at: str | None = None
+    final_video_id: int | None = None
     is_published: bool  # True if latest final video has been published to My Reels
     is_auto_created: bool  # True if project was auto-created for a 5-star clip
     created_at: str
-    current_mode: Optional[str] = 'framing'
-    last_opened_at: Optional[str] = None
+    current_mode: str | None = 'framing'
+    last_opened_at: str | None = None
     # Game grouping info
-    game_ids: List[int] = []  # List of game IDs for clips in this project
-    game_names: List[str] = []  # Display names for those games
-    game_dates: List[str] = []  # Game dates (for season/year grouping)
-    group_key: Optional[str] = None  # Group key for hierarchical display
+    game_ids: list[int] = []  # List of game IDs for clips in this project
+    game_names: list[str] = []  # Display names for those games
+    game_dates: list[str] = []  # Game dates (for season/year grouping)
+    group_key: str | None = None  # Group key for hierarchical display
     # Clip details for card display
-    clips: List[ClipSummary] = []  # Info about each clip in the project
+    clips: list[ClipSummary] = []  # Info about each clip in the project
     # Unified two-half in-match start (sec) for single-clip drafts; soccer-notation
     # card mark (T3920). Computed at read-time (drafts have no frozen final_video).
     # NULL for multi-clip drafts.
-    clip_game_start_time: Optional[float] = None
+    clip_game_start_time: float | None = None
 
 
 class WorkingClipResponse(BaseModel):
     id: int
-    raw_clip_id: Optional[int]
-    uploaded_filename: Optional[str]
+    raw_clip_id: int | None
+    uploaded_filename: str | None
     filename: str  # Resolved filename (from raw_clips or uploaded)
-    name: Optional[str] = None  # Human-readable name from raw_clips
-    notes: Optional[str] = None  # Notes from raw_clips
-    tags: List[str] = []  # Tags from raw_clips (for auto-generated names)
-    rating: Optional[int] = None  # Rating from raw_clips (for auto-generated names)
-    exported_at: Optional[str] = None  # ISO timestamp when clip was exported
+    name: str | None = None  # Human-readable name from raw_clips
+    notes: str | None = None  # Notes from raw_clips
+    tags: list[str] = []  # Tags from raw_clips (for auto-generated names)
+    rating: int | None = None  # Rating from raw_clips (for auto-generated names)
+    exported_at: str | None = None  # ISO timestamp when clip was exported
     sort_order: int
 
 
@@ -257,18 +257,18 @@ class ProjectDetailResponse(BaseModel):
     id: int
     name: str
     aspect_ratio: str
-    working_video_id: Optional[int]
-    working_video_url: Optional[str] = None  # Presigned R2 URL for streaming
-    working_video_created_at: Optional[str] = None
-    final_video_id: Optional[int]
+    working_video_id: int | None
+    working_video_url: str | None = None  # Presigned R2 URL for streaming
+    working_video_created_at: str | None = None
+    final_video_id: int | None
     has_final_video: bool = False
-    final_video_created_at: Optional[str] = None
-    clips: List[WorkingClipResponse]
+    final_video_created_at: str | None = None
+    clips: list[WorkingClipResponse]
     created_at: str
     is_auto_created: bool = False  # True if auto-created from 5-star clips
 
 
-@router.get("", response_model=List[ProjectListItem])
+@router.get("", response_model=list[ProjectListItem])
 async def list_projects():
     """List all projects with progress information.
 
@@ -524,7 +524,7 @@ async def create_project(project: ProjectCreate):
         )
 
 
-def _build_clips_filter_query(game_ids: List[int], min_rating: int, tags: List[str]):
+def _build_clips_filter_query(game_ids: list[int], min_rating: int, tags: list[str]):
     """Build SQL query and params for filtering raw clips."""
     # min_rating = 0 means "All clips" (include everything regardless of rating)
     if min_rating <= 0:
@@ -856,7 +856,7 @@ async def update_project(project_id: int, project: ProjectCreate):
 @router.patch("/{project_id}/state")
 async def update_project_state(
     project_id: int,
-    current_mode: Optional[str] = None,
+    current_mode: str | None = None,
     update_last_opened: bool = False
 ):
     """
@@ -935,6 +935,7 @@ async def get_working_video(project_id: int):
     Returns the video file if it exists, 404 otherwise.
     """
     from fastapi.responses import FileResponse, RedirectResponse
+
     from app.database import get_working_videos_path
 
     with get_db_connection() as conn:
@@ -1019,7 +1020,7 @@ async def stream_working_video(project_id: int, request: Request):
     so we drop the probe and reuse a pooled connection — the fresh-TLS + extra
     round-trip were most of the proxy TTFB.
     """
-    from fastapi.responses import StreamingResponse, Response
+    from fastapi.responses import Response, StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1130,12 +1131,12 @@ class OutdatedClipInfo(BaseModel):
     clip_name: str
     framed_version: int
     current_version: int
-    boundaries_updated_at: Optional[str] = None
+    boundaries_updated_at: str | None = None
 
 
 class OutdatedClipsResponse(BaseModel):
     has_outdated_clips: bool
-    outdated_clips: List[OutdatedClipInfo]
+    outdated_clips: list[OutdatedClipInfo]
 
 
 @router.get("/{project_id}/outdated-clips", response_model=OutdatedClipsResponse)
@@ -1211,7 +1212,7 @@ async def check_outdated_clips(project_id: int):
 
 
 class RefreshClipsRequest(BaseModel):
-    working_clip_ids: List[int]
+    working_clip_ids: list[int]
 
 
 class RefreshClipsResponse(BaseModel):
@@ -1230,7 +1231,6 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
     Rescaling: if old duration was 30s and new is 20s, a keyframe at frame 450 (15s @ 30fps)
     maps to frame 300 (10s) — all frames multiplied by (newDuration / oldDuration).
     """
-    import json
 
     with get_db_connection() as conn:
         cursor = conn.cursor()

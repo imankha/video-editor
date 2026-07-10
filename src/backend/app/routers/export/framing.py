@@ -11,34 +11,35 @@ These endpoints handle crop keyframes, segment speed changes, trimming,
 and AI upscaling for the Framing mode workflow.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from pathlib import Path
+import asyncio
 import json
+import logging
 import math
 import os
 import shutil
 import tempfile
-import uuid
-import asyncio
-import logging
-import ffmpeg
-
-from ...models import CropKeyframe
-from ...websocket import export_progress, manager
-from ...interpolation import generate_crop_filter
-from ...database import get_db_connection
-from ...queries import latest_working_clips_subquery
-from ...storage import generate_presigned_url, upload_bytes_to_r2
-from ...services.ffmpeg_service import get_video_duration, get_video_info
-from ...highlight_transform import get_output_duration, canonicalize_segments_data
-from .multi_clip import ClipExportData, BytesFile, _export_clips
-from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from pydantic import BaseModel
 import time as time_module
-from ...user_context import get_current_user_id
+import uuid
+from pathlib import Path
+
+import ffmpeg
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
+
+from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
+from ...database import get_db_connection
+from ...highlight_transform import canonicalize_segments_data, get_output_duration
+from ...interpolation import generate_crop_filter
+from ...models import CropKeyframe
 from ...profile_context import get_current_profile_id
+from ...queries import latest_working_clips_subquery
+from ...services.ffmpeg_service import get_video_duration, get_video_info
+from ...storage import generate_presigned_url, upload_bytes_to_r2
+from ...user_context import get_current_user_id
 from ...utils.encoding import decode_data
+from ...websocket import export_progress, manager
+from .multi_clip import BytesFile, ClipExportData, _export_clips
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def export_crop(
     try:
         keyframes_data = json.loads(keyframes_json)
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid keyframes JSON: {e!s}")
 
     keyframes = [CropKeyframe(**kf) for kf in keyframes_data]
 
@@ -444,7 +445,7 @@ async def render_project(request: RenderRequest, http_request: Request):
             raise HTTPException(status_code=500, detail=f"Invalid crop_data in database: {e}")
 
     # Credit reservation
-    from ...services.user_db import reserve_credits, confirm_reservation, release_reservation
+    from ...services.user_db import confirm_reservation, release_reservation, reserve_credits
 
     source_duration = clip['raw_duration'] or 0
     segments_raw = None

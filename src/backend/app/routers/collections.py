@@ -18,7 +18,7 @@ game_ids/tags BLOBs are on-disk storage only, decoded in Python here).
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -27,7 +27,7 @@ from app.analytics import record_milestone
 from app.database import get_db_connection
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
-from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
+from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import open_profile_db_readonly
 from app.services.sharing_db import (
     create_collection_share,
@@ -119,7 +119,7 @@ CURATED_COMBOS = {
 }
 
 
-def _curated_for(sport: Optional[str]) -> list:
+def _curated_for(sport: str | None) -> list:
     """Top Plays first, then the sport's curated combos (soccer if unknown)."""
     combos = CURATED_COMBOS.get(sport or DEFAULT_SPORT, CURATED_COMBOS[DEFAULT_SPORT])
     return [TOP_PLAYS, *combos]
@@ -143,18 +143,18 @@ def _pluralize(tag: str) -> str:
 class RatioBucketed(BaseModel):
     reel_count: int
     unwatched_count: int = 0               # T4190: NEW (watched_at IS NULL) reels in this bucket
-    ratio_counts: Dict[str, int]
-    ratio_durations: Dict[str, float]      # NULL-excluded sums per ratio
-    ratio_eligible: Dict[str, bool]        # ratio_durations[r] >= threshold
+    ratio_counts: dict[str, int]
+    ratio_durations: dict[str, float]      # NULL-excluded sums per ratio
+    ratio_eligible: dict[str, bool]        # ratio_durations[r] >= threshold
     total_duration: float                  # NULL-excluded
     has_null_durations: bool
-    latest_published_at: Optional[str]
+    latest_published_at: str | None
 
 
 class GameCollection(RatioBucketed):
     game_id: int
     game_name: str
-    game_date: Optional[str]
+    game_date: str | None
 
 
 class SeasonTotal(BaseModel):              # T3640 consumer (already ratio-scoped)
@@ -178,16 +178,16 @@ class TagTotal(BaseModel):                 # raw per-tag feed (other consumers)
 class SmartCollection(RatioBucketed):      # T3670: curated (Top Plays / combos) + per-tag
     key: str
     name: str
-    tags: Optional[List[str]]              # member fetch: ?tags=...; None => all reels
+    tags: list[str] | None              # member fetch: ?tags=...; None => all reels
     nudge_when_locked: bool                # True => amber locked card sub-30s; False => hide until ready
 
 
 class CollectionsSummaryResponse(BaseModel):
-    smart_collections: List[SmartCollection]  # curated (Top Plays + combos) then ready per-tag
-    games: List[GameCollection]            # sorted latest_published_at DESC
+    smart_collections: list[SmartCollection]  # curated (Top Plays + combos) then ready per-tag
+    games: list[GameCollection]            # sorted latest_published_at DESC
     mixes: RatioBucketed                   # always present, may be reel_count 0
-    season_totals: List[SeasonTotal]
-    tag_totals: List[TagTotal]
+    season_totals: list[SeasonTotal]
+    tag_totals: list[TagTotal]
     total_reel_count: int                  # == list_downloads().total_count
 
 
@@ -195,7 +195,7 @@ class CollectionsSummaryResponse(BaseModel):
 # Accumulation helpers
 # ---------------------------------------------------------------------------
 
-def _utc(ts: Optional[str]) -> Optional[str]:
+def _utc(ts: str | None) -> str | None:
     """Normalize a SQLite timestamp to ISO-UTC ('...Z') like downloads.py, so
     JS parses it and lexical comparison orders it correctly."""
     if ts and not ts.endswith("Z"):
@@ -215,7 +215,7 @@ def _new_bucket() -> dict:
     }
 
 
-def _add_reel(bucket: dict, ratio: str, duration, published_at: Optional[str],
+def _add_reel(bucket: dict, ratio: str, duration, published_at: str | None,
               unwatched: bool = False) -> None:
     bucket["reel_count"] += 1
     if unwatched:
@@ -268,7 +268,7 @@ def _add_total(acc: dict, key, duration) -> None:
         t["total_duration"] += duration
 
 
-def _season_key(date_str: Optional[str], season_fn) -> Optional[str]:
+def _season_key(date_str: str | None, season_fn) -> str | None:
     """'<Season> <Year>' from a 'YYYY-MM-DD[...]' string, or None if unparseable."""
     if not date_str:
         return None
@@ -285,7 +285,7 @@ def _season_key(date_str: Optional[str], season_fn) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 @router.get("/summary", response_model=CollectionsSummaryResponse)
-async def collections_summary(sport: Optional[str] = None):
+async def collections_summary(sport: str | None = None):
     """Per-game / mixes / season / tag aggregates for the Collections tab.
 
     `sport` selects the curated combo set (the per-tag and per-game aggregates
@@ -370,13 +370,13 @@ async def collections_summary(sport: Optional[str] = None):
                 }
 
         # Pass 2: build buckets + season/tag totals + smart-collection buckets.
-        game_buckets: Dict[int, dict] = {}
+        game_buckets: dict[int, dict] = {}
         mixes = _new_bucket()
         season_acc: dict = {}
         tag_acc: dict = {}
         curated_defs = _curated_for(sport)
         curated_buckets = {d["key"]: _new_bucket() for d in curated_defs}
-        tag_buckets: Dict[str, dict] = {}   # per-tag dynamic collections
+        tag_buckets: dict[str, dict] = {}   # per-tag dynamic collections
 
         for p in parsed:
             ratio, duration, gid = p["ratio"], p["duration"], p["game_id"]
@@ -495,25 +495,25 @@ async def collections_summary(sport: Optional[str] = None):
 
 class CollectionScope(BaseModel):
     type: Literal["game", "all", "mixes"]
-    game_id: Optional[int] = None
+    game_id: int | None = None
 
 
 class CollectionFilter(BaseModel):
-    tags: Optional[List[str]] = None
-    min_rating: Optional[int] = None   # accepted but inert until a rating filter exists
+    tags: list[str] | None = None
+    min_rating: int | None = None   # accepted but inert until a rating filter exists
 
 
 class CollectionDefinition(BaseModel):
     scope: CollectionScope
     filter: CollectionFilter = Field(default_factory=CollectionFilter)
     aspect_ratio: Literal["9:16", "16:9"]
-    budget_sec: Optional[float] = None
-    title: Optional[str] = None          # server overwrites with a frozen title
+    budget_sec: float | None = None
+    title: str | None = None          # server overwrites with a frozen title
 
 
 class CollectionShareRequest(BaseModel):
     definition: CollectionDefinition
-    recipient_emails: List[str] = []
+    recipient_emails: list[str] = []
     is_public: bool = False
 
 
@@ -521,22 +521,22 @@ class CollectionShareRecipient(BaseModel):
     share_token: str
     recipient_email: str
     is_existing_link: bool               # surfaced an existing link (dedup)
-    email_sent: Optional[bool] = None
+    email_sent: bool | None = None
 
 
 class CollectionShareResponse(BaseModel):
-    shares: List[CollectionShareRecipient]
+    shares: list[CollectionShareRecipient]
     title: str
 
 
 # ---- membership evaluation (shared by resolve; reuses list_downloads' chain) --
 
-def select_within_budget(members: List[dict], budget_sec: float) -> List[dict]:
+def select_within_budget(members: list[dict], budget_sec: float) -> list[dict]:
     """Greedy-with-skip selection of members that fit the budget, in order
     (Python port of frontend budget.js::selectWithinBudget). NULL-duration
     members can't be budgeted; guarantees at least one member when any has a
     duration so a shared link is never empty for a non-empty collection."""
-    out: List[dict] = []
+    out: list[dict] = []
     used = 0.0
     for m in members:
         d = m["duration"]
@@ -552,7 +552,7 @@ def select_within_budget(members: List[dict], budget_sec: float) -> List[dict]:
     return out
 
 
-def evaluate_collection_members(conn, definition: dict) -> List[dict]:
+def evaluate_collection_members(conn, definition: dict) -> list[dict]:
     """Return the live members of a collection definition against an open profile
     DB connection, ordered by the canonical comparator (rating, quality_score,
     recency -- T3630 ORDER_BY_RANK). Each: {id, name, duration, filename}.
@@ -658,7 +658,7 @@ def _format_budget(sec: float) -> str:
     return f"{s // 60}:{s % 60:02d}"
 
 
-def _smart_base_name(tags: List[str]) -> str:
+def _smart_base_name(tags: list[str]) -> str:
     """Frozen share title for an all-scope tag filter, kept consistent with the
     in-app card names: a curated combo's name if the tag set matches one (across
     any sport), a pluralized single tag ('Top Goals'), else a sorted join."""
@@ -770,8 +770,11 @@ async def create_collection_share_endpoint(body: CollectionShareRequest):
     email_results: dict = {}
     if not is_self_share:
         import asyncio
+
         from app.services.email import (
-            send_collection_share_email, _resolve_sender_name, _is_existing_user,
+            _is_existing_user,
+            _resolve_sender_name,
+            send_collection_share_email,
         )
         sender_name = _resolve_sender_name(sharer_email)
         tasks = {}

@@ -4,19 +4,20 @@ Health and status endpoints for the Video Editor API.
 This router handles health checks, status endpoints, and the hello world endpoint.
 """
 
-from fastapi import APIRouter, HTTPException
-from datetime import datetime
 import logging
 import time
+from datetime import datetime
+
+from fastapi import APIRouter, HTTPException
 
 logger = logging.getLogger(__name__)
 
+from ..database import get_database_path, get_user_data_path, is_database_initialized, sync_db_to_cloud
+from ..middleware.db_sync import set_sync_failed
 from ..models import HelloResponse
-from ..websocket import export_progress
-from ..database import is_database_initialized, get_database_path, get_user_data_path, sync_db_to_cloud
-from ..middleware.db_sync import is_sync_failed, set_sync_failed
-from ..user_context import get_current_user_id
 from ..storage import R2_ENABLED
+from ..user_context import get_current_user_id
+from ..websocket import export_progress
 
 router = APIRouter(tags=["health"])
 
@@ -103,8 +104,8 @@ async def health_check():
 @router.get("/api/debug/tasks")
 async def debug_modal_tasks():
     """Debug endpoint: show modal_tasks status (for E2E test diagnostics)."""
+
     from ..database import get_db_connection
-    import json
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()

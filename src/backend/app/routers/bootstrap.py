@@ -10,14 +10,17 @@ import asyncio
 import contextvars
 import logging
 import time
+
 from fastapi import APIRouter
 
-from ..user_context import get_current_user_id
 from ..database import get_db_connection
 from ..queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from ..services.user_db import (
-    get_profiles, get_selected_profile_id, get_credit_balance,
+    get_credit_balance,
+    get_profiles,
+    get_selected_profile_id,
 )
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
@@ -48,14 +51,14 @@ def _read_user_scoped(user_id: str) -> dict:
 
     credits = get_credit_balance(user_id)
 
-    from ..routers.settings import get_all_preferences, DEFAULTS, _to_nested
+    from ..routers.settings import DEFAULTS, _to_nested, get_all_preferences
     stored = get_all_preferences()
     settings = _to_nested({**DEFAULTS, **stored})
 
     # Quest progress
     from ..quest_config import QUEST_DEFINITIONS
-    from ..services.user_db import get_completed_and_claimed_quest_ids
     from ..routers.quests import _check_all_steps
+    from ..services.user_db import get_completed_and_claimed_quest_ids
 
     # T1536: single user.sqlite open for completed + claimed (was two).
     completed_quest_ids, claimed_quest_ids = get_completed_and_claimed_quest_ids(user_id)
@@ -168,8 +171,8 @@ async def _read_profile_scoped():
     user-scoped worker thread. Returns (projects_response, games_response, misc)
     where misc carries the group's own wall time under `_ms` (internal only)."""
     t0 = time.perf_counter()
-    from ..routers.projects import list_projects
     from ..routers.games import list_games_metadata
+    from ..routers.projects import list_projects
     projects_response = await list_projects()
     games_response = await list_games_metadata()
     misc = _read_profile_misc()

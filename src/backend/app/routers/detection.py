@@ -16,38 +16,37 @@ Caching:
 - Frontend can check cache before requesting detection
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
-import cv2
-import os
+import json
 import logging
+import os
+import shutil
 import tempfile
 import uuid
-import shutil
-import json
 from pathlib import Path
-from typing import Optional
-from io import BytesIO
 
+import cv2
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
+from ..database import get_db_connection
 from ..models import (
+    BoundingBox,
+    Detection,
     PlayerDetectionRequest,
     PlayerDetectionResponse,
-    Detection,
-    BoundingBox,
 )
 from ..services.modal_client import (
-    modal_enabled,
     call_modal_detect_players,
+    modal_enabled,
 )
-from ..database import get_db_connection
-from ..user_context import get_current_user_id
 from ..storage import (
-    file_exists_in_r2,
-    upload_bytes_to_r2,
-    get_r2_client,
     R2_BUCKET,
-    r2_key,
     R2_ENABLED,
+    file_exists_in_r2,
+    get_r2_client,
+    r2_key,
+    upload_bytes_to_r2,
 )
+from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/detect", tags=["detection"])
@@ -75,7 +74,7 @@ def get_detection_cache_path(video_filename: str, frame_number: int) -> str:
     return f"detections/{video_name}/frame_{frame_number}.json"
 
 
-def get_cached_detection(user_id: str, video_filename: str, frame_number: int) -> Optional[dict]:
+def get_cached_detection(user_id: str, video_filename: str, frame_number: int) -> dict | None:
     """
     Check if detection result is cached in R2 and return it.
 
@@ -184,7 +183,7 @@ def get_yolo_model():
             )
         except Exception as e:
             logger.error(f"Failed to load YOLO model: {e}")
-            raise HTTPException(status_code=500, detail=f"Failed to load YOLO model: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to load YOLO model: {e!s}")
 
     return _yolo_model
 
@@ -232,7 +231,7 @@ def get_video_path(video_id: str = None, video_path: str = None) -> str:
         if video_id not in _detection_videos:
             raise HTTPException(
                 status_code=404,
-                detail=f"Video not found. Please upload video first using /api/detect/upload"
+                detail="Video not found. Please upload video first using /api/detect/upload"
             )
         return _detection_videos[video_id]
 
@@ -285,7 +284,7 @@ async def upload_video_for_detection(video: UploadFile = File(...)):
         if temp_path.exists():
             temp_path.unlink()
         logger.error(f"Failed to upload video: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload video: {e!s}")
 
 
 @router.delete("/upload/{video_id}")
@@ -310,7 +309,7 @@ async def delete_uploaded_video(video_id: str):
 
     except Exception as e:
         logger.error(f"Failed to delete video: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete video: {e!s}")
 
 
 @router.post("/players", response_model=PlayerDetectionResponse)

@@ -9,32 +9,31 @@ Games are stored globally in R2 at games/{blake3_hash}.mp4 for deduplication.
 The blake3_hash is stored in the games table for lookup.
 """
 
+import logging
 import re
 import uuid
-import logging
-from typing import Optional, List
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.database import get_db_connection
-from app.utils.encoding import encode_data, decode_data
 from app.constants import UploadStatus
+from app.database import get_db_connection
 from app.services.storage_credits import calculate_upload_cost
 from app.services.user_db import get_credit_balance
-from app.user_context import get_current_user_id
 from app.storage import (
     R2_ENABLED,
-    r2_head_object_global,
-    r2_create_multipart_upload,
-    r2_complete_multipart_upload,
-    r2_abort_multipart_upload,
-    r2_is_multipart_upload_valid,
-    r2_set_object_metadata_global,
     generate_multipart_urls,
     generate_presigned_url_global,
+    r2_abort_multipart_upload,
+    r2_complete_multipart_upload,
+    r2_create_multipart_upload,
+    r2_head_object_global,
+    r2_is_multipart_upload_valid,
+    r2_set_object_metadata_global,
 )
+from app.user_context import get_current_user_id
+from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +67,7 @@ class PrepareUploadRequest(BaseModel):
     blake3_hash: str = Field(..., description="BLAKE3 hash of the file (64 hex chars)")
     file_size: int = Field(..., description="File size in bytes")
     original_filename: str = Field(..., description="Original filename")
-    label: Optional[str] = Field(None, description="Display label (e.g. 'First Half')")
+    label: str | None = Field(None, description="Display label (e.g. 'First Half')")
 
 
 class PartInfo(BaseModel):
@@ -78,16 +77,16 @@ class PartInfo(BaseModel):
 
 class FinalizeUploadRequest(BaseModel):
     upload_session_id: str = Field(..., description="Session ID from prepare-upload")
-    parts: List[PartInfo] = Field(..., description="List of uploaded parts with ETags")
+    parts: list[PartInfo] = Field(..., description="List of uploaded parts with ETags")
     # Video metadata stored on R2 object for future reference
-    video_duration: Optional[float] = Field(None, description="Video duration in seconds")
-    video_width: Optional[int] = Field(None, description="Video width in pixels")
-    video_height: Optional[int] = Field(None, description="Video height in pixels")
+    video_duration: float | None = Field(None, description="Video duration in seconds")
+    video_width: int | None = Field(None, description="Video width in pixels")
+    video_height: int | None = Field(None, description="Video height in pixels")
 
 
 class SavePartsRequest(BaseModel):
     """Request to save completed parts for resume support."""
-    parts: List[PartInfo] = Field(..., description="List of completed parts with ETags")
+    parts: list[PartInfo] = Field(..., description="List of completed parts with ETags")
 
 
 # ==============================================================================

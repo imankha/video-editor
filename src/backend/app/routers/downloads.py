@@ -5,30 +5,30 @@ Provides access to final videos that have been exported from Overlay mode.
 Users can list, download, and delete their final videos.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
-from pydantic import BaseModel
-from typing import Optional, List
-from datetime import datetime
 import asyncio
+import logging
 import os
 import re
-import logging
+from datetime import datetime
 
-from app.database import get_db_connection, get_final_videos_path
-from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
-from app.user_context import get_current_user_id, get_current_req_id
-from app.storage import R2_ENABLED, generate_presigned_url, file_exists_in_r2
-from app.services.project_archive import archive_project, restore_project, is_project_archived
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
+from pydantic import BaseModel
+
 from app.constants import SourceType
-from app.utils.encoding import decode_data
-from app.services.collection_metadata import route_game_ids, route_collection, ORDER_BY_RANK
+from app.database import get_db_connection, get_final_videos_path
 from app.middleware.db_sync import durable_sync
+from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
+from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.project_archive import archive_project, is_project_archived, restore_project
+from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
+from app.user_context import get_current_req_id, get_current_user_id
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
 
-def get_download_file_url(filename: str, verify_exists: bool = False) -> Optional[str]:
+def get_download_file_url(filename: str, verify_exists: bool = False) -> str | None:
     """
     Get presigned URL for download/final video if R2 is enabled.
 
@@ -75,10 +75,10 @@ def _get_season_for_month(month: int) -> str:
 
 
 def _generate_game_display_name(
-    opponent_name: Optional[str],
-    game_date: Optional[str],
-    game_type: Optional[str],
-    tournament_name: Optional[str],
+    opponent_name: str | None,
+    game_date: str | None,
+    game_type: str | None,
+    tournament_name: str | None,
     fallback_name: str
 ) -> str:
     """
@@ -116,7 +116,7 @@ def _generate_game_display_name(
     return " ".join(parts)
 
 
-def _generate_group_key(game_names: List[str], game_dates: List[str]) -> Optional[str]:
+def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | None:
     """
     Generate a group key based on games.
 
@@ -177,47 +177,47 @@ class RatingCounts(BaseModel):
     mistake: int = 0     # Rating 2 (?)
     blunder: int = 0     # Rating 1 (??)
     total: int = 0
-    weighted_average: Optional[float] = None  # Weighted average rating
+    weighted_average: float | None = None  # Weighted average rating
 
 
 class DownloadItem(BaseModel):
     id: int
-    project_id: Optional[int] = None
+    project_id: int | None = None
     project_name: str
     filename: str
-    file_url: Optional[str] = None  # Presigned R2 URL or None (use local proxy)
+    file_url: str | None = None  # Presigned R2 URL or None (use local proxy)
     created_at: str
-    file_size: Optional[int]  # Size in bytes
-    duration: Optional[float] = None  # Frozen at export-finalize (T3600); NULL until v007 backfill
-    aspect_ratio: Optional[str] = None  # Frozen at export-finalize (T3600), e.g. '9:16'
-    tags: List[str] = []  # Distinct clip tags frozen at export-finalize (T3600)
-    source_type: Optional[str]  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
-    game_id: Optional[int]  # For annotated_game exports, the source game ID
-    rating_counts: Optional[RatingCounts] = None  # Rating breakdown for annotated games
-    rating: Optional[float] = None  # Glicko rating (T3630); primary ordering key, NULL until seeded
-    quality_score: Optional[float] = None  # Frozen single-clip star (T3630); seed + secondary ordering
-    clip_count: Optional[int] = None  # Distinct constituent clips (T3630); 1 = collection-eligible
-    clip_game_start_time: Optional[float] = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
+    file_size: int | None  # Size in bytes
+    duration: float | None = None  # Frozen at export-finalize (T3600); NULL until v007 backfill
+    aspect_ratio: str | None = None  # Frozen at export-finalize (T3600), e.g. '9:16'
+    tags: list[str] = []  # Distinct clip tags frozen at export-finalize (T3600)
+    source_type: str | None  # 'brilliant_clip' | 'custom_project' | 'annotated_game' | None
+    game_id: int | None  # For annotated_game exports, the source game ID
+    rating_counts: RatingCounts | None = None  # Rating breakdown for annotated games
+    rating: float | None = None  # Glicko rating (T3630); primary ordering key, NULL until seeded
+    quality_score: float | None = None  # Frozen single-clip star (T3630); seed + secondary ordering
+    clip_count: int | None = None  # Distinct constituent clips (T3630); 1 = collection-eligible
+    clip_game_start_time: float | None = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
     # Game grouping info
-    watched_at: Optional[str] = None  # ISO timestamp when first played in gallery
-    game_ids: List[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
-    game_names: List[str] = []  # Display names for those games
-    game_dates: List[str] = []  # Game dates (for season/year grouping)
-    group_key: Optional[str] = None  # Group key for hierarchical display
+    watched_at: str | None = None  # ISO timestamp when first played in gallery
+    game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
+    game_names: list[str] = []  # Display names for those games
+    game_dates: list[str] = []  # Game dates (for season/year grouping)
+    group_key: str | None = None  # Group key for hierarchical display
 
 
 class DownloadListResponse(BaseModel):
-    downloads: List[DownloadItem]
+    downloads: list[DownloadItem]
     total_count: int
 
 
 @router.get("", response_model=DownloadListResponse)
 async def list_downloads(
-    source_type: Optional[str] = None,
-    game_id: Optional[int] = None,
-    aspect_ratio: Optional[str] = None,
+    source_type: str | None = None,
+    game_id: int | None = None,
+    aspect_ratio: str | None = None,
     mixes: bool = False,
-    tags: Optional[str] = None,
+    tags: str | None = None,
 ):
     """
     List all final videos with metadata.
@@ -563,7 +563,6 @@ async def download_file(download_id: int):
     Download/stream a final video file. Redirects to R2 when enabled.
     Returns the video file for download with project name as filename.
     """
-    from fastapi.responses import RedirectResponse
 
     logger.info(f"[Download] Request for download_id={download_id}")
 
@@ -596,15 +595,16 @@ async def download_file(download_id: int):
                 logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
                 raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-            logger.info(f"[Download] Streaming from R2 through backend proxy")
+            logger.info("[Download] Streaming from R2 through backend proxy")
 
             # Generate download filename from project name
             download_filename = generate_download_filename(row['project_name'])
 
             async def stream_from_r2():
-                from app.utils.retry import is_transient_error, TIER_2
                 import asyncio as _asyncio
                 import random as _random
+
+                from app.utils.retry import TIER_2, is_transient_error
 
                 last_exc = None
                 for attempt in range(TIER_2["max_attempts"]):
@@ -683,7 +683,7 @@ async def stream_download(download_id: int, request: Request):
     cost two extra R2 round-trips (with fresh TLS each) on every request, which
     was most of the ~7s TTFB.
     """
-    from fastapi.responses import StreamingResponse, Response
+    from fastapi.responses import Response, StreamingResponse
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
