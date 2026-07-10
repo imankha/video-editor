@@ -17,7 +17,7 @@ import logging
 from datetime import datetime
 from typing import Optional, Union
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..analytics import record_milestone
@@ -332,7 +332,7 @@ async def get_shared_collection(share_token: str, request: Request):
 
 
 @shared_router.get("/{share_token}", response_model=ShareDetailResponse)
-async def get_shared_video(share_token: str, request: Request):
+async def get_shared_video(share_token: str, request: Request, background_tasks: BackgroundTasks):
     share = get_share_by_token(share_token)
     if not share:
         raise HTTPException(404, "Share not found")
@@ -344,7 +344,14 @@ async def get_shared_video(share_token: str, request: Request):
         if not email or email.lower() != share["recipient_email"].lower():
             raise HTTPException(403, "Access denied")
 
-    record_milestone(share["sharer_user_id"], "share_viewed", {"share_token": share_token, "sharer_user_id": share["sharer_user_id"]})
+    # T4840: record the view off the response path so the JSON no longer waits
+    # on 2 Postgres writes + opening the sharer's SQLite. Semantics identical.
+    background_tasks.add_task(
+        record_milestone,
+        share["sharer_user_id"],
+        "share_viewed",
+        {"share_token": share_token, "sharer_user_id": share["sharer_user_id"]},
+    )
 
     video_url = generate_presigned_url_global(_build_video_r2_key(share))
 
@@ -356,6 +363,33 @@ async def get_shared_video(share_token: str, request: Request):
         is_public=bool(share["is_public"]),
         shared_at=share["shared_at"],
     )
+
+
+@shared_router.post("/{share_token}/viewed", status_code=204)
+async def record_shared_view(share_token: str, background_tasks: BackgroundTasks):
+    """T4840: fire-and-forget view beacon for the edge-rendered share page.
+
+    The edge Pages Function edge-caches the share JSON, so `get_shared_video`
+    no longer runs on every view. This tiny endpoint lets the edge page record
+    a `share_viewed` milestone on EVERY render (cache hits included) so view
+    analytics don't regress. No auth -- public shares are viewed anonymously
+    today, and `record_milestone` is scheduled in the background exactly as
+    `get_shared_video` now does. Unknown token -> 404; otherwise 204.
+    """
+    share = get_share_by_token(share_token)
+    if not share:
+        raise HTTPException(404, "Share not found")
+    if share["revoked_at"]:
+        # Revoked shares no longer render on the edge; don't record a view.
+        return Response(status_code=204)
+
+    background_tasks.add_task(
+        record_milestone,
+        share["sharer_user_id"],
+        "share_viewed",
+        {"share_token": share_token, "sharer_user_id": share["sharer_user_id"]},
+    )
+    return Response(status_code=204)
 
 
 @shared_router.patch("/{share_token}")

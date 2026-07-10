@@ -277,6 +277,89 @@ class TestGetSharedVideo:
         assert resp.status_code == 410
 
 
+class TestViewBeacon:
+    """T4840: POST /api/shared/{token}/viewed -- fire-and-forget view beacon
+    for the edge-rendered share page (records on edge-cache hits)."""
+
+    def _create_share(self, client, is_public=True) -> str:
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL], "is_public": is_public},
+            headers=_auth_headers(SHARER_ID),
+        )
+        return resp.json()["shares"][0]["share_token"]
+
+    def test_beacon_public_returns_204_and_records(self, client):
+        token = self._create_share(client, is_public=True)
+        with patch("app.routers.shares.record_milestone") as rec:
+            resp = client.post(f"/api/shared/{token}/viewed")
+        assert resp.status_code == 204
+        assert resp.content == b""
+        # Background task runs before TestClient returns.
+        rec.assert_called_once()
+        args = rec.call_args.args
+        assert args[0] == SHARER_ID
+        assert args[1] == "share_viewed"
+
+    def test_beacon_private_returns_204_and_records(self, client):
+        # No auth on the beacon: private shares still record a view (matches the
+        # old GET's anonymous recording once past the gate; the edge only calls
+        # it for public shares).
+        token = self._create_share(client, is_public=False)
+        with patch("app.routers.shares.record_milestone") as rec:
+            resp = client.post(f"/api/shared/{token}/viewed")
+        assert resp.status_code == 204
+        rec.assert_called_once()
+
+    def test_beacon_unknown_token_404(self, client):
+        with patch("app.routers.shares.record_milestone") as rec:
+            resp = client.post("/api/shared/nonexistent-token/viewed")
+        assert resp.status_code == 404
+        rec.assert_not_called()
+
+    def test_beacon_revoked_204_no_record(self, client):
+        token = self._create_share(client, is_public=True)
+        client.delete(f"/api/shared/{token}", headers=_auth_headers(SHARER_ID))
+        with patch("app.routers.shares.record_milestone") as rec:
+            resp = client.post(f"/api/shared/{token}/viewed")
+        assert resp.status_code == 204
+        rec.assert_not_called()
+
+
+class TestGetSharedVideoBackgroundsAnalytics:
+    """T4840: get_shared_video schedules record_milestone off the response path
+    (via BackgroundTasks) without changing the response shape."""
+
+    def _create_public_share(self, client) -> str:
+        video_id = _seed_final_video(client)
+        resp = client.post(
+            f"/api/gallery/{video_id}/share",
+            json={"recipient_emails": [RECIPIENT_EMAIL], "is_public": True},
+            headers=_auth_headers(SHARER_ID),
+        )
+        return resp.json()["shares"][0]["share_token"]
+
+    def test_payload_unchanged_and_milestone_backgrounded(self, client):
+        token = self._create_public_share(client)
+        with patch("app.routers.shares.record_milestone") as rec, \
+             patch("app.routers.shares.generate_presigned_url_global", return_value="https://r2.example.com/video.mp4"):
+            resp = client.get(f"/api/shared/{token}")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Response shape is identical to pre-T4840.
+        assert data["video_name"] == "Test Video"
+        assert data["video_url"] == "https://r2.example.com/video.mp4"
+        assert data["is_public"] is True
+        assert set(data.keys()) == {
+            "share_token", "video_name", "video_duration", "video_url",
+            "is_public", "shared_at",
+        }
+        # Still recorded, but via the background task.
+        rec.assert_called_once()
+        assert rec.call_args.args[1] == "share_viewed"
+
+
 class TestPatchShare:
     def _create_share(self, client) -> str:
         video_id = _seed_final_video(client)
