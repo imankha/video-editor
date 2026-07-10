@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { warmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
+import { scheduleWarmAllUserVideos, setWarmupPriority, WARMUP_PRIORITY } from './utils/cacheWarming';
 import { initSession } from './utils/sessionInit';
 import { ConnectionStatus } from './components/ConnectionStatus';
 import { DownloadsPanel } from './components/DownloadsPanel';
@@ -230,7 +230,7 @@ function App() {
         ]);
       }
 
-      warmAllUserVideos();
+      scheduleWarmAllUserVideos();
       dismissPreloader();
       initialLoadInProgress = false;
 
@@ -333,7 +333,7 @@ function App() {
     // (same-device path — cross-device recovery reloads instead).
     const unsubAuth = useAuthStore.subscribe((state, prev) => {
       if (state.isAuthenticated && !prev.isAuthenticated && !initialLoadInProgress) {
-        warmAllUserVideos();
+        scheduleWarmAllUserVideos();
         useProfileStore.getState().fetchProfiles();
         useProjectsStore.getState().fetchProjects();
         useGamesDataStore.getState().fetchGames();

@@ -167,6 +167,61 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
 - **Upload duplicates game state**: one-time upload-store restore effect (`[]` deps, L280-298) +
   active-upload video restore (L323-333) re-hydrate state when navigating back mid-upload.
 
+## Perf attribution (T4770, 2026-07-09)
+- **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and
+  `GET /api/games/{id}/video` (302→presigned R2) both re-time ~90–150ms in isolation (co-timed
+  `/api/health` ~80ms). In a session HAR they can show 1100–1450ms TTFB — that is **contention
+  from `warmAllUserVideos()` (App.jsx:233,336)** streaming many `working_video/stream` through the
+  1-vCPU Fly box concurrently, NOT endpoint work. Classic T4000 trap: re-time live before "fixing"
+  `/load`/`/video`. T4000's early-src parallelization (load ∥ video) is confirmed working.
+- **Home games are gated on `GET /api/bootstrap`** (`setFromBootstrap(data.games)`, App.jsx:212),
+  which uses `list_games_metadata` (no presign) — the "defer presigning" suspect is ruled out
+  (`GET /api/games` presigns all 6 in ~100ms live). Warm cache barely helps home → server-bound.
+- **T4771 landed (2026-07-09): bootstrap PARALLELIZED, not split.** The two read groups now run
+  concurrently (user.sqlite on a worker thread, profile.sqlite on the loop) — live TTFB **~657ms→~360ms
+  median** (co-timed `/health` ~8ms). Single endpoint, single response shape, read-only. See
+  backend-services.md § Landmines for the contextvars-into-thread detail.
+- **T4771 games skeleton (perceived-perf).** `gamesDataStore.isLoading` defaults **true**; the Games tab
+  renders `<GamesListSkeleton>` (ProjectManager.jsx, GameCard-shaped `animate-pulse` cards) instead of
+  bare "Loading games..." text until the first bootstrap/fetch lands. NOTE: the opaque index.html
+  preloader (App.jsx `dismissPreloader`, fires AFTER bootstrap) covers the true first paint, so the
+  skeleton is seen on non-preloader games-loading transitions (profile switch, empty refetch, fallback),
+  not the very first paint — the first-paint latency win comes from the shorter bootstrap. Preloader
+  timing deliberately NOT moved (revealing the shell early would flash an empty header/continue-cards).
+  Fix fan-out sibling: T4772 (tame the warm storm).
+- **My Reels `rank/confidence` dedup (T4775).** `GET /api/rank/confidence` is read via one shared
+  in-flight guard: `src/frontend/src/utils/rankConfidence.js` (`fetchRankConfidence(ratio)`, a
+  `Map<ratio,Promise>` cleared on settle — mirrors `gamesDataStore._getGameInflight`). All confidence
+  reads route through it: `ConfidenceBanner` (My Reels open, both ratios via `Promise.all`),
+  `RankingGame` (ratio probe), `useRanking` (in-game refresh). Opening My Reels mounts only the
+  banner; it reads BOTH ratios (portrait+landscape) — **2 distinct calls, both needed** (not a dup).
+  The "3× rank/confidence" in the T4770 ledger was the StrictMode dev double-invoke (2 ratios × 2
+  mounts = 4 in the HAR); the guard collapses each ratio's concurrent dup to one in-flight fetch,
+  measured 4→2 per My Reels open (portrait once, landscape once, every run). **Prod single-mount cold
+  open had no dup to remove (already 2);** the guard's prod value is defensive coalescing of genuinely
+  concurrent callers (banner `refreshKey` refetch racing, banner+ranker overlap) + a single read path.
+  Note: the T4770 walkthrough's `myreels:clicked→settled` is a fixed `waitForTimeout(2500)` (spec
+  line 291), so it can't move with this fix — the request count is the real signal.
+
+## Cache warming (post-T4772, 2026-07-09)
+- **`warmAllUserVideos()` is NO LONGER called synchronously** on home mount / login. App.jsx uses
+  `scheduleWarmAllUserVideos()` (cacheWarming.js), which defers the whole warm-all to
+  `requestIdleCallback` (timeout 3s; `setTimeout` 1.5s fallback) so warming never competes with
+  bootstrap + first paint + the user's first navigation.
+- **Warm concurrency is hard-capped at 1** (`MAX_WARM_CONCURRENCY`, `getWorkerCount()` returns 1).
+  Every same-origin warm streams THROUGH the 1-vCPU Fly bounded proxy; N-at-once starves the
+  foreground. Was up to 4 (connection-type dependent); now always serialized.
+- **Off-screen working (draft) videos are NOT warmed from home.** `warmAllUserVideos` no longer
+  enqueues `data.working_urls` (workingQueue stays `[]`) and skips the tier-1 `has_working_video`
+  branch (`continue`). Only targeted **clip ranges** (1MB head + clip region on the active game),
+  `game_urls`, and `gallery_urls` warm. A draft's `working_video/stream` is fetched by the player
+  when the user actually opens it; the 1KB pre-warm bought marginal edge-priming at the cost of the
+  systemic storm. Working-video byte-path speed itself is T4773 (proxy TTFB / 302→R2).
+- **Evidence (T4772 walkthrough, medians of 3):** warm `working_video/stream` overlapping the
+  Annotate/Overlay/My-Reels foreground windows dropped **3→0** (16→0 total in HAR); overlay foreground
+  stream TTFB 848→626ms. FOREGROUND_PROXY/DIRECT abort + `clearForegroundActive` resume machinery is
+  unchanged — a warmed foreground video (game clip ranges / gallery) still starts fast.
+
 ## Active/upcoming work
 - **T4220**: fix remove_segment_split speed wipe — re-index the speeds dict (deterministic merge
   rule); align useSegments.js.

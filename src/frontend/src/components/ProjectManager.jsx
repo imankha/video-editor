@@ -736,7 +736,7 @@ export function ProjectManager({
       {activeTab === 'games' ? (
         /* Games List */
         gamesLoading ? (
-          <div className="text-gray-400">Loading games...</div>
+          <GamesListSkeleton />
         ) : gamesError ? (
           <div className="text-center py-8">
             <div className="inline-flex items-center gap-2 text-red-400 mb-3">
@@ -1249,6 +1249,40 @@ function ActiveUploadCard({ upload, onClick, onCancel }) {
           </div>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * GamesListSkeleton - placeholder shown while the games list loads (T4771).
+ * Mirrors the loaded layout: "Your Games" heading + a stack of GameCard-shaped
+ * cards, so the screen never blank-then-pops or shows bare "Loading..." text.
+ * Pure render; matches GameCard's shell (p-3 sm:p-4 bg-gray-800 rounded-lg
+ * border border-gray-700) and its icon + title + metadata rows.
+ */
+export function GamesListSkeleton({ count = 4 }) {
+  return (
+    <div className="w-full max-w-2xl" data-testid="games-skeleton">
+      <div className="h-3.5 w-24 bg-gray-700/70 rounded mb-3 animate-pulse" />
+      <div className="space-y-2">
+        {Array.from({ length: count }).map((_, i) => (
+          <div
+            key={i}
+            className="p-3 sm:p-4 bg-gray-800 rounded-lg border border-gray-700 animate-pulse"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-[18px] h-[18px] bg-gray-700 rounded flex-shrink-0" />
+              <div className="h-4 bg-gray-700 rounded w-40 max-w-[55%]" />
+            </div>
+            <div className="mt-2 flex items-center gap-3">
+              <div className="h-3 bg-gray-700/70 rounded w-16" />
+              <div className="h-3 bg-gray-700/70 rounded w-12" />
+              <div className="h-3 bg-gray-700/70 rounded w-20 hidden sm:block" />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

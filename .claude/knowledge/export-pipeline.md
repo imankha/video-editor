@@ -92,6 +92,31 @@ graph LR
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
 - T4370 will add `tests/export_golden/`-style DB-delta snapshots; until it lands there is NO characterization safety net over this pipeline — prefer surgical diffs.
 
+## Perf attribution (T4770, 2026-07-09)
+- **`working_video/stream` is a same-origin Range pass-through proxy (NOT byte-windowed).** It forwards
+  the client's Range to R2 and returns R2's status/Content-Range/Content-Length unchanged — working_videos
+  are self-contained faststart MP4s (ftyp→moov→mdat, moov at front), so R2's own 206 is authoritative.
+  Contrast `clips.py:stream_working_clip_bounded`, which DOES clamp bytes (clips are slices of GB games).
+  Ranged playback = plain Range forwarding; there is no moov-window contract to preserve here.
+- **T4773 DONE (pooled-httpx, KEEP; `projects.py:stream_working_video`).** Was: fresh `httpx.AsyncClient()`
+  per request **twice** (a 1-byte size-probe round-trip to compute Content-Length ourselves, then the
+  stream) → fresh R2 TLS every time (HAR `ssl=485–1193ms`/req). Fix (T4630 precedent, mirrors
+  `downloads.py:stream_download`/`_get_r2_stream_client`, scoped to THIS endpoint only): module-level
+  pooled client `_get_working_video_r2_client()` + drop the size probe (single R2 round-trip, pass R2's
+  range headers through). Post-storm re-measure (2026-07-09, in-container): overlay `clicked→videoReady`
+  **3474→2136ms (-39%)**; HAR main-stream first-byte **1037→408ms (-61%)** under the overlay-open burst;
+  live isolated single-request TTFB only 245→224ms (a lone request has no pool to reuse — the win is under
+  Chrome's concurrent Range burst). Lever 2 (302→presigned-R2) was NOT needed. `/health` flat (~2ms)
+  throughout → not a contention artifact (ledger row 3's proxy-TTFB cost was real, distinct from the
+  T4772 storm). Correctness verified live: 200/206/416/HEAD, byte-integrity (full == concatenated ranges).
+- **`warmAllUserVideos()` (App.jsx:233,336) is a contention villain.** It streams `working_video/stream`
+  for MANY projects at once through the Fly proxy on every home mount (Annotate/Overlay/My Reels opens
+  all show the storm), inflating foreground TTFBs 0.5–1.5s. Fix = foreground-first + bounded concurrency
+  (T4772); reuse `utils/cacheWarming.js` priority/abort machinery. The reel playback path
+  (`GET /api/downloads/{id}/stream`, bounded proxy) is FAST (~615ms to playing, TTFB 441ms) — no issue.
+- Editor post-video "settle" (`videoReady→settled` ~1.5s in framing AND overlay) is a **main-thread JS
+  gap** (no request in flight) = crop/highlight/canvas hydration, not latency (T4774).
+
 ## Active/upcoming work
 - **T4200** (TODO, audit B1): extend sync-then-announce to framing (`framing.py:718-722` ungated finally-sync) + multi-clip (`multi_clip.py:2298-2301`; COMPLETE sites `:1440-1448`, `:1737`); DB-save failure becomes terminal. Copy overlay's pattern; share `_export_sync_failed_data` via `export_helpers` (no router→router imports).
 - **T4240** (TODO, audit A1+A10): the four recovery bugs above. Surgical; do not start the repository refactor there.
