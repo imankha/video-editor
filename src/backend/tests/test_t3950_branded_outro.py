@@ -170,3 +170,53 @@ def test_render_time_only_no_persistence_imports():
     app_imports = {m for m in imported if m.startswith("app.")}
     assert app_imports <= {"app.storage", "app.storage.download_from_r2",
                            "app.storage.upload_to_r2"}, app_imports
+
+
+@pytest.mark.asyncio
+async def test_overlay_render_appends_outro_before_finalize(monkeypatch):
+    """Wiring proof for the main flow (Site 1): the overlay real-render background task
+    appends the outro to the FINAL object, and does so BEFORE the DB finalize / sync gate.
+
+    Drives the real `_run_overlay_export_background` with the render engine, R2 helper,
+    finalize, and sync all mocked -- so it needs neither a GPU/subprocess nor R2, and
+    isn't blocked by the container's local-overlay ProcessPool contextvar limitation.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+    from app.routers.export import overlay as ov
+
+    order = []
+
+    async def fake_overlay_auto(**kwargs):
+        # Assert the outro is appended to the SAME key the engine wrote the final to.
+        assert kwargs["output_key"].startswith("final_videos/")
+        order.append(("render", kwargs["output_key"]))
+        return {"status": "success"}
+
+    def fake_apply_outro(user_id, key):
+        order.append(("outro", key))
+        return True
+
+    def fake_finalize(*a, **k):
+        order.append(("finalize", None))
+        return 4242
+
+    monkeypatch.setattr(ov, "call_modal_overlay_auto", fake_overlay_auto)
+    monkeypatch.setattr("app.services.branded_outro.apply_branded_outro_to_r2_object", fake_apply_outro)
+    monkeypatch.setattr(ov, "_finalize_overlay_export", fake_finalize)
+    monkeypatch.setattr("app.services.export_helpers.sync_export_db_to_r2", lambda *a, **k: True)
+    monkeypatch.setattr(ov.manager, "send_progress", AsyncMock())
+    monkeypatch.setattr(ov, "export_progress", {})
+
+    await ov._run_overlay_export_background(
+        export_id="t3950-wire", project_id=7, project_name="P", user_id="u", profile_id="pf",
+        working_filename="working_7.mp4",
+        highlight_regions=[{"keyframes": [{"t": 0}]}], effect_type="dark_overlay",
+        video_duration=3.0, overlay_settings={},
+    )
+
+    steps = [s[0] for s in order]
+    assert steps == ["render", "outro", "finalize"], steps
+    # The outro targeted the exact final object the engine produced.
+    render_key = next(k for s, k in order if s == "render")
+    outro_key = next(k for s, k in order if s == "outro")
+    assert outro_key == render_key
