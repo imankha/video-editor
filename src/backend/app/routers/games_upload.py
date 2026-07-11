@@ -564,11 +564,19 @@ async def get_dedupe_game_url(game_id: int):
 @router.delete("/dedupe/{game_id}")
 async def delete_dedupe_game(game_id: int):
     """
-    Delete a game from user's database.
+    Delete a game from user's database (dedup-upload flow).
 
-    Global video is NOT deleted - it may be shared by other users.
-    Uses "never delete" approach for storage (cleanup via future cron job).
+    Global video is NOT deleted - it may be shared by other users. T4270: this route
+    used to run a bare `DELETE FROM games` with no storage-ref or orphan-project
+    cleanup, permanently leaking game_storage refs (R2 objects never became
+    deletable). It now goes through the SAME _delete_game_cascade helper the main
+    DELETE route uses, so ref-counts and orphan projects stay correct on every path.
     """
+    from app.profile_context import get_current_profile_id
+    from app.services.auth_db import delete_ref
+
+    from .games import _delete_game_cascade
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
@@ -579,16 +587,19 @@ async def delete_dedupe_game(game_id: int):
                 detail="Game not found"
             )
 
-        # Remove from user's library only (global video stays)
-        cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
+        video_hashes, orphaned = _delete_game_cascade(cursor, game_id)
         conn.commit()
 
-        logger.info(f"Removed game from user's library: game_id={game_id}")
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+    for h in video_hashes:
+        delete_ref(user_id, profile_id, h)
 
-        return {
-            "status": "deleted",
-            "game_id": game_id
-        }
+    logger.info(
+        f"Removed game from user's library (dedupe route): game_id={game_id} "
+        f"({orphaned} orphaned projects cleaned up, {len(video_hashes)} storage refs removed)"
+    )
+    return {"status": "deleted", "game_id": game_id}
 
 
 @router.get("/dedupe")

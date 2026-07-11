@@ -60,6 +60,8 @@ export function OverlayScreen({
   const overlayClipMetadata = useProjectDataStore(state => state.clipMetadata);
   const setOverlayClipMetadata = useProjectDataStore(state => state.setClipMetadata);
   const clips = useProjectDataStore(state => state.clips);
+  const clipMetadataCache = useProjectDataStore(state => state.clipMetadataCache);
+  const getClipFileUrl = useProjectDataStore(state => state.getClipFileUrl);
 
   // Overlay store - for overlay-specific state (loading, effects, changes)
   const {
@@ -145,10 +147,14 @@ export function OverlayScreen({
   // DETERMINE EFFECTIVE VIDEO SOURCE
   // =========================================
 
-  // Get framing video data from clips (for pass-through mode - only used when no working video)
-  const framingVideoUrl = clips[0]?.fileUrl || clips[0]?.url;
-  const framingMetadata = clips[0]?.metadata;
-  const framingVideoFile = clips[0]?.file;
+  // Get framing video data from the first clip (pass-through mode, used only when no
+  // working video exists). T4270: read the CANONICAL clip shape via the store's
+  // accessors. Since T250 clips hold the raw backend shape (`file_url`, and metadata
+  // in clipMetadataCache) -- the old `clips[0].fileUrl/url/metadata/file` reads were
+  // always undefined, so this pass-through never actually supplied a source.
+  const firstClipId = clips[0]?.id;
+  const framingVideoUrl = firstClipId != null ? getClipFileUrl(firstClipId, projectId) : undefined;
+  const framingMetadata = firstClipId != null ? clipMetadataCache[firstClipId] : undefined;
 
   // Determine if we should wait for working video (don't use original clip as fallback)
   // If project has a working_video_url but workingVideo is null, we're loading it
@@ -157,7 +163,7 @@ export function OverlayScreen({
   // Effective video: working video from store, or fallback to framing video only if no working video exists
   const effectiveOverlayVideoUrl = workingVideo?.url || (shouldWaitForWorkingVideo ? null : framingVideoUrl);
   const effectiveOverlayMetadata = workingVideo?.metadata || (shouldWaitForWorkingVideo ? null : framingMetadata);
-  const effectiveOverlayFile = workingVideo?.file || (shouldWaitForWorkingVideo ? null : framingVideoFile);
+  const effectiveOverlayFile = workingVideo?.file || null;
 
   // Diagnostic: log video source state on every render where something interesting happens
   useEffect(() => {
@@ -764,15 +770,18 @@ export function OverlayScreen({
     if (!hasClips) return false;
     // Multiple clips means there were edits to combine them
     if (clips.length > 1) return true;
-    // Check if single clip has segments or crop modifications
+    // Check if single clip has segments or crop modifications. T4270: read the
+    // canonical raw-clip fields (`segments_data`, `crop_data`) -- the old
+    // `firstClip.segments`/`.cropKeyframes` reads referenced a shape that no longer
+    // exists, so this always returned false.
     const firstClip = clips[0];
-    if (firstClip?.segments) {
-      const { boundaries, segmentSpeeds, trimRange } = firstClip.segments;
+    if (firstClip?.segments_data) {
+      const { boundaries, segmentSpeeds, trimRange } = firstClip.segments_data;
       if (boundaries?.length > 2 || Object.keys(segmentSpeeds || {}).length > 0 || trimRange) {
         return true;
       }
     }
-    if (firstClip?.cropKeyframes?.length > 0) return true;
+    if (firstClip?.crop_data?.length > 0) return true;
     return false;
   }, [hasClips, clips]);
 
@@ -786,7 +795,6 @@ export function OverlayScreen({
     seek,
     framingVideoUrl,
     framingMetadata,
-    framingVideoFile,
     keyframes: [], // No framing keyframes in overlay mode
     segments: null,
     segmentSpeeds: {},
