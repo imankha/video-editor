@@ -75,9 +75,10 @@ class TestComputeStorageStatus:
     def test_no_ref_with_skipped_is_expired(self):
         assert self._fn(None, "skipped") == "expired"
 
-    def test_unparseable_expiry_is_active(self):
-        """An unparseable expiry falls back to 'active' (treat as present)."""
-        assert self._fn("not-a-date", None) == "active"
+    def test_unparseable_expiry_is_expired(self):
+        """T4280: unparseable expiry is treated as EXPIRED (not active). Bad data
+        is not a safe 'present' signal — fail visibly rather than silently allow."""
+        assert self._fn("not-a-date", None) == "expired"
 
     def test_past_expiry_with_auto_export_is_expired(self):
         """Both signals agree: expired."""
