@@ -1,6 +1,6 @@
 ---
 domain: modal-gpu
-updated: 2026-07-11 (T4240 recovery bugs fixed)
+updated: 2026-07-11 (T4240 recovery bugs fixed; T3950 branded outro - NOT in Modal)
 ---
 # Modal GPU / Local Render — Domain Knowledge
 
@@ -39,6 +39,7 @@ graph LR
   MG & AI --> R2[(R2 in/out via presigned URLs / r2-credentials)]
   MG -->|yield progress dicts| CB[progress_callback -> WS send_progress]
 ```
+- **T3950 invariant:** The branded outro is NOT inside any Modal function. Modal produces `working_videos` (intermediate). The outro fires in `overlay.py` at `final_videos` creation — on the backend server, after Modal completes, with the R2 object rewritten in-place. No Modal redeploy needed when T3950 feature is changed.
 - **Dispatch/monitoring:** Modal functions are Python generators; the backend iterates `fn.remote_gen(...)` in an executor and forwards each `{progress, phase, message}` yield to the async `progress_callback` (framing loop `modal_client.py:689-715`; clips `:897-943`; overlay `:1106-1131`).
   - There is **no webhook and no Modal→backend callback** — progress is consumed in-process, then pushed over the export WebSocket via `export_helpers.send_progress`.
   - `progress_reporter.py` is pure weighted-phase math (`DEFAULT_PHASE_WEIGHTS`, UPSCALING weight 0.50); it never talks to Modal.
@@ -86,7 +87,7 @@ graph LR
 - Cost/perf anchors (E6 benchmark): T4 ≈ 681 ms/frame; 10s clip @30fps ≈ 204 GPU-s ≈ $0.03; Modal jobs can run 40+ min (hence the 60-min stale threshold in `cleanup_stale_exports`).
 
 ## Active/upcoming work
-- **T3950** (TODO): "Made with Reel Ballers" branded outro (~1.5-2s), render-time FFmpeg concat in `video_processing.py` — both single-clip and multi-clip/collection paths, per aspect ratio (9:16/1:1/16:9), exactly once (no double-outro on re-export), behind a single flag for future paid removal. No persistence writes.
+- ~~**T3950**~~ IMPLEMENTED 2026-07-11: "Made with Reel Ballers" branded outro (~1.75s). NOT in `video_processing.py` — `app/services/branded_outro.py` wired into `overlay.py`'s `final_videos` producers (router layer, both engines, no Modal edit/redeploy). Programmatic `color`+`drawtext` card (bundled font, `fontfile=`), matched to reel res/fps/SAR/pixfmt/audio, concat `-c copy` (re-encode fallback). Flag `BRANDED_OUTRO_ENABLED` (default true). Non-fatal on failure. Render-time only, no persistence. Tests: `test_t3950_branded_outro.py`. See lines 3/42 and export-pipeline.md invariant.
 - ~~**T4240**~~ DONE 2026-07-11 (all four recovery bugs fixed — see Landmines above).
 - **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.

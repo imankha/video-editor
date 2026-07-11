@@ -1,6 +1,6 @@
 ---
 domain: export-pipeline
-updated: 2026-07-11 (T4200/T4210/T4230/T4240/T4280 bug sweep)
+updated: 2026-07-11 (T4200/T4210/T4230/T4240/T4280 bug sweep; T3950 branded outro)
 ---
 # Export Pipeline — Domain Knowledge
 
@@ -24,7 +24,6 @@ updated: 2026-07-11 (T4200/T4210/T4230/T4240/T4280 bug sweep)
 | `GET /api/exports/{job_id}/modal-status` | `exports.py:797` | Recovery source of truth; may call `finalize_modal_export` (`exports.py:191`) |
 | Sweep (no route) | `auto_export.py _export_brilliant_clip` | **T4175**: pre-expiry, preserves each never-framed clip's extract to `raw_clips/auto_*.mp4` + wires `raw_clips.filename` + leaves a frameable draft. NO publish, NO archive (was: `final_videos` insert + `archive_project`). Already-framed reels still skipped (T4160). |
 | `POST /api/downloads/publish/{project_id}` etc. | `downloads.py:818` publish, `:923` restore | Both use `durable_sync` dependency |
-| `POST /api/downloads/move-to-profile` | `downloads.py:move_reels_to_profile` (T4850) | MOVE published reels to a sibling profile (same user). Body `{video_ids,target_profile_id}`. Batch all-or-nothing; COPIES the per-profile R2 media to the target prefix, writes+durably-syncs TARGET DB, THEN deletes from SOURCE (source rides `durable_sync`), then deletes source-prefix objects last. See below. |
 
 **The 6 export triggers** (T4370 harness must snapshot all of them): single-clip render (`/render`), multi-clip Modal branch, multi-clip local branch (`_export_clips:1236` vs `:1463`), overlay final (`render_overlay`/`/final`), durable worker (`export_worker.process_export_job`), sweep auto-export (`auto_export._export_brilliant_clip`).
 
@@ -53,8 +52,8 @@ graph LR
   - Export routers never touch `storage_refs`/`game_storage_refs` — the ref-count/reclaim lifecycle that can delete a `games/{hash}.mp4` lives in `materialization.py` / `sweep_scheduler.py` / `games.py`; `auto_export.py` is the pre-reclaim export hook.
 - **Finalize transaction** (hand-copied 5×, drifted — see epic): insert `working_videos`/`final_videos` → repoint `projects.working_video_id`/`final_video_id` → complete `export_jobs` → stamp `working_clips.exported_at` + snapshot `raw_clip_version`.
   - Copies: `export_worker.py:259-339`, `framing.py:227-288`, `multi_clip.py:1398-1435` + `:1660-1727`, `exports.py:249-268` (omits version/duration), `overlay.py:96 _finalize_overlay_export`.
-- **`final_videos` writers (3):** `overlay.py:152` (`_finalize_overlay_export`), `overlay.py:1262` (`export_final`), `auto_export.py:283` (sweep — hardcodes `version=1, source_type='brilliant_clip'`, `published_at` set at insert; NOTE post-T4175 the sweep drafts instead of publishing, so this writer is effectively dormant — see T4175 below).
-- **T4890 poster (share-link og:image):** both live `final_videos` writers (`_finalize_overlay_export`, `export_final`) call `services/poster.py:generate_and_store_poster(user_id, final_filename)` at finalize (BEFORE the DB write, so ffmpeg/R2 never runs inside a write txn) and freeze the result on the row's `poster_filename` column (basename `{final_filename}.jpg`; full per-profile key `final_videos/posters/{poster_filename}`). ffmpeg first-frame grab (`-ss 0 -frames:v 1`) reads the video's presigned URL directly; poster uploaded with `content_type=image/jpeg` + `width/height` R2 object-metadata (used for og:image:width/height). BEST-EFFORT: any failure -> `poster_filename` NULL, export still succeeds (no silent fallback — share resolution omits og:image + logs at info when the object is absent). Share resolution (`shares.py:_resolve_poster`) derives the poster key deterministically from the share's frozen `video_filename` and HEAD-probes R2 for existence (so a backfill lights up EXISTING share links immediately — chosen over a Postgres shares column). Move-reels (`downloads.py:move_reels_to_profile`) carries `poster_filename` in `_MOVED_REEL_CARRY_COLUMNS` and relocates the poster object best-effort (HEAD-probe first; missing -> move reel without poster, null the target ref — a cosmetic asset never aborts a legit move). Backfill: admin `POST /api/admin/backfill-share-posters` (idempotent, skip-if-poster-exists heal, HEAD-probe video exists, per-profile explicit R2 sync). Schema: profile_db **v024** adds `final_videos.poster_filename TEXT`. Tests: `test_t4890_share_poster.py`, edge `share-page.test.js`.
+- **`final_videos` writers (3):** `overlay.py:152` (`_finalize_overlay_export`), `overlay.py:1262` (`export_final`), `auto_export.py:283` (sweep — hardcodes `version=1, source_type='brilliant_clip'`, `published_at` set at insert).
+- **Branded outro (T3950):** `app/services/branded_outro.py` appends a ~1.75s programmatic FFmpeg end-card to ALL published final videos. Wired ONLY at the `final_videos` production step (4 points in `overlay.py`): `export_final` bytes path (`:1238`), overlay background task after render before `_finalize_overlay_export` (`:1715`), no-keyframes copy path (`:1941`), test-mode copy path (`:2014`). NEVER wired in framing/stitch/Modal — those produce intermediate `working_videos`; the outro fires exactly once when overlay.py creates the `final_video`. Gate: `BRANDED_OUTRO_ENABLED` env var (default true). Failure is NON-TERMINAL: logs + ships card-less. No persistence writes. Font: `app/assets/fonts/DejaVuSans-Bold.ttf` (bundled, 708 KB). Re-export gets exactly one outro because re-export flows through the same 4 overlay.py final_video creation points.
 - **My Reels grouping (T4190):** the frozen `final_videos.game_ids` BLOB (v008/T3605) is the PRIMARY game-attribution source — `collections_summary` and the `/api/downloads` game_id/mixes filters route by it (`route_collection`), and `list_downloads` now resolves `brilliant_clip` reels' `game_names`/`game_ids`/`group_key` from it too (`downloads.py:~306-470`), with the `raw_clips.auto_project_id -> game_id` chain kept only as a fallback for pre-v008 reels (empty blob). Frozen ids survive the source clip's draft being re-created (`auto_project_id` repointing), which previously dropped the published reel out of its group. `collections_summary` also exposes a per-bucket `unwatched_count` (`SUM watched_at IS NULL`) so the My Reels NEW badge (`GET /api/downloads/count`) always has a visible collapsed-group chip counterpart.
 - **Durable sync:**
   - Background tasks bypass the request middleware, so they must call `export_helpers.sync_export_db_to_r2` (`export_helpers.py:333`) themselves. It blocks (`lock_timeout=None`), syncs BOTH profile DB and user DB, returns True only if both reached R2; on failure it marks sync pending for the middleware retry path.
@@ -90,45 +89,6 @@ graph LR
 - `export_worker.process_framing_export` does NOT stamp `working_clips.exported_at` (drift vs the router paths).
 - T2720 history: a 14s R2 upload lock once froze the UI post-export — keep syncs off the request path; change ordering, not threading.
 
-## Transfer reels between profiles (T4850)
-
-- **`POST /api/downloads/move-to-profile`** (`downloads.py:move_reels_to_profile`) MOVES
-  published `final_videos` rows to a sibling profile of the SAME user (multi-athlete
-  accounts). Cross-profile DB access reuses materialization's helpers:
-  `ensure_profile_db_local(user_id, target_profile_id)` (R2 pull of the target DB) +
-  `_open_profile_db(...)` (raw rw connection, `foreign_keys=ON`), then explicit
-  `sync_db_to_r2_explicit(user_id, target_profile_id)`. Target validated via
-  `user_db.get_profiles`.
-- **R2 MEDIA IS PER-PROFILE — the move server-side COPIES the object** (bug fix, do not
-  regress): `final_videos/{filename}` lives under `{env}/users/{uid}/profiles/{SOURCE}/`
-  (r2_key embeds profile_id). The move copies it to the TARGET prefix
-  (`copy_profile_object`) or the target-profile presign 404s on stream/download. The
-  original "media is per-USER, no copy" assumption shipped a 404-on-play bug (found in
-  live test). `filename` is a per-user hash → no collision across a user's profiles.
-- **What moves vs resets** (`_build_moved_reel_row`): carried = frozen display/play
-  metadata (`filename, name, duration, aspect_ratio, tags, clip_count, quality_score,
-  rating_counts, version, created_at, clip_start_time, clip_game_start_time, published_at`).
-  Reset/cleared = `project_id/game_id/game_ids -> NULL` (source-profile ids; keeping
-  them dangles + fabricates a phantom "Game N" collection), `source_clip_id -> NULL`
-  (avoid twin-sync/teammate-exclude collisions), `rating/rd/match_count` re-seeded
-  as a fresh export (single-clip: `seed_rating(quality_score)`/`RD_MAX`/0; multi-clip:
-  NULL/NULL/0), `watched_at -> NULL` (NEW in target).
-- **`latest_final_videos_subquery()` carries a lineage-less tiebreaker** (`queries.py`):
-  a moved reel has project_id AND game_id NULL; without a per-row `id` tiebreaker (fires
-  ONLY when both are NULL) all moved reels collapse into the `(0,0)` partition and only
-  one survives `MAX(version)`. No-op for every pre-T4850 row.
-- **Durability = target-first, source-second** (T4110 across two DBs + R2 objects):
-  validate all ids (all-or-nothing 400) -> Phase 0 copy media object(s) to target prefix
-  (fail -> 502, nothing moved) -> Phase 1 insert target rows + sync TARGET DB (fail ->
-  roll back target rows AND copied objects, 503, source intact) -> Phase 2 delete source
-  rows (source rides `durable_sync`) -> Phase 3 delete SOURCE-prefix objects LAST (fail ->
-  logged orphan, never gated). Machine death mid-op = brief DUPLICATE (reel in both),
-  never loss. One DB sync per profile, never per reel.
-- **INVARIANT — before_after_tracks/editing lineage stay in source**; the moved reel is
-  NOT re-editable in the target (no project/working_clips copied). Collections/rankings are
-  derived views over published `final_videos`, so deleting the source row auto-vacates them
-  (no membership table). Tests: `test_t4850_move_reels.py`, `e2e/T4850-move-reels.spec.js`.
-
 ## Testing seams
 - `MODAL_ENABLED=false` → full local render path (T4120's sanctioned in-container verify mode); `FORCE_R2_SYNC_FAILURE` + machine-cycle simulation seams (prod-gated) exist for durability tests (`tests/test_t4050_durable_sync.py` is the pattern).
 - WARNING (memory): backend tests TRUNCATE the real dev Postgres — warn the user before running; the guard blocks staging/prod only.
@@ -163,7 +123,7 @@ graph LR
 - **T4380** (TODO): unify the two competing job-create helpers (`exports.py:86` `'pending'` vs `export_helpers.py:37` `'processing'`).
 - **DONE (2026-07-11 bug sweep):** T4200 (framing+multi-clip sync-then-announce), T4210 (overlay blob decode→500 not []; PUT /overlay-data deleted), T4230 (projects.py catch-all crop-NULL fixed; renameProject no longer writes stale aspect_ratio), T4240 (four recovery bugs fixed), T4280 (backend silent-fallback sweep).
 - **Export Write-Path Unification epic** (`docs/plans/tasks/export-write-path/EPIC.md`, STRICT serial order): T4370 golden harness (DB-delta snapshots for all 6 triggers + local render goldens — gates everything after) → T4380 ExportJobRepository → T4390 finalize/publish single writers → T4400 backend-authoritative export (`mark-exported`; kills client-state authority) → T4410 pipelines→services + sweep unification. T4420 (interpolation) and T4430 (ffmpeg params/probe) also depend on T4370.
-- **T3950** (TODO): "Made with Reel Ballers" outro, render-time FFmpeg concat in both single-clip and multi-clip paths — see modal-gpu.md.
+- ~~**T3950**~~ IMPLEMENTED 2026-07-11: "Made with Reel Ballers" outro appended at the `final_videos` production step in `overlay.py` (NOT framing/stitch) — see the Data-flow "Branded outro" bullet above and modal-gpu.md.
 - **T2650** (TODO): move sweep auto-export compute to Modal.
 - DONE context (do not re-fix): T4010 atomic re-export, T4020 shadow-version guard, T4110 overlay sync-then-announce, T4160/T4170 sweep framed-reel preservation + metadata heal.
 
