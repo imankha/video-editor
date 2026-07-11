@@ -1,6 +1,6 @@
 ---
 domain: modal-gpu
-updated: 2026-07-03 (initial version, workflow setup)
+updated: 2026-07-11 (T4240 recovery bugs fixed)
 ---
 # Modal GPU / Local Render — Domain Knowledge
 
@@ -69,10 +69,7 @@ graph LR
 - **Crop-interpolation math exists 4×** (audit E4 / T4420): canonical `app/interpolation.py`, `ai_upscaler/keyframe_interpolator.py`, `video_processing.py:586-1156`, `_optimized.py`. Divergence = local vs Modal exports crop differently. Fixture parity FIRST when consolidating.
 - **`video_processing_optimized.py`** is a separate benchmark app (`reel-ballers-video-optimized`) with 8 T4/L4 variants — never called by the client; T4420 deletes it. `process_framing_ai_l4` is likewise an unwired copy.
 - **`deploy_result.txt` is stale** (old app name `reel-ballers-video`, old function list); the `local_entrypoint` example at `video_processing.py:2929` also prints the old name. Don't trust either as deploy ground truth.
-- **`exports.py:279` NameError** (T4240): success return references undefined `presigned_url`; bare except at `:282` → every committed Modal recovery reports `finalized: False`. Sibling bugs, all T4240:
-  - Modal-API-error → "not running" → `cleanup_stale_exports` can kill a live paid job (`exports.py:290-309,343-366`).
-  - Fabricated `recovered_{job_id}.mp4` when the Modal result lacks `output_key` (`exports.py:216`) — DB row pointing at a nonexistent R2 object.
-  - `export_worker.py:198-204` except block reads try-scoped vars (error handler can itself NameError).
+- ~~**T4240 recovery-bug quartet** (FIXED 2026-07-11):~~ `exports.py:279` NameError was T4790 (fixed 2026-07-10). The remaining three T4240 bugs are now fixed: `check_modal_job_running` returns None on lookup error instead of treating it as "not running" (cleanup skips unknown-status jobs, no longer kills live paid jobs); fabricated `recovered_{job_id}.mp4` filename when `output_key` missing replaced with a loud failure and no DB row; `export_worker.py` except block narrowed so try-scoped vars are always in scope. Regression tests: `test_t4240_export_recovery.py`.
 - **Two `LocalGPUProcessor` classes both register `ProcessingBackend.LOCAL_GPU`** (`processor_local.py:332` CUDA-required vs `local_gpu_processor.py:379` ffmpeg-only) — last import wins the factory slot. Another reason not to use the factory.
 - **`modal_queue.py` has ZERO registered task types** — `_process_single_task` always fails "Unknown task type" (`modal_queue.py:106-108`); retained scaffolding (clip extraction removed T740/T800). Startup recovery is per-user-first-request (`main.py:344-351` defers; `session_init.py:255-301` runs `recover_orphaned_jobs` + `process_modal_queue`), NOT at boot.
 - **Encode drift** (T4430/T4710):
@@ -90,7 +87,7 @@ graph LR
 
 ## Active/upcoming work
 - **T3950** (TODO): "Made with Reel Ballers" branded outro (~1.5-2s), render-time FFmpeg concat in `video_processing.py` — both single-clip and multi-clip/collection paths, per aspect ratio (9:16/1:1/16:9), exactly once (no double-outro on re-export), behind a single flag for future paid removal. No persistence writes.
-- **T4240** (TODO): the recovery-bug quartet above.
+- ~~**T4240**~~ DONE 2026-07-11 (all four recovery bugs fixed — see Landmines above).
 - **T4420** (TODO, depends on T4370 harness): one interpolation module packaged into the Modal image; GPU-param on `process_framing_ai` (kills the L4 copy); delete `_optimized.py`. Requires Modal redeploy (ask user).
 - **T4430** (TODO, depends on T4370): named encode profiles + single ffprobe.
 - **Upscale Quality epic** (`docs/plans/tasks/upscale-quality/EPIC.md`, strict order): T4700 SR testbed (`src/backend/experiments/sr_testbed/`, prime directive: no quality change ships without a testbed run) → T4710 encode/denoise quick wins (crf, bt709, `dni_weight`) → T4720 GAN A/B → T4730 temporal VSR prototype (FlashVSR/SeedVR2, L40S) → T4740 prod integration with crop-size routing → T4750 fine-tune.

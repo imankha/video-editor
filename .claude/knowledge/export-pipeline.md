@@ -1,6 +1,6 @@
 ---
 domain: export-pipeline
-updated: 2026-07-03 (initial version, workflow setup)
+updated: 2026-07-11 (T4200/T4210/T4230/T4240/T4280 bug sweep)
 ---
 # Export Pipeline — Domain Knowledge
 
@@ -64,7 +64,7 @@ graph LR
 - **before_after.py:** builds "Before vs After" comparison videos from `before_after_tracks` (rows written by `overlay.py:1283-1327` during `/final`). Pure local FFmpeg; no R2/DB writes, no `export_jobs`.
 
 ## Invariants & rules
-1. **Sync-then-announce (T4110, DONE 2026-06-28):** the R2 DB sync must succeed BEFORE the export is announced complete. Enforced today ONLY for overlay: `overlay.py:1907-1923` (background render gates COMPLETE on `synced`), `:2122-2129` and `:2189-2196` (copy/test paths → 503 + retryable `_export_sync_failed_data` event, helper at `overlay.py:199`). `sync_export_db_to_r2`'s docstring (`export_helpers.py:347-349`) says all callers must gate on it — framing and multi-clip DON'T yet (that gap is T4200).
+1. **Sync-then-announce (T4110 + T4200, DONE 2026-07-11):** the R2 DB sync must succeed BEFORE the export is announced complete. Enforced for overlay (`overlay.py:1907-1923`; copy/test paths → 503 + retryable `_export_sync_failed_data` event, helper at `overlay.py:199`), framing (`framing.py:718-722` now gated, `_export_sync_failed_data` shared via `export_helpers`), and multi-clip (`multi_clip.py:2298-2301` + COMPLETE sites `:1440-1448/:1737` all gated). DB-save failure is terminal — no phantom export announces success. The `_export_sync_failed_data` helper now lives in `export_helpers.py` (no router→router imports).
 2. **Never destroy the old final video before the new one exists (T4010, DONE 2026-06-26):** re-export inserts a new `final_videos` version, repoints atomically, deletes the prior R2 object only post-commit (`overlay.py:1202-1210`, `:1336-1337`, `_finalize_overlay_export:189-190`); no speculative `final_video_id = NULL` at job-accept (`framing.py:245-248` comment; `export_worker.py:335` repoints working only). Failure paths restore prior pointers (`framing.py:696-703`).
 3. **No export may create a working-clip version that drops just-exported framing (T4020, DONE, frontend):** the export→overlay transition must not fire a second full-state save; only the pre-render `saveCurrentClipState` (ExportButtonContainer) is the gesture. Backend faithfully persists what it receives — the guard is frontend convention only until T4400.
 4. **Every DB write traces to a user gesture** (CLAUDE.md persistence rule); sweep auto-export is the one gesture-less writer, which is why it must become explicit parameters of the shared writer (epic decision 3, `docs/plans/tasks/export-write-path/EPIC.md`).
@@ -77,11 +77,12 @@ graph LR
 - **T4020 (prod incident):** redundant post-render full-state save (`FramingScreen.jsx` transition) persisted EMPTY crop/segments as a new shadow working-clip version; bloat-cleanup then pruned the real one → permanent framing loss. Recovery only via pre-prune R2 snapshot.
 - **T4110 (prod incident):** export finalize rows rode fire-and-forget sync; machine cycle lost them → "edited reel vanishes from My Reels". Fix = sync-then-announce + `sync_failed` retry UX + v018 heal migration.
 - **Rank-sweep incident (T4160/T4170):** sweep auto-export published raw 1080p stream-copies into the 9:16 ranking pool (its own `final_videos` writer, instant publish, hardcoded metadata). Sweep is still a parallel universe: no `export_jobs` row, own ffmpeg/R2/status literals (audit E8; unified in T4410).
-- **Live bugs (audit 2026-07-03, tasked):**
-  - Multi-clip swallows DB-save exceptions and still announces success (`multi_clip.py:1436-1448` — phantom export; T4200 makes it terminal).
-  - ~~`exports.py` returned undefined `presigned_url`~~ FIXED by T4790 (2026-07-10, regression test in test_t4790_undefined_name_bugs.py); T4240's remaining scope: bare-except narrowing + the other 3 recovery bugs.
-  - Modal API error treated as "not running" → `cleanup_stale_exports` can kill a live paid job (`exports.py:290-309`, T4240).
-  - Fabricated `recovered_{job_id}.mp4` filename when a Modal result lacks `output_key` (`exports.py:216`, T4240).
+- **Live bugs (audit 2026-07-03, fixed in bug sweep 2026-07-11):**
+  - ~~Multi-clip swallows DB-save exceptions and still announces success~~ FIXED T4200 (terminal failure; sync-then-announce extended to framing+multi-clip).
+  - ~~`exports.py` returned undefined `presigned_url`~~ FIXED T4790 (2026-07-10).
+  - ~~Modal API error treated as "not running" → `cleanup_stale_exports` kills live paid job~~ FIXED T4240 (`check_modal_job_running` returns None on lookup error; cleanup skips jobs with unknown Modal status).
+  - ~~Fabricated `recovered_{job_id}.mp4` when Modal result lacks `output_key`~~ FIXED T4240 (fails loudly, no fabricated row).
+  - ~~`export_worker.py:198-204` except block reads try-scoped vars~~ FIXED T4240 (bare-except narrowed to `Exception`; vars are now always in scope).
   - Two competing job-create helpers with different initial status: `exports.py:86` (`'pending'`) vs `export_helpers.py:37` (`'processing'`, swallows insert failure) — T4380 unifies.
 - WS progress is lossy by design; if you need durability, write `export_jobs`, don't add WS retries.
 - `export_worker.process_framing_export` does NOT stamp `working_clips.exported_at` (drift vs the router paths).
@@ -118,9 +119,8 @@ graph LR
   gap** (no request in flight) = crop/highlight/canvas hydration, not latency (T4774).
 
 ## Active/upcoming work
-- **T4200** (TODO, audit B1): extend sync-then-announce to framing (`framing.py:718-722` ungated finally-sync) + multi-clip (`multi_clip.py:2298-2301`; COMPLETE sites `:1440-1448`, `:1737`); DB-save failure becomes terminal. Copy overlay's pattern; share `_export_sync_failed_data` via `export_helpers` (no router→router imports).
-- **T4240** (TODO, audit A1+A10): the four recovery bugs above. Surgical; do not start the repository refactor there.
-- **T4210/T4230/T4280** (TODO): overlay blob decode→`[]` erasure; projects.py catch-all NULLing crop/segments; backend silent-fallback sweep — adjacent write-path bugs.
+- **T4380** (TODO): unify the two competing job-create helpers (`exports.py:86` `'pending'` vs `export_helpers.py:37` `'processing'`).
+- **DONE (2026-07-11 bug sweep):** T4200 (framing+multi-clip sync-then-announce), T4210 (overlay blob decode→500 not []; PUT /overlay-data deleted), T4230 (projects.py catch-all crop-NULL fixed; renameProject no longer writes stale aspect_ratio), T4240 (four recovery bugs fixed), T4280 (backend silent-fallback sweep).
 - **Export Write-Path Unification epic** (`docs/plans/tasks/export-write-path/EPIC.md`, STRICT serial order): T4370 golden harness (DB-delta snapshots for all 6 triggers + local render goldens — gates everything after) → T4380 ExportJobRepository → T4390 finalize/publish single writers → T4400 backend-authoritative export (`mark-exported`; kills client-state authority) → T4410 pipelines→services + sweep unification. T4420 (interpolation) and T4430 (ffmpeg params/probe) also depend on T4370.
 - **T3950** (TODO): "Made with Reel Ballers" outro, render-time FFmpeg concat in both single-clip and multi-clip paths — see modal-gpu.md.
 - **T2650** (TODO): move sweep auto-export compute to Modal.
