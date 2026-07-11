@@ -206,20 +206,10 @@ def _finalize_overlay_export(
     return final_video_id
 
 
-def _export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:
-    """T4110: completion event when the render succeeded but the durable R2 sync
-    failed. Sent as a terminal ERROR (so the client marks the export failed, never
-    'complete', and never surfaces Move-to-My-Reels) but flagged retryable so the
-    UI prompts Retry — the WebSocket analog of T4050's 503 sync_failed response."""
-    from app.websocket import make_progress_data
-    data = make_progress_data(
-        current=100, total=100, phase='error',
-        message="Render finished but couldn't save to the cloud. Please try Export again.",
-        export_type=export_type, project_id=project_id, project_name=project_name,
-    )
-    data['retryable'] = True
-    data['code'] = 'sync_failed'
-    return data
+# T4200: the sync_failed payload builder now lives in export_helpers so framing and
+# multi-clip share the exact same event shape (no router→router imports). Kept as a
+# thin module-local alias so existing overlay call sites read unchanged.
+from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data
 
 
 # =============================================================================
