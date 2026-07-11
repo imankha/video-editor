@@ -708,6 +708,67 @@ async def copy_file_in_r2(user_id: str, source_path: str, dest_path: str) -> boo
         return False
 
 
+def profile_r2_key(user_id: str, profile_id: str, path: str) -> str:
+    """Build an R2 object key for a SPECIFIC profile, bypassing the ContextVar.
+
+    Same format as r2_key(): {env}/users/{user_id}/profiles/{profile_id}/{path}.
+    Use for CROSS-PROFILE operations (e.g. T4850 reel move) where the object lives
+    under a profile that is NOT the current request profile. R2 media artifacts are
+    PER-PROFILE (r2_key embeds profile_id), so a same-user move must relocate the
+    object between the two profile prefixes — the sqlite row alone is not enough.
+    """
+    path = path.replace("\\", "/")
+    return f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/{path}"
+
+
+def copy_profile_object(user_id: str, source_profile_id: str,
+                        target_profile_id: str, relative_path: str) -> bool:
+    """Server-side copy a per-profile R2 object from one profile prefix to another
+    (same user, same bucket — no download/upload). Returns True on success, or True
+    if R2 is disabled (nothing to relocate). False on any failure (caller aborts)."""
+    if not R2_ENABLED:
+        return True
+    client = get_r2_client()
+    if not client:
+        logger.error("[copy_profile_object] R2 client not available")
+        return False
+
+    source_key = profile_r2_key(user_id, source_profile_id, relative_path)
+    dest_key = profile_r2_key(user_id, target_profile_id, relative_path)
+    try:
+        from .utils.retry import TIER_3, retry_r2_call
+        retry_r2_call(
+            client.copy_object,
+            Bucket=R2_BUCKET,
+            CopySource={'Bucket': R2_BUCKET, 'Key': source_key},
+            Key=dest_key,
+            operation=f"copy_profile {source_key} -> {dest_key}", **TIER_3,
+        )
+        logger.info(f"[copy_profile_object] {source_key} -> {dest_key}")
+        return True
+    except Exception as e:
+        logger.error(f"[copy_profile_object] FAILED {source_key} -> {dest_key} - {e}")
+        return False
+
+
+def delete_profile_object(user_id: str, profile_id: str, relative_path: str) -> bool:
+    """Delete a per-profile R2 object under a SPECIFIC profile prefix (bypasses the
+    ContextVar). Returns True on success or if R2 disabled; False on failure."""
+    if not R2_ENABLED:
+        return True
+    key = profile_r2_key(user_id, profile_id, relative_path)
+    return r2_delete_object_global(key)
+
+
+def profile_object_exists(user_id: str, profile_id: str, relative_path: str) -> bool:
+    """HEAD a per-profile R2 object under a SPECIFIC profile prefix. False if R2
+    disabled. Used to verify a moved reel's media resolves under the target prefix."""
+    if not R2_ENABLED:
+        return False
+    key = profile_r2_key(user_id, profile_id, relative_path)
+    return r2_head_object_global(key) is not None
+
+
 def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
     """Check if a file exists in R2."""
     client = get_r2_client()

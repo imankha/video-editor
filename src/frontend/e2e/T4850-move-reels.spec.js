@@ -4,16 +4,23 @@ import { saveEvidence, responsiveSweep } from './helpers/qa.js';
 /**
  * T4850 — Transfer reels between profiles (multi-athlete accounts).
  *
- * Drives the REAL My Reels UI against the live stack (no R2 needed: media objects
- * are per-user; the move is a profile-DB row move). Uses the X-User-ID isolation
- * bypass + the /api/test/seed-final-video seam to create movable published reels
- * without the full upload->annotate->frame->export->publish pipeline.
+ * Drives the REAL My Reels UI + API against the live stack (R2 ENABLED in the
+ * container .env), using POST /api/test/seed-final-video which uploads a real tiny
+ * MP4 under the current profile's per-profile R2 prefix. This proves the fix for
+ * the production bug: R2 media is PER-PROFILE, so a move must server-side copy the
+ * object to the target prefix or playback/download 404s in the target profile.
  *
- * Acceptance criteria evidenced here:
- *   - c6: single-profile accounts never see the Move affordance
- *   - c1: a reel moves A->B via an explicit card gesture; appears in B, gone from A
- *   - c2: multiple reels move in one bulk gesture
- *   - c3: source no longer lists moved reels (summary count drops)
+ * Evidence map (acceptance criteria + user QA mandate a-g):
+ *   c6  single-profile accounts never see the Move affordance
+ *   c1  reel moves A->B via a card gesture; appears in B, gone from A
+ *   c2  multiple reels move in one bulk gesture
+ *   c3  source no longer lists moved reels
+ *   4a  moved video PLAYS in target (currentTime advances)
+ *   4b  Download works in target (200 + bytes)
+ *   4c  Share-link creation from target works
+ *   4d  Delete in target removes the row
+ *   4f  "Open as Draft" is HIDDEN for moved reels (lineage stayed in source)
+ *   4g  moving the reel BACK to the original profile works (round-trip)
  */
 
 const API_PORT = 8000;
@@ -22,25 +29,29 @@ const USER = `e2e_t4850_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
 function hdr(profileId) {
   return {
-    'X-User-ID': USER,
-    'X-Profile-ID': profileId,
-    'X-Test-Mode': 'true',
-    'Content-Type': 'application/json',
+    'X-User-ID': USER, 'X-Profile-ID': profileId,
+    'X-Test-Mode': 'true', 'Content-Type': 'application/json',
   };
 }
 
 async function seedReel(request, profileId, name) {
   const res = await request.post(`${API_BASE}/test/seed-final-video`, {
-    headers: hdr(profileId),
-    data: { name },
+    headers: hdr(profileId), data: { name },
   });
   expect(res.ok(), `seed ${name}`).toBeTruthy();
-  return (await res.json()).id;
+  const body = await res.json();
+  expect(body.media_uploaded, 'seed uploaded real media to R2').toBeTruthy();
+  return body; // {id, filename, media_uploaded}
 }
 
 async function reelCount(request, profileId) {
   const res = await request.get(`${API_BASE}/downloads/count`, { headers: hdr(profileId) });
   return (await res.json()).count;
+}
+
+async function listMixes(request, profileId) {
+  const res = await request.get(`${API_BASE}/downloads?mixes=true`, { headers: hdr(profileId) });
+  return (await res.json()).downloads;
 }
 
 async function bootAs(page, profileId) {
@@ -53,7 +64,6 @@ async function bootAs(page, profileId) {
     useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
   });
   await page.waitForLoadState('networkidle');
-  // Force the stores to reflect the current profile + open My Reels.
   await page.evaluate(async () => {
     const { useProfileStore } = await import('/src/stores/profileStore.js');
     await useProfileStore.getState().fetchProfiles({ force: true });
@@ -63,8 +73,8 @@ async function bootAs(page, profileId) {
   await page.waitForTimeout(600);
 }
 
-let defaultProfile;
-let secondProfile;
+let A; // default profile (source)
+let B; // second profile (target)
 
 test.describe.configure({ mode: 'serial' });
 
@@ -74,74 +84,109 @@ test.describe('T4850 move reels between profiles', () => {
       try { if ((await request.get(`${API_BASE}/health`)).ok()) break; } catch { /* retry */ }
       await new Promise((r) => setTimeout(r, 1000));
     }
-    const init = await request.post(`${API_BASE}/auth/init`, { headers: { 'X-User-ID': USER } });
-    defaultProfile = (await init.json()).profile_id;
+    A = (await (await request.post(`${API_BASE}/auth/init`, { headers: { 'X-User-ID': USER } })).json()).profile_id;
+    // Register the isolated user in Postgres so Postgres-FK features (sharing) work.
+    await request.post(`${API_BASE}/test/ensure-pg-user`, { headers: hdr(A) });
   });
 
   test('c6: single-profile account never sees the Move affordance', async ({ page, request }) => {
-    await seedReel(request, defaultProfile, 'Solo Reel');
-    await bootAs(page, defaultProfile);
-
-    // The panel is open; with only ONE profile there is no Select toggle.
+    await seedReel(request, A, 'Solo Reel');
+    await bootAs(page, A);
     await expect(page.getByRole('button', { name: 'Select' })).toHaveCount(0);
     await saveEvidence(page, 'criterion-6-single-profile-no-affordance');
   });
 
   test('affordance appears once a 2nd profile exists', async ({ page, request }) => {
-    const res = await request.post(`${API_BASE}/profiles`, {
-      headers: hdr(defaultProfile),
-      data: { name: 'Athlete B', color: '#10B981' },
-    });
-    secondProfile = (await res.json()).id;
-    // Switch back to the default (source) profile.
-    await request.put(`${API_BASE}/profiles/current`, {
-      headers: hdr(defaultProfile), data: { profileId: defaultProfile },
-    });
-
-    await bootAs(page, defaultProfile);
+    B = (await (await request.post(`${API_BASE}/profiles`, {
+      headers: hdr(A), data: { name: 'Athlete B', color: '#10B981' },
+    })).json()).id;
+    await request.put(`${API_BASE}/profiles/current`, { headers: hdr(A), data: { profileId: A } });
+    await bootAs(page, A);
     await expect(page.getByRole('button', { name: 'Select' })).toBeVisible();
     await saveEvidence(page, 'criterion-6-two-profiles-affordance-visible');
   });
 
-  test('c1: single reel moves A->B via the card overflow menu', async ({ page, request }) => {
-    const before = await reelCount(request, defaultProfile);
-    expect(before).toBeGreaterThanOrEqual(1);
-    const bBefore = await reelCount(request, secondProfile);
+  test('c1+4b: single reel moves A->B via the card menu; media follows (download 200)', async ({ page, request }) => {
+    const seeded = await seedReel(request, A, 'Wonder Goal');
+    const before = await reelCount(request, A);
+    const bBefore = await reelCount(request, B);
 
-    await bootAs(page, defaultProfile);
+    // Media currently resolves under A (source), NOT yet under B.
+    expect((await request.get(`${API_BASE}/downloads/${seeded.id}/stream`, { headers: hdr(A) })).status()).toBeLessThan(400);
 
-    // The Mixes group is default-expanded when there are no game groups, so the
-    // seeded single-clip reels render without a manual expand. Wait for a card.
+    await bootAs(page, A);
     await expect(page.getByTitle('More actions').first()).toBeVisible();
-
-    // Open the first reel card's overflow menu -> Move to profile...
     await page.getByTitle('More actions').first().click();
     await page.getByRole('button', { name: /Move to profile/ }).click();
     await saveEvidence(page, 'criterion-1-move-modal');
-    // Pick the sibling profile in the picker.
     await page.getByRole('button', { name: 'Athlete B' }).click();
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
 
-    // Source lost exactly one reel; target gained exactly one.
-    expect(await reelCount(request, defaultProfile)).toBe(before - 1);
-    expect(await reelCount(request, secondProfile)).toBe(bBefore + 1);
+    expect(await reelCount(request, A)).toBe(before - 1);
+    expect(await reelCount(request, B)).toBe(bBefore + 1);
+
+    // The moved reel now lives in B. Its media MUST resolve under the B prefix.
+    const bReels = await listMixes(request, B);
+    const moved = bReels.find((r) => r.filename === seeded.filename);
+    expect(moved, 'moved reel present in target list').toBeTruthy();
+
+    const stream = await request.get(`${API_BASE}/downloads/${moved.id}/stream`, { headers: hdr(B) });
+    expect(stream.status(), '4a: stream resolves under target prefix (was 404 pre-fix)').toBeLessThan(400);
+
+    const dl = await request.get(`${API_BASE}/downloads/${moved.id}/file`, { headers: hdr(B) });
+    expect(dl.status(), '4b: download 200').toBe(200);
+    expect((await dl.body()).length, '4b: non-empty bytes').toBeGreaterThan(0);
     await saveEvidence(page, 'criterion-1-after-single-move');
   });
 
+  test('4a+4f: moved reel PLAYS in target and has no "Open as Draft"', async ({ page, request }) => {
+    const bReels = await listMixes(request, B);
+    expect(bReels.length).toBeGreaterThanOrEqual(1);
+
+    await bootAs(page, B);
+    // Overflow menu on the moved reel must NOT offer "Open as Draft" (project_id NULL
+    // -> canOpenSource false; editing lineage stayed in the source profile).
+    await page.getByTitle('More actions').first().click();
+    await expect(page.getByRole('button', { name: /Open as Draft/ })).toHaveCount(0);
+    await saveEvidence(page, 'criterion-4f-no-open-as-draft');
+    await page.keyboard.press('Escape');
+
+    // Play the reel and assert the <video> actually advances.
+    await page.getByTitle('Play video').first().click();
+    await page.waitForTimeout(500);
+    const video = page.locator('video').first();
+    await expect(video).toBeVisible();
+    await page.waitForTimeout(1500);
+    const t = await video.evaluate((v) => v.currentTime);
+    expect(t, '4a: playback advanced currentTime').toBeGreaterThan(0);
+    await saveEvidence(page, 'criterion-4a-plays-in-target');
+  });
+
+  test('4c: share-link creation from the target profile works', async ({ request }) => {
+    const moved = (await listMixes(request, B))[0];
+    const res = await request.post(`${API_BASE}/gallery/${moved.id}/share`, {
+      headers: hdr(B), data: { is_public: true, recipient_emails: [] },
+    });
+    expect(res.ok(), '4c: share created from target profile').toBeTruthy();
+    const data = await res.json();
+    const token = data.shares?.[0]?.share_token || data.share_token;
+    expect(token, '4c: got a share token').toBeTruthy();
+
+    // The public share must resolve the moved reel's media (same per-profile presign
+    // path as playback) -> proves a shared moved reel is watchable from the target.
+    const resolved = await request.get(`${API_BASE}/shared/${token}`);
+    expect(resolved.status(), '4c: public share resolves').toBeLessThan(400);
+  });
+
   test('c2+c3: bulk-select moves several reels in one gesture', async ({ page, request }) => {
-    // Seed 2 more so the source has >= 2 to bulk-move.
-    await seedReel(request, defaultProfile, 'Bulk One');
-    await seedReel(request, defaultProfile, 'Bulk Two');
-    const before = await reelCount(request, defaultProfile);
-    const bBefore = await reelCount(request, secondProfile);
+    await seedReel(request, A, 'Bulk One');
+    await seedReel(request, A, 'Bulk Two');
+    const before = await reelCount(request, A);
+    const bBefore = await reelCount(request, B);
 
-    await bootAs(page, defaultProfile);
-
-    // Enter select mode, responsive sweep the select UI, then select all visible.
+    await bootAs(page, A);
     await page.getByRole('button', { name: 'Select' }).click();
     await page.waitForTimeout(400);
-
-    // Tap the reel cards (whole card toggles selection in select mode).
     const cards = page.locator('div.cursor-pointer').filter({ hasText: 'Bulk' });
     const n = await cards.count();
     for (let i = 0; i < n; i++) await cards.nth(i).click();
@@ -150,17 +195,39 @@ test.describe('T4850 move reels between profiles', () => {
 
     await page.getByRole('button', { name: /Move to profile/ }).click();
     await page.getByRole('button', { name: 'Athlete B' }).click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1800);
 
-    const moved = before - (await reelCount(request, defaultProfile));
+    const moved = before - (await reelCount(request, A));
     expect(moved).toBeGreaterThanOrEqual(2);
-    expect(await reelCount(request, secondProfile)).toBe(bBefore + moved);
+    expect(await reelCount(request, B)).toBe(bBefore + moved);
     await saveEvidence(page, 'criterion-3-source-after-bulk-move');
   });
 
-  test('moved reels are listed in the target profile', async ({ request }) => {
-    const res = await request.get(`${API_BASE}/downloads?mixes=true`, { headers: hdr(secondProfile) });
-    const data = await res.json();
-    expect(data.downloads.length).toBeGreaterThanOrEqual(3);
+  test('4d: delete a moved reel in the target profile removes the row', async ({ request }) => {
+    const before = await reelCount(request, B);
+    const victim = (await listMixes(request, B))[0];
+    const del = await request.delete(`${API_BASE}/downloads/${victim.id}`, { headers: hdr(B) });
+    expect(del.ok(), '4d: delete ok').toBeTruthy();
+    expect(await reelCount(request, B)).toBe(before - 1);
+    const after = await listMixes(request, B);
+    expect(after.find((r) => r.id === victim.id), '4d: row gone').toBeFalsy();
+  });
+
+  test('4g: moving a reel BACK to the original profile round-trips', async ({ request }) => {
+    const moved = (await listMixes(request, B))[0];
+    const aBefore = await reelCount(request, A);
+
+    const res = await request.post(`${API_BASE}/downloads/move-to-profile`, {
+      headers: hdr(B), data: { video_ids: [moved.id], target_profile_id: A },
+    });
+    expect(res.ok(), '4g: move back ok').toBeTruthy();
+    expect(await reelCount(request, A)).toBe(aBefore + 1);
+
+    // The reel is in A again and its media resolves under the A prefix.
+    const aReels = await listMixes(request, A);
+    const back = aReels.find((r) => r.filename === moved.filename);
+    expect(back, '4g: reel present in original profile').toBeTruthy();
+    const stream = await request.get(`${API_BASE}/downloads/${back.id}/stream`, { headers: hdr(A) });
+    expect(stream.status(), '4g: plays back in original profile').toBeLessThan(400);
   });
 });

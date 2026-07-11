@@ -23,7 +23,13 @@ from app.queries import exclude_teammate_reels_clause, latest_final_videos_subqu
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import _open_profile_db, ensure_profile_db_local
 from app.services.project_archive import archive_project, is_project_archived, restore_project
-from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
+from app.storage import (
+    R2_ENABLED,
+    copy_profile_object,
+    delete_profile_object,
+    file_exists_in_r2,
+    generate_presigned_url,
+)
 from app.user_context import get_current_req_id, get_current_user_id
 from app.utils.encoding import decode_data
 
@@ -900,16 +906,20 @@ async def move_reels_to_profile(
 
     Batch-atomic and all-or-nothing: every id is validated first; a single
     offender (unknown id, unpublished/draft, wrong profile) rejects the whole
-    batch with 400 and nothing moves. The reel's R2 media object is per-USER
-    (shared across the user's profiles), so only the sqlite `final_videos` row
-    moves between the two profile DBs — no R2 object copy.
+    batch with 400 and nothing moves.
 
-    Durability (T4110 sync-then-announce, applied across two DBs): the target DB
-    is written and synced to R2 FIRST; only after it is durably in R2 is the
-    source row deleted. A machine death mid-op can therefore leave the reel briefly
-    in BOTH profiles (a visible duplicate the user can re-move) but NEVER in
-    neither (data loss). The source DB rides the `durable_sync` dependency
-    (middleware awaits its R2 sync inside the write lock -> 503 on failure).
+    R2 media objects are PER-PROFILE (r2_key embeds profile_id), so the reel's
+    final_videos/{filename} MUST be server-side copied from the source-profile
+    prefix to the target-profile prefix — the sqlite row alone would 404 on
+    playback/download in the target. Ordering (all-or-nothing, target-first for
+    durability):
+      Phase 0: copy media object(s) source->target prefix (fail -> 502, nothing moved)
+      Phase 1: insert target rows + durable-sync target DB
+               (sync fail -> roll back target rows + copied objects, 503, source intact)
+      Phase 2: delete source rows (source rides `durable_sync` -> 503 on its sync fail)
+      Phase 3: delete SOURCE-prefix objects LAST (fail -> logged orphan, never gated)
+    A machine death mid-op can leave the reel briefly in BOTH profiles (a visible
+    duplicate the user can re-move) but NEVER in neither (data loss).
     """
     user_id = get_current_user_id()
     source_profile_id = get_current_profile_id()
@@ -970,7 +980,42 @@ async def move_reels_to_profile(
 
         source_rows = [rows_by_id[vid] for vid in video_ids]
 
-        # --- Phase 1: write + durably sync the TARGET profile FIRST ---------
+        # R2 media objects are PER-PROFILE (r2_key embeds profile_id), so the reel's
+        # final_videos/{filename} lives under the SOURCE prefix. The move MUST copy
+        # each object to the TARGET prefix or the target-profile presign 404s. The
+        # `filename` is a per-user hash so two reels never collide on it.
+        media_paths = [f"final_videos/{r['filename']}" for r in source_rows]
+
+        # --- Phase 0: server-side COPY the media to the TARGET prefix FIRST ---
+        # Nothing is deleted until the target reel is fully durable (row + object),
+        # so a failure here leaves the source 100% intact.
+        copied_paths: list[str] = []
+        for rel_path in media_paths:
+            ok = await asyncio.to_thread(
+                copy_profile_object, user_id, source_profile_id, target_profile_id, rel_path
+            )
+            if not ok:
+                # Roll back the objects we already copied into the target prefix so a
+                # failed move leaves no orphan there, then fail visibly (nothing moved).
+                for done in copied_paths:
+                    await asyncio.to_thread(
+                        delete_profile_object, user_id, target_profile_id, done
+                    )
+                logger.error(
+                    f"[MoveReels] R2 copy FAILED for {rel_path} "
+                    f"{source_profile_id}->{target_profile_id} req_id={req_id} -> 502"
+                )
+                raise HTTPException(
+                    status_code=502,
+                    detail={
+                        "message": "Could not copy reel media to the target profile. Nothing was moved.",
+                        "code": "media_copy_failed",
+                        "retryable": True,
+                    },
+                )
+            copied_paths.append(rel_path)
+
+        # --- Phase 1: write + durably sync the TARGET profile DB -------------
         ensure_profile_db_local(user_id, target_profile_id)
         target_conn = _open_profile_db(user_id, target_profile_id)
         if target_conn is None:
@@ -978,6 +1023,7 @@ async def move_reels_to_profile(
             _ensure_empty_profile_db(target_profile_id)
             target_conn = _open_profile_db(user_id, target_profile_id)
         if target_conn is None:
+            _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             raise HTTPException(status_code=500, detail="Could not open target profile database")
 
         insert_cols = _MOVED_REEL_CARRY_COLUMNS + (
@@ -1001,23 +1047,25 @@ async def move_reels_to_profile(
                 sync_db_to_r2_explicit, user_id, target_profile_id
             )
             if not target_synced:
-                # Roll back the exact rows we just inserted so a failed move leaves
-                # NOTHING behind in either profile, then surface the retryable 503.
-                # The source is still untouched at this point.
+                # Roll back the exact rows we just inserted AND the copied objects so a
+                # failed move leaves NOTHING behind in the target, then surface the
+                # retryable 503. The source is still 100% untouched at this point.
                 ph = ",".join("?" for _ in inserted_target_ids)
                 tcur.execute(
                     f"DELETE FROM final_videos WHERE id IN ({ph})", inserted_target_ids
                 )
                 target_conn.commit()
+                _cleanup_target_objects(user_id, target_profile_id, copied_paths)
                 logger.warning(
                     f"[MoveReels] target R2 sync FAILED, rolled back target ids="
-                    f"{inserted_target_ids} req_id={req_id} -> 503"
+                    f"{inserted_target_ids} + {len(copied_paths)} object(s) req_id={req_id} -> 503"
                 )
                 raise HTTPException(status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE)
         except HTTPException:
             raise
         except Exception:
             target_conn.rollback()
+            _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             logger.exception(
                 f"[MoveReels] target insert failed ids={video_ids} req_id={req_id}"
             )
@@ -1025,7 +1073,7 @@ async def move_reels_to_profile(
         finally:
             target_conn.close()
 
-        # --- Phase 2: target is durable -> remove the reels from the SOURCE --
+        # --- Phase 2: target is fully durable -> remove reels from the SOURCE --
         # before_after_tracks cascade via ON DELETE CASCADE (foreign_keys=ON);
         # NULL the project pointer first, mirroring delete_download's FK cleanup.
         for vid in video_ids:
@@ -1035,6 +1083,21 @@ async def move_reels_to_profile(
             cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
         conn.commit()
 
+    # --- Phase 3: delete the SOURCE-prefix media objects LAST ---------------
+    # The target reel is now fully durable (object + row + synced DB); the source
+    # DB row is gone. Only now do we drop the source-prefix objects. A failure here
+    # is a harmless orphan (logged loudly), NEVER data loss — do not gate the 200.
+    for rel_path in media_paths:
+        deleted = await asyncio.to_thread(
+            delete_profile_object, user_id, source_profile_id, rel_path
+        )
+        if not deleted:
+            logger.error(
+                f"[MoveReels] ORPHAN: failed to delete source object {rel_path} under "
+                f"profile={source_profile_id} user={user_id} req_id={req_id} — "
+                f"target copy is durable, safe to sweep later"
+            )
+
     logger.info(
         f"[MoveReels] moved {len(video_ids)} reel(s) {source_profile_id}->"
         f"{target_profile_id} user={user_id} req_id={req_id} "
@@ -1043,6 +1106,19 @@ async def move_reels_to_profile(
     # durable_sync dependency makes the middleware AWAIT the source-profile R2 sync
     # inside the write lock and convert failure into a 503 (never a lying 200).
     return {"success": True, "moved_ids": video_ids, "target_profile_id": target_profile_id}
+
+
+def _cleanup_target_objects(user_id: str, target_profile_id: str, rel_paths: list[str]) -> None:
+    """Best-effort delete of objects already copied into the target prefix when a
+    move aborts after Phase 0 — keeps a failed move from orphaning target media."""
+    for rel_path in rel_paths:
+        try:
+            delete_profile_object(user_id, target_profile_id, rel_path)
+        except Exception:
+            logger.exception(
+                f"[MoveReels] failed to clean up target object {rel_path} "
+                f"profile={target_profile_id}"
+            )
 
 
 def _ensure_empty_profile_db(profile_id: str) -> None:

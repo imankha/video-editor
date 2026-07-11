@@ -73,10 +73,20 @@ Constraints:
 (source) profile; target profile synced explicitly.
 
 **No schema change.** Move = a `final_videos` row copy between the two profile
-SQLite DBs. R2 media objects are per-USER (`{env}/users/{uid}/final_videos/...`),
-shared across the user's profiles, so NO R2 object copy — the carried `filename`
-plays as-is in the target. `season_rank` does not exist (v009 dropped it); rank
-state is the `rating`/`rd`/`match_count` columns ON `final_videos`.
+SQLite DBs **PLUS a server-side R2 object copy**. R2 media is PER-PROFILE —
+`r2_key` embeds `profile_id`, so `final_videos/{filename}` lives under
+`{env}/users/{uid}/profiles/{SOURCE}/...`. The move server-side copies the object
+to the `{TARGET}` prefix (`copy_profile_object`) and deletes the source-prefix
+object last; without this, the target-profile presign 404s on playback/download
+(the bug the first cut shipped — the "media is per-USER" kickoff assumption was
+wrong). `season_rank` does not exist (v009 dropped it); rank state is the
+`rating`/`rd`/`match_count` columns ON `final_videos`.
+
+**R2 media ordering (all-or-nothing, target-first):** Phase 0 copy object(s)
+source->target prefix (fail -> 502, nothing moved) -> Phase 1 insert target rows +
+durable-sync target DB (fail -> roll back target rows + copied objects, 503) ->
+Phase 2 delete source rows (source rides `durable_sync`) -> Phase 3 delete
+source-prefix objects LAST (fail -> logged orphan, never data loss).
 
 **Source-profile references cleaned up on move (decision 4 enumeration):**
 - The `final_videos` row itself — DELETEd from source (Phase 2). Latest published
@@ -128,10 +138,13 @@ before source-sync can leave the reel briefly in BOTH profiles (a visible duplic
 the user can re-move) but NEVER in neither (no data loss). One sync per profile DB,
 never per reel.
 
-**Share links:** existing public share tokens (`shares` in Postgres) snapshot the
-`filename` and resolve the media by the per-USER R2 key, which is unchanged by a
-same-user move -> existing links keep working. No invalidation needed (no user-visible
-UX decision surfaced).
+**Share links:** public share tokens (`shares` in Postgres) snapshot the `filename`
+and are keyed by the sharer's user+profile; the public-playback presign uses the
+same per-PROFILE r2_key. Because the move relocates the media object to the target
+prefix, a share created FROM the target profile resolves correctly (verified live,
+E2E 4c). A pre-existing share created under the SOURCE profile before the move would
+point at the now-deleted source-prefix object — acceptable in v1 (reels are typically
+shared after they land in their final profile); revisit if it surfaces.
 
 **Test seam (non-prod only):** `POST /api/test/seed-final-video` inserts a published
 reel so E2E can create movable reels without the full pipeline (gated 3 ways like

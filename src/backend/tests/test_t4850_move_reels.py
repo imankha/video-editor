@@ -291,3 +291,125 @@ async def test_target_sync_failure_503_nothing_moved(env):
 
     assert len(_rows(env, SRC)) == 1          # source untouched
     assert _rows(env, DST) == []              # target rolled back
+
+
+# --------------------------------------------------------------------------- #
+# R2 MEDIA relocation — objects are PER-PROFILE (r2_key embeds profile_id).
+# These tests exercise REAL key construction so a regression to the old
+# "per-user, no copy" assumption fails loudly.
+# --------------------------------------------------------------------------- #
+
+class _FakeR2:
+    """In-memory S3/R2 stand-in: {full_key: bytes}."""
+    def __init__(self, store):
+        self.store = store
+        self.copies = []
+        self.deletes = []
+
+    def copy_object(self, Bucket=None, CopySource=None, Key=None, **kw):
+        src = CopySource["Key"]
+        if src not in self.store:
+            raise ValueError(f"NoSuchKey: {src}")
+        self.store[Key] = self.store[src]
+        self.copies.append((src, Key))
+        return {}
+
+    def delete_object(self, Bucket=None, Key=None, **kw):
+        self.store.pop(Key, None)
+        self.deletes.append(Key)
+        return {}
+
+    def head_object(self, Bucket=None, Key=None, **kw):
+        if Key not in self.store:
+            raise ValueError("404 NoSuchKey")
+        return {"ContentLength": len(self.store[Key]), "Metadata": {}}
+
+
+def _use_fake_r2(store):
+    """Patch app.storage to route media ops through a FakeR2 (R2 'enabled') while
+    keeping DB sync a no-op (local profile DBs already exist)."""
+    from contextlib import ExitStack
+    fake = _FakeR2(store)
+    stack = ExitStack()
+    stack.enter_context(patch("app.storage.R2_ENABLED", True))
+    stack.enter_context(patch("app.storage.get_r2_client", lambda: fake))
+    stack.enter_context(patch("app.storage.sync_database_from_r2_if_newer",
+                              lambda *a, **k: (False, None, False)))
+    stack.enter_context(patch("app.routers.downloads.sync_db_to_r2_explicit",
+                              lambda *a, **k: True))
+    return stack, fake
+
+
+def _media_key(profile_id, filename):
+    from app.storage import profile_r2_key
+    return profile_r2_key(USER_ID, profile_id, f"final_videos/{filename}")
+
+
+def test_profile_r2_key_is_per_profile():
+    # Locks the invariant: the media key embeds the PROFILE id, not just the user.
+    from app.storage import APP_ENV, profile_r2_key
+    key = profile_r2_key("u1", "pXYZ", "final_videos/x.mp4")
+    assert key == f"{APP_ENV}/users/u1/profiles/pXYZ/final_videos/x.mp4"
+    # Two profiles of the same user get DISTINCT keys (the whole reason a move
+    # must copy the object).
+    assert profile_r2_key("u1", "pA", "final_videos/x.mp4") != \
+        profile_r2_key("u1", "pB", "final_videos/x.mp4")
+
+
+def test_copy_and_delete_profile_object_use_exact_prefixes():
+    from app.storage import (
+        copy_profile_object, delete_profile_object, profile_object_exists,
+    )
+    src_key = _media_key(SRC, "clip.mp4")
+    dst_key = _media_key(DST, "clip.mp4")
+    store = {src_key: b"VIDEO"}
+    stack, fake = _use_fake_r2(store)
+    with stack:
+        assert copy_profile_object(USER_ID, SRC, DST, "final_videos/clip.mp4") is True
+        assert fake.copies == [(src_key, dst_key)]          # exact source->target keys
+        assert store[dst_key] == b"VIDEO"
+        assert profile_object_exists(USER_ID, DST, "final_videos/clip.mp4") is True
+        assert delete_profile_object(USER_ID, SRC, "final_videos/clip.mp4") is True
+        assert src_key not in store and fake.deletes == [src_key]
+
+
+@pytest.mark.asyncio
+async def test_move_relocates_media_to_target_prefix(env):
+    fid = _insert_reel(env, SRC, project_id=1101)
+    filename = f"reel_{fid}.mp4"
+    src_key = _media_key(SRC, filename)
+    dst_key = _media_key(DST, filename)
+    store = {src_key: b"MP4DATA"}
+
+    stack, fake = _use_fake_r2(store)
+    with stack:
+        await _move([fid])
+
+    # DB row moved AND the media object now lives under the TARGET prefix, with the
+    # SOURCE-prefix object deleted last (no orphan, playback in B resolves).
+    assert _rows(env, SRC) == []
+    assert len(_rows(env, DST)) == 1
+    assert dst_key in store and store[dst_key] == b"MP4DATA"
+    assert src_key not in store
+    assert (src_key, dst_key) in fake.copies
+    assert src_key in fake.deletes
+
+
+@pytest.mark.asyncio
+async def test_move_aborts_and_keeps_source_when_media_copy_fails(env):
+    fid = _insert_reel(env, SRC, project_id=1201)
+    filename = f"reel_{fid}.mp4"
+    src_key = _media_key(SRC, filename)
+    # Store is EMPTY -> copy_object raises NoSuchKey -> copy_profile_object False.
+    store = {}
+    stack, _fake = _use_fake_r2(store)
+    from fastapi import HTTPException
+    with stack:
+        with pytest.raises(HTTPException) as ei:
+            await _move([fid])
+    assert ei.value.status_code == 502
+    assert ei.value.detail["code"] == "media_copy_failed"
+    # Nothing moved: source row intact, target has no row and no object.
+    assert len(_rows(env, SRC)) == 1
+    assert _rows(env, DST) == []
+    assert _media_key(DST, filename) not in store

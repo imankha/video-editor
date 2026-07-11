@@ -77,6 +77,31 @@ class SeedReelRequest(BaseModel):
     aspect_ratio: str = "9:16"
     clip_count: int = 1
     quality_score: float | None = 5.0
+    with_media: bool = True  # generate + upload a real tiny MP4 to R2
+
+
+def _generate_tiny_mp4() -> bytes | None:
+    """Render a ~1s faststart MP4 via ffmpeg so a seeded reel is genuinely playable
+    (metadata + seekable). Returns None if ffmpeg is unavailable."""
+    import subprocess
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td) / "seed.mp4"
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-f", "lavfi",
+                    "-i", "color=c=blue:s=180x320:d=1:r=15",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-movflags", "+faststart", str(out),
+                ],
+                check=True, capture_output=True, timeout=30,
+            )
+            return out.read_bytes()
+        except (OSError, subprocess.SubprocessError) as e:
+            logger.warning(f"[TEST] tiny-mp4 generation failed: {e}")
+            return None
 
 
 @router.post("/seed-final-video")
@@ -84,17 +109,29 @@ async def seed_final_video(req: SeedReelRequest):
     """Insert a PUBLISHED final_video into the current profile (test seam, T4850).
 
     Lets an E2E create a movable reel without driving the whole upload -> annotate
-    -> frame -> export -> publish pipeline. Non-prod only (gated three ways like
-    every seam). Returns the new reel id + filename."""
+    -> frame -> export -> publish pipeline. With `with_media` (default), a real tiny
+    MP4 is uploaded to R2 under the current profile's final_videos/ prefix so the
+    reel actually PLAYS/downloads — exercising the per-profile media path the move
+    must relocate. Non-prod only (gated three ways like every seam)."""
     _require_seams_enabled()
 
     from ..database import get_db_connection
     from ..services.glicko import RD_MAX, seed_rating
+    from ..storage import upload_bytes_to_r2
 
     single = req.clip_count == 1
     rating = seed_rating(req.quality_score) if single else None
     rd = RD_MAX if single else None
-    filename = f"seed_{get_current_user_id()[:6]}_{req.name.replace(' ', '_')}.mp4"
+    safe = "".join(c for c in req.name.replace(" ", "_") if c.isalnum() or c in "_-")
+    filename = f"seed_{get_current_user_id()[:6]}_{safe}.mp4"
+
+    media_uploaded = False
+    if req.with_media and R2_ENABLED:
+        data = _generate_tiny_mp4()
+        if data:
+            media_uploaded = upload_bytes_to_r2(
+                get_current_user_id(), f"final_videos/{filename}", data
+            )
 
     with get_db_connection() as conn:
         cur = conn.cursor()
@@ -104,7 +141,7 @@ async def seed_final_video(req: SeedReelRequest):
               (project_id, filename, version, duration, source_type, name,
                published_at, aspect_ratio, clip_count, quality_score,
                rating, rd, match_count)
-            VALUES (NULL, ?, 1, 5.0, 'custom_project', ?,
+            VALUES (NULL, ?, 1, 1.0, 'custom_project', ?,
                     CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, 0)
             """,
             (filename, req.name, req.aspect_ratio, req.clip_count,
@@ -113,8 +150,28 @@ async def seed_final_video(req: SeedReelRequest):
         reel_id = cur.lastrowid
         conn.commit()
 
-    logger.warning(f"[TEST] seeded final_video id={reel_id} name={req.name!r}")
-    return {"status": "ok", "id": reel_id, "filename": filename}
+    logger.warning(
+        f"[TEST] seeded final_video id={reel_id} name={req.name!r} media={media_uploaded}"
+    )
+    return {"status": "ok", "id": reel_id, "filename": filename, "media_uploaded": media_uploaded}
+
+
+@router.post("/ensure-pg-user")
+async def ensure_pg_user():
+    """Idempotently create the current user in the Postgres `users` table (test seam).
+
+    The X-User-ID isolation bypass gives a fresh SQLite profile but NO Postgres
+    users row, so any Postgres-FK feature (sharing, referrals) 500s. This lets an
+    E2E exercise those end-to-end under an isolated user. Non-prod only."""
+    _require_seams_enabled()
+
+    from ..services.auth_db import create_user, get_user_by_id
+
+    user_id = get_current_user_id()
+    if get_user_by_id(user_id) is None:
+        create_user(user_id, email=f"{user_id}@e2e.local")
+        return {"status": "created", "user_id": user_id}
+    return {"status": "exists", "user_id": user_id}
 
 
 @router.post("/simulate-machine-cycle")
