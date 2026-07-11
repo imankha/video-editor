@@ -88,6 +88,7 @@ export function ModeSwitcher({
     return (
       <button
         key={modeOption.id}
+        data-testid={`mode-${modeOption.id}`}
         onClick={() => !disabled && isAvailable && onModeChange(modeOption.id)}
         disabled={disabled || !isAvailable}
         className={`

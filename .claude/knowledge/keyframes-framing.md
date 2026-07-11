@@ -95,6 +95,22 @@ gesture (drag/resize/delete) in FramingContainer
   (overlay.py:379-393); its `expected_version` 409 check is commented out (overlay.py:384-391 → T4330).
 
 ## Landmines & history
+- **Mobile editor layout invariant (T4880).** The editor shell (`App.jsx`, the non-Annotate
+  branch) uses `h-dvh` — NEVER `h-screen`/`100vh` inside the editor tree — so the
+  `flex-1 overflow-auto` content pane maps to iOS Safari's *visible* viewport (100vh spills
+  behind the dynamic toolbar and clips the bottom). On mobile (`useIsMobile()`, <1024px or
+  touch+no-hover) the editor defaults to the **inline scrollable** layout, NOT a fullscreen
+  video takeover. History: commit 10494193 made `mobileFs = isMobile` (always `fixed inset-0`
+  fullscreen); the below-timeline controls — Framing `ExportButtonSection` (Export/Proceed)
+  and Overlay `OverlayExportButtonSection` (settings + the "Add Spotlight" primary button,
+  which IS the overlay export button: `ExportButtonView` renders `isFramingMode ? 'Export' :
+  'Add Spotlight'`) — are gated `!mobileFs`, so they rendered nowhere on a phone and the
+  framing→overlay→export flow was impossible. Fix: `mobileFs = isMobile && mobileExpanded`
+  (view-local `useState`, default false); fullscreen video is opt-in via a `Maximize` button,
+  and the in-fullscreen back button collapses to inline (Home lives in the header). A dvh fix
+  ALONE can't help here — controls that aren't rendered can't be scrolled to. Playwright
+  emulation reproduces the layout but NOT the vh/dvh iOS-toolbar behavior; that needs a real
+  device. `ModeSwitcher` buttons carry `data-testid="mode-{id}"`.
 - **T4774 "post-video settle gap" is a measurement artifact (profiled, DROP).** The T4770
   ledger's `framing/overlay:videoReady → settled ≈ 1.5s` is the walkthrough's own
   `waitForTimeout(1500)`, not main-thread work. A CDP CPU profile + longtask observer

@@ -52,6 +52,30 @@ Likely root cause to investigate first: the app shell is `h-screen overflow-hidd
 
 **2026-07-11**: Task created from user report with portrait + landscape screenshots.
 
+**2026-07-11 (impl, branch feature/T4880-mobile-editor-scroll)**: Root cause was NOT
+only the `h-screen`/`vh` hypothesis. The real blocker: the mobile editor is an
+always-on fullscreen video takeover (`mobileFs = isMobile`, from commit 10494193
+"always-fullscreen editor"), a `fixed inset-0 z-[100]` layer. The below-timeline
+controls — Framing's `ExportButtonSection` (Export / Proceed to Overlay) and Overlay's
+`OverlayExportButtonSection` (all overlay settings + the "Add Spotlight" primary button)
+— are gated behind `!mobileFs`, so they were **never rendered on a phone**. A dvh fix
+alone cannot surface controls that don't exist in any scrollable pane.
+Fix (LAYOUT lane):
+1. `App.jsx` shell `h-screen` -> `h-dvh` so the `overflow-auto` editor pane maps to the
+   true iOS visible viewport (the correct vh fix; helps every scrollable editor screen).
+2. `FramingModeView.jsx` / `OverlayModeView.jsx`: mobile now defaults to the inline
+   scrollable layout (renders timeline + settings + Export/Proceed/Add-Spotlight in
+   normal flow — all reachable). Fullscreen video is preserved as opt-in via a new
+   Maximize button (view-local `mobileExpanded` state); the in-overlay back button
+   collapses back to inline instead of navigating Home (Home lives in the header).
+3. `ModeSwitcher.jsx`: added `data-testid="mode-{id}"` for reliable e2e targeting.
+Evidence: Vitest `FramingModeView.mobileReachable` + `OverlayModeView.mobileReachable`
+(fail pre-fix, pass post-fix); Playwright `e2e/T4880-mobile-editor-reachable.spec.js`
+(real app, iPhone 390x844 portrait + 844x390 landscape) — Framing Export reachable +
+clickable both orientations, responsiveSweep clean. See qa/ screenshots.
+Honesty: Playwright emulation cannot reproduce iOS Safari's dynamic-toolbar vh/dvh
+chrome behavior — final real-iPhone check is on the user once this is on staging.
+
 ## Acceptance Criteria
 
 - [ ] On an iPhone-sized viewport (portrait and landscape), the user can reach and use everything below the timeline in Framing and Overlay

@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
@@ -8,9 +8,8 @@ import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
-import { Minimize, ArrowLeft } from 'lucide-react';
+import { Minimize, Maximize } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
-import { useEditorStore } from '../stores/editorStore';
 
 /**
  * ExportButtonSection - Container+View composition for Overlay mode export
@@ -240,8 +239,11 @@ export function OverlayModeView({
   const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
-  const mobileFs = isMobile;
-  const setEditorMode = useEditorStore((s) => s.setEditorMode);
+  // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
+  // hid the overlay settings + Add Spotlight/export controls with no way to reach
+  // them (T4880); the inline scrollable layout keeps every control reachable.
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const mobileFs = isMobile && mobileExpanded;
 
   return (
     <>
@@ -429,6 +431,19 @@ export function OverlayModeView({
                 onToggleFullscreen={onToggleFullscreen}
               />
             )}
+
+            {/* Mobile expand — opt into fullscreen video (inline layout keeps
+                the overlay settings + Add Spotlight/export controls reachable below) */}
+            {isMobile && !mobileFs && effectiveOverlayVideoUrl && (
+              <button
+                onClick={() => setMobileExpanded(true)}
+                className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
+                title="Fullscreen video"
+                aria-label="Expand video to fullscreen"
+              >
+                <Maximize size={18} />
+              </button>
+            )}
           </div>
 
           {/* Mobile-only clip title — minimal, under video */}
@@ -569,10 +584,10 @@ export function OverlayModeView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={isFullscreen ? Minimize : ArrowLeft}
+                  icon={Minimize}
                   iconOnly
-                  onClick={isFullscreen ? onToggleFullscreen : () => setEditorMode('project-manager')}
-                  title={isFullscreen ? 'Exit fullscreen' : 'Home'}
+                  onClick={isFullscreen ? onToggleFullscreen : () => setMobileExpanded(false)}
+                  title="Exit fullscreen"
                   className="bg-black/50 hover:bg-black/70"
                 />
               </div>
