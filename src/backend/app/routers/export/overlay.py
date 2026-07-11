@@ -360,8 +360,8 @@ async def overlay_action(project_id: int, action: OverlayAction):
     Apply an atomic overlay action.
 
     This endpoint processes a single user gesture and updates the overlay data
-    atomically. This is preferred over the PUT /overlay-data endpoint which
-    sends full JSON blobs and can cause overwrites.
+    atomically. It is the only write path for overlay data -- the full-blob
+    PUT /overlay-data endpoint (which could cause overwrites) was removed in T4210.
 
     Actions:
     - create_region: data.start_time, data.end_time

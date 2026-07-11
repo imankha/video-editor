@@ -92,6 +92,17 @@ def test_game_status_helper_surfaces_null_and_trusts_value(caplog):
     assert _game_status_or_log("ready", 1) == "ready"  # happy path unchanged
 
 
+def test_get_games_route_binds_list_games():
+    """Guard: the _game_status_or_log helper must NOT sit under the @router.get('')
+    decorator (that would register the helper as the endpoint and break GET /api/games)."""
+    get_games = [
+        r for r in app.routes
+        if getattr(r, "path", "") == "/api/games" and "GET" in getattr(r, "methods", set())
+    ]
+    assert get_games, "GET /api/games route missing"
+    assert get_games[0].endpoint.__name__ == "list_games"
+
+
 # --- #3: unparseable expiry -> EXPIRED (safe direction) ----------------------
 
 def test_storage_status_unparseable_expiry_is_expired(caplog):

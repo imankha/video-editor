@@ -857,7 +857,6 @@ async def list_games_metadata():
     return await _list_games_impl(skip_presigned_urls=True)
 
 
-@router.get("")
 def _game_status_or_log(status, game_id):
     """T4280: trust the stored game status. A NULL status is a data bug to find, not
     hide as 'ready' -- log at ERROR and surface the real (null) value so the frontend
@@ -870,6 +869,7 @@ def _game_status_or_log(status, game_id):
     return status
 
 
+@router.get("")
 async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
     ensure_directories()
