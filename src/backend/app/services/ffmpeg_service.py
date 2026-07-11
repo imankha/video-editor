@@ -272,8 +272,12 @@ def get_video_duration(video_path: str) -> float:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return float(result.stdout.strip())
     except (subprocess.CalledProcessError, ValueError) as e:
+        # T4280: a failed probe means the file is bad/unreadable. Returning 0.0 let a
+        # zero-length duration flow into export math (segment boundaries, credit seconds)
+        # and produce corrupt results silently. Raise so the export fails visibly; every
+        # caller already runs inside the export pipeline's try/except, which fails the job.
         logger.error(f"Failed to get duration for {video_path}: {e}")
-        return 0.0
+        raise RuntimeError(f"ffprobe could not read duration for {video_path}: {e}") from e
 
 
 def get_video_info(video_path: str) -> dict[str, Any]:

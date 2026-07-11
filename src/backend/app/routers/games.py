@@ -42,6 +42,7 @@ from app.storage import (
     get_r2_client,
     r2_head_object_global,
 )
+from app.queries import normalize_rating
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 
@@ -814,7 +815,7 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
             continue
 
         stats = per_game[gid]
-        rating = row['rating'] or 3
+        rating = normalize_rating(row['rating'], context=f"game_stats game={gid}")
         if rating == 5:
             stats['brilliant_count'] += 1
         elif rating == 4:
@@ -857,6 +858,18 @@ async def list_games_metadata():
 
 
 @router.get("")
+def _game_status_or_log(status, game_id):
+    """T4280: trust the stored game status. A NULL status is a data bug to find, not
+    hide as 'ready' -- log at ERROR and surface the real (null) value so the frontend
+    can render an unknown state instead of a false 'ready'."""
+    if status is None:
+        logger.error(
+            f"[games] Game {game_id} has NULL status -- data bug; surfacing null "
+            f"instead of defaulting to 'ready'. Investigate the source of the null."
+        )
+    return status
+
+
 async def list_games():
     """List all saved games. Videos stored globally at games/{blake3_hash}.mp4."""
     ensure_directories()
@@ -960,7 +973,7 @@ async def _list_games_impl(skip_presigned_urls=False):
                 'created_at': row['created_at'],
                 'video_duration': row['effective_duration'],
                 'viewed_duration': row['viewed_duration'] or 0,
-                'status': row['status'] or 'ready',
+                'status': _game_status_or_log(row['status'], row['id']),
                 'storage_status': storage_status,
                 'storage_expires_at': expires_at_val,
                 'video_size': row['video_size'],
@@ -1633,15 +1646,19 @@ def _compute_storage_status(expires_at_val, auto_export_status) -> str:
 
     Single source of truth shared by list_games and load_game so the two can't
     diverge. Expired when the game_storage expiry has passed, OR when there is no
-    storage ref but the game was auto-exported (source deleted post-grace). An
-    unparseable expiry falls back to 'active' (treat as present, not gone).
+    storage ref but the game was auto-exported (source deleted post-grace).
+
+    T4280: an UNPARSEABLE expiry is treated as EXPIRED (the safe direction: it blocks
+    share/re-export of a possibly-gone video, matching T3970), and logged -- not
+    silently defaulted to 'active', which would present a possibly-gone video as fine.
     """
     if expires_at_val:
         try:
             exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
             return 'expired' if exp_dt.replace(tzinfo=None) < datetime.utcnow() else 'active'
-        except (ValueError, TypeError):
-            return 'active'
+        except (ValueError, TypeError) as e:
+            logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r}: {e}. Treating as EXPIRED.")
+            return 'expired'
     if auto_export_status:
         return 'expired'
     return 'active'
@@ -1667,8 +1684,11 @@ def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
     try:
         exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
         return exp_dt.replace(tzinfo=None) < datetime.utcnow()
-    except (ValueError, TypeError):
-        return False
+    except (ValueError, TypeError) as e:
+        # T4280: unparseable expiry -> treat as EXPIRED (safe: gate sharing of a
+        # possibly-gone video), and log; never silently report "not expired".
+        logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r} for {blake3_hash}: {e}. Treating as EXPIRED.")
+        return True
 
 
 class ShareGameRequest(BaseModel):

@@ -25,7 +25,7 @@ from app.database import (
     get_db_connection,
     get_raw_clips_path,
 )
-from app.queries import derive_clip_name, latest_working_clips_subquery
+from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
 from app.services.default_crop import refit_crop_keyframes
 from app.services.pg import get_pg
 from app.storage import generate_presigned_url, upload_bytes_to_r2
@@ -398,12 +398,20 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                             f"Keyframe too close to an existing one (min spacing {MIN_KEYFRAME_SPACING} frames)"
                         )
 
+                    # T4280: never fabricate crop geometry. A missing x/y/width/height
+                    # is a client bug; persisting invented 0/640/360 would write a wrong
+                    # crop to the DB. Reject the action naming the missing field (0 is a
+                    # valid coordinate, so check for None, not falsiness). The handler
+                    # turns ValueError into a 400 that names the field.
+                    for _field in ('x', 'y', 'width', 'height'):
+                        if getattr(action.data, _field) is None:
+                            raise ValueError(f"add_crop_keyframe requires data.{_field}")
                     new_kf = {
                         'frame': action.data.frame,
-                        'x': action.data.x or 0,
-                        'y': action.data.y or 0,
-                        'width': action.data.width or 640,
-                        'height': action.data.height or 360,
+                        'x': action.data.x,
+                        'y': action.data.y,
+                        'width': action.data.width,
+                        'height': action.data.height,
                         'origin': origin
                     }
                     crop_keyframes.append(new_kf)
@@ -861,7 +869,7 @@ def _create_auto_project_for_clip(cursor, raw_clip_id: int, clip_name: str) -> i
     if clip_name:
         project_name = clip_name
     elif clip_data:
-        rating = clip_data['rating'] or 5
+        rating = normalize_rating(clip_data['rating'], context=f"project_name raw_clip={raw_clip_id}")
         tags = decode_data(clip_data['tags']) or []
         notes = clip_data['notes'] or ''
         generated_title = ''
@@ -1356,7 +1364,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
         result = []
         for clip in clips:
             tags = decode_data(clip['raw_tags']) or []
-            rating = clip['raw_rating'] or 3
+            rating = normalize_rating(clip['raw_rating'], context="clip_list")
             raw_filename = clip['raw_filename']
             uploaded_filename = clip['uploaded_filename']
 

@@ -56,14 +56,17 @@ class MockVideoUpscaler:
 
         logger.info(f"[MockUpscaler] Processing {input_path} -> {output_path}")
 
-        # Get source dimensions
+        # Get source dimensions. T4280: a failed probe means the file is bad -- raise
+        # rather than guessing 1920x1080, which would crop/scale against wrong dimensions
+        # and produce corrupt output downstream (a silent fallback for internal data).
         try:
             probe = ffmpeg_lib.probe(input_path)
             video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
             src_w = int(video_info['width'])
             src_h = int(video_info['height'])
-        except Exception:
-            src_w, src_h = 1920, 1080
+        except Exception as e:
+            logger.error(f"[MockUpscaler] Failed to probe source dimensions for {input_path}: {e}")
+            raise RuntimeError(f"Cannot process video: ffprobe failed for {input_path}: {e}") from e
 
         # Use first keyframe for crop
         # Keyframes may be fractional (0-1) or pixel coords — detect and handle both
