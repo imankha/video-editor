@@ -32,7 +32,8 @@ Likely root cause to investigate first: the app shell is `h-screen overflow-hidd
 - `src/frontend/src/components/ExportButtonView.jsx` — the unreachable "Add Spotlight"/Export button
 
 ### Related Tasks
-- None blocking. Screenshots from the report are with the user (landscape + portrait, iPhone).
+- Blocks: T4930 (mobile viewport usability matrix — generalizes this task's regression test to every screen × popular viewports; T4930's audit must FAIL against the pre-fix layout as proof it would have caught this)
+- Screenshots from the report are with the user (landscape + portrait, iPhone).
 
 ### Technical Notes
 - Test on iOS Safari specifically (dynamic browser chrome). Playwright device emulation (`iPhone 14` descriptor) catches layout math but NOT the vh-vs-dvh chrome behavior — a real-device or responsive-mode sanity check is required before calling this done.
