@@ -40,10 +40,14 @@ def test_project_with_working_video():
         """)
         project_id = cursor.lastrowid
 
-        # Create working video with empty highlights
+        # Create working video with empty highlights. Empty is stored as NULL
+        # (production representation); highlights_data is a BLOB always written via
+        # encode_data(...) or None -- never a plain string. Storing the literal
+        # string '[]' here would be invalid data that only "worked" under the old
+        # silent decode fallback removed in T4210.
         cursor.execute("""
             INSERT INTO working_videos (project_id, filename, version, highlights_data, effect_type, overlay_version)
-            VALUES (?, 'test_working.mp4', 1, '[]', 'original', 0)
+            VALUES (?, 'test_working.mp4', 1, NULL, 'original', 0)
         """, (project_id,))
         working_video_id = cursor.lastrowid
 

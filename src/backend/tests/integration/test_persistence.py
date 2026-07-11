@@ -297,27 +297,34 @@ class PersistenceTest:
         """Test 5: Overlay mode data persistence"""
         log_section("TEST 5: Overlay Mode Data Persistence")
 
-        # Save overlay data
-        overlay_data = {
-            "highlights_data": json.dumps([
-                {"start": 2.5, "end": 5.0, "color": "#FF6B35"}
-            ]),
-            "text_overlays": json.dumps([
-                {"text": "Great Play!", "timestamp": 3.0, "position": "top"}
-            ]),
-            "effect_type": "brightness_boost"
-        }
-
-        response = requests.put(
-            f"{BASE_URL}/export/projects/{self.test_project_id}/overlay-data",
-            data=overlay_data  # Form data, not JSON
+        # Save overlay data via the surgical actions endpoint. The full-blob
+        # PUT /overlay-data writer was removed in T4210 (it skipped overlay_version
+        # and could silently revert surgical edits); gesture actions are the only
+        # write path now.
+        response = requests.post(
+            f"{BASE_URL}/export/projects/{self.test_project_id}/overlay/actions",
+            json={
+                "action": "create_region",
+                "data": {"start_time": 2.5, "end_time": 5.0, "region_id": "integ-region-1"},
+            },
         )
-
         if response.status_code == 200:
-            log_success("Saved overlay data")
+            log_success("Saved overlay region")
             self.passed_tests += 1
         else:
-            log_error(f"Failed to save overlay data: {response.text}")
+            log_error(f"Failed to save overlay region: {response.text}")
+            self.failed_tests += 1
+            return False
+
+        response = requests.post(
+            f"{BASE_URL}/export/projects/{self.test_project_id}/overlay/actions",
+            json={"action": "set_effect_type", "data": {"effect_type": "brightness_boost"}},
+        )
+        if response.status_code == 200:
+            log_success("Set overlay effect type")
+            self.passed_tests += 1
+        else:
+            log_error(f"Failed to set effect type: {response.text}")
             self.failed_tests += 1
             return False
 
@@ -326,14 +333,13 @@ class PersistenceTest:
         if response.status_code == 200:
             data = response.json()
             highlights_count = len(data.get('highlights_data', []))
-            overlays_count = len(data.get('text_overlays', []))
             effect = data.get('effect_type')
 
-            if highlights_count == 1 and overlays_count == 1 and effect == 'brightness_boost':
+            if highlights_count == 1 and effect == 'brightness_boost':
                 log_success("Overlay data persisted correctly")
                 self.passed_tests += 1
             else:
-                log_error(f"Overlay data incorrect: highlights={highlights_count} (expected 1), overlays={overlays_count} (expected 1), effect={effect} (expected brightness_boost)")
+                log_error(f"Overlay data incorrect: highlights={highlights_count} (expected 1), effect={effect} (expected brightness_boost)")
                 self.failed_tests += 1
         else:
             log_error("Failed to retrieve overlay data")
