@@ -487,13 +487,38 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
 
                 boundaries = segments_data.get('boundaries', [])
                 if action.data.time in boundaries:
+                    # boundaries here is the splits-only list (gesture path: no 0, no
+                    # duration). Its sorted index k is the split being removed. Split k
+                    # separates segment k from segment k+1; removing it merges them into
+                    # one segment at index k. Re-index segmentSpeeds instead of clearing
+                    # (T4220) so unrelated slow-mo speeds survive:
+                    #   i < k       -> keep speeds[i]
+                    #   merged  k   -> keep only if speeds[k] == speeds[k+1] (both sides
+                    #                  agree), else omit (merged plays 1x -- deterministic,
+                    #                  no guessing which side wins)
+                    #   i > k + 1   -> shift down: speeds[i] moves to key (i-1)
+                    # Keys are STRING indices; missing key == default 1x.
+                    boundaries.sort()
+                    k = boundaries.index(action.data.time)
                     boundaries.remove(action.data.time)
                     segments_data['boundaries'] = boundaries
-                    # Also remove any speed setting for affected segment
-                    segment_speeds = segments_data.get('segmentSpeeds', {})
-                    # Rebuild speeds dict with updated indices
-                    # (This is complex - for now just clear speeds)
-                    segments_data['segmentSpeeds'] = {}
+
+                    old_speeds = segments_data.get('segmentSpeeds', {}) or {}
+                    new_speeds = {}
+                    for key, val in old_speeds.items():
+                        i = int(key)
+                        if i < k:
+                            new_speeds[str(i)] = val
+                        elif i == k or i == k + 1:
+                            continue  # merged segment handled below
+                        else:  # i > k + 1
+                            new_speeds[str(i - 1)] = val
+                    # Merged segment k keeps a speed only if both original sides carried
+                    # the same explicit speed.
+                    sk = old_speeds.get(str(k))
+                    if sk is not None and sk == old_speeds.get(str(k + 1)):
+                        new_speeds[str(k)] = sk
+                    segments_data['segmentSpeeds'] = new_speeds
                 logger.info(f"[Framing Action] Removed segment split at {action.data.time}s")
 
             elif action.action == "set_segment_speed":
