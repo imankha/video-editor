@@ -168,6 +168,16 @@ class ProjectCreate(BaseModel):
     aspect_ratio: str  # "16:9" or "9:16"
 
 
+class ProjectRename(BaseModel):
+    """PUT /projects/{id} payload. Rename ONLY -- aspect_ratio is deliberately not
+    accepted here. It has exactly one writer, POST /clips/projects/{id}/aspect-ratio
+    (T3910), which re-fits every clip's crop keyframes when the ratio changes. Letting
+    this PUT write a stale cached aspect_ratio (e.g. from a rename right after a ratio
+    change) would leave crops shaped for the new ratio while the DB claims the old one,
+    rendering wrong-shaped crops at export. See T4230."""
+    name: str
+
+
 class ProjectFromClipsCreate(BaseModel):
     """Create a project pre-populated with filtered clips."""
     name: str
@@ -829,8 +839,9 @@ async def delete_project(project_id: int):
 
 
 @router.put("/{project_id}")
-async def update_project(project_id: int, project: ProjectCreate):
-    """Update project name and/or aspect ratio."""
+async def update_project(project_id: int, project: ProjectRename):
+    """Rename a project. Only the name is updated -- aspect_ratio is owned solely by
+    POST /clips/projects/{id}/aspect-ratio (which re-fits crops). See T4230 / ProjectRename."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -839,8 +850,8 @@ async def update_project(project_id: int, project: ProjectCreate):
             raise HTTPException(status_code=404, detail="Project not found")
 
         cursor.execute("""
-            UPDATE projects SET name = ?, aspect_ratio = ? WHERE id = ?
-        """, (project.name, project.aspect_ratio, project_id))
+            UPDATE projects SET name = ? WHERE id = ?
+        """, (project.name, project_id))
 
         # Clear auto_project_id link so the project is no longer treated as auto-created.
         # The fetch query computes is_auto_created dynamically via this link.
@@ -1258,16 +1269,25 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
             current_boundaries_version = row['boundaries_version'] or 1
             new_duration = (row['end_time'] or 0) - (row['start_time'] or 0)
 
-            # Rescale crop keyframes if they exist
-            new_crop_data = None
-            if row['crop_data']:
-                try:
+            # Rescale crop keyframes and segment boundaries. If decode or the
+            # rescale math fails for this clip, log at ERROR and SKIP the clip
+            # entirely -- keep the existing crop_data/segments_data and do NOT bump
+            # raw_clip_version. Writing NULL here (the old behavior) permanently
+            # destroyed the user's framing on any transient error. Never reset user
+            # data on failure; fail visibly and leave it intact for recovery.
+            # The except is narrowed to the data-shaped errors decode + rescale can
+            # raise; genuine code bugs propagate to the endpoint error handler.
+            try:
+                # Default to existing data so the "no rescale needed" branches write
+                # it back unchanged.
+                new_crop_data = row['crop_data']
+                if row['crop_data']:
                     crop_keyframes = decode_data(row['crop_data'])
                     if crop_keyframes and len(crop_keyframes) >= 2:
                         # Old duration derived from last permanent keyframe's frame number
                         # Keyframes are frame-based; last keyframe is at the old end frame
                         old_end_frame = crop_keyframes[-1].get('frame', 0)
-                        framerate = 30  # Standard framerate
+                        framerate = 30  # T-audit C7: hardcoded framerate, tracked separately
                         new_end_frame = round(new_duration * framerate)
 
                         if old_end_frame > 0 and new_end_frame > 0:
@@ -1282,17 +1302,10 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
                             new_crop_data = encode_data(rescaled)
                             logger.info(f"Rescaled {len(rescaled)} keyframes for clip {working_clip_id}: "
                                        f"old_end={old_end_frame} new_end={new_end_frame} scale={scale:.3f}")
-                        else:
-                            new_crop_data = row['crop_data']  # Keep as-is if can't determine scale
-                    else:
-                        new_crop_data = row['crop_data']
-                except (json.JSONDecodeError, TypeError, Exception):
-                    new_crop_data = None  # Corrupt data, reset
+                        # else: keep as-is (new_crop_data already = row['crop_data'])
 
-            # Rescale segment boundaries if they exist
-            new_segments_data = None
-            if row['segments_data']:
-                try:
+                new_segments_data = row['segments_data']
+                if row['segments_data']:
                     seg_data = decode_data(row['segments_data'])
                     # Get old duration from segment boundaries (last boundary = old duration)
                     boundaries = seg_data.get('boundaries', [])
@@ -1319,10 +1332,15 @@ async def refresh_outdated_clips(project_id: int, request: RefreshClipsRequest, 
                             seg_data['userSplits'] = [round(s * scale, 3) for s in seg_data['userSplits']]
 
                         new_segments_data = encode_data(seg_data)
-                    else:
-                        new_segments_data = row['segments_data']
-                except (json.JSONDecodeError, TypeError, Exception):
-                    new_segments_data = None
+                    # else: keep as-is (new_segments_data already = row['segments_data'])
+            except (ValueError, TypeError, KeyError, IndexError) as e:
+                logger.error(
+                    f"[Refresh] Failed to rescale working clip {working_clip_id} "
+                    f"(raw_clip_id={row['raw_clip_id']}): {e}. Skipping this clip -- "
+                    f"keeping existing crop_data/segments_data intact, not bumping version.",
+                    exc_info=True,
+                )
+                continue
 
             # Update working clip with rescaled data and new version
             cursor.execute("""
