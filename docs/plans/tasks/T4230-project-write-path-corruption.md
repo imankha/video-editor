@@ -1,6 +1,6 @@
 # T4230: Project Write-Path Corruption — Rescale NULLs Crop Data + Rename Reverts Aspect Ratio
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-07-03

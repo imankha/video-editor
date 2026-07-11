@@ -1,6 +1,6 @@
 # T4760: Reel Ranker "Pick this one" Button Hit Area Too Small
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-04

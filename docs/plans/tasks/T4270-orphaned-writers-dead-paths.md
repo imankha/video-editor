@@ -1,6 +1,6 @@
 # T4270: Orphaned Writers & Dead Paths — saveAnnotations, Dedupe DELETE, Overlay Pass-Through
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-03

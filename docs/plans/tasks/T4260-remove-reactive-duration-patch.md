@@ -1,6 +1,6 @@
 # T4260: Remove Reactive Game-Duration PATCH (Last Banned effect→API Write)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03

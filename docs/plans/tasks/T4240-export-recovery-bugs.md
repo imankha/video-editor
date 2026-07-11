@@ -1,6 +1,6 @@
 # T4240: Export Recovery Bugs — NameError on Success, Live Jobs Marked Dead, Fabricated Filenames
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-03

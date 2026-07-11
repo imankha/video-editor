@@ -1,6 +1,6 @@
 # T4210: Overlay Highlight Erasure — Corrupt Blob Silently Becomes [] + Orphaned Full-Blob PUT
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 8
 **Complexity:** 2
 **Created:** 2026-07-03

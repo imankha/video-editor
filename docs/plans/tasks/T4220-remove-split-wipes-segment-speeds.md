@@ -1,6 +1,6 @@
 # T4220: remove_segment_split Wipes ALL Segment Speeds
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 2
 **Created:** 2026-07-03

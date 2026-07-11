@@ -1,6 +1,6 @@
 # T4280: Backend Silent-Fallback Sweep — Fail Visibly on Internal Data
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-03
