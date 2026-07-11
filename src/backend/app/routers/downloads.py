@@ -16,10 +16,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.constants import SourceType
-from app.database import get_db_connection, get_final_videos_path
-from app.middleware.db_sync import durable_sync
+from app.database import get_db_connection, get_final_videos_path, sync_db_to_r2_explicit
+from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
+from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
+from app.services.materialization import _open_profile_db, ensure_profile_db_local
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import R2_ENABLED, file_exists_in_r2, generate_presigned_url
 from app.user_context import get_current_req_id, get_current_user_id
@@ -825,6 +827,235 @@ async def rename_download(download_id: int, body: dict):
             raise HTTPException(status_code=404, detail="Download not found")
         conn.commit()
         return {"success": True, "name": name}
+
+
+class MoveToProfileRequest(BaseModel):
+    video_ids: list[int]
+    target_profile_id: str
+
+
+# Columns copied verbatim from the source reel into the target profile. These are
+# the FROZEN, self-contained metadata that make a published reel play + display
+# without any editing lineage (T3600/T3605 freeze). Lineage-scoped columns
+# (project_id, game_id, game_ids, source_clip_id) and per-profile ranking columns
+# (rating, rd, match_count, watched_at) are handled explicitly in the move, NOT
+# copied — see _build_moved_reel_row.
+_MOVED_REEL_CARRY_COLUMNS = (
+    "filename", "version", "duration", "source_type", "name", "rating_counts",
+    "created_at", "aspect_ratio", "tags", "clip_count", "quality_score",
+    "clip_start_time", "clip_game_start_time",
+)
+
+
+def _build_moved_reel_row(src_row) -> dict:
+    """Map a source-profile final_videos row to the target-profile INSERT values.
+
+    Decision 1 (published-reel-only MOVE): only the frozen metadata that lets the
+    reel play + rank + display moves; editing lineage stays in the source profile.
+    Decision 4 (enter target as new): reset every per-profile reference so the reel
+    joins the target profile's pool clean, with no dangling cross-profile ids.
+
+    - project_id / game_id / game_ids: NULL/None. They reference SOURCE-profile
+      projects+games that do not exist in the target; keeping them would dangle
+      (violates the no-orphan-refs criterion) and would fabricate a phantom
+      "Game N" collection in the target (collections.py resolves a routed-but-
+      missing game to a 'Game N' fallback). Cleared -> the reel routes to Mixes /
+      date-fallback grouping, honestly unattributed in its new profile.
+    - source_clip_id: NULL. It points at a SOURCE raw_clip; a collision with a
+      target raw_clip id could wrongly twin-sync ratings or exclude the reel as a
+      teammate reel. Cleared -> the moved reel is an individual ranking contestant.
+    - rating/rd/match_count: re-seeded exactly as a fresh export would (single-clip
+      reels re-seed from their frozen quality_score; multi-clip / unrated reels
+      stay NULL and never rank). match_count -> 0 discards source ranking history.
+    - watched_at: NULL so the reel shows as NEW in the target's My Reels.
+    """
+    from app.services.glicko import RD_MAX, seed_rating
+
+    row = {col: src_row[col] for col in _MOVED_REEL_CARRY_COLUMNS}
+    row["project_id"] = None
+    row["game_id"] = None
+    row["game_ids"] = None
+    row["source_clip_id"] = None
+    row["watched_at"] = None
+    row["published_at"] = src_row["published_at"]
+    # Re-seed ranking: only reels that were rankable in the source (rating set)
+    # re-enter the target pool; preserve the never-rank state of multi-clip reels.
+    if src_row["rating"] is not None:
+        row["rating"] = seed_rating(src_row["quality_score"])
+        row["rd"] = RD_MAX
+    else:
+        row["rating"] = None
+        row["rd"] = None
+    row["match_count"] = 0
+    return row
+
+
+@router.post("/move-to-profile")
+async def move_reels_to_profile(
+    body: MoveToProfileRequest,
+    _durable: None = Depends(durable_sync),
+):
+    """Move one or more PUBLISHED reels from the current profile to a sibling
+    profile of the SAME user (T4850, multi-athlete accounts).
+
+    Batch-atomic and all-or-nothing: every id is validated first; a single
+    offender (unknown id, unpublished/draft, wrong profile) rejects the whole
+    batch with 400 and nothing moves. The reel's R2 media object is per-USER
+    (shared across the user's profiles), so only the sqlite `final_videos` row
+    moves between the two profile DBs — no R2 object copy.
+
+    Durability (T4110 sync-then-announce, applied across two DBs): the target DB
+    is written and synced to R2 FIRST; only after it is durably in R2 is the
+    source row deleted. A machine death mid-op can therefore leave the reel briefly
+    in BOTH profiles (a visible duplicate the user can re-move) but NEVER in
+    neither (data loss). The source DB rides the `durable_sync` dependency
+    (middleware awaits its R2 sync inside the write lock -> 503 on failure).
+    """
+    user_id = get_current_user_id()
+    source_profile_id = get_current_profile_id()
+    req_id = get_current_req_id()
+    target_profile_id = body.target_profile_id
+
+    # --- Validate the target profile belongs to this user and is a sibling ---
+    from app.services.user_db import get_profiles
+    profile_ids = {p["id"] for p in get_profiles(user_id)}
+    if target_profile_id not in profile_ids:
+        raise HTTPException(status_code=404, detail="Target profile not found")
+    if target_profile_id == source_profile_id:
+        raise HTTPException(
+            status_code=400, detail="Target profile must differ from the current profile"
+        )
+
+    video_ids = list(dict.fromkeys(body.video_ids))  # de-dupe, preserve order
+    if not video_ids:
+        raise HTTPException(status_code=400, detail="No reels selected")
+
+    logger.info(
+        f"[MoveReels] start ids={video_ids} {source_profile_id}->{target_profile_id} "
+        f"user={user_id} req_id={req_id}"
+    )
+
+    carry_cols = ", ".join(_MOVED_REEL_CARRY_COLUMNS)
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+
+        # --- Fetch + validate ALL requested reels up front (all-or-nothing) ---
+        placeholders = ",".join("?" for _ in video_ids)
+        cursor.execute(
+            f"""
+            SELECT {carry_cols}, id, project_id, game_id, game_ids,
+                   source_clip_id, published_at, rating
+            FROM final_videos
+            WHERE id IN ({placeholders})
+            """,
+            video_ids,
+        )
+        rows_by_id = {r["id"]: r for r in cursor.fetchall()}
+
+        missing = [vid for vid in video_ids if vid not in rows_by_id]
+        unpublished = [
+            vid for vid in video_ids
+            if vid in rows_by_id and rows_by_id[vid]["published_at"] is None
+        ]
+        if missing or unpublished:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Some reels cannot be moved.",
+                    "not_found": missing,
+                    "not_published": unpublished,
+                },
+            )
+
+        source_rows = [rows_by_id[vid] for vid in video_ids]
+
+        # --- Phase 1: write + durably sync the TARGET profile FIRST ---------
+        ensure_profile_db_local(user_id, target_profile_id)
+        target_conn = _open_profile_db(user_id, target_profile_id)
+        if target_conn is None:
+            # Target has no local/R2 DB yet -> materialize an empty schema for it.
+            _ensure_empty_profile_db(target_profile_id)
+            target_conn = _open_profile_db(user_id, target_profile_id)
+        if target_conn is None:
+            raise HTTPException(status_code=500, detail="Could not open target profile database")
+
+        insert_cols = _MOVED_REEL_CARRY_COLUMNS + (
+            "project_id", "game_id", "game_ids", "source_clip_id",
+            "watched_at", "published_at", "rating", "rd", "match_count",
+        )
+        insert_sql = (
+            f"INSERT INTO final_videos ({', '.join(insert_cols)}) "
+            f"VALUES ({', '.join('?' for _ in insert_cols)})"
+        )
+        inserted_target_ids: list[int] = []
+        try:
+            tcur = target_conn.cursor()
+            for src_row in source_rows:
+                new_row = _build_moved_reel_row(src_row)
+                tcur.execute(insert_sql, [new_row[c] for c in insert_cols])
+                inserted_target_ids.append(tcur.lastrowid)
+            target_conn.commit()
+
+            target_synced = await asyncio.to_thread(
+                sync_db_to_r2_explicit, user_id, target_profile_id
+            )
+            if not target_synced:
+                # Roll back the exact rows we just inserted so a failed move leaves
+                # NOTHING behind in either profile, then surface the retryable 503.
+                # The source is still untouched at this point.
+                ph = ",".join("?" for _ in inserted_target_ids)
+                tcur.execute(
+                    f"DELETE FROM final_videos WHERE id IN ({ph})", inserted_target_ids
+                )
+                target_conn.commit()
+                logger.warning(
+                    f"[MoveReels] target R2 sync FAILED, rolled back target ids="
+                    f"{inserted_target_ids} req_id={req_id} -> 503"
+                )
+                raise HTTPException(status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE)
+        except HTTPException:
+            raise
+        except Exception:
+            target_conn.rollback()
+            logger.exception(
+                f"[MoveReels] target insert failed ids={video_ids} req_id={req_id}"
+            )
+            raise HTTPException(status_code=500, detail="Failed to write target profile")
+        finally:
+            target_conn.close()
+
+        # --- Phase 2: target is durable -> remove the reels from the SOURCE --
+        # before_after_tracks cascade via ON DELETE CASCADE (foreign_keys=ON);
+        # NULL the project pointer first, mirroring delete_download's FK cleanup.
+        for vid in video_ids:
+            cursor.execute(
+                "UPDATE projects SET final_video_id = NULL WHERE final_video_id = ?", (vid,)
+            )
+            cursor.execute("DELETE FROM final_videos WHERE id = ?", (vid,))
+        conn.commit()
+
+    logger.info(
+        f"[MoveReels] moved {len(video_ids)} reel(s) {source_profile_id}->"
+        f"{target_profile_id} user={user_id} req_id={req_id} "
+        f"(source R2 sync pending via durable_sync)"
+    )
+    # durable_sync dependency makes the middleware AWAIT the source-profile R2 sync
+    # inside the write lock and convert failure into a 503 (never a lying 200).
+    return {"success": True, "moved_ids": video_ids, "target_profile_id": target_profile_id}
+
+
+def _ensure_empty_profile_db(profile_id: str) -> None:
+    """Create an empty, schema-current profile.sqlite for a target profile that has
+    never been opened (no local file, nothing in R2). Reuses ensure_database via a
+    temporary profile-context swap (same pattern as materialization helpers)."""
+    from app.database import ensure_database
+    from app.profile_context import reset_profile_id_token, set_current_profile_id
+    token = set_current_profile_id(profile_id)
+    try:
+        ensure_database()
+    finally:
+        reset_profile_id_token(token)
 
 
 @router.post("/publish/{project_id}")

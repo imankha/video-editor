@@ -72,6 +72,51 @@ def _unlink_db_files(base: Path, name: str) -> bool:
     return existed
 
 
+class SeedReelRequest(BaseModel):
+    name: str = "Seeded Reel"
+    aspect_ratio: str = "9:16"
+    clip_count: int = 1
+    quality_score: float | None = 5.0
+
+
+@router.post("/seed-final-video")
+async def seed_final_video(req: SeedReelRequest):
+    """Insert a PUBLISHED final_video into the current profile (test seam, T4850).
+
+    Lets an E2E create a movable reel without driving the whole upload -> annotate
+    -> frame -> export -> publish pipeline. Non-prod only (gated three ways like
+    every seam). Returns the new reel id + filename."""
+    _require_seams_enabled()
+
+    from ..database import get_db_connection
+    from ..services.glicko import RD_MAX, seed_rating
+
+    single = req.clip_count == 1
+    rating = seed_rating(req.quality_score) if single else None
+    rd = RD_MAX if single else None
+    filename = f"seed_{get_current_user_id()[:6]}_{req.name.replace(' ', '_')}.mp4"
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO final_videos
+              (project_id, filename, version, duration, source_type, name,
+               published_at, aspect_ratio, clip_count, quality_score,
+               rating, rd, match_count)
+            VALUES (NULL, ?, 1, 5.0, 'custom_project', ?,
+                    CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, 0)
+            """,
+            (filename, req.name, req.aspect_ratio, req.clip_count,
+             req.quality_score, rating, rd),
+        )
+        reel_id = cur.lastrowid
+        conn.commit()
+
+    logger.warning(f"[TEST] seeded final_video id={reel_id} name={req.name!r}")
+    return {"status": "ok", "id": reel_id, "filename": filename}
+
+
 @router.post("/simulate-machine-cycle")
 async def simulate_machine_cycle():
     """Drop machine-local SQLite state and re-pull from R2 (test seam).

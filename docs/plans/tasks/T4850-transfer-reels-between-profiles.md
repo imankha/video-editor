@@ -66,6 +66,77 @@ Constraints:
 4. [ ] Migration file if schema changes
 5. [ ] Tests: backend single + batch transfer round-trip (incl. collection auto-remove and rank-row cleanup); frontend E2E single move + bulk move gestures
 
+### Implementation notes (locked decisions -> what the code does)
+
+**Endpoint:** `POST /api/downloads/move-to-profile` body `{video_ids: [int], target_profile_id: str}`
+(`downloads.py:move_reels_to_profile`). `durable_sync` dependency on the request
+(source) profile; target profile synced explicitly.
+
+**No schema change.** Move = a `final_videos` row copy between the two profile
+SQLite DBs. R2 media objects are per-USER (`{env}/users/{uid}/final_videos/...`),
+shared across the user's profiles, so NO R2 object copy — the carried `filename`
+plays as-is in the target. `season_rank` does not exist (v009 dropped it); rank
+state is the `rating`/`rd`/`match_count` columns ON `final_videos`.
+
+**Source-profile references cleaned up on move (decision 4 enumeration):**
+- The `final_videos` row itself — DELETEd from source (Phase 2). Latest published
+  reels are derived views, so this vacates every derived collection (game groups,
+  Mixes, smart collections, season buckets) and the ranking pool automatically —
+  there is NO membership table to edit.
+- `projects.final_video_id` — NULLed for the moved reel before delete (FK cleanup,
+  mirrors `delete_download`).
+- `before_after_tracks` — cascade-deleted via `ON DELETE CASCADE` (get_db_connection
+  runs `PRAGMA foreign_keys=ON`); the before/after comparison lineage stays behind
+  and dies with the source reel.
+- Editing lineage (`raw_clips`/`projects`/`working_clips`/`working_videos`) — LEFT in
+  the source profile untouched (decision 1: reel not re-editable in target).
+
+**Target-profile row (what moves vs what resets — `_build_moved_reel_row`):**
+- Carried verbatim (frozen display/play metadata): `filename, version, duration,
+  source_type, name, rating_counts, created_at, aspect_ratio, tags, clip_count,
+  quality_score, clip_start_time, clip_game_start_time`.
+- `project_id, game_id, game_ids` -> NULL/None. They reference SOURCE-profile
+  projects+games absent in the target. Keeping them would dangle (fails the
+  no-orphan-refs criterion) AND fabricate a phantom "Game N" collection
+  (`collections.py` gives a routed-but-missing game a `Game N` fallback name). Cleared
+  -> the reel routes to Mixes / date-fallback grouping, honestly unattributed in its
+  new profile. (Minor deviation from decision 1's "game_ids moves": cross-profile
+  game ids cannot move without moving the game; documented here.)
+- `source_clip_id` -> NULL. Points at a SOURCE raw_clip; a collision with a target
+  raw_clip id could wrongly twin-sync ratings or exclude the reel as a teammate reel.
+  Cleared -> the moved reel is an individual ranking contestant (rank.py handles NULL
+  source_clip_id as "orphan, stays individual").
+- `rating/rd/match_count` -> re-seeded exactly as a fresh export (single-clip reels:
+  `seed_rating(quality_score)`, `RD_MAX`, 0; multi-clip/unrated: NULL/NULL/0). Discards
+  source ranking history; enters the target pool as new.
+- `watched_at` -> NULL (shows as NEW in the target's My Reels).
+- `published_at` -> preserved (stays a published reel).
+
+**`latest_final_videos_subquery()` partition fix (`queries.py`):** a moved reel has
+`project_id` AND `game_id` NULL, so all moved reels would collapse into the single
+`(0,0)` partition and only ONE would survive `MAX(version)`. Added a per-row `id`
+tiebreaker that fires ONLY when both keys are NULL. Strict no-op for every pre-T4850
+row (each has a project_id or a game_id).
+
+**Batch atomicity / durability (T4110 across two DBs):** all ids validated up front
+(all-or-nothing: any unknown/unpublished id -> 400, nothing moves). Then the TARGET
+DB is written + synced to R2 FIRST; only after it is durably in R2 is the SOURCE row
+deleted (source rides `durable_sync`). Target sync failure -> the just-inserted target
+rows are rolled back and a retryable 503 is returned (nothing moved either side —
+verified by test). A machine death in the narrow window after target-durable but
+before source-sync can leave the reel briefly in BOTH profiles (a visible duplicate
+the user can re-move) but NEVER in neither (no data loss). One sync per profile DB,
+never per reel.
+
+**Share links:** existing public share tokens (`shares` in Postgres) snapshot the
+`filename` and resolve the media by the per-USER R2 key, which is unchanged by a
+same-user move -> existing links keep working. No invalidation needed (no user-visible
+UX decision surfaced).
+
+**Test seam (non-prod only):** `POST /api/test/seed-final-video` inserts a published
+reel so E2E can create movable reels without the full pipeline (gated 3 ways like
+every seam).
+
 ## Acceptance Criteria
 
 - [ ] A reel in profile A can be moved to profile B of the same user via an explicit gesture, and appears in B's My Reels
