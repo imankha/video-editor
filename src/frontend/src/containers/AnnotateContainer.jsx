@@ -1133,9 +1133,21 @@ export function AnnotateContainer({
       if (!isFinite(videoDur) || videoDur <= 0) return;
 
       const storedDur = annotateVideoMetadata?.duration;
-      // Update if missing OR if video element reports a longer duration than what the DB stored
-      // (DB duration can be truncated if ffprobe ran on an incomplete upload)
+      // Update if missing OR if the video element reports a longer duration than the DB.
       if (!storedDur || videoDur > storedDur + 1) {
+        // T4260: this is a MEMORY-ONLY runtime fixup so the scrub bar shows the right
+        // length. It must NEVER write back to the backend -- the old reactive PATCH to
+        // /games/{id}/duration was the last banned effect->API write: a partially
+        // buffered stream, a wrong-range proxy response, or a mid-load src swap could
+        // persist a bogus duration that the streaming proxy then trusted. The real fix
+        // is at the source (ffprobe the COMPLETE file at upload finalize).
+        if (storedDur && videoDur > storedDur + 1) {
+          console.warn(
+            `[AnnotateContainer] Game ${annotateGameIdRef.current}: video element duration ` +
+            `${videoDur.toFixed(2)}s exceeds stored duration ${storedDur.toFixed(2)}s. Using the ` +
+            `element value in-memory only (no write-back). If persistent, re-probe at upload finalize.`
+          );
+        }
         setAnnotateVideoMetadata({
           duration: videoDur,
           width: video.videoWidth,
@@ -1146,15 +1158,6 @@ export function AnnotateContainer({
           size: annotateVideoMetadata?.size,
           resolution: `${video.videoWidth}x${video.videoHeight}`,
         });
-        // Correct the stored duration in the backend so the streaming proxy uses the right value
-        const gameId = annotateGameIdRef.current;
-        if (gameId && storedDur) {
-          apiFetch(`${API_BASE}/api/games/${gameId}/duration`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ duration: videoDur }),
-          }).catch(() => {});
-        }
       }
     };
 

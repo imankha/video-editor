@@ -18,9 +18,8 @@ import json
 import logging
 import os
 from datetime import datetime
-from math import isfinite
 
-from fastapi import APIRouter, Body, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
@@ -636,7 +635,13 @@ async def activate_game(game_id: int):
             if not gv['fps'] and meta.get('fps'):
                 gv_updates.append("fps = ?")
                 gv_params.append(meta['fps'])
-            if not gv['duration'] and meta.get('duration'):
+            # T4260: the duration stored at pending-insert is the CLIENT-provided value
+            # (from the browser's video element, possibly truncated on a partial buffer).
+            # This probe ran on the COMPLETE R2 object, so it is authoritative -- overwrite
+            # the stored duration with it rather than only filling when NULL. This fixes
+            # the source of the truncated-duration bug the removed reactive PATCH papered
+            # over. (Activation always probes here: pending videos have fps=NULL.)
+            if meta.get('duration'):
                 gv_updates.append("duration = ?")
                 gv_params.append(meta['duration'])
             if not gv['video_width'] and meta.get('width'):
@@ -670,7 +675,9 @@ async def activate_game(game_id: int):
             game_updates = []
             game_params = []
             if agg['total_duration']:
-                game_updates.append("video_duration = COALESCE(video_duration, ?)")
+                # T4260: authoritative from the complete-file probe above (not COALESCE),
+                # so a truncated client-provided games.video_duration is corrected too.
+                game_updates.append("video_duration = ?")
                 game_params.append(agg['total_duration'])
             if agg['total_size']:
                 game_updates.append("video_size = COALESCE(video_size, ?)")
@@ -1407,31 +1414,11 @@ async def update_game(
         return {'success': True}
 
 
-@router.patch("/{game_id:int}/duration")
-async def correct_game_duration(game_id: int, duration: float = Body(..., embed=True)):
-    """Correct video_duration when the browser detects a longer actual duration than stored."""
-    if not isfinite(duration) or duration <= 0:
-        raise HTTPException(status_code=422, detail="Invalid duration")
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT video_duration FROM games WHERE id = ?", (game_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
-
-        stored = row['video_duration'] or 0
-        if duration <= stored + 1:
-            return {'success': True, 'updated': False}
-
-        cursor.execute("UPDATE games SET video_duration = ? WHERE id = ?", (duration, game_id))
-        cursor.execute(
-            "UPDATE game_videos SET duration = ? WHERE game_id = ? AND sequence = 1",
-            (duration, game_id),
-        )
-        conn.commit()
-        logger.warning(f"Corrected game {game_id} duration: {stored:.1f}s -> {duration:.1f}s")
-        return {'success': True, 'updated': True}
+# T4260: removed PATCH /{game_id}/duration (correct_game_duration). It was written
+# to only by AnnotateContainer's reactive effect (the last banned effect->API write),
+# now deleted. Duration is made correct at the source: activate_game re-probes the
+# COMPLETE R2 file and stores that authoritative duration, so the browser never needs
+# to "correct" a truncated value. Zero remaining callers -> dead write path removed.
 
 
 # T4270: removed PUT /{game_id}/annotations (update_annotations) and its
