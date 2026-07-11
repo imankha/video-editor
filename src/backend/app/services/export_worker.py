@@ -160,11 +160,17 @@ async def process_export_job(job_id: str):
     update_job_started(job_id)
     await send_progress(job_id, 5, "Export started...")
 
+    # T4240: bind everything the except handler reads BEFORE the try. Previously
+    # config/job_type/project_id were assigned inside the try, so a decode_data failure
+    # made the error handler itself raise (NameError/UnboundLocalError) when it did
+    # config.get(...) -- the handler crashed instead of failing the job cleanly.
+    config = {}
+    job_type = job['type']
+    project_id = job['project_id']
+
     try:
         # Parse config
         config = decode_data(job['input_data'])
-        job_type = job['type']
-        project_id = job['project_id']
 
         # Route to appropriate handler
         if job_type == 'framing':

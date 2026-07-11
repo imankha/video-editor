@@ -292,34 +292,11 @@ export const useGamesDataStore = create((set, get) => ({
     }
   },
 
-  /**
-   * Save annotations to file
-   */
-  saveAnnotations: async (gameId, annotations) => {
-    if (!gameId) {
-      console.warn('[gamesDataStore] Cannot save annotations: no gameId');
-      return false;
-    }
-
-    try {
-      const response = await apiFetch(`${API_BASE}/api/games/${gameId}/annotations`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(annotations),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || `Failed to save annotations: ${response.status}`);
-      }
-
-      return true;
-    } catch (err) {
-      console.error('[gamesDataStore] Failed to save annotations:', err);
-      set({ error: err.message });
-      return false;
-    }
-  },
+  // T4270: removed the dormant `saveAnnotations` full-state PUT to
+  // /games/{id}/annotations. It had zero callers; annotations are written only via
+  // the surgical /clips/raw gesture flow. Its full-state overwrite had the same
+  // clobber profile as the overlay PUT deleted in T4210. The backend endpoint was
+  // removed too.
 
   /**
    * Delete a game

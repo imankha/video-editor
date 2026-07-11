@@ -34,7 +34,6 @@ export function OverlayContainer({
   // Framing video state (for pass-through mode)
   framingVideoUrl,
   framingMetadata,
-  framingVideoFile,
 
   // Keyframes and segments from Framing mode
   keyframes,
@@ -133,10 +132,11 @@ export function OverlayContainer({
   }, [overlayVideoMetadata, hasMultipleClips, hasFramingEdits, framingMetadata]);
 
   const effectiveOverlayFile = useMemo(() => {
+    // T4270: there is no framing-file pass-through -- raw clips carry no File object
+    // (they are streamed via file_url), so the old `framingVideoFile` branch was dead.
     if (overlayVideoFile) return overlayVideoFile;
-    if (!hasMultipleClips && !hasFramingEdits && framingVideoFile) return framingVideoFile;
     return null;
-  }, [overlayVideoFile, hasMultipleClips, hasFramingEdits, framingVideoFile]);
+  }, [overlayVideoFile]);
 
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);

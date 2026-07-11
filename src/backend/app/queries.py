@@ -7,7 +7,35 @@ multiple files.
 """
 
 
+import logging
+
 from app.constants import get_rating_adjective
+
+logger = logging.getLogger(__name__)
+
+# T4280: NULL-rating semantics, decided ONCE and used at every read site, replacing the
+# three divergent invented defaults (games.py `or 3`, clips.py `or 5`, clips.py `or 3`)
+# -- three fallbacks for one field was the smoking gun of the silent-fallback audit.
+# raw_clips.rating is NOT NULL, so a missing rating at read time is anomalous (an
+# unmatched join or an un-migrated row): surface it (log ERROR) rather than hide it, and
+# fall back to a single documented value. UNRATED_RATING is the neutral middle ("interesting").
+UNRATED_RATING = 3
+
+
+def normalize_rating(rating, *, context: str = "") -> int:
+    """Return a usable clip rating, logging when the stored value was missing (a bug).
+
+    Trusts any real stored value (including an unexpected 0); only a NULL is substituted,
+    and only with a log so the anomaly stays visible. See T4280.
+    """
+    if rating is None:
+        logger.error(
+            f"[rating] NULL rating encountered{f' ({context})' if context else ''}; "
+            f"raw_clips.rating is NOT NULL so this is a data bug -- using the unrated "
+            f"default {UNRATED_RATING}. Investigate the source."
+        )
+        return UNRATED_RATING
+    return rating
 
 
 def derive_clip_name(stored_name: str | None, rating: int, tags: list[str], notes: str = '', generated_title: str = '') -> str:

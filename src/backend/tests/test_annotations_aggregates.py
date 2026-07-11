@@ -60,6 +60,54 @@ def client():
         yield c
 
 
+def _seed_annotations(game_id, annotations):
+    """Seed/replace a game's raw_clips from an annotations list.
+
+    Replicates the sync semantics of the removed save_annotations_to_db (T4270): upsert
+    raw_clips by the (end_time, video_sequence) natural key and delete clips no longer
+    present. These aggregate tests used the deleted PUT /annotations only as a seeding
+    convenience; production creates clips via the surgical /clips/raw gesture flow. The
+    aggregates under test (clip_count, rating counts, aggregate_score) are derived live
+    from raw_clips, so seeding them directly keeps the tests exercising the real logic.
+    """
+    from app.database import get_db_connection
+    from app.utils.encoding import encode_data
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, end_time, video_sequence FROM raw_clips WHERE game_id = ?", (game_id,)
+        )
+        existing = {(r["end_time"], r["video_sequence"]): r["id"] for r in cur.fetchall()}
+        keys = set()
+        for ann in annotations:
+            start_time = ann.get("start_time", 0)
+            end_time = ann.get("end_time", start_time)
+            vseq = ann.get("video_sequence")
+            key = (end_time, vseq)
+            keys.add(key)
+            tags_encoded = encode_data(ann.get("tags", []))
+            rating = ann.get("rating", 3)
+            name = ann.get("name", "")
+            notes = ann.get("notes", "")
+            if key in existing:
+                cur.execute(
+                    "UPDATE raw_clips SET start_time=?, name=?, rating=?, tags=?, notes=? WHERE id=?",
+                    (start_time, name, rating, tags_encoded, notes, existing[key]),
+                )
+            else:
+                cur.execute(
+                    "INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, "
+                    "end_time, game_id, video_sequence) VALUES ('', ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (rating, tags_encoded, name, notes, start_time, end_time, game_id, vseq),
+                )
+        for key, cid in existing.items():
+            if key not in keys:
+                cur.execute("DELETE FROM working_clips WHERE raw_clip_id = ?", (cid,))
+                cur.execute("DELETE FROM raw_clips WHERE id = ?", (cid,))
+        conn.commit()
+
+
 @pytest.fixture
 def empty_game(client):
     """Create a game with no annotations directly in database."""
@@ -95,7 +143,7 @@ class TestGameAggregates:
             {"start_time": 50, "end_time": 65, "name": "C", "rating": 4, "tags": [], "notes": ""},
             {"start_time": 70, "end_time": 85, "name": "D", "rating": 1, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         response = client.get("/api/games")
         game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
@@ -114,7 +162,7 @@ class TestGameAggregates:
             {"start_time": 10, "end_time": 25, "name": "A", "rating": 5, "tags": [], "notes": ""},
             {"start_time": 30, "end_time": 45, "name": "B", "rating": 4, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         # Verify first save
         response = client.get("/api/games")
@@ -127,7 +175,7 @@ class TestGameAggregates:
         new_annotations = [
             {"start_time": 10, "end_time": 25, "name": "Only", "rating": 3, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=new_annotations)
+        _seed_annotations(empty_game['id'], new_annotations)
 
         # Verify aggregates updated
         response = client.get("/api/games")
@@ -144,10 +192,10 @@ class TestGameAggregates:
         annotations = [
             {"start_time": 10, "end_time": 25, "name": "A", "rating": 5, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         # Then clear them
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=[])
+        _seed_annotations(empty_game['id'], [])
 
         response = client.get("/api/games")
         game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
@@ -169,7 +217,7 @@ class TestGameAggregates:
             {"start_time": 70, "end_time": 85, "name": "Mistake", "rating": 2, "tags": [], "notes": ""},
             {"start_time": 90, "end_time": 105, "name": "Blunder", "rating": 1, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         response = client.get("/api/games")
         game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
@@ -195,7 +243,7 @@ class TestGameAggregates:
             {"start_time": 110, "end_time": 125, "name": "F", "rating": 2, "tags": [], "notes": ""},
             {"start_time": 130, "end_time": 145, "name": "G", "rating": 1, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         response = client.get("/api/games")
         game = next(g for g in response.json()["games"] if g["id"] == empty_game['id'])
@@ -212,7 +260,7 @@ class TestGameAggregates:
             {"start_time": 10, "end_time": 25, "name": "Mine", "rating": 5, "tags": [], "notes": ""},
             {"start_time": 30, "end_time": 45, "name": "Teammate", "rating": 5, "tags": [], "notes": ""},
         ]
-        client.put(f"/api/games/{empty_game['id']}/annotations", json=annotations)
+        _seed_annotations(empty_game['id'], annotations)
 
         # Mark the second clip as a teammate clip (my_athlete=0) directly in the DB.
         with get_db_connection() as conn:

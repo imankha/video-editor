@@ -3,6 +3,37 @@ import { timeToFrame, frameToTime } from '../../../utils/videoUtils';
 import { track } from '../../../utils/analytics';
 
 /**
+ * Re-index the segment-speeds map when the split at sorted index `k` is removed.
+ *
+ * Removing split k merges segment k and segment k+1 into a single segment at index k.
+ * This mirrors the backend remove_segment_split rule (T4220) exactly so the DB and the
+ * hook agree after the gesture:
+ *   - i < k     -> keep speeds[i]
+ *   - merged k  -> keep only if both original sides carried the SAME explicit speed,
+ *                  otherwise omit (merged segment plays 1x -- deterministic)
+ *   - i > k + 1 -> shift down: speeds[i] moves to key (i - 1)
+ * Keys are string segment indices; a missing key means the default 1x. (This map only
+ * ever stores non-default speeds -- setSegmentSpeed deletes a key when speed === 1.)
+ */
+export function reindexSegmentSpeedsOnRemove(speeds, k) {
+  const next = {};
+  for (const [key, val] of Object.entries(speeds)) {
+    const i = Number(key);
+    if (i < k) {
+      next[i] = val;
+    } else if (i === k || i === k + 1) {
+      continue; // merged segment handled below
+    } else {
+      next[i - 1] = val;
+    }
+  }
+  if (speeds[k] !== undefined && speeds[k] === speeds[k + 1]) {
+    next[k] = speeds[k];
+  }
+  return next;
+}
+
+/**
  * Hook to manage video segments with speed control and trimming
  *
  * REFACTORED ARCHITECTURE (Option 1 + 4):
@@ -296,19 +327,26 @@ export function useSegments() {
       setTrimHistory([]); // BUG FIX: Also clear history when trimRange is cleared
     }
 
-    setUserSplits(prev => {
-      const newSplits = prev.filter(s => Math.abs(s - time) > 0.01);
+    // Locate the split being removed among the sorted splits. Its index k drives the
+    // speed re-index below and must be computed BEFORE the split is filtered out.
+    const sorted = [...userSplits].sort((a, b) => a - b);
+    const k = sorted.findIndex(s => Math.abs(s - time) < 0.01);
 
+    if (k === -1) {
       // INVARIANT: Warn if this removal leaves no change
       if (process.env.NODE_ENV === 'development') {
-        if (newSplits.length === prev.length) {
-          console.warn('⚠️ INVARIANT WARNING: removeBoundary had no effect - boundary not found at time:', time);
-        }
+        console.warn('⚠️ INVARIANT WARNING: removeBoundary had no effect - boundary not found at time:', time);
       }
+      return;
+    }
 
-      return newSplits;
-    });
-  }, [duration, trimRange]);
+    setUserSplits(prev => prev.filter(s => Math.abs(s - time) > 0.01));
+
+    // Re-index segment speeds to match the backend remove_segment_split rule (T4220):
+    // split k merges segment k and segment k+1 into one segment at index k. Keep
+    // unrelated speeds with shifted indices instead of dropping them.
+    setSegmentSpeeds(prev => reindexSegmentSpeedsOnRemove(prev, k));
+  }, [duration, trimRange, userSplits]);
 
   /**
    * Set speed for a segment (identified by index)

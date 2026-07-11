@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-07-03 (initial version, workflow setup)
+updated: 2026-07-11 (T4220/T4260/T4270 bug sweep)
 ---
 # Annotate — Domain Knowledge
 
@@ -137,19 +137,10 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   StrictMode. Second half: `useAnnotate.importAnnotations` writes `setDuration(overrideDuration)`
   unconditionally (useAnnotate.js:671-679) — the old `!duration` gate broke on the second game open
   (closure held the prior game's duration). Lesson: never gate a load path on "some video src exists".
-- **Reactive game-duration PATCH (LIVE, → T4260)**: AnnotateContainer.jsx:1115-1158 is the LAST
-  banned effect→API write in the app — on `loadedmetadata`, if the element reports duration >
-  stored+1, it PATCHes `/api/games/{id}/duration` (games.py:1409-1433 updates
-  `games.video_duration` + `game_videos.duration`). A partial buffer/proxy hiccup persists a bogus
-  duration the streaming proxy then trusts; two tabs ping-pong. Fix: delete the PATCH, keep
-  memory-only fixup, probe server-side at upload finalize.
-- **remove_segment_split wipes speeds (LIVE, → T4220)**: clips.py:483-497 sets
-  `segmentSpeeds = {}` on ANY split removal ("This is complex - for now just clear speeds"); hook
-  state disagrees with DB until reload.
-- **save_annotations_to_db is a divergent second writer** (audit E11): duplicates
-  save/update/delete logic (including deleting no-longer-present annotations + their
-  auto-projects/working_clips, games.py:1683-1697) but does NOT bump `boundaries_version` when
-  mutating start_time (L1647). Don't extend it; consolidate onto the gesture path.
+- ~~**Reactive game-duration PATCH (FIXED T4260, 2026-07-11)**~~: the `loadedmetadata` effect→PATCH `/api/games/{id}/duration` is deleted from `AnnotateContainer.jsx`. The memory-only fixup is kept (console.warn only). Duration is now authoritative at upload finalize (ffprobe). Endpoint `games.py:1409` is removed. Regression test: `test_t4260_duration_source.py`.
+- ~~**remove_segment_split wipes speeds (FIXED T4220, 2026-07-11)**~~: `clips.py` re-indexes the `segmentSpeeds` dict on split removal (merged segment keeps the speed if both sides were equal, else omitted; later indices shift down). Frontend `useSegments.js` aligns to the same rule. Regression tests: `test_t4220_remove_split_speeds.py`, `useSegments.removeSplit.test.js`.
+- ~~**gamesDataStore.saveAnnotations / PUT /annotations bulk writer (FIXED T4270, 2026-07-11)**~~: `saveAnnotations` (gamesDataStore.js) and its endpoint `PUT /api/games/{id}/annotations` deleted — zero frontend callers confirmed by grep. `save_annotations_to_db` backend function retained (internal callers exist: share materialization, recap flows). The divergent second-writer path is gone; consolidation is audit E11/T4500.
+- **save_annotations_to_db is a divergent second writer** (audit E11): its HTTP endpoint is deleted (T4270), but the Python function remains for internal callers. Does NOT bump `boundaries_version` when mutating start_time (L1647). Don't extend it; consolidate onto the gesture path (T4500).
 - **editorStore reactive writer**: `useEffect → setAnnotateHasSelectedClip` at
   AnnotateContainer.jsx:241-243 (quest-panel auto-collapse) — dead state slated for deletion in
   T4440; audit D5 moves the gameVideos/tags/share useState + restore-sync effects (L97-99,
@@ -223,12 +214,9 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   unchanged — a warmed foreground video (game clip ranges / gallery) still starts fast.
 
 ## Active/upcoming work
-- **T4220**: fix remove_segment_split speed wipe — re-index the speeds dict (deterministic merge
-  rule); align useSegments.js.
-- **T4260**: remove the reactive duration PATCH (last banned effect→API write; clears the way for
-  the T4290 ESLint guardrail).
-- **T4270**: delete orphaned `gamesDataStore.saveAnnotations` + its endpoint; delete
-  `DELETE /games/dedupe/{id}` (leaks game_storage ref-counts).
+- ~~**T4220**~~ DONE 2026-07-11 (speed re-index).
+- ~~**T4260**~~ DONE 2026-07-11 (reactive PATCH removed; clears way for T4290 ESLint guardrail).
+- ~~**T4270**~~ DONE 2026-07-11 (saveAnnotations + PUT endpoint deleted; DELETE /dedupe/{id} fixed to use cascade cleanup, not deleted).
 - **T4320** (Durability epic): `Depends(durable_sync)` on `/clips/raw/save` + finalize —
   annotation saves currently ride fire-and-forget R2 sync (0.5s deferral); machine replacement can
   revert a whole toasted session.

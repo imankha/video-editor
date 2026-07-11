@@ -1435,7 +1435,27 @@ async def _export_clips(
                         conn.commit()
                         logger.info(f"[Multi-Clip Export] Saved to DB: working_video_id={working_video_id}, project updated, export_jobs completed")
                 except Exception as e:
-                    logger.error(f"[Multi-Clip Export] Failed to save to database: {e}")
+                    # T4200: a DB-save failure is TERMINAL. The old code logged and fell
+                    # through to the COMPLETE broadcast below, so the user saw success
+                    # while no DB row pointed at the R2 object (T4010 lost-references
+                    # family). Re-raise so the outer handler refunds credits, marks the
+                    # job failed, and broadcasts an error -- never a false success.
+                    logger.error(f"[Multi-Clip Export] Failed to save to database (terminal): {e}", exc_info=True)
+                    raise
+
+            # T4200: durable boundary — sync the new working_videos/export_jobs rows to
+            # R2 BEFORE announcing COMPLETE. If the sync fails, emit the same retryable
+            # sync_failed event overlay uses and return without announcing success, so a
+            # machine cycling after the announce can never strand the export (the same
+            # bug class T4110 fixed for overlay). The finally-block sync stays as a
+            # best-effort backstop; the announce no longer depends on it.
+            from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE
+            from ...services.export_helpers import export_sync_failed_data, sync_export_db_to_r2
+            if not await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id):
+                sync_failed = export_sync_failed_data('framing', project_id, project_name)
+                export_progress[export_id] = sync_failed
+                await manager.send_progress(export_id, sync_failed)
+                return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
 
             # Final progress update
             progress_data = {
@@ -1728,8 +1748,25 @@ async def _export_clips(
                     logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
 
             except Exception as e:
-                logger.error(f"[Multi-Clip Export] Failed to save working video: {e}", exc_info=True)
-                working_video_id = None
+                # T4200: a DB-save (or R2 upload) failure is TERMINAL. The old code set
+                # working_video_id = None and still announced "Export complete!" below,
+                # stranding the user with a success message and no working video. Re-raise
+                # so the outer handler refunds credits, marks the job failed, and
+                # broadcasts an error.
+                logger.error(f"[Multi-Clip Export] Failed to save working video (terminal): {e}", exc_info=True)
+                raise
+
+        # T4200: durable boundary — sync before announcing COMPLETE (see the Modal
+        # branch above). Only gate when there is a project to persist; a project-less
+        # render (project_id falsy) has nothing to sync.
+        if project_id:
+            from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE
+            from ...services.export_helpers import export_sync_failed_data, sync_export_db_to_r2
+            if not await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id):
+                sync_failed = export_sync_failed_data('framing', project_id, project_name)
+                export_progress[export_id] = sync_failed
+                await manager.send_progress(export_id, sync_failed)
+                return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
 
         # Complete
         complete_data = {

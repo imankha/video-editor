@@ -221,10 +221,13 @@ export const useProjectsStore = create((set, get) => ({
     const project = get().projects.find(p => p.id === projectId);
     if (!project) return;
 
+    // Send ONLY the name. aspect_ratio has a single writer (the re-fit endpoint);
+    // sending a stale cached aspect_ratio here would revert a just-changed ratio and
+    // leave crops wrong-shaped at export. See T4230.
     const response = await apiFetch(`${API_BASE_URL}/projects/${projectId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName, aspect_ratio: project.aspect_ratio }),
+      body: JSON.stringify({ name: newName }),
     });
     if (!response.ok) throw new Error('Failed to rename project');
 

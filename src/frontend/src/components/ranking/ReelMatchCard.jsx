@@ -41,31 +41,45 @@ export function ReelMatchCard({ side, onPick, onReplay, won, hotkeyHint, classNa
         <Maximize2 size={15} />
       </button>
 
-      {/* Bottom overlay: name + info + the ONLY pick affordance. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 p-3 pt-9 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
-        <div className="text-white font-semibold text-sm truncate">{side.name}</div>
-        {side.opponent_line && (
-          <div className="text-[11px] text-gray-300 truncate">{side.opponent_line}</div>
-        )}
-        <div className="flex items-center gap-2 flex-wrap text-[11px] mt-0.5">
-          {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
-          {(side.tags || []).map((t) => (
-            <span key={t} className="text-cyan-200/80">#{t}</span>
-          ))}
-        </div>
-        <button
-          type="button"
+      {/* Bottom overlay. T4760: the ENTIRE name+info+button block is the pick
+          target (not just the 44px button), so taps that land near the button still
+          register. The video above and the transparent gradient spacer stay
+          watch-only -- the "tapping the clip does not pick" rule is unchanged. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 pt-9 bg-gradient-to-t from-black/90 via-black/55 to-transparent">
+        <div
+          role="button"
+          tabIndex={0}
           onClick={onPick}
-          className={`mt-2 flex items-center justify-center gap-2 w-full min-h-[44px] rounded-lg
-            font-semibold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); }
+          }}
+          aria-label={`Pick ${side.name}`}
+          data-testid="reel-pick-target"
+          className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] cursor-pointer"
         >
-          <Check size={16} /> Pick this one
-          {hotkeyHint && (
-            <kbd className="hidden md:inline ml-1 px-1.5 py-0.5 rounded bg-black/25 text-xs font-mono leading-none">
-              {hotkeyHint}
-            </kbd>
+          <div className="text-white font-semibold text-sm truncate">{side.name}</div>
+          {side.opponent_line && (
+            <div className="text-[11px] text-gray-300 truncate">{side.opponent_line}</div>
           )}
-        </button>
+          <div className="flex items-center gap-2 flex-wrap text-[11px] mt-0.5">
+            {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
+            {(side.tags || []).map((t) => (
+              <span key={t} className="text-cyan-200/80">#{t}</span>
+            ))}
+          </div>
+          {/* Visual affordance only; the clickable target is the wrapper above. */}
+          <div
+            className={`pointer-events-none mt-2 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-lg
+              font-semibold text-white ${REEL.bgCta} ${REEL.bgCtaHover} transition-colors`}
+          >
+            <Check size={16} /> Pick this one
+            {hotkeyHint && (
+              <kbd className="hidden md:inline ml-1 px-1.5 py-0.5 rounded bg-black/25 text-xs font-mono leading-none">
+                {hotkeyHint}
+              </kbd>
+            )}
+          </div>
+        </div>
       </div>
 
       {won && (

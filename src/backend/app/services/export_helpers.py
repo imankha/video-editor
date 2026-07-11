@@ -376,6 +376,26 @@ def sync_export_db_to_r2(user_id: str, profile_id: str | None) -> bool:
     return ok
 
 
+def export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:
+    """T4110/T4200: completion event when the render succeeded but the durable R2 sync
+    failed. Sent as a terminal ERROR (so the client marks the export failed, never
+    'complete', and never surfaces Move-to-My-Reels) but flagged retryable so the UI
+    prompts Retry — the WebSocket analog of T4050's 503 sync_failed response.
+
+    Shared here (not in a router) so framing, multi-clip, and overlay all emit the
+    identical payload the frontend's retry UX expects — no router→router imports.
+    """
+    from app.websocket import make_progress_data
+    data = make_progress_data(
+        current=100, total=100, phase='error',
+        message="Render finished but couldn't save to the cloud. Please try Export again.",
+        export_type=export_type, project_id=project_id, project_name=project_name,
+    )
+    data['retryable'] = True
+    data['code'] = 'sync_failed'
+    return data
+
+
 # =============================================================================
 # Clip Source Resolution (shared across framing + multi-clip render paths)
 # =============================================================================

@@ -37,7 +37,7 @@ Version model — two INDEPENDENT version systems, never conflate:
 Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, `tags`, `game_ids`, …) are **msgpack** via `encode_data`/`decode_data` in `src/backend/app/utils/encoding.py`. JSON over the wire, msgpack on disk (msgpack-over-HTTP was rejected).
 
 ## Invariants & rules
-1. **Gesture-based, never reactive** (CLAUDE.md): every DB write traces to a named user gesture. Surgical actions POST only the changed field (`POST .../actions`; backend does read-modify-write on the blob). Full-state saves (`PUT /clips/{id}`, `saveCurrentClipState`) only on explicit export gesture. Reactive `useEffect`→API/store persistence is BANNED (caused T350 keyframe origin corruption; T4020 shadow-version loss). Last surviving violation: game-duration PATCH (T4260).
+1. **Gesture-based, never reactive** (CLAUDE.md): every DB write traces to a named user gesture. Surgical actions POST only the changed field (`POST .../actions`; backend does read-modify-write on the blob). Full-state saves (`PUT /clips/{id}`, `saveCurrentClipState`) only on explicit export gesture. Reactive `useEffect`→API/store persistence is BANNED (caused T350 keyframe origin corruption; T4020 shadow-version loss). ~~Last surviving violation: game-duration PATCH (T4260)~~ → FIXED 2026-07-11: the `loadedmetadata` PATCH is deleted from `AnnotateContainer.jsx`; no reactive effect→API writes remain in the codebase.
 2. Runtime fixups (keyframe normalization etc.) are memory-only, never persisted; restore is read-only; one write path per piece of data.
 3. Writers must commit BEFORE the write lock releases (middleware relies on this for read-your-writes).
 4. `SKIP_SYNC_PATHS` (db_sync.py:309) and `AUTH_ALLOWLIST_PREFIXES` (db_sync.py:322) are the only sync/auth bypasses — check them before assuming a route syncs.
@@ -51,10 +51,10 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 - **Local dev**: DB changes made directly to a local profile.sqlite get overwritten by R2 restore/sync on reload — edit the R2 copy (`scripts/edit-user-db.py`) or use fallback paths (memory: dev state simulation).
 - **T350**: reactive useEffect persistence compounded keyframe fixups into corruption — origin of the gesture-only rule.
 - **T4020**: export's redundant post-render full-state save wrote an empty "shadow" working-clip version; bloat-cleanup then pruned the real one = permanent framing loss. Fixed frontend-side; backend-authoritative export (audit B4/T4400) is the structural fix.
-- **T4110**: sync-then-announce durable export boundary — implemented for overlay exports only (overlay.py:2122-2196); framing (framing.py:718-722) and multi_clip (multi_clip.py:2298-2301) still announce COMPLETE before unchecked sync → T4200.
+- **T4110 → T4200 (DONE 2026-07-11)**: sync-then-announce extended to framing and multi-clip. ALL export paths now gate COMPLETE on sync success; DB-save failure is terminal. The `_export_sync_failed_data` helper lives in `export_helpers.py`.
 - **0.5s defer window** (T2720): middleware sync gives up waiting for the R2 upload lock after 0.5s and defers — annotation sessions can revert wholesale if the machine dies before the next sync (T4320).
 - Shutdown sync (main.py:255-276) covers profile DBs only, not user.sqlite.
-- `overlay_version` on working_videos is bumped by surgical overlay actions; the orphaned `PUT /overlay-data` (overlay.py:1383) does NOT bump it — deletion pending in T4210.
+- ~~`overlay_version` on working_videos is bumped by surgical overlay actions; the orphaned `PUT /overlay-data` (overlay.py:1383) does NOT bump it — deletion pending in T4210~~. FIXED T4210 (2026-07-11): `PUT /overlay-data` deleted; decode failure now returns 500 instead of silently returning `[]` and erasing all highlights.
 - `segments_data` has two formats on disk (splits-only from gestures vs full-list from PUT); always `canonicalize_segments_data` before walking pairs — until T4340 canonicalizes at write time.
 
 ## Migration runner invariants (T4830)

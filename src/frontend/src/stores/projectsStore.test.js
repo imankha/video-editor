@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
+
 import { useProjectsStore } from './projectsStore';
+import apiFetch from '../utils/apiFetch';
 
 describe('projectsStore.refreshSelectedProject', () => {
   beforeEach(() => {
@@ -87,5 +91,30 @@ describe('projectsStore.refreshSelectedProject', () => {
 
     expect(result).toBe(null);
     expect(fetchProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('projectsStore.renameProject (T4230)', () => {
+  beforeEach(() => {
+    useProjectsStore.setState({ projects: [], selectedProjectId: null });
+    vi.mocked(apiFetch).mockReset();
+  });
+
+  it('sends only { name } -- never a stale aspect_ratio (single-writer rule)', async () => {
+    // The cached project still carries the OLD ratio; a rename must not echo it back.
+    useProjectsStore.setState({
+      projects: [{ id: 7, name: 'Old Name', aspect_ratio: '9:16', is_auto_created: true }],
+    });
+    vi.mocked(apiFetch).mockResolvedValue({ ok: true });
+
+    await useProjectsStore.getState().renameProject(7, 'New Name');
+
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = vi.mocked(apiFetch).mock.calls[0];
+    expect(url).toMatch(/\/projects\/7$/);
+    expect(opts.method).toBe('PUT');
+    const body = JSON.parse(opts.body);
+    expect(body).toEqual({ name: 'New Name' });
+    expect(body).not.toHaveProperty('aspect_ratio');
   });
 });

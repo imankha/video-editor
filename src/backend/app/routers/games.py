@@ -18,14 +18,13 @@ import json
 import logging
 import os
 from datetime import datetime
-from math import isfinite
 
-from fastapi import APIRouter, Body, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, get_rating_adjective
-from app.database import ensure_directories, get_db_connection, get_raw_clips_path
+from app.database import ensure_directories, get_db_connection
 from app.profile_context import get_current_profile_id
 from app.services.auth_db import (
     delete_ref,
@@ -43,9 +42,9 @@ from app.storage import (
     get_r2_client,
     r2_head_object_global,
 )
+from app.queries import normalize_rating
 from app.user_context import get_current_user_id
-from app.utils.clip_range import normalize_clip_range
-from app.utils.encoding import decode_data, encode_data
+from app.utils.encoding import decode_data
 
 logger = logging.getLogger(__name__)
 
@@ -637,7 +636,13 @@ async def activate_game(game_id: int):
             if not gv['fps'] and meta.get('fps'):
                 gv_updates.append("fps = ?")
                 gv_params.append(meta['fps'])
-            if not gv['duration'] and meta.get('duration'):
+            # T4260: the duration stored at pending-insert is the CLIENT-provided value
+            # (from the browser's video element, possibly truncated on a partial buffer).
+            # This probe ran on the COMPLETE R2 object, so it is authoritative -- overwrite
+            # the stored duration with it rather than only filling when NULL. This fixes
+            # the source of the truncated-duration bug the removed reactive PATCH papered
+            # over. (Activation always probes here: pending videos have fps=NULL.)
+            if meta.get('duration'):
                 gv_updates.append("duration = ?")
                 gv_params.append(meta['duration'])
             if not gv['video_width'] and meta.get('width'):
@@ -671,7 +676,9 @@ async def activate_game(game_id: int):
             game_updates = []
             game_params = []
             if agg['total_duration']:
-                game_updates.append("video_duration = COALESCE(video_duration, ?)")
+                # T4260: authoritative from the complete-file probe above (not COALESCE),
+                # so a truncated client-provided games.video_duration is corrected too.
+                game_updates.append("video_duration = ?")
                 game_params.append(agg['total_duration'])
             if agg['total_size']:
                 game_updates.append("video_size = COALESCE(video_size, ?)")
@@ -808,7 +815,7 @@ def _compute_athlete_stats(cursor, game_ids: list) -> dict:
             continue
 
         stats = per_game[gid]
-        rating = row['rating'] or 3
+        rating = normalize_rating(row['rating'], context=f"game_stats game={gid}")
         if rating == 5:
             stats['brilliant_count'] += 1
         elif rating == 4:
@@ -848,6 +855,18 @@ async def list_games_metadata():
     """Return game metadata without presigned URLs (used by bootstrap endpoint)."""
     ensure_directories()
     return await _list_games_impl(skip_presigned_urls=True)
+
+
+def _game_status_or_log(status, game_id):
+    """T4280: trust the stored game status. A NULL status is a data bug to find, not
+    hide as 'ready' -- log at ERROR and surface the real (null) value so the frontend
+    can render an unknown state instead of a false 'ready'."""
+    if status is None:
+        logger.error(
+            f"[games] Game {game_id} has NULL status -- data bug; surfacing null "
+            f"instead of defaulting to 'ready'. Investigate the source of the null."
+        )
+    return status
 
 
 @router.get("")
@@ -954,7 +973,7 @@ async def _list_games_impl(skip_presigned_urls=False):
                 'created_at': row['created_at'],
                 'video_duration': row['effective_duration'],
                 'viewed_duration': row['viewed_duration'] or 0,
-                'status': row['status'] or 'ready',
+                'status': _game_status_or_log(row['status'], row['id']),
                 'storage_status': storage_status,
                 'storage_expires_at': expires_at_val,
                 'video_size': row['video_size'],
@@ -1408,69 +1427,70 @@ async def update_game(
         return {'success': True}
 
 
-@router.patch("/{game_id:int}/duration")
-async def correct_game_duration(game_id: int, duration: float = Body(..., embed=True)):
-    """Correct video_duration when the browser detects a longer actual duration than stored."""
-    if not isfinite(duration) or duration <= 0:
-        raise HTTPException(status_code=422, detail="Invalid duration")
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT video_duration FROM games WHERE id = ?", (game_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Game not found")
-
-        stored = row['video_duration'] or 0
-        if duration <= stored + 1:
-            return {'success': True, 'updated': False}
-
-        cursor.execute("UPDATE games SET video_duration = ? WHERE id = ?", (duration, game_id))
-        cursor.execute(
-            "UPDATE game_videos SET duration = ? WHERE game_id = ? AND sequence = 1",
-            (duration, game_id),
-        )
-        conn.commit()
-        logger.warning(f"Corrected game {game_id} duration: {stored:.1f}s -> {duration:.1f}s")
-        return {'success': True, 'updated': True}
+# T4260: removed PATCH /{game_id}/duration (correct_game_duration). It was written
+# to only by AnnotateContainer's reactive effect (the last banned effect->API write),
+# now deleted. Duration is made correct at the source: activate_game re-probes the
+# COMPLETE R2 file and stores that authoritative duration, so the browser never needs
+# to "correct" a truncated value. Zero remaining callers -> dead write path removed.
 
 
-@router.put("/{game_id:int}/annotations")
-async def update_annotations(
-    game_id: int,
-    annotations: list = Body(...)
-):
+# T4270: removed PUT /{game_id}/annotations (update_annotations) and its
+# save_annotations_to_db full-state writer -- a dormant full-blob overwrite with zero
+# live callers (its only frontend caller, gamesDataStore.saveAnnotations, was also
+# removed). Annotations are written solely via the surgical /clips/raw gesture flow;
+# GET still exposes them via load_annotations_from_db.
+
+
+def _delete_game_cascade(cursor, game_id: int) -> tuple[list[str], int]:
+    """Delete a game and its now-orphaned projects within the caller's transaction.
+
+    Returns (video_hashes, orphaned_project_count). The caller must commit and then
+    call delete_ref(user_id, profile_id, h) for each returned hash -- delete_ref
+    opens its OWN connection, so it can't run inside this transaction.
+
+    Shared by the main DELETE /{id} route AND the dedupe DELETE route so BOTH keep
+    game_storage ref-counts and orphan projects correct. The dedupe route used to run
+    a bare `DELETE FROM games` with no ref cleanup, leaking R2 refs permanently (T4270).
+
+    Cleanup order matters for FK constraints:
+    - raw_clips cascade from games (ON DELETE CASCADE), which cascades to working_clips
+    - projects reference clips without cascade, so empty ones are pruned explicitly.
     """
-    Update game annotations.
+    # Collect video hashes before cascade delete removes game_videos rows.
+    video_hashes = [
+        row['blake3_hash'] for row in
+        cursor.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,)).fetchall()
+    ]
 
-    Saves annotations to the database.
-    Call this whenever annotations change in the frontend.
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id FROM games WHERE id = ?", (game_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=404, detail="Game not found")
+    # Find all projects linked to this game's clips (auto-created or manual).
+    cursor.execute("""
+        SELECT DISTINCT p.id FROM projects p
+        JOIN working_clips wc ON wc.project_id = p.id
+        JOIN raw_clips rc ON rc.id = wc.raw_clip_id
+        WHERE rc.game_id = ?
+    """, (game_id,))
+    project_ids_before = {row['id'] for row in cursor.fetchall()}
 
-    # Save annotations to database
-    save_annotations_to_db(game_id, annotations)
+    # Delete the game — cascades to raw_clips, which cascades to working_clips.
+    cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
 
-    logger.info(f"Updated annotations for game {game_id}: {len(annotations)} clips")
-    return {
-        'success': True,
-        'clip_count': len(annotations)
-    }
+    # Delete any projects that are now empty (all their clips came from this game).
+    if project_ids_before:
+        placeholders = ','.join('?' * len(project_ids_before))
+        cursor.execute(f"""
+            DELETE FROM projects WHERE id IN ({placeholders})
+            AND id NOT IN (SELECT DISTINCT project_id FROM working_clips)
+        """, list(project_ids_before))
+        orphaned = cursor.rowcount
+    else:
+        orphaned = 0
+
+    return video_hashes, orphaned
 
 
 @router.delete("/{game_id:int}")
 async def delete_game(game_id: int):
-    """Delete a game from user's database. Global video is NOT deleted (may be shared).
-
-    Cleanup order matters for FK constraints:
-    - raw_clips cascade from games (ON DELETE CASCADE)
-    - But working_clips/working_videos/final_videos reference raw_clips and projects
-      without cascade, so we must delete those manually first.
-    """
+    """Delete a game from user's database. Global video is NOT deleted (may be shared)."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -1478,35 +1498,7 @@ async def delete_game(game_id: int):
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Game not found")
 
-        # Collect video hashes before cascade delete removes game_videos rows
-        video_hashes = [
-            row['blake3_hash'] for row in
-            cursor.execute("SELECT blake3_hash FROM game_videos WHERE game_id = ?", (game_id,)).fetchall()
-        ]
-
-        # Find all projects linked to this game's clips (auto-created or manual)
-        cursor.execute("""
-            SELECT DISTINCT p.id FROM projects p
-            JOIN working_clips wc ON wc.project_id = p.id
-            JOIN raw_clips rc ON rc.id = wc.raw_clip_id
-            WHERE rc.game_id = ?
-        """, (game_id,))
-        project_ids_before = {row['id'] for row in cursor.fetchall()}
-
-        # Delete the game — cascades to raw_clips, which cascades to working_clips
-        cursor.execute("DELETE FROM games WHERE id = ?", (game_id,))
-
-        # Delete any projects that are now empty (all their clips came from this game)
-        if project_ids_before:
-            placeholders = ','.join('?' * len(project_ids_before))
-            cursor.execute(f"""
-                DELETE FROM projects WHERE id IN ({placeholders})
-                AND id NOT IN (SELECT DISTINCT project_id FROM working_clips)
-            """, list(project_ids_before))
-            orphaned = cursor.rowcount
-        else:
-            orphaned = 0
-
+        video_hashes, orphaned = _delete_game_cascade(cursor, game_id)
         conn.commit()
 
     user_id = get_current_user_id()
@@ -1598,137 +1590,6 @@ def load_annotations_from_db(game_id: int) -> list:
         return annotations
 
 
-def save_annotations_to_db(game_id: int, annotations: list) -> None:
-    """
-    Save annotations to raw_clips table, syncing with existing records.
-
-    Uses natural key (game_id, end_time, video_sequence) to match annotations with raw_clips.
-    - Updates existing clips' metadata (name, rating, tags, notes, start_time)
-    - Deletes clips that are no longer in the annotations list
-    - New clips are expected to be created via real-time save
-    """
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Get existing raw_clips for this game (using (end_time, video_sequence) as natural key)
-        cursor.execute("""
-            SELECT id, end_time, video_sequence, filename, auto_project_id
-            FROM raw_clips
-            WHERE game_id = ?
-        """, (game_id,))
-        existing_clips = {(row['end_time'], row['video_sequence']): dict(row) for row in cursor.fetchall()}
-
-        # Track which keys are still present in annotations
-        annotation_keys = set()
-
-        for ann in annotations:
-            # Normalize an inverted range before it becomes the end_time-keyed
-            # natural key or hits the DB, so start_time <= end_time always holds.
-            start_time, end_time = normalize_clip_range(
-                ann.get('start_time', 0),
-                ann.get('end_time', ann.get('start_time', 0)),
-            )
-            video_sequence = ann.get('video_sequence')
-            clip_key = (end_time, video_sequence)
-            annotation_keys.add(clip_key)
-
-            tags = ann.get('tags', [])
-            tags_encoded = encode_data(tags)
-            rating = ann.get('rating', 3)
-            name = ann.get('name', '')
-
-            # Don't store default names - they should be computed on read
-            default_name = generate_clip_name(rating, tags)
-            if name == default_name:
-                name = ''
-
-            if clip_key in existing_clips:
-                # Update existing raw_clip metadata
-                cursor.execute("""
-                    UPDATE raw_clips
-                    SET start_time = ?, name = ?, rating = ?, tags = ?, notes = ?
-                    WHERE id = ?
-                """, (
-                    start_time,
-                    name,
-                    rating,
-                    tags_encoded,
-                    ann.get('notes', ''),
-                    existing_clips[clip_key]['id']
-                ))
-            else:
-                # Create new raw_clip (fallback if real-time save failed)
-                cursor.execute("""
-                    INSERT INTO raw_clips (filename, rating, tags, name, notes, start_time, end_time, game_id, video_sequence)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    '',
-                    rating,
-                    tags_encoded,
-                    name,
-                    ann.get('notes', ''),
-                    start_time,
-                    end_time,
-                    game_id,
-                    video_sequence,
-                ))
-                logger.info(f"Created raw_clip for game {game_id} at end_time {end_time} video_sequence {video_sequence}")
-
-        # Delete raw_clips that are no longer in annotations
-        for clip_key, clip_data in existing_clips.items():
-            if clip_key not in annotation_keys:
-                clip_id = clip_data['id']
-                filename = clip_data['filename']
-                auto_project_id = clip_data['auto_project_id']
-
-                # Delete auto-project if exists and unmodified
-                if auto_project_id:
-                    _delete_auto_project_if_unmodified(cursor, auto_project_id)
-
-                # Delete working clips that reference this raw clip
-                cursor.execute("DELETE FROM working_clips WHERE raw_clip_id = ?", (clip_id,))
-
-                # Delete the raw clip record
-                cursor.execute("DELETE FROM raw_clips WHERE id = ?", (clip_id,))
-
-                # Delete the file from disk
-                if filename:
-                    file_path = get_raw_clips_path() / filename
-                    if file_path.exists():
-                        os.unlink(file_path)
-                        logger.info(f"Deleted clip file: {file_path}")
-
-        conn.commit()
-
-
-def _delete_auto_project_if_unmodified(cursor, project_id: int) -> bool:
-    """Delete an auto-created project if it hasn't been modified."""
-    # Check if project has been modified (has working video, final video, or multiple clips)
-    cursor.execute("""
-        SELECT p.working_video_id, p.final_video_id,
-               (SELECT COUNT(*) FROM working_clips WHERE project_id = p.id) as clip_count
-        FROM projects p WHERE p.id = ?
-    """, (project_id,))
-    project = cursor.fetchone()
-
-    if not project:
-        return False
-
-    # Don't delete if project has been worked on
-    if project['working_video_id'] or project['final_video_id'] or project['clip_count'] > 1:
-        logger.info(f"Keeping modified auto-project {project_id}")
-        return False
-
-    # Delete the working clip first (foreign key constraint)
-    cursor.execute("DELETE FROM working_clips WHERE project_id = ?", (project_id,))
-
-    # Delete the project
-    cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-
-    logger.info(f"Deleted unmodified auto-project {project_id}")
-    return True
-
-
 @router.post("/{game_id:int}/finish-annotation")
 async def finish_annotation(game_id: int, body: FinishAnnotationRequest = FinishAnnotationRequest()):
     """
@@ -1785,15 +1646,19 @@ def _compute_storage_status(expires_at_val, auto_export_status) -> str:
 
     Single source of truth shared by list_games and load_game so the two can't
     diverge. Expired when the game_storage expiry has passed, OR when there is no
-    storage ref but the game was auto-exported (source deleted post-grace). An
-    unparseable expiry falls back to 'active' (treat as present, not gone).
+    storage ref but the game was auto-exported (source deleted post-grace).
+
+    T4280: an UNPARSEABLE expiry is treated as EXPIRED (the safe direction: it blocks
+    share/re-export of a possibly-gone video, matching T3970), and logged -- not
+    silently defaulted to 'active', which would present a possibly-gone video as fine.
     """
     if expires_at_val:
         try:
             exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
             return 'expired' if exp_dt.replace(tzinfo=None) < datetime.utcnow() else 'active'
-        except (ValueError, TypeError):
-            return 'active'
+        except (ValueError, TypeError) as e:
+            logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r}: {e}. Treating as EXPIRED.")
+            return 'expired'
     if auto_export_status:
         return 'expired'
     return 'active'
@@ -1819,8 +1684,11 @@ def _is_game_storage_expired(cursor, blake3_hash: str | None) -> bool:
     try:
         exp_dt = expires_at_val if isinstance(expires_at_val, datetime) else datetime.fromisoformat(expires_at_val)
         return exp_dt.replace(tzinfo=None) < datetime.utcnow()
-    except (ValueError, TypeError):
-        return False
+    except (ValueError, TypeError) as e:
+        # T4280: unparseable expiry -> treat as EXPIRED (safe: gate sharing of a
+        # possibly-gone video), and log; never silently report "not expired".
+        logger.error(f"[games] Unparseable storage_expires_at {expires_at_val!r} for {blake3_hash}: {e}. Treating as EXPIRED.")
+        return True
 
 
 class ShareGameRequest(BaseModel):

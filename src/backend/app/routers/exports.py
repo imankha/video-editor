@@ -15,6 +15,7 @@ Key design principles:
 import json
 import logging
 import math
+import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -208,8 +209,31 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
     project_id = job['project_id']
     output_key = modal_result.get('output_key', '')
 
+    # T4240: never fabricate a filename. A Modal result with no output_key means the
+    # render produced no output object; inventing recovered_{job_id}.mp4 would create a
+    # working_videos row pointing at an R2 object that doesn't exist (a lost-reference
+    # bug). Fail the recovery loudly for this job and mark it error instead.
+    if not output_key:
+        logger.error(f"[ExportJobs] Cannot finalize job {job_id}: Modal result missing output_key")
+        try:
+            with get_db_connection() as conn:
+                conn.cursor().execute("""
+                    UPDATE export_jobs
+                    SET status = 'error',
+                        error = 'Modal result incomplete: no output_key',
+                        completed_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (job_id,))
+                conn.commit()
+        except sqlite3.Error as db_err:
+            logger.error(f"[ExportJobs] Also failed to mark job {job_id} error: {db_err}", exc_info=True)
+        return {
+            "finalized": False,
+            "error": "Modal result incomplete: no output_key",
+        }
+
     # Extract filename from output_key (e.g., "working_videos/working_123_abc.mp4" -> "working_123_abc.mp4")
-    output_filename = output_key.split('/')[-1] if output_key else f"recovered_{job_id}.mp4"
+    output_filename = output_key.split('/')[-1]
 
     try:
         with get_db_connection() as conn:
@@ -278,34 +302,53 @@ def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
             "output_filename": output_filename,
         }
 
-    except Exception as e:
-        logger.error(f"[ExportJobs] Failed to finalize export {job_id}: {e}")
+    except sqlite3.Error as e:
+        # T4240: narrowed from a bare `except Exception`, which masked programming
+        # errors (e.g. the old undefined-`presigned_url` NameError) as a fake
+        # "finalized: False" for an export that had already committed. Only DB errors
+        # are handled here; anything else propagates (a 500 with a stack trace beats a
+        # lying "not finalized").
+        logger.error(f"[ExportJobs] Failed to finalize export {job_id}: {e}", exc_info=True)
         return {
             "finalized": False,
             "error": str(e)
         }
 
 
-def check_modal_job_running(modal_call_id: str) -> bool:
+def check_modal_job_running(modal_call_id: str) -> bool | None:
     """Check if a Modal job is still running using its call_id.
 
-    Returns True if running, False if complete/error/not found.
+    Three-state (T4240):
+    - True  -> still running (positive evidence).
+    - False -> definitively not running: a result was retrieved.
+    - None  -> UNKNOWN: Modal is unavailable or the API/transport errored, so we
+      could not determine the state. Callers MUST NOT treat None as "dead" -- killing
+      a paid job requires positive evidence it finished. A transient Modal API hiccup
+      previously returned False here and let cleanup_stale_exports mark live jobs error.
     """
     try:
         import modal
-        call = modal.FunctionCall.from_id(modal_call_id)
-        try:
-            # Non-blocking check - TimeoutError means still running
-            call.get(timeout=0)
-            return False  # Got result, not running
-        except TimeoutError:
-            return True  # Still running
-        except Exception:
-            return False  # Error, not running
     except ImportError:
-        return False  # Modal not available
+        return None  # Modal not available -> can't know
+
+    try:
+        call = modal.FunctionCall.from_id(modal_call_id)
     except Exception:
-        return False  # Failed to check, assume not running
+        logger.warning(f"[ExportJobs] Modal lookup failed for call {modal_call_id}; status unknown", exc_info=True)
+        return None  # API error looking up the call -> unknown
+
+    try:
+        # Non-blocking check - TimeoutError means still running.
+        call.get(timeout=0)
+        return False  # Got a result -> not running
+    except TimeoutError:
+        return True  # Still running
+    except Exception:
+        # Could be the job's own exception (dead) OR a Modal transport error (alive).
+        # We can't safely distinguish, so report UNKNOWN rather than risk killing a
+        # live paid job.
+        logger.warning(f"[ExportJobs] Modal status check errored for call {modal_call_id}; status unknown", exc_info=True)
+        return None
 
 
 def cleanup_stale_exports(max_age_minutes: int = 60):
@@ -338,16 +381,24 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
         # Check each candidate - only mark stale if Modal job is NOT running
         stale_count = 0
         still_running_count = 0
+        unknown_count = 0
 
         for job_id, modal_call_id in stale_candidates:
             if modal_call_id:
-                # Check Modal status before marking stale
-                if check_modal_job_running(modal_call_id):
+                # Check Modal status before marking stale.
+                running = check_modal_job_running(modal_call_id)
+                if running:  # True -> positively still running
                     still_running_count += 1
                     logger.info(f"[ExportJobs] Job {job_id} still running on Modal, not marking stale")
-                    continue  # Don't mark as stale - Modal says it's running
+                    continue
+                if running is None:
+                    # T4240: UNKNOWN (Modal API error). Never mark a paid job error on
+                    # a hunch -- skip it and re-check on the next sweep.
+                    unknown_count += 1
+                    logger.info(f"[ExportJobs] Job {job_id} Modal status unknown (API error), skipping this sweep")
+                    continue
 
-            # Either no modal_call_id or Modal says not running - mark as stale
+            # Either no modal_call_id or Modal says NOT running (False) - mark as stale
             cursor.execute("""
                 UPDATE export_jobs
                 SET status = 'error',
@@ -363,6 +414,8 @@ def cleanup_stale_exports(max_age_minutes: int = 60):
             logger.warning(f"[ExportJobs] Cleaned up {stale_count} stale exports")
         if still_running_count > 0:
             logger.info(f"[ExportJobs] {still_running_count} exports still running on Modal")
+        if unknown_count > 0:
+            logger.info(f"[ExportJobs] {unknown_count} exports had unknown Modal status, left untouched for next sweep")
 
 
 def get_active_exports() -> list[dict]:

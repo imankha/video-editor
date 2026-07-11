@@ -21,7 +21,6 @@ import threading
 import time as time_module
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -41,7 +40,6 @@ from ...database import (
     get_uploads_path,
 )
 from ...highlight_transform import (
-    transform_all_regions_to_raw,
     transform_all_regions_to_working,
 )
 from ...profile_context import get_current_profile_id
@@ -53,7 +51,6 @@ from ...services.collection_metadata import (
 )
 from ...services.ffmpeg_service import get_encoding_command_parts
 from ...services.image_extractor import (
-    extract_player_images_for_region,
     list_highlight_images,
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
@@ -209,20 +206,10 @@ def _finalize_overlay_export(
     return final_video_id
 
 
-def _export_sync_failed_data(export_type: str, project_id: int, project_name: str) -> dict:
-    """T4110: completion event when the render succeeded but the durable R2 sync
-    failed. Sent as a terminal ERROR (so the client marks the export failed, never
-    'complete', and never surfaces Move-to-My-Reels) but flagged retryable so the
-    UI prompts Retry — the WebSocket analog of T4050's 503 sync_failed response."""
-    from app.websocket import make_progress_data
-    data = make_progress_data(
-        current=100, total=100, phase='error',
-        message="Render finished but couldn't save to the cloud. Please try Export again.",
-        export_type=export_type, project_id=project_id, project_name=project_name,
-    )
-    data['retryable'] = True
-    data['code'] = 'sync_failed'
-    return data
+# T4200: the sync_failed payload builder now lives in export_helpers so framing and
+# multi-clip share the exact same event shape (no router→router imports). Kept as a
+# thin module-local alias so existing overlay call sites read unchanged.
+from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data
 
 
 # =============================================================================
@@ -322,8 +309,18 @@ def _get_overlay_data(cursor, project_id: int) -> tuple:
     if row['highlights_data']:
         try:
             highlights = decode_data(row['highlights_data'])
-        except Exception:
-            highlights = []
+        except Exception as e:
+            # NEVER fall back to []. Every overlay action does read-modify-write of
+            # the whole blob, so returning [] here would make the user's next gesture
+            # persist an empty list and permanently erase every highlight. Fail
+            # visibly instead (endpoint returns 500) and leave the stored blob intact
+            # for recovery. See T4210 / CLAUDE.md "No Silent Fallbacks for Internal Data".
+            logger.error(
+                f"[Overlay] Failed to decode highlights_data for working_video_id={row['id']} "
+                f"(project_id={project_id}): {e}. Refusing to overwrite with empty list.",
+                exc_info=True,
+            )
+            raise
 
     effect_type = normalize_effect_type(row['effect_type'])
     highlight_color = row['highlight_color']  # Can be None
@@ -363,8 +360,8 @@ async def overlay_action(project_id: int, action: OverlayAction):
     Apply an atomic overlay action.
 
     This endpoint processes a single user gesture and updates the overlay data
-    atomically. This is preferred over the PUT /overlay-data endpoint which
-    sends full JSON blobs and can cause overwrites.
+    atomically. It is the only write path for overlay data -- the full-blob
+    PUT /overlay-data endpoint (which could cause overwrites) was removed in T4210.
 
     Actions:
     - create_region: data.start_time, data.end_time
@@ -1390,207 +1387,6 @@ async def get_final_video(project_id: int):
         if presigned_url:
             return {"url": presigned_url, "filename": result['filename']}
         raise HTTPException(status_code=404, detail="Failed to generate R2 URL for final video")
-
-
-@router.put("/projects/{project_id}/overlay-data")
-async def save_overlay_data(
-    project_id: int,
-    highlights_data: str = Form("[]"),
-    text_overlays: str = Form("[]"),
-    effect_type: str = Form(DEFAULT_HIGHLIGHT_EFFECT.value)
-):
-    """
-    Save overlay editing state for a project.
-
-    Called by frontend auto-save when user modifies highlights in Overlay mode.
-    Saves to working_videos table for the project's current working video.
-
-    Also transforms and saves highlight data to source raw_clips for cross-project
-    reuse. The transformation converts from working video space to raw clip space,
-    accounting for crop, trim, and speed changes.
-
-    Request (form data):
-    - highlights_data: JSON string of highlight regions
-    - text_overlays: JSON string of text overlay configs
-    - effect_type: 'brightness_boost' | 'dark_overlay'
-
-    Response:
-    - success: boolean
-    - saved_at: timestamp
-    - raw_clips_updated: number of raw clips updated with defaults
-    """
-    logger.info(f"[Overlay Data] Saving for project {project_id}")
-
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-
-        # Get project's current working video
-        cursor.execute("""
-            SELECT working_video_id FROM projects WHERE id = ?
-        """, (project_id,))
-        project = cursor.fetchone()
-
-        if not project:
-            raise HTTPException(status_code=404, detail="Project not found")
-
-        if not project['working_video_id']:
-            raise HTTPException(
-                status_code=400,
-                detail="Project has no working video - complete framing first"
-            )
-
-        # Parse highlights from form data for DB write and later use
-        parsed_highlights = json.loads(highlights_data) if highlights_data and highlights_data != '[]' else []
-
-        # Update working video with overlay data
-        cursor.execute("""
-            UPDATE working_videos
-            SET highlights_data = ?,
-                text_overlays = ?,
-                effect_type = ?
-            WHERE id = ?
-        """, (encode_data(parsed_highlights) if parsed_highlights else None,
-              encode_data(json.loads(text_overlays)) if text_overlays and text_overlays != '[]' else None,
-              effect_type, project['working_video_id']))
-
-        # Transform and save highlight data to source raw_clips
-        raw_clips_updated = 0
-
-        if parsed_highlights:
-            try:
-                raw_clips_updated = await _save_highlights_to_raw_clips(
-                    project_id=project_id,
-                    regions=parsed_highlights,
-                    cursor=cursor
-                )
-            except Exception as e:
-                logger.warning(f"[Overlay Data] Failed to parse highlights: {e}")
-
-        conn.commit()
-
-        logger.info(f"[Overlay Data] Saved for working_video {project['working_video_id']}, "
-                   f"updated {raw_clips_updated} raw_clips")
-
-        return JSONResponse({
-            'success': True,
-            'saved_at': datetime.now().isoformat(),
-            'working_video_id': project['working_video_id'],
-            'raw_clips_updated': raw_clips_updated
-        })
-
-
-async def _save_highlights_to_raw_clips(
-    project_id: int,
-    regions: list,
-    cursor
-) -> int:
-    """
-    Transform highlight regions to raw clip space and save to raw_clips.
-
-    Returns the number of raw clips updated.
-    """
-    # Get working clips with framing data and raw clip info
-    cursor.execute("""
-        SELECT wc.id, wc.raw_clip_id, wc.crop_data, wc.segments_data,
-               rc.filename as raw_filename
-        FROM working_clips wc
-        JOIN raw_clips rc ON wc.raw_clip_id = rc.id
-        WHERE wc.project_id = ? AND wc.raw_clip_id IS NOT NULL
-    """, (project_id,))
-
-    working_clips = cursor.fetchall()
-
-    if not working_clips:
-        logger.info("[Overlay Data] No working clips with raw_clip_id found")
-        return 0
-
-    # Get working video dimensions
-    cursor.execute("""
-        SELECT wv.filename
-        FROM working_videos wv
-        JOIN projects p ON p.working_video_id = wv.id
-        WHERE p.id = ?
-    """, (project_id,))
-    wv_result = cursor.fetchone()
-
-    # Default dimensions if we can't determine from video
-    working_video_dims = {'width': 1080, 'height': 1920}
-
-    if wv_result:
-        # Try to get actual dimensions from the working video file
-        import cv2
-
-        from ...database import get_working_videos_path
-        wv_path = get_working_videos_path() / wv_result['filename']
-        if wv_path.exists():
-            cap = cv2.VideoCapture(str(wv_path))
-            if cap.isOpened():
-                working_video_dims = {
-                    'width': int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                    'height': int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                }
-                cap.release()
-
-    logger.info(f"[Overlay Data] Working video dimensions: {working_video_dims}")
-
-    clips_updated = 0
-
-    for clip in working_clips:
-        raw_clip_id = clip['raw_clip_id']
-        raw_filename = clip['raw_filename']
-
-        # Parse framing data
-        crop_keyframes = []
-        segments_data = {}
-
-        if clip['crop_data']:
-            try:
-                crop_keyframes = decode_data(clip['crop_data'])
-            except Exception:
-                pass
-
-        if clip['segments_data']:
-            try:
-                segments_data = decode_data(clip['segments_data'])
-            except Exception:
-                pass
-
-        # Transform regions to raw clip space
-        raw_regions = transform_all_regions_to_raw(
-            regions=regions,
-            crop_keyframes=crop_keyframes,
-            segments_data=segments_data,
-            working_video_dims=working_video_dims,
-            framerate=30.0
-        )
-
-        if not raw_regions:
-            logger.info(f"[Overlay Data] No regions transformed for raw_clip {raw_clip_id}")
-            continue
-
-        # Extract player images for each region
-        raw_clip_path = get_raw_clips_path() / raw_filename
-
-        for region in raw_regions:
-            if raw_clip_path.exists():
-                region['keyframes'] = extract_player_images_for_region(
-                    video_path=str(raw_clip_path),
-                    raw_clip_id=raw_clip_id,
-                    keyframes=region['keyframes'],
-                    framerate=30.0
-                )
-
-        # Save to raw_clips
-        cursor.execute("""
-            UPDATE raw_clips
-            SET default_highlight_regions = ?
-            WHERE id = ?
-        """, (encode_data(raw_regions) if raw_regions else None, raw_clip_id))
-
-        clips_updated += 1
-        logger.info(f"[Overlay Data] Saved {len(raw_regions)} regions to raw_clip {raw_clip_id}")
-
-    return clips_updated
 
 
 async def _load_highlights_from_raw_clips(project_id: int, cursor) -> list:

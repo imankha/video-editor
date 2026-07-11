@@ -132,24 +132,38 @@ export function HeroMatchup({ pair, wonId, muted = true, onPick, onReplay }) {
         </span>
       </button>
 
-      {/* Bottom overlay: name + info + single Pick. */}
-      <div className="absolute inset-x-0 bottom-0 z-10 p-3 pt-10 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
-        <div className="text-white font-semibold text-base truncate">{cur.name}</div>
-        {cur.opponent_line && <div className="text-xs text-gray-300 truncate">{cur.opponent_line}</div>}
-        <div className="flex items-center gap-2 flex-wrap text-xs mt-0.5">
-          {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
-          {(cur.tags || []).map((t) => <span key={t} className="text-cyan-200/80">#{t}</span>)}
-        </div>
-        <button
-          type="button"
-          onClick={() => onPick(cur, other)}
-          disabled={!canPick}
-          className={`mt-2 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl
-            font-bold text-white ${REEL.bgCta} transition-colors
-            ${canPick ? REEL.bgCtaHover : 'opacity-50 cursor-not-allowed'}`}
+      {/* Bottom overlay. T4760: the whole name+info+button block is the pick target
+          (not just the 48px button) so near-misses still register. The video stays
+          watch-only. While the pick gate is counting down the target is inert (the
+          visible "Pick in Ns" communicates why); only the video/swap affordances work. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 pt-10 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+        <div
+          role="button"
+          tabIndex={canPick ? 0 : -1}
+          aria-disabled={!canPick}
+          onClick={() => { if (canPick) onPick(cur, other); }}
+          onKeyDown={(e) => {
+            if (canPick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPick(cur, other); }
+          }}
+          aria-label={`Pick ${cur.name}`}
+          data-testid="hero-pick-target"
+          className={`p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${canPick ? 'cursor-pointer' : 'cursor-not-allowed'}`}
         >
-          <Check size={18} /> {canPick ? 'Pick' : `Pick in ${pickGate}s`}
-        </button>
+          <div className="text-white font-semibold text-base truncate">{cur.name}</div>
+          {cur.opponent_line && <div className="text-xs text-gray-300 truncate">{cur.opponent_line}</div>}
+          <div className="flex items-center gap-2 flex-wrap text-xs mt-0.5">
+            {minuteLabel && <span className="font-mono text-cyan-300">{minuteLabel}</span>}
+            {(cur.tags || []).map((t) => <span key={t} className="text-cyan-200/80">#{t}</span>)}
+          </div>
+          {/* Visual affordance only; the clickable target is the wrapper above. */}
+          <div
+            className={`pointer-events-none mt-2 flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl
+              font-bold text-white ${REEL.bgCta} transition-colors
+              ${canPick ? REEL.bgCtaHover : 'opacity-50'}`}
+          >
+            <Check size={18} /> {canPick ? 'Pick' : `Pick in ${pickGate}s`}
+          </div>
+        </div>
       </div>
 
       {won && (
