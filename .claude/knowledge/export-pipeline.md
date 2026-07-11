@@ -24,6 +24,7 @@ updated: 2026-07-03 (initial version, workflow setup)
 | `GET /api/exports/{job_id}/modal-status` | `exports.py:797` | Recovery source of truth; may call `finalize_modal_export` (`exports.py:191`) |
 | Sweep (no route) | `auto_export.py _export_brilliant_clip` | **T4175**: pre-expiry, preserves each never-framed clip's extract to `raw_clips/auto_*.mp4` + wires `raw_clips.filename` + leaves a frameable draft. NO publish, NO archive (was: `final_videos` insert + `archive_project`). Already-framed reels still skipped (T4160). |
 | `POST /api/downloads/publish/{project_id}` etc. | `downloads.py:818` publish, `:923` restore | Both use `durable_sync` dependency |
+| `POST /api/downloads/move-to-profile` | `downloads.py:move_reels_to_profile` (T4850) | MOVE published reels to a sibling profile (same user). Body `{video_ids,target_profile_id}`. Batch all-or-nothing; COPIES the per-profile R2 media to the target prefix, writes+durably-syncs TARGET DB, THEN deletes from SOURCE (source rides `durable_sync`), then deletes source-prefix objects last. See below. |
 
 **The 6 export triggers** (T4370 harness must snapshot all of them): single-clip render (`/render`), multi-clip Modal branch, multi-clip local branch (`_export_clips:1236` vs `:1463`), overlay final (`render_overlay`/`/final`), durable worker (`export_worker.process_export_job`), sweep auto-export (`auto_export._export_brilliant_clip`).
 
@@ -86,6 +87,45 @@ graph LR
 - WS progress is lossy by design; if you need durability, write `export_jobs`, don't add WS retries.
 - `export_worker.process_framing_export` does NOT stamp `working_clips.exported_at` (drift vs the router paths).
 - T2720 history: a 14s R2 upload lock once froze the UI post-export — keep syncs off the request path; change ordering, not threading.
+
+## Transfer reels between profiles (T4850)
+
+- **`POST /api/downloads/move-to-profile`** (`downloads.py:move_reels_to_profile`) MOVES
+  published `final_videos` rows to a sibling profile of the SAME user (multi-athlete
+  accounts). Cross-profile DB access reuses materialization's helpers:
+  `ensure_profile_db_local(user_id, target_profile_id)` (R2 pull of the target DB) +
+  `_open_profile_db(...)` (raw rw connection, `foreign_keys=ON`), then explicit
+  `sync_db_to_r2_explicit(user_id, target_profile_id)`. Target validated via
+  `user_db.get_profiles`.
+- **R2 MEDIA IS PER-PROFILE — the move server-side COPIES the object** (bug fix, do not
+  regress): `final_videos/{filename}` lives under `{env}/users/{uid}/profiles/{SOURCE}/`
+  (r2_key embeds profile_id). The move copies it to the TARGET prefix
+  (`copy_profile_object`) or the target-profile presign 404s on stream/download. The
+  original "media is per-USER, no copy" assumption shipped a 404-on-play bug (found in
+  live test). `filename` is a per-user hash → no collision across a user's profiles.
+- **What moves vs resets** (`_build_moved_reel_row`): carried = frozen display/play
+  metadata (`filename, name, duration, aspect_ratio, tags, clip_count, quality_score,
+  rating_counts, version, created_at, clip_start_time, clip_game_start_time, published_at`).
+  Reset/cleared = `project_id/game_id/game_ids -> NULL` (source-profile ids; keeping
+  them dangles + fabricates a phantom "Game N" collection), `source_clip_id -> NULL`
+  (avoid twin-sync/teammate-exclude collisions), `rating/rd/match_count` re-seeded
+  as a fresh export (single-clip: `seed_rating(quality_score)`/`RD_MAX`/0; multi-clip:
+  NULL/NULL/0), `watched_at -> NULL` (NEW in target).
+- **`latest_final_videos_subquery()` carries a lineage-less tiebreaker** (`queries.py`):
+  a moved reel has project_id AND game_id NULL; without a per-row `id` tiebreaker (fires
+  ONLY when both are NULL) all moved reels collapse into the `(0,0)` partition and only
+  one survives `MAX(version)`. No-op for every pre-T4850 row.
+- **Durability = target-first, source-second** (T4110 across two DBs + R2 objects):
+  validate all ids (all-or-nothing 400) -> Phase 0 copy media object(s) to target prefix
+  (fail -> 502, nothing moved) -> Phase 1 insert target rows + sync TARGET DB (fail ->
+  roll back target rows AND copied objects, 503, source intact) -> Phase 2 delete source
+  rows (source rides `durable_sync`) -> Phase 3 delete SOURCE-prefix objects LAST (fail ->
+  logged orphan, never gated). Machine death mid-op = brief DUPLICATE (reel in both),
+  never loss. One DB sync per profile, never per reel.
+- **INVARIANT — before_after_tracks/editing lineage stay in source**; the moved reel is
+  NOT re-editable in the target (no project/working_clips copied). Collections/rankings are
+  derived views over published `final_videos`, so deleting the source row auto-vacates them
+  (no membership table). Tests: `test_t4850_move_reels.py`, `e2e/T4850-move-reels.spec.js`.
 
 ## Testing seams
 - `MODAL_ENABLED=false` → full local render path (T4120's sanctioned in-container verify mode); `FORCE_R2_SYNC_FAILURE` + machine-cycle simulation seams (prod-gated) exist for durability tests (`tests/test_t4050_durable_sync.py` is the pattern).

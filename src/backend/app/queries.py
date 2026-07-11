@@ -110,6 +110,16 @@ def latest_final_videos_subquery() -> str:
 
     Uses (COALESCE(project_id, 0), COALESCE(game_id, 0)) as composite key to avoid collisions.
 
+    T4850 (transferred reels): a reel MOVED to another profile keeps no source
+    lineage in its new profile — both project_id AND game_id are NULL (the
+    editing lineage stays behind in the source profile). Without a discriminator
+    those rows would all collapse into the single (0, 0) partition and only ONE
+    moved reel would survive the MAX(version) filter. The per-row `id` tiebreaker
+    (added ONLY when both keys are NULL) gives each moved reel its own partition.
+    It is a strict no-op for every pre-T4850 row: an exported reel always carries
+    a project_id (brilliant_clip / custom_project) or a game_id (annotated_game),
+    so the CASE yields 0 and version dedup within a source is unchanged.
+
     Returns:
         SQL string for use in WHERE ... id IN (...)
 
@@ -122,7 +132,9 @@ def latest_final_videos_subquery() -> str:
     return """
         SELECT id FROM (
             SELECT id, ROW_NUMBER() OVER (
-                PARTITION BY COALESCE(project_id, 0), COALESCE(game_id, 0)
+                PARTITION BY COALESCE(project_id, 0), COALESCE(game_id, 0),
+                             CASE WHEN project_id IS NULL AND game_id IS NULL
+                                  THEN id ELSE 0 END
                 ORDER BY version DESC
             ) as rn
             FROM final_videos
