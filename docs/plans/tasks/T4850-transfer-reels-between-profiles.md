@@ -2,7 +2,7 @@
 
 **Status:** TODO
 **Impact:** 6
-**Complexity:** 6
+**Complexity:** 4
 **Created:** 2026-07-10
 **Updated:** 2026-07-10
 
@@ -22,12 +22,14 @@ This hits the core audience directly (highly engaged soccer parents; multi-kid f
 - **Game sharing DOES materialize across profiles**: the team-sharing epic (T2820–T2850) can copy a game reference + per-player-filtered annotations into a recipient profile ([materialization.py](../../../src/backend/app/services/materialization.py), T2830's game-reference helper: games + game_videos + game_storage_refs insertion; T2850's share flow has a recipient profile picker). This is the machinery to extend — do NOT build a parallel system.
 - **Data locality**: everything a reel is made of lives in the *source profile's* SQLite DB — `raw_clips` → `projects`/`working_clips` (versioned) → `final_videos` (frozen name/aspect/duration/game_ids at publish) — plus R2 media objects. A transfer is a cross-profile-DB row copy + R2 ref handling, same shape as T2830's materialization and `scripts/copy_user_between_envs.py`.
 
-## Solution (direction, needs design pass)
+## Solution (decisions locked with user 2026-07-10)
 
-Two complementary pieces; scope decision at design time:
+User settled the four open design questions:
 
-1. **Transfer after the fact (the actual request)**: a "Move to profile…" action on reel cards in My Reels (and probably draft cards). Backend endpoint that materializes the reel into the sibling profile's DB and removes it from the source (move, not copy — same user, so R2 objects can be referenced/re-pointed rather than duplicated; decide copy-vs-repoint per object type). Must carry the full lineage needed for re-edit (project + working_clips + raw_clip + game reference via T2830's helper) OR explicitly transfer as "published reel only" (frozen metadata, no re-edit) — decide in design; the frozen-metadata-only variant is far simpler and satisfies the reported use case (curation/sharing per athlete).
-2. **Assign at creation (prevents the problem)**: optional target-profile picker when creating a clip / publishing, defaulting to current profile. Lower priority; only if design shows it falls out cheaply from (1).
+1. **Semantics: published-reel-only MOVE.** Transfer the `final_videos` row + frozen metadata (name, aspect_ratio, duration, game_ids — T3600 freeze) to the sibling profile and remove it from the source. The reel plays, ranks, and shares in the target profile but is NOT re-editable there; editing lineage (raw_clip/project/working_clips) stays behind in the source profile. No full-lineage materialization, no copy-in-both-profiles.
+2. **UI surface: reel card overflow menu + bulk select.** "Move to profile…" action on My Reels cards, visible only when the account has 2+ profiles. No publish-time profile picker in this task. **Mass migration is in scope (user, 2026-07-10):** a multi-select mode in My Reels ("Select" → check reels → "Move to profile…") so a parent can move a whole batch of one athlete's reels at once.
+3. **Scope: published reels only.** Drafts are not movable in v1.
+4. **Collections: auto-remove on move.** Moving a reel silently removes it from source-profile collections and vacates its ranking slot (`season_rank`, Glicko row) as part of the single move operation. Design pass must enumerate every source-profile reference cleaned up (collections, rank rows, watched state) and what happens to existing share links for the moved video (share snapshots are per sharer_profile in Postgres — decide invalidate vs leave-working).
 
 Constraints:
 - Gesture-based persistence: the move is a single explicit user action → one surgical backend call. No reactive syncing.
@@ -58,17 +60,18 @@ Constraints:
 ## Implementation
 
 ### Steps
-1. [ ] Design pass: full-lineage move vs published-reel-only move; collection/ranking edge cases; R2 copy-vs-repoint
-2. [ ] Backend: transfer endpoint (surgical, both-DB sync + version bump)
-3. [ ] Frontend: "Move to profile…" action on reel (and draft?) cards, only shown when the user has 2+ profiles
+1. [ ] Design pass: enumerate every source-profile reference the move must clean up (collections, season_rank/Glicko, watched state, share links); R2 copy-vs-repoint per object type
+2. [ ] Backend: batch transfer endpoint `POST /api/reels/move-to-profile {video_ids: [...], target_profile_id}` — moves N reels atomically in ONE operation, one durable sync + version bump per profile DB (not per reel); partial-failure semantics decided in design (all-or-nothing preferred)
+3. [ ] Frontend: "Move to profile…" on the reel card overflow menu + multi-select mode in My Reels with a bulk "Move to profile…" action; both only shown when the user has 2+ profiles
 4. [ ] Migration file if schema changes
-5. [ ] Tests: backend transfer round-trip; frontend E2E move gesture
+5. [ ] Tests: backend single + batch transfer round-trip (incl. collection auto-remove and rank-row cleanup); frontend E2E single move + bulk move gestures
 
 ## Acceptance Criteria
 
 - [ ] A reel in profile A can be moved to profile B of the same user via an explicit gesture, and appears in B's My Reels
-- [ ] Source profile no longer lists the reel; no orphaned rows or dangling final_video refs (v021/v022 lesson)
-- [ ] Moved reel plays in the target profile (R2 refs valid)
+- [ ] Multiple reels can be selected and moved in one gesture (mass migration), with one sync per profile DB
+- [ ] Source profile no longer lists moved reels; collections auto-updated, rank rows vacated; no orphaned rows or dangling final_video refs (v021/v022 lesson)
+- [ ] Moved reels play in the target profile (R2 refs valid)
 - [ ] Both profile DBs sync durably (survives machine cycle — T4050/T4110 boundary)
 - [ ] Users with a single profile never see the affordance
 - [ ] Tests pass
