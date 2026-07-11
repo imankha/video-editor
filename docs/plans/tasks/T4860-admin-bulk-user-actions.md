@@ -51,7 +51,7 @@ Tests:
 - `src/backend/tests/test_admin.py` (or the file where existing admin endpoint tests live — locate `grant-credits` tests and sit next to them).
 
 ### Related Tasks
-- Depends on: none.
+- Soft-depends on: **T4870** (admin panel shows fake 0 credits for users whose `user.sqlite` isn't on the local machine) — land it first or in the same wave, otherwise bulk-grant decisions are made against wrong balances.
 - Related: existing single-user grant flow (`CreditGrantModal`, `POST /admin/users/{id}/grant-credits`) — bulk grant must stay behaviorally identical per user.
 
 ### Technical Notes
