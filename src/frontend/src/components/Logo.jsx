@@ -47,7 +47,14 @@ export function Logo({ className = '', size = 40 }) {
   );
 }
 
-export function LogoWithText({ className = '', onLogoClick, logoAriaLabel }) {
+export function LogoWithText({
+  className = '',
+  onLogoClick,
+  logoAriaLabel,
+  logoSize = 64,
+  textClassName = 'text-xl',
+  widthClassName = 'w-[80px]',
+}) {
   const emblem = onLogoClick ? (
     <button
       type="button"
@@ -56,17 +63,17 @@ export function LogoWithText({ className = '', onLogoClick, logoAriaLabel }) {
       className="self-center cursor-pointer hover:scale-110 transition-transform focus:outline-none"
       style={{ lineHeight: 0, background: 'none', border: 'none', padding: 0 }}
     >
-      <Logo size={64} />
+      <Logo size={logoSize} />
     </button>
   ) : (
-    <Logo size={64} className="self-center" />
+    <Logo size={logoSize} className="self-center" />
   );
 
   return (
-    <div className={`flex flex-col w-[80px] ${className}`}>
-      <span className="text-xl font-bold text-white text-left">Reel</span>
+    <div className={`flex flex-col ${widthClassName} ${className}`}>
+      <span className={`${textClassName} font-bold text-white text-left`}>Reel</span>
       {emblem}
-      <span className="text-xl font-bold text-white text-right">Ballers</span>
+      <span className={`${textClassName} font-bold text-white text-right`}>Ballers</span>
     </div>
   );
 }
