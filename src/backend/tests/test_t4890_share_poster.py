@@ -460,3 +460,50 @@ def test_moved_reel_carries_poster_and_copies_object(tmp_path):
             "SELECT poster_filename FROM final_videos WHERE filename='reeln.mp4'").fetchone()
         ct2.close()
         assert moved2["poster_filename"] is None
+
+
+# ---------------------------------------------------------------------------
+# Clearest-frame selection (unfurl audit follow-up)
+# ---------------------------------------------------------------------------
+
+def test_clearest_frame_skips_blurry_opening(tmp_path):
+    """A clip whose opening is black and whose middle has detail must NOT
+    poster the black frame. JPEG-size heuristic: detail encodes larger."""
+    import subprocess
+
+    from app.services import poster as poster_mod
+
+    src = str(tmp_path / "clip.mp4")
+    # 1s black, then 2s of detailed test pattern
+    subprocess.run(
+        ["ffmpeg", "-y",
+         "-f", "lavfi", "-i", "color=black:s=320x240:d=1",
+         "-f", "lavfi", "-i", "testsrc=size=320x240:rate=25:duration=2",
+         "-filter_complex", "[0:v][1:v]concat=n=2:v=1[v]",
+         "-map", "[v]", src],
+        capture_output=True, check=True, timeout=60,
+    )
+    out = str(tmp_path / "poster.jpg")
+    assert poster_mod.extract_clearest_frame_jpeg(src, out)
+
+    first = str(tmp_path / "first.jpg")
+    assert poster_mod.extract_first_frame_jpeg(src, first)
+
+    from pathlib import Path
+    # The selected frame must be substantially richer than the black opener.
+    assert Path(out).stat().st_size > Path(first).stat().st_size * 2
+
+
+def test_clearest_frame_falls_back_when_probe_fails(tmp_path, monkeypatch):
+    from app.services import poster as poster_mod
+
+    monkeypatch.setattr(poster_mod, "_probe_duration", lambda source: None)
+    called = {}
+
+    def fake_first(source, output_path):
+        called["yes"] = True
+        return True
+
+    monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", fake_first)
+    assert poster_mod.extract_clearest_frame_jpeg("whatever.mp4", str(tmp_path / "o.jpg"))
+    assert called.get("yes")

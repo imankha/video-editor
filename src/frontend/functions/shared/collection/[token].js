@@ -48,7 +48,15 @@ ${posterMeta}<meta property="og:site_name" content="Reel Ballers">
 export function injectHeadTags(html, tags) {
   const i = html.search(/<\/head>/i);
   if (i === -1) return html; // no <head> -> serve untouched rather than corrupt
-  return html.slice(0, i) + tags + html.slice(i);
+  // Strip the SPA's own static og/twitter tags first: crawlers take the FIRST
+  // occurrence, so leaving the generic app-wide tags in place would win over
+  // the share-specific ones we inject.
+  const stripped = html.replace(
+    /[ \t]*<meta (?:property="og:|name="twitter:)[^>]*>\r?\n?/gi,
+    ""
+  );
+  const j = stripped.search(/<\/head>/i);
+  return stripped.slice(0, j) + tags + stripped.slice(j);
 }
 
 async function fetchWithTimeout(url, ms) {

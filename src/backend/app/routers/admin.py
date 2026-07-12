@@ -452,7 +452,8 @@ _POSTER_BACKFILL_STATE: dict = {"running": False, "last_result": None, "task": N
 
 @router.post("/backfill-share-posters")
 async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
-                                 dry_run: bool = Query(False)):
+                                 dry_run: bool = Query(False),
+                                 force: bool = Query(False)):
     """Generate first-frame posters for PUBLISHED reels that have none (T4890).
 
     Reels published before the poster feature carry no og:image, so their share
@@ -467,7 +468,7 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
     from ..services.poster import backfill_posters as _backfill
 
     if dry_run:
-        return await asyncio.to_thread(_backfill, limit, True)
+        return await asyncio.to_thread(_backfill, limit, True, force)
 
     if _POSTER_BACKFILL_STATE["running"]:
         return {"started": False, "already_running": True,
@@ -477,7 +478,7 @@ async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
 
     async def _run_in_background():
         try:
-            _POSTER_BACKFILL_STATE["last_result"] = await asyncio.to_thread(_backfill, limit, False)
+            _POSTER_BACKFILL_STATE["last_result"] = await asyncio.to_thread(_backfill, limit, False, force)
         except Exception as exc:
             logger.exception("[PosterBackfill] background run failed")
             _POSTER_BACKFILL_STATE["last_result"] = {"error": str(exc)}

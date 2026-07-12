@@ -49,4 +49,16 @@ describe('injectHeadTags', () => {
   it('serves untouched HTML when no </head> exists (never corrupts)', () => {
     expect(injectHeadTags('<html>no head</html>', 'X')).toBe('<html>no head</html>');
   });
+
+  it("strips the SPA's static og/twitter tags so injected ones win", () => {
+    const spa =
+      '<head><meta property="og:title" content="Reel Ballers">\n' +
+      '<meta name="twitter:card" content="summary_large_image">\n' +
+      '<meta name="description" content="keep me"></head>';
+    const out = injectHeadTags(spa, '<meta property="og:title" content="Specific">');
+    expect(out).toContain('content="Specific"');
+    expect(out).not.toContain('content="Reel Ballers"');
+    expect(out).toContain('keep me'); // non-og meta untouched
+    expect(out.match(/og:title/g)).toHaveLength(1);
+  });
 });

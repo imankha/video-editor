@@ -45,6 +45,71 @@ def poster_rel_path(basename: str) -> str:
     return f"final_videos/{POSTER_SUBDIR}/{basename}"
 
 
+# Sampled positions for clearest-frame selection. Skips the extremes: openings
+# fade in / start mid-whistle, endings fade out.
+CANDIDATE_POSITIONS = (0.15, 0.3, 0.5, 0.7, 0.85)
+
+
+def _probe_duration(source: str) -> float | None:
+    """Container duration in seconds via ffprobe, or None (never raises)."""
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        source,
+    ]
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+        return float(out.stdout.strip())
+    except Exception as e:
+        logger.info(f"[Poster] duration probe failed: {e}")
+        return None
+
+
+def extract_clearest_frame_jpeg(source: str, output_path: str) -> bool:
+    """Pick the CLEAREST frame among a handful sampled across the clip.
+
+    Heuristic: JPEG-encode one frame at each of CANDIDATE_POSITIONS and keep the
+    LARGEST encoding - encoded size tracks detail/sharpness (motion blur and
+    defocus compress away detail), so the biggest JPEG is the crispest candidate.
+    Cost: ~5 fast seeks + 5 single-frame encodes (faststart MP4s make remote
+    seeks ranged reads), well under a second of CPU - no ML, no full decode.
+
+    Falls back to the plain first frame when probing/sampling fails. Returns
+    True when output_path holds a poster; never raises.
+    """
+    duration = _probe_duration(source)
+    if not duration or duration <= 0:
+        return extract_first_frame_jpeg(source, output_path)
+
+    best_bytes: bytes | None = None
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, frac in enumerate(CANDIDATE_POSITIONS):
+            cand = str(Path(tmp) / f"cand_{i}.jpg")
+            cmd = [
+                "ffmpeg", "-y",
+                "-ss", f"{duration * frac:.3f}",
+                "-i", source,
+                "-frames:v", "1",
+                "-q:v", "3",
+                cand,
+            ]
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
+            except Exception:
+                continue
+            p = Path(cand)
+            if p.exists() and p.stat().st_size > 0:
+                data = p.read_bytes()
+                if best_bytes is None or len(data) > len(best_bytes):
+                    best_bytes = data
+
+    if best_bytes is None:
+        return extract_first_frame_jpeg(source, output_path)
+    Path(output_path).write_bytes(best_bytes)
+    return True
+
+
 def extract_first_frame_jpeg(source: str, output_path: str) -> bool:
     """Grab the first frame of a video to a JPEG via ffmpeg.
 
@@ -90,7 +155,7 @@ def generate_and_store_poster(user_id: str, final_filename: str) -> str | None:
     basename = poster_basename(final_filename)
     with tempfile.TemporaryDirectory() as tmp:
         out_path = str(Path(tmp) / basename)
-        if not extract_first_frame_jpeg(video_url, out_path):
+        if not extract_clearest_frame_jpeg(video_url, out_path):
             logger.info(f"[Poster] extraction failed for {final_filename}; no poster stored")
             return None
         data = Path(out_path).read_bytes()
@@ -111,7 +176,7 @@ def generate_and_store_poster(user_id: str, final_filename: str) -> str | None:
     return basename
 
 
-def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
+def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:
     """Admin-triggered one-off: generate posters for PUBLISHED reels that have none
     (T4890). Pre-existing reels published before this feature carry no poster, so
     their share links unfurl without an og:image until backfilled.
@@ -128,6 +193,10 @@ def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
     while `partial` is True. NOT run on startup/deploy. Idempotent -- once the
     column is set the row is no longer a candidate. Never raises per-row: a single
     failure is recorded in `failed` and the scan continues.
+
+    `force=True` REGENERATES posters for ALL published reels (poster or not) --
+    used to upgrade legacy first-frame posters to clearest-frame selection. The
+    object key is deterministic, so regeneration just overwrites in place.
     """
     from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
     from ..migrations import _get_profile_ids
@@ -139,6 +208,7 @@ def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
     result = {
         "limit": limit,
         "dry_run": dry_run,
+        "force": force,
         "scanned": 0,
         "generated": [],
         "already_present": [],
@@ -161,13 +231,12 @@ def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
             set_current_profile_id(profile_id)
             ensure_database()
 
+            candidate_sql = (
+                "SELECT id, filename FROM final_videos WHERE published_at IS NOT NULL"
+                + ("" if force else " AND poster_filename IS NULL")
+            )
             with get_db_connection() as conn:
-                rows = [
-                    dict(r) for r in conn.execute(
-                        "SELECT id, filename FROM final_videos "
-                        "WHERE published_at IS NOT NULL AND poster_filename IS NULL"
-                    ).fetchall()
-                ]
+                rows = [dict(r) for r in conn.execute(candidate_sql).fetchall()]
 
             profile_changed = False
             for row in rows:
@@ -178,8 +247,9 @@ def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
                 result["scanned"] += 1
                 basename = poster_basename(filename)
 
-                # Skip-if-poster-exists: the object is already there, just heal the ref.
-                if file_exists_in_r2(user_id, poster_rel_path(basename)):
+                # Skip-if-poster-exists: the object is already there, just heal the
+                # ref. Bypassed under force: regeneration overwrites in place.
+                if not force and file_exists_in_r2(user_id, poster_rel_path(basename)):
                     if not dry_run:
                         _set_poster_filename(fv_id, basename)
                         profile_changed = True
@@ -211,12 +281,11 @@ def backfill_posters(limit: int = 25, dry_run: bool = False) -> dict:
 
             # Persist the healed/generated poster_filename column to R2 (sweep
             # corollary: an explicit sync is required outside the request path).
-            if profile_changed:
-                if not sync_db_to_r2_explicit(user_id, profile_id):
-                    logger.error(
-                        f"[PosterBackfill] R2 DB sync FAILED for user={user_id} "
-                        f"profile={profile_id}; poster_filename writes may be lost on cold-load"
-                    )
+            if profile_changed and not sync_db_to_r2_explicit(user_id, profile_id):
+                logger.error(
+                    f"[PosterBackfill] R2 DB sync FAILED for user={user_id} "
+                    f"profile={profile_id}; poster_filename writes may be lost on cold-load"
+                )
 
     logger.info(
         f"[PosterBackfill] done generated={len(result['generated'])} "
