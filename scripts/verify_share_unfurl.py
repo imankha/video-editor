@@ -87,6 +87,12 @@ def check_once(share_url: str, attempt: int) -> tuple[bool, list[str]]:
     ):
         print("    note: og:image dims absent (optional)")
 
+    # An invalid player card (no twitter:player URL) makes renderers show an
+    # EMPTY media pane even when og:image is perfect (found live on staging).
+    if tags.get("twitter:card") == "player" and not tags.get("twitter:player"):
+        problems.append("twitter:card=player without twitter:player (invalid card, "
+                        "renders an empty media pane)")
+
     return not problems, problems
 
 

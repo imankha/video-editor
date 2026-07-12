@@ -104,6 +104,15 @@ describe('renderSharePage', () => {
     expect(html).toContain('property="og:title"');
     expect(html).toContain('property="og:video"');
     expect(html).toContain('name="twitter:card"');
+    // NEVER card=player: we emit no twitter:player URL, and an invalid player
+    // card makes renderers show an EMPTY media pane (found live on staging).
+    expect(html).not.toContain('content="player"');
+  });
+
+  it('twitter:card is summary_large_image with a poster, summary without', () => {
+    const withPoster = { ...share, video_poster_url: 'https://r2.example.com/p.jpg' };
+    expect(renderSharePage(withPoster)).toContain('name="twitter:card" content="summary_large_image"');
+    expect(renderSharePage(share)).toContain('name="twitter:card" content="summary"');
   });
 
   it('emits og:image + twitter:image + <video poster> when a poster URL is present (T4890)', () => {

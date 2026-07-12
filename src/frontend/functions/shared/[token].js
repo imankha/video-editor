@@ -117,7 +117,7 @@ ${preconnect}
 <meta property="og:video" content="${videoUrl}">
 <meta property="og:video:type" content="video/mp4">
 ${posterMeta}<meta property="og:site_name" content="Reel Ballers">
-<meta name="twitter:card" content="player">
+<meta name="twitter:card" content="${rawPosterUrl ? "summary_large_image" : "summary"}">
 <meta name="twitter:title" content="${name}">
 <meta name="twitter:description" content="${desc}">
 <style>
