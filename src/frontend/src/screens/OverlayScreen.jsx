@@ -21,6 +21,7 @@ import { useFramingStore } from '../stores/framingStore';
 import { useExportStore } from '../stores/exportStore';
 import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
+import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
 import { track } from '../utils/analytics';
 
 /**
@@ -516,6 +517,13 @@ export function OverlayScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, overlayLoadedProjectId, setOverlaySyncState]);
 
+  // Clear any unsaved-failure state when switching projects so a prior project's
+  // failed overlay actions never block/warn on this one (T4900). Keyed on
+  // projectId only — this is a lifecycle reset, not reactive persistence.
+  useEffect(() => {
+    return () => useOverlayActionStore.getState().reset();
+  }, [projectId]);
+
   // Load overlay data from backend
   // Skip if we have fresh clip metadata (from framing export) - that takes priority
   // Uses state machine to track loading state
@@ -584,8 +592,8 @@ export function OverlayScreen({
       // Get the created region to extract times
       const region = highlightRegions.find(r => r.id === regionId);
       if (region) {
-        overlayActions.createRegion(projectId, region.startTime, region.endTime, regionId)
-          .catch(err => console.error('[OverlayScreen] Failed to sync createRegion:', err));
+        dispatchOverlayAction('createRegion', () =>
+          overlayActions.createRegion(projectId, region.startTime, region.endTime, regionId));
       }
     }
     setOverlayChangedSinceExport(true);
@@ -597,8 +605,7 @@ export function OverlayScreen({
     const region = highlightRegions[regionIndex];
     deleteHighlightRegion(regionIndex);
     if (region && canSyncActions) {
-      overlayActions.deleteRegion(projectId, region.id)
-        .catch(err => console.error('[OverlayScreen] Failed to sync deleteRegion:', err));
+      dispatchOverlayAction('deleteRegion', () => overlayActions.deleteRegion(projectId, region.id));
     }
     setOverlayChangedSinceExport(true);
   }, [deleteHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
@@ -607,8 +614,8 @@ export function OverlayScreen({
   const wrappedMoveHighlightRegionStart = useCallback((regionId, newStartTime) => {
     moveHighlightRegionStart(regionId, newStartTime);
     if (canSyncActions) {
-      overlayActions.updateRegion(projectId, regionId, newStartTime, null)
-        .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion start:', err));
+      dispatchOverlayAction('updateRegionStart', () =>
+        overlayActions.updateRegion(projectId, regionId, newStartTime, null));
     }
     setOverlayChangedSinceExport(true);
   }, [moveHighlightRegionStart, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -617,8 +624,10 @@ export function OverlayScreen({
   const wrappedMoveHighlightRegionEnd = useCallback((regionId, newEndTime) => {
     moveHighlightRegionEnd(regionId, newEndTime);
     if (canSyncActions) {
-      overlayActions.updateRegion(projectId, regionId, null, newEndTime)
-        .catch(err => console.error('[OverlayScreen] Failed to sync updateRegion end:', err));
+      // Extend/shrink segment end. On failure this queues for Retry — the extended
+      // bound is what lets manual keyframes past the original range survive (T4900).
+      dispatchOverlayAction('updateRegionEnd', () =>
+        overlayActions.updateRegion(projectId, regionId, null, newEndTime));
     }
     setOverlayChangedSinceExport(true);
   }, [moveHighlightRegionEnd, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -628,8 +637,7 @@ export function OverlayScreen({
     const region = highlightRegions[regionIndex];
     toggleHighlightRegion(regionIndex, enabled);
     if (region && canSyncActions) {
-      overlayActions.toggleRegion(projectId, region.id, enabled)
-        .catch(err => console.error('[OverlayScreen] Failed to sync toggleRegion:', err));
+      dispatchOverlayAction('toggleRegion', () => overlayActions.toggleRegion(projectId, region.id, enabled));
     }
     setOverlayChangedSinceExport(true);
   }, [toggleHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
@@ -654,8 +662,10 @@ export function OverlayScreen({
         },
         data,
         actions: {
-          add: (frame, d) => overlayActions.addKeyframe(projectId, region.id, { time, ...d }),
-          del: (frame) => overlayActions.deleteKeyframe(projectId, region.id, frameToTime(frame, highlightRegionsFramerate)),
+          add: (frame, d) => dispatchOverlayAction('addKeyframe', () =>
+            overlayActions.addKeyframe(projectId, region.id, { time, ...d })),
+          del: (frame) => dispatchOverlayAction('deleteKeyframe', () =>
+            overlayActions.deleteKeyframe(projectId, region.id, frameToTime(frame, highlightRegionsFramerate))),
         },
         awaited: false,
         onError: (err) => console.error('[OverlayScreen] Failed to sync keyframe:', err),
@@ -670,8 +680,7 @@ export function OverlayScreen({
     const region = getRegionAtTime(time);
     removeHighlightRegionKeyframe(time);
     if (region && canSyncActions) {
-      overlayActions.deleteKeyframe(projectId, region.id, time)
-        .catch(err => console.error('[OverlayScreen] Failed to sync deleteKeyframe:', err));
+      dispatchOverlayAction('deleteKeyframe', () => overlayActions.deleteKeyframe(projectId, region.id, time));
     }
     setOverlayChangedSinceExport(true);
   }, [removeHighlightRegionKeyframe, projectId, canSyncActions, getRegionAtTime, setOverlayChangedSinceExport]);
@@ -681,8 +690,7 @@ export function OverlayScreen({
     track('overlay_effect_change', { to: effectType }, { debugOnly: true });
     setHighlightEffectType(effectType);
     if (canSyncActions) {
-      overlayActions.setEffectType(projectId, effectType)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setEffectType:', err));
+      dispatchOverlayAction('setEffectType', () => overlayActions.setEffectType(projectId, effectType));
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightEffectType, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -693,8 +701,7 @@ export function OverlayScreen({
     // T3700: quest_3 "Pick your highlight color"
     useQuestStore.getState().recordAchievement('overlay_color_set');
     if (canSyncActions) {
-      overlayActions.setHighlightColor(projectId, color)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightColor:', err));
+      dispatchOverlayAction('setHighlightColor', () => overlayActions.setHighlightColor(projectId, color));
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightColor, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -703,8 +710,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'strokeWidth', value: val }, { debugOnly: true });
     setStrokeWidth(val);
     if (canSyncActions) {
-      overlayActions.setStrokeWidth(projectId, val)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setStrokeWidth:', err));
+      dispatchOverlayAction('setStrokeWidth', () => overlayActions.setStrokeWidth(projectId, val));
     }
     setOverlayChangedSinceExport(true);
   }, [setStrokeWidth, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -713,8 +719,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'fillEnabled', value: val }, { debugOnly: true });
     setFillEnabled(val);
     if (canSyncActions) {
-      overlayActions.setFillEnabled(projectId, val)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setFillEnabled:', err));
+      dispatchOverlayAction('setFillEnabled', () => overlayActions.setFillEnabled(projectId, val));
     }
     setOverlayChangedSinceExport(true);
   }, [setFillEnabled, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -722,8 +727,7 @@ export function OverlayScreen({
   const wrappedSetFillOpacity = useCallback((val) => {
     setFillOpacity(val);
     if (canSyncActions) {
-      overlayActions.setFillOpacity(projectId, val)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setFillOpacity:', err));
+      dispatchOverlayAction('setFillOpacity', () => overlayActions.setFillOpacity(projectId, val));
     }
     setOverlayChangedSinceExport(true);
   }, [setFillOpacity, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -732,8 +736,7 @@ export function OverlayScreen({
     track('overlay_settings_change', { field: 'dimStrength', value: val }, { debugOnly: true });
     setDimStrength(val);
     if (canSyncActions) {
-      overlayActions.setDimStrength(projectId, val)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setDimStrength:', err));
+      dispatchOverlayAction('setDimStrength', () => overlayActions.setDimStrength(projectId, val));
     }
     setOverlayChangedSinceExport(true);
   }, [setDimStrength, projectId, canSyncActions, setOverlayChangedSinceExport]);
@@ -744,8 +747,7 @@ export function OverlayScreen({
     // T3700: quest_3 "Choose the spotlight shape" (Body/Ground)
     useQuestStore.getState().recordAchievement('overlay_shape_set');
     if (canSyncActions) {
-      overlayActions.setHighlightShape(projectId, val)
-        .catch(err => console.error('[OverlayScreen] Failed to sync setHighlightShape:', err));
+      dispatchOverlayAction('setHighlightShape', () => overlayActions.setHighlightShape(projectId, val));
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);

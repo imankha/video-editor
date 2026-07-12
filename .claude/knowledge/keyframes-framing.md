@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-03 (initial version, workflow setup)
+updated: 2026-07-12 (T4900 overlay render read path + extended-segment keyframes)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -93,6 +93,30 @@ gesture (drag/resize/delete) in FramingContainer
   (clips.py:267-309), in place, no version bump. Atomic only because there is no `await` between
   read and commit (audit B8 → T4360). Overlay same shape with `overlay_version+1`
   (overlay.py:379-393); its `expected_version` 409 check is commented out (overlay.py:384-391 → T4330).
+
+## Overlay render read path (T4900)
+
+`overlay.py` now has two canonical helpers for reading region bounds and filtering keyframes:
+
+- **`_region_bounds(region)`** — tolerates BOTH key formats: camelCase `startTime`/`endTime`
+  (written by surgical overlay actions / `overlay_action`) AND snake_case `start_time`/`end_time`
+  (written by `highlight_transform.py` during framing export). Before T4900, the render path
+  read `region['start_time']` directly → KeyError on action-written blobs.
+- **`_keyframes_within_bounds(region, eps=0.04)`** — keeps keyframes inside the region's
+  CURRENT (possibly extended) `[start, end]` bounds from `_region_bounds`. T4900 failure mode
+  3: when the user extends a segment and adds keyframes past the original auto-boundary, the
+  render path now honours the EXTENDED bound and keeps those keyframes. Before T4900, the
+  inline filter used `region['start_time']`/`region['end_time']` hard-coded → any
+  camelCase-written blob would KeyError; and even if it hadn't, the bounds were read before
+  the extend action landed (persistence gap = the real failure mode in prod, not a render bug).
+- **`_process_frames_to_ffmpeg`** uses both helpers for the region-active check and the
+  keyframe filter. Do not inline them back to `region['start_time']`.
+
+**Persistence gap vs render bug:** In the 31p incident, failure mode 1 (actions never
+reached the backend) was the primary cause — the DB held only the auto keyframe, so there was
+nothing to render. Failure mode 3 (render clipping extended-segment keyframes) was ruled out
+but sealed by the helper refactor as a defence-in-depth. The frontend `overlayActionStore`
+failure-visibility fix is the correct fix for the primary cause (see persistence-sync.md).
 
 ## Landmines & history
 - **T4774 "post-video settle gap" is a measurement artifact (profiled, DROP).** The T4770

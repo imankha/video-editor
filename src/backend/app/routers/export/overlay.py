@@ -354,6 +354,45 @@ def _find_keyframe_index(keyframes: list, time: float, tolerance: float = 0.02) 
     return -1
 
 
+def _region_bounds(region: dict) -> tuple[float, float]:
+    """Read a region's [start, end] time bounds tolerant of BOTH key formats.
+
+    Surgical overlay actions persist camelCase ``startTime``/``endTime``
+    (overlay_action, this file), while the framing->overlay transform and the
+    frontend export payload use snake_case ``start_time``/``end_time``
+    (highlight_transform.py). The render read path must honour whichever the
+    stored blob uses; reading only one form silently clips the region (or
+    KeyErrors on action-written blobs). Mirrors highlight_transform.py:770-771.
+    T4900: when the user extends a segment, the ``update_region`` action writes
+    the new ``endTime`` here, so honouring it is what lets manual keyframes past
+    the original auto-segment boundary survive to the render (failure mode 3).
+    """
+    # Same tolerant read as highlight_transform.py:770-771. No extra `or 0`
+    # coercion: create_region always writes both bounds, so a present-but-None
+    # bound would be an internal bug we want to surface, not silently collapse
+    # the region to [x, 0] and drop every keyframe (CLAUDE.md: no silent fallbacks).
+    start = region.get('start_time', region.get('startTime', 0))
+    end = region.get('end_time', region.get('endTime', 0))
+    return start, end
+
+
+def _keyframes_within_bounds(region: dict, eps: float = 0.04) -> list:
+    """Keyframes that fall inside the region's CURRENT [start, end] bounds.
+
+    Keyframes outside the window don't influence rendering (user may have shrunk
+    the region). T4900 failure mode 3: because bounds are read from the current
+    (possibly EXTENDED) region via _region_bounds, manual keyframes the user
+    added past the original auto-segment boundary are retained here — they are
+    NOT clipped, as long as the extend-segment action landed. The regression test
+    pins exactly this.
+    """
+    r_start, r_end = _region_bounds(region)
+    return [
+        kf for kf in region.get('keyframes', [])
+        if r_start - eps <= kf.get('time', 0) <= r_end + eps
+    ]
+
+
 @router.post("/projects/{project_id}/overlay/actions")
 async def overlay_action(project_id: int, action: OverlayAction):
     """
@@ -742,8 +781,9 @@ def _process_frames_to_ffmpeg(
     stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
     stderr_thread.start()
 
-    # Sort regions by start time for efficient lookup
-    sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
+    # Sort regions by start time for efficient lookup. _region_bounds tolerates
+    # both camelCase (action-written) and snake_case (transform-written) blobs.
+    sorted_regions = sorted(highlight_regions, key=lambda r: _region_bounds(r)[0])
 
     frame_idx = 0
     try:
@@ -757,19 +797,14 @@ def _process_frames_to_ffmpeg(
             # Find active region for this frame
             active_region = None
             for region in sorted_regions:
-                if region['start_time'] <= current_time <= region['end_time']:
+                r_start, r_end = _region_bounds(region)
+                if r_start <= current_time <= r_end:
                     active_region = region
                     break
 
             # Render highlight if in a region
             if active_region:
-                # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
-                # should not influence rendering (user may have shrunk the region)
-                eps = 0.04
-                region_keyframes = [
-                    kf for kf in active_region['keyframes']
-                    if active_region['start_time'] - eps <= kf['time'] <= active_region['end_time'] + eps
-                ]
+                region_keyframes = _keyframes_within_bounds(active_region)
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
                 if highlight is not None:

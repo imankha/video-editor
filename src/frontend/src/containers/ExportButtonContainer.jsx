@@ -12,6 +12,7 @@ import { ExportStatus } from '../constants/exportStatus';
 import { HighlightEffect } from '../constants/highlightEffects';
 import { clipCropKeyframes } from '../utils/clipSelectors';
 import { useQuestStore } from '../stores/questStore';
+import { useOverlayActionStore } from '../stores/overlayActionStore';
 
 // Export configuration - centralized for easy A/B testing
 export const EXPORT_CONFIG = {
@@ -188,6 +189,9 @@ export function ExportButtonContainer({
   const requireAuth = useAuthStore((s) => s.requireAuth);
   const isOffline = useSyncStore((s) => s.isOffline);
   const creditBalance = useCreditStore((s) => s.balance);
+  // T4900/31p: block Add Spotlight (overlay export) while surgical overlay edits
+  // are still unsaved, so the backend-authoritative render can't use stale data.
+  const hasUnsavedOverlayFailures = useOverlayActionStore((s) => s.failedActions.length > 0);
 
   // Use props if provided, otherwise fall back to context values
   const editorMode = editorModeProp ?? contextEditorMode ?? EDITOR_MODES.FRAMING;
@@ -493,6 +497,17 @@ export function ExportButtonContainer({
    * Main export handler
    */
   const handleExport = async () => {
+    // T4900/31p export gate: if overlay edits failed to persist, the DB holds
+    // stale highlight data — rendering now would silently ignore the user's
+    // manual keyframes (the exact "Add Spotlight ignored my keyframes" bug).
+    // Block, tell the user, and re-send the failed actions (gesture-initiated).
+    if (editorMode === EDITOR_MODES.OVERLAY &&
+        useOverlayActionStore.getState().failedActions.length > 0) {
+      setError("Some edits haven't saved. Retrying now — please export again once they save.");
+      useOverlayActionStore.getState().retryFailedOverlayActions();
+      return;
+    }
+
     const hasProjectClips = clips && clips.length > 0 && clips.some(c => c.id);
     const isBackendAuthoritative = (editorMode === EDITOR_MODES.OVERLAY && projectId) ||
                                    (editorMode === EDITOR_MODES.FRAMING && hasProjectClips);
@@ -1089,9 +1104,11 @@ export function ExportButtonContainer({
 
   // Button title/tooltip (soft nudge only — does not gate export)
   const framedCount = totalClips - unframedCount;
-  const buttonTitle = isFramingMode && hasUnframedClips
-    ? `${framedCount}/${totalClips} clips framed — the rest will use a centered default`
-    : undefined;
+  const buttonTitle = (!isFramingMode && hasUnsavedOverlayFailures)
+    ? "Some edits haven't saved — retry saving before exporting"
+    : (isFramingMode && hasUnframedClips
+      ? `${framedCount}/${totalClips} clips framed — the rest will use a centered default`
+      : undefined);
 
   return {
     // State
