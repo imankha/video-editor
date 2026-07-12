@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react';
-import { Minimize, ArrowLeft, Crop, Move } from 'lucide-react';
+import { Minimize, Maximize, Crop } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
@@ -11,7 +11,6 @@ import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '.
 import { Button } from '../components/shared';
 import { FramingMode, CropOverlay } from './framing';
 import { formatTimeSimple } from '../components/shared/clipConstants';
-import { useEditorStore } from '../stores/editorStore';
 
 /**
  * ExportButtonSection - Container+View composition for Framing mode export
@@ -222,8 +221,11 @@ export function FramingModeView({
   const [touchMode, setTouchMode] = useState('crop');
   const isMobile = useIsMobile();
   const fsControls = useFullscreenControls({ isPlaying });
-  const mobileFs = isMobile;
-  const setEditorMode = useEditorStore((s) => s.setEditorMode);
+  // Mobile fullscreen video is opt-in (tap the expand button). Defaulting to it
+  // hid the below-timeline controls (export/proceed) with no way to reach them
+  // (T4880); the inline scrollable layout keeps every control reachable.
+  const [mobileExpanded, setMobileExpanded] = useState(false);
+  const mobileFs = isMobile && mobileExpanded;
 
   return (
     <>
@@ -423,6 +425,19 @@ export function FramingModeView({
                 onToggleFullscreen={onToggleFullscreen}
               />
             )}
+
+            {/* Mobile expand — opt into fullscreen video (inline layout keeps
+                the timeline + export controls reachable below) */}
+            {isMobile && !mobileFs && videoUrl && (
+              <button
+                onClick={() => setMobileExpanded(true)}
+                className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
+                title="Fullscreen video"
+                aria-label="Expand video to fullscreen"
+              >
+                <Maximize size={18} />
+              </button>
+            )}
           </div>
 
           {/* Mobile-only clip title — minimal, under video */}
@@ -571,10 +586,10 @@ export function FramingModeView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={isFullscreen ? Minimize : ArrowLeft}
+                  icon={Minimize}
                   iconOnly
-                  onClick={isFullscreen ? onToggleFullscreen : () => setEditorMode('project-manager')}
-                  title={isFullscreen ? 'Exit fullscreen' : 'Home'}
+                  onClick={isFullscreen ? onToggleFullscreen : () => setMobileExpanded(false)}
+                  title="Exit fullscreen"
                   className="bg-black/50 hover:bg-black/70"
                 />
               </div>

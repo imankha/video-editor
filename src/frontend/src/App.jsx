@@ -723,7 +723,7 @@ function App() {
     <ProjectProvider>
     <AppStateProvider value={appStateValue}>
     <ImpersonationBanner />
-    <div className="h-screen overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
+    <div className="h-dvh overflow-hidden bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex">
       {/* Connection status banner - shows when backend is unreachable */}
       <ConnectionStatus />
       {/* Annotate mode: AnnotateScreen handles its own sidebar + main content */}
