@@ -205,7 +205,7 @@ async def get_contacts():
 
 
 @gallery_shares_router.post("/{video_id}/share", response_model=ShareCreateResponse)
-async def create_share(video_id: int, body: ShareCreateRequest):
+async def create_share(video_id: int, body: ShareCreateRequest, background_tasks: BackgroundTasks):
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
@@ -261,7 +261,12 @@ async def create_share(video_id: int, body: ShareCreateRequest):
         recipient_emails=recipient_emails,
         is_public=body.is_public,
     )
-    record_milestone(user_id, "share_completed", {"recipient_count": len(recipient_emails), "share_type": "public" if body.is_public else "direct"})
+    # Analytics off the response path (T4840 pattern): Copy Link's toast waits
+    # on this response, and the milestone is a Postgres write it never needed.
+    background_tasks.add_task(
+        record_milestone, user_id, "share_completed",
+        {"recipient_count": len(recipient_emails), "share_type": "public" if body.is_public else "direct"},
+    )
 
     sharer = get_user_by_id(user_id)
     sharer_email = sharer["email"] if sharer else user_id
@@ -288,7 +293,10 @@ async def create_share(video_id: int, body: ShareCreateRequest):
             results = await asyncio.gather(*tasks.values())
             email_results = dict(zip(tasks.keys(), results))
             for email in tasks:
-                record_milestone(user_id, "invite_sent", {"recipient_email": email, "share_type": "public" if body.is_public else "direct"})
+                background_tasks.add_task(
+                    record_milestone, user_id, "invite_sent",
+                    {"recipient_email": email, "share_type": "public" if body.is_public else "direct"},
+                )
 
     return ShareCreateResponse(
         shares=[

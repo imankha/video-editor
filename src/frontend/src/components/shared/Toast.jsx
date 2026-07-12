@@ -26,8 +26,15 @@ export const useToastStore = create((set, get) => ({
       ...toast,
     };
 
+    // dedupKey: a repeat toast replaces the previous one instead of stacking
+    // (e.g. hammering "Copy link" shows ONE toast, not a column of them).
     set((state) => ({
-      toasts: [...state.toasts, newToast],
+      toasts: [
+        ...(newToast.dedupKey
+          ? state.toasts.filter((t) => t.dedupKey !== newToast.dedupKey)
+          : state.toasts),
+        newToast,
+      ],
     }));
 
     // Auto-dismiss

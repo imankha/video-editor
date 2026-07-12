@@ -115,12 +115,12 @@ export function GlobalExportIndicator() {
                 });
                 track('share_initiated', { method, source: 'toast' });
                 if (method === 'clipboard') {
-                  toast.success('Link copied to clipboard');
+                  toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
                 }
               } else {
                 await copyLink({ downloadId: exp.outputVideoId });
                 track('share_initiated', { method: 'clipboard', source: 'toast' });
-                toast.success('Link copied to clipboard');
+                toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
               }
             } catch (err) {
               if (err.name === 'AbortError') return;

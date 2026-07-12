@@ -13,15 +13,29 @@ function isMobileDevice() {
     (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
 }
 
+// In-flight dedup: rapid repeat clicks await the SAME request instead of
+// queueing N identical POSTs behind the backend's per-user write lock (the
+// endpoint is idempotent - every call returns the same public link anyway).
+const inflightShareUrl = new Map();
+
 async function createShareUrl(downloadId) {
-  const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recipient_emails: [], is_public: true }),
-  });
-  if (!resp.ok) throw new Error('Failed to create share link');
-  const data = await resp.json();
-  return `${window.location.origin}/shared/${data.shares[0].share_token}`;
+  if (inflightShareUrl.has(downloadId)) return inflightShareUrl.get(downloadId);
+  const request = (async () => {
+    const resp = await apiFetch(`${API_BASE}/api/gallery/${downloadId}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipient_emails: [], is_public: true }),
+    });
+    if (!resp.ok) throw new Error('Failed to create share link');
+    const data = await resp.json();
+    return `${window.location.origin}/shared/${data.shares[0].share_token}`;
+  })();
+  inflightShareUrl.set(downloadId, request);
+  try {
+    return await request;
+  } finally {
+    inflightShareUrl.delete(downloadId);
+  }
 }
 
 async function copyToClipboard(text) {

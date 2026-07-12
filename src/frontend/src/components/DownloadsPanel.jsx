@@ -532,7 +532,7 @@ export function DownloadsPanel({
                         });
                         track('share_initiated', { method, source: 'gallery' });
                         if (method === 'clipboard') {
-                          toast.success('Link copied to clipboard');
+                          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
                         }
                       } catch (err) {
                         if (err.name === 'AbortError') return;
@@ -549,7 +549,7 @@ export function DownloadsPanel({
                       try {
                         await copyLink({ downloadId: download.id });
                         track('share_initiated', { method: 'clipboard', source: 'gallery' });
-                        toast.success('Link copied to clipboard');
+                        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
                       } catch (err) {
                         if (err.name === 'AbortError') return;
                         setSharingDownload(download);
@@ -589,7 +589,7 @@ export function DownloadsPanel({
                             try {
                               await copyLink({ downloadId: download.id });
                               track('share_initiated', { method: 'clipboard', source: 'gallery' });
-                              toast.success('Link copied to clipboard');
+                              toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
                             } catch (err) {
                               if (err.name === 'AbortError') return;
                               setSharingDownload(download);
@@ -615,7 +615,7 @@ export function DownloadsPanel({
                               });
                               track('share_initiated', { method, source: 'gallery' });
                               if (method === 'clipboard') {
-                                toast.success('Link copied to clipboard');
+                                toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
                               }
                             } catch (err) {
                               if (err.name === 'AbortError') return;
