@@ -52,11 +52,25 @@ Two gaps, one pricing + one transparency:
 
 ## Solution
 
-### Workstream A — Repricing (~5c/credit)
-Present pack options to user at kickoff (final numbers are a user gate):
-- **Option A, flat 5c:** 80/$3.99 · 140/$6.99 · 260/$12.99
-- **Option B, tiered to 5c best-value:** 70/$3.99 (5.7c) · 130/$6.99 (5.4c) · 260/$12.99 (5.0c) — preserves "Best Value" meaning
-Update `CREDIT_PACKS`, `CREDIT_VALUE`, and the single-sourced frontend packs. Update analytics expectations if any dashboards assume pack sizes.
+### Workstream A — Repricing (tiered ladder to 5c best-value)
+
+User decision 2026-07-12: NOT flat — keep users incentivized to buy bigger packs; "5c" states the magnitude of the change, landing at the top tier. Numbers must be simple: credits in multiples of 10, prices $X.99.
+
+**Pricing model (researched 2026-07-12):** quantity-discount power law `unit_price(q) = p0 x (q/q0)^(-k)` with elasticity k in the consumer-typical 0.15-0.25 band; good-better-best structure (middle tier = target/default, top tier = value anchor); savings communicated as "+X% bonus credits" against the starter rate rather than discounting the reference price. Industry norms: 5-25% per-unit discount depth across a consumer ladder; a well-placed ladder shifts 10-30 points of mix toward the target tier. Sources: Chargebee volume-discount glossary, Tremendous tiered-vs-volume guide, Stripe credits-pricing resources, price-anchoring/decoy literature (see task creation conversation).
+
+**RECOMMENDED ladder** (keeps existing $ price points; ~30% cheaper per credit across the board vs today):
+
+| Pack | Price | Credits | c/credit | vs starter rate | Exported video |
+|---|---|---|---|---|---|
+| Starter | $3.99 | 60 | 6.65c | — (reference) | 1 min |
+| Popular (target) | $6.99 | 120 | 5.83c | **+14% bonus** (105 -> 120) | 2 min |
+| Best Value | $12.99 | 260 | 5.00c | **+33% bonus** (195 -> 260) | 4m20s |
+
+Fit check: k = ln(6.65/5.00)/ln(260/60) = **0.195** (in band); starter->best discount depth 24.8% (in the 5-25% norm, matches today's 28% shape); Popular = exactly 2x starter credits for 1.75x price — the clean doubling makes the target tier legible at a glance.
+
+**Alternate (steeper top-tier pull), if user prefers:** 60/$3.99 · 120/$6.99 · **280/$12.99** (4.64c, +40% bonus, k=0.23, depth 30%). And noted for later: a 4th "Season" mega-pack is the natural growth lever — don't add it in this task.
+
+Final pack numbers remain a user gate at kickoff (recommended vs alternate). Update `CREDIT_PACKS`, `CREDIT_VALUE` (-> 0.05, the new worst-case), and the single-sourced frontend packs. Update analytics expectations if any dashboards assume pack sizes.
 
 ### Workstream B — "What you get" transparency
 1. **State the rule everywhere credits appear:** "1 credit = 1 second of exported video" on pack cards (with honest per-pack conversion: "80 credits = 80 seconds ≈ 6 clips"), in the buy modal, and in a compact "How credits work" explainer (buy modal link + help surface): what costs credits (export seconds, upload storage/30 days), what's free (spotlight, detection, downloads, sharing), credits never expire.
@@ -93,7 +107,7 @@ Update `CREDIT_PACKS`, `CREDIT_VALUE`, and the single-sourced frontend packs. Up
 
 ### Steps
 1. [ ] Step 0 — measure overlay render GPU-s/video-s on a representative clip (it's free to users; know what we're absorbing); sanity-check framing cost anchor still ~0.3c/s
-2. [ ] User gate: pick pack option (A flat 5c / B tiered) and confirm explainer copy stance
+2. [ ] User gate: confirm ladder (recommended 60/120/260 vs alternate 60/120/280) and explainer copy stance
 3. [ ] Backend: new `CREDIT_PACKS`, `CREDIT_VALUE`, packs in `/payments/config`
 4. [ ] Frontend: packs from config (kill the duplicate), rule copy + explainer, pre-flight export/upload cost display, transactions view
 5. [ ] Tests: pack math, config endpoint, pre-flight display, transactions rendering
