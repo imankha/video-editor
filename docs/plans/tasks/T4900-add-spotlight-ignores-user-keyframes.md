@@ -1,6 +1,6 @@
 # T4900: Add Spotlight ignores user-added highlight keyframes beyond the auto-added ones
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-11
