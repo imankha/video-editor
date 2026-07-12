@@ -22,6 +22,17 @@ const DEFAULT_API = "https://reel-ballers-api-staging.fly.dev";
 
 const SHARE_CACHE_TTL = 600; // seconds (10 min) -- comfortably < 4h presign expiry
 const UPSTREAM_TIMEOUT_MS = 2000;
+// Crawlers get a longer upstream budget: the ONLY page fetch that matters for
+// an unfurl is the crawler's, and preview caches (iMessage etc.) keep whatever
+// they get. A human hitting a slow API just falls back to the SPA, which
+// handles the share fine; a crawler that falls back caches a tagless preview.
+const CRAWLER_UPSTREAM_TIMEOUT_MS = 8000;
+
+export function isCrawler(userAgent) {
+  return /bot|crawl|spider|preview|facebookexternalhit|whatsapp|slack|twitter|telegram|discord|linkedin|skype|imessage|applebot/i.test(
+    userAgent || ""
+  );
+}
 
 export function apiBase(hostname) {
   return API_BY_HOST[hostname] || DEFAULT_API;
@@ -191,7 +202,7 @@ async function fetchWithTimeout(url, ms) {
 // Returns the share JSON for a PUBLIC share (edge-cached), or null when the
 // caller should fall through to the SPA (non-public, missing url, error, or
 // timeout). Never throws.
-async function loadPublicShare(api, token, request, waitUntil) {
+async function loadPublicShare(api, token, request, waitUntil, upstreamTimeoutMs = UPSTREAM_TIMEOUT_MS) {
   const cache = caches.default;
   const cacheKey = new Request(
     new URL(`/__share-cache/${encodeURIComponent(token)}`, request.url).toString()
@@ -208,7 +219,7 @@ async function loadPublicShare(api, token, request, waitUntil) {
 
   let upstream;
   try {
-    upstream = await fetchWithTimeout(`${api}/api/shared/${encodeURIComponent(token)}`, UPSTREAM_TIMEOUT_MS);
+    upstream = await fetchWithTimeout(`${api}/api/shared/${encodeURIComponent(token)}`, upstreamTimeoutMs);
   } catch {
     return null; // timeout / network error -> SPA fallthrough
   }
@@ -251,9 +262,22 @@ export async function onRequestGet(context) {
   // status-identical to today's direct SPA navigation (sign-in, revoked,
   // not-found flows all unchanged). Verified locally: ASSETS.fetch on the
   // original path returns 200 index.html (NOT a 308 canonicalization).
-  const serveSpa = () => env.ASSETS.fetch(request);
+  //
+  // Fallbacks are marked no-store: a transient upstream failure once got the
+  // SPA response CDN-cached under the share URL, and every crawler for the
+  // next TTL window saw a tagless page (found live on staging, 2026-07-12).
+  // Only successful edge renders may be cached.
+  const serveSpa = async () => {
+    const resp = await env.ASSETS.fetch(request);
+    const uncached = new Response(resp.body, resp);
+    uncached.headers.set("cache-control", "no-store");
+    return uncached;
+  };
 
-  const share = await loadPublicShare(api, token, request, waitUntil);
+  const upstreamBudget = isCrawler(request.headers.get("user-agent"))
+    ? CRAWLER_UPSTREAM_TIMEOUT_MS
+    : UPSTREAM_TIMEOUT_MS;
+  const share = await loadPublicShare(api, token, request, waitUntil, upstreamBudget);
   if (!share) {
     return serveSpa();
   }

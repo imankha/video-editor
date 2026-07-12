@@ -2,7 +2,7 @@
 // Workers runtime needed. Integration (routing, fallthrough, beacon, caching) is
 // covered by `wrangler pages dev` in the task verification.
 import { describe, it, expect } from 'vitest';
-import { renderSharePage, escapeHtml, apiBase, absolutizePosterUrl } from './[token].js';
+import { renderSharePage, escapeHtml, apiBase, absolutizePosterUrl, isCrawler } from './[token].js';
 
 describe('apiBase', () => {
   it('maps the prod host to the prod API', () => {
@@ -24,6 +24,22 @@ describe('escapeHtml', () => {
   it('coerces null/undefined to empty string', () => {
     expect(escapeHtml(null)).toBe('');
     expect(escapeHtml(undefined)).toBe('');
+  });
+});
+
+describe('isCrawler', () => {
+  it('matches the major unfurl crawlers', () => {
+    expect(isCrawler('facebookexternalhit/1.1')).toBe(true);
+    expect(isCrawler('WhatsApp/2.23.20')).toBe(true);
+    expect(isCrawler('Twitterbot/1.0')).toBe(true);
+    expect(isCrawler('Slackbot-LinkExpanding 1.0')).toBe(true);
+    expect(isCrawler('Mozilla/5.0 (compatible; Discordbot/2.0)')).toBe(true);
+  });
+
+  it('does not match normal browsers', () => {
+    expect(isCrawler('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false);
+    expect(isCrawler('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36')).toBe(false);
+    expect(isCrawler(null)).toBe(false);
   });
 });
 
