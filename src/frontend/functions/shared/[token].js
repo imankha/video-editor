@@ -60,6 +60,27 @@ export function renderSharePage(share) {
   const appHome = "https://app.reelballers.com/";
   const desc = `${name} -- shared from Reel Ballers.`;
 
+  // T4890: first-frame poster for the unfurl card + instant first paint. Crawlers
+  // don't run JS and need an ABSOLUTE URL, which the API supplies (presigned R2).
+  // Omitted entirely when the reel has no poster (no silent fallback / dead URL);
+  // platforms render their own play button over og:image when og:video is present.
+  const rawPosterUrl = share.video_poster_url || "";
+  const posterUrl = escapeHtml(rawPosterUrl);
+  const posterW = Number.isInteger(share.video_poster_width) ? share.video_poster_width : null;
+  const posterH = Number.isInteger(share.video_poster_height) ? share.video_poster_height : null;
+  const posterDims = rawPosterUrl && posterW && posterH
+    ? `<meta property="og:image:width" content="${posterW}">
+<meta property="og:image:height" content="${posterH}">
+`
+    : "";
+  const posterMeta = rawPosterUrl
+    ? `<meta property="og:image" content="${posterUrl}">
+<meta property="og:image:type" content="image/jpeg">
+${posterDims}<meta name="twitter:image" content="${posterUrl}">
+`
+    : "";
+  const posterAttr = rawPosterUrl ? ` poster="${posterUrl}"` : "";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -73,7 +94,7 @@ ${preconnect}
 <meta property="og:description" content="${desc}">
 <meta property="og:video" content="${videoUrl}">
 <meta property="og:video:type" content="video/mp4">
-<meta property="og:site_name" content="Reel Ballers">
+${posterMeta}<meta property="og:site_name" content="Reel Ballers">
 <meta name="twitter:card" content="player">
 <meta name="twitter:title" content="${name}">
 <meta name="twitter:description" content="${desc}">
@@ -100,7 +121,7 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 <span class="brand">REEL BALLERS</span>
 </header>
 <main>
-<video id="v" src="${videoUrl}" autoplay muted playsinline controls preload="auto"></video>
+<video id="v" src="${videoUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
 <button id="unmute" type="button">Tap to unmute</button>
 </main>
 <footer>

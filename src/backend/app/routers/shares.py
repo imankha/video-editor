@@ -39,7 +39,12 @@ from ..services.sharing_db import (
     revoke_share,
     update_share_visibility,
 )
-from ..storage import APP_ENV, generate_presigned_url_global
+from ..services.poster import poster_basename, poster_rel_path
+from ..storage import (
+    APP_ENV,
+    generate_presigned_url_global,
+    r2_head_object_global,
+)
 from ..user_context import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -73,6 +78,9 @@ class ShareDetailResponse(BaseModel):
     video_name: str | None
     video_duration: float | None
     video_url: str | None
+    video_poster_url: str | None = None
+    video_poster_width: int | None = None
+    video_poster_height: int | None = None
     is_public: bool
     shared_at: Union[str, datetime]
 
@@ -130,6 +138,54 @@ def _build_video_r2_key(share: dict) -> str:
         f"/profiles/{share['sharer_profile_id']}"
         f"/final_videos/{share['video_filename']}"
     )
+
+
+def _build_poster_r2_key(share: dict) -> str:
+    """Full R2 key for the share's first-frame poster (T4890).
+
+    The poster key is DETERMINISTIC from the video filename under the SAME
+    per-profile prefix as the video (`final_videos/posters/{video_filename}.jpg`),
+    so it needs no extra snapshot on the share row -- it follows the exact same
+    access model as `_build_video_r2_key`.
+    """
+    rel = poster_rel_path(poster_basename(share["video_filename"]))
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}"
+        f"/{rel}"
+    )
+
+
+def _resolve_poster(share: dict) -> tuple[str | None, int | None, int | None]:
+    """(url, width, height) for a share's poster, or (None, None, None) if absent.
+
+    Existence is decided by an R2 HEAD (the object store is where the unfurl
+    crawler will actually fetch it, so this is the honest source of truth AND it
+    means a backfill of legacy reels lights up their EXISTING share links
+    immediately). No silent fallback: a reel without a poster yields None so the
+    edge page omits the og:image tag, and we log at info. Never raises.
+
+    Width/height come from the poster object's user-metadata (set at generation);
+    they are optional -- absent metadata just omits og:image:width/height."""
+    poster_key = _build_poster_r2_key(share)
+    head = r2_head_object_global(poster_key)
+    if head is None:
+        logger.info(
+            f"[Share] no poster for token={share.get('share_token')} "
+            f"({poster_key}); omitting og:image"
+        )
+        return (None, None, None)
+    meta = head.get("Metadata") or {}
+    width = _int_or_none(meta.get("width"))
+    height = _int_or_none(meta.get("height"))
+    return (generate_presigned_url_global(poster_key), width, height)
+
+
+def _int_or_none(value) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -370,12 +426,18 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
     )
 
     video_url = generate_presigned_url_global(_build_video_r2_key(share))
+    # T4890: absolute, unauthenticated poster URL (same access model as video_url)
+    # so the edge share page can emit og:image/twitter:image + <video poster>.
+    poster_url, poster_w, poster_h = _resolve_poster(share)
 
     return ShareDetailResponse(
         share_token=share["share_token"],
         video_name=share["video_name"],
         video_duration=share["video_duration"],
         video_url=video_url,
+        video_poster_url=poster_url,
+        video_poster_width=poster_w,
+        video_poster_height=poster_h,
         is_public=bool(share["is_public"]),
         shared_at=share["shared_at"],
     )

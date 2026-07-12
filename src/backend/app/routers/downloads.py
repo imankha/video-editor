@@ -22,6 +22,7 @@ from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import _open_profile_db, ensure_profile_db_local
+from app.services.poster import poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
@@ -29,6 +30,7 @@ from app.storage import (
     delete_profile_object,
     file_exists_in_r2,
     generate_presigned_url,
+    profile_object_exists,
 )
 from app.user_context import get_current_req_id, get_current_user_id
 from app.utils.encoding import decode_data
@@ -850,6 +852,9 @@ _MOVED_REEL_CARRY_COLUMNS = (
     "filename", "version", "duration", "source_type", "name", "rating_counts",
     "created_at", "aspect_ratio", "tags", "clip_count", "quality_score",
     "clip_start_time", "clip_game_start_time",
+    # T4890: the first-frame poster is per-profile media too; carry the frozen ref
+    # and copy the object (below) so the moved reel's share link still unfurls.
+    "poster_filename",
 )
 
 
@@ -984,7 +989,31 @@ async def move_reels_to_profile(
         # final_videos/{filename} lives under the SOURCE prefix. The move MUST copy
         # each object to the TARGET prefix or the target-profile presign 404s. The
         # `filename` is a per-user hash so two reels never collide on it.
-        media_paths = [f"final_videos/{r['filename']}" for r in source_rows]
+        # T4890: the poster object (final_videos/posters/{poster_filename}) rides the
+        # SAME all-or-nothing copy/rollback/delete list when the reel has one, so the
+        # moved reel's share link unfurls under the target profile prefix. The poster
+        # is a best-effort cosmetic asset everywhere else in T4890, so a set-but-missing
+        # poster object must NOT abort a legitimate reel move: HEAD-probe it first and
+        # only relocate (and carry the ref) when the object actually exists. Missing ->
+        # move the reel WITHOUT the poster (ref nulled below) so nothing dangles.
+        media_paths = []
+        posters_moved: set[int] = set()  # final_video ids whose poster object relocates
+        for r in source_rows:
+            media_paths.append(f"final_videos/{r['filename']}")
+            pf = r["poster_filename"]
+            if not pf:
+                continue
+            rel = poster_rel_path(pf)
+            if await asyncio.to_thread(
+                profile_object_exists, user_id, source_profile_id, rel
+            ):
+                media_paths.append(rel)
+                posters_moved.add(r["id"])
+            else:
+                logger.warning(
+                    f"[MoveReels] poster object missing for fv={r['id']} ({rel}); "
+                    f"moving reel WITHOUT poster req_id={req_id}"
+                )
 
         # --- Phase 0: server-side COPY the media to the TARGET prefix FIRST ---
         # Nothing is deleted until the target reel is fully durable (row + object),
@@ -1039,6 +1068,10 @@ async def move_reels_to_profile(
             tcur = target_conn.cursor()
             for src_row in source_rows:
                 new_row = _build_moved_reel_row(src_row)
+                # T4890: don't carry a poster ref whose object we did NOT relocate
+                # (missing source object) -- keeps the moved row from dangling.
+                if src_row["poster_filename"] and src_row["id"] not in posters_moved:
+                    new_row["poster_filename"] = None
                 tcur.execute(insert_sql, [new_row[c] for c in insert_cols])
                 inserted_target_ids.append(tcur.lastrowid)
             target_conn.commit()

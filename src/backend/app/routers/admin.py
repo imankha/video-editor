@@ -450,6 +450,56 @@ async def backfill_hiq_recaps_status():
             "last_result": _BACKFILL_STATE["last_result"]}
 
 
+_POSTER_BACKFILL_STATE: dict = {"running": False, "last_result": None, "task": None}
+
+
+@router.post("/backfill-share-posters")
+async def backfill_share_posters(limit: int = Query(25, ge=1, le=500),
+                                 dry_run: bool = Query(False)):
+    """Generate first-frame posters for PUBLISHED reels that have none (T4890).
+
+    Reels published before the poster feature carry no og:image, so their share
+    links unfurl text-only until backfilled. Per-video ffmpeg first-frame grab, so
+    it is throttled/batched by `limit` and NOT run on startup. Only reels whose
+    video object still exists are processed; reels whose poster already exists are
+    healed (no re-encode). Pass `dry_run=true` for a synchronous candidate count.
+    The real run returns immediately and executes in the background -- GET this
+    same path to poll `running`/`last_result`.
+    """
+    _require_admin()
+    from ..services.poster import backfill_posters as _backfill
+
+    if dry_run:
+        return await asyncio.to_thread(_backfill, limit, True)
+
+    if _POSTER_BACKFILL_STATE["running"]:
+        return {"started": False, "already_running": True,
+                "last_result": _POSTER_BACKFILL_STATE["last_result"]}
+
+    _POSTER_BACKFILL_STATE["running"] = True
+
+    async def _run_in_background():
+        try:
+            _POSTER_BACKFILL_STATE["last_result"] = await asyncio.to_thread(_backfill, limit, False)
+        except Exception as exc:
+            logger.exception("[PosterBackfill] background run failed")
+            _POSTER_BACKFILL_STATE["last_result"] = {"error": str(exc)}
+        finally:
+            _POSTER_BACKFILL_STATE["running"] = False
+
+    _POSTER_BACKFILL_STATE["task"] = asyncio.create_task(_run_in_background())
+    return {"started": True, "limit": limit,
+            "note": "running in background; GET this path to poll running/last_result"}
+
+
+@router.get("/backfill-share-posters")
+async def backfill_share_posters_status():
+    """Read-only status of the share-poster backfill (see POST above)."""
+    _require_admin()
+    return {"running": _POSTER_BACKFILL_STATE["running"],
+            "last_result": _POSTER_BACKFILL_STATE["last_result"]}
+
+
 # ---------------------------------------------------------------------------
 # Analytics dashboards (T3030)
 # ---------------------------------------------------------------------------
