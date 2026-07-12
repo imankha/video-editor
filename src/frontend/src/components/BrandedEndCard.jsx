@@ -5,11 +5,18 @@ import { BRANDED_OUTRO_ENABLED } from '../constants/brandedOutro';
 const CTA_URL =
   'https://www.reelballers.com/?utm_source=share_endcard&utm_medium=viral&utm_campaign=reel_endcard';
 
-export function BrandedEndCard({ visible, onReplay }) {
+export function BrandedEndCard({
+  visible,
+  onReplay,
+  // Default anchors inside a relative player container (SharedVideoOverlay).
+  // Fullscreen fixed players (CollectionPlayer, z-[70]) must pass a fixed,
+  // higher-z override or the card renders underneath them.
+  positionClassName = 'absolute inset-0 z-20',
+}) {
   if (!BRANDED_OUTRO_ENABLED || !visible) return null;
   return (
     <div
-      className="absolute inset-0 z-20 flex flex-col items-center px-5"
+      className={`${positionClassName} flex flex-col items-center px-5`}
       style={{ background: 'rgba(11,15,26,0.97)' }}
     >
       {/* Hero: the logo lockup, centered; the emblem replays */}

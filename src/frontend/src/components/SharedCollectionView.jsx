@@ -117,7 +117,11 @@ export function SharedCollectionView({ token }) {
           onClose={handleClose}
           onEnded={() => setShowEndCard(true)}
         />
-        <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
+        <BrandedEndCard
+          visible={showEndCard}
+          onReplay={handleReplay}
+          positionClassName="fixed inset-0 z-[90]"
+        />
         <button
           onClick={handleReshare}
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"
