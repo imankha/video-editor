@@ -456,20 +456,10 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
     )
 
 
-@shared_router.get("/{share_token}/poster.jpg")
-async def get_shared_poster(share_token: str):
-    """Stable public poster image for unfurl crawlers (T4890 follow-up).
-
-    og:image must never embed a presigned URL: crawlers refetch after the
-    signature's 4h expiry and the edge-cached share HTML would carry a dead
-    link. This proxies the poster object with a FRESH presign per request.
-    Access model: knowing the share token grants the poster (one frame of an
-    already-shared video), same trust boundary as the share link itself.
-    """
-    share = get_share_by_token(share_token)
-    if not share or share["revoked_at"]:
-        raise HTTPException(404, "Share not found")
-    poster_key = _build_poster_r2_key(share)
+async def _serve_poster_jpeg(poster_key: str) -> Response:
+    """Proxy a poster object with a FRESH presign per request (24h client cache).
+    404 when the object is absent; 502 on an R2 fetch failure. Never presigned
+    URLs in responses - crawlers refetch after signatures expire."""
     if r2_head_object_global(poster_key) is None:
         raise HTTPException(404, "No poster for this share")
 
@@ -484,6 +474,40 @@ async def get_shared_poster(share_token: str):
         media_type="image/jpeg",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@shared_router.get("/collection/{share_token}/poster.jpg")
+async def get_shared_collection_poster(share_token: str):
+    """Stable unfurl image for a COLLECTION share: the first member's poster.
+
+    Public collections only - crawlers cannot authenticate, and a private
+    collection's unfurl should reveal nothing.
+    """
+    share = get_collection_share_by_token(share_token)
+    if not share or share["revoked_at"] or not share["collection_is_public"]:
+        raise HTTPException(404, "Share not found")
+
+    from .collections import first_member_poster_key
+    poster_key = first_member_poster_key(share)
+    if poster_key is None:
+        raise HTTPException(404, "No poster for this share")
+    return await _serve_poster_jpeg(poster_key)
+
+
+@shared_router.get("/{share_token}/poster.jpg")
+async def get_shared_poster(share_token: str):
+    """Stable public poster image for unfurl crawlers (T4890 follow-up).
+
+    og:image must never embed a presigned URL: crawlers refetch after the
+    signature's 4h expiry and the edge-cached share HTML would carry a dead
+    link. This proxies the poster object with a FRESH presign per request.
+    Access model: knowing the share token grants the poster (one frame of an
+    already-shared video), same trust boundary as the share link itself.
+    """
+    share = get_share_by_token(share_token)
+    if not share or share["revoked_at"]:
+        raise HTTPException(404, "Share not found")
+    return await _serve_poster_jpeg(_build_poster_r2_key(share))
 
 
 @shared_router.post("/{share_token}/viewed", status_code=204)

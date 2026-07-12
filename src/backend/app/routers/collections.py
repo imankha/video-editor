@@ -608,27 +608,19 @@ def _context_line(definition: dict) -> str:
     return "This link always shows the current top reels."
 
 
-def resolve_collection_share(share: dict) -> dict:
-    """Evaluate a stored collection share against the sharer's profile DB (with
-    R2 fallback) and presign each member. Read-only: never writes the sharer DB.
-    Empty / DB-evicted membership -> still 200 with empty members + the title."""
+def _evaluated_share_members(share: dict) -> tuple[dict, list]:
+    """(definition, evaluated members in playback order) for a collection share.
+    Empty members on unavailable sharer DB - never raises."""
     definition = share["collection_definition"]
     if isinstance(definition, str):
         definition = json.loads(definition)
-
-    title = definition.get("title") or "Highlights"
-    base = {
-        "title": title,
-        "context_line": _context_line(definition),
-        "aspect_ratio": definition["aspect_ratio"],
-    }
 
     conn = open_profile_db_readonly(share["sharer_user_id"], share["sharer_profile_id"])
     if conn is None:
         logger.warning(
             f"[collection-share] sharer DB unavailable for token={share['share_token']}"
         )
-        return {**base, "members": []}
+        return definition, []
     try:
         members = evaluate_collection_members(conn, definition)
     finally:
@@ -637,6 +629,40 @@ def resolve_collection_share(share: dict) -> dict:
     budget = definition.get("budget_sec")
     if budget:
         members = select_within_budget(members, budget)
+    return definition, members
+
+
+def first_member_poster_key(share: dict) -> str | None:
+    """Full R2 key of the FIRST member's poster, or None when memberless.
+
+    The collection unfurl card (og:image) shows the first reel's first frame -
+    the same reel playback opens with."""
+    from app.services.poster import poster_basename, poster_rel_path
+
+    _, members = _evaluated_share_members(share)
+    if not members:
+        return None
+    rel = poster_rel_path(poster_basename(members[0]["filename"]))
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}/{rel}"
+    )
+
+
+def resolve_collection_share(share: dict) -> dict:
+    """Evaluate a stored collection share against the sharer's profile DB (with
+    R2 fallback) and presign each member. Read-only: never writes the sharer DB.
+    Empty / DB-evicted membership -> still 200 with empty members + the title."""
+    from app.services.poster import poster_basename, poster_rel_path
+    from app.storage import r2_head_object_global
+
+    definition, members = _evaluated_share_members(share)
+    title = definition.get("title") or "Highlights"
+    base = {
+        "title": title,
+        "context_line": _context_line(definition),
+        "aspect_ratio": definition["aspect_ratio"],
+    }
 
     uid, pid = share["sharer_user_id"], share["sharer_profile_id"]
     out_members = []
@@ -648,13 +674,36 @@ def resolve_collection_share(share: dict) -> dict:
             "duration": m["duration"],
             "presigned_url": generate_presigned_url_global(key),
         })
-    return {**base, "members": out_members}
+
+    # T4890 follow-up: first member's poster as the unfurl image. STABLE relative
+    # proxy path (never presigned - see shares._resolve_poster); the edge function
+    # absolutizes it. Absent poster -> fields omitted, og:image omitted upstream.
+    poster_fields = {}
+    if out_members:
+        rel = poster_rel_path(poster_basename(members[0]["filename"]))
+        head = r2_head_object_global(f"{APP_ENV}/users/{uid}/profiles/{pid}/{rel}")
+        if head is not None:
+            meta = head.get("Metadata") or {}
+
+            def _i(v):
+                try:
+                    return int(v) if v is not None else None
+                except (TypeError, ValueError):
+                    return None
+
+            poster_fields = {
+                "poster_url": f"/api/shared/collection/{share['share_token']}/poster.jpg",
+                "poster_width": _i(meta.get("width")),
+                "poster_height": _i(meta.get("height")),
+            }
+
+    return {**base, "members": out_members, **poster_fields}
 
 
 # ---- create endpoint (authenticated sharer) -------------------------------
 
 def _format_budget(sec: float) -> str:
-    s = int(round(sec))
+    s = round(sec)
     return f"{s // 60}:{s % 60:02d}"
 
 

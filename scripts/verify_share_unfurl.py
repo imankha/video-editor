@@ -64,7 +64,12 @@ def check_once(share_url: str, attempt: int) -> tuple[bool, list[str]]:
     for key in ("og:image", "og:video"):
         url = tags.get(key)
         if not url:
-            problems.append(f"missing {key}")
+            # og:image is the unfurl contract; og:video only exists on
+            # single-reel pages (collections legitimately omit it).
+            if key == "og:image":
+                problems.append("missing og:image")
+            else:
+                print("    note: no og:video (expected for collection pages)")
             continue
         if not url.startswith("https://"):
             problems.append(f"{key} is not absolute: {url[:80]}")
