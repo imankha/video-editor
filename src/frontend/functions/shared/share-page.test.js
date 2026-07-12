@@ -147,4 +147,54 @@ describe('renderSharePage', () => {
     const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true });
     expect(html).toContain('<title>Shared Video | Reel Ballers</title>');
   });
+
+  describe('branded end-card (T3950 playback compositing)', () => {
+    it('CTA has exact spec text and correct UTM href', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('id="end-card"');
+      expect(html).toContain('Make your own reel at www.reelballers.com');
+      expect(html).toContain('utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard');
+    });
+
+    it('secondary row contains Made With + Reel + emblem + Ballers', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('Made With');
+      expect(html).toContain('>Reel<');
+      expect(html).toContain('>Ballers<');
+      expect(html).toContain('id="emblem"');
+      expect(html).toContain('aria-label="Replay"');
+    });
+
+    it('no headline and no bottom link — URL lives in CTA text only', () => {
+      const html = renderSharePage(share);
+      expect(html).not.toContain('Your athlete deserves');
+      expect(html).not.toContain('ec-hl');
+      expect(html).not.toContain('ec-ql');
+    });
+
+    it('emblem replay wired to emblem id, not a ghost "replay" id', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('getElementById("emblem")');
+      expect(html).not.toContain('getElementById("replay")');
+      expect(html).toContain('classList.remove("show")');
+      expect(html).toContain('v.currentTime=0');
+      expect(html).toContain('v.play()');
+    });
+
+    it('end-card is hidden by default (display:none) and shown on ended via JS', () => {
+      const html = renderSharePage(share);
+      // CSS: #end-card{display:none ...}; toggled via .show class by JS
+      expect(html).toMatch(/#end-card\{[^}]*display:none/);
+      expect(html).toMatch(/#end-card\.show\{display:flex\}/);
+      // JS: ended listener adds .show
+      expect(html).toContain('"ended"');
+      expect(html).toContain('classList.add("show")');
+    });
+
+    it('page still fits under 15KB with the end-card included', () => {
+      const html = renderSharePage(share);
+      const bytes = new TextEncoder().encode(html).length;
+      expect(bytes).toBeLessThan(15 * 1024);
+    });
+  });
 });

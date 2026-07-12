@@ -1,6 +1,6 @@
 # T3950: "Made with Reel Ballers" Outro on Exports
 
-**Status:** TODO
+**Status:** IN PROGRESS
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-06-25
@@ -66,3 +66,91 @@ clip/keyframe data — it's a presentation step at export, like a watermark.
 - [ ] All three aspect ratios (9:16, 1:1, 16:9) render the card correctly (no letterboxing/stretch).
 - [ ] No outro data leaks into working clip/keyframe state; it's purely render-time.
 - [ ] Existing export tests pass; a test asserts the outro is appended for each path/ratio.
+
+---
+
+## Design Pivot (2026-07-12) — burn-in REJECTED, playback-composited CHOSEN
+
+**User decision:** do NOT burn the card into the exported MP4. Composite it at playback
+time on public/shared viewer surfaces. Rationale: no re-encode, no migration, every
+existing reel gets attribution for free on next view.
+
+**Approach chosen:**
+- `BrandedEndCard.jsx` — single React component (dark bg, wordmark, URL, Replay button),
+  only renders when `visible=true`. Prop-gated: never shown in editor/ranker/My Reels.
+- `SharedVideoOverlay` — shows BrandedEndCard on `MediaPlayer.onEnded`.
+- `SharedCollectionView` — shows BrandedEndCard on `CollectionPlayer.onEnded`; `playerKey`
+  remount on Replay resets the sequential story player to index 0.
+- Edge function `[token].js` — inline DOM end-card (`#end-card` div) shown via a
+  `v.ended` listener; replay clears the class and resets `v.currentTime=0`.
+- Gate: `BRANDED_OUTRO_ENABLED` constant in `src/frontend/src/constants/brandedOutro.js`.
+- No backend changes, no migration, no ffmpeg dependency.
+
+**Also: download-time burn-in (scope addition 2026-07-12):**
+Downloaded files must carry attribution even though playback is composited. Approach:
+- `app/services/branded_outro.py` KEPT (not burned into stored final_videos; invoked at serve time)
+- `GET /api/downloads/{id}/file` downloads original from R2 → `append_branded_outro(original, out)` → stream result → cleanup in `finally`. Non-fatal: failure logs loudly + serves original (HTTP 200 always).
+- Card cached per (width×height, fps, pix_fmt, audio layout) in `/tmp/rb_outro_cards/` (MD5 key, atomic rename). No per-download re-encode after first request for a given resolution.
+- Compilation download investigated: NO compilation download path exists in downloads.py — future feature, not wired.
+- Gate: `BRANDED_OUTRO_ENABLED` env var (backend, default true) — same flag name as frontend constant.
+
+## Implementation notes (T3950 — original burn-in approach, SUPERSEDED)
+
+**Where the outro is appended — decided WITH EVIDENCE (kickoff instruction).** The
+kickoff sketch listed the framing render + multi-clip stitch as append points, but
+tracing the pipeline shows those steps produce the intermediate **`working_videos/*`**
+object, NOT the published artifact:
+
+- `/api/export/render` (single-clip) and `/api/export/multi-clip` both funnel through
+  `multi_clip._export_clips`, which writes a **working video** (`working_videos/…`).
+- The overlay step (`/api/export/render-overlay` → `_finalize_overlay_export`, and
+  `/api/export/final`) re-renders/copies that working video into the **`final_videos/*`**
+  object. Overlay ALWAYS runs before a reel is shareable — the no-keyframes case is a
+  copy path, not a skip — and `publish` 404s without a `final_videos` row. Sharing /
+  My Reels / downloads read `final_videos` only; a working video is never shared.
+
+So the **final published artifact for every flow is `final_videos/*`**, and the outro is
+appended there — exactly once, by the ONE step that produces it. Appending at framing
+would (a) pollute the editing preview with a branded card and (b) rely on overlay
+faithfully carrying it forward. Appending at the final step is the governing invariant
+the kickoff itself named ("the step that produces the FINAL published artifact").
+
+**Append sites (all router-level in `overlay.py`, above the Modal/local dispatch):**
+
+| Flow | Producer of `final_videos/*` | Outro hook |
+|------|------------------------------|------------|
+| Single- & multi-clip, with highlights | `_run_overlay_export_background` (Modal or local overlay render) | `apply_branded_outro_to_r2_object` on the final key, before `_finalize_overlay_export` |
+| No highlights | `render_overlay` no-keyframes R2 copy | same helper on `dest_key` |
+| E2E test mode | `render_overlay` test-mode R2 copy | same helper on `dest_key` |
+| Frontend-rendered final | `export_final` (`/final`) | `apply_branded_outro_to_bytes` before the single upload |
+
+Because the hook is at the router layer (operating on the R2 `final_videos/*` object /
+in-memory bytes), it covers **both Modal and local engines with ZERO Modal edits** — the
+concat runs on the Fly backend after the engine returns. **No Modal redeploy is required
+for this feature.** (Framing / multi-clip stitch / `video_processing.py` were deliberately
+NOT touched.)
+
+**No double-outro / re-export:** re-export re-renders from SOURCE into a NEW working
+video (no outro) → NEW final (one outro). Nothing stacks because the working video the
+overlay consumes never carries a card. Sync-then-announce (T4110/T4200) is preserved:
+the outro rewrite happens BEFORE `_finalize_overlay_export` and the sync gate.
+
+**Card:** programmatic FFmpeg (`branded_outro.py`) — dark card + `drawtext` wordmark +
+URL, faded in, ~1.75s, sized per output resolution (wordmark width-constrained so 9:16
+doesn't clip), silent audio matching the reel's layout. Bundled font
+(`app/assets/fonts/DejaVuSans-Bold.ttf`) referenced by absolute `fontfile=` since the Fly
+image ships ffmpeg but no fontconfig fonts. Append is a fast concat-demuxer stream copy
+(`-c copy`; only the card is encoded), with a re-encode concat fallback if the copy join
+fails validation. Flag: `BRANDED_OUTRO_ENABLED` (env, default true) gates the whole
+feature for a future paid branding-removal tier.
+
+**Failure = non-fatal (external-boundary choice):** a card/concat failure logs loudly and
+ships the card-less final; the outro must never sink a (possibly paid) export.
+
+**Duration budget:** the outro sits OUTSIDE the recorded `final_videos.duration` (that
+column is frozen from working-clip content by `compute_project_metadata`), so the card is
+chrome, not counted against duration-capped collections.
+
+**Sweep note:** `auto_export` no longer publishes (T4175 — it drafts); its dormant
+`final_videos` writer is intentionally NOT wired for an outro. If the sweep ever publishes
+a shareable reel again, it must call the same helper.

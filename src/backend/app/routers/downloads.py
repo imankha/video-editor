@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import re
+import tempfile
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -570,9 +571,15 @@ def generate_download_filename(project_name: str) -> str:
 @router.get("/{download_id}/file")
 async def download_file(download_id: int):
     """
-    Download/stream a final video file. Redirects to R2 when enabled.
-    Returns the video file for download with project name as filename.
+    Download a final video file with the branded outro burned in at serve time.
+
+    T3950: the outro is appended on-the-fly via ffmpeg concat so stored files
+    carry no outro and existing reels automatically get attribution. The card is
+    cached per resolution/fps in the system temp dir so repeat downloads are fast.
+    Non-fatal: any card/concat failure logs loudly and serves the original file --
+    a download must never break because of branding.
     """
+    import shutil as _shutil
 
     logger.info(f"[Download] Request for download_id={download_id}")
 
@@ -595,73 +602,104 @@ async def download_file(download_id: int):
         from app.analytics import record_milestone
         record_milestone(get_current_user_id(), "video_downloaded", {"video_id": download_id})
 
-        # If R2 enabled, stream through backend to avoid CORS issues with fetch API
+        download_filename = generate_download_filename(row['project_name'])
+        dl_headers = {
+            "Content-Disposition": f'attachment; filename="{download_filename}"',
+            "Cache-Control": "no-cache",
+        }
+
+        # ---- R2 path: download to temp, append outro, stream result ----
         if R2_ENABLED:
             import httpx
 
-            # verify_exists=True to check file exists and log warning if not
             presigned_url = get_download_file_url(row['filename'], verify_exists=True)
             if not presigned_url:
-                logger.error(f"[Download] R2 enabled but failed to generate presigned URL for: {row['filename']} - file may not exist in R2")
+                logger.error(
+                    f"[Download] R2 presigned URL failed for: {row['filename']}"
+                )
                 raise HTTPException(status_code=404, detail="Video file not found in storage")
 
-            logger.info("[Download] Streaming from R2 through backend proxy")
+            logger.info("[Download] Streaming from R2 with branded outro")
 
-            # Generate download filename from project name
-            download_filename = generate_download_filename(row['project_name'])
+            async def _stream_with_outro_r2():
+                tmp_dir = tempfile.mkdtemp(prefix="rb_dl_outro_")
+                try:
+                    original_path = os.path.join(tmp_dir, "original.mp4")
+                    out_path = os.path.join(tmp_dir, "with_outro.mp4")
 
-            async def stream_from_r2():
-                import asyncio as _asyncio
-                import random as _random
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(120.0, connect=10.0)
+                    ) as client:
+                        async with client.stream("GET", presigned_url) as response:
+                            if response.status_code != 200:
+                                raise HTTPException(
+                                    status_code=response.status_code,
+                                    detail=f"R2 returned {response.status_code}",
+                                )
+                            with open(original_path, "wb") as fout:
+                                async for chunk in response.aiter_bytes(1024 * 1024):
+                                    fout.write(chunk)
 
-                from app.utils.retry import TIER_2, is_transient_error
-
-                last_exc = None
-                for attempt in range(TIER_2["max_attempts"]):
+                    serve_path = original_path
                     try:
-                        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
-                            async with client.stream("GET", presigned_url) as response:
-                                if response.status_code != 200:
-                                    raise HTTPException(
-                                        status_code=response.status_code,
-                                        detail=f"R2 returned {response.status_code}"
-                                    )
-                                async for chunk in response.aiter_bytes(chunk_size=1024 * 1024):
-                                    yield chunk
-                        return
-                    except HTTPException:
-                        raise
-                    except Exception as e:
-                        last_exc = e
-                        if not is_transient_error(e) or attempt >= TIER_2["max_attempts"] - 1:
-                            raise
-                        delay = TIER_2["initial_delay"] * (2.0 ** attempt) * (0.5 + _random.random())
-                        logger.warning(f"[stream_proxy] Download attempt {attempt + 1} failed: {e}, retrying in {delay:.1f}s")
-                        await _asyncio.sleep(delay)
+                        from app.services.branded_outro import append_branded_outro
+                        if await asyncio.to_thread(append_branded_outro, original_path, out_path):
+                            serve_path = out_path
+                    except Exception as exc:
+                        logger.error(
+                            f"[Download] Outro append failed for download_id={download_id}: {exc}"
+                        )
+
+                    with open(serve_path, "rb") as fin:
+                        while True:
+                            chunk = fin.read(1024 * 1024)
+                            if not chunk:
+                                break
+                            yield chunk
+                finally:
+                    _shutil.rmtree(tmp_dir, ignore_errors=True)
 
             return StreamingResponse(
-                stream_from_r2(),
+                _stream_with_outro_r2(),
                 media_type="video/mp4",
-                headers={
-                    "Content-Disposition": f'attachment; filename="{download_filename}"',
-                    "Cache-Control": "no-cache"
-                }
+                headers=dl_headers,
             )
 
-        # Local mode only: serve from filesystem
+        # ---- Local path: append outro to temp file, stream result ----
         file_path = get_final_videos_path() / row['filename']
         if not file_path.exists():
             logger.error(f"[Download] File missing: {file_path}")
             raise HTTPException(status_code=404, detail="Video file not found")
 
-        # Generate download filename from project name (single source of truth)
-        download_filename = generate_download_filename(row['project_name'])
-        logger.info(f"[Download] Serving file as: {download_filename}")
+        logger.info(f"[Download] Serving local file as: {download_filename}")
 
-        return FileResponse(
-            path=str(file_path),
+        async def _stream_with_outro_local():
+            tmp_dir = tempfile.mkdtemp(prefix="rb_dl_outro_")
+            try:
+                out_path = os.path.join(tmp_dir, "with_outro.mp4")
+                serve_path = str(file_path)
+                try:
+                    from app.services.branded_outro import append_branded_outro
+                    if await asyncio.to_thread(append_branded_outro, str(file_path), out_path):
+                        serve_path = out_path
+                except Exception as exc:
+                    logger.error(
+                        f"[Download] Outro append failed for download_id={download_id}: {exc}"
+                    )
+
+                with open(serve_path, "rb") as fin:
+                    while True:
+                        chunk = fin.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                _shutil.rmtree(tmp_dir, ignore_errors=True)
+
+        return StreamingResponse(
+            _stream_with_outro_local(),
             media_type="video/mp4",
-            filename=download_filename
+            headers=dl_headers,
         )
 
 

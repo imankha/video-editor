@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, Loader, Lock, Download, Share2 } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
+import { BrandedEndCard } from './BrandedEndCard';
 import { SharePageInstallBanner } from './SharePageInstallBanner';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
@@ -12,6 +13,10 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   const [state, setState] = useState('loading');
   const [share, setShare] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [showEndCard, setShowEndCard] = useState(false);
+  // Bumped on Replay: remounts MediaPlayer so playback restarts from 0
+  // (same pattern as SharedCollectionView's playerKey).
+  const [playKey, setPlayKey] = useState(0);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
@@ -83,13 +88,23 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
       }
     };
 
+    const handleReplay = () => {
+      setShowEndCard(false);
+      setPlayKey((k) => k + 1);
+    };
+
     return (
       <Overlay onClose={onClose} title={share.video_name} onDownload={handleDownload}>
-        <MediaPlayer
-          src={share.video_url}
-          autoPlay
-          onClose={onClose}
-        />
+        <div className="relative w-full h-full">
+          <MediaPlayer
+            key={playKey}
+            src={share.video_url}
+            autoPlay={!showEndCard}
+            onClose={onClose}
+            onEnded={() => setShowEndCard(true)}
+          />
+          <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
+        </div>
         <SharePageInstallBanner />
         {isAuthenticated && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">

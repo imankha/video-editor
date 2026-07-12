@@ -20,8 +20,9 @@ import { useStandaloneVideo } from '../hooks/useStandaloneVideo';
  * @param {string} props.src - Video source URL
  * @param {boolean} props.autoPlay - Whether to auto-play on mount
  * @param {Function} props.onClose - Callback when Escape is pressed
+ * @param {Function=} props.onEnded - Callback when video playback ends
  */
-export function MediaPlayer({ src, autoPlay = true, onClose }) {
+export function MediaPlayer({ src, autoPlay = true, onClose, onEnded }) {
   const containerRef = useRef(null);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -185,6 +186,7 @@ export function MediaPlayer({ src, autoPlay = true, onClose }) {
         autoPlay={autoPlay}
         className="w-full h-full object-contain"
         style={{ maxHeight: '100%', maxWidth: '100%', pointerEvents: 'none' }}
+        onEnded={onEnded}
         {...handlers}
       >
         Your browser does not support the video tag.
