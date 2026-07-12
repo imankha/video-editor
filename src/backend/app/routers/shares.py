@@ -27,6 +27,7 @@ from ..services.auth_db import (
     get_user_by_id,
     validate_session,
 )
+from ..services.poster import poster_basename, poster_rel_path
 from ..services.sharing_db import (
     create_shares,
     get_active_public_share_for_video,
@@ -39,7 +40,6 @@ from ..services.sharing_db import (
     revoke_share,
     update_share_visibility,
 )
-from ..services.poster import poster_basename, poster_rel_path
 from ..storage import (
     APP_ENV,
     generate_presigned_url_global,
@@ -166,7 +166,12 @@ def _resolve_poster(share: dict) -> tuple[str | None, int | None, int | None]:
     edge page omits the og:image tag, and we log at info. Never raises.
 
     Width/height come from the poster object's user-metadata (set at generation);
-    they are optional -- absent metadata just omits og:image:width/height."""
+    they are optional -- absent metadata just omits og:image:width/height.
+
+    The URL is the STABLE relative proxy path (/api/shared/{token}/poster.jpg),
+    never a presigned R2 URL: unfurl crawlers refetch og:image long after a
+    4h signature expires, and the edge-cached HTML would bake in a dead link.
+    The edge function absolutizes it with its API base."""
     poster_key = _build_poster_r2_key(share)
     head = r2_head_object_global(poster_key)
     if head is None:
@@ -178,7 +183,7 @@ def _resolve_poster(share: dict) -> tuple[str | None, int | None, int | None]:
     meta = head.get("Metadata") or {}
     width = _int_or_none(meta.get("width"))
     height = _int_or_none(meta.get("height"))
-    return (generate_presigned_url_global(poster_key), width, height)
+    return (f"/api/shared/{share['share_token']}/poster.jpg", width, height)
 
 
 def _int_or_none(value) -> int | None:
@@ -440,6 +445,36 @@ async def get_shared_video(share_token: str, request: Request, background_tasks:
         video_poster_height=poster_h,
         is_public=bool(share["is_public"]),
         shared_at=share["shared_at"],
+    )
+
+
+@shared_router.get("/{share_token}/poster.jpg")
+async def get_shared_poster(share_token: str):
+    """Stable public poster image for unfurl crawlers (T4890 follow-up).
+
+    og:image must never embed a presigned URL: crawlers refetch after the
+    signature's 4h expiry and the edge-cached share HTML would carry a dead
+    link. This proxies the poster object with a FRESH presign per request.
+    Access model: knowing the share token grants the poster (one frame of an
+    already-shared video), same trust boundary as the share link itself.
+    """
+    share = get_share_by_token(share_token)
+    if not share or share["revoked_at"]:
+        raise HTTPException(404, "Share not found")
+    poster_key = _build_poster_r2_key(share)
+    if r2_head_object_global(poster_key) is None:
+        raise HTTPException(404, "No poster for this share")
+
+    import httpx
+    url = generate_presigned_url_global(poster_key)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+        resp = await client.get(url)
+    if resp.status_code != 200:
+        raise HTTPException(502, "Poster fetch failed")
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
 
 

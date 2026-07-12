@@ -2,7 +2,7 @@
 // Workers runtime needed. Integration (routing, fallthrough, beacon, caching) is
 // covered by `wrangler pages dev` in the task verification.
 import { describe, it, expect } from 'vitest';
-import { renderSharePage, escapeHtml, apiBase } from './[token].js';
+import { renderSharePage, escapeHtml, apiBase, absolutizePosterUrl } from './[token].js';
 
 describe('apiBase', () => {
   it('maps the prod host to the prod API', () => {
@@ -24,6 +24,28 @@ describe('escapeHtml', () => {
   it('coerces null/undefined to empty string', () => {
     expect(escapeHtml(null)).toBe('');
     expect(escapeHtml(undefined)).toBe('');
+  });
+});
+
+describe('absolutizePosterUrl', () => {
+  // Regression: og:image originally embedded a presigned R2 URL, which expires
+  // in 4h - unfurl crawlers refetching later (or hitting edge-cached HTML) got
+  // a dead link and showed no image. The API now sends a stable relative proxy
+  // path that must be absolutized against the API base.
+  it('prefixes a relative proxy path with the API base', () => {
+    const share = { video_poster_url: '/api/shared/tok/poster.jpg' };
+    absolutizePosterUrl(share, 'https://api.example.com');
+    expect(share.video_poster_url).toBe('https://api.example.com/api/shared/tok/poster.jpg');
+  });
+
+  it('leaves absolute URLs and missing posters untouched', () => {
+    const abs = { video_poster_url: 'https://cdn.example.com/p.jpg' };
+    absolutizePosterUrl(abs, 'https://api.example.com');
+    expect(abs.video_poster_url).toBe('https://cdn.example.com/p.jpg');
+
+    const none = {};
+    absolutizePosterUrl(none, 'https://api.example.com');
+    expect(none.video_poster_url).toBeUndefined();
   });
 });
 

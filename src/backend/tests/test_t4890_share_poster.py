@@ -291,29 +291,81 @@ def _share(filename="reel_z.mp4"):
 def test_resolve_poster_present():
     from app.routers import shares
     with patch.object(shares, "r2_head_object_global",
-                      return_value={"Metadata": {"width": "1080", "height": "1920"}}), \
-         patch.object(shares, "generate_presigned_url_global", return_value="https://r2/p.jpg?sig=1"):
+                      return_value={"Metadata": {"width": "1080", "height": "1920"}}):
         url, w, h = shares._resolve_poster(_share())
-    assert url == "https://r2/p.jpg?sig=1"
+    # STABLE relative proxy path, never a presigned URL: crawlers refetch
+    # og:image after the signature would have expired (bug found live on
+    # staging - unfurl tools showed no image).
+    assert url == "/api/shared/tok123/poster.jpg"
     assert (w, h) == (1080, 1920)
 
 
 def test_resolve_poster_absent_omits():
     from app.routers import shares
-    with patch.object(shares, "r2_head_object_global", return_value=None), \
-         patch.object(shares, "generate_presigned_url_global") as presign:
+    with patch.object(shares, "r2_head_object_global", return_value=None):
         url, w, h = shares._resolve_poster(_share())
     assert (url, w, h) == (None, None, None)
-    presign.assert_not_called()
 
 
 def test_resolve_poster_present_without_dims():
     from app.routers import shares
-    with patch.object(shares, "r2_head_object_global", return_value={"Metadata": {}}), \
-         patch.object(shares, "generate_presigned_url_global", return_value="https://r2/p.jpg"):
+    with patch.object(shares, "r2_head_object_global", return_value={"Metadata": {}}):
         url, w, h = shares._resolve_poster(_share())
-    assert url == "https://r2/p.jpg"
+    assert url == "/api/shared/tok123/poster.jpg"
     assert (w, h) == (None, None)
+
+
+def test_poster_endpoint_serves_jpeg_with_cache_header():
+    import asyncio
+    from unittest.mock import MagicMock
+
+    from app.routers import shares
+
+    share = {**_share(), "revoked_at": None}
+    fake_resp = MagicMock(status_code=200, content=b"\xff\xd8jpegbytes")
+
+    class _FakeClient:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url): return fake_resp
+
+    import httpx
+    with patch.object(shares, "get_share_by_token", return_value=share), \
+         patch.object(shares, "r2_head_object_global", return_value={"Metadata": {}}), \
+         patch.object(shares, "generate_presigned_url_global", return_value="https://r2/p.jpg?sig=1"), \
+         patch.object(httpx, "AsyncClient", _FakeClient):
+        resp = asyncio.run(shares.get_shared_poster("tok123"))
+    assert resp.media_type == "image/jpeg"
+    assert resp.headers["cache-control"] == "public, max-age=86400"
+    assert resp.body == b"\xff\xd8jpegbytes"
+
+
+def test_poster_endpoint_404_when_absent_or_revoked():
+    import asyncio
+
+    import pytest
+    from fastapi import HTTPException
+
+    from app.routers import shares
+
+    with patch.object(shares, "get_share_by_token", return_value=None):
+        with pytest.raises(HTTPException) as e:
+            asyncio.run(shares.get_shared_poster("tok123"))
+        assert e.value.status_code == 404
+
+    share = {**_share(), "revoked_at": "2026-07-12"}
+    with patch.object(shares, "get_share_by_token", return_value=share):
+        with pytest.raises(HTTPException) as e:
+            asyncio.run(shares.get_shared_poster("tok123"))
+        assert e.value.status_code == 404
+
+    live = {**_share(), "revoked_at": None}
+    with patch.object(shares, "get_share_by_token", return_value=live), \
+         patch.object(shares, "r2_head_object_global", return_value=None):
+        with pytest.raises(HTTPException) as e:
+            asyncio.run(shares.get_shared_poster("tok123"))
+        assert e.value.status_code == 404
 
 
 def test_build_poster_r2_key():

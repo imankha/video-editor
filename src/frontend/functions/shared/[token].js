@@ -27,6 +27,17 @@ export function apiBase(hostname) {
   return API_BY_HOST[hostname] || DEFAULT_API;
 }
 
+// T4890: the API returns the poster as a STABLE relative proxy path (never a
+// presigned URL - crawlers refetch og:image after the 4h signature expires,
+// and the edge-cached HTML would bake in a dead link). Crawlers don't resolve
+// relative URLs, so absolutize against the API base before rendering.
+export function absolutizePosterUrl(share, api) {
+  if (share.video_poster_url && share.video_poster_url.startsWith("/")) {
+    share.video_poster_url = api + share.video_poster_url;
+  }
+  return share;
+}
+
 // Server-rendered HTML: every interpolated value MUST pass through this. A
 // crafted video_name must not be able to break out of an attribute or inject
 // markup.
@@ -246,6 +257,8 @@ export async function onRequestGet(context) {
   if (!share) {
     return serveSpa();
   }
+
+  absolutizePosterUrl(share, api);
 
   // Fire-and-forget view beacon on EVERY render (cache hit or miss) so view
   // analytics don't regress when the JSON is edge-cached.
