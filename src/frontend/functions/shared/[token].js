@@ -111,7 +111,7 @@ video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;backgr
 #unmute:hover{background:#22d3ee}
 #end-card{display:none;position:absolute;inset:0;z-index:20;flex-direction:column;align-items:center;padding:20px;background:rgba(11,15,26,.97)}
 #end-card.show{display:flex}
-.ec-cta{display:block;text-align:center;padding:12px 24px 32px;color:#c084fc;font-weight:600;font-size:16px;text-decoration:none;line-height:1.4}
+.ec-cta{display:block;width:100%;text-align:center;padding:20px 24px 32px;color:#c084fc;font-weight:600;font-size:16px;text-decoration:none;line-height:1.4}
 .ec-cta:hover{text-decoration:underline}
 .ec-mw{font-size:13px;color:#9ca3af}
 .ec-lr{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}

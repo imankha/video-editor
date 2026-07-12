@@ -29,7 +29,7 @@ export function BrandedEndCard({ visible, onReplay }) {
         href={CTA_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-center font-semibold text-lg pb-8 pt-3 px-6 hover:underline"
+        className="w-full text-center font-semibold text-lg pb-8 pt-5 px-6 hover:underline"
         style={{ color: '#c084fc', textDecoration: 'none' }}
       >
         Make your own reel at www.reelballers.com
