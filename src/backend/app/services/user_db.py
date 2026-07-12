@@ -553,8 +553,50 @@ def get_credit_stats_for_admin(user_ids: list[str] | None = None) -> dict:
             continue
         user_id = user_dir.name
         user_db_path = user_dir / "user.sqlite"
+
         if not user_db_path.exists():
-            continue
+            if user_ids is not None:
+                # Explicit-ids admin path: attempt R2 restore for missing files.
+                # Use sync_user_db_from_r2_if_newer directly (not ensure_user_database) to avoid
+                # creating a balance-0 stub DB on R2 error. ensure_user_database materialises a
+                # stub when R2 fails, which then poisons subsequent admin loads via the
+                # _initialized_user_dbs cache — the stub looks like a real 0-balance entry.
+                from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
+                if R2_ENABLED:
+                    # File is absent: pass local_version=None so the in-memory version
+                    # cache is ignored. A cached version with no local file is stale by
+                    # definition — if we pass it, sync may return "already current" and
+                    # fall through to sqlite3.connect on a missing path (creating an empty
+                    # stub instead of restoring real data).
+                    _, new_version, was_error = sync_user_db_from_r2_if_newer(
+                        user_id, user_db_path, None
+                    )
+                    if was_error:
+                        logger.warning(
+                            f"[UserDB] Admin stats: R2 unreachable for {user_id},"
+                            f" no local file - reporting null"
+                        )
+                        continue
+                    if new_version is None:
+                        # NOT_FOUND: genuinely new user, no credits to show
+                        continue
+                    # Restored from R2; guard in case sync succeeded but file still absent
+                    if not user_db_path.exists():
+                        logger.warning(
+                            f"[UserDB] Admin stats: file absent after R2 sync for {user_id} - skipping"
+                        )
+                        continue
+                    # Fall through: file now present, read it below
+                else:
+                    logger.warning(
+                        f"[UserDB] Admin stats: no local file for {user_id} (R2 disabled) - skipping"
+                    )
+                    continue
+            else:
+                # scan-all path: log instead of silent skip
+                logger.warning(f"[UserDB] Admin stats: no local file for {user_id} - skipping")
+                continue
+
         try:
             conn = sqlite3.connect(str(user_db_path), timeout=5)
             conn.row_factory = sqlite3.Row
@@ -591,7 +633,7 @@ def get_credit_stats_for_admin(user_ids: list[str] | None = None) -> dict:
             user_stats = {
                 "credits_spent": spent_rows["total_spent"] or 0 if spent_rows else 0,
                 "credits_purchased": purchased_row["total_purchased"] or 0 if purchased_row else 0,
-                "credits_balance": balance_row["balance"] if balance_row else 0,
+                "credits_balance": balance_row["balance"] if balance_row else None,
                 "purchase_credit_amounts": [r["amount"] for r in purchase_detail_rows],
             }
             stats[user_id] = user_stats

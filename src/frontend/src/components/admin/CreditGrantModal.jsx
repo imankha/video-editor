@@ -58,7 +58,7 @@ export function CreditGrantModal({ user, onClose }) {
 
         <p className="text-gray-400 text-sm mb-3">
           {user.email || user.user_id}
-          <span className="ml-2 text-gray-500">({user.credits} current)</span>
+          <span className="ml-2 text-gray-500">({user.credits == null ? '—' : user.credits} current)</span>
         </p>
 
         <div className="flex gap-1 mb-3 bg-gray-700/50 rounded-lg p-0.5">

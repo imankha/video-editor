@@ -174,10 +174,7 @@ async def list_users(
     users = []
     for row in rows:
         user_id = row["user_id"]
-        user_credit = credit_stats.get(user_id, {
-            "credits_spent": 0, "credits_purchased": 0,
-            "credits_balance": 0, "purchase_credit_amounts": [],
-        })
+        user_credit = credit_stats.get(user_id)
 
         user_actions = actions_by_user.get(user_id, {})
         last_step = _compute_last_step(set(user_actions.keys()))
@@ -206,9 +203,9 @@ async def list_users(
             "export_failed_count": user_actions.get("export_failed", 0),
             "share_completed_count": user_actions.get("share_completed", 0),
             "credit_purchase_count": user_actions.get("credit_purchased", 0),
-            "credits": user_credit["credits_balance"],
-            "credits_spent": user_credit["credits_spent"],
-            "credits_purchased": user_credit["credits_purchased"],
+            "credits": user_credit["credits_balance"] if user_credit else None,
+            "credits_spent": user_credit["credits_spent"] if user_credit else 0,
+            "credits_purchased": user_credit["credits_purchased"] if user_credit else 0,
             "total_spent_cents": row["total_spent_cents"] or 0,
             "last_active_at": row["last_active_at"].isoformat() if row["last_active_at"] else None,
             "session_count": session_count,
