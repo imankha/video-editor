@@ -1,6 +1,6 @@
 # T4890: Shared reel links: first-frame preview image with play button
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-11
