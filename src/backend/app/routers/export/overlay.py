@@ -354,23 +354,35 @@ def _find_keyframe_index(keyframes: list, time: float, tolerance: float = 0.02) 
     return -1
 
 
+def _normalize_region_keys(region: dict) -> dict:
+    """Normalize camelCase region keys to snake_case in place.
+
+    Surgical overlay actions (create_region, update_region) persist ``startTime``/
+    ``endTime``. The framing->overlay transform uses ``start_time``/``end_time``.
+    The Modal renderer (video_processing.py) uses direct bracket access
+    ``region["start_time"]``, so camelCase blobs KeyError in prod. Normalizing at
+    the single DB-read boundary (render_overlay) makes both local and Modal paths
+    receive canonical snake_case, without touching the stored blob or the action
+    writer.
+    """
+    if 'startTime' in region and 'start_time' not in region:
+        region['start_time'] = region['startTime']
+    if 'endTime' in region and 'end_time' not in region:
+        region['end_time'] = region['endTime']
+    return region
+
+
 def _region_bounds(region: dict) -> tuple[float, float]:
     """Read a region's [start, end] time bounds tolerant of BOTH key formats.
 
-    Surgical overlay actions persist camelCase ``startTime``/``endTime``
-    (overlay_action, this file), while the framing->overlay transform and the
-    frontend export payload use snake_case ``start_time``/``end_time``
-    (highlight_transform.py). The render read path must honour whichever the
-    stored blob uses; reading only one form silently clips the region (or
-    KeyErrors on action-written blobs). Mirrors highlight_transform.py:770-771.
-    T4900: when the user extends a segment, the ``update_region`` action writes
-    the new ``endTime`` here, so honouring it is what lets manual keyframes past
-    the original auto-segment boundary survive to the render (failure mode 3).
+    Both ``startTime``/``endTime`` (camelCase, action-written) and
+    ``start_time``/``end_time`` (snake_case, transform-written) are handled.
+    Callers that go through ``render_overlay`` will have already been normalized
+    by ``_normalize_region_keys``, so both keys exist; the local renderer keeps
+    this helper as defence-in-depth for any caller that bypasses normalization.
+    The ``0`` default only applies when BOTH keys are absent (corrupt blob);
+    a present-but-None bound surfaces as a TypeError in arithmetic (visible bug).
     """
-    # Same tolerant read as highlight_transform.py:770-771. No extra `or 0`
-    # coercion: create_region always writes both bounds, so a present-but-None
-    # bound would be an internal bug we want to surface, not silently collapse
-    # the region to [x, 0] and drop every keyframe (CLAUDE.md: no silent fallbacks).
     start = region.get('start_time', region.get('startTime', 0))
     end = region.get('end_time', region.get('endTime', 0))
     return start, end
@@ -1885,11 +1897,19 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         except Exception as e:
             logger.warning(f"[Overlay Render] Failed to create export_jobs record: {e}")
 
-    # Parse highlight regions
+    # Parse highlight regions and normalize to canonical snake_case keys.
+    # T4900: create_region/update_region write camelCase startTime/endTime;
+    # the Modal renderer reads region["start_time"] directly (KeyError on
+    # camelCase blobs). Normalizing here — the single DB-read boundary — fixes
+    # both the local and Modal paths without touching the stored blob or the
+    # action writer.
     highlight_regions = []
     if project['highlights_data']:
         try:
-            highlight_regions = decode_data(project['highlights_data'])
+            highlight_regions = [
+                _normalize_region_keys(r)
+                for r in (decode_data(project['highlights_data']) or [])
+            ]
             # DEBUG: Log what we loaded from database
             logger.info(f"[Overlay Render] DEBUG - Loaded highlights_data from DB: {len(project['highlights_data'])} chars")
             if highlight_regions and highlight_regions[0].get('keyframes'):

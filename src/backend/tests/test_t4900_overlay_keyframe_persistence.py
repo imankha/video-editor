@@ -31,6 +31,7 @@ from app.session_init import _init_cache
 from app.routers.export.overlay import (
     _region_bounds,
     _keyframes_within_bounds,
+    _normalize_region_keys,
     _get_overlay_data,
 )
 
@@ -47,6 +48,33 @@ _HDRS = {"X-User-ID": TEST_USER_ID}
 # --------------------------------------------------------------------------- #
 # Unit: render read-path bounds + keyframe filter (no DB)
 # --------------------------------------------------------------------------- #
+
+class TestNormalizeRegionKeys:
+    """_normalize_region_keys is the DB-read boundary fix for the Modal path.
+
+    video_processing.py uses direct bracket access ``region["start_time"]``
+    which KeyErrors on camelCase-only blobs from create_region/update_region.
+    Normalizing at render_overlay before dispatch to Modal/local fixes both
+    renderers without touching the stored blob.
+    """
+
+    def test_camelcase_only_gets_snake_case_aliases(self):
+        r = {"startTime": 1.0, "endTime": 5.0, "keyframes": []}
+        _normalize_region_keys(r)
+        assert r["start_time"] == 1.0 and r["end_time"] == 5.0
+
+    def test_existing_snake_case_not_overwritten(self):
+        r = {"start_time": 2.0, "end_time": 4.0, "startTime": 0.0}
+        _normalize_region_keys(r)
+        # start_time already present — must not be clobbered
+        assert r["start_time"] == 2.0
+
+    def test_mixed_blob_snake_takes_priority(self):
+        # framing-export blob may have both; snake wins
+        r = {"start_time": 1.5, "end_time": 3.0, "startTime": 0.0, "endTime": 0.0}
+        _normalize_region_keys(r)
+        assert r["start_time"] == 1.5 and r["end_time"] == 3.0
+
 
 class TestRegionBounds:
     def test_bounds_tolerate_camelcase_action_blob(self):
