@@ -24,9 +24,11 @@ def fetch(url: str, timeout: float = 20.0, ua: str = CRAWLER_UA) -> tuple[int, d
     req = urllib.request.Request(url, headers={"User-Agent": ua})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, dict(resp.headers), resp.read()
+            headers = {k.lower(): v for k, v in resp.headers.items()}
+            return resp.status, headers, resp.read()
     except urllib.error.HTTPError as e:
-        return e.code, dict(e.headers), e.read()
+        headers = {k.lower(): v for k, v in e.headers.items()}
+        return e.code, headers, e.read()
 
 
 def parse_meta(html: str) -> dict:
@@ -72,7 +74,7 @@ def check_once(share_url: str, attempt: int) -> tuple[bool, list[str]]:
         t0 = time.monotonic()
         a_status, a_headers, a_body = fetch(url)
         ms = int((time.monotonic() - t0) * 1000)
-        ctype = a_headers.get("Content-Type", "?")
+        ctype = a_headers.get("content-type", "?")
         print(f"    {key:9} -> {a_status} {ctype} {len(a_body)} bytes in {ms}ms  "
               f"[{url[:70]}...]")
         if a_status != 200:
