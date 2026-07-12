@@ -21,18 +21,13 @@ const API_BY_HOST = {
 const DEFAULT_API = "https://reel-ballers-api-staging.fly.dev";
 
 const SHARE_CACHE_TTL = 600; // seconds (10 min) -- comfortably < 4h presign expiry
-const UPSTREAM_TIMEOUT_MS = 2000;
-// Crawlers get a longer upstream budget: the ONLY page fetch that matters for
-// an unfurl is the crawler's, and preview caches (iMessage etc.) keep whatever
-// they get. A human hitting a slow API just falls back to the SPA, which
-// handles the share fine; a crawler that falls back caches a tagless preview.
-const CRAWLER_UPSTREAM_TIMEOUT_MS = 8000;
-
-export function isCrawler(userAgent) {
-  return /bot|crawl|spider|preview|facebookexternalhit|whatsapp|slack|twitter|telegram|discord|linkedin|skype|imessage|applebot/i.test(
-    userAgent || ""
-  );
-}
+// Generous upstream budget for EVERYONE: the staging/prod API cold-starts in
+// seconds when its Fly machine was asleep, and preview crawlers arrive with
+// plain browser UAs (Microlink/Previewer reproduced this live) - a UA-based
+// split misses them. Bailing to the SPA early buys humans nothing anyway: the
+// SPA's first fetch is the SAME API call through the SAME cold start. The
+// fallback exists for real failures, not slow starts.
+const UPSTREAM_TIMEOUT_MS = 8000;
 
 export function apiBase(hostname) {
   return API_BY_HOST[hostname] || DEFAULT_API;
@@ -274,10 +269,7 @@ export async function onRequestGet(context) {
     return uncached;
   };
 
-  const upstreamBudget = isCrawler(request.headers.get("user-agent"))
-    ? CRAWLER_UPSTREAM_TIMEOUT_MS
-    : UPSTREAM_TIMEOUT_MS;
-  const share = await loadPublicShare(api, token, request, waitUntil, upstreamBudget);
+  const share = await loadPublicShare(api, token, request, waitUntil);
   if (!share) {
     return serveSpa();
   }
