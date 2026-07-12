@@ -127,15 +127,9 @@ _cors_origins = [
 if _cors_extra:
     _cors_origins.extend(origin.strip() for origin in _cors_extra.split(",") if origin.strip())
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["X-Sync-Status"],
-    max_age=86400,
-)
+# NOTE: CORSMiddleware is added LAST (below, after every other middleware) so it
+# is the OUTERMOST HTTP middleware. This is deliberate and load-bearing — see the
+# block near the bottom of the middleware section. Do not re-add it here.
 
 # Single combined middleware for user context + R2 sync.
 # Must be ONE middleware because BaseHTTPMiddleware's call_next() copies the
@@ -143,9 +137,12 @@ app.add_middleware(
 # the call_next() boundary. See db_sync.py for details.
 app.add_middleware(RequestContextMiddleware)
 
-# T1190: ASGI-level WebSocket replay. Must be added AFTER RequestContextMiddleware
-# so it becomes the outermost middleware (last added = outermost in Starlette).
-# HTTP scopes pass through; only WebSocket scopes are checked for fly_machine_id.
+# T1190: ASGI-level WebSocket replay. Added AFTER RequestContextMiddleware so it
+# sits OUTSIDE it for WebSocket scopes (the only scopes it checks for
+# fly_machine_id; HTTP scopes pass straight through). NOTE: the CORS and gpc
+# middleware below are added even later, so they wrap this for HTTP — that is
+# intentional (see the CORS block) and harmless here because both ignore
+# WebSocket scopes, leaving FlyReplay first to see every ws connection.
 from app.middleware.fly_replay import FlyReplayMiddleware
 
 app.add_middleware(FlyReplayMiddleware)
@@ -156,6 +153,27 @@ async def gpc_signal_middleware(request, call_next):
     if request.headers.get("Sec-GPC") == "1":
         logging.getLogger(__name__).debug(f"[Privacy] GPC signal detected: {request.url.path}")
     return await call_next(request)
+
+# CORS must be the OUTERMOST HTTP middleware (added LAST so Starlette wraps it
+# around everything). Prod bug 31p: overlay action POSTs to the cross-origin API
+# host failed as "TypeError: Failed to fetch" (188x over a 6-min session) while
+# same-origin video streaming kept working. Root cause: error/control responses
+# produced by the middlewares below — the auth 401/503 in RequestContextMiddleware
+# and the Fly machine-pinning replay Response (db_sync.py) — are emitted OUTSIDE
+# the CORS boundary when CORS is inner, so they carry NO Access-Control-Allow-*
+# headers. A cross-origin browser then blocks the response and surfaces it as an
+# opaque network error instead of a real status the frontend can act on. Making
+# CORS outermost guarantees every response (success, 4xx/5xx, and preflight)
+# carries CORS headers, and lets preflights be answered before auth/pinning run.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Sync-Status"],
+    max_age=86400,
+)
 
 # Include routers
 app.include_router(health_router)

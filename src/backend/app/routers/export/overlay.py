@@ -354,6 +354,57 @@ def _find_keyframe_index(keyframes: list, time: float, tolerance: float = 0.02) 
     return -1
 
 
+def _normalize_region_keys(region: dict) -> dict:
+    """Normalize camelCase region keys to snake_case in place.
+
+    Surgical overlay actions (create_region, update_region) persist ``startTime``/
+    ``endTime``. The framing->overlay transform uses ``start_time``/``end_time``.
+    The Modal renderer (video_processing.py) uses direct bracket access
+    ``region["start_time"]``, so camelCase blobs KeyError in prod. Normalizing at
+    the single DB-read boundary (render_overlay) makes both local and Modal paths
+    receive canonical snake_case, without touching the stored blob or the action
+    writer.
+    """
+    if 'startTime' in region and 'start_time' not in region:
+        region['start_time'] = region['startTime']
+    if 'endTime' in region and 'end_time' not in region:
+        region['end_time'] = region['endTime']
+    return region
+
+
+def _region_bounds(region: dict) -> tuple[float, float]:
+    """Read a region's [start, end] time bounds tolerant of BOTH key formats.
+
+    Both ``startTime``/``endTime`` (camelCase, action-written) and
+    ``start_time``/``end_time`` (snake_case, transform-written) are handled.
+    Callers that go through ``render_overlay`` will have already been normalized
+    by ``_normalize_region_keys``, so both keys exist; the local renderer keeps
+    this helper as defence-in-depth for any caller that bypasses normalization.
+    The ``0`` default only applies when BOTH keys are absent (corrupt blob);
+    a present-but-None bound surfaces as a TypeError in arithmetic (visible bug).
+    """
+    start = region.get('start_time', region.get('startTime', 0))
+    end = region.get('end_time', region.get('endTime', 0))
+    return start, end
+
+
+def _keyframes_within_bounds(region: dict, eps: float = 0.04) -> list:
+    """Keyframes that fall inside the region's CURRENT [start, end] bounds.
+
+    Keyframes outside the window don't influence rendering (user may have shrunk
+    the region). T4900 failure mode 3: because bounds are read from the current
+    (possibly EXTENDED) region via _region_bounds, manual keyframes the user
+    added past the original auto-segment boundary are retained here — they are
+    NOT clipped, as long as the extend-segment action landed. The regression test
+    pins exactly this.
+    """
+    r_start, r_end = _region_bounds(region)
+    return [
+        kf for kf in region.get('keyframes', [])
+        if r_start - eps <= kf.get('time', 0) <= r_end + eps
+    ]
+
+
 @router.post("/projects/{project_id}/overlay/actions")
 async def overlay_action(project_id: int, action: OverlayAction):
     """
@@ -742,8 +793,9 @@ def _process_frames_to_ffmpeg(
     stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
     stderr_thread.start()
 
-    # Sort regions by start time for efficient lookup
-    sorted_regions = sorted(highlight_regions, key=lambda r: r['start_time'])
+    # Sort regions by start time for efficient lookup. _region_bounds tolerates
+    # both camelCase (action-written) and snake_case (transform-written) blobs.
+    sorted_regions = sorted(highlight_regions, key=lambda r: _region_bounds(r)[0])
 
     frame_idx = 0
     try:
@@ -757,19 +809,14 @@ def _process_frames_to_ffmpeg(
             # Find active region for this frame
             active_region = None
             for region in sorted_regions:
-                if region['start_time'] <= current_time <= region['end_time']:
+                r_start, r_end = _region_bounds(region)
+                if r_start <= current_time <= r_end:
                     active_region = region
                     break
 
             # Render highlight if in a region
             if active_region:
-                # Filter keyframes to region bounds — keyframes outside [start_time, end_time]
-                # should not influence rendering (user may have shrunk the region)
-                eps = 0.04
-                region_keyframes = [
-                    kf for kf in active_region['keyframes']
-                    if active_region['start_time'] - eps <= kf['time'] <= active_region['end_time'] + eps
-                ]
+                region_keyframes = _keyframes_within_bounds(active_region)
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
                 if highlight is not None:
@@ -1850,11 +1897,19 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
         except Exception as e:
             logger.warning(f"[Overlay Render] Failed to create export_jobs record: {e}")
 
-    # Parse highlight regions
+    # Parse highlight regions and normalize to canonical snake_case keys.
+    # T4900: create_region/update_region write camelCase startTime/endTime;
+    # the Modal renderer reads region["start_time"] directly (KeyError on
+    # camelCase blobs). Normalizing here — the single DB-read boundary — fixes
+    # both the local and Modal paths without touching the stored blob or the
+    # action writer.
     highlight_regions = []
     if project['highlights_data']:
         try:
-            highlight_regions = decode_data(project['highlights_data'])
+            highlight_regions = [
+                _normalize_region_keys(r)
+                for r in (decode_data(project['highlights_data']) or [])
+            ]
             # DEBUG: Log what we loaded from database
             logger.info(f"[Overlay Render] DEBUG - Loaded highlights_data from DB: {len(project['highlights_data'])} chars")
             if highlight_regions and highlight_regions[0].get('keyframes'):

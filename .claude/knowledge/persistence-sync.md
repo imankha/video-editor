@@ -1,6 +1,6 @@
 ---
 domain: persistence-sync
-updated: 2026-07-09 (T4830 robust migration runner)
+updated: 2026-07-12 (T4900 overlay action failure visibility + CORS root-cause fix)
 ---
 # Persistence & R2 Sync — Domain Knowledge
 
@@ -68,6 +68,63 @@ Blob encoding: binary columns (`crop_data`, `segments_data`, `highlights_data`, 
 5. **User-level migrated/skipped only when ALL registered profiles verify.** If any registered profile lands in errors[], the user's failing profiles are reported in errors[] and the user is NOT counted as migrated or skipped.
 6. **Orphan cleanup is opt-in.** `scripts/cleanup_orphan_profiles.py` archives orphan R2 objects (copies to `orphans/` prefix, then deletes originals). Dry-run by default; `--apply` + manual confirmation required. Never auto-invoked by the runner.
 7. **`MigrateResult` status values:** `"ok"` (profile verified at head), `"sync_failed"` (upload returned False), `"not_at_head"` (R2 user_version ≠ head after sync), `"missing"` (registered profile has no R2 object), `"download_failed"` (transient R2 download error).
+
+## Overlay action failure visibility (T4900 / prod bug 31p)
+
+**Root cause of 31p (2026-07-12, `feature/T4900`):** `CORSMiddleware` was the INNERMOST
+HTTP middleware. Auth 401s and Fly machine-pinning Responses produced by
+`RequestContextMiddleware` (outside CORS) carried NO `Access-Control-Allow-*` headers.
+Cross-origin browsers blocked those responses and surfaced them as opaque `"TypeError:
+Failed to fetch"` — exactly the 188 identical failures the reporter saw while video
+streaming (same-origin) kept working. Overlay action POSTs hit a 5xx (backend restart,
+machine migration) → preflight got no CORS → opaque network error in the browser.
+
+**Fix (main.py):** `CORSMiddleware` moved to be the OUTERMOST HTTP middleware (added
+LAST in main.py, after all other `add_middleware` calls). Every response — success, 4xx,
+5xx, and preflight — now carries CORS headers before reaching the browser.
+
+**Frontend failure visibility (overlayActionStore.js):** Before T4900 every failed
+overlay action POST was swallowed with a bare `console.error`. Now:
+- `dispatchOverlayAction(label, run)` wraps every surgical overlay action with bounded
+  retry (2 retries, 400ms base backoff — still the same gesture, NOT reactive).
+- On final failure: action queued in `failedActions[]`, persistent toast "Your edits
+  aren't saving — Retry" (duration: 0) surfaces via the shared Toast.
+- `_surfaceFailureToast` reconciles against `useToastStore` before skipping — a user
+  who dismissed the toast (X button) gets a fresh warning on the next failure (stale
+  `_toastId` would have suppressed it).
+- `retryFailedOverlayActions()` re-sends queued actions on gesture (Retry button or
+  export gate). Clears state on success; re-surfaces toast on continued failure.
+- `reset()` called on project unmount (`useEffect` cleanup keyed on `projectId`) so
+  failures from a prior project never leak into the next.
+
+**Export gate (ExportButtonContainer.jsx):**
+- `hasUnsavedOverlayFailures = failedActions.length > 0` (read from store, not prop-drilled).
+- If true AND in overlay mode: `handleExport` shows an inline error message, calls
+  `retryFailedOverlayActions()`, and returns — no render POST is fired.
+- `buttonTitle` shows "Some edits haven't saved — retry saving before exporting" as tooltip.
+
+**Wire-up (OverlayScreen.jsx):**
+- All surgical action handlers (`wrappedAddHighlightRegion`, `wrappedMoveHighlightRegionEnd`,
+  `wrappedAddHighlightRegionKeyframe`, etc.) now call `dispatchOverlayAction(...)` instead
+  of bare `overlayActions.*()`.
+- `reset()` fired on overlay teardown via `useEffect(() => () => reset(), [projectId])`.
+
+**Tests:**
+- `src/frontend/src/stores/overlayActionStore.test.js` (9 unit tests): happy path, retry
+  transient, failure burst, dedup toast, stale-toast re-surface, retry-success,
+  retry-fail-again, export-gate selector, reset.
+- `src/backend/tests/test_t4900_cors_error_headers.py`: 401 error response carries CORS
+  header; OPTIONS preflight on overlay/actions is answered correctly.
+- `src/backend/tests/test_t4900_overlay_keyframe_persistence.py`: render read path
+  `_region_bounds`/`_keyframes_within_bounds` tolerates camelCase + snake_case, keeps
+  keyframes past extended boundary, drops genuinely outside ones; integration: actions →
+  blob the render reads; persistence-gap simulation (31p failure mode reproduced).
+- E2E spec: `src/frontend/e2e/T4900-overlay-action-failure-visibility.spec.js`.
+
+**Invariant added:** Overlay surgical action fire-and-forget is now failure-visible: the
+Retry affordance is gesture-initiated, NOT a background reactive loop. Do NOT add reactive
+retry logic (`useEffect` watching failure state to re-send). The only allowed persistence-
+retry trigger is an explicit user gesture (Retry button or export button auto-retry).
 
 ## Active/upcoming work
 Durability & Sync Hardening epic (docs/plans/PLAN.md, in order): **T4310** R2 CAS conflict detection; **T4320** durable clip-creating gestures + user.sqlite in shutdown sync; **T4330** unified action client (per-entity FIFO, version threading, 409 — overlay's `expected_version` check at overlay.py:384-391 is commented out today); **T4340** canonicalize segments_data at write; **T4350** re-transform carried highlights on re-export; **T4360** BEGIN IMMEDIATE + invariant tests. Related bug tier: T4200 (framing/multi-clip sync-then-announce), T4210 (overlay blob decode → 500). Full map: docs/plans/audit-2026-07-03-code-quality.md sections B and G.
