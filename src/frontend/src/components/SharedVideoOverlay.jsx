@@ -14,6 +14,9 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
   const [share, setShare] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showEndCard, setShowEndCard] = useState(false);
+  // Bumped on Replay: remounts MediaPlayer so playback restarts from 0
+  // (same pattern as SharedCollectionView's playerKey).
+  const [playKey, setPlayKey] = useState(0);
 
   const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
@@ -87,12 +90,14 @@ export function SharedVideoOverlay({ shareToken, onClose }) {
 
     const handleReplay = () => {
       setShowEndCard(false);
+      setPlayKey((k) => k + 1);
     };
 
     return (
       <Overlay onClose={onClose} title={share.video_name} onDownload={handleDownload}>
         <div className="relative w-full h-full">
           <MediaPlayer
+            key={playKey}
             src={share.video_url}
             autoPlay={!showEndCard}
             onClose={onClose}

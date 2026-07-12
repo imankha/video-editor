@@ -109,12 +109,19 @@ main{flex:1;display:flex;align-items:center;justify-content:center;background:#0
 video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;background:#000}
 #unmute{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:10px 18px;border:0;border-radius:9999px;background:rgba(34,211,238,.92);color:#03151a;font-size:14px;font-weight:600;cursor:pointer;backdrop-filter:blur(4px)}
 #unmute:hover{background:#22d3ee}
-#end-card{display:none;position:absolute;inset:0;z-index:20;flex-direction:column;align-items:center;justify-content:center;background:rgba(11,15,26,.97)}
+#end-card{display:none;position:absolute;inset:0;z-index:20;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:20px;background:rgba(11,15,26,.97)}
 #end-card.show{display:flex}
-#end-card p.wm{font-size:clamp(18px,4vw,28px);font-weight:700;color:#fff;text-align:center;padding:0 16px}
-#end-card p.url{font-size:clamp(12px,2.5vw,16px);color:#9ca3af;margin-top:8px}
-#replay{margin-top:24px;padding:10px 24px;border:0;border-radius:9999px;background:#22d3ee;color:#03151a;font-size:14px;font-weight:600;cursor:pointer}
-#replay:hover{background:#67e8f9}
+.ec-cta{display:block;width:90%;max-width:320px;text-align:center;padding:14px 20px;border-radius:9999px;background:#a855f7;color:#fff;font-weight:700;font-size:15px;text-decoration:none;line-height:1.4}
+.ec-cta:hover{opacity:.9}
+.ec-mw{font-size:11px;color:#9ca3af}
+.ec-lr{display:flex;flex-direction:column;align-items:center;gap:6px}
+.ec-lk{display:flex;flex-direction:column;width:80px}
+.ec-lt{font-size:18px;font-weight:700;color:#fff;line-height:1.1}
+.ec-lk .ec-lt:first-child{text-align:left}
+.ec-lk .ec-lt:last-child{text-align:right}
+#emblem{background:none;border:none;cursor:pointer;padding:0;line-height:0}
+#emblem:hover svg{transform:scale(1.1)}
+#emblem svg{transition:transform .15s;display:block}
 footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid #1f2937;background:#0b1220}
 footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 .dl{display:inline-flex;align-items:center;gap:6px;color:#9ca3af}
@@ -129,10 +136,16 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 <main>
 <video id="v" src="${videoUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
 <button id="unmute" type="button">Tap to unmute</button>
-<div id="end-card" role="region" aria-label="Made with Reel Ballers">
-<p class="wm">Made with Reel Ballers</p>
-<p class="url">reelballers.com</p>
-<button id="replay" type="button">Replay</button>
+<div id="end-card" role="region" aria-label="End of video">
+<a class="ec-cta" href="https://www.reelballers.com/?utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard" target="_blank" rel="noopener">Make your own reel at www.reelballers.com</a>
+<div class="ec-lr">
+<span class="ec-mw">Made With</span>
+<div class="ec-lk">
+<span class="ec-lt">Reel</span>
+<button id="emblem" type="button" aria-label="Replay" style="align-self:center"><svg width="64" height="64" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="22" stroke="url(#eclg)" stroke-width="3" fill="none"/><circle cx="24" cy="4" r="2" fill="#a855f7"/><circle cx="24" cy="44" r="2" fill="#a855f7"/><circle cx="4" cy="24" r="2" fill="#a855f7"/><circle cx="44" cy="24" r="2" fill="#a855f7"/><path d="M20 16 L20 32 L34 24 Z" fill="white" opacity=".95"/><defs><linearGradient id="eclg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#a855f7"/><stop offset="100%" stop-color="#6366f1"/></linearGradient></defs></svg></button>
+<span class="ec-lt">Ballers</span>
+</div>
+</div>
 </div>
 </main>
 <footer>
@@ -141,7 +154,7 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 </footer>
 <script>
 (function(){
-var v=document.getElementById("v"),b=document.getElementById("unmute"),ec=document.getElementById("end-card"),rp=document.getElementById("replay");
+var v=document.getElementById("v"),b=document.getElementById("unmute"),ec=document.getElementById("end-card"),rp=document.getElementById("emblem");
 function hide(){b.style.display="none"}
 if(!v.muted)hide();
 b.addEventListener("click",function(){v.muted=false;v.play();hide()});

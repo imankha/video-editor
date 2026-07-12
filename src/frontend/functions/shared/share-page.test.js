@@ -149,12 +149,36 @@ describe('renderSharePage', () => {
   });
 
   describe('branded end-card (T3950 playback compositing)', () => {
-    it('renders the end-card overlay with wordmark and replay button', () => {
+    it('CTA has exact spec text and correct UTM href', () => {
       const html = renderSharePage(share);
       expect(html).toContain('id="end-card"');
-      expect(html).toContain('Made with Reel Ballers');
-      expect(html).toContain('reelballers.com');
-      expect(html).toContain('id="replay"');
+      expect(html).toContain('Make your own reel at www.reelballers.com');
+      expect(html).toContain('utm_source=share_endcard&amp;utm_medium=viral&amp;utm_campaign=reel_endcard');
+    });
+
+    it('secondary row contains Made With + Reel + emblem + Ballers', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('Made With');
+      expect(html).toContain('>Reel<');
+      expect(html).toContain('>Ballers<');
+      expect(html).toContain('id="emblem"');
+      expect(html).toContain('aria-label="Replay"');
+    });
+
+    it('no headline and no bottom link — URL lives in CTA text only', () => {
+      const html = renderSharePage(share);
+      expect(html).not.toContain('Your athlete deserves');
+      expect(html).not.toContain('ec-hl');
+      expect(html).not.toContain('ec-ql');
+    });
+
+    it('emblem replay wired to emblem id, not a ghost "replay" id', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('getElementById("emblem")');
+      expect(html).not.toContain('getElementById("replay")');
+      expect(html).toContain('classList.remove("show")');
+      expect(html).toContain('v.currentTime=0');
+      expect(html).toContain('v.play()');
     });
 
     it('end-card is hidden by default (display:none) and shown on ended via JS', () => {
@@ -165,13 +189,6 @@ describe('renderSharePage', () => {
       // JS: ended listener adds .show
       expect(html).toContain('"ended"');
       expect(html).toContain('classList.add("show")');
-    });
-
-    it('replay button resets the video and hides the card', () => {
-      const html = renderSharePage(share);
-      expect(html).toContain('classList.remove("show")');
-      expect(html).toContain('v.currentTime=0');
-      expect(html).toContain('v.play()');
     });
 
     it('page still fits under 15KB with the end-card included', () => {
