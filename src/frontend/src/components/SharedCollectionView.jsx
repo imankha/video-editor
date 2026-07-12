@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, Loader, Lock, FolderOpen, Share2, Check } from 'lucide-react';
 import { Button } from './shared/Button';
+import { BrandedEndCard } from './BrandedEndCard';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -19,6 +20,8 @@ export function SharedCollectionView({ token }) {
   const [data, setData] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showEndCard, setShowEndCard] = useState(false);
+  const [playerKey, setPlayerKey] = useState(0);
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -99,9 +102,22 @@ export function SharedCollectionView({ token }) {
       aspect_ratio: data.aspect_ratio,
       duration: m.duration,
     }));
+
+    const handleReplay = () => {
+      setShowEndCard(false);
+      setPlayerKey((k) => k + 1);
+    };
+
     return (
       <>
-        <CollectionPlayer reels={reels} title={data.title} onClose={handleClose} />
+        <CollectionPlayer
+          key={playerKey}
+          reels={reels}
+          title={data.title}
+          onClose={handleClose}
+          onEnded={() => setShowEndCard(true)}
+        />
+        <BrandedEndCard visible={showEndCard} onReplay={handleReplay} />
         <button
           onClick={handleReshare}
           className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[80] flex items-center gap-2 px-4 py-2 bg-gray-800/90 backdrop-blur rounded-full text-sm text-gray-200 hover:text-white hover:bg-gray-700/90 transition-colors"

@@ -147,4 +147,37 @@ describe('renderSharePage', () => {
     const html = renderSharePage({ video_url: 'https://r2.example.com/x.mp4', is_public: true });
     expect(html).toContain('<title>Shared Video | Reel Ballers</title>');
   });
+
+  describe('branded end-card (T3950 playback compositing)', () => {
+    it('renders the end-card overlay with wordmark and replay button', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('id="end-card"');
+      expect(html).toContain('Made with Reel Ballers');
+      expect(html).toContain('reelballers.com');
+      expect(html).toContain('id="replay"');
+    });
+
+    it('end-card is hidden by default (display:none) and shown on ended via JS', () => {
+      const html = renderSharePage(share);
+      // CSS: #end-card{display:none ...}; toggled via .show class by JS
+      expect(html).toMatch(/#end-card\{[^}]*display:none/);
+      expect(html).toMatch(/#end-card\.show\{display:flex\}/);
+      // JS: ended listener adds .show
+      expect(html).toContain('"ended"');
+      expect(html).toContain('classList.add("show")');
+    });
+
+    it('replay button resets the video and hides the card', () => {
+      const html = renderSharePage(share);
+      expect(html).toContain('classList.remove("show")');
+      expect(html).toContain('v.currentTime=0');
+      expect(html).toContain('v.play()');
+    });
+
+    it('page still fits under 15KB with the end-card included', () => {
+      const html = renderSharePage(share);
+      const bytes = new TextEncoder().encode(html).length;
+      expect(bytes).toBeLessThan(15 * 1024);
+    });
+  });
 });

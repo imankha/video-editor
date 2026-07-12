@@ -109,6 +109,12 @@ main{flex:1;display:flex;align-items:center;justify-content:center;background:#0
 video{max-width:100%;max-height:100%;width:auto;height:auto;display:block;background:#000}
 #unmute{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;display:flex;align-items:center;gap:8px;padding:10px 18px;border:0;border-radius:9999px;background:rgba(34,211,238,.92);color:#03151a;font-size:14px;font-weight:600;cursor:pointer;backdrop-filter:blur(4px)}
 #unmute:hover{background:#22d3ee}
+#end-card{display:none;position:absolute;inset:0;z-index:20;flex-direction:column;align-items:center;justify-content:center;background:rgba(11,15,26,.97)}
+#end-card.show{display:flex}
+#end-card p.wm{font-size:clamp(18px,4vw,28px);font-weight:700;color:#fff;text-align:center;padding:0 16px}
+#end-card p.url{font-size:clamp(12px,2.5vw,16px);color:#9ca3af;margin-top:8px}
+#replay{margin-top:24px;padding:10px 24px;border:0;border-radius:9999px;background:#22d3ee;color:#03151a;font-size:14px;font-weight:600;cursor:pointer}
+#replay:hover{background:#67e8f9}
 footer{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid #1f2937;background:#0b1220}
 footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 .dl{display:inline-flex;align-items:center;gap:6px;color:#9ca3af}
@@ -123,6 +129,11 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 <main>
 <video id="v" src="${videoUrl}"${posterAttr} autoplay muted playsinline controls preload="auto"></video>
 <button id="unmute" type="button">Tap to unmute</button>
+<div id="end-card" role="region" aria-label="Made with Reel Ballers">
+<p class="wm">Made with Reel Ballers</p>
+<p class="url">reelballers.com</p>
+<button id="replay" type="button">Replay</button>
+</div>
 </main>
 <footer>
 <a class="dl" href="${videoUrl}" download>Download</a>
@@ -130,11 +141,13 @@ footer a{color:#e5e7eb;text-decoration:none;font-size:14px}
 </footer>
 <script>
 (function(){
-var v=document.getElementById("v"),b=document.getElementById("unmute");
+var v=document.getElementById("v"),b=document.getElementById("unmute"),ec=document.getElementById("end-card"),rp=document.getElementById("replay");
 function hide(){b.style.display="none"}
 if(!v.muted)hide();
 b.addEventListener("click",function(){v.muted=false;v.play();hide()});
 v.addEventListener("volumechange",function(){if(!v.muted)hide()});
+v.addEventListener("ended",function(){ec.classList.add("show");v.controls=false});
+rp.addEventListener("click",function(){ec.classList.remove("show");v.controls=true;v.currentTime=0;v.play()});
 })();
 </script>
 </body>

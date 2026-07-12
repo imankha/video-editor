@@ -1286,12 +1286,6 @@ async def export_final(
 
         # Upload directly from memory to R2 (no temp file)
         content = await video.read()
-        # T3950: this frontend-rendered video IS the final published artifact -> append
-        # the branded outro before the single upload (no download round trip). The
-        # working video the frontend rendered from carries NO outro, so exactly one is
-        # added here. Non-fatal: on failure the original bytes ship card-less.
-        from app.services.branded_outro import apply_branded_outro_to_bytes
-        content = await asyncio.to_thread(apply_branded_outro_to_bytes, content)
         if not upload_bytes_to_r2(user_id, f"final_videos/{filename}", content):
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
@@ -1769,17 +1763,6 @@ async def _run_overlay_export_background(
         parallel_used = result.get("parallel", False)
         logger.info(f"[Overlay Background] Processing complete (parallel={parallel_used})")
 
-        # T3950: append the branded outro to the FINAL published object. Overlay is
-        # the step that produces final_videos/* for both single-clip and multi-clip
-        # flows (framing/stitch only produce the intermediate working video), so this
-        # is the one place the outro is added -- exactly once, no double on re-export.
-        # Runs at the router layer on the R2 object, covering Modal + local without a
-        # Modal edit. Non-fatal: a card failure logs + ships the card-less final.
-        from app.services.branded_outro import apply_branded_outro_to_r2_object
-        await asyncio.to_thread(
-            apply_branded_outro_to_r2_object, user_id, f"final_videos/{output_filename}"
-        )
-
         _t0 = time_module.monotonic()
         final_video_id = await asyncio.to_thread(
             _finalize_overlay_export,
@@ -2007,11 +1990,6 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             await copy_file_in_r2(user_id, source_key, dest_key)
             logger.info(f"[Overlay Render] Copied {source_key} -> {dest_key}")
 
-            # T3950: this copy IS the final published artifact (no highlights to
-            # render), so append the branded outro here. Non-fatal on failure.
-            from app.services.branded_outro import apply_branded_outro_to_r2_object
-            await asyncio.to_thread(apply_branded_outro_to_r2_object, user_id, dest_key)
-
             # Send progress update
             await send_progress(
                 export_id, 95, 100, 'finalizing', 'Saving to library...',
@@ -2079,11 +2057,6 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
             await copy_file_in_r2(user_id, source_key, dest_key)
             logger.info(f"[Overlay Render] TEST MODE: Copied {source_key} -> {dest_key}")
-
-            # T3950: final published artifact -> append the branded outro (same as the
-            # no-keyframes path). Non-fatal on failure.
-            from app.services.branded_outro import apply_branded_outro_to_r2_object
-            await asyncio.to_thread(apply_branded_outro_to_r2_object, user_id, dest_key)
 
             await send_progress(
                 export_id, 95, 100, 'finalizing', 'Saving to library...',

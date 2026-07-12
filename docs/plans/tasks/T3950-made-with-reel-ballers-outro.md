@@ -1,6 +1,6 @@
 # T3950: "Made with Reel Ballers" Outro on Exports
 
-**Status:** TODO
+**Status:** IN PROGRESS
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-06-25
@@ -69,7 +69,28 @@ clip/keyframe data — it's a presentation step at export, like a watermark.
 
 ---
 
-## Implementation notes (T3950 — verified per-flow invariant)
+## Design Pivot (2026-07-12) — burn-in REJECTED, playback-composited CHOSEN
+
+**User decision:** do NOT burn the card into the exported MP4. Composite it at playback
+time on public/shared viewer surfaces. Rationale: no re-encode, no migration, every
+existing reel gets attribution for free on next view.
+
+**Approach chosen:**
+- `BrandedEndCard.jsx` — single React component (dark bg, wordmark, URL, Replay button),
+  only renders when `visible=true`. Prop-gated: never shown in editor/ranker/My Reels.
+- `SharedVideoOverlay` — shows BrandedEndCard on `MediaPlayer.onEnded`.
+- `SharedCollectionView` — shows BrandedEndCard on `CollectionPlayer.onEnded`; `playerKey`
+  remount on Replay resets the sequential story player to index 0.
+- Edge function `[token].js` — inline DOM end-card (`#end-card` div) shown via a
+  `v.ended` listener; replay clears the class and resets `v.currentTime=0`.
+- Gate: `BRANDED_OUTRO_ENABLED` constant in `src/frontend/src/constants/brandedOutro.js`.
+- No backend changes, no migration, no ffmpeg dependency.
+
+**Prior burn-in approach (deleted):** `app/services/branded_outro.py` (ffmpeg card-builder),
+`app/assets/fonts/DejaVuSans-Bold.ttf` (708 KB), 4 call sites in `overlay.py`, and
+`tests/test_t3950_branded_outro.py` — all removed in the 2026-07-12 rework.
+
+## Implementation notes (T3950 — original burn-in approach, SUPERSEDED)
 
 **Where the outro is appended — decided WITH EVIDENCE (kickoff instruction).** The
 kickoff sketch listed the framing render + multi-clip stitch as append points, but
