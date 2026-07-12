@@ -86,9 +86,13 @@ existing reel gets attribution for free on next view.
 - Gate: `BRANDED_OUTRO_ENABLED` constant in `src/frontend/src/constants/brandedOutro.js`.
 - No backend changes, no migration, no ffmpeg dependency.
 
-**Prior burn-in approach (deleted):** `app/services/branded_outro.py` (ffmpeg card-builder),
-`app/assets/fonts/DejaVuSans-Bold.ttf` (708 KB), 4 call sites in `overlay.py`, and
-`tests/test_t3950_branded_outro.py` — all removed in the 2026-07-12 rework.
+**Also: download-time burn-in (scope addition 2026-07-12):**
+Downloaded files must carry attribution even though playback is composited. Approach:
+- `app/services/branded_outro.py` KEPT (not burned into stored final_videos; invoked at serve time)
+- `GET /api/downloads/{id}/file` downloads original from R2 → `append_branded_outro(original, out)` → stream result → cleanup in `finally`. Non-fatal: failure logs loudly + serves original (HTTP 200 always).
+- Card cached per (width×height, fps, pix_fmt, audio layout) in `/tmp/rb_outro_cards/` (MD5 key, atomic rename). No per-download re-encode after first request for a given resolution.
+- Compilation download investigated: NO compilation download path exists in downloads.py — future feature, not wired.
+- Gate: `BRANDED_OUTRO_ENABLED` env var (backend, default true) — same flag name as frontend constant.
 
 ## Implementation notes (T3950 — original burn-in approach, SUPERSEDED)
 

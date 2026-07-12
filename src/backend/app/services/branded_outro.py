@@ -1,0 +1,411 @@
+"""
+Branded "Made with Reel Ballers" outro (T3950).
+
+A short (~1.75s) end-card appended to the FINAL published video at render time.
+It is *chrome*, not content: it is NOT persisted into working_clips / keyframes /
+segments or any DB row (CLAUDE.md: render-time only, no reactive persistence).
+
+Where it is appended (the verified per-flow invariant):
+  The outro is appended by the ONE step that produces the FINAL published artifact
+  (a `final_videos/*` object) for each flow -- never on the intermediate
+  `working_videos/*` object, which the overlay step always re-renders/copies into
+  the final. Framing (`_export_clips`) and the multi-clip stitch produce the WORKING
+  video; the overlay export (`render_overlay` real render + no-keyframes copy + test
+  copy) and `export_final` produce the FINAL video. So the outro is wired into the
+  final-video producers only. Every published/shared reel passes through one of them
+  (publish 404s without a `final_videos` row), so this covers single-clip, multi-clip,
+  and re-export with exactly one outro and no double-stacking. See
+  `docs/plans/tasks/T3950-made-with-reel-ballers-outro.md`.
+
+Card generation matches the main video EXACTLY (resolution / fps / SAR / pixel format /
+audio layout / timebase) so the append is a fast concat-demuxer stream copy (`-c copy`);
+only the ~1.75s card is encoded. A full re-encode concat is the fallback if the copy
+join fails validation (e.g. a frontend-rendered `export_final` upload with an odd
+profile).
+
+Flag: `BRANDED_OUTRO_ENABLED` (env, default true) gates the whole feature so a paid
+"remove branding" tier can turn it off later -- flag only, no billing logic here.
+
+External-boundary failure choice: appending the outro must NEVER abort an export (a
+failed card must not sink a paid GPU render). On any card/concat failure the helper
+logs loudly and returns False; the caller keeps the card-less final and completes the
+export, surfacing a warning. A visible card-less "success" beats a lost reel.
+"""
+
+import hashlib
+import json
+import logging
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+# Card cache: one card per (resolution/fps/format) combo, shared across all download
+# requests. Built once per unique params for the lifetime of the process; stored in the
+# system temp dir (survives in-process but not across pod restarts, which is fine --
+# a 1.75s card build on a cold start is negligible).
+_CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
+
+# ~1.75s: long enough to read the wordmark, short enough to not feel like an ad break.
+OUTRO_DURATION = 1.75
+# Fade the whole card up from black over the first fraction of a second (no hard cut).
+OUTRO_FADE_IN = 0.4
+WORDMARK_TEXT = "Made with Reel Ballers"
+URL_TEXT = "reelballers.com"
+
+# Bundled font -- the Fly image installs ffmpeg but NO fontconfig fonts, so drawtext
+# must be pointed at an absolute `fontfile=` that ships in the repo (COPY . . in the
+# Dockerfile), not `font=Sans` (which needs fontconfig). Works identically in the
+# /dotask container and in dev.
+_FONT_PATH = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "DejaVuSans-Bold.ttf"
+
+# Brand palette (dark background, white wordmark, muted URL).
+_BG_COLOR = "0x0B0F1A"
+_WORDMARK_COLOR = "white"
+_URL_COLOR = "0x9CA3AF"
+
+
+def outro_enabled() -> bool:
+    """Whether the branded outro should be appended (env flag, default ON).
+
+    The one place a future paid branding-removal tier flips the whole feature off.
+    """
+    return os.getenv("BRANDED_OUTRO_ENABLED", "true").strip().lower() not in (
+        "0", "false", "no", "off", "",
+    )
+
+
+def _run(cmd: list[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+
+def _card_cache_key(info: dict) -> str:
+    """16-char hex key for the params that determine card content and compatibility."""
+    key = (
+        f"{info['width']}x{info['height']}_fps={info['fps_str']}"
+        f"_pix={info['pix_fmt']}_sar={info['sar']}_ts={info['timescale']}"
+        f"_audio={info['has_audio']}_arate={info.get('a_rate', 0)}"
+        f"_ach={info.get('a_channels', 0)}"
+    )
+    return hashlib.md5(key.encode()).hexdigest()[:16]
+
+
+def _get_or_build_card(info: dict) -> str | None:
+    """Return a cached card path for `info`, building it if absent.
+
+    Writes to _CARD_CACHE_DIR using an atomic rename so concurrent callers
+    never read a partial file. Returns None on any failure (never raises).
+    """
+    try:
+        _CARD_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        logger.warning(f"[BrandedOutro] cannot create card cache dir: {e}")
+        return None
+
+    card_path = _CARD_CACHE_DIR / f"card_{_card_cache_key(info)}.mp4"
+    if card_path.exists():
+        return str(card_path)
+
+    tmp_card = str(card_path) + ".tmp"
+    try:
+        _build_outro_card(tmp_card, info)
+        os.replace(tmp_card, str(card_path))
+        return str(card_path)
+    except Exception as e:
+        logger.error(f"[BrandedOutro] card build failed: {e}")
+        try:
+            os.remove(tmp_card)
+        except OSError:
+            pass
+        return None
+
+
+def _probe_media(path: str) -> dict:
+    """Probe the video+audio stream params we must match for a clean concat.
+
+    Returns width/height/fps_str/pix_fmt/sar/timescale/duration plus audio info
+    (has_audio, a_codec, a_rate, a_channels). Raises on a failed probe -- we must
+    not guess dimensions for a concat (a mismatch corrupts the join).
+    """
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries",
+        "stream=index,codec_type,codec_name,width,height,r_frame_rate,"
+        "avg_frame_rate,pix_fmt,sample_aspect_ratio,time_base,sample_rate,channels",
+        "-show_entries", "format=duration",
+        "-of", "json", path,
+    ]
+    data = json.loads(_run(cmd).stdout)
+    streams = data.get("streams", [])
+    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    if not vstream:
+        raise RuntimeError(f"no video stream in {path}")
+
+    # Prefer avg_frame_rate; fall back to r_frame_rate. Keep it as a fraction string
+    # so we pass the exact rate (e.g. 30000/1001) through to the card, not a rounded float.
+    fps_str = vstream.get("avg_frame_rate") or vstream.get("r_frame_rate") or "30/1"
+    if fps_str in ("0/0", "0/1", "N/A", None):
+        fps_str = vstream.get("r_frame_rate") or "30/1"
+
+    sar = vstream.get("sample_aspect_ratio") or "1:1"
+    if sar in ("0:1", "N/A", None):
+        sar = "1:1"
+
+    # timebase like "1/15360" -> timescale 15360, matched on the card so -c copy joins cleanly.
+    time_base = vstream.get("time_base") or "1/15360"
+    try:
+        timescale = int(time_base.split("/")[1])
+    except (ValueError, IndexError):
+        timescale = 15360
+
+    return {
+        "width": int(vstream["width"]),
+        "height": int(vstream["height"]),
+        "fps_str": fps_str,
+        "pix_fmt": vstream.get("pix_fmt") or "yuv420p",
+        "sar": sar.replace(":", "/"),
+        "timescale": timescale,
+        "duration": float(data.get("format", {}).get("duration") or 0.0),
+        "has_audio": astream is not None,
+        "a_codec": (astream or {}).get("codec_name") or "aac",
+        "a_rate": int((astream or {}).get("sample_rate") or 48000),
+        "a_channels": int((astream or {}).get("channels") or 2),
+    }
+
+
+def _build_outro_card(card_path: str, info: dict) -> None:
+    """Render the end-card to `card_path`, matching the main video's params exactly.
+
+    Dark background + faded-in wordmark + URL, sized to the output resolution so all
+    three aspect ratios (9:16 / 1:1 / 16:9) get correctly-proportioned text with no
+    letterboxing/stretch. Silent audio track (matching layout) is included only when
+    the main video has audio, so a `-c copy` concat stays stream-aligned.
+    """
+    w, h = info["width"], info["height"]
+    fps_str = info["fps_str"]
+    pix_fmt = info["pix_fmt"]
+
+    # Size the wordmark so it fits BOTH dimensions. For portrait (9:16) the width is
+    # the binding constraint -- a height-only size overflows the frame and clips the
+    # text. Estimate rendered width from the glyph count (DejaVuSans-Bold averages
+    # ~0.62*fontsize per char) and keep it within 85% of the frame width; also cap by
+    # height so it doesn't get huge on 16:9.
+    _char_advance = 0.62
+    width_fs = int((w * 0.85) / (len(WORDMARK_TEXT) * _char_advance))
+    wordmark_fs = max(24, min(round(h * 0.06), width_fs))
+    url_fs = max(14, round(h * 0.030))
+    font = _FONT_PATH.as_posix()
+
+    # Center wordmark just above the midline, URL just below it.
+    vf = (
+        f"drawtext=fontfile='{font}':text='{WORDMARK_TEXT}':"
+        f"fontsize={wordmark_fs}:fontcolor={_WORDMARK_COLOR}:"
+        f"x=(w-text_w)/2:y=(h*0.46)-(text_h/2),"
+        f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
+        f"fontsize={url_fs}:fontcolor={_URL_COLOR}:"
+        f"x=(w-text_w)/2:y=(h*0.56)-(text_h/2),"
+        f"fade=t=in:st=0:d={OUTRO_FADE_IN}:color=black,"
+        f"setsar={info['sar']},format={pix_fmt}"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-f", "lavfi",
+        "-i", f"color=c={_BG_COLOR}:s={w}x{h}:r={fps_str}:d={OUTRO_DURATION}",
+    ]
+    if info["has_audio"]:
+        layout = "mono" if info["a_channels"] == 1 else "stereo"
+        cmd += ["-f", "lavfi", "-i",
+                f"anullsrc=channel_layout={layout}:sample_rate={info['a_rate']}"]
+
+    cmd += ["-vf", vf, "-t", str(OUTRO_DURATION)]
+    cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+            "-pix_fmt", pix_fmt, "-r", fps_str,
+            "-video_track_timescale", str(info["timescale"])]
+    if info["has_audio"]:
+        cmd += ["-c:a", "aac", "-b:a", "128k",
+                "-ar", str(info["a_rate"]), "-ac", str(info["a_channels"]),
+                "-t", str(OUTRO_DURATION)]
+    else:
+        cmd += ["-an"]
+    # Force mp4 container explicitly so the output path extension doesn't need
+    # to be .mp4 (the cache builds to a .tmp path before an atomic rename).
+    cmd += ["-f", "mp4", card_path]
+    _run(cmd)
+
+
+def _concat_copy(main_path: str, card_path: str, out_path: str) -> None:
+    """Fast append: concat demuxer with stream copy (only the card was encoded)."""
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        list_path = f.name
+        for p in (main_path, card_path):
+            f.write(f"file '{os.path.abspath(p)}'\n")
+    try:
+        _run([
+            "ffmpeg", "-y",
+            "-fflags", "+genpts",
+            "-f", "concat", "-safe", "0", "-i", list_path,
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart",
+            out_path,
+        ])
+    finally:
+        try:
+            os.remove(list_path)
+        except OSError:
+            pass
+
+
+def _concat_reencode(main_path: str, card_path: str, out_path: str, has_audio: bool) -> None:
+    """Robust fallback: re-encode concat via the concat filter.
+
+    Slower (re-encodes the main video), used only when the stream-copy join fails
+    validation -- e.g. a frontend-rendered final with an incompatible H.264 profile.
+    """
+    if has_audio:
+        fc = "[0:v][0:a][1:v][1:a]concat=n=2:v=1:a=1[v][a]"
+        maps = ["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-b:a", "128k"]
+    else:
+        fc = "[0:v][1:v]concat=n=2:v=1:a=0[v]"
+        maps = ["-map", "[v]", "-an"]
+    _run([
+        "ffmpeg", "-y",
+        "-i", main_path, "-i", card_path,
+        "-filter_complex", fc, *maps,
+        "-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        out_path,
+    ])
+
+
+def _validate_concat(out_path: str, expected_min: float) -> bool:
+    """Sanity-check the joined file: probes cleanly and is at least expected length."""
+    try:
+        info = _probe_media(out_path)
+        return info["duration"] >= expected_min
+    except Exception as e:
+        logger.warning(f"[BrandedOutro] concat validation probe failed: {e}")
+        return False
+
+
+def append_branded_outro(in_path: str, out_path: str) -> bool:
+    """Append the branded outro to `in_path`, writing the result to `out_path`.
+
+    Returns True if the outro was appended, False if it was skipped (flag off) or
+    failed (in which case `out_path` is NOT written -- the caller keeps `in_path`).
+    Never raises: outro failure must not abort an export or a download.
+
+    The outro card is cached per (resolution/fps/format) in _CARD_CACHE_DIR so
+    repeated download requests for the same reel don't re-encode the card each time.
+    """
+    if not outro_enabled():
+        return False
+    if not _FONT_PATH.exists():
+        logger.error(f"[BrandedOutro] font missing at {_FONT_PATH}; skipping outro")
+        return False
+
+    try:
+        info = _probe_media(in_path)
+        card_path = _get_or_build_card(info)
+        if card_path is None:
+            return False
+
+        expected_min = info["duration"] + OUTRO_DURATION * 0.6
+
+        try:
+            _concat_copy(in_path, card_path, out_path)
+            if _validate_concat(out_path, expected_min):
+                logger.info(
+                    f"[BrandedOutro] appended (copy) {info['width']}x{info['height']} "
+                    f"@ {info['fps_str']} audio={info['has_audio']}"
+                )
+                return True
+            logger.warning("[BrandedOutro] stream-copy join failed validation; re-encoding")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"[BrandedOutro] stream-copy concat failed; re-encoding. {e.stderr[-400:] if e.stderr else e}")
+
+        _concat_reencode(in_path, card_path, out_path, info["has_audio"])
+        if _validate_concat(out_path, expected_min):
+            logger.info("[BrandedOutro] appended (re-encode fallback)")
+            return True
+        logger.error("[BrandedOutro] re-encode concat also failed validation; shipping card-less")
+        return False
+
+    except subprocess.CalledProcessError as e:
+        stderr = e.stderr[-600:] if e.stderr else str(e)
+        logger.error(f"[BrandedOutro] ffmpeg failed; shipping card-less final. stderr:\n{stderr}")
+        return False
+    except Exception as e:
+        logger.error(f"[BrandedOutro] unexpected failure; shipping card-less final: {e}", exc_info=True)
+        return False
+
+
+def apply_branded_outro_to_bytes(content: bytes) -> bytes:
+    """Append the outro to an in-memory final video, returning the new bytes.
+
+    For `export_final`, which already holds the frontend-rendered final in memory --
+    appending before the single R2 upload avoids a download+re-upload round trip.
+    Returns the ORIGINAL bytes unchanged if the outro is skipped (flag off) or fails
+    (never raises -- the export still ships).
+    """
+    if not outro_enabled():
+        return content
+
+    tmp_dir = tempfile.mkdtemp(prefix="branded_outro_bytes_")
+    in_path = os.path.join(tmp_dir, "final_in.mp4")
+    out_path = os.path.join(tmp_dir, "final_out.mp4")
+    try:
+        with open(in_path, "wb") as f:
+            f.write(content)
+        if not append_branded_outro(in_path, out_path):
+            return content
+        with open(out_path, "rb") as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"[BrandedOutro] apply-to-bytes failed; shipping card-less: {e}", exc_info=True)
+        return content
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def apply_branded_outro_to_r2_object(user_id: str, final_key: str) -> bool:
+    """Append the outro to an existing `final_videos/*` R2 object, in place.
+
+    Downloads the final, appends the card, re-uploads to the SAME key. Runs at the
+    router layer (above the Modal/local dispatch), so it covers both engines without
+    editing any Modal function. Blocking (sync) -- callers wrap in asyncio.to_thread.
+
+    Returns True if the object was rewritten with the outro; False if skipped (flag
+    off) or on any failure (the original card-less object is left untouched). Never
+    raises -- the export completes either way.
+    """
+    if not outro_enabled():
+        return False
+
+    from app.storage import download_from_r2, upload_to_r2
+
+    tmp_dir = tempfile.mkdtemp(prefix="branded_outro_r2_")
+    in_path = os.path.join(tmp_dir, "final_in.mp4")
+    out_path = os.path.join(tmp_dir, "final_out.mp4")
+    try:
+        if not download_from_r2(user_id, final_key, Path(in_path)):
+            logger.error(f"[BrandedOutro] could not download {final_key} to append outro; shipping card-less")
+            return False
+        if not append_branded_outro(in_path, out_path):
+            return False
+        if not upload_to_r2(user_id, final_key, Path(out_path)):
+            logger.error(f"[BrandedOutro] re-upload of outro'd {final_key} failed; original object retained")
+            return False
+        logger.info(f"[BrandedOutro] rewrote {final_key} with outro")
+        return True
+    except Exception as e:
+        logger.error(f"[BrandedOutro] apply-to-r2 failed for {final_key}; shipping card-less: {e}", exc_info=True)
+        return False
+    finally:
+        import shutil
+        shutil.rmtree(tmp_dir, ignore_errors=True)
