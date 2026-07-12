@@ -71,6 +71,14 @@ Make the admin credit read go through the same canonical-access guarantee as eve
 
 **2026-07-10**: Bug reported (grant reveals hidden balance: N granted -> N+8 shown). Root cause confirmed same day by code read: admin stats read raw local disk + silently default missing users to 0, while the grant path R2-restores first. Data in R2 is intact.
 
+**2026-07-11**: Implementation complete. Staleness option measured and decided:
+- Option (a) stale-file read-as-is: chosen for existing local files. Stale-but-present files are read directly — no R2 staleness check. Acceptable in practice (staleness window = process/machine lifetime).
+- Option (b) `sync_user_db_from_r2_if_newer` per page user: NOT implemented for existing files. ~25 R2 HEAD calls per admin page load, ~500ms-1250ms added latency (R2 HEAD ~20-50ms each). Cannot measure directly (R2_ENABLED=false in dev). Can be layered on later if staleness becomes a problem.
+- **For missing files** (the primary bug): `sync_user_db_from_r2_if_newer` is called directly — NOT `ensure_user_database`. Reason: `ensure_user_database` creates a balance-0 stub DB on R2 error; that stub then gets read as a real 0-balance on subsequent admin page loads, recreating the original bug. `sync_user_db_from_r2_if_newer` never creates a stub — R2 error leaves no local file, user is omitted, admin sees `—`.
+- Callers: only one caller (`admin.py:172` with explicit page_user_ids). No scan-all callers exist — the R2 restore path is restricted to explicit-ids safely.
+
+**2026-07-12**: Refined fix: replaced first-attempt (`ensure_user_database` + cooldown heuristic) with `sync_user_db_from_r2_if_newer` direct call to prevent stub-DB poisoning. All 7 backend tests pass. Frontend null rendering verified in UserTable and CreditGrantModal.
+
 ## Acceptance Criteria
 
 - [ ] Admin panel shows the true canonical balance for every user, including users with no local `user.sqlite` on the serving machine (verified on staging with a user inactive since before the last machine cycle).

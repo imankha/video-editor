@@ -266,7 +266,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
 
                 <td className="px-3 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1.5">
-                    <span className="text-gray-200 text-xs">{user.credits ?? 0}</span>
+                    <span className="text-gray-200 text-xs">{user.credits == null ? '—' : user.credits}</span>
                     <button
                       onClick={() => setGrantUser(user)}
                       className="text-gray-500 hover:text-purple-400 transition-colors"
