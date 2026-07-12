@@ -1,6 +1,6 @@
 # T4870: Admin Panel Shows 0 Credits for Users With Nonzero Balances
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-10
