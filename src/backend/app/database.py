@@ -683,6 +683,7 @@ def ensure_database():
                 source_clip_id INTEGER,
                 clip_start_time REAL,
                 clip_game_start_time REAL,
+                poster_filename TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

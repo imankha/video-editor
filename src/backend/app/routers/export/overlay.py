@@ -54,6 +54,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
+from ...services.poster import generate_and_store_poster
 from ...storage import (
     delete_from_r2,
     generate_presigned_url,
@@ -116,6 +117,12 @@ def _finalize_overlay_export(
     Shared by all overlay export completion paths (no-keyframes copy, local,
     Modal GPU, test mode). Returns the final_video_id.
     """
+    # T4890: extract + store the first-frame poster (og:image for share links)
+    # BEFORE opening the DB connection so the ffmpeg/R2 work never extends the
+    # write transaction. Best-effort: None on failure (never blocks the export).
+    # The final video is already in R2 here, so ffmpeg reads its presigned URL.
+    poster_fn = generate_and_store_poster(user_id, output_filename)
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
@@ -161,11 +168,12 @@ def _finalize_overlay_export(
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
+                poster_filename)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1282,6 +1290,13 @@ async def export_final(
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
+        # T4890: extract + store the first-frame poster (og:image for share links),
+        # frozen on the row at finalize. Done here -- right after the R2 upload and
+        # BEFORE any DB write -- so the ffmpeg/R2 work never runs inside an open write
+        # transaction (parity with _finalize_overlay_export, which hoists it too).
+        # Best-effort: None on failure (never blocks the export).
+        poster_fn = generate_and_store_poster(user_id, filename)
+
         # Get next version number for final video
         cursor.execute("""
             SELECT COALESCE(MAX(version), 0) + 1 as next_version
@@ -1317,11 +1332,12 @@ async def export_final(
         cursor.execute("""
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
-                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
+                poster_filename)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 

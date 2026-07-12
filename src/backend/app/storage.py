@@ -565,7 +565,15 @@ def upload_to_r2(user_id: str, relative_path: str, local_path: Path) -> bool:
         return False
 
 
-def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: bool = False) -> bool:
+def upload_bytes_to_r2(
+    user_id: str,
+    relative_path: str,
+    data: bytes,
+    *,
+    fast: bool = False,
+    content_type: str | None = None,
+    metadata: dict | None = None,
+) -> bool:
     """
     Upload bytes directly to R2 without writing to disk.
 
@@ -575,6 +583,10 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: b
         data: Bytes to upload
         fast: Use the sync client (short timeouts). Use for small payloads (<1MB)
               where a 30s stall on a cold connection is unacceptable.
+        content_type: Optional Content-Type stored on the object (e.g. image/jpeg)
+              so a browser/crawler fetch serves the right MIME.
+        metadata: Optional small string map stored as object user-metadata
+              (x-amz-meta-*); returned by HEAD. Values are coerced to str.
 
     Returns:
         True if upload succeeded, False otherwise
@@ -623,8 +635,14 @@ def upload_bytes_to_r2(user_id: str, relative_path: str, data: bytes, *, fast: b
     try:
         from .utils.retry import TIER_1, retry_r2_call
 
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+        if metadata:
+            extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
+
         def _upload():
-            client.upload_fileobj(BytesIO(data), R2_BUCKET, key)
+            client.upload_fileobj(BytesIO(data), R2_BUCKET, key, ExtraArgs=extra_args)
 
         retry_r2_call(_upload, operation=f"upload_bytes {key}", **TIER_1)
         logger.debug(f"Uploaded bytes to R2: {key} ({len(data)} bytes)")

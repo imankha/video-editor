@@ -68,6 +68,47 @@ describe('renderSharePage', () => {
     expect(html).toContain('name="twitter:card"');
   });
 
+  it('emits og:image + twitter:image + <video poster> when a poster URL is present (T4890)', () => {
+    const withPoster = {
+      ...share,
+      video_poster_url: 'https://r2.example.com/final/posters/abc.mp4.jpg?sig=pqr',
+      video_poster_width: 1080,
+      video_poster_height: 1920,
+    };
+    const html = renderSharePage(withPoster);
+    const posterEsc = escapeHtml(withPoster.video_poster_url);
+    expect(html).toContain(`<meta property="og:image" content="${posterEsc}">`);
+    expect(html).toContain('property="og:image:type" content="image/jpeg"');
+    expect(html).toContain('<meta property="og:image:width" content="1080">');
+    expect(html).toContain('<meta property="og:image:height" content="1920">');
+    expect(html).toContain(`<meta name="twitter:image" content="${posterEsc}">`);
+    expect(html).toMatch(new RegExp(`<video[^>]*\\bposter="${posterEsc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
+  });
+
+  it('omits og:image/width/height/twitter:image and the poster attr when no poster (no silent fallback)', () => {
+    const html = renderSharePage(share); // share has no video_poster_url
+    expect(html).not.toContain('og:image');
+    expect(html).not.toContain('twitter:image');
+    expect(html).not.toMatch(/<video[^>]*\bposter=/);
+  });
+
+  it('omits og:image:width/height when dimensions are missing but still emits og:image', () => {
+    const html = renderSharePage({ ...share, video_poster_url: 'https://r2.example.com/p.jpg' });
+    expect(html).toContain('property="og:image" content=');
+    expect(html).not.toContain('og:image:width');
+    expect(html).not.toContain('og:image:height');
+  });
+
+  it('escapes a hostile poster URL so it cannot break out of attributes', () => {
+    const hostile = {
+      ...share,
+      video_poster_url: `https://r2.example.com/p.jpg"><script>alert(1)</script>`,
+    };
+    const html = renderSharePage(hostile);
+    expect(html).not.toContain('"><script>alert(1)');
+    expect(html).toContain('&quot;&gt;&lt;script&gt;');
+  });
+
   it('has the download link and the Open Reel Ballers CTA', () => {
     const html = renderSharePage(share);
     expect(html).toMatch(/<a[^>]*download/);
