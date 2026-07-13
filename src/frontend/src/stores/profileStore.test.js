@@ -15,6 +15,43 @@ vi.mock('../config', () => ({
   API_BASE: '',
 }));
 
+// Mock the store barrel + websocket manager that switchProfile pulls in via
+// `_resetDataStores`. Without these mocks, every switchProfile/createProfile
+// call dynamically imports the REAL 12-store barrel and fires real fetch*()
+// calls; under full-suite parallel load that dynamic-import graph occasionally
+// blew past the 5s test timeout (the intermittent "switchProfile timeout"
+// flake). The store's own sequencing (await _resetDataStores before navigate)
+// is correct — this is purely test cost, so we stub the graph here.
+const _resettableStore = () => ({
+  getState: () => ({
+    reset: vi.fn(),
+    fetchProjects: vi.fn(),
+    fetchGames: vi.fn(),
+    fetchCredits: vi.fn(),
+    fetchProgress: vi.fn(),
+    setEditorMode: vi.fn(),
+  }),
+});
+vi.mock('./index', () => ({
+  useProjectsStore: _resettableStore(),
+  useGamesDataStore: _resettableStore(),
+  useProjectDataStore: _resettableStore(),
+  useFramingStore: _resettableStore(),
+  useOverlayStore: _resettableStore(),
+  useVideoStore: _resettableStore(),
+  useExportStore: _resettableStore(),
+  useUploadStore: _resettableStore(),
+  useGalleryStore: _resettableStore(),
+  useSettingsStore: _resettableStore(),
+  useCreditStore: _resettableStore(),
+  useQuestStore: _resettableStore(),
+  useEditorStore: _resettableStore(),
+  EDITOR_MODES: { PROJECT_MANAGER: 'project_manager' },
+}));
+vi.mock('../services/ExportWebSocketManager', () => ({
+  default: { disconnectAll: vi.fn() },
+}));
+
 describe('profileStore', () => {
   let useProfileStore;
 

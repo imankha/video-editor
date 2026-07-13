@@ -21,7 +21,6 @@ so a brand-new throwaway PG (`docker run postgres:16`, or a local
 | Layer | Test | Failure | Root cause | Handling |
 |-------|------|---------|-----------|----------|
 | Backend | `test_collection_metadata.py::test_stamps_aspect_ratio_and_tags` | ffprobe not found | Needs ffmpeg on PATH | CI installs ffmpeg; local Windows devs need it on PATH |
-| Frontend | `profileStore` switchProfile timeout | Intermittent timeout under full-suite load; passes in isolation | Flaky async test | CI runs vitest with `--retry=2`. Burn-down: fix the race in the test |
 | Backend | `test_tutorial_quest_steps.py::test_definitions_endpoint_tutorial_step_first` | `AssertionError: expected first step to be tutorial` | Test-order pollution: passes in isolation, fails full-suite (prior test mutates shared state) | **Deselected in CI** (CI run 29273804525, 2026-07-13). Burn-down: isolate shared state in test fixture |
 
 Observed 2026-07-04 during the first /dotask wave (bug27p, T4190, T4100, T3980
