@@ -1,6 +1,6 @@
 # T5030: ESLint warning backlog regrew past the CI gate (1038 > 1019) — burn it back down
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 2
 **Created:** 2026-07-13

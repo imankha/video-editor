@@ -1,6 +1,6 @@
 # T4850: Transfer Reels/Clips Between Profiles (Multi-Athlete Accounts)
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-10

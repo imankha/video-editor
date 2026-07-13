@@ -1,6 +1,6 @@
 # T4200: Framing/Multi-Clip Export Durability (sync-then-announce)
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 9
 **Complexity:** 3
 **Created:** 2026-07-03

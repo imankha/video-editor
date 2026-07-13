@@ -1,6 +1,6 @@
 # T4960: PG pool serves dead connections — first request after idle returns 500
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-12

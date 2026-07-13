@@ -1,6 +1,6 @@
 # T4250: Spline Interpolator Consolidation — Fixes Highlight Opacity Snapping Between Keyframes
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-07-03

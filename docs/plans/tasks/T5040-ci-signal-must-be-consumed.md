@@ -1,6 +1,6 @@
 # T5040: Branch CI red for 9+ days and nobody noticed — make the signal consumed, not decorative
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-13

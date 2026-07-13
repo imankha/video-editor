@@ -1,6 +1,6 @@
 # T4880: Mobile: Framing/Overlay content below the timeline is unreachable (can't save/exit)
 
-**Status:** STAGING
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 4
 **Created:** 2026-07-11
