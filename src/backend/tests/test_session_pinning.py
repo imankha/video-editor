@@ -88,10 +88,10 @@ class TestMachineCookieSetting:
 
     def test_cookie_not_reset_when_already_matching(self, client_on_machine_a):
         """When cookie matches current machine, no Set-Cookie header needed."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_A)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={"X-User-ID": "test-user"},
-            cookies={"fly_machine_id": MACHINE_A},
         )
         assert r.status_code != 400
         cookie_header = r.headers.get("set-cookie", "")
@@ -107,29 +107,29 @@ class TestFlyReplay:
 
     def test_replay_on_cookie_mismatch(self, client_on_machine_a):
         """Cookie says Machine B but we're Machine A -> fly-replay header."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={"X-User-ID": "test-user"},
-            cookies={"fly_machine_id": MACHINE_B},
         )
         assert r.headers.get("fly-replay") == f"instance={MACHINE_B}"
 
     def test_replay_is_short_circuit(self, client_on_machine_a):
         """Replayed response should not run any handler logic (no auth, no DB)."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={"X-User-ID": "test-user"},
-            cookies={"fly_machine_id": MACHINE_B},
         )
         assert "fly-replay" in r.headers
         assert r.status_code == 200
 
     def test_no_replay_when_cookie_matches(self, client_on_machine_a):
         """When cookie matches current machine, no fly-replay header."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_A)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={"X-User-ID": "test-user"},
-            cookies={"fly_machine_id": MACHINE_A},
         )
         assert "fly-replay" not in r.headers
 
@@ -143,10 +143,10 @@ class TestFlyReplay:
 
     def test_replay_works_for_post_requests(self, client_on_machine_a):
         """POST requests also get replayed on machine mismatch."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
         r = client_on_machine_a.post(
             "/api/auth/me",
             headers={"X-User-ID": "test-user"},
-            cookies={"fly_machine_id": MACHINE_B},
         )
         assert r.headers.get("fly-replay") == f"instance={MACHINE_B}"
 
@@ -161,26 +161,26 @@ class TestCircuitBreaker:
     def test_circuit_breaker_clears_stale_cookie(self, client_on_machine_a):
         """Replayed request arriving on wrong machine (target dead) should
         clear old cookie and set new one for current machine."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={
                 "X-User-ID": "test-user",
                 "fly-replay-src": f"instance={MACHINE_B};region=lax;t=1234",
             },
-            cookies={"fly_machine_id": MACHINE_B},
         )
         assert "fly-replay" not in r.headers
         assert r.cookies.get("fly_machine_id") == MACHINE_A
 
     def test_circuit_breaker_processes_request_normally(self, client_on_machine_a):
         """Circuit-breaker should process the request, not reject it."""
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
         r = client_on_machine_a.get(
             "/api/auth/me",
             headers={
                 "X-User-ID": "test-user",
                 "fly-replay-src": f"instance={MACHINE_B};region=lax;t=1234",
             },
-            cookies={"fly_machine_id": MACHINE_B},
         )
         assert r.status_code != 401
 
@@ -294,10 +294,8 @@ class TestAllowlistedPaths:
     def test_health_with_stale_cookie_still_replays(self, client_on_machine_a):
         """Even health checks replay when cookie mismatches -- replay is
         path-agnostic to maintain simplicity."""
-        r = client_on_machine_a.get(
-            "/api/health",
-            cookies={"fly_machine_id": MACHINE_B},
-        )
+        client_on_machine_a.cookies.set("fly_machine_id", MACHINE_B)
+        r = client_on_machine_a.get("/api/health")
         assert r.headers.get("fly-replay") == f"instance={MACHINE_B}"
 
 

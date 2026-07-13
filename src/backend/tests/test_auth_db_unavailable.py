@@ -36,7 +36,8 @@ def test_db_unavailable_with_cookie_returns_503_retryable(client):
         "app.middleware.db_sync.validate_session",
         side_effect=psycopg2.OperationalError("server closed the connection unexpectedly"),
     ):
-        resp = client.get(PROTECTED_PATH, cookies={"rb_session": "some-session-id"})
+        client.cookies.set("rb_session", "some-session-id")
+        resp = client.get(PROTECTED_PATH)
     assert resp.status_code == 503
     assert resp.headers.get("Retry-After") == "2"
     assert resp.json()["detail"] == "Service temporarily unavailable, please retry."
@@ -55,5 +56,6 @@ def test_invalid_cookie_with_healthy_db_returns_401(client):
     auth failure.
     """
     with patch("app.middleware.db_sync.validate_session", return_value=None):
-        resp = client.get(PROTECTED_PATH, cookies={"rb_session": "bogus"})
+        client.cookies.set("rb_session", "bogus")
+        resp = client.get(PROTECTED_PATH)
     assert resp.status_code == 401

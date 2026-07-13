@@ -26,6 +26,7 @@ import traceback
 
 # Load environment variables from .env file (if exists)
 # Look in project root (two levels up from app/)
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -112,10 +113,22 @@ ENV = os.getenv("ENV", "development")
 IS_DEV = ENV == "development"
 
 # Create FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """App startup/shutdown (T5060: replaces the deprecated @app.on_event
+    handlers with the fastapi lifespan pattern). Bodies are unchanged; only the
+    registration mechanism moved. Startup runs before `yield`, shutdown after.
+    """
+    await _startup_event()
+    yield
+    await _shutdown_event()
+
+
 app = FastAPI(
     title="Video Editor API",
     version="0.1.0",
-    description="Backend API for video editing application with AI upscaling"
+    description="Backend API for video editing application with AI upscaling",
+    lifespan=lifespan,
 )
 
 # Configure CORS
@@ -326,8 +339,7 @@ def _graceful_shutdown(signum, frame):
     sys.exit(0)
 
 
-@app.on_event("startup")
-async def startup_event():
+async def _startup_event():
     """Log version information on startup and register signal handlers"""
     logger.info("=" * 80)
     logger.info("VIDEO EDITOR BACKEND STARTING")
@@ -401,8 +413,7 @@ async def startup_event():
     await start_cleanup_loop()
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
+async def _shutdown_event():
     from app.services.sweep_scheduler import stop_sweep_loop
     await stop_sweep_loop()
 
