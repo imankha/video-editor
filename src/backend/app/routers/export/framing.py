@@ -623,6 +623,20 @@ async def _run_render_background(
                 f"source object with no preserved extract?). No new working video "
                 f"will be produced. err={type(extract_err).__name__}: {extract_err}"
             )
+            # T4990: classify a CONFIRMED reclaimed/expired source at the
+            # R2-object boundary (HEAD-probe, NOT ffmpeg-stderr string matching).
+            # resolve_clip_source normally raises SourceUnavailable first, but a
+            # source can vanish between resolution and this extract (or a stale
+            # presigned URL 404s). Re-probe existence: only a sustained miss of
+            # ALL candidate sources reclassifies -- transient failures stay
+            # generic (T4820 confirmed-404-only). Chain the original error so the
+            # ffmpeg stderr is preserved in the traceback for debugging.
+            from ...services.export_helpers import (
+                SourceUnavailable,
+                source_confirmed_unavailable,
+            )
+            if source_confirmed_unavailable(clip):
+                raise SourceUnavailable(clip.get('id') or clip.get('raw_clip_id')) from extract_err
             raise
         logger.info(f"[Render] ffmpeg extract took {time_module.monotonic() - _t0:.2f}s")
 
@@ -670,6 +684,20 @@ async def _run_render_background(
             logger.info(f"[Render] Refunded {credits_deducted} credits (pre-pipeline failure)")
         logger.error(f"[Render] Background render failed: {e}", exc_info=True)
 
+        # T4990: a confirmed missing/expired source records a typed, actionable
+        # failure (SOURCE_UNAVAILABLE + "unavailable/expired" wording) that the
+        # UI can explain, instead of a raw ffmpeg crash string. resolve_clip_source
+        # (primary path) and the extract-failure backstop above both raise
+        # SourceUnavailable for this case.
+        from ...services.export_helpers import (
+            SourceUnavailable,
+            classified_source_unavailable_message,
+        )
+        if isinstance(e, SourceUnavailable):
+            failure_message = classified_source_unavailable_message(e.clip_id)
+        else:
+            failure_message = str(e)
+
         # T4010: a failed render must leave the project exactly as before the job.
         # Restore the pointers in case the pipeline advanced working_video_id or
         # nulled final_video_id before failing -- the published reel is never lost.
@@ -682,7 +710,7 @@ async def _run_render_background(
         except Exception as restore_err:
             logger.error(f"[Render] Failed to restore prior pointers for project {project_id}: {restore_err}")
 
-        fail_export_job(export_id, str(e))
+        fail_export_job(export_id, failure_message)
 
         # _export_clips' generic error path already sent a WS error; cover the
         # paths that didn't (pre-pipeline failures, HTTPException from pipeline).
@@ -690,7 +718,7 @@ async def _run_render_background(
             from app.websocket import make_progress_data
             error_data = make_progress_data(
                 current=0, total=100, phase='error',
-                message=f"Export failed: {e}",
+                message=f"Export failed: {failure_message}",
                 export_type='framing', project_id=project_id, project_name=project_name,
             )
             export_progress[export_id] = error_data

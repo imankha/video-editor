@@ -400,6 +400,11 @@ def export_sync_failed_data(export_type: str, project_id: int, project_name: str
 # Clip Source Resolution (shared across framing + multi-clip render paths)
 # =============================================================================
 
+# T4990: stable machine-readable code the UI keys off to show the "source
+# expired/unavailable" panel (bug 27p copy) instead of a raw ffmpeg string.
+SOURCE_UNAVAILABLE_CODE = "SOURCE_UNAVAILABLE"
+
+
 class SourceUnavailable(Exception):
     """No editable source could be resolved for a clip.
 
@@ -408,9 +413,60 @@ class SourceUnavailable(Exception):
     fallback (CLAUDE.md: no silent fallbacks for internal data).
     """
 
+    code = SOURCE_UNAVAILABLE_CODE
+
     def __init__(self, clip_id):
         self.clip_id = clip_id
         super().__init__(f"No editable source available for clip {clip_id}")
+
+
+def classified_source_unavailable_message(clip_id) -> str:
+    """The failure text recorded on a missing-source render (T4990).
+
+    Carries the machine-readable ``SOURCE_UNAVAILABLE`` prefix AND user-actionable
+    words (unavailable / expired / reclaimed) so the frontend can render the
+    expired-source panel and a person reading the job row understands it — never
+    a raw ffmpeg stderr.
+    """
+    return (
+        f"{SOURCE_UNAVAILABLE_CODE}: the source video for clip {clip_id} is "
+        f"unavailable (expired/reclaimed). Re-export cannot render it."
+    )
+
+
+def source_confirmed_unavailable(clip: dict) -> bool:
+    """True only when NONE of a clip's candidate R2 sources still exist.
+
+    Used to classify a render EXTRACT failure at the R2-object boundary rather
+    than by parsing ffmpeg stderr (a banned defensive patch, CLAUDE.md). Probes
+    the same sources, in the same way, as ``resolve_clip_source``:
+      1. game video  ``games/{blake3}.mp4``  (global namespace)
+      2. preserved per-clip extract ``raw_clips/{raw_filename}``
+      3. recap master ``recaps/{game_id}.mp4``
+
+    ``r2_head_object_global``/``file_exists_in_r2`` retry transient blips
+    internally, so a True here is a SUSTAINED miss — a confirmed reclaimed/expired
+    source, not a transient R2 error (T4820 confirmed-404-only rule; transient
+    errors fall through as ``False`` and the render failure stays generic).
+    """
+    from app.storage import file_exists_in_r2, r2_head_object_global
+    from app.user_context import get_current_user_id
+
+    game_hash = clip.get('game_blake3_hash')
+    if game_hash and r2_head_object_global(f"games/{game_hash}.mp4") is not None:
+        return False
+
+    user_id = get_current_user_id()
+
+    raw_filename = clip.get('raw_filename') or clip.get('uploaded_filename')
+    if raw_filename and file_exists_in_r2(user_id, f"raw_clips/{raw_filename}"):
+        return False
+
+    game_id = clip.get('game_id')
+    if game_id and file_exists_in_r2(user_id, f"recaps/{game_id}.mp4"):
+        return False
+
+    return True
 
 
 def _resolve_recap_source(clip: dict):
