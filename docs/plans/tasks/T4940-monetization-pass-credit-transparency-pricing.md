@@ -78,6 +78,29 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 3. **Usage history:** minimal transactions view (source, amount, date, running balance) fed by the existing `/credits/transactions` endpoint — likely in the profile/account surface next to the balance.
 4. Copy tone per user intent: value-forward, not scarcity-forward ("your credits go further now").
 
+### Workstream C — Live-mode Stripe on prod (GO-LIVE GATE, do FIRST)
+
+**CONFIRMED 2026-07-13: prod is in Stripe TEST mode — it has never collected real money.** Reported by user (the `4242 4242 4242 4242` test card completes a purchase on prod) and confirmed in the config:
+- repo-root `.env.prod` (pushed to the prod Fly backend by `scripts/push-secrets.sh production`, per `scripts/deploy_production.sh`): `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_PUBLISHABLE_KEY=pk_test_...`. The **test secret key on the backend is the direct cause** — test-mode PaymentIntents accept test cards and "succeed", so credits are granted against fake payments.
+- `src/frontend/.env.production` (baked by `vite build --mode production` -> `reel-ballers-prod` Cloudflare Pages): `VITE_STRIPE_PUBLIC_KEY=pk_test_...`. Frontend prefers this baked var over `/payments/config` ([BuyCreditsModal.jsx:30](../../src/frontend/src/components/BuyCreditsModal.jsx#L30)), so even a fixed backend key would be shadowed until this is fixed too.
+
+**Fix (operator/user runs — env files are gitignored and AI must NOT handle live keys):**
+1. In the **Stripe Dashboard, toggle to Live mode**; get `sk_live_...` + `pk_live_...`.
+2. Create a **live-mode webhook endpoint** pointing at the prod backend `/api/payments/webhook`; copy its `whsec_...`. Webhook signing secrets are per-endpoint AND per-mode — the current test-mode `STRIPE_WEBHOOK_SECRET` will NOT verify live events (silent fulfillment gap otherwise).
+3. Update repo-root `.env.prod`: `STRIPE_SECRET_KEY=sk_live_...`, `STRIPE_PUBLISHABLE_KEY=pk_live_...`, `STRIPE_WEBHOOK_SECRET=whsec_...(live)`.
+4. Update `src/frontend/.env.production`: `VITE_STRIPE_PUBLIC_KEY=pk_live_...`.
+5. Redeploy: backend (`deploy_production.sh --backend-only` runs push-secrets + fly deploy) AND frontend (`--frontend-only`, rebuilds with the live key). Both are required — backend for the charge, frontend for the baked publishable key.
+
+**Verify (all three, per "verify deployed artifacts" standard):**
+- `4242...` test card is now **DECLINED** on prod (the original repro must fail).
+- A real card creates a real charge visible in the **Stripe Live dashboard**, and credits are granted (webhook + verify/confirm paths fire).
+- Fetch the deployed prod JS bundle and confirm `pk_live_` is baked in (not `pk_test_`).
+
+**Notes:**
+- Staging stays test-mode intentionally. But `deploy-frontend.yml:29` (staging) hardcodes a literal `pk_test_...` in the workflow — a `pk_` publishable key is not a secret, but it violates the project's no-hardcoded-keys-in-workflows standard; move it to a GitHub secret while here (cheap, and prevents someone copying the hardcoded pattern into a prod workflow). Do NOT hardcode any `sk_`/`whsec_`.
+- Sequence: this is the actual point of monetization — **do Workstream C before A/B**. Repricing and value-messaging are meaningless while prod collects $0. If time-boxed, C can ship as its own fast deploy ahead of the pricing/transparency changes.
+- Pre-existing test-mode "purchases" on prod granted real credits against fake payments — decide with user whether any cleanup/audit of those grants is warranted (likely negligible volume; document the decision).
+
 ## Context
 
 ### Relevant Files (REQUIRED)
@@ -87,6 +110,7 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 - `src/frontend/src/components/InsufficientCreditsModal.jsx` — align copy with the stated rule
 - `src/frontend/src/containers/ExportButtonContainer.jsx` + `components/ExportButtonView.jsx` — pre-flight cost display
 - `src/frontend/src/stores/creditStore.js` — `getRequiredCredits` (already exists)
+- **Workstream C (config, not committed):** repo-root `.env.prod` (backend secrets, gitignored), `src/frontend/.env.production` (frontend build env, gitignored), `scripts/deploy_production.sh` + `scripts/push-secrets.sh` (deploy path), `.github/workflows/deploy-frontend.yml:29` (staging hardcoded `pk_test`), `src/backend/app/routers/payments.py` (reads the keys; logs key prefix at startup)
 - `src/frontend/src/utils/storageCost.js` — upload cost preview
 - `src/frontend/src/components/shared/UnifiedHeader.jsx` — balance display; entry point to usage history
 - `src/frontend/src/components/TermsOfService.jsx` — check for pricing mentions
@@ -106,19 +130,23 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 ## Implementation
 
 ### Steps
-1. [ ] Step 0 — measure overlay render GPU-s/video-s on a representative clip (it's free to users; know what we're absorbing); sanity-check framing cost anchor still ~0.3c/s
-2. [ ] User gate: confirm ladder (recommended 60/120/260 vs alternate 60/120/280) and explainer copy stance
-3. [ ] Backend: new `CREDIT_PACKS`, `CREDIT_VALUE`, packs in `/payments/config`
-4. [ ] Frontend: packs from config (kill the duplicate), rule copy + explainer, pre-flight export/upload cost display, transactions view
-5. [ ] Tests: pack math, config endpoint, pre-flight display, transactions rendering
-6. [ ] Verify a live Stripe test purchase end-to-end on staging (amount, credits granted, analytics `total_spent`)
+1. [ ] **Workstream C FIRST (go-live gate)** — user flips prod to live Stripe keys (backend `.env.prod` sk_live/pk_live/live whsec + frontend `.env.production` pk_live), redeploy backend + frontend, verify test card declined + real charge in live dashboard + pk_live in prod bundle. Move staging workflow pk_test to a GitHub secret. Decide on any cleanup of prior test-mode grants.
+2. [ ] Step 0 — measure overlay render GPU-s/video-s on a representative clip (it's free to users; know what we're absorbing); sanity-check framing cost anchor still ~0.3c/s
+3. [ ] User gate: confirm ladder (recommended 60/120/260 vs alternate 60/120/280) and explainer copy stance
+4. [ ] Backend: new `CREDIT_PACKS`, `CREDIT_VALUE`, packs in `/payments/config`
+5. [ ] Frontend: packs from config (kill the duplicate), rule copy + explainer, pre-flight export/upload cost display, transactions view
+6. [ ] Tests: pack math, config endpoint, pre-flight display, transactions rendering
+7. [ ] Verify a live Stripe test purchase end-to-end on staging (amount, credits granted, analytics `total_spent`)
 
 ### Progress Log
 
 **2026-07-12**: Task created after investigation. Economics: marginal cloud cost ~0.4-0.5c/credit vs 5c proposed price -> ~90% gross margin; 5c is safely profitable. Key mechanical dependency found: `CREDIT_VALUE` constant couples pack pricing to upload cost formula. Key UX gap: cost is computed pre-flight but only shown on insufficiency.
 
+**2026-07-13**: Added Workstream C after user reported the `4242` test card works on prod. CONFIRMED prod is in Stripe test mode on BOTH tiers: `.env.prod` has `sk_test_`/`pk_test_` (backend) and `src/frontend/.env.production` has `pk_test_` (frontend build). Prod has collected no real money. This is the actual go-live gate and precedes the pricing/transparency work.
+
 ## Acceptance Criteria
 
+- [ ] **Prod Stripe is in LIVE mode:** test card declined on prod, real charge appears in Stripe live dashboard, prod bundle ships `pk_live_`, live webhook secret verifies live events
 - [ ] Overlay render cost measured and documented (this file + modal-gpu.md)
 - [ ] New pack pricing live at ~5c/credit (exact packs user-approved), profitable per measured costs
 - [ ] `CREDIT_VALUE` updated; upload formula still cost-recovering at new price
