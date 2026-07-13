@@ -98,6 +98,15 @@ the box:
 **2026-07-12**: All four issues hit and manually worked around during the
 derisk sweep; full attribution in the sweep report.
 
+**2026-07-13** (T5020 CI fix): Added `pytest.importorskip("torch")` at module level in
+tests/test_ai_upscaler.py (before the `with patch('torch.cuda.is_available')` block);
+confirmed 1 skipped / 0 errors when torch absent in this container.
+
+**2026-07-13** (T5020 CI fix): Changed CI Pytest step from `pytest tests/` to
+`pytest tests/test_*.py` (canonical selection matching run_tests.py); `tests/integration/`
+excluded. The `pytest tests/` form triggers a capture-closing internal error
+(ValueError: I/O operation on closed file) that the canonical glob avoids.
+
 ## Acceptance Criteria
 
 - [ ] Fresh container full-suite run needs zero manual pip/env fixes
