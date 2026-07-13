@@ -36,7 +36,10 @@ export async function loginAsRealUser(
 ) {
   const data = { email };
   if (profileId) data.profile_id = profileId;
-  const res = await pageOrContext.request.post('/api/auth/dev-login', {
+  // E2E_API_BASE lets this helper work when baseURL is a remote frontend host
+  // (e.g. staging CF Pages) that does not proxy /api to the backend.
+  const apiBase = process.env.E2E_API_BASE || '/api';
+  const res = await pageOrContext.request.post(`${apiBase}/auth/dev-login`, {
     data,
     headers: { 'X-Test-Mode': 'true' },
   });

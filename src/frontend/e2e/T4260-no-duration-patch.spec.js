@@ -48,14 +48,20 @@ test('T4260 annotate load fires NO PATCH .../duration (reactive write deleted)',
 
   // Discover a real game ID from this user's bootstrap data.
   let gameId = 6; // fallback: T4110's known dev-seed game
-  const bootstrapRes = await context.request.get('/api/bootstrap', {
+  // E2E_API_BASE keeps this working when baseURL is a remote frontend host
+  // (e.g. staging CF Pages) that does not proxy /api.
+  const apiBase = process.env.E2E_API_BASE || '/api';
+  const bootstrapRes = await context.request.get(`${apiBase}/bootstrap`, {
     headers: { 'X-Profile-ID': PROFILE_ID },
   });
   if (bootstrapRes.ok()) {
     const data = await bootstrapRes.json().catch(() => ({}));
-    const first = (data.games || [])[0];
+    // bootstrap nests the list: { games: { games: [...] } }
+    const list = Array.isArray(data.games) ? data.games : data.games?.games || [];
+    const first = list[0];
     if (first?.id) gameId = first.id;
   }
+  if (process.env.E2E_GAME_ID) gameId = Number(process.env.E2E_GAME_ID);
   console.log(`[T4260] using game ${gameId}`);
 
   // Navigate to Annotate for this game via the pendingGameId breadcrumb.
