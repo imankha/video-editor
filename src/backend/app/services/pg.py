@@ -7,6 +7,7 @@ This module replaces the SQLite-based auth_db and sharing_db connection manageme
 
 import logging
 import os
+import time
 from contextlib import contextmanager
 
 import psycopg2
@@ -16,6 +17,18 @@ from psycopg2.pool import ThreadedConnectionPool
 logger = logging.getLogger(__name__)
 
 _pool: ThreadedConnectionPool | None = None
+
+# T4960 idle-age gate: only pre-ping a checked-out connection that has sat idle in
+# the pool longer than this. Connections reused within the window were just proven
+# alive by the prior request, so the ~1 round-trip ``SELECT 1`` is skipped on the
+# hot path (measured ~2.4ms/checkout otherwise). Fly closes idle client sockets on
+# a minutes timescale (keepalives_idle=30s), so 5s is far below any real death
+# window while still eliminating the steady-state overhead.
+_IDLE_PING_THRESHOLD_S = 5.0
+
+# id(conn) -> monotonic time the connection was last returned to the pool. Used
+# only to compute idle age for the gate above; entries are removed on discard.
+_last_returned: dict[int, float] = {}
 
 _SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS users (
@@ -293,18 +306,67 @@ def close_pg_pool():
 def get_pg():
     """Yield a connection from the pool. Auto-commits on clean exit, rolls back on error.
 
-    Relies on TCP keepalives (keepalives_idle=30s) to detect dead connections
-    rather than a per-checkout SELECT 1 health check, which added 2 round-trips
-    (~100-200ms on remote Fly PG) to every single call.
+    T4960: pre-pings the checked-out connection with a cheap ``SELECT 1`` before
+    yielding. Fly Postgres closes idle client sockets while the pool still holds
+    them (``conn.closed`` stays 0), so keepalives alone did not stop the FIRST
+    request after an idle window from eating a dead socket -> 500. On a failed
+    ping the stale connection is discarded (``putconn(..., close=True)``) and the
+    next one is fetched.
+
+    Idle-age gate: the ping is skipped for a connection reused within
+    ``_IDLE_PING_THRESHOLD_S`` (the prior request already proved it alive), so the
+    steady-state hot path pays zero extra round-trips. Only connections that have
+    sat idle past the window — i.e. the exact after-idle case this fixes — are
+    pinged.
+
+    Bound: after a long idle window EVERY pooled connection is stale (up to
+    ``maxconn`` of them sit dead in the free list), so a fixed 2-attempt bound
+    still 500s the first request — verified in the T4960 live-drive. Discarding a
+    stale conn shrinks the pool, so within ``maxconn + 1`` checkouts psycopg2 must
+    hand back a freshly-minted (live) connection; that is the bound. Steady state
+    is one attempt. If the server itself is down, ``getconn()`` raises on connect
+    and the error propagates (not recoverable here, by design).
     """
     if _pool is None:
         raise RuntimeError("Postgres pool not initialized -- call init_pg_pool() first")
-    conn = _pool.getconn()
+
+    conn = None
+    last_err = None
+    max_attempts = getattr(_pool, "maxconn", 1) + 1
+    for attempt in range(1, max_attempts + 1):
+        candidate = _pool.getconn()
+        if candidate.closed:
+            logger.warning(
+                "[PG] discarded stale connection (already closed, attempt %d/%d)",
+                attempt, max_attempts,
+            )
+            _last_returned.pop(id(candidate), None)
+            _pool.putconn(candidate, close=True)
+            continue
+        returned_at = _last_returned.get(id(candidate))
+        if returned_at is not None and (time.monotonic() - returned_at) < _IDLE_PING_THRESHOLD_S:
+            conn = candidate  # recently proven alive -> skip the ping (hot path)
+            break
+        try:
+            with candidate.cursor() as cur:
+                cur.execute("SELECT 1")
+            candidate.rollback()  # don't leak the ping's read transaction to the caller
+            conn = candidate
+            break
+        except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+            last_err = e
+            logger.warning(
+                "[PG] discarded stale connection during pre-ping (attempt %d/%d): %s",
+                attempt, max_attempts, e,
+            )
+            _last_returned.pop(id(candidate), None)
+            _pool.putconn(candidate, close=True)
+    if conn is None:
+        raise last_err if last_err is not None else psycopg2.OperationalError(
+            "[PG] no live connection available after pre-ping retries"
+        )
+
     try:
-        if conn.closed:
-            logger.warning("[PG] Discarding closed connection, fetching fresh one")
-            _pool.putconn(conn, close=True)
-            conn = _pool.getconn()
         yield conn
         conn.commit()
     except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
@@ -322,6 +384,15 @@ def get_pg():
         raise
     finally:
         _pool.putconn(conn, close=conn.closed)
+        # Reconcile the idle-age ledger AFTER putconn: psycopg2 closes any conn
+        # returned while the free list is already at minconn (overflow) or flagged
+        # close=True, so its post-putconn ``closed`` state is the source of truth.
+        # Stamping only re-pooled (still-open) conns keeps the ledger bounded to
+        # the live pool and prevents leaked entries from causing id()-reuse skips.
+        if conn.closed:
+            _last_returned.pop(id(conn), None)
+        else:
+            _last_returned[id(conn)] = time.monotonic()
 
 
 def init_pg_schema():

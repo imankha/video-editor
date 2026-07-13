@@ -93,6 +93,26 @@ SQLAlchemy's `pool_pre_ping` does. This codebase uses psycopg2 +
 traceback). Documented repro; scripts/e2e in the sweep now retry logins as a
 workaround — remove those retries' necessity, but keep them (they're harmless).
 
+**2026-07-13** (implemented, `feature/T4960-pg-pool-preping`): Pre-ping added in
+`get_pg()` only. Two findings beyond the original spec, both driven by the QA
+live-drive (killing the app's idle pooled conns server-side, then re-requesting):
+1. **Bound must scale with the pool, not be fixed at 2.** After an idle window
+   EVERY pooled conn is dead, so a 2-attempt bound still 500s the first request
+   (reproduced: `attempt 1/2` + `2/2` both failed → 500). Bound is now
+   `maxconn+1` (11), guaranteeing a freshly-minted live conn. Re-verified: 200
+   after discarding 2 stale conns (`attempt 1/11`, `2/11`).
+2. **Idle-age gate added** (`_IDLE_PING_THRESHOLD_S=5s`): measured ping overhead
+   was ~2.4ms/checkout over the container's Docker-NAT DB path (>2ms matrix
+   threshold), and the code being replaced had deliberately dropped per-checkout
+   `SELECT 1` for latency. The gate skips the ping for conns reused within 5s
+   (hot-path overhead now ~0.0015ms) and only pings conns idle past the window —
+   exactly the after-idle case. Trade-off (a conn dying within 5s of idle is
+   served dead) is safe: Fly death is minutes-scale, keepalives_idle=30s.
+Unit tests: `tests/test_t4960_pg_pool_preping.py` (5 cases, hermetic fake pool).
+Live-drive: recovered to 200 twice with `[PG] discarded stale connection` logged.
+Staging acceptance criterion (10+ min real idle) is DEFERRED to post-deploy
+verification — not reproducible in-container.
+
 ## Acceptance Criteria
 
 - [ ] First PG-touching request after 10+ min staging idle returns 200 (manual

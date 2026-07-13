@@ -1,6 +1,6 @@
 ---
 domain: backend-services
-updated: 2026-07-12 (T4870: admin credit read now R2-canonical; silent fallback removed)
+updated: 2026-07-13 (T4960: get_pg() pre-pings at checkout, discard+retry stale conns, idle-age gated)
 ---
 # Backend Services & Structure — Domain Knowledge
 
@@ -23,7 +23,7 @@ Key services (`app/services/`): `pg.py` (Postgres pool + `_SCHEMA_DDL`), `user_d
 
 ## Data flow
 Three databases, different access patterns:
-1. **Fly Postgres** (auth/sharing/sessions/analytics/game storage refs): `from app.services.pg import get_pg`; context manager auto-commits/rolls back (pg.py:293). `%s` params, RealDictCursor (rows are dicts). Schema: `_SCHEMA_DDL` in pg.py:21 (`CREATE TABLE IF NOT EXISTS`, run at startup — fresh DBs only).
+1. **Fly Postgres** (auth/sharing/sessions/analytics/game storage refs): `from app.services.pg import get_pg`; context manager auto-commits/rolls back. `%s` params, RealDictCursor (rows are dicts). Schema: `_SCHEMA_DDL` in pg.py:21 (`CREATE TABLE IF NOT EXISTS`, run at startup — fresh DBs only). **T4960**: `get_pg()` pre-pings each checkout with `SELECT 1` (rollback after, no txn leak) and discards+refetches stale conns, bounded to `maxconn+1` attempts then re-raise, WARNING `[PG] discarded stale connection` per discard — fixes first-request-after-idle 500s (Fly closes idle sockets while `conn.closed` stays 0; keepalives alone didn't catch it). Gated by `_IDLE_PING_THRESHOLD_S=5s` (conns reused within the window skip the ping → ~0 hot-path overhead; only idle-past-window conns are pinged). A fixed 2-attempt bound is insufficient — after idle ALL pooled conns are dead, so the bound must exceed the free-list size.
 2. **Per-user-per-profile SQLite** `profile.sqlite` (clips/projects/games/final videos): `from app.database import get_db_connection` → `TrackedConnection` (write tracking for R2 sync). `?` params, `sqlite3.Row` (bracket access only — `.get()` does not exist). Schema: `ensure_database()` in database.py:479.
 3. **Per-user SQLite** `user.sqlite` (credits/profiles list/quests/activity): `app/services/user_db.py`, schema `_USER_DB_SCHEMA` (user_db.py:39).
 
