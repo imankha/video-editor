@@ -117,5 +117,5 @@ jobs:
         run: python -c "from app.main import app"
       - name: Pytest (deselects = docs/testing/known-failures.md)
         run: >-
-          python -m pytest tests/ --tb=short
+          python -m pytest tests/ --tb=short --capture=sys
           --deselect tests/test_shared_game_extension.py::TestStorageStatusDerivation
