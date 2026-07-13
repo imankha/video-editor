@@ -119,5 +119,4 @@ jobs:
         # selection mirrors run_tests.py (canonical suite); tests/integration is not part of it; pytest tests/ hits a capture-closing internal error - root-cause tracked in T5000
         run: >-
           python -m pytest tests/test_*.py --tb=short --capture=sys
-          --deselect tests/test_shared_game_extension.py::TestStorageStatusDerivation
           --deselect tests/test_tutorial_quest_steps.py::test_definitions_endpoint_tutorial_step_first

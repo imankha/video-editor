@@ -504,9 +504,29 @@ class TestStorageStatusDerivation:
     """Verify the inline logic that derives storage_status and can_extend."""
 
     @pytest.fixture(autouse=True)
-    def _create_users(self, pg_conn):
+    def _create_users(self, pg_conn, tmp_path):
+        # insert_game_storage_ref -> get_db_connection reads the CURRENT user
+        # context (not the passed user_id) to locate the per-profile SQLite, so
+        # a bare pytest run of this class hit "RuntimeError: No user context
+        # set". The derivation assertions read from Postgres, so the SQLite
+        # write is incidental but must not crash — set a context and isolate it
+        # in tmp_path, mirroring the other pg-backed classes (T5050).
+        from app.user_context import set_current_user_id, reset_user_id
+        from app.profile_context import set_current_profile_id, reset_profile_id_token
+
         create_user("sharer-user", email="sharer@test.com")
         create_user("recipient-user", email="recipient@test.com")
+
+        set_current_user_id("recipient-user")
+        prof_token = set_current_profile_id("recipient-profile")
+        with patch("app.database.USER_DATA_BASE", tmp_path), \
+             patch("app.database._initialized_users", {"sharer-user", "recipient-user"}), \
+             patch("app.database.R2_ENABLED", False):
+            yield
+        # Restore the pre-class context (session default profile / no user) so a
+        # leaked context can't pollute later tests under full-suite ordering.
+        reset_user_id()
+        reset_profile_id_token(prof_token)
 
     @staticmethod
     def _derive_status(expires_at_val, auto_export_status=None):

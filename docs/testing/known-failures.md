@@ -20,7 +20,6 @@ so a brand-new throwaway PG (`docker run postgres:16`, or a local
 
 | Layer | Test | Failure | Root cause | Handling |
 |-------|------|---------|-----------|----------|
-| Backend | `test_shared_game_extension.py::TestStorageStatusDerivation` (4 pg-backed cases) | `RuntimeError: No user context set` in fixture setup (`insert_game_storage_ref -> get_db_connection`) | Test class never calls `set_current_user_id()` in a bare pytest run; fails before the code under test | **Deselected in CI** (whole class; also skips its 2 passing pure cases). Burn-down: set user context in the class fixture |
 | Backend | `test_collection_metadata.py::test_stamps_aspect_ratio_and_tags` | ffprobe not found | Needs ffmpeg on PATH | CI installs ffmpeg; local Windows devs need it on PATH |
 | Frontend | `profileStore` switchProfile timeout | Intermittent timeout under full-suite load; passes in isolation | Flaky async test | CI runs vitest with `--retry=2`. Burn-down: fix the race in the test |
 | Backend | `test_tutorial_quest_steps.py::test_definitions_endpoint_tutorial_step_first` | `AssertionError: expected first step to be tutorial` | Test-order pollution: passes in isolation, fails full-suite (prior test mutates shared state) | **Deselected in CI** (CI run 29273804525, 2026-07-13). Burn-down: isolate shared state in test fixture |
