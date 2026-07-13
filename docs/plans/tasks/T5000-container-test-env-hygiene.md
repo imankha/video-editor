@@ -17,6 +17,10 @@ will bite every future worker identically:
    'app'`. known-failures.md CLAIMS "container bootstrap pins httpx<0.28" —
    it does not (or the pin lost to dependency resolution). Manual
    `pip install 'httpx<0.28'` fixed it.
+   **SUPERSEDED by T5020** (2026-07-13): the same conflict makes backend CI
+   `ResolutionImpossible` at install — T5020 decides the httpx story once
+   (requirements/starlette upgrade); this task then only verifies the
+   container matches that decision.
 2. **torch missing**: `tests/test_ai_upscaler.py` fails collection with
    `ModuleNotFoundError: No module named 'torch'` and — because it is a
    COLLECTION error — pytest aborts the ENTIRE run (`Interrupted: 1 error

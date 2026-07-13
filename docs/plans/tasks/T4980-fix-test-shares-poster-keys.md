@@ -1,6 +1,6 @@
 # T4980: test_shares payload key-set assert not updated for T4890 poster fields (red on master)
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 3
 **Complexity:** 1
 **Created:** 2026-07-12
