@@ -354,7 +354,12 @@ class TestGetSharedVideoBackgroundsAnalytics:
         assert set(data.keys()) == {
             "share_token", "video_name", "video_duration", "video_url",
             "is_public", "shared_at",
+            "video_poster_url", "video_poster_width", "video_poster_height",
         }
+        # No poster in this fixture: r2_head_object_global returns None -> all None.
+        assert data["video_poster_url"] is None
+        assert data["video_poster_width"] is None
+        assert data["video_poster_height"] is None
         # Still recorded, but via the background task.
         rec.assert_called_once()
         assert rec.call_args.args[1] == "share_viewed"
