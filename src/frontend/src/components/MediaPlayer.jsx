@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Play } from 'lucide-react';
 import { VideoLoadingOverlay } from './shared/VideoLoadingOverlay';
 import { VideoControls } from './shared/VideoControls';

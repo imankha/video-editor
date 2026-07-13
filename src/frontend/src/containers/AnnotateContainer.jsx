@@ -50,24 +50,23 @@ export function AnnotateContainer({
   seek,
 
   // Game management
-  uploadGameVideo, // T80: Unified upload with deduplication
+  _uploadGameVideo, // T80: Unified upload with deduplication (not yet wired)
   getGame,
   loadGame,
-  getGameVideoUrl,
+  _getGameVideoUrl,
 
   // Project management
   fetchProjects,
 
   // Navigation
-  onBackToProjects,
+  _onBackToProjects,
   setEditorMode,
 
   // Downloads
-  onOpenDownloads,
+  _onOpenDownloads,
 }) {
   // Annotate mode state (consolidated via useAnnotateState hook)
   const {
-    annotateVideoFile,
     annotateVideoUrl,
     annotateVideoMetadata,
     annotateGameId,
@@ -79,8 +78,6 @@ export function AnnotateContainer({
     setAnnotateGameName,
     annotateSourceExpired,
     setAnnotateSourceExpired,
-    isImportingToProjects,
-    setIsImportingToProjects,
     // Note: isUploadingGameVideo and uploadProgress from local state are NOT used
     // We use uploadStore instead for persistence across page navigation
     annotatePlaybackSpeed,
@@ -215,7 +212,6 @@ export function AnnotateContainer({
     deleteClipRegion: deleteClipRegionLocal,
     selectRegion: selectAnnotateRegion,
     getRegionAtTime: getAnnotateRegionAtTime,
-    getExportData: getAnnotateExportData,
     importAnnotations,
     setRawClipId,
     setAutoProjectId,
@@ -699,7 +695,7 @@ export function AnnotateContainer({
         performance.mark('gesture:load-game:end');
         try {
           const m = performance.measure('gesture:load-game', 'gesture:load-game:start', 'gesture:load-game:end');
-          // eslint-disable-next-line no-console
+           
           console.info(`[GESTURE] load-game duration=${Math.round(m.duration)}ms`);
         } catch { /* marks cleared */ }
         performance.clearMarks('gesture:load-game:start');
@@ -1308,9 +1304,7 @@ export function AnnotateContainer({
         });
 
       // Wait for all saves to complete (but UI already updated)
-      Promise.all(savePromises).then(results => {
-        const successCount = results.filter(r => r !== null).length;
-      });
+      Promise.all(savePromises);
     } else {
       console.warn('[AnnotateContainer] No gameId available - clips will not be saved to library');
     }

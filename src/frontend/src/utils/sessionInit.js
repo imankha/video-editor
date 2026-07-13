@@ -105,7 +105,7 @@ function installFetchInterceptor() {
               const total = Math.round(performance.now() - t0);
               const sizeKB = (bodyText.length / 1024).toFixed(1);
               if (total >= SLOW_FETCH_MS) {
-                // eslint-disable-next-line no-console
+                 
                 console.warn(
                   `[SLOW FETCH] ${method} ${pathOnly} total=${total}ms ttfb=${ttfb}ms body=${bodyMs}ms size=${sizeKB}KB req_id=${reqId} status=${response.status}`
                 );
@@ -123,7 +123,7 @@ function installFetchInterceptor() {
           } else {
             const elapsed = Math.round(performance.now() - t0);
             if (elapsed >= SLOW_FETCH_MS) {
-              // eslint-disable-next-line no-console
+               
               console.warn(
                 `[SLOW FETCH] ${method} ${pathOnly} ${elapsed}ms req_id=${reqId} status=${response.status}`
               );

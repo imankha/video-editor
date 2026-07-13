@@ -102,7 +102,7 @@ export const useGamesDataStore = create((set, get) => ({
           try {
             const m = performance.measure('games:fetch', 'games:fetch:start', 'games:fetch:end');
             if (m.duration >= 1000) {
-              // eslint-disable-next-line no-console
+               
               console.warn(`[TIMING] games:fetch duration=${Math.round(m.duration)}ms threshold=1000ms`);
             }
           } catch { /* marks cleared */ }

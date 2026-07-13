@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Maximize2, Check, ArrowLeftRight } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
 import { ClipVideo } from './ClipVideo';

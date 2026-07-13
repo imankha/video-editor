@@ -1,4 +1,3 @@
-import React from 'react';
 import { LogoWithText } from './Logo';
 import { BRANDED_OUTRO_ENABLED } from '../constants/brandedOutro';
 

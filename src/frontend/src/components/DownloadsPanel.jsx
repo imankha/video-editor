@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical, ArrowRightLeft, CheckSquare, Square } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
@@ -64,11 +64,8 @@ export function DownloadsPanel({
     deleteDownload,
     downloadFile,
     downloadingId,
-    getDownloadUrl,
-    getStreamingUrl,
     renameDownload,
     markWatched,
-    formatFileSize,
     formatDate,
   } = useDownloads(false);
 
@@ -330,9 +327,6 @@ export function DownloadsPanel({
     return false;
   };
 
-  // Get appropriate title for the folder button
-  const getOpenSourceTitle = () => 'Open Reel as Draft';
-
   const handleBeforeAfter = async (e, download) => {
     e.stopPropagation();
     setExportingBeforeAfter(download.id);
@@ -388,9 +382,6 @@ export function DownloadsPanel({
 
   // Find the latest unwatched download ID (first unwatched in created_at DESC order)
   const latestUnwatchedId = downloads.find(d => !d.watched_at)?.id ?? null;
-
-  // ID of the latest export (for auto-expanding its parent group)
-  const latestDownloadId = downloads[0]?.id ?? null;
 
   const getUnwatchedStyle = (downloadId) => {
     if (downloadId === latestUnwatchedId) {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, AlertCircle, Loader, Lock, Download, Share2 } from 'lucide-react';
 import { MediaPlayer } from './MediaPlayer';
 import { BrandedEndCard } from './BrandedEndCard';

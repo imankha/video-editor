@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 

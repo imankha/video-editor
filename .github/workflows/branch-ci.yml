@@ -44,7 +44,8 @@ jobs:
         # T4790: froze the eslint backlog at 0 errors / 1019 warnings. Any new
         # error, or warnings past the baseline, fails the branch. Ratchet these
         # numbers DOWN as the warning backlog is cleared; never up.
-        run: npx eslint src --max-warnings 1019
+        # T5030: ratcheted down to 998 (burned React imports + dead local vars).
+        run: npx eslint src --max-warnings 998
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
 

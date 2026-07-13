@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { X, ArrowRightLeft, Loader, User } from 'lucide-react';
 import { REEL } from '../config/themeColors';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, Loader, Lock, FolderOpen, Share2, Check } from 'lucide-react';
 import { Button } from './shared/Button';
 import { BrandedEndCard } from './BrandedEndCard';
