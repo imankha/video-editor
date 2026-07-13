@@ -120,5 +120,4 @@ jobs:
         run: >-
           python -m pytest tests/test_*.py --tb=short --capture=sys
           --deselect tests/test_shared_game_extension.py::TestStorageStatusDerivation
-          --deselect tests/test_t4050_missing_source_reexport.py
           --deselect tests/test_tutorial_quest_steps.py::test_definitions_endpoint_tutorial_step_first
