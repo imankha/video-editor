@@ -364,6 +364,9 @@ Read: docs/plans/tasks/{task-file}.md
 ### Skipped Stages
 {List specific stages being skipped with reasons, or "None - full workflow"}
 
+### Report Expectations
+Worker and final reports must include a `CI verdict:` line: `green`, or `red — <job>/<step> — attributed to known-failures / fixed in <sha> / task T<id> filed`.
+
 ## Workflow
 
 {List only the stages that apply, with task-specific details for each step}

@@ -103,7 +103,32 @@ generated the kickoff, and checked file-ownership against other live workers. `S
    ```
    bash scripts/task.sh push <SLUG>
    ```
-   Report: fetch origin -> switch to `feature/T<id>-…` -> test -> merge.
+   **Mandatory CI-verdict step (do NOT skip):** after the push, fetch the Branch CI result
+   before reporting the branch ready:
+   ```
+   # Poll until the run appears (the webhook can lag a few seconds after push)
+   for i in 1 2 3 4 5; do
+     RESULT=$(gh run list --workflow "Branch CI" --branch <branch> --limit 1 \
+               --json databaseId,status,conclusion)
+     [ "$(echo "$RESULT" | jq 'length')" -gt 0 ] && break
+     sleep 10
+   done
+   RUN_ID=$(echo "$RESULT" | jq -r '.[0].databaseId')
+   # Wait for completion, exit non-zero on failure
+   gh run watch "$RUN_ID" --exit-status
+   # Fetch failing job + step names (not full logs) for the verdict line
+   gh run view "$RUN_ID" --json jobs --jq '.jobs[] | select(.conclusion=="failure") | {job:.name, step: [.steps[] | select(.conclusion=="failure") | .name]}'
+   ```
+   - **GREEN**: report `CI verdict: green` and tell the user which branch to test.
+   - **RED**: DO NOT tell the user to test yet. Triage in the supervisor chat:
+     1. **Fix in the worker** (`claude -p -c`) if it is a real regression introduced by this task.
+     2. **Attribute to known-failures.md** (`docs/testing/known-failures.md`) if it is a
+        pre-existing failure not caused by this task — add the failing job + step + date.
+     3. **File a task** if the failure is real but out of scope — then proceed with the
+        known-failures attribution so the CI signal stays meaningful.
+     After triage, include `CI verdict: red — <job>/<step> — attributed to known-failures /
+     fixed in commit <sha> / task T<id> filed` in the push report before telling the user.
+   Report: fetch origin -> switch to `feature/T<id>-…` -> CI verdict -> test -> merge.
 
 6. **Cleanup is automatic** via the committed `post-merge` hook (`.githooks/post-merge`)
    when the branch lands on master. Only step in if `/c/tmp/post-merge-cleanup.log` shows the
