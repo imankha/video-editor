@@ -58,8 +58,13 @@ def test_tutorial_step_is_first_in_each_quest():
 
 def test_definitions_endpoint_tutorial_step_first():
     """GET /api/quests/definitions returns tutorial step as first in each quest."""
-    # Call the async handler directly
-    definitions = asyncio.get_event_loop().run_until_complete(get_definitions())
+    # Call the async handler directly. Use asyncio.run() (fresh loop, created
+    # and closed here) rather than asyncio.get_event_loop().run_until_complete:
+    # the latter depends on an ambient current event loop, which a prior async
+    # test can leave cleared, making this pass in isolation but raise
+    # "RuntimeError: There is no current event loop" under full-suite order
+    # (the order-pollution this test was deselected for -- T5050).
+    definitions = asyncio.run(get_definitions())
     by_id = {q["id"]: q for q in definitions}
     for quest_id, step_id, _ in TUTORIAL_STEPS:
         quest = by_id[quest_id]
