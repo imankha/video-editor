@@ -219,7 +219,6 @@ def _finalize_overlay_export(
 # thin module-local alias so existing overlay call sites read unchanged.
 from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data
 
-
 # =============================================================================
 # Gesture-Based Overlay Actions API
 # =============================================================================
@@ -1240,7 +1239,7 @@ async def export_final(
     logger.info(f"[Final Export] Starting for project {project_id}")
 
     try:
-        overlay_config = json.loads(overlay_data)
+        json.loads(overlay_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid overlay_data JSON")
 

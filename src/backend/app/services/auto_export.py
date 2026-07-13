@@ -195,7 +195,6 @@ def _export_brilliant_clip(
             f"start={start_time} end={end_time} (end <= start)"
         )
         return
-    duration = end_time - start_time
     logger.info(f"[AutoExport] Brilliant clip={clip['id']} hash={video_hash[:12]} range={start_time:.1f}-{end_time:.1f}s")
 
     # T4160: never replace an existing published reel for this clip. A published

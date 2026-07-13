@@ -245,7 +245,7 @@ export function ProjectsScreen({
         performance.mark('gesture:open-project:end');
         try {
           const m = performance.measure('gesture:open-project', 'gesture:open-project:start', 'gesture:open-project:end');
-          // eslint-disable-next-line no-console
+           
           console.info(`[GESTURE] open-project duration=${Math.round(m.duration)}ms`);
         } catch { /* marks cleared */ }
         performance.clearMarks('gesture:open-project:start');

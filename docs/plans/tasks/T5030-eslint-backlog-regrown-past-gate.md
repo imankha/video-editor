@@ -81,6 +81,20 @@ The current crop is dominated by trivial classes:
 
 ### Progress Log
 
+**2026-07-13**: Implemented. `npx eslint src --fix` removed 12 unused-disable directives
+(comment-only changes, verified via git diff: only eslint-disable lines removed). Then
+burned 28 additional warnings by: (a) removing `import React from 'react'` / `React,`
+from 13 staged component files (safe: React 17+ JSX transform, React never referenced
+directly; verified via grep refs=0 per file); (b) Toast.jsx also dropped unused `useEffect`
+(only on import line, never called); (c) DownloadsPanel.jsx: 3 unused hook destructuring
+vars + 2 dead local consts removed; (d) AnnotateContainer.jsx: 3 unused hook vars removed,
+1 dead rename alias removed, dead Promise.all().then() callback removed, 4 unused function
+args prefixed with `_`. Result: 1038 -> 998 warnings (0 errors). Gate ratcheted to 998.
+vitest: 979 passed (1 known flake -- profileStore switchProfile timeout -- passes in
+isolation, fails intermittently under full-suite load per known-failures.md).
+Committed as chore(T5030) on feature/T5020-T5030-branch-ci-green. CI push required to
+confirm frontend gate passes -- deferred to supervisor.
+
 **2026-07-13**: Found while auditing the red Branch CI after the derisk wave;
 counted 1038 locally on master `fce6a643`.
 

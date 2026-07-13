@@ -212,7 +212,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       setIsLoading(false);
       return null;
     }
-  }, [setError, setIsLoading, setVideoLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- reads videoUrl via getState() to keep callback stable
+  }, [setError, setIsLoading, setVideoLoaded]);  
 
   /**
    * Load a video from a streaming URL (no blob download)
@@ -336,7 +336,7 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       clipOffset: newClipOffset,
       clipDuration: newClipDuration,
     });
-  }, [setError, setCurrentTime, setVideoLoaded]); // eslint-disable-line react-hooks/exhaustive-deps -- reads videoUrl/metadata via getState() to keep callback stable
+  }, [setError, setCurrentTime, setVideoLoaded]);  
 
   /**
    * Play video - handles promise to prevent race conditions

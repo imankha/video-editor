@@ -1,4 +1,3 @@
-import React from 'react';
 import { Maximize2, Check } from 'lucide-react';
 import { REEL } from '../../config/themeColors';
 import { ClipVideo } from './ClipVideo';

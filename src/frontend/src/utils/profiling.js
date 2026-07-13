@@ -60,7 +60,7 @@ export function timedSpan(label, fn, thresholdMs) {
         const measure = performance.measure(label, markStart, markEnd);
         const elapsed = Math.round(measure.duration);
         if (elapsed >= threshold) {
-          // eslint-disable-next-line no-console
+           
           console.warn(
             `[TIMING] ${label} duration=${elapsed}ms threshold=${threshold}ms`
           );
@@ -114,7 +114,7 @@ export async function profiledFetch(label, url, opts, thresholdMs = 500) {
 
   const totalRound = Math.round(total);
   if (totalRound >= thresholdMs) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[TIMING] fetch:${label} total=${totalRound}ms ttfb=${Math.round(ttfb)}ms body=${Math.round(bodyTime)}ms url=${typeof url === 'string' ? url.split('?')[0] : url}`
     );

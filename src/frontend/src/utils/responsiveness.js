@@ -39,10 +39,10 @@ export function installResponsivenessMonitor() {
 
         const msg = `[LONGTASK] duration=${duration}ms start=${Math.round(entry.startTime)}ms attribution=${attr} name=${entry.name}`;
         if (duration >= WARN_THRESHOLD_MS) {
-          // eslint-disable-next-line no-console
+           
           console.warn(msg);
         } else {
-          // eslint-disable-next-line no-console
+           
           console.info(msg);
         }
       }
@@ -67,7 +67,7 @@ export function profileSlow(label, fn, thresholdMs = 500) {
     } finally {
       const elapsed = Math.round(performance.now() - t0);
       if (elapsed >= thresholdMs) {
-        // eslint-disable-next-line no-console
+         
         console.warn(`[SLOW] ${label} took ${elapsed}ms (threshold ${thresholdMs}ms)`);
       }
     }

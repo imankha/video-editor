@@ -188,7 +188,7 @@ async def export_framing(
     logger.info(f"[Framing Export] Starting for project {project_id}")
 
     try:
-        clips_config = json.loads(clips_data)
+        json.loads(clips_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid clips_data JSON")
 

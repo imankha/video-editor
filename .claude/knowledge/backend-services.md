@@ -1,6 +1,6 @@
 ---
 domain: backend-services
-updated: 2026-07-13 (T4960: get_pg() pre-pings at checkout, discard+retry stale conns, idle-age gated)
+updated: 2026-07-13 (T5020: fastapi 0.110.1 / starlette 0.37.2 -- TestClient no longer passes removed `app=` kwarg, test and prod now both use httpx 0.28.1)
 ---
 # Backend Services & Structure — Domain Knowledge
 

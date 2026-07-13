@@ -1,4 +1,3 @@
-import React from 'react';
 import { Crop, Sparkles, Scissors, Loader2 } from 'lucide-react';
 import { useAppState } from '../../contexts';
 import { GAME, REEL } from '../../config/themeColors';

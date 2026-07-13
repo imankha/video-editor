@@ -13,7 +13,7 @@ import tempfile
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.constants import SourceType
@@ -171,7 +171,7 @@ def _generate_group_key(game_names: list[str], game_dates: list[str]) -> str | N
         year = years_list[0]
         seasons = seasons_by_year.get(year, set())
         if len(seasons) == 1:
-            return f"{list(seasons)[0]} {year}"
+            return f"{next(iter(seasons))} {year}"
         return str(year)
     else:
         return f"{min(years_list)}-{max(years_list)}"
@@ -629,16 +629,15 @@ async def download_file(download_id: int):
 
                     async with httpx.AsyncClient(
                         timeout=httpx.Timeout(120.0, connect=10.0)
-                    ) as client:
-                        async with client.stream("GET", presigned_url) as response:
-                            if response.status_code != 200:
-                                raise HTTPException(
-                                    status_code=response.status_code,
-                                    detail=f"R2 returned {response.status_code}",
-                                )
-                            with open(original_path, "wb") as fout:
-                                async for chunk in response.aiter_bytes(1024 * 1024):
-                                    fout.write(chunk)
+                    ) as client, client.stream("GET", presigned_url) as response:
+                        if response.status_code != 200:
+                            raise HTTPException(
+                                status_code=response.status_code,
+                                detail=f"R2 returned {response.status_code}",
+                            )
+                        with open(original_path, "wb") as fout:
+                            async for chunk in response.aiter_bytes(1024 * 1024):
+                                fout.write(chunk)
 
                     serve_path = original_path
                     try:
@@ -1093,7 +1092,7 @@ async def move_reels_to_profile(
             _cleanup_target_objects(user_id, target_profile_id, copied_paths)
             raise HTTPException(status_code=500, detail="Could not open target profile database")
 
-        insert_cols = _MOVED_REEL_CARRY_COLUMNS + (
+        insert_cols = (*_MOVED_REEL_CARRY_COLUMNS,
             "project_id", "game_id", "game_ids", "source_clip_id",
             "watched_at", "published_at", "rating", "rd", "match_count",
         )

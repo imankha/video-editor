@@ -5,7 +5,6 @@ Projects organize clips for editing through Framing and Overlay modes.
 Each project has an aspect ratio (16:9 or 9:16) and contains working clips.
 """
 
-import json
 import logging
 from datetime import datetime
 

@@ -1147,8 +1147,6 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip: clip found, auto_project_id={clip['auto_project_id']}, game_id={clip['game_id']}")
 
-        old_rating = clip['rating']
-        new_rating = update.rating if update.rating is not None else old_rating
         old_start = clip['start_time']
         old_end = clip['end_time']
         new_start = update.start_time if update.start_time is not None else old_start
@@ -1752,7 +1750,6 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
                 from app.utils.retry import TIER_2, is_transient_error
 
-                last_exc = None
                 for attempt in range(TIER_2["max_attempts"]):
                     try:
                         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
@@ -1768,7 +1765,6 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
                     except HTTPException:
                         raise
                     except Exception as e:
-                        last_exc = e
                         if not is_transient_error(e) or attempt >= TIER_2["max_attempts"] - 1:
                             raise
                         delay = TIER_2["initial_delay"] * (2.0 ** attempt) * (0.5 + _random.random())

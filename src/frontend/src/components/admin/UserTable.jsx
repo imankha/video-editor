@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity } from 'lucide-react';
 import { CreditGrantModal } from './CreditGrantModal';
 import { useAuthStore } from '../../stores/authStore';
