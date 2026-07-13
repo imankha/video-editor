@@ -1937,7 +1937,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
     # Apply global highlight_color to all keyframes if set
     # This allows users to change the highlight color without re-editing each keyframe
-    global_highlight_color = project['highlight_color'] if 'highlight_color' in project else None
+    global_highlight_color = project['highlight_color'] if 'highlight_color' in project.keys() else None
     if global_highlight_color:
         logger.info(f"[Overlay Render] Applying global highlight color: {global_highlight_color}")
         for region in highlight_regions:

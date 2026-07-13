@@ -1750,7 +1750,6 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
 
                 from app.utils.retry import TIER_2, is_transient_error
 
-                last_exc = None
                 for attempt in range(TIER_2["max_attempts"]):
                     try:
                         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0)) as client:
@@ -2140,9 +2139,9 @@ async def update_working_clip(
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
-                current_clip['width'] if 'width' in current_clip else None,
-                current_clip['height'] if 'height' in current_clip else None,
-                current_clip['fps'] if 'fps' in current_clip else None,
+                current_clip['width'] if 'width' in current_clip.keys() else None,
+                current_clip['height'] if 'height' in current_clip.keys() else None,
+                current_clip['fps'] if 'fps' in current_clip.keys() else None,
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()

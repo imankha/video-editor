@@ -43,7 +43,7 @@ def _do_cleanup():
     from .auth_db import cleanup_expired_sessions
     from .pg import get_pg
 
-    sessions_deleted = cleanup_expired_sessions()
+    cleanup_expired_sessions()
 
     with get_pg() as conn:
         cur = conn.cursor()

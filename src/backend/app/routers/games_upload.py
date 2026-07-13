@@ -457,7 +457,7 @@ async def list_pending_uploads():
                 'blake3_hash': row['blake3_hash'],
                 'file_size': row['file_size'],
                 'original_filename': row['original_filename'],
-                'label': row['label'] if 'label' in row else None,
+                'label': row['label'] if 'label' in row.keys() else None,
                 'completed_parts': len(completed_parts),
                 'total_parts': total_parts,
                 'progress_percent': round(len(completed_parts) / total_parts * 100) if total_parts > 0 else 0,

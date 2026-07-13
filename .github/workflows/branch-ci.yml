@@ -101,15 +101,16 @@ jobs:
         # T4790: froze the ruff backlog at 261 errors (all remaining are
         # unsafe-autofix or manual-only rules; see the T4790 report). Fail if the
         # count grows. Ratchet the baseline DOWN as the remainder is cleared.
-        # T5020: ratcheted to 245 (burned F841/B007/SIM118/RUF015/RUF005/RUF046
-        # in ffmpeg_service, export_worker, local_processors, clips, multi_clip,
-        # downloads, overlay, games_upload; --fix took 5 auto-fixable first).
+        # T5020: ratcheted to 239. NOTE: 5 SIM118 warnings in clips.py,
+        # overlay.py, games_upload.py are kept as x.keys() -- ruff's suggested
+        # rewrite is a bug for sqlite3.Row (in row checks VALUES, not column
+        # names). See tests/test_sqlite_row_membership.py for proof.
         run: |
           OUT=$(ruff check app --output-format=concise || true)
           COUNT=$(printf '%s\n' "$OUT" | grep -c '^app/' || true)
-          echo "ruff error count: $COUNT (baseline 245)"
-          if [ "$COUNT" -gt 245 ]; then
-            echo "::error::ruff errors grew past the T5020 baseline of 245 (now $COUNT). Fix the new errors or lower the baseline only if you reduced the backlog."
+          echo "ruff error count: $COUNT (baseline 239)"
+          if [ "$COUNT" -gt 239 ]; then
+            echo "::error::ruff errors grew past the T5020 baseline of 239 (now $COUNT). Fix the new errors or lower the baseline only if you reduced the backlog."
             exit 1
           fi
       - name: Import check

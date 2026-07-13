@@ -52,7 +52,7 @@ def _extract_keywords_vectorizer(notes: str, corpus: list[str]) -> str:
     )
 
     try:
-        tfidf_matrix = vectorizer.fit_transform(corpus)
+        vectorizer.fit_transform(corpus)
     except ValueError:
         # Empty vocabulary after stop words — fall back
         return _extract_keywords_simple(notes)
