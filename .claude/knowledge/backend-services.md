@@ -86,5 +86,26 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 ## Edge (Cloudflare Pages Functions)
 - **T4840** `src/frontend/functions/shared/[token].js` — edge-rendered public share page. Matches ONLY single-segment `/shared/{token}` (`/shared/collection/*`, `/shared/teammate/*` are two segments -> never match -> keep hitting the SPA via `public/_redirects`). Fetches `GET {api}/api/shared/{token}` server-side (API base by hostname: `app.reelballers.com`->prod, else staging), edge-caches the JSON via Cache API keyed by token ONLY when `is_public===true` (TTL 600s < 4h presign), renders a self-contained <15KB HTML page (muted-autoplay `<video>`, OG/Twitter meta, preconnect, escaped interpolations), and fires a `waitUntil` POST to the `/viewed` beacon on every render. Non-public / 403/404/410 / error / 2s-timeout -> `env.ASSETS.fetch(request)` SPA fallthrough (returns index.html at 200, URL preserved -- do NOT fetch `/index.html` directly, ASSETS 308-canonicalizes it to `/`). **Never make a share less accessible than today -> fallthrough on any doubt.** Deploy: wrangler auto-bundles `functions/` from cwd `src/frontend` (both `.github/workflows/deploy-frontend.yml` and `scripts/deploy_production.sh` already `cd src/frontend` + `wrangler pages deploy dist` — no script change). Revoke latency: up to the 10-min cache TTL for public shares.
 
+## Enumeration consistency (T5110 / T4970)
+- **Poster backfill migrates each profile to head before querying (T5110).** `backfill_posters`
+  (poster.py) enumerates via UNFILTERED `_get_profile_ids` (includes orphan profiles that
+  `run_all_migrations` registry-skips, T4830), but `ensure_database()` only does CREATE TABLE
+  IF NOT EXISTS — never versioned ALTERs. A below-head/orphan profile missing
+  `final_videos.poster_filename` made the `WHERE poster_filename IS NULL` query raise
+  `no such column` and ABORT THE WHOLE RUN (prod 2026-07-13). Fix: call `_migrate_profile_db`
+  per profile after `ensure_database()` (holds "every touched profile is at head", heals the
+  orphan gap), AND wrap the candidate query in try/except so a still-below-head/corrupt profile
+  is recorded in `result["failed"]` and the sweep continues. Any admin sweep that iterates
+  `_get_profile_ids` + queries a migration-added column must do the same.
+- **`get_all_users_for_admin()` has NO segment join; `list_users` uses LEFT JOIN (T4970).**
+  `user_segments` rows are created ONLY in the OAuth/OTP signup flows (`create_user_segment`,
+  guarded by `is_new`); test-login (auth.py:877), the test seam, and copied accounts create
+  users via `create_user` with NO segment row BY DESIGN. So enumeration must never inner-join
+  `user_segments`. `get_all_users_for_admin` (poster-backfill/migrations iterator) already had
+  no join. The `GET /api/admin/users` `list_users` endpoint INNER-joined and dropped segmentless
+  users (5 listed, not 6) → now LEFT JOIN on both COUNT + page query; segment fields come back
+  NULL and the frontend UserTable already renders NULLs as `—` (T4870 null-not-fabricated). An
+  origin/date filter still legitimately excludes NULL segments.
+
 ## Active/upcoming work
 Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T4270, T4280 (silent-fallback sweep). **T4870 DONE** (admin credits read R2-canonical; silent-fallback removed). Guardrails first: T4290/T4300. Backend consolidations: **T4610** require_admin router Depends, T4620 fetch_or_404 + enums, **T4630** R2StreamProxy service (4 streaming-proxy copies), **T4640** games.py activation/share services (depends on T4360), **T4650** raw_clips write-path consolidation, **T4660** open_sqlite factory + game_display service. Export Write-Path epic T4370-T4410 (strict order: characterization tests → ExportJobRepository → finalize/publish single writer → backend-authoritative export → orchestration move). Full map: docs/plans/PLAN.md § Code Quality & Refactoring.

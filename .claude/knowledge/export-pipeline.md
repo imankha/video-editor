@@ -50,6 +50,21 @@ graph LR
   - Hash resolved as `COALESCE(gv.blake3_hash, g.blake3_hash)` joining `game_videos`→`games` (`framing.py:399`, `multi_clip.py:2044`, `auto_export.py:125-129`).
   - Per-user artifacts: `raw_clips/`, `working_videos/`, `final_videos/`, `temp/multi_clip_{export_id}/`.
   - Export routers never touch `storage_refs`/`game_storage_refs` — the ref-count/reclaim lifecycle that can delete a `games/{hash}.mp4` lives in `materialization.py` / `sweep_scheduler.py` / `games.py`; `auto_export.py` is the pre-reclaim export hook.
+- **Missing-source classification (T4990):** a re-export whose game source was reclaimed must
+  record a TYPED `SOURCE_UNAVAILABLE` failure (user-actionable "expired/unavailable" wording),
+  not a raw ffmpeg 404 string, so the UI can show the expired-source panel. Classify at the
+  R2-object boundary, NEVER by parsing ffmpeg stderr (banned defensive patch). Primary path:
+  `resolve_clip_source` already raises `SourceUnavailable` when every candidate source is gone.
+  Backstop in `_run_render_background` (framing.py): on ffmpeg EXTRACT failure, re-probe with
+  `export_helpers.source_confirmed_unavailable(clip)` (same HEAD probes resolve uses —
+  `r2_head_object_global`/`file_exists_in_r2` retry transient blips internally, so True = a
+  SUSTAINED miss = confirmed-404-only, T4820; a present source with a transient failure stays
+  GENERIC). The outer handler maps `SourceUnavailable` → `classified_source_unavailable_message`
+  (carries the `SOURCE_UNAVAILABLE` code + clip id) into `fail_export_job` + the WS error.
+  Spec/regression: `test_t4050_missing_source_reexport.py` (was RED on master, deselected in CI)
+  + `test_t4990_source_classification.py`. NOTE: the known-failures.md row + branch-ci.yml
+  `--deselect` for test_t4050_missing_source_reexport are now stale (the test passes) — remove
+  both once this lands.
 - **Finalize transaction** (hand-copied 5×, drifted — see epic): insert `working_videos`/`final_videos` → repoint `projects.working_video_id`/`final_video_id` → complete `export_jobs` → stamp `working_clips.exported_at` + snapshot `raw_clip_version`.
   - Copies: `export_worker.py:259-339`, `framing.py:227-288`, `multi_clip.py:1398-1435` + `:1660-1727`, `exports.py:249-268` (omits version/duration), `overlay.py:96 _finalize_overlay_export`.
 - **`final_videos` writers (3):** `overlay.py:152` (`_finalize_overlay_export`), `overlay.py:1262` (`export_final`), `auto_export.py:283` (sweep — hardcodes `version=1, source_type='brilliant_clip'`, `published_at` set at insert).
