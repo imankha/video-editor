@@ -300,7 +300,7 @@ async def process_framing_export(job_id: str, project_id: int, config: dict) -> 
         raise RuntimeError("AI SR model failed to load")
 
     # Run upscaling in thread pool (CPU-bound work)
-    result = await asyncio.to_thread(
+    await asyncio.to_thread(
         upscaler.process_video_with_upscale,
         input_path=video_path,
         output_path=output_path,

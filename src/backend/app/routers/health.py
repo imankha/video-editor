@@ -74,7 +74,7 @@ async def health_check():
     t0 = time.perf_counter()
     from ..profile_context import get_current_profile_id
     try:
-        profile_id = get_current_profile_id()
+        get_current_profile_id()
         db_info = {
             "db_initialized": is_database_initialized(),
             "db_path": str(get_database_path()),

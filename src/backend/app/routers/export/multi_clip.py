@@ -729,7 +729,7 @@ def calculate_detection_timestamps(source_clips: list[dict[str, Any]], fps: int 
             if i == 0:
                 frame = math.ceil(absolute_time * fps)
             else:
-                frame = int(round(absolute_time * fps))
+                frame = round(absolute_time * fps)
             detection_points.append({
                 'timestamp': absolute_time,
                 'frame': frame,
@@ -986,8 +986,6 @@ async def process_single_clip(
         upscaler: Optional AIVideoUpscaler instance to reuse across clips.
                   If None, a new one will be created (not recommended for multi-clip).
     """
-    clip_index = clip_data['clipIndex']
-
     # Read video content
     video_content = await video_file.read()
 

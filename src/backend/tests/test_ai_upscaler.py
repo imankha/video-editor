@@ -15,6 +15,8 @@ from typing import Dict, List, Tuple
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+pytest.importorskip("torch")  # skip entire module if torch not installed (e.g. CI)
+
 # We'll import the actual module, but mock heavy dependencies
 with patch('torch.cuda.is_available', return_value=False):
     from app.ai_upscaler import AIVideoUpscaler

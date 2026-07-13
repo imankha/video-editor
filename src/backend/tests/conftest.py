@@ -103,8 +103,11 @@ def pg_conn(monkeypatch):
     cur = setup.cursor()
     # Drop analytics tables that may have stale schemas from prior migrations
     cur.execute("DROP TABLE IF EXISTS user_actions, user_flow_events, user_segments, user_milestones CASCADE")
-    cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
+    # _SCHEMA_DDL (idempotent CREATE IF NOT EXISTS) must run before the DELETE
+    # so schema_migrations exists on a fresh DB. Runs after the DROP so that
+    # user_actions is present when RUNNER sees it (v009 fresh-deploy branch).
     cur.execute(_SCHEMA_DDL)
+    cur.execute("DELETE FROM schema_migrations WHERE version >= 5")
 
     from app.migrations.postgres import RUNNER
     RUNNER.run(setup, "postgres")
