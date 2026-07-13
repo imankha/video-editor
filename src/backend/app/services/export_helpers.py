@@ -463,10 +463,7 @@ def source_confirmed_unavailable(clip: dict) -> bool:
         return False
 
     game_id = clip.get('game_id')
-    if game_id and file_exists_in_r2(user_id, f"recaps/{game_id}.mp4"):
-        return False
-
-    return True
+    return not (game_id and file_exists_in_r2(user_id, f"recaps/{game_id}.mp4"))
 
 
 def _resolve_recap_source(clip: dict):
