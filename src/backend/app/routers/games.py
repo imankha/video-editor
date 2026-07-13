@@ -26,6 +26,7 @@ from app.analytics import record_milestone
 from app.constants import GameCreateStatus, GameStatus, GameType, get_rating_adjective
 from app.database import ensure_directories, get_db_connection
 from app.profile_context import get_current_profile_id
+from app.queries import normalize_rating
 from app.services.auth_db import (
     delete_ref,
     get_game_storage_ref,
@@ -42,7 +43,6 @@ from app.storage import (
     get_r2_client,
     r2_head_object_global,
 )
-from app.queries import normalize_rating
 from app.user_context import get_current_user_id
 from app.utils.encoding import decode_data
 

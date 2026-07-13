@@ -455,7 +455,7 @@ async def local_framing(
             logger.info(f"[LocalProcessor] Pre-extracted: {is_pre_extracted}, clip offset: {clip_offset}s{trim_msg}")
 
             # Process with Real-ESRGAN
-            result = await asyncio.to_thread(
+            await asyncio.to_thread(
                 upscaler.process_video_with_upscale,
                 input_path=input_path,
                 output_path=output_path,
@@ -706,7 +706,7 @@ def _framing_sync(
                     'trim_end': clip_offset + (clip_duration or 0),
                 }
 
-            result = upscaler.process_video_with_upscale(
+            upscaler.process_video_with_upscale(
                 input_path=input_path,
                 output_path=output_path,
                 keyframes=adjusted_keyframes,

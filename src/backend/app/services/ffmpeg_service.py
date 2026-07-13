@@ -382,7 +382,7 @@ def add_chapters_to_video(
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to add chapters: {e.stderr}")
@@ -436,7 +436,7 @@ def concatenate_with_cut(
         cmd.append(output_path)
 
         logger.info(f"Cut concat command: {' '.join(cmd[:15])}...")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Cut concatenation failed: {e.stderr}")
@@ -472,7 +472,7 @@ def concatenate_with_fade(
     video_labels = []
     audio_labels = []
 
-    for i, (path, dur) in enumerate(zip(clip_paths, durations)):
+    for i, (_path, dur) in enumerate(zip(clip_paths, durations)):
         is_first = (i == 0)
         is_last = (i == len(clip_paths) - 1)
 
@@ -532,7 +532,7 @@ def concatenate_with_fade(
 
     try:
         logger.info(f"Fade concat command: {' '.join(cmd[:15])}...")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Fade concatenation failed: {e.stderr}")
@@ -618,7 +618,7 @@ def concatenate_with_dissolve(
 
     try:
         logger.info(f"Dissolve concat command: {' '.join(cmd[:15])}...")
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Dissolve concatenation failed: {e.stderr}")
@@ -692,7 +692,7 @@ def extract_clip(
     cmd.append(output_path)
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"Clip extraction failed: {e.stderr}")
@@ -702,7 +702,7 @@ def extract_clip(
 def is_ffmpeg_available() -> bool:
     """Check if FFmpeg is available in PATH."""
     try:
-        result = subprocess.run(
+        subprocess.run(
             ['ffmpeg', '-version'],
             capture_output=True,
             text=True,

@@ -1147,8 +1147,6 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
         if update.create_project:
             logger.info(f"[CreateReel] update_raw_clip: clip found, auto_project_id={clip['auto_project_id']}, game_id={clip['game_id']}")
 
-        old_rating = clip['rating']
-        new_rating = update.rating if update.rating is not None else old_rating
         old_start = clip['start_time']
         old_end = clip['end_time']
         new_start = update.start_time if update.start_time is not None else old_start
@@ -1768,7 +1766,6 @@ async def get_working_clip_file(project_id: int, clip_id: int, stream: bool = Fa
                     except HTTPException:
                         raise
                     except Exception as e:
-                        last_exc = e
                         if not is_transient_error(e) or attempt >= TIER_2["max_attempts"] - 1:
                             raise
                         delay = TIER_2["initial_delay"] * (2.0 ** attempt) * (0.5 + _random.random())
@@ -2143,9 +2140,9 @@ async def update_working_clip(
                 raw_clip_version,
                 # T1500: carry dims forward; otherwise every new version starts NULL
                 # and re-triggers the probe-fallback path.
-                current_clip['width'] if 'width' in current_clip.keys() else None,
-                current_clip['height'] if 'height' in current_clip.keys() else None,
-                current_clip['fps'] if 'fps' in current_clip.keys() else None,
+                current_clip['width'] if 'width' in current_clip else None,
+                current_clip['height'] if 'height' in current_clip else None,
+                current_clip['fps'] if 'fps' in current_clip else None,
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()

@@ -219,7 +219,6 @@ def _finalize_overlay_export(
 # thin module-local alias so existing overlay call sites read unchanged.
 from ...services.export_helpers import export_sync_failed_data as _export_sync_failed_data
 
-
 # =============================================================================
 # Gesture-Based Overlay Actions API
 # =============================================================================
@@ -1240,7 +1239,7 @@ async def export_final(
     logger.info(f"[Final Export] Starting for project {project_id}")
 
     try:
-        overlay_config = json.loads(overlay_data)
+        json.loads(overlay_data)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid overlay_data JSON")
 
@@ -1938,7 +1937,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
 
     # Apply global highlight_color to all keyframes if set
     # This allows users to change the highlight color without re-editing each keyframe
-    global_highlight_color = project['highlight_color'] if 'highlight_color' in project.keys() else None
+    global_highlight_color = project['highlight_color'] if 'highlight_color' in project else None
     if global_highlight_color:
         logger.info(f"[Overlay Render] Applying global highlight color: {global_highlight_color}")
         for region in highlight_regions:
