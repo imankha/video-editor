@@ -100,6 +100,16 @@ then file the follow-up for (A).
 **2026-07-13**: Found while auditing why both derisk-wave branches showed red
 CI. Full evidence in the CI run log for run 29264734885.
 
+**2026-07-13**: Implemented Option A (root cause fix, not the CI-only downgrade).
+Verified from starlette source that 0.37.2 is the first release to drop `app=self.app`
+from TestClient.__init__ (0.37.1 still passes it). fastapi 0.110.1 is the first release
+admitting starlette>=0.37.2. pydantic 2.5.0 / typing_extensions 4.15.0 satisfy 0.110.1
+constraints -- no cascade. pip install resolves clean (exit 0, httpx stays 0.28.1).
+`from app.main import app` OK. Targeted backend suites: 159 passed (incl. the formerly-
+broken test_collection_shares.py) + broader set 13 passed on throwaway PG. Zero new
+failures. Committed as fix(T5020) on feature/T5020-T5030-branch-ci-green. CI run required
+to confirm backend job executes pytest for the first time -- deferred to supervisor.
+
 ## Acceptance Criteria
 
 - [ ] Backend CI job passes pip install and executes pytest
