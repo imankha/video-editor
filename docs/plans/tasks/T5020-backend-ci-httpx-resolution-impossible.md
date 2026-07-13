@@ -1,6 +1,6 @@
 # T5020: Backend CI has NEVER run — httpx pin conflict makes pip install ResolutionImpossible
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-13

@@ -1,6 +1,6 @@
 # T5040: Branch CI red for 9+ days and nobody noticed — make the signal consumed, not decorative
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-13
@@ -92,10 +92,16 @@ Prompt Structure gained a `CI verdict:` report-expectations line. Green dry-run 
 (gh not authenticated in-container); supervisor commands provided in report. Branch-protection
 trade-off summary included in report. No product code touched.
 
+**2026-07-13 (landed)**: Merged to master. Branch-protection decision recorded:
+**DEFER** (user, 2026-07-13) - revisit after Branch CI has stayed green for a week;
+current CLI-merge flow stays. Dry-run evidence satisfied by real runs: green =
+29274441558 / 29276076478; red-with-step-names = 29272052477 (backend/Ruff gate)
+and 29273277490 (backend/Pytest).
+
 ## Acceptance Criteria
 
 - [ ] spawn-worker/dotask skills instruct the supervisor to fetch + report the
       branch CI verdict before declaring a branch ready
 - [ ] Worker report template carries a CI-verdict line
 - [ ] Dry-run evidence: one green report, one red report with failing steps
-- [ ] Branch-protection decision recorded (yes/no) with the user's answer
+- [x] Branch-protection decision recorded: DEFER (user, 2026-07-13)
