@@ -85,6 +85,13 @@ Close the loop at the two points where the signal should gate:
 **2026-07-13**: Created from the CI audit after the derisk wave. Run history
 evidence: `gh run list --workflow "Branch CI" --limit 20` → 20/20 failure.
 
+**2026-07-13**: Skills edited on branch `feature/T5040-ci-signal-consumed` (based on
+`feature/T5020-T5030-branch-ci-green`). spawn-worker step 5 gained mandatory CI-verdict
+poll+triage block; dotask step 6 mirrors it with a pointer to spawn-worker; task-management
+Prompt Structure gained a `CI verdict:` report-expectations line. Green dry-run DEFERRED
+(gh not authenticated in-container); supervisor commands provided in report. Branch-protection
+trade-off summary included in report. No product code touched.
+
 ## Acceptance Criteria
 
 - [ ] spawn-worker/dotask skills instruct the supervisor to fetch + report the

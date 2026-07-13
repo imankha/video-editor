@@ -59,6 +59,8 @@ Turn planned task(s) into finished, pushed work — driven entirely from this on
    spawn-worker), then drive all workers concurrently with `run_in_background: true`; report
    each worker's progress here as notifications arrive. Relay any design gates to the user.
 
-6. **Land:** per worker, sanity-check diffstat -> `bash scripts/task.sh push <SLUG>` -> tell
-   the user which branches are ready. Cleanup is automatic on merge (post-merge hook); see
-   spawn-worker for the fallback.
+6. **Land:** per worker, sanity-check diffstat -> `bash scripts/task.sh push <SLUG>` ->
+   **fetch and report the Branch CI verdict** (see spawn-worker step 5 for the exact poll
+   commands and triage paths) -> tell the user which branches are ready. A red verdict must
+   be triaged — fix, attribute to known-failures.md, or task it — before the user is told to
+   test. Cleanup is automatic on merge (post-merge hook); see spawn-worker for the fallback.
