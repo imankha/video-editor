@@ -118,6 +118,30 @@ def test_final_frame_shows_card(tmp_path, tmp_video, monkeypatch, label, w, h, h
     assert yavg > 18.0, f"final frame looks black (YAVG={yavg}) — card/text missing"
 
 
+def test_final_frame_shows_logo_emblem(tmp_path, tmp_video, monkeypatch):
+    """The card carries the LOGO (purple play-emblem), not just text -- a regression
+    to the old text-only card would have no meaningful purple, so this pins it."""
+    monkeypatch.setenv("BRANDED_OUTRO_ENABLED", "true")
+    main = tmp_video(1080, 1920, True)
+    out = tmp_path / "out.mp4"
+    assert append_branded_outro(str(main), str(out)) is True
+
+    frame = tmp_path / "last.png"
+    subprocess.run(
+        ["ffmpeg", "-y", "-sseof", "-0.1", "-i", str(out), "-frames:v", "1", str(frame)],
+        capture_output=True, check=True,
+    )
+    import cv2
+    img = cv2.imread(str(frame))  # BGR
+    h = img.shape[0]
+    # Emblem sits in the vertical middle band; count pixels near brand purple.
+    band = img[int(h * 0.30):int(h * 0.70), :, :]
+    b, g, r_ = band[:, :, 0].astype(int), band[:, :, 1].astype(int), band[:, :, 2].astype(int)
+    # brand purple ~ #a855f7 (R168 G85 B247): high R & B, lower G.
+    purple = ((r_ > 110) & (b > 160) & (g < 150) & (b > g + 40)).sum()
+    assert purple > 500, f"no logo emblem in final frame (purple px={purple})"
+
+
 def test_flag_off_skips_outro(tmp_path, tmp_video, monkeypatch):
     """BRANDED_OUTRO_ENABLED=false -> no outro, no output written (feature gated off)."""
     monkeypatch.setenv("BRANDED_OUTRO_ENABLED", "false")

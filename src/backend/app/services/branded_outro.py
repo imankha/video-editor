@@ -52,7 +52,9 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
 OUTRO_DURATION = 1.75
 # Fade the whole card up from black over the first fraction of a second (no hard cut).
 OUTRO_FADE_IN = 0.4
-WORDMARK_TEXT = "Made with Reel Ballers"
+# Bump when the card LAYOUT changes so stale cached cards (old layout) rebuild.
+_CARD_VERSION = "v2-logo"
+MADE_WITH_TEXT = "Made with"
 URL_TEXT = "reelballers.com"
 
 # Bundled font -- the Fly image installs ffmpeg but NO fontconfig fonts, so drawtext
@@ -61,10 +63,14 @@ URL_TEXT = "reelballers.com"
 # /dotask container and in dev.
 _FONT_PATH = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "DejaVuSans-Bold.ttf"
 
-# Brand palette (dark background, white wordmark, muted URL).
+# The ReelBallers logo lockup (Reel / play-emblem / Ballers) pre-rendered on the
+# EXACT card background color, so it overlays seamlessly with no alpha compositing.
+# Regenerate at that same bg if _BG_COLOR ever changes (see the branding asset).
+_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "branding" / "reelballers-lockup.png"
+
+# Brand palette (dark background, muted caption text; the logo carries the color).
 _BG_COLOR = "0x0B0F1A"
-_WORDMARK_COLOR = "white"
-_URL_COLOR = "0x9CA3AF"
+_CAPTION_COLOR = "0x9CA3AF"
 
 
 def outro_enabled() -> bool:
@@ -81,10 +87,20 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, check=True)
 
 
+def _escape_filter_path(path: str) -> str:
+    """Escape a filesystem path for use inside an ffmpeg filtergraph value.
+
+    A colon separates filter options, so a Windows drive letter (`C:/...`)
+    breaks parsing. Backslash-escape the colon; forward slashes are already
+    fine. No-op on POSIX paths (prod/container), needed for local Windows dev.
+    """
+    return path.replace("\\", "/").replace(":", "\\:")
+
+
 def _card_cache_key(info: dict) -> str:
     """16-char hex key for the params that determine card content and compatibility."""
     key = (
-        f"{info['width']}x{info['height']}_fps={info['fps_str']}"
+        f"{_CARD_VERSION}_{info['width']}x{info['height']}_fps={info['fps_str']}"
         f"_pix={info['pix_fmt']}_sar={info['sar']}_ts={info['timescale']}"
         f"_audio={info['has_audio']}_arate={info.get('a_rate', 0)}"
         f"_ach={info.get('a_channels', 0)}"
@@ -187,41 +203,50 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     w, h = info["width"], info["height"]
     fps_str = info["fps_str"]
     pix_fmt = info["pix_fmt"]
+    font = _escape_filter_path(_FONT_PATH.as_posix())
+    logo = _LOGO_PATH.as_posix()
 
-    # Size the wordmark so it fits BOTH dimensions. For portrait (9:16) the width is
-    # the binding constraint -- a height-only size overflows the frame and clips the
-    # text. Estimate rendered width from the glyph count (DejaVuSans-Bold averages
-    # ~0.62*fontsize per char) and keep it within 85% of the frame width; also cap by
-    # height so it doesn't get huge on 16:9.
-    _char_advance = 0.62
-    width_fs = int((w * 0.85) / (len(WORDMARK_TEXT) * _char_advance))
-    wordmark_fs = max(24, min(round(h * 0.06), width_fs))
+    # Layout, centered as a group with the URL pinned near the bottom:
+    #   "Made with"  (small caption)
+    #   [logo lockup] (Reel / emblem / Ballers, the visual anchor)
+    #   reelballers.com  (caption, near the bottom edge)
+    # The logo is scaled to a fraction of the card HEIGHT; scale=-2 derives the
+    # width from the asset's aspect (portrait), so it never overflows on any of
+    # 9:16 / 1:1 / 16:9, and overlay=(W-w)/2 centers it horizontally.
+    logo_h = round(h * 0.46)
+    logo_y = round(h * 0.46 - logo_h / 2)          # logo group centered ~46% down
+    made_fs = max(16, round(h * 0.036))            # "Made with" -- deliberately small
     url_fs = max(14, round(h * 0.030))
-    font = _FONT_PATH.as_posix()
+    made_y = logo_y - made_fs - round(h * 0.02)    # caption sits just above the logo
+    url_y = round(h * 0.88)                         # URL near the bottom edge
 
-    # Center wordmark just above the midline, URL just below it.
-    vf = (
-        f"drawtext=fontfile='{font}':text='{WORDMARK_TEXT}':"
-        f"fontsize={wordmark_fs}:fontcolor={_WORDMARK_COLOR}:"
-        f"x=(w-text_w)/2:y=(h*0.46)-(text_h/2),"
+    filter_complex = (
+        f"[1:v]scale=-2:{logo_h}[logo];"
+        f"[0:v][logo]overlay=x=(W-w)/2:y={logo_y}[base];"
+        f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"
+        f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y},"
         f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
-        f"fontsize={url_fs}:fontcolor={_URL_COLOR}:"
-        f"x=(w-text_w)/2:y=(h*0.56)-(text_h/2),"
+        f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y},"
         f"fade=t=in:st=0:d={OUTRO_FADE_IN}:color=black,"
-        f"setsar={info['sar']},format={pix_fmt}"
+        f"setsar={info['sar']},format={pix_fmt}[v]"
     )
 
     cmd = [
         "ffmpeg", "-y",
         "-f", "lavfi",
         "-i", f"color=c={_BG_COLOR}:s={w}x{h}:r={fps_str}:d={OUTRO_DURATION}",
+        "-i", logo,
     ]
+    audio_idx = 2
     if info["has_audio"]:
         layout = "mono" if info["a_channels"] == 1 else "stereo"
         cmd += ["-f", "lavfi", "-i",
                 f"anullsrc=channel_layout={layout}:sample_rate={info['a_rate']}"]
 
-    cmd += ["-vf", vf, "-t", str(OUTRO_DURATION)]
+    cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
+    if info["has_audio"]:
+        cmd += ["-map", f"{audio_idx}:a"]
+    cmd += ["-t", str(OUTRO_DURATION)]
     cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
             "-pix_fmt", pix_fmt, "-r", fps_str,
             "-video_track_timescale", str(info["timescale"])]
