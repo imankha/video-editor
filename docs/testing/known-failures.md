@@ -14,7 +14,6 @@ Rules:
 | Layer | Test | Failure | Root cause | Handling |
 |-------|------|---------|-----------|----------|
 | Backend | `test_shared_game_extension.py::TestStorageStatusDerivation` (4 pg-backed cases) | `RuntimeError: No user context set` in fixture setup (`insert_game_storage_ref -> get_db_connection`) | Test class never calls `set_current_user_id()` in a bare pytest run; fails before the code under test | **Deselected in CI** (whole class; also skips its 2 passing pure cases). Burn-down: set user context in the class fixture |
-| Backend | `test_collection_shares.py` (collection error) | `Client.__init__() got an unexpected keyword argument 'app'` | httpx >= 0.28 removed the `app=` kwarg the pinned starlette TestClient passes | Environment fix: pin `httpx<0.28` (CI installs it; container bootstrap pins it). Not a code bug |
 | Backend | `test_collection_metadata.py::test_stamps_aspect_ratio_and_tags` | ffprobe not found | Needs ffmpeg on PATH | CI installs ffmpeg; local Windows devs need it on PATH |
 | Frontend | `profileStore` switchProfile timeout | Intermittent timeout under full-suite load; passes in isolation | Flaky async test | CI runs vitest with `--retry=2`. Burn-down: fix the race in the test |
 | Frontend | `tests/perf/load-perf.spec.js` collected by vitest | Playwright spec has no vitest context | vitest include pattern picked up the perf spec | **Fixed** in vite.config.js (`tests/perf` excluded) -- remove this row after confirming on CI |

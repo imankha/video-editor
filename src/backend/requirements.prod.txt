@@ -2,9 +2,12 @@
 # GPU processing is handled by Modal - no torch/CUDA needed
 
 # Web framework
-fastapi==0.108.0
+# T5020: fastapi 0.110.1 / starlette 0.37.2 is the minimal bump whose TestClient
+# no longer passes the httpx-removed `app=` kwarg (starlette dropped it in 0.37.2),
+# so tests run on the SAME httpx 0.28.1 as prod -- no CI-only downgrade needed.
+fastapi==0.110.1
 uvicorn==0.25.0
-starlette==0.32.0.post1
+starlette==0.37.2
 pydantic==2.5.0
 pydantic_core==2.14.1
 

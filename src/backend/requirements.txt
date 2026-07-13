@@ -37,7 +37,7 @@ einops==0.6.1
 entrypoint2==1.1
 executing==2.2.1
 facexlib==0.3.0
-fastapi==0.108.0
+fastapi==0.110.1
 ffmpeg-python==0.2.0
 filelock==3.19.1
 filterpy==1.4.5
@@ -164,7 +164,7 @@ soupsieve==2.8
 sportslabkit==0.3.1
 SQLAlchemy==2.0.45
 stack-data==0.6.3
-starlette==0.32.0.post1
+starlette==0.37.2
 stripe==14.4.1
 StrEnum==0.4.15
 supervision==0.27.0

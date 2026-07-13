@@ -110,10 +110,10 @@ fi
 # ruff isn't baked into the image; the hook degrades silently without it.
 command -v ruff >/dev/null 2>&1 || sudo pip install --quiet ruff 2>/dev/null || true
 
-# httpx 0.28 removed the app= kwarg that this image's starlette TestClient passes,
-# so backend endpoint tests fail to collect. Pin below 0.28 (idempotent, fast when
-# already satisfied) so workers can actually run their backend test suites.
-sudo pip install --quiet "httpx<0.28" 2>/dev/null || true
+# T5020: starlette 0.37.2 dropped the httpx-removed `app=` TestClient kwarg, so
+# backend endpoint tests collect on the pinned httpx 0.28.1 (same as prod). The
+# old `httpx<0.28` pin is gone -- the image is built from requirements, which now
+# carry the compatible fastapi/starlette versions.
 
 # Container fact sheet: overrides the repo CLAUDE.md where the host docs are
 # wrong INSIDE this container (Windows venv paths, MCP-only tools, ...). Claude

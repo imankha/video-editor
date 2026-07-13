@@ -83,8 +83,10 @@ jobs:
           cache-dependency-path: src/backend/requirements*.txt
       - name: Install ffmpeg (metadata tests use ffprobe)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: Install deps (httpx pinned <0.28 for starlette TestClient)
-        run: pip install -r requirements.prod.txt -r requirements.test.txt "httpx<0.28" ruff
+      - name: Install deps
+        # T5020: starlette 0.37.2 dropped the httpx-removed `app=` TestClient kwarg,
+        # so tests run on the SAME httpx 0.28.1 as prod -- no `httpx<0.28` override.
+        run: pip install -r requirements.prod.txt -r requirements.test.txt ruff
       - name: Ruff (changed files vs master)
         run: |
           git fetch origin master --quiet
