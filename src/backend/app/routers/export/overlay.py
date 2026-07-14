@@ -362,20 +362,38 @@ def _find_keyframe_index(keyframes: list, time: float, tolerance: float = 0.02) 
 
 
 def _normalize_region_keys(region: dict) -> dict:
-    """Normalize camelCase region keys to snake_case in place.
+    """Normalize region + keyframe keys in place at the single DB-read boundary.
 
-    Surgical overlay actions (create_region, update_region) persist ``startTime``/
-    ``endTime``. The framing->overlay transform uses ``start_time``/``end_time``.
-    The Modal renderer (video_processing.py) uses direct bracket access
-    ``region["start_time"]``, so camelCase blobs KeyError in prod. Normalizing at
-    the single DB-read boundary (render_overlay) makes both local and Modal paths
-    receive canonical snake_case, without touching the stored blob or the action
-    writer.
+    Two normalizations happen here so every downstream consumer (Modal spline,
+    local ``KeyframeInterpolator`` spline, request-body parse) receives canonical
+    keyframes and never KeyErrors:
+
+    1. **Region time keys** (T4900): surgical overlay actions (create_region,
+       update_region) persist ``startTime``/``endTime``; the framing->overlay
+       transform uses ``start_time``/``end_time``. The Modal renderer
+       (video_processing.py) uses direct bracket access ``region["start_time"]``,
+       so camelCase blobs KeyError in prod. Normalize to snake_case.
+    2. **Keyframe opacity keys** (T5120 / prod bug 32p): keyframes that went
+       through the framing->overlay transform/restore (highlight_transform.py)
+       carry only a single ``opacity`` field and DROP ``strokeOpacity``/
+       ``fillOpacity``. The spline helpers read those keys with bare bracket
+       access (``sp('strokeOpacity')``), so opacity-only keyframes KeyError
+       mid-render. Derive them from the legacy ``opacity`` fallback, mirroring
+       the sanctioned legacy branch (overlay.py:998-999) exactly.
+
+    Normalizing at this one boundary (render_overlay) heals the blob for
+    rendering without touching the stored data or the action writer, and keeps
+    the spline helpers free of scattered defensive ``.get()`` reads.
     """
     if 'startTime' in region and 'start_time' not in region:
         region['start_time'] = region['startTime']
     if 'endTime' in region and 'end_time' not in region:
         region['end_time'] = region['endTime']
+    for kf in region.get('keyframes', []):
+        if 'strokeOpacity' not in kf:
+            kf['strokeOpacity'] = kf.get('opacity', 0.85)
+        if 'fillOpacity' not in kf:
+            kf['fillOpacity'] = kf.get('opacity', 0.05)
     return region
 
 

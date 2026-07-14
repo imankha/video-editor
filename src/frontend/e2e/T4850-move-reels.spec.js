@@ -187,9 +187,19 @@ test.describe('T4850 move reels between profiles', () => {
     await bootAs(page, A);
     await page.getByRole('button', { name: 'Select' }).click();
     await page.waitForTimeout(400);
-    const cards = page.locator('div.cursor-pointer').filter({ hasText: 'Bulk' });
+    // Stable hook on the selectable card root (T5010). The old
+    // `div.cursor-pointer` locator also matched ancestor wrappers with no
+    // onClick, so clicks landed on nothing and the test timed out on the
+    // disabled Move button. getByTestId targets only the real card.
+    const cards = page.getByTestId('reel-card').filter({ hasText: 'Bulk' });
     const n = await cards.count();
-    for (let i = 0; i < n; i++) await cards.nth(i).click();
+    expect(n).toBeGreaterThanOrEqual(2);
+    // Assert the "N selected" counter after each click: fail fast on the first
+    // non-registering click instead of waiting 300s on the Move button.
+    for (let i = 0; i < n; i++) {
+      await cards.nth(i).click();
+      await expect(page.getByText(`${i + 1} selected`)).toBeVisible();
+    }
     await saveEvidence(page, 'criterion-2-bulk-selected');
     await responsiveSweep(page);
 

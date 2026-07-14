@@ -111,6 +111,16 @@ gesture (drag/resize/delete) in FramingContainer
   the extend action landed (persistence gap = the real failure mode in prod, not a render bug).
 - **`_process_frames_to_ffmpeg`** uses both helpers for the region-active check and the
   keyframe filter. Do not inline them back to `region['start_time']`.
+- **`_normalize_region_keys` also heals keyframe opacity keys (T5120, prod bug 32p).**
+  Transform-restored highlight keyframes (`highlight_transform.py` raw_from_working /
+  working_from_raw) carry only a single `opacity` and DROP `strokeOpacity`/`fillOpacity`.
+  The spline helpers (`video_processing._spline_interpolate_highlight` `sp('strokeOpacity')`,
+  `keyframe_interpolator._interpolate`) read those keys with BARE bracket access → KeyError
+  mid-render → "Overlay processing failed: 'strokeOpacity'" toast. `_normalize_region_keys`
+  now derives them from the `opacity` fallback (mirrors the sanctioned legacy branch
+  overlay.py:998-999: stroke default 0.85, fill 0.05) at the SINGLE DB-read boundary, so
+  every downstream spline consumer is fed complete keyframes. Do NOT sprinkle `.get()` into
+  the spline helpers — normalize once at the boundary (same rule T4900 set for region keys).
 
 **Persistence gap vs render bug:** In the 31p incident, failure mode 1 (actions never
 reached the backend) was the primary cause — the DB held only the auto keyframe, so there was

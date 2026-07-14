@@ -259,6 +259,8 @@ async def _run_real_export(db_path, project_id, aspect_ratio, source_path, stash
 
     with patch("app.services.local_processors.MockVideoUpscaler", new=Faithful), \
          patch.object(multi_clip, "get_clip_cache", return_value=_no_cache()), \
+         patch.object(multi_clip, "modal_enabled", return_value=False), \
+         patch("app.storage.R2_ENABLED", False), \
          patch.object(multi_clip, "manager", AsyncMock()):
         # project_id=None: exercise the real geometry + ffmpeg render path without the
         # R2-upload / working_videos DB-write / player-detection tail (those are not the

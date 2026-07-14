@@ -199,7 +199,7 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
     object key is deterministic, so regeneration just overwrites in place.
     """
     from ..database import ensure_database, get_db_connection, sync_db_to_r2_explicit
-    from ..migrations import _get_profile_ids
+    from ..migrations import _get_profile_ids, _migrate_profile_db
     from ..profile_context import set_current_profile_id
     from ..storage import file_exists_in_r2
     from ..user_context import set_current_user_id
@@ -231,12 +231,53 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
             set_current_profile_id(profile_id)
             ensure_database()
 
+            # Migrate this profile to head BEFORE the poster_filename query (T5110).
+            # The backfill enumerates via unfiltered _get_profile_ids (includes
+            # orphan profiles that run_all_migrations deliberately registry-skips,
+            # T4830), while ensure_database only does CREATE TABLE IF NOT EXISTS --
+            # it never runs versioned ALTERs. So an orphan/below-head profile lacks
+            # the poster_filename column and the candidate query below would crash
+            # the ENTIRE run. Migrating each touched profile to head holds the
+            # invariant "every profile the backfill touches is at head" (and heals
+            # the orphan gap as a side effect). Best-effort: a migration failure is
+            # recorded and the profile is skipped, never aborting the sweep.
+            try:
+                migrate_res = _migrate_profile_db(user_id, profile_id)
+                if migrate_res.status != "ok":
+                    logger.warning(
+                        f"[PosterBackfill] profile {user_id}/{profile_id} not verified "
+                        f"at head (status={migrate_res.status}); attempting scan anyway"
+                    )
+            except Exception as e:
+                result["failed"].append(
+                    {"profile_id": profile_id, "error": f"migrate_failed: {e}"}
+                )
+                logger.error(
+                    f"[PosterBackfill] migrate failed for {user_id}/{profile_id}: {e}"
+                )
+                continue
+
             candidate_sql = (
                 "SELECT id, filename FROM final_videos WHERE published_at IS NOT NULL"
                 + ("" if force else " AND poster_filename IS NULL")
             )
-            with get_db_connection() as conn:
-                rows = [dict(r) for r in conn.execute(candidate_sql).fetchall()]
+            # Wrap the candidate query: a profile still below head / with a missing
+            # column (migration couldn't heal it, or a corrupt blob) is recorded in
+            # `failed` and skipped, never a hard crash. This extends the docstring's
+            # "never raises per-row" guarantee to cover the schema/query failure that
+            # aborted the whole run on prod 2026-07-13 (T5110).
+            try:
+                with get_db_connection() as conn:
+                    rows = [dict(r) for r in conn.execute(candidate_sql).fetchall()]
+            except Exception as e:
+                result["failed"].append(
+                    {"profile_id": profile_id, "error": f"candidate_query_failed: {e}"}
+                )
+                logger.error(
+                    f"[PosterBackfill] candidate query failed for "
+                    f"{user_id}/{profile_id}: {e}"
+                )
+                continue
 
             profile_changed = False
             for row in rows:

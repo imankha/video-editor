@@ -413,6 +413,8 @@ export function DownloadsPanel({
     return (
       <div
         key={download.id}
+        data-testid="reel-card"
+        data-selected={isSelected}
         onClick={selectMode ? () => toggleSelected(download.id) : undefined}
         className={`p-3 bg-gray-700 rounded-lg border transition-colors ${
           selectMode

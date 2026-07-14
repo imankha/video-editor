@@ -108,10 +108,16 @@ async def list_users(
     with get_pg() as conn:
         cur = conn.cursor()
 
+        # LEFT JOIN (T4970): a user with no user_segments row (test-login/OTP-
+        # bypass accounts, copied accounts — segments are created only in the
+        # OAuth/OTP signup flows) must still be enumerated, not dropped. An
+        # inner join here made such users invisible in GET /api/admin/users.
+        # An origin/date filter (where_clause) still legitimately excludes NULL
+        # segment fields, so filtered views are unchanged.
         cur.execute(f"""
             SELECT COUNT(*) AS cnt
             FROM users u
-            JOIN user_segments s ON u.user_id = s.user_id
+            LEFT JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
         """, params)
         total_users = cur.fetchone()["cnt"]
@@ -127,7 +133,7 @@ async def list_users(
                 s.total_spent_cents, s.last_active_at,
                 s.total_usage_seconds, s.current_session_start
             FROM users u
-            JOIN user_segments s ON u.user_id = s.user_id
+            LEFT JOIN user_segments s ON u.user_id = s.user_id
             {where_clause}
             ORDER BY s.last_active_at DESC NULLS LAST
             LIMIT %s OFFSET %s

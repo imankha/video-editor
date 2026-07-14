@@ -264,7 +264,8 @@ def test_logout_fires_vacuum_when_user_archived():
 
         mock_validate.return_value = {"user_id": "user-abc", "email": "test@test.com"}
 
-        r = client.post("/api/auth/logout", cookies={"rb_session": "fake-session"})
+        client.cookies.set("rb_session", "fake-session")
+        r = client.post("/api/auth/logout")
 
     assert r.status_code == 200
     assert r.json()["logged_out"] is True
@@ -289,7 +290,8 @@ def test_logout_skips_vacuum_when_no_archive():
 
         mock_validate.return_value = {"user_id": "user-abc", "email": "test@test.com"}
 
-        r = client.post("/api/auth/logout", cookies={"rb_session": "fake-session"})
+        client.cookies.set("rb_session", "fake-session")
+        r = client.post("/api/auth/logout")
 
     assert r.status_code == 200
     assert r.json()["logged_out"] is True
