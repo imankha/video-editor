@@ -1135,6 +1135,21 @@ def reset_initialized_flag():
     _initialized_users.discard(user_id)
 
 
+def forget_local_db_state(user_id: str) -> None:
+    """Drop every in-process cache entry for a user's profile databases.
+
+    Called on account deletion so a same-process relogin/reregister re-checks R2 (and,
+    when R2 was purged, starts genuinely fresh) instead of reusing a stale "already
+    initialized" flag or cached version that skips the R2 restore path.
+    """
+    _initialized_users.discard(user_id)
+    with _user_sqlite_version_lock:
+        _user_sqlite_versions.pop(user_id, None)
+    with _db_version_lock:
+        for key in [k for k in _user_db_versions if k[0] == user_id]:
+            _user_db_versions.pop(key, None)
+
+
 def sync_db_to_cloud() -> str:
     """
     Sync the current user's database to R2 storage with version tracking.

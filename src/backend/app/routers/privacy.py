@@ -7,7 +7,6 @@ DELETE /api/privacy/delete-account — CCPA full account deletion
 
 import json
 import logging
-import shutil
 import sqlite3
 from datetime import datetime
 
@@ -17,7 +16,6 @@ from fastapi.responses import JSONResponse, Response
 from app.database import USER_DATA_BASE
 from app.services.auth_db import (
     get_user_by_id,
-    invalidate_user_sessions,
 )
 from app.storage import (
     APP_ENV,
@@ -143,46 +141,40 @@ async def delete_account(request: Request):
     user_id = get_current_user_id()
     logger.info(f"[Privacy] Account deletion requested: user={user_id}")
 
-    # 1. Delete R2 objects
-    if R2_ENABLED:
-        try:
-            client = get_r2_client()
-            if client:
-                prefix = f"{APP_ENV}/users/{user_id}/"
-                paginator = client.get_paginator("list_objects_v2")
-                deleted_count = 0
-                for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
-                    objects = page.get("Contents", [])
-                    if objects:
-                        keys = [{"Key": obj["Key"]} for obj in objects]
-                        client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": keys})
-                        deleted_count += len(keys)
-                logger.info(f"[Privacy] Deleted {deleted_count} R2 objects for user={user_id}")
-        except Exception as e:
-            logger.error(f"[Privacy] R2 deletion failed: {e}")
-            raise HTTPException(status_code=500, detail="Failed to delete cloud storage data")
-
-    # 2. Delete local user folder
-    user_path = USER_DATA_BASE / user_id
-    if user_path.exists():
-        shutil.rmtree(user_path)
-        logger.info(f"[Privacy] Deleted local folder: {user_path}")
-
-    # 3. Delete auth DB records (sessions + user)
+    # 1. Purge local + R2 + in-process caches + sessions. This is the step that
+    #    guarantees a reregister for the same identity starts fresh: the R2 copy of
+    #    user.sqlite is what resurrects a zombie account (bugs 33/34/35). Raises on R2
+    #    error -> report failure instead of a partial (resurrectable) deletion.
+    from app.routers.auth import _purge_user_data
     try:
-        invalidate_user_sessions(user_id)
+        _purge_user_data(user_id)
+    except Exception as e:
+        logger.error(f"[Privacy] Storage purge failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete cloud storage data") from e
+
+    # 2. Best-effort Postgres identity-row cleanup. The storage purge above already
+    #    guarantees a fresh reregister (bugs 33/34/35) even if these rows survive, so it
+    #    runs AFTER the purge. NOTE: `users` still has plain (no ON DELETE CASCADE) FK
+    #    references from `game_storage_refs` and `shares.sharer_user_id`, so DELETE FROM
+    #    users can still raise for a user who owns a game or a share -> 500 with storage
+    #    already gone. That FK gap is PRE-EXISTING and tracked separately (needs owned-row
+    #    cleanup or ON DELETE CASCADE via a Postgres migration — blast radius on recipients
+    #    of the user's shares makes it a deliberate design call); it does NOT reintroduce
+    #    the zombie, because R2 is purged regardless of the users row.
+    try:
         from app.services.pg import get_pg
         with get_pg() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM user_actions WHERE user_id = %s", (user_id,))
             cur.execute("DELETE FROM user_segments WHERE user_id = %s", (user_id,))
+            cur.execute("DELETE FROM referrals WHERE referrer_id = %s OR referred_id = %s", (user_id, user_id))
             cur.execute("DELETE FROM users WHERE user_id = %s", (user_id,))
         logger.info(f"[Privacy] Cleared auth DB records for user={user_id}")
     except Exception as e:
         logger.error(f"[Privacy] Auth DB cleanup failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete account records")
+        raise HTTPException(status_code=500, detail="Failed to delete account records") from e
 
-    # 4. Clear session cookie
+    # 3. Clear session cookie
     response = JSONResponse(content={"deleted": True, "user_id": user_id})
     _delete_cookie(response, "rb_session")
 

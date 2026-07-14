@@ -205,6 +205,20 @@ def ensure_user_database(user_id: str) -> None:
         _initialized_user_dbs.add(user_id)
 
 
+def forget_user_db(user_id: str) -> None:
+    """Drop every in-process cache entry for a user's user.sqlite + profile DBs.
+
+    Called on account deletion so a same-process relogin re-initialises from scratch
+    (or from R2) instead of trusting a stale in-memory flag/version. Pairs with the
+    local-folder + R2 purge in the delete handlers.
+    """
+    with _init_lock:
+        _initialized_user_dbs.discard(user_id)
+    _r2_user_restore_cooldowns.pop(user_id, None)
+    from ..database import forget_local_db_state
+    forget_local_db_state(user_id)
+
+
 @contextmanager
 def get_user_db_connection(user_id: str = None):
     """Get connection to user-level database."""
