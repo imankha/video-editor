@@ -14,6 +14,8 @@ Execute the approved design with **implementation quality**: clean code, no stat
 - **[Coding Standards](../references/coding-standards.md)** - All implementation rules (MVC, state, types, etc.)
 - [Code Smells](../references/code-smells.md) - Fowler's refactoring catalog
 
+Follow CLAUDE.md "Refactoring Rules" section.
+
 ## When to Invoke
 
 After tests are created (Stage 3), using:

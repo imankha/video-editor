@@ -366,6 +366,31 @@ NEVER (reactive):
 
 See [coding-standards.md](.claude/references/coding-standards.md) for implementation patterns and anti-patterns.
 
+## Refactoring Rules
+
+Process rules for structural refactors (code motion, consolidation). Rationale and audit
+findings: [docs/plans/audit-2026-07-03-code-quality.md](docs/plans/audit-2026-07-03-code-quality.md).
+For the code-smell catalog and general coding standards (DRY, MVC, etc.), see
+[code-smells.md](.claude/references/code-smells.md) and
+[coding-standards.md](.claude/references/coding-standards.md) -- these rules add process
+constraints on top, they do not replace those references.
+
+1. **Abstract on the 3rd duplication, never the 1st.** Two copies may be coincidence; three is
+   a system. Premature indirection hides code paths from grep and hurts agents more than
+   duplication does.
+2. **Characterization tests before structural change.** Pin current behavior (golden outputs)
+   before consolidating duplicated modules; strangler-fig (facade -> comparison -> flip ->
+   delete), never big-bang rewrite.
+3. **Moves are mechanical commits.** Code motion (file moves, renames) never mixes with
+   behavior change in a single commit -- reviewers must be able to trust "this diff only moves
+   code".
+4. **Keep reviewable units < ~200 lines of meaningful diff**; split larger refactors into
+   sequenced tasks.
+5. **Update CLAUDE.md/skills in the same PR as the refactor** -- a landed refactor that leaves
+   stale conventions actively misleads the next agent.
+6. **Greppability beats elegance:** explicit names, no dynamic dispatch/registry indirection for
+   internal code, string literals near their use or in `constants/` -- never computed.
+
 ## Migration System
 
 AI never manually migrates accounts. AI writes migration code. Admin hits the endpoint.
