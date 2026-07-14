@@ -48,7 +48,19 @@ def _fresh_event_loop():
 
 @pytest.fixture
 def hermetic(tmp_path, monkeypatch):
-    """Per-user SQLite under tmp; R2 disabled; caches redirected to fresh containers."""
+    """Per-user SQLite under tmp; R2 disabled; caches redirected to fresh containers.
+
+    Does NOT touch app.session_init._init_cache as a whole: it is a process-wide,
+    session-lifetime dict that conftest's session-scoped _set_default_profile_context
+    fixture seeds once (for "a"/"testdefault") for the ENTIRE test run. A blanket
+    .clear() here (previously present) wiped those shared entries the first time any
+    test in this file ran, silently pushing every later test file's "testdefault"/"a"
+    requests onto the slow re-init path for the rest of the process -- surfacing as
+    unrelated SQLite lock timeouts and 404s in far-away test files. Every test in this
+    file uses uuid4-suffixed ids (_uid()), so entries from a prior test here can never
+    collide with a later one; explicit per-uid cache pops (where a test needs to force
+    the slow path) are enough, matching production's invalidate_user_cache(user_id).
+    """
     base = tmp_path / "user_data"
     base.mkdir()
     monkeypatch.setattr("app.database.USER_DATA_BASE", base)
@@ -62,10 +74,7 @@ def hermetic(tmp_path, monkeypatch):
     monkeypatch.setattr("app.database._initialized_users", set())
     monkeypatch.setattr("app.database._user_sqlite_versions", {})
     monkeypatch.setattr("app.database._user_db_versions", {})
-    from app.session_init import _init_cache
-    _init_cache.clear()
     yield base
-    _init_cache.clear()
 
 
 def _make_account(uid: str, pid: str):
