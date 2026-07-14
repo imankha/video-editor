@@ -1558,6 +1558,46 @@ def r2_delete_object_global(key: str) -> bool:
 # ==============================================================================
 
 
+def delete_user_r2_data(user_id: str) -> int:
+    """Delete every R2 object under {env}/users/{user_id}/ for a user.
+
+    Covers user.sqlite, all profile.sqlite files, and all per-profile media. Paginated
+    so it removes >1000 objects. Returns the number of objects deleted. Raises on R2
+    error so callers can fail visibly (a partial delete must never be reported as a
+    complete deletion — it would leave a resurrectable zombie account).
+    """
+    client = get_r2_client()
+    if not client:
+        return 0
+
+    from .utils.retry import TIER_3, retry_r2_call
+
+    prefix = f"{APP_ENV}/users/{user_id}/"
+    paginator = client.get_paginator("list_objects_v2")
+    deleted = 0
+    for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
+        objects = page.get("Contents", [])
+        if not objects:
+            continue
+        delete_keys = [{"Key": obj["Key"]} for obj in objects]
+        resp = retry_r2_call(
+            client.delete_objects,
+            Bucket=R2_BUCKET, Delete={"Objects": delete_keys},
+            operation=f"delete_user {user_id}", **TIER_3,
+        )
+        # delete_objects returns HTTP 200 with a per-key `Errors` array on partial failure
+        # (throttle / per-object denial) WITHOUT raising — surface it so a surviving object
+        # (e.g. user.sqlite) is never silently counted as deleted.
+        errors = resp.get("Errors") if isinstance(resp, dict) else None
+        if errors:
+            raise RuntimeError(
+                f"R2 delete_objects reported {len(errors)} error(s) for user {user_id}: {errors[:3]}"
+            )
+        deleted += len(delete_keys)
+    logger.info(f"Deleted {deleted} R2 objects under {prefix}")
+    return deleted
+
+
 def delete_profile_r2_data(user_id: str, profile_id: str) -> bool:
     """Delete all R2 objects under profiles/{profile_id}/ for a user.
 

@@ -301,7 +301,22 @@ async def claim_reward(quest_id: str):
     if not qdef:
         raise HTTPException(status_code=404, detail="Quest not found")
 
-    # Verify all steps complete
+    # Progress/claim consistency (bugs 34p/35p): GET /progress reports a quest complete when
+    # it is in the user-scoped completed/claimed set (T970 — this survives profile switches),
+    # WITHOUT re-deriving steps from the active profile. claim-reward must honor that SAME
+    # source BEFORE re-checking steps; otherwise the two endpoints disagree — a quest the panel
+    # shows as complete 400s here when the active profile lacks the step data (a resurrected
+    # account, or simply a different selected profile). This is idempotency, not a loosened
+    # gate: a quest only enters completed/claimed via a prior legitimate grant, so returning
+    # already_claimed never hands out unearned credits — an unclaimed quest still faces the
+    # full step check below.
+    completed_ids, claimed_ids = get_completed_and_claimed_quest_ids(user_id)
+    if quest_id in completed_ids or quest_id in claimed_ids:
+        mark_quest_completed(user_id, quest_id)  # keep the completed set in sync with claimed
+        balance = get_credit_balance(user_id)
+        return {"credits_granted": 0, "new_balance": balance["balance"], "already_claimed": True}
+
+    # Verify all steps complete (unclaimed quest — the full gate applies unchanged)
     with get_db_connection() as conn:
         all_steps = _check_all_steps(user_id, conn)
 

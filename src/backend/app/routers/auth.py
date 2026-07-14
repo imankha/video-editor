@@ -47,9 +47,7 @@ from app.services.auth_db import (
 from app.session_init import invalidate_user_cache, user_session_init
 from app.storage import (
     APP_ENV,
-    R2_BUCKET,
     R2_ENABLED,
-    get_r2_client,
 )
 from app.user_context import get_current_user_id, set_current_user_id
 
@@ -73,28 +71,51 @@ NUF_RESET_EMAILS = _load_nuf_reset_emails()
 logger = logging.getLogger(__name__)
 
 
-def _reset_test_account(user_id: str, email: str) -> None:
-    """Wipe all data for a test account so next login is a fresh new-user experience."""
-    logger.info(f"[Auth] Resetting test account: {email} (user_id={user_id})")
+def _purge_user_data(user_id: str) -> dict:
+    """Completely remove a user's per-user storage and in-process state.
+
+    Deletes the local user folder, ALL R2 objects under the user prefix (user.sqlite,
+    every profile.sqlite, all per-profile media), the in-process init/version caches,
+    and the user's sessions. After this, a login/reregister for the same identity
+    restores nothing -> session_init sees an absent selected profile -> is_new_user is
+    True -> credits are seeded and the quest slate is clean.
+
+    This is the invariant behind bugs 33/34/35: an INCOMPLETE deletion (local-only)
+    left the R2 copy of user.sqlite to be restored on the next login, resurrecting a
+    zombie account. Raises on R2 error so a partial delete is never reported as complete.
+    """
+    summary = {"local_deleted": False, "r2_objects_deleted": 0}
 
     user_path = USER_DATA_BASE / user_id
     if user_path.exists():
         shutil.rmtree(user_path)
+        summary["local_deleted"] = True
         logger.info(f"[Auth] Deleted local folder: {user_path}")
 
     if R2_ENABLED:
-        client = get_r2_client()
-        if client:
-            prefix = f"{APP_ENV}/users/{user_id}/"
-            paginator = client.get_paginator("list_objects_v2")
-            for page in paginator.paginate(Bucket=R2_BUCKET, Prefix=prefix):
-                objects = page.get("Contents", [])
-                if objects:
-                    keys = [{"Key": obj["Key"]} for obj in objects]
-                    client.delete_objects(Bucket=R2_BUCKET, Delete={"Objects": keys})
-            logger.info(f"[Auth] Deleted R2 data under {prefix}")
+        from app.storage import delete_user_r2_data
+        summary["r2_objects_deleted"] = delete_user_r2_data(user_id)
 
-    invalidate_user_sessions(user_id)
+    # Invalidate in-process caches so a same-process relogin cannot resurrect old data
+    # from a stale "already initialized" flag / cached version.
+    invalidate_user_cache(user_id)                       # session_init init cache
+    from app.services.user_db import forget_user_db
+    forget_user_db(user_id)                              # user.sqlite + profile-DB caches
+
+    invalidate_user_sessions(user_id)                    # kill sessions (in-mem + Postgres rows)
+    logger.info(
+        f"[Auth] Purged user data for {user_id}: "
+        f"local={summary['local_deleted']}, r2_objects={summary['r2_objects_deleted']}"
+    )
+    return summary
+
+
+def _reset_test_account(user_id: str, email: str) -> None:
+    """Wipe all data for a test account so next login is a fresh new-user experience."""
+    logger.info(f"[Auth] Resetting test account: {email} (user_id={user_id})")
+
+    _purge_user_data(user_id)
+
     from app.services.pg import get_pg
     with get_pg() as conn:
         cur = conn.cursor()
@@ -189,24 +210,22 @@ async def accept_terms(request: Request):
 @router.delete("/user")
 async def delete_user():
     """
-    Delete the current user's entire data folder.
+    Delete the current user's entire per-user storage.
     Use with caution — primarily for test cleanup.
+
+    Purges local + R2 + in-process caches + sessions so a reregister for the same
+    identity starts genuinely fresh (see _purge_user_data). Idempotent: runs the full
+    purge even when the local folder is already gone (the R2 copy is what resurrects a
+    zombie account, so it must be removed regardless of local state).
     """
     user_id = get_current_user_id()
-    user_path = USER_DATA_BASE / user_id
-
-    if not user_path.exists():
-        logger.info(f"User folder does not exist: {user_id}")
-        return {"message": f"User {user_id} has no data to delete", "deleted": False}
-
     try:
-        logger.info(f"Deleting user folder: {user_path}")
-        shutil.rmtree(user_path)
-        logger.info(f"Successfully deleted user: {user_id}")
-        return {"message": f"Deleted all data for user {user_id}", "deleted": True}
+        logger.info(f"Deleting all data for user: {user_id}")
+        summary = _purge_user_data(user_id)
+        return {"message": f"Deleted all data for user {user_id}", "deleted": True, **summary}
     except Exception as e:
-        logger.error(f"Failed to delete user folder: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}")
+        logger.error(f"Failed to delete user data: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user data: {e}") from e
 
 
 # --- T405: Google OAuth + Session management (shared auth DB) ---
