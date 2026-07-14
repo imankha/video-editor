@@ -2,6 +2,8 @@ import js from "@eslint/js";
 import reactPlugin from "eslint-plugin-react";
 import reactHooksPlugin from "eslint-plugin-react-hooks";
 import globals from "globals";
+import noPersistenceInEffects from "./eslint-rules/no-persistence-in-effects.js";
+import noRawEditorModeLiterals from "./eslint-rules/no-raw-editor-mode-literals.js";
 
 export default [
   js.configs.recommended,
@@ -10,6 +12,14 @@ export default [
     plugins: {
       react: reactPlugin,
       "react-hooks": reactHooksPlugin,
+      // Project-local guardrail rules (T4290) — machine-enforce the persistence
+      // & constants conventions that used to live only in prose (CLAUDE.md).
+      local: {
+        rules: {
+          "no-persistence-in-effects": noPersistenceInEffects,
+          "no-raw-editor-mode-literals": noRawEditorModeLiterals,
+        },
+      },
     },
     languageOptions: {
       ecmaVersion: "latest",
@@ -55,6 +65,19 @@ export default [
       "no-self-compare": "error",
       "no-template-curly-in-string": "warn",
       eqeqeq: ["warn", "smart"],
+
+      // T4290 guardrails
+      // Rule 1 (ERROR): reactive persistence inside useEffect/useLayoutEffect is
+      // banned (CLAUDE.md: gesture-based, never reactive). Zero clean-scoped
+      // violations exist today, so this can ship as a hard error.
+      "local/no-persistence-in-effects": "error",
+      // Rule 2 (OFF for now): raw editor-mode literals. The whole-`src` CI
+      // regression gate is frozen at `--max-warnings 998` and is currently AT the
+      // ceiling (998/998). Enabling this as `warn` would push totals over 998 and
+      // turn the gate RED, and the gate may only ratchet DOWN. It stays `off`
+      // until EDITOR_MODES adoption (T4560) lands and the warning baseline is
+      // ratcheted below the ceiling — then flip to "warn". Rule + tests ship now.
+      "local/no-raw-editor-mode-literals": "off",
     },
   },
   {
