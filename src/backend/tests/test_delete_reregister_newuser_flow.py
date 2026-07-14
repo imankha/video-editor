@@ -186,6 +186,63 @@ def test_returning_user_not_reseeded(hermetic):
     assert get_credit_balance(uid)["balance"] == NEW_ACCOUNT_CREDITS  # unchanged (not doubled)
 
 
+def test_returning_user_keeps_quest_progress(hermetic):
+    """Regression: a normal returning user (no delete) keeps their completed/claimed quest
+    state across a session re-init — the fix must not reset anyone's progress."""
+    from app.session_init import user_session_init, _init_cache
+    from app.services.user_db import (
+        grant_credits,
+        mark_quest_completed,
+        get_completed_and_claimed_quest_ids,
+    )
+    from app.routers.quests import get_progress
+
+    uid = _uid("progressed")
+    pid = "cdef1234"
+    _make_account(uid, pid)
+    grant_credits(uid, 15, "quest_reward", "quest_1")
+    mark_quest_completed(uid, "quest_1")
+
+    _init_cache.pop(uid, None)
+    result = user_session_init(uid)
+    assert result["is_new_user"] is False
+
+    completed, claimed = get_completed_and_claimed_quest_ids(uid)
+    assert completed == {"quest_1"}
+    assert claimed == {"quest_1"}
+
+    prog = asyncio.run(get_progress())
+    q1 = next(q for q in prog["quests"] if q["id"] == "quest_1")
+    assert q1["completed"] is True
+    assert q1["reward_claimed"] is True
+
+
+def test_reregister_with_different_email_is_an_independent_fresh_account(hermetic):
+    """Edge case: reregistering with a DIFFERENT email after a delete is unaffected by the
+    deleted account's state — _find_or_create_user mints a brand-new user_id for a new
+    email, so it never touches the deleted user's (purged) caches/storage at all."""
+    from app.session_init import user_session_init, _init_cache
+    from app.services.user_db import get_credit_balance
+
+    old_uid = _uid("olddeleted")
+    old_pid = "11112222"
+    _make_account(old_uid, old_pid)
+
+    from app.routers.auth import _purge_user_data
+    _purge_user_data(old_uid)
+
+    # A different email means a DIFFERENT user_id (generate_user_id(), never reused).
+    new_uid = _uid("newemail")
+    _init_cache.pop(new_uid, None)
+    result = user_session_init(new_uid)
+
+    assert result["is_new_user"] is True
+    assert get_credit_balance(new_uid)["balance"] == NEW_ACCOUNT_CREDITS
+    # The old identity's purge left no trace that could leak into the new one.
+    assert new_uid != old_uid
+    assert old_uid not in _init_cache
+
+
 # ---------------------------------------------------------------------------
 # Deletion completeness — both endpoints purge R2 + local + in-process caches
 # ---------------------------------------------------------------------------
@@ -287,6 +344,32 @@ def test_delete_user_idempotent_when_nothing_exists(hermetic):
     result = asyncio.run(auth.delete_user())
     assert result["deleted"] is True
     assert result["local_deleted"] is False
+
+
+def test_delete_with_no_r2_copy_reports_zero_and_does_not_error(hermetic, monkeypatch):
+    """Edge case: R2 IS enabled but the user never had anything uploaded there (e.g. they
+    deleted before any sync happened). delete_user_r2_data must walk an empty prefix
+    cleanly and report 0 deleted, not raise or hang."""
+    from app.storage import delete_user_r2_data
+
+    class _EmptyPaginator:
+        def paginate(self, **kwargs):
+            return iter([{"Contents": []}])  # one page, no objects — "no R2 copy"
+
+    class _FakeClient:
+        def get_paginator(self, name):
+            assert name == "list_objects_v2"
+            return _EmptyPaginator()
+
+        def delete_objects(self, **kwargs):
+            raise AssertionError("delete_objects must not be called when nothing exists")
+
+    monkeypatch.setattr("app.storage.R2_ENABLED", True, raising=False)
+    monkeypatch.setattr("app.storage.get_r2_client", lambda: _FakeClient())
+
+    uid = _uid("nor2")
+    deleted = delete_user_r2_data(uid)
+    assert deleted == 0
 
 
 def test_nuf_reset_still_purges_storage_and_caches(hermetic, monkeypatch):
