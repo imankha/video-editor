@@ -23,6 +23,8 @@ Automatically refactor files before feature implementation to ensure code confor
 
 For each file identified by Code Expert, check against [Coding Standards](../references/coding-standards.md).
 
+Follow CLAUDE.md "Refactoring Rules" section.
+
 **If no violations found → Skip to "Ready for Architecture"**
 
 ### 2. Coordinate with Tester (Coverage Check)

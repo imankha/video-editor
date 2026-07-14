@@ -36,6 +36,8 @@ The reviewer must internalize these project rules before reviewing. These are no
 
 See [coding-standards.md](../references/coding-standards.md) -- single source of truth. Read it in FULL before reviewing. It defines: MVC + Data Always Ready, State Management (Single Source of Truth, Derive Don't Duplicate, API Data Architecture), Persistence (Gesture-Based, Never Reactive), Loose Coupling / Tight Cohesion, Type Safety, Data Guards, and Code Organization.
 
+Follow CLAUDE.md "Refactoring Rules" section.
+
 **Severity mapping (reviewer-specific):** violations of these coding-standards sections are always BLOCKING:
 - **API Data Architecture** -- any of its four listed violations (useState for API data, transforming on write, client-side IDs, stored derived flags)
 - **Persistence: Gesture-Based, Never Reactive** -- any write not traceable to a named user gesture, any reactive `useEffect` persistence
