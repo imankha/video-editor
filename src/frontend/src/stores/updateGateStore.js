@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { flushDurableState } from '../utils/updateFlush';
+import { useAuthStore } from './authStore';
 
 /**
  * T5070 — owns the blocking update-gate's state. UpdateGateModal is a pure
@@ -31,26 +32,35 @@ export const useUpdateGateStore = create((set, get) => ({
    * The "Update now" gesture. Barriered: the destructive cache flush + reload
    * only run after flushDurableState() resolves. On failure the gate stays up
    * with an error, never skipWaiting/reloads with unsynced state.
+   *
+   * A logged-out user (gate firing on the login screen, or a session that
+   * expired) has no per-user durable state to flush at all -- skip the
+   * barrier entirely rather than let flush-verify's 401 read as a failure
+   * and strand the gate with no way forward (every deploy would otherwise
+   * permanently lock out anyone not authenticated).
    */
   runUpdate: async () => {
     if (get().phase === 'flushing') return;
     set({ phase: 'flushing', error: null });
-    try {
-      await flushDurableState();
-    } catch (e) {
-      set({ phase: 'error', error: e?.message || 'Could not save your latest changes.' });
-      return;
+
+    if (useAuthStore.getState().isAuthenticated) {
+      try {
+        await flushDurableState();
+      } catch (e) {
+        set({ phase: 'error', error: e?.message || 'Could not save your latest changes.' });
+        return;
+      }
     }
 
-    const updateSW = get()._updateSW;
-    if (updateSW) {
-      // Triggers skipWaiting on the waiting SW; its own 'controlling' listener
-      // reloads the page. No waiting SW (version-mismatch-only case) -> no-op.
+    const { reason, _updateSW: updateSW } = get();
+    if (reason === 'sw' && updateSW) {
+      // A real waiting SW exists; skipWaiting's 'controlling' listener
+      // (workbox-window) performs the reload itself -- don't also force one
+      // here, which would race a double reload.
       await updateSW(true);
+      return;
     }
-    // Always force the reload as the terminal step -- covers version-mismatch
-    // (no waiting SW, so updateSW(true) alone never reloads) and is a safe
-    // no-op if the SW's own reload already fired first.
+    // version-mismatch (no waiting SW) -- nothing else will reload on its own.
     window.location.reload();
   },
 }));

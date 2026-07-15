@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useUpdateGateStore } from './updateGateStore';
+import { useAuthStore } from './authStore';
 
 const { flushDurableStateMock } = vi.hoisted(() => ({ flushDurableStateMock: vi.fn() }));
 
@@ -18,10 +19,12 @@ const INITIAL_STATE = {
 describe('updateGateStore', () => {
   let reloadSpy;
   const originalLocation = window.location;
+  const originalAuthState = useAuthStore.getState();
 
   beforeEach(() => {
     flushDurableStateMock.mockReset();
     useUpdateGateStore.setState(INITIAL_STATE);
+    useAuthStore.setState({ isAuthenticated: true });
     // jsdom's window.location.reload is non-configurable, so vi.spyOn can't
     // redefine it directly — replace the whole location object instead.
     reloadSpy = vi.fn();
@@ -36,6 +39,7 @@ describe('updateGateStore', () => {
       configurable: true,
       value: originalLocation,
     });
+    useAuthStore.setState(originalAuthState);
   });
 
   describe('requireUpdate', () => {
@@ -61,8 +65,8 @@ describe('updateGateStore', () => {
     });
   });
 
-  describe('runUpdate', () => {
-    it('flushes durable state BEFORE calling updateSW/reload (barrier ordering)', async () => {
+  describe('runUpdate — authenticated', () => {
+    it('flushes durable state BEFORE calling updateSW/reload (barrier ordering, reason: sw)', async () => {
       const callOrder = [];
       flushDurableStateMock.mockImplementation(async () => {
         callOrder.push('flush');
@@ -70,12 +74,16 @@ describe('updateGateStore', () => {
       const updateSW = vi.fn(async () => {
         callOrder.push('updateSW');
       });
+      useUpdateGateStore.setState({ reason: 'sw' });
       useUpdateGateStore.getState().setUpdateSW(updateSW);
       reloadSpy.mockImplementation(() => callOrder.push('reload'));
 
       await useUpdateGateStore.getState().runUpdate();
 
-      expect(callOrder).toEqual(['flush', 'updateSW', 'reload']);
+      expect(callOrder).toEqual(['flush', 'updateSW']);
+      // A real waiting SW's own 'controlling' listener reloads — runUpdate
+      // must not ALSO force one (would race a double reload).
+      expect(reloadSpy).not.toHaveBeenCalled();
     });
 
     it('sets phase to flushing while the barrier is in flight', () => {
@@ -92,6 +100,7 @@ describe('updateGateStore', () => {
     it('on flush failure: sets phase=error with a message, and NEVER calls updateSW or reloads', async () => {
       flushDurableStateMock.mockRejectedValue(new Error('Could not confirm your latest changes were saved.'));
       const updateSW = vi.fn();
+      useUpdateGateStore.setState({ reason: 'sw' });
       useUpdateGateStore.getState().setUpdateSW(updateSW);
 
       await useUpdateGateStore.getState().runUpdate();
@@ -103,8 +112,9 @@ describe('updateGateStore', () => {
       expect(reloadSpy).not.toHaveBeenCalled();
     });
 
-    it('reloads even with no waiting SW (the version-mismatch-only case)', async () => {
+    it('reloads directly with no waiting SW (the version-mismatch-only case)', async () => {
       flushDurableStateMock.mockResolvedValue(undefined);
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
       // No setUpdateSW call — _updateSW stays null, as it would for a pure
       // backend-only deploy with no waiting service worker.
 
@@ -135,6 +145,31 @@ describe('updateGateStore', () => {
       await useUpdateGateStore.getState().runUpdate();
 
       expect(useUpdateGateStore.getState().error).toBeNull();
+    });
+  });
+
+  describe('runUpdate — unauthenticated (G1: no lockout on the login screen)', () => {
+    it('skips the flush barrier entirely and proceeds straight to reload', async () => {
+      useAuthStore.setState({ isAuthenticated: false });
+      useUpdateGateStore.setState({ reason: 'version-mismatch' });
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
+      expect(reloadSpy).toHaveBeenCalledTimes(1);
+      expect(useUpdateGateStore.getState().phase).not.toBe('error');
+    });
+
+    it('proceeds to updateSW(true) when a waiting SW exists, even logged out', async () => {
+      useAuthStore.setState({ isAuthenticated: false });
+      useUpdateGateStore.setState({ reason: 'sw' });
+      const updateSW = vi.fn();
+      useUpdateGateStore.getState().setUpdateSW(updateSW);
+
+      await useUpdateGateStore.getState().runUpdate();
+
+      expect(flushDurableStateMock).not.toHaveBeenCalled();
+      expect(updateSW).toHaveBeenCalledWith(true);
     });
   });
 });

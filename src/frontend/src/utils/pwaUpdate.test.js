@@ -131,4 +131,20 @@ describe('setupPwaUpdatePrompt', () => {
     returnToApp();
     expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
   });
+
+  it('Scenario B fix: polls GET /api/version on visibility return even when onRegisteredSW never fires', () => {
+    // Reproduces the live-drive failure: a dev server / failed registration
+    // means onRegisteredSW never calls back, but the backend-version
+    // handshake must still work regardless of service-worker lifecycle.
+    const { returnToApp } = setup();
+    fetch.mockClear();
+
+    returnToApp();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+  });
+
+  it('does not throw calling registration.update when no registration was ever provided', () => {
+    const { returnToApp } = setup();
+    expect(() => returnToApp()).not.toThrow();
+  });
 });
