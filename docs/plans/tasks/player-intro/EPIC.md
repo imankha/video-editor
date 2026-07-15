@@ -97,10 +97,15 @@ pitch diagram:
 ## Related: animation polish
 
 User direction: the same premium-motion bar applies to **intros, outros, and spotlights** — they
-should all *animate* and look professional, not static. This epic covers the intro; elevating the
-existing branded **outro** (`branded_outro.py`, currently a mostly-static card) and the
-**spotlight** overlay animation are related follow-ups worth their own tasks. Not yet created —
-flagged here so the motion/polish direction is captured in one place.
+should all *animate* and look professional, not static. This epic covers the intro; the siblings
+are their own tasks:
+- **[T5240](../T5240-animated-branded-outro.md)** — animate the branded outro (currently a
+  near-static card) to share the intro's motion vocabulary.
+- **[T5250](../T5250-spotlight-animation-polish.md)** — premium entrance/exit reveal for the
+  spotlight overlay.
+
+Cohesion goal: a reel that opens with an animated intro, spotlights with a produced reveal, and
+closes with an animated outro should feel like one system.
 
 ## Child tasks (implement in order)
 
