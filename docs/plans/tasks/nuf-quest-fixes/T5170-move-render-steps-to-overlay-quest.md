@@ -11,7 +11,7 @@ The overlay work is split across two quests in a way that feels wrong to the use
 "Configure Your Spotlight" ends at `choose_shape`, while the two steps that actually produce
 the spotlight — `export_overlay` ("Add the Spotlight") and `wait_for_overlay` ("Render the
 Spotlight") — live at the START of Quest 4 "Publish Your Reel"
-([quest_config.py:40-63](../../src/backend/app/quest_config.py#L40-L63)).
+([quest_config.py:40-63](../../../src/backend/app/quest_config.py#L40-L63)).
 
 Feedback: those two render steps belong in the Overlay quest, so Quest 3 covers configuring
 AND rendering the spotlight, and Quest 4 is purely about publishing.
@@ -38,14 +38,14 @@ pairing that mirrors framing's `export_framing`/`wait_for_export`.
 
 ## Implementation
 
-1. [quest_config.py](../../src/backend/app/quest_config.py) — move `export_overlay` and
+1. [quest_config.py](../../../src/backend/app/quest_config.py) — move `export_overlay` and
    `wait_for_overlay` from `quest_4.step_ids` to the end of `quest_3.step_ids`.
-2. [data/questDefinitions.js](../../src/frontend/src/data/questDefinitions.js) — mirror the
+2. [data/questDefinitions.js](../../../src/frontend/src/data/questDefinitions.js) — mirror the
    same move (keep identical to backend).
 3. Step triggers are UNCHANGED — they are derived from the `export_jobs` overlay aggregate
-   in `_check_all_steps` ([quests.py:187-188](../../src/backend/app/routers/quests.py#L187-L188)),
+   in `_check_all_steps` ([quests.py:187-188](../../../src/backend/app/routers/quests.py#L187-L188)),
    which is keyed by step id, not by quest. Moving the ids between quests needs NO trigger edit.
-4. Titles/descriptions in [config/questDefinitions.jsx](../../src/frontend/src/config/questDefinitions.jsx)
+4. Titles/descriptions in [config/questDefinitions.jsx](../../../src/frontend/src/config/questDefinitions.jsx)
    (`STEP_TITLES` / `STEP_DESCRIPTIONS`) are keyed by step id — they move with the steps
    automatically, no text change required. (Optional: sanity-check that the `move_to_my_reels`
    copy still reads well as Quest 4's first content step.)
@@ -58,7 +58,7 @@ pairing that mirrors framing's `export_framing`/`wait_for_export`.
 - Quests are claimed sequentially; by the time a user has done any overlay export they have
   already claimed quest_3. Once a quest's reward is claimed, the progress endpoint renders ALL
   its steps `True` regardless of definition
-  ([quests.py:261](../../src/backend/app/routers/quests.py#L261)). So users past quest_3 keep
+  ([quests.py:261](../../../src/backend/app/routers/quests.py#L261)). So users past quest_3 keep
   it complete, and quest_4 shrinking is harmless.
 - Users still IN quest_3 will now correctly need to render the spotlight before claiming it.
 
@@ -66,7 +66,7 @@ pairing that mirrors framing's `export_framing`/`wait_for_export`.
   clicked Claim would see quest_3 flip back to incomplete (missing the two render steps) until
   they render. Decide if that small in-flight population warrants an idempotent reconciliation
   (e.g. auto-complete/claim quest_3 for anyone who already satisfied its old step set). Follow
-  the [v005_quest_restructure.py](../../src/backend/app/migrations/user_db/v005_quest_restructure.py)
+  the [v005_quest_restructure.py](../../../src/backend/app/migrations/user_db/v005_quest_restructure.py)
   precedent if a migration is warranted; otherwise document why self-heal is sufficient.
 
 ## Interaction with T5140
@@ -82,7 +82,7 @@ Backend: extend the quest-structure tests — assert quest_3 now contains `expor
 `wait_for_overlay` (7 steps) and quest_4 does not (3 steps), triggers still fire from
 `export_jobs`, and a previously-claimed quest_3/quest_4 renders correctly (no un-claim, no
 double-grant). If a reconciliation migration is added, cover it in
-[test_quest_migration.py](../../src/backend/tests/test_quest_migration.py).
+[test_quest_migration.py](../../../src/backend/tests/test_quest_migration.py).
 
 ## Classification hint
 

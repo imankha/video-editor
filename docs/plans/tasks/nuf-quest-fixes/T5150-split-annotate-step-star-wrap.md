@@ -12,7 +12,7 @@ Save"). Two issues reported:
 
 1. **Star wrap.** The description renders five inline `<FilledStar/>` that wrap across a
    line break in the narrow quest panel, so "★★★★★" reads as one star then four stars.
-   ([questDefinitions.jsx:170](../../src/frontend/src/config/questDefinitions.jsx#L170))
+   ([questDefinitions.jsx:170](../../../src/frontend/src/config/questDefinitions.jsx#L170))
 2. **Too much in one step.** `annotate_brilliant` bundles trim + rate + tag + note +
    confirm My Athlete/Create Reel toggles + Save into one task. The user wants it split
    further so the flow is legible and per-step drop-off is measurable.
@@ -43,10 +43,10 @@ watch_annotate_tutorial, upload_game, add_clip, rate_clip, annotate_brilliant, p
 
 ### Backend
 
-1. [quest_config.py](../../src/backend/app/quest_config.py) — insert `rate_clip` into
+1. [quest_config.py](../../../src/backend/app/quest_config.py) — insert `rate_clip` into
    `quest_1.step_ids` between `add_clip` and `annotate_brilliant`. Reward for quest_1
    stays 15 (per-step, not per-count).
-2. [quests.py](../../src/backend/app/routers/quests.py):
+2. [quests.py](../../../src/backend/app/routers/quests.py):
    - Add `"clip_rated"` to `_STEP_ACHIEVEMENT_KEYS` (~line 83). It rides the existing
      batched `IN` query — no new DB query.
    - In `_check_all_steps`, add under Quest 1:
@@ -60,9 +60,9 @@ watch_annotate_tutorial, upload_game, add_clip, rate_clip, annotate_brilliant, p
 
 ### Frontend
 
-3. [data/questDefinitions.js](../../src/frontend/src/data/questDefinitions.js) — mirror the
+3. [data/questDefinitions.js](../../../src/frontend/src/data/questDefinitions.js) — mirror the
    `step_ids` change (this file is the store's local copy; keep it identical to the backend).
-4. [config/questDefinitions.jsx](../../src/frontend/src/config/questDefinitions.jsx):
+4. [config/questDefinitions.jsx](../../../src/frontend/src/config/questDefinitions.jsx):
    - Add `rate_clip` to `STEP_TITLES` ("Rate & Tag the Play") and `annotate_brilliant`
      retitled to "Save Your Reel".
    - Split `STEP_DESCRIPTIONS`. Move the trim/rate/tag/note copy to `rate_clip`; leave the
@@ -71,7 +71,7 @@ watch_annotate_tutorial, upload_game, add_clip, rate_clip, annotate_brilliant, p
      rating never breaks across lines. This is the fix for issue #1 and applies to whichever
      step keeps the stars (`rate_clip`).
 5. Fire the new achievement on the **rating gesture** (not on save): in
-   [ClipDetailsEditor.jsx:114](../../src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx#L114)
+   [ClipDetailsEditor.jsx:114](../../../src/frontend/src/modes/annotate/components/ClipDetailsEditor.jsx#L114)
    `handleRatingChange`, call `useQuestStore.getState().recordAchievement('clip_rated')`
    alongside `onUpdate({ rating })`. `recordAchievement` is fire-and-forget + session-deduped,
    so firing on every star click is safe.
@@ -81,7 +81,7 @@ watch_annotate_tutorial, upload_game, add_clip, rate_clip, annotate_brilliant, p
 **Not required.** The `rate_clip` trigger self-heals via the `rc["reels"] >= 1` backfill
 (same pattern that backfilled `add_clip`), and the progress endpoint already renders ALL
 steps `True` for any quest whose reward is already claimed
-([quests.py:261](../../src/backend/app/routers/quests.py#L261)). So:
+([quests.py:261](../../../src/backend/app/routers/quests.py#L261)). So:
 - A user who already saved a reel: `rate_clip` shows complete immediately.
 - A user who already claimed quest_1: unaffected (all steps render complete).
 
@@ -89,8 +89,8 @@ No `completed_quests` rows change. Do NOT write a migration unless a test surfac
 
 ## Tests
 
-- Backend: extend [test_tutorial_quest_steps.py](../../src/backend/tests/test_tutorial_quest_steps.py)
-  / [test_quest_migration.py](../../src/backend/tests/test_quest_migration.py) — assert
+- Backend: extend [test_tutorial_quest_steps.py](../../../src/backend/tests/test_tutorial_quest_steps.py)
+  / [test_quest_migration.py](../../../src/backend/tests/test_quest_migration.py) — assert
   quest_1 now has 6 steps, `rate_clip` completes on `clip_rated` achievement AND backfills
   when a reel exists, and a pre-existing claimed quest_1 still renders fully complete.
 - Frontend: assert the star run is non-wrapping (single line container) and the two new

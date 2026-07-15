@@ -12,7 +12,7 @@ description tells the user to leave and frame another reel while the upscale run
 
 > "We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your
 > next reel while you wait."
-> ([questDefinitions.jsx:177](../../src/frontend/src/config/questDefinitions.jsx#L177))
+> ([questDefinitions.jsx:177](../../../src/frontend/src/config/questDefinitions.jsx#L177))
 
 For a first-run user following the tutorial this is wrong: they have exactly **one** clip,
 which they just sent to framing. Telling them to go frame "your next reel" sends them looking
@@ -26,7 +26,7 @@ the copy to this reel and point forward to the next step (the spotlight).
 
 ## Implementation
 
-1. In [questDefinitions.jsx](../../src/frontend/src/config/questDefinitions.jsx), replace the
+1. In [questDefinitions.jsx](../../../src/frontend/src/config/questDefinitions.jsx), replace the
    `wait_for_export` description string. Suggested copy (final wording at implementor's
    discretion, keep it outcome-framed and jargon-free per the file header):
 
