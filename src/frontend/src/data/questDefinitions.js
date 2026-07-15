@@ -35,6 +35,9 @@ export const QUEST_DEFINITIONS = [
       'select_players',
       'choose_color',
       'choose_shape',
+      // T5170: render steps moved here from quest_4 (kept in sync with quest_config.py)
+      'export_overlay',
+      'wait_for_overlay',
     ],
   },
   {
@@ -43,8 +46,6 @@ export const QUEST_DEFINITIONS = [
     reward: 15,
     step_ids: [
       'watch_publish_tutorial',
-      'export_overlay',
-      'wait_for_overlay',
       'move_to_my_reels',
       'view_gallery_video',
     ],

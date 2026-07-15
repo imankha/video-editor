@@ -48,6 +48,11 @@ QUEST_DEFINITIONS = [
             "select_players",
             "choose_color",
             "choose_shape",
+            # T5170: rendering the spotlight belongs with configuring it — the
+            # user adds AND renders the spotlight in one sitting, so these two
+            # render steps live at the end of the overlay quest, not in Publish.
+            "export_overlay",
+            "wait_for_overlay",
         ],
     },
     {
@@ -56,8 +61,6 @@ QUEST_DEFINITIONS = [
         "reward": 15,
         "step_ids": [
             "watch_publish_tutorial",
-            "export_overlay",
-            "wait_for_overlay",
             "move_to_my_reels",
             "view_gallery_video",
         ],

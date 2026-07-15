@@ -98,3 +98,45 @@ describe('questDefinitions rate_clip split (T5150)', () => {
     }
   });
 });
+
+// T5170: the two spotlight-render steps move from Publish (quest_4) to the end
+// of Configure Your Spotlight (quest_3). The data mirror must stay in sync with
+// the backend SSOT, and every moved step must still resolve a title.
+describe('questDefinitions overlay-quest move (T5170)', () => {
+  it('appends the render steps to the end of quest_3 in the data mirror', () => {
+    const q3 = QUEST_DEFINITIONS.find((q) => q.id === 'quest_3');
+    expect(q3.step_ids).toEqual([
+      'watch_overlay_tutorial',
+      'open_overlay',
+      'select_players',
+      'choose_color',
+      'choose_shape',
+      'export_overlay',
+      'wait_for_overlay',
+    ]);
+    expect(q3.step_ids.slice(-2)).toEqual(['export_overlay', 'wait_for_overlay']);
+  });
+
+  it('leaves quest_4 with only tutorial + publish steps', () => {
+    const q4 = QUEST_DEFINITIONS.find((q) => q.id === 'quest_4');
+    expect(q4.step_ids).toEqual([
+      'watch_publish_tutorial',
+      'move_to_my_reels',
+      'view_gallery_video',
+    ]);
+    expect(q4.step_ids).not.toContain('export_overlay');
+    expect(q4.step_ids).not.toContain('wait_for_overlay');
+  });
+
+  it('resolves titles + descriptions for the moved render steps', () => {
+    for (const stepId of ['export_overlay', 'wait_for_overlay']) {
+      expect(STEP_TITLES[stepId], `missing title for ${stepId}`).toBeTruthy();
+      expect(STEP_DESCRIPTIONS[stepId], `missing description for ${stepId}`).toBeTruthy();
+    }
+  });
+
+  it('has no duplicate step ids across all quests after the move', () => {
+    const all = QUEST_DEFINITIONS.flatMap((q) => q.step_ids);
+    expect(new Set(all).size).toBe(all.length);
+  });
+});
