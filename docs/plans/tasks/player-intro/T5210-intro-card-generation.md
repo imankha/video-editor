@@ -16,24 +16,30 @@ to a reel/collection/multiclip output. No image-to-video path exists today — b
 ## Scope
 
 Build `app/services/player_intro.py` (mirroring `branded_outro.py`):
-- `build_intro_card(info, probe, out_path)` — compose the card with `ffmpeg`:
+- `build_intro_card(info, probe, out_path)` — compose an **animated** card:
   - Gold background (`-f lavfi color`), player **name tiled as a faint watermark**, diagonal
     hazard-stripe accents (overlay PNGs or drawbox), the **stats panel** (drawtext, absolute
     `fontfile=` — Fly image has no fontconfig; reuse `app/assets/fonts/DejaVuSans-Bold.ttf`),
-    and the **cut-out player photo** (`overlay`), ending on a **white-flash** out.
+    the **cut-out player photo as the animated hero**, and a **white-flash** out.
   - Use `photo_cutout_key` when present, else `photo_key`.
+- **Motion is the deliverable, not a nicety (user direction):** the photo does a slow push-in /
+  Ken Burns / reveal so the kid is up close and central; stats lines **stagger/fade in**; the
+  white-flash transitions out. Use ffmpeg `zoompan` (photo), `drawtext` with `enable='between(t,...)'`
+  or alpha ramps (staggered text), and `xfade`/fade for the flash. A static frame is NOT
+  acceptable — the value is the animation + professionalism.
 - **Probe-match the target** via `_probe_media` (branded_outro.py:141) so the concat is clean
   (width/height/fps/pix_fmt/sar); cache per (resolution×fps×format×profile-content-hash) like the
   outro card cache.
 - **Prepend, not append:** concat `[card][main]` using `_concat_copy` (stream-copy when profiles
   match) / `_concat_reencode` fallback, `_validate_concat`.
 - **Non-fatal contract:** any failure -> return without the intro, never sink the export/share.
-- Optional `zoompan` Ken Burns on the photo.
 
-### v1 fidelity (EPIC open decision)
-**Recommend v1 = static/lightly-animated card** (bg + watermark + hazard accents + stats panel +
-cut-out photo + white-flash out). The **animated position-pitch diagram is a fast-follow**
-(templated animation is materially heavier); leave a clean seam for it. Confirm scope before build.
+### Fidelity / renderer decision
+**Pitch/position diagram is OUT** (user direction — dropped entirely). Focus effort on a
+photo-forward, animated, premium look. Prototype with pure ffmpeg (`zoompan`+`xfade`+timed
+`drawtext`); **if ffmpeg can't reach a premium feel**, evaluate a richer template renderer (headless
+browser / Remotion-style HTML-to-video) before committing the card layout. Get a design pass on the
+motion (timings, easing) — "looks professional" is the acceptance bar.
 
 ## Relevant files
 - `src/backend/app/services/branded_outro.py` — copy the structure (`_build_outro_card`:195,
@@ -47,7 +53,8 @@ change. Depends on T5190 (fields+photo) and T5200 (cut-out). Architect + a desig
 layout recommended.
 
 ## Acceptance criteria
-- [ ] `build_intro_card` produces an MP4 matching the reference card layout from profile data.
+- [ ] `build_intro_card` produces an **animated** MP4 (photo push-in + staggered text-in +
+  white-flash out) from profile data — reviewed as "looks professional," not a static frame.
 - [ ] Prepends `[card][main]` with probe-matched, validated concat; cached per format+content.
 - [ ] Uses cut-out photo when available; non-fatal on any failure.
-- [ ] Animated-pitch seam left for the fast-follow.
+- [ ] No pitch/position diagram (dropped).

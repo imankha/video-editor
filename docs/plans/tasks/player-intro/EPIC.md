@@ -4,19 +4,30 @@ Let users attach a **broadcast/recruiting-style player intro** to shared collect
 multiclip videos: add a photo + a few facts about their youth player, and we generate an
 animated intro card that plays before the footage.
 
+## Design intent (user direction 2026-07-15)
+
+The point is NOT a data readout — it's **cool animation, seeing your kid up close, and a level of
+professionalism** that makes the parent proud to share. Motion and polish are the product. The
+**pitch/position diagram from the reference is explicitly OUT of scope** — it's not what makes this
+feel good. Lean into an animated, photo-forward, professional card. (This same bar — intros,
+outros, and spotlights that *animate* and look premium — is the broader direction; see
+[Related work](#related-animation-polish).)
+
 ## Visual target
 
-Reference: `C:\Users\imank\Videos\Captures\stafford intro.mp4` (~12s: ~7s animated card, then a
+Reference: `C:\Users\imank\Videos\Captures\stafford intro.mp4` (~12s: animated card, then a
 white-flash cut into the footage). **The reference contains a real minor's photo + PII, so it is
-NOT committed to the repo — view the local file.** The card, from frame analysis:
+NOT committed to the repo — view the local file.** Take the *look and feel* from it, minus the
+pitch diagram:
 
-- **Cut-out player photo** (background removed — see [T5200](T5200-player-cutout.md)) on a gold
-  field, with the player's **name tiled as a faint watermark** behind, plus diagonal "hazard
+- **Cut-out player photo, animated as the hero** (background removed — see
+  [T5200](T5200-player-cutout.md)): a close-up of the player that moves — slow push-in / Ken Burns
+  / reveal — so the kid is front-and-center. This is the emotional core.
+- **Gold field with the player's name tiled as a faint watermark** behind, plus diagonal "hazard
   stripe" broadcast accents in the corners.
-- **Stats panel** (condensed uppercase, small-square bullet before the name):
+- **Stats panel that animates in** (condensed uppercase, small-square bullet before the name):
   Name · Positions + jersey numbers ("Midfielder 6,8,10") · Height · Class (grad year) ·
-  Current Club (+ role, e.g. "Captain") · High School.
-- **Animated pitch diagram** (green) where the player's position numbers (8, 10, ...) light up.
+  Current Club (+ role, e.g. "Captain") · High School. Lines can stagger/fade in for polish.
 - Ends on a **white flash** transition into the first reel.
 
 ## Product flow
@@ -69,17 +80,27 @@ NOT committed to the repo — view the local file.** The card, from frame analys
      added facial templates to "personal information"; also state BIPA-class laws). Background
      removal ([T5200](T5200-player-cutout.md)) is segmentation, NOT recognition — fine.
 
-## Open scope decisions (recommendation in bold)
+## Decisions (settled)
 
-- **v1 card fidelity:** the reference has an animated pitch diagram + tiled-name watermark +
-  cut-out photo. Recommend **v1 = static/lightly-animated card** (photo + stats panel + gold bg +
-  hazard accents + white-flash out) via ffmpeg drawtext/overlay; **the animated position-pitch
-  is a fast-follow** (heavier: templated animation). Splitting keeps [T5210](T5210-intro-card-generation.md)
-  shippable.
-- **DOB vs grad-year:** recommend **grad-year/age-band only** (see decision #4). Revisit only if a
-  concrete feature needs exact DOB.
-- **Cut-out approach:** see [T5200](T5200-player-cutout.md) — recommend a server-side segmentation
-  model (rembg/u2net-class) with "upload an already-cut PNG" as a fallback.
+- **Pitch/position diagram: OUT.** Dropped per user direction — it's not what makes the intro
+  feel good. Do not build it, not even as a fast-follow.
+- **Animation is core, not optional.** The animated photo hero (push-in/reveal) + staggered
+  text-in + white-flash out ARE v1 — the value is the motion + polish, so ffmpeg must actually
+  animate (zoompan/xfade/enable-time drawtext), not render a static frame. If plain ffmpeg can't
+  hit a premium look, evaluate a richer renderer (e.g. a headless-browser/Remotion-style template)
+  in [T5210](T5210-intro-card-generation.md).
+- **DOB vs grad-year:** **grad-year/age-band only** (see decision #4). Revisit only if a concrete
+  feature needs exact DOB.
+- **Cut-out approach:** see [T5200](T5200-player-cutout.md) — server-side segmentation model
+  (rembg/u2net-class) with "upload an already-cut PNG" as a fallback.
+
+## Related: animation polish
+
+User direction: the same premium-motion bar applies to **intros, outros, and spotlights** — they
+should all *animate* and look professional, not static. This epic covers the intro; elevating the
+existing branded **outro** (`branded_outro.py`, currently a mostly-static card) and the
+**spotlight** overlay animation are related follow-ups worth their own tasks. Not yet created —
+flagged here so the motion/polish direction is captured in one place.
 
 ## Child tasks (implement in order)
 
