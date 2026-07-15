@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { setupPwaUpdatePrompt } from './pwaUpdate';
-import { useToastStore } from '../components/shared/Toast';
+import { useUpdateGateStore } from '../stores/updateGateStore';
 
 const { registerSWMock } = vi.hoisted(() => ({ registerSWMock: vi.fn() }));
 
 vi.mock('virtual:pwa-register', () => ({
   registerSW: registerSWMock,
 }));
+
+const INITIAL_GATE_STATE = {
+  isUpdateRequired: false,
+  reason: null,
+  phase: 'idle',
+  error: null,
+  _updateSW: null,
+};
 
 // Captures the visibilitychange handler instead of registering it on the
 // shared jsdom document, so listeners don't leak between tests.
@@ -29,36 +37,37 @@ function setup({ waiting = null } = {}) {
 describe('setupPwaUpdatePrompt', () => {
   beforeEach(() => {
     registerSWMock.mockReset();
-    useToastStore.setState({ toasts: [] });
+    useUpdateGateStore.setState(INITIAL_GATE_STATE);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ headers: new Headers(), ok: true }));
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it('shows a persistent refresh toast when a new version is waiting', () => {
+  it('requires an update (reason: sw) when a new version is waiting', () => {
     const { updateSW, handlers } = setup();
 
     handlers.onNeedRefresh();
 
-    const toasts = useToastStore.getState().toasts;
-    expect(toasts).toHaveLength(1);
-    expect(toasts[0].title).toBe('New version available');
-    // duration 0 = never auto-dismiss; the user must see the prompt
-    expect(toasts[0].duration).toBe(0);
+    const state = useUpdateGateStore.getState();
+    expect(state.isUpdateRequired).toBe(true);
+    expect(state.reason).toBe('sw');
+    // The gate itself drives updateSW via runUpdate — onNeedRefresh only raises it.
     expect(updateSW).not.toHaveBeenCalled();
-
-    toasts[0].action.onClick();
-    expect(updateSW).toHaveBeenCalledWith(true);
   });
 
-  it('does not stack duplicate toasts when onNeedRefresh fires again', () => {
+  it('wires updateSW into the store so the gate can trigger skipWaiting + reload', () => {
+    const { updateSW } = setup();
+    expect(useUpdateGateStore.getState()._updateSW).toBe(updateSW);
+  });
+
+  it('is idempotent when onNeedRefresh fires again', () => {
     const { handlers } = setup();
-
     handlers.onNeedRefresh();
     handlers.onNeedRefresh();
-
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useUpdateGateStore.getState().reason).toBe('sw');
   });
 
   it('checks for an update when the app becomes visible again', () => {
@@ -86,35 +95,56 @@ describe('setupPwaUpdatePrompt', () => {
     expect(registration.update).toHaveBeenCalledTimes(2);
   });
 
-  it('re-shows a dismissed prompt on return while an update is still waiting', () => {
+  it('re-requires the gate on return while an update is still waiting', () => {
     const { handlers, registration, returnToApp } = setup({ waiting: {} });
     handlers.onRegisteredSW('/sw.js', registration);
 
     handlers.onNeedRefresh();
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
 
-    // user dismisses the toast without refreshing
-    useToastStore.setState({ toasts: [] });
+    // Simulate the store somehow dropping back (defensive — gate has no
+    // user-facing dismiss, but the SW-waiting re-check path must still hold).
+    useUpdateGateStore.setState({ isUpdateRequired: false, reason: null });
 
     returnToApp();
-    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useUpdateGateStore.getState().isUpdateRequired).toBe(true);
     // a waiting SW means there is nothing new to fetch
     expect(registration.update).not.toHaveBeenCalled();
-  });
-
-  it('does not re-show the prompt on return while it is still visible', () => {
-    const { handlers, registration, returnToApp } = setup({ waiting: {} });
-    handlers.onRegisteredSW('/sw.js', registration);
-
-    handlers.onNeedRefresh();
-    returnToApp();
-
-    expect(useToastStore.getState().toasts).toHaveLength(1);
   });
 
   it('does nothing when registration is unavailable', () => {
     const { handlers, returnToApp } = setup();
     expect(() => handlers.onRegisteredSW('/sw.js', undefined)).not.toThrow();
+    expect(() => returnToApp()).not.toThrow();
+  });
+
+  it('polls GET /api/version on load', () => {
+    setup();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+  });
+
+  it('polls GET /api/version again on a throttled visibility return', () => {
+    const { handlers, registration, returnToApp } = setup();
+    handlers.onRegisteredSW('/sw.js', registration);
+    fetch.mockClear();
+
+    returnToApp();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+  });
+
+  it('Scenario B fix: polls GET /api/version on visibility return even when onRegisteredSW never fires', () => {
+    // Reproduces the live-drive failure: a dev server / failed registration
+    // means onRegisteredSW never calls back, but the backend-version
+    // handshake must still work regardless of service-worker lifecycle.
+    const { returnToApp } = setup();
+    fetch.mockClear();
+
+    returnToApp();
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/version'));
+  });
+
+  it('does not throw calling registration.update when no registration was ever provided', () => {
+    const { returnToApp } = setup();
     expect(() => returnToApp()).not.toThrow();
   });
 });

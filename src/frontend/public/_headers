@@ -1,2 +1,16 @@
 /*
   Cross-Origin-Opener-Policy: same-origin-allow-popups
+
+# T5070: entry documents must always revalidate — a stale HTTP-cached copy of
+# any of these would mean the browser byte-checks a stale sw.js/index.html and
+# the update gate's handshake never sees the new deploy. no-cache (not
+# no-store) still allows a fast 304; hashed JS/CSS assets keep their default
+# long-cache (they're immutable — a new deploy always emits new hashes).
+/index.html
+  Cache-Control: no-cache
+
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache

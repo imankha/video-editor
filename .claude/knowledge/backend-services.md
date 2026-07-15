@@ -112,5 +112,15 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   NULL and the frontend UserTable already renders NULLs as `—` (T4870 null-not-fabricated). An
   origin/date filter still legitimately excludes NULL segments.
 
+- **`GET /api/version` + `AppVersionHeaderMiddleware` + `POST /api/sync/flush-verify` (T5070).**
+  Backend advertises its build id as `X-App-Version` on every response — middleware added LAST
+  (outermost) so the header survives 401s/preflight; CORS `expose_headers` includes it. Value =
+  `COMMIT_SHA` build-arg (Dockerfile ARG/ENV; deploy-backend.yml passes `github.sha`,
+  deploy_production.sh passes `git rev-parse HEAD`), `version.py` falls back to `"dev"` locally.
+  Consumed by the frontend update-gate version handshake (see persistence-sync.md § T5070).
+  `POST /api/sync/flush-verify` (health router) is the update-gate's step-3 durable-flush barrier:
+  checkpoints WAL + awaits R2 upload → **200** clean / **503** still-pending / **401** unauthenticated
+  (the client treats 401 as a no-op, not a failure — logged-out users have nothing to flush).
+
 ## Active/upcoming work
 Bug tier (TODO): T4210 (overlay decode → 500, delete orphaned PUT), T4220-T4270, T4280 (silent-fallback sweep). **T4870 DONE** (admin credits read R2-canonical; silent-fallback removed). Guardrails first: T4290/T4300. Backend consolidations: **T4610** require_admin router Depends, T4620 fetch_or_404 + enums, **T4630** R2StreamProxy service (4 streaming-proxy copies), **T4640** games.py activation/share services (depends on T4360), **T4650** raw_clips write-path consolidation, **T4660** open_sqlite factory + game_display service. Export Write-Path epic T4370-T4410 (strict order: characterization tests → ExportJobRepository → finalize/publish single writer → backend-authoritative export → orchestration move). Full map: docs/plans/PLAN.md § Code Quality & Refactoring.
