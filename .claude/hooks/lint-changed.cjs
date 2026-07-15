@@ -50,6 +50,19 @@ function report(toolName, res) {
   process.exit(2);
 }
 
+// T4930: viewport-unit gate — ban h-screen/100vh in the app tree (js/jsx/css
+// under src/frontend/src) in favor of h-dvh/100dvh, so the emulator-invisible
+// iOS 100vh clipping that caused T4880 can't be reintroduced. Runs before eslint
+// (which exits the process on completion). Best-effort: node missing => skip.
+if (/^src\/frontend\/src\/.+\.(js|jsx|css)$/.test(rel)) {
+  const res = run('node', [path.join(repoRoot, 'scripts', 'check-viewport-units.mjs'), norm], repoRoot);
+  if (res.status && res.status !== 0) {
+    const out = ((res.stdout || '') + '\n' + (res.stderr || '')).trim();
+    process.stderr.write(`[hook:viewport-units] ${rel} has a banned h-screen/100vh — use h-dvh/100dvh:\n${out}\n`);
+    process.exit(2);
+  }
+}
+
 if (/^src\/frontend\/.+\.(js|jsx|ts|tsx)$/.test(rel) && !rel.includes('node_modules')) {
   const feDir = path.join(repoRoot, 'src', 'frontend');
   if (!fs.existsSync(path.join(feDir, 'node_modules', '.bin'))) process.exit(0);
