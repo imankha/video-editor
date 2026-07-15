@@ -49,6 +49,8 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_shape_set",
     # Publish-quest step event (Move to My Reels button)
     "moved_to_my_reels",
+    # T5150: rate_clip step event — fires on the rating gesture in the clip editor
+    "clip_rated",
     # T4780: tutorial-watch step events (one per quest, fires at 80% watch or 10s+close)
     "watched_annotate_tutorial",
     "watched_framing_tutorial",
@@ -91,6 +93,7 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_color_set",
     "overlay_shape_set",
     "moved_to_my_reels",
+    "clip_rated",
     "watched_gallery_video_1s",
     # T4780: tutorial-watch steps (ride the same batched IN query — no new DB queries)
     "watched_annotate_tutorial",
@@ -165,6 +168,11 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # by "any clip exists" so it auto-completes on save and for users who clipped before
     # this step existed (you can't have a clip without having opened the form).
     steps["add_clip"] = 'add_clip_opened' in achieved or rc["total"] >= 1
+    # T5150: rate_clip — completed when the user rates a clip (achievement fired on
+    # the rating gesture). Backfilled by "any reel exists" so it auto-completes for
+    # users who saved a reel before this step existed: you can't save a reel without
+    # rating a clip, so a reel is proof the rate step was satisfied.
+    steps["rate_clip"] = 'clip_rated' in achieved or rc["reels"] >= 1
     steps["annotate_brilliant"] = rc["reels"] >= 1
     steps["playback_annotations"] = 'played_annotations' in achieved
 

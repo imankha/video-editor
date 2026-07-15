@@ -20,6 +20,7 @@ QUEST_DEFINITIONS = [
             "watch_annotate_tutorial",
             "upload_game",
             "add_clip",
+            "rate_clip",
             "annotate_brilliant",
             "playback_annotations",
         ],

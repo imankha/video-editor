@@ -137,7 +137,8 @@ export const STEP_TITLES = {
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
   add_clip: 'Find an Amazing Play',
-  annotate_brilliant: 'Rate 5 Stars & Save',
+  rate_clip: 'Rate & Tag the Play',
+  annotate_brilliant: 'Save Your Reel',
   playback_annotations: 'Watch Your Clips Back',
   // Quest 2 — Frame Your Highlight
   open_framing: 'Open Your Reel',
@@ -167,7 +168,8 @@ export const STEP_DESCRIPTIONS = {
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
   add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,
-  annotate_brilliant: <>Set start time and end time precisely to isolate the action. Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> and tag it, maybe add a note. Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
+  rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
+  annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,

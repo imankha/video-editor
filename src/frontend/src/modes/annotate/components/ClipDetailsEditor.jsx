@@ -5,6 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
+import { useQuestStore } from '../../../stores/questStore';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
@@ -114,6 +115,10 @@ export function ClipDetailsEditor({
   const handleRatingChange = (newRating) => {
     // Only update rating, don't touch the name
     onUpdate({ rating: newRating });
+    // T5150: the rate_clip quest step completes on the RATING gesture (not on
+    // save). recordAchievement is fire-and-forget and session-deduped, so firing
+    // on every star click is safe — it POSTs once per session.
+    useQuestStore.getState().recordAchievement('clip_rated');
   };
 
   const handleTagToggle = (tagName) => {
