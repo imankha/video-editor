@@ -75,10 +75,51 @@ export default defineConfig({
     apiPort: API_PORT,
   },
 
+  // T4930: the usability audit runs across a viewport MATRIX; every other spec
+  // stays Desktop-Chrome-only. The mobile/tablet projects therefore `testMatch`
+  // ONLY screen-usability.spec.js (NOT the *.selfcheck.spec.js, which pins its own
+  // viewport and only needs to run once on desktop) — so the added CI cost is one
+  // audit pass per device, not the whole functional suite x5.
   projects: [
     {
+      // Desktop: the existing project. Runs EVERYTHING (functional specs + the
+      // audit at desktop size + the synthetic self-check).
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    // Mobile/tablet projects run on the CHROMIUM engine with each device's
+    // viewport / deviceScaleFactor / isMobile / touch / UA. WHY chromium and not
+    // the descriptor's default WebKit: it keeps the matrix runnable wherever the
+    // repo already installs chromium (CI installs only chromium; no extra ~300MB
+    // WebKit download), and matches the established mobile-emulation pattern in
+    // this suite (T4880 emulated iPhone via a chromium context). The honest limit
+    // — neither engine reproduces iOS Safari's dynamic-toolbar 100vh chrome — is
+    // documented in usabilityAudit.js and blocked at the source by the
+    // check-viewport-units.mjs gate, so the engine choice does not weaken the
+    // T4880 coverage. Each phone project also audits landscape (see sweepOrientations).
+    {
+      // The reporting user's device class (most-popular current iPhone).
+      name: 'iphone',
+      testMatch: /screen-usability\.spec\.js/,
+      use: { ...devices['iPhone 14'], browserName: 'chromium' },
+    },
+    {
+      // Smallest supported iPhone — tightest height, clips below-fold first.
+      name: 'iphone-se',
+      testMatch: /screen-usability\.spec\.js/,
+      use: { ...devices['iPhone SE'], browserName: 'chromium' },
+    },
+    {
+      // Most-popular Android class.
+      name: 'android',
+      testMatch: /screen-usability\.spec\.js/,
+      use: { ...devices['Pixel 7'], browserName: 'chromium' },
+    },
+    {
+      // Tablet.
+      name: 'tablet',
+      testMatch: /screen-usability\.spec\.js/,
+      use: { ...devices['iPad (gen 7)'], browserName: 'chromium' },
     },
   ],
 

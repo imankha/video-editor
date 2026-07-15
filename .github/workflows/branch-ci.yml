@@ -46,6 +46,13 @@ jobs:
         # numbers DOWN as the warning backlog is cleared; never up.
         # T5030: ratcheted down to 998 (burned React imports + dead local vars).
         run: npx eslint src --max-warnings 998
+      - name: Viewport-unit gate (T4930 — no h-screen/100vh in the app tree)
+        # Blocks the emulator-invisible iOS 100vh-vs-100dvh failure mode at the
+        # source (root cause of T4880). Bans h-screen/100vh in src/frontend/src in
+        # favor of h-dvh/100dvh; native-fullscreen CSS is exempt and pre-existing
+        # occurrences are a tracked, ratcheting KNOWN_DEBT list in the script.
+        working-directory: .
+        run: node scripts/check-viewport-units.mjs
       - name: Unit tests (vitest, retry absorbs known flakes)
         run: npx vitest run --retry=2
 
