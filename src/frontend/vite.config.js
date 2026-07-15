@@ -15,8 +15,10 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      // 'prompt': a new SW waits until the user accepts the update toast (see
-      // utils/pwaUpdate.js) — a silent reload could interrupt in-memory editing state.
+      // 'prompt': a new SW waits until the user accepts the update gate (see
+      // utils/pwaUpdate.js + components/UpdateGateModal.jsx) — the gate's
+      // "Update now" click drives a barriered flush -> updateSW(true) ->
+      // reload (T5070), so activation is controlled, never silent/early.
       registerType: 'prompt',
       manifest: {
         name: 'Reel Ballers',
@@ -37,6 +39,16 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/storage/],
+        // T5070: set explicitly rather than relying on the Workbox default —
+        // cleanupOutdatedCaches deletes precache entries from prior SW
+        // revisions on activate; clientsClaim lets the newly-activated SW
+        // take control of already-open clients immediately, so the
+        // update-gate's post-reload page is served by the NEW SW, not the
+        // old one. skipWaiting is still driven explicitly by updateSW(true)
+        // (registerType: 'prompt' below), not set globally here — activation
+        // must wait for the gate's barriered flush, never fire early.
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/lh3\.googleusercontent\.com/,

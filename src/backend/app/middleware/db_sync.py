@@ -309,6 +309,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/redoc',
         '/openapi.json',
         '/api/health',
+        '/api/version',      # T5070: version handshake, no DB involvement
         '/api/auth',
         '/api/quests/achievements',
         '/api/shared/',
@@ -320,6 +321,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
     AUTH_ALLOWLIST_PREFIXES = (
         '/api/auth/',               # All auth sub-routes (google, email/*, me, logout)
         '/api/health',              # Health check
+        '/api/version',             # T5070: version handshake works pre-login too
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
         '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/api/shared/',             # T1750: public share links work without auth
@@ -343,6 +345,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth/verify-otp',
         '/api/auth/test-login',
         '/api/health',
+        '/api/version',   # T5070: stateless version check, no per-user data needed
     )
 
     def _is_allowlisted(self, request: Request) -> bool:

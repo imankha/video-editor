@@ -22,6 +22,12 @@ export const useFramingStore = create((set, get) => ({
   // Currently loaded clip data (from projectDataStore, but needed for framing)
   currentClipId: null,
 
+  // T5070: the mounted FramingScreen's saveCurrentClipState, so the update-gate's
+  // step-3 flush (updateFlush.js) can reach it from OUTSIDE the framing component
+  // tree. null when no framing editor is mounted -- the flush treats that as
+  // "nothing uncommitted to save" (edits are already surgically persisted).
+  activeSaveCurrentClipState: null,
+
   // Actions
   setClipState: (clipId, state) => set(prev => ({
     clipStates: { ...prev.clipStates, [clipId]: state }
@@ -34,6 +40,9 @@ export const useFramingStore = create((set, get) => ({
   setIncludeAudio: (value) => set({ includeAudio: value }),
 
   setCurrentClipId: (clipId) => set({ currentClipId: clipId }),
+
+  registerSaveCurrentClipState: (fn) => set({ activeSaveCurrentClipState: fn }),
+  clearSaveCurrentClipState: () => set({ activeSaveCurrentClipState: null }),
 
   markExported: (stateHash) => set({
     hasExported: true,
