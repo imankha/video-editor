@@ -14,7 +14,7 @@ const QUEST_ACHIEVEMENT_KEY = {
 };
 
 const PLAYBACK_RATES = [0.5, 0.85, 1, 1.25, 1.5, 2];
-const DEFAULT_RATE = 0.85;
+const DEFAULT_RATE = 0.8;
 
 // Minimum leftover viewport height (video box already subtracted) needed to
 // place the caption strip below the player instead of overlaying the video.

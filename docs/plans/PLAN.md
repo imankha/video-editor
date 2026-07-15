@@ -492,6 +492,7 @@ Final pre-alpha polish: source material, analytics review, returning-user experi
 | T3590 | ↳ [Day 7/14/30 Content & Personalization](tasks/lifecycle-emails/T3590-lifecycle-email-content.md) | 8 | 5 | 1.6 | TODO | [ ] | render_lifecycle_email: appreciation + help block per stuck_at stage + feedback ask (annotate/playback/create/frame/spotlight/share clarity, scoped to steps reached) + free-credit offer. Reuses _build_share_email design system. |
 | T3595 | [Share Viewer Opt-In & Viewer Bucket](tasks/T3595-share-viewer-optin-bucket.md) | 7 | 6 | 1.2 | TODO | [x] | Opt-in CTA on shared link viewer pages ("learn how to make clips like this?"); opted-in viewers stored as leads + one-time how-to email. Passive viewers never emailed. share_viewer_leads table buckets viewers separately from users; converted_user_id links viewer->signup. Today share_viewed is sharer-attributed only. |
 | T3290 | [Tune NUF for Returning Users](tasks/T3290-tune-nuf-returning-users.md) | 8 | 4 | 2.0 | TODO | [ ] | Differentiate new user flow for returning users vs first-timers. Conversation needed to scope. |
+| T5140 | [Reshoot Tutorial Videos](tasks/T5140-reshoot-tutorial-videos.md) | 6 | 3 | 2.0 | TODO | [ ] | Reshoot in-app quest tutorials against final alpha UI. Bake ~0.8x narration into the audio at production time so videos play correctly at 1x, then flip DEFAULT_RATE back to 1 in both tutorial modals. Do last — needs UI frozen. |
 
 ### Milestone: Alpha Marketing
 
