@@ -14,6 +14,7 @@ export const useAdminStore = create((set, get) => ({
   pageSize: 10,
 
   grantState: {},
+  bulkActionLoading: false,
   funnelTotals: null,
 
   segmentOrigin: null,
@@ -112,6 +113,63 @@ export const useAdminStore = create((set, get) => ({
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },
       }));
+      throw err;
+    }
+  },
+
+  // T4860: bulk grant credits. Follows grantCredits shape but patches every
+  // successfully-granted user's balance from the per-user results array.
+  bulkGrantCredits: async (userIds, amount) => {
+    set({ bulkActionLoading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/users/bulk/grant-credits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: userIds, amount }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const balanceById = {};
+      for (const r of data.results) {
+        if (r.ok) balanceById[r.user_id] = r.balance;
+      }
+      set(state => ({
+        bulkActionLoading: false,
+        users: state.users.map(u =>
+          Object.prototype.hasOwnProperty.call(balanceById, u.user_id)
+            ? { ...u, credits: balanceById[u.user_id] }
+            : u
+        ),
+      }));
+      useCreditStore.getState().fetchCredits();
+      return data;
+    } catch (err) {
+      set({ bulkActionLoading: false });
+      throw err;
+    }
+  },
+
+  // T4860: send an update email to many users (or a single test to the caller).
+  sendBulkEmail: async (userIds, subject, body, { test = false } = {}) => {
+    set({ bulkActionLoading: true });
+    try {
+      const res = await apiFetch(`${API_BASE}/api/admin/users/bulk/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: userIds, subject, body, test }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      set({ bulkActionLoading: false });
+      return data;
+    } catch (err) {
+      set({ bulkActionLoading: false });
       throw err;
     }
   },
