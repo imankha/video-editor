@@ -7,6 +7,7 @@ Used by the OTP auth flow (T401) to send 6-digit verification codes.
 import base64
 import logging
 import os
+import re
 
 import httpx
 
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
 FROM_ADDRESS = "Reel Ballers <noreply@reelballers.com>"
+# T4860: human/reply-able sender for admin update emails (announcements, credit
+# grants). Net-new address; keep noreply@ for all transactional mail. Resend
+# verifies at the domain level, so any @reelballers.com sender works.
+ADMIN_FROM_ADDRESS = "Reel Ballers <hello@reelballers.com>"
 
 # T1740: CAN-SPAM compliant footer for all emails (used by OTP + bug reports)
 _CAN_SPAM_FOOTER = """
@@ -117,6 +122,126 @@ def _build_share_email(
 </table>
 </body>
 </html>"""
+
+
+def body_text_to_html(body: str) -> str:
+    """Convert an admin's plain-text email body to safe HTML (T4860).
+
+    Escapes the entire body first (never accept raw HTML), then splits on blank
+    lines into <p> paragraphs and turns single newlines into <br>. Inline styles
+    only (email clients ignore <style>). The caller has already validated the
+    body is 1..10000 chars of non-empty text.
+    """
+    escaped = _html_escape(body)
+    blocks = re.split(r"\n[ \t]*\n", escaped)
+    paragraphs = []
+    for block in blocks:
+        block = block.strip("\n")
+        if not block.strip():
+            continue
+        paragraphs.append(
+            '<p style="color:#1f2937;font-size:16px;line-height:24px;margin:0 0 16px 0;">'
+            f"{block.replace(chr(10), '<br>')}</p>"
+        )
+    return "".join(paragraphs)
+
+
+def _build_update_email(subject: str, body_html: str) -> str:
+    """Branded HTML shell for an admin update email (T4860).
+
+    Clones the visual shell of _build_share_email (logo header on #7c3aed, white
+    content card, footer with Privacy/Terms + CAN-SPAM footer) but has no CTA
+    button or sharer name — the content card is just the subject as an <h2> and
+    the paragraph-converted body. `subject` is escaped here; `body_html` is
+    already-safe HTML from body_text_to_html and is inserted verbatim.
+    """
+    subject = _html_escape(subject)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>{subject}</title>
+</head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:{_FONT_STACK};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;">
+<tr><td align="center" style="padding:32px 16px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">
+  <tr><td style="height:4px;background:#7c3aed;font-size:0;line-height:0;">&nbsp;</td></tr>
+  <tr><td style="padding:24px 32px 0 32px;text-align:center;">
+    <a href="https://reelballers.com" style="text-decoration:none;">
+      <table role="presentation" width="56" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+        <tr><td style="text-align:left;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Reel</td></tr>
+        <tr><td style="text-align:center;padding:4px 0;"><img src="https://app.reelballers.com/icon-email.png" width="40" height="40" alt="Reel Ballers" style="display:block;width:40px;height:40px;border:0;margin:0 auto;"></td></tr>
+        <tr><td style="text-align:right;color:#111827;font-size:14px;font-weight:700;font-family:{_FONT_STACK};line-height:1;">Ballers</td></tr>
+      </table>
+    </a>
+  </td></tr>
+  <tr><td style="padding:20px 32px 32px 32px;">
+    <h2 style="color:#111827;font-size:24px;line-height:32px;font-weight:700;margin:0 0 16px 0;">{subject}</h2>
+    {body_html}
+  </td></tr>
+  <tr><td style="padding:0 32px;"><hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"></td></tr>
+  <tr><td style="padding:24px 32px;">
+    <p style="color:#4b5563;font-size:13px;line-height:20px;margin:0 0 8px 0;">
+      Sent via <a href="https://reelballers.com" style="color:#6d28d9;text-decoration:none;">Reel Ballers</a>
+    </p>
+    <p style="color:#6b7280;font-size:12px;line-height:18px;margin:0;">
+      <a href="https://app.reelballers.com/privacy" style="color:#6b7280;text-decoration:underline;">Privacy Policy</a>
+      &nbsp;&middot;&nbsp;
+      <a href="https://app.reelballers.com/terms" style="color:#6b7280;text-decoration:underline;">Terms of Service</a>
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>"""
+
+
+async def send_admin_update_email(to_email: str, subject: str, body_html: str) -> bool:
+    """Send one branded admin update email to a single recipient (T4860).
+
+    Dev-mode (RESEND_API_KEY unset): log the would-be email and return True —
+    matches the share functions, NOT OTP's raise, so a missing key never 500s
+    the admin panel in local dev. `subject` is plain text; `body_html` is the
+    already-escaped/converted body from body_text_to_html.
+    """
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        logger.warning(
+            f"[Email] DEV MODE -- admin update email to {to_email} "
+            f"subject '{subject}' (body {len(body_html)} chars HTML)"
+        )
+        return True
+
+    html_body = _build_update_email(subject, body_html)
+
+    try:
+        async def _send():
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                return await client.post(
+                    RESEND_API_URL,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json={
+                        "from": ADMIN_FROM_ADDRESS,
+                        "to": [to_email],
+                        "subject": subject,
+                        "html": html_body,
+                    },
+                )
+
+        resp = await retry_async_call(_send, operation="resend_admin_update", **TIER_1)
+        if resp.status_code not in (200, 201):
+            logger.error(f"[Email] Admin update email failed: {resp.status_code} {resp.text}")
+            return False
+        logger.info(f"[Email] Admin update email sent to {to_email}")
+        return True
+    except Exception as e:
+        logger.error(f"[Email] Admin update email to {to_email} failed: {e}")
+        return False
 
 
 def _resolve_sender_name(sharer_email: str) -> str:

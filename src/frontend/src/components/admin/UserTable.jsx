@@ -1,6 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars -- all icons are used in JSX below; the config's no-unused-vars doesn't recognize JSX usage
+import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square } from 'lucide-react';
+// eslint-disable-next-line no-unused-vars -- used in JSX below
 import { CreditGrantModal } from './CreditGrantModal';
+// eslint-disable-next-line no-unused-vars -- used in JSX below
+import { BulkEmailModal } from './BulkEmailModal';
+// eslint-disable-next-line no-unused-vars -- used in JSX below
+import { BulkActionBar } from './BulkActionBar';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';
 
@@ -135,10 +141,16 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
   const nextPage = useAdminStore(s => s.nextPage);
   const prevPage = useAdminStore(s => s.prevPage);
 
-  const [grantUser, setGrantUser] = useState(null);
+  const [grantUsers, setGrantUsers] = useState(null);
+  const [emailUsers, setEmailUsers] = useState(null);
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState('last_active_at');
   const [sortDir, setSortDir] = useState('desc');
+
+  // T4860: selection is ephemeral view state — local useState only, never
+  // persisted (no-redundant-state / no persisted view state).
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
 
   const matchedUsers = useMemo(() => {
     if (!search) return users;
@@ -165,6 +177,55 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
     }
   }
 
+  // Selected user objects derived from the full page (not just the filtered
+  // view), so a search filter never drops an already-selected user.
+  const selectedUsers = useMemo(
+    () => users.filter(u => selectedIds.has(u.user_id)),
+    [users, selectedIds],
+  );
+
+  const allFilteredSelected = sorted.length > 0 && sorted.every(u => selectedIds.has(u.user_id));
+
+  function toggleRow(userId) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        for (const u of sorted) next.delete(u.user_id);
+      } else {
+        for (const u of sorted) next.add(u.user_id);
+      }
+      return next;
+    });
+  }
+
+  function enterSelectionMode() {
+    setSelectionMode(true);
+  }
+
+  function exitSelectionMode() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function handleBulkGrantDone() {
+    setGrantUsers(null);
+    exitSelectionMode();
+  }
+
+  function handleBulkEmailDone() {
+    setEmailUsers(null);
+    exitSelectionMode();
+  }
+
   function SortIcon({ colKey }) {
     if (sortKey !== colKey) return <ArrowUpDown size={10} className="opacity-30" />;
     return sortDir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />;
@@ -188,6 +249,18 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
             />
           </div>
 
+          <button
+            type="button"
+            onClick={() => (selectionMode ? exitSelectionMode() : enterSelectionMode())}
+            className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
+              selectionMode
+                ? 'border-purple-500/50 bg-purple-600/30 text-purple-200'
+                : 'border-white/10 text-gray-300 hover:bg-white/5'
+            }`}
+          >
+            {selectionMode ? 'Done' : 'Select'}
+          </button>
+
           <span className="text-gray-500 text-xs">
             {sorted.length} of {users.length} on page
             {totalUsers > 0 && ` · ${totalUsers} users total`}
@@ -204,11 +277,32 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
         </a>
       </div>
 
+      {selectionMode && (
+        <BulkActionBar
+          count={selectedIds.size}
+          onGrant={() => setGrantUsers(selectedUsers)}
+          onEmail={() => setEmailUsers(selectedUsers)}
+          onCancel={exitSelectionMode}
+        />
+      )}
+
       {/* Table */}
       <div className="rounded-lg border border-white/10">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/10 text-gray-400 text-xs uppercase tracking-wider">
+              {selectionMode && (
+                <th className="px-3 py-2.5 w-8 text-center select-none">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAll}
+                    className="text-gray-400 hover:text-purple-300 transition-colors align-middle"
+                    title={allFilteredSelected ? 'Deselect all' : 'Select all'}
+                  >
+                    {allFilteredSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                  </button>
+                </th>
+              )}
               {COLUMNS.map(col => (
                 <th
                   key={col.key}
@@ -224,8 +318,27 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map(user => (
-              <tr key={user.user_id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+            {sorted.map(user => {
+              const isSelected = selectedIds.has(user.user_id);
+              return (
+              <tr
+                key={user.user_id}
+                className={`border-b border-white/5 transition-colors ${
+                  isSelected ? 'bg-purple-500/10' : 'hover:bg-white/5'
+                }`}
+              >
+                {selectionMode && (
+                  <td className="px-3 py-2.5 text-center">
+                    <button
+                      type="button"
+                      onClick={() => toggleRow(user.user_id)}
+                      className="text-gray-400 hover:text-purple-300 transition-colors align-middle"
+                      title={isSelected ? 'Deselect' : 'Select'}
+                    >
+                      {isSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                    </button>
+                  </td>
+                )}
                 <td className="px-3 py-2.5 text-gray-200 text-xs">
                   {user.email ? (
                     <button
@@ -268,7 +381,7 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   <div className="flex items-center justify-end gap-1.5">
                     <span className="text-gray-200 text-xs">{user.credits == null ? '—' : user.credits}</span>
                     <button
-                      onClick={() => setGrantUser(user)}
+                      onClick={() => setGrantUsers([user])}
                       className="text-gray-500 hover:text-purple-400 transition-colors"
                       title="Grant credits"
                     >
@@ -300,7 +413,8 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -330,8 +444,15 @@ export function UserTable({ users, onUserClick, funnelTotals }) {
         </div>
       )}
 
-      {grantUser && (
-        <CreditGrantModal user={grantUser} onClose={() => setGrantUser(null)} />
+      {grantUsers && (
+        <CreditGrantModal
+          users={grantUsers}
+          onClose={grantUsers.length > 1 ? handleBulkGrantDone : () => setGrantUsers(null)}
+        />
+      )}
+
+      {emailUsers && (
+        <BulkEmailModal users={emailUsers} onClose={handleBulkEmailDone} />
       )}
     </>
   );
