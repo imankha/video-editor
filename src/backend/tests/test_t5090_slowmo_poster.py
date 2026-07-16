@@ -91,6 +91,16 @@ def test_empty_and_none_inputs():
     assert first_slowmo_section([(None, 5.0)]) is None
 
 
+def test_leading_segmentless_clip_with_unknown_duration_bails():
+    # A leading uploaded clip (no segments_data, no raw_clips row -> source_duration
+    # None) has an UNKNOWN output length. We must NOT accumulate a 0.0 offset that
+    # would mis-place clip 1's slow-mo at the start; bail to first frame (None).
+    clip1 = {"boundaries": [0, 1, 3], "segmentSpeeds": {"0": 0.5}}
+    assert first_slowmo_section([(None, None), (clip1, 3.0)]) is None
+    # Sanity: with a KNOWN leading duration the offset is correct.
+    assert first_slowmo_section([(None, 3.0), (clip1, 3.0)]) == (3.0, 5.0)
+
+
 # ---------------------------------------------------------------------------
 # generate_and_store_poster: slow-mo -> first-half window; else first frame
 # ---------------------------------------------------------------------------

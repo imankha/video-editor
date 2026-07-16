@@ -174,7 +174,12 @@ def _clip_slowmo_walk(
     local output timeline, or None when the clip has no slow-mo segment.
     """
     if not segments_data:
-        return (None, source_duration or 0.0)
+        # No segments -> no slow-mo. Output length is the clip's source duration;
+        # when THAT is unknown (uploaded clip with no raw_clips row), return inf so
+        # first_slowmo_section's isfinite bail fires rather than accumulating a
+        # bogus 0.0 offset that would mis-place a LATER clip's slow-mo (no
+        # fabricated offset -- falls back to the first frame).
+        return (None, source_duration if source_duration is not None else float("inf"))
 
     trim_start, trim_end = get_trim_range(segments_data)
     if trim_end == float("inf") and source_duration:
