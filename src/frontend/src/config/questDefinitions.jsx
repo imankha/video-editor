@@ -161,7 +161,7 @@ export const STEP_DESCRIPTIONS = {
   return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
   open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.DRAFTS}</MiniButton> and tap your reel's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
-  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
+  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
   wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
   // Quest 3 — Spotlight Your Player
