@@ -5,7 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
-import { useQuestStore } from '../../../stores/questStore';
+import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
@@ -110,16 +110,6 @@ export function ClipDetailsEditor({
   const handleNameChange = (e) => {
     // Store whatever the user types - empty string means "use auto-generated"
     onUpdate({ name: e.target.value });
-  };
-
-  // T5185: the rate_clip step ("Rate & Tag the Play") completes the moment the clip
-  // has BOTH a star rating (>=1) AND at least one tag — fired from whichever gesture
-  // completes the pair, immediately (not on save). recordAchievement is fire-and-forget
-  // and session-deduped, so calling it from both handlers POSTs once per session.
-  const maybeRecordRatedAndTagged = (rating, tags) => {
-    if (rating >= 1 && (tags?.length ?? 0) >= 1) {
-      useQuestStore.getState().recordAchievement('clip_rated');
-    }
   };
 
   const handleRatingChange = (newRating) => {

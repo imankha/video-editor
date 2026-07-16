@@ -323,6 +323,12 @@ export function QuestPanel({ inline = false }) {
                           {STEP_DESCRIPTIONS[stepId]}
                         </p>
                       )}
+                      {/* Unmissable CTA for the tutorial step the user should watch right now */}
+                      {isCurrent && !done && TUTORIAL_STEP_QUEST[stepId] && (
+                        <div className="mt-2">
+                          <WatchTutorialButton questId={TUTORIAL_STEP_QUEST[stepId]} variant="primary" />
+                        </div>
+                      )}
                       {/* Tutorial steps stay relaunchable even after completion */}
                       {done && TUTORIAL_STEP_QUEST[stepId] && (
                         <div className="mt-1">

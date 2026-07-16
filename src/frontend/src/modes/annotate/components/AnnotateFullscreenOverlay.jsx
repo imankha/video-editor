@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Star, X, Plus } from 'lucide-react';
 import { getPositions, getTagSet } from '../constants/tagRegistry';
 import { generateClipName } from '../../../utils/clipDisplayName';
+import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput, hasUncommittedTeammateText } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
@@ -230,15 +231,16 @@ export function AnnotateFullscreenOverlay({
     if (!createProjectManuallySet) {
       setCreateProject(newRating === 5 && myAthlete);
     }
+    maybeRecordRatedAndTagged(newRating, selectedTags);
   };
   handleRatingChangeRef.current = handleRatingChange;
 
   const handleTagToggle = (tagName) => {
-    setSelectedTags((prev) =>
-      prev.includes(tagName)
-        ? prev.filter((t) => t !== tagName)
-        : [...prev, tagName]
-    );
+    const newTags = selectedTags.includes(tagName)
+      ? selectedTags.filter((t) => t !== tagName)
+      : [...selectedTags, tagName];
+    setSelectedTags(newTags);
+    maybeRecordRatedAndTagged(rating, newTags);
   };
 
   const handleNameChange = (e) => {
