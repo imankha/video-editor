@@ -254,7 +254,9 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
     assert set(res["generated"]) == {1}
     assert set(res["already_present"]) == {2}
     assert set(res["skipped_gone"]) == {3}
-    gen.assert_called_once_with(USER_ID, "r1.mp4")
+    # T5090: backfill now reconstructs + passes the reel's ordered clip segments.
+    # r1 has no project rows here, so reconstruction yields [] (-> first frame).
+    gen.assert_called_once_with(USER_ID, "r1.mp4", [])
 
     # Columns healed/set for r1 + r2.
     rows = {r["id"]: r["poster_filename"]

@@ -54,7 +54,11 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
-from ...services.poster import generate_and_store_poster
+from ...services.poster import (
+    generate_and_store_poster,
+    load_project_clip_segments,
+    read_clip_segments_for_project,
+)
 from ...storage import (
     delete_from_r2,
     generate_presigned_url,
@@ -117,11 +121,15 @@ def _finalize_overlay_export(
     Shared by all overlay export completion paths (no-keyframes copy, local,
     Modal GPU, test mode). Returns the final_video_id.
     """
-    # T4890: extract + store the first-frame poster (og:image for share links)
-    # BEFORE opening the DB connection so the ffmpeg/R2 work never extends the
-    # write transaction. Best-effort: None on failure (never blocks the export).
-    # The final video is already in R2 here, so ffmpeg reads its presigned URL.
-    poster_fn = generate_and_store_poster(user_id, output_filename)
+    # T4890: extract + store the poster (og:image for share links) BEFORE opening
+    # the DB connection so the ffmpeg/R2 work never extends the write transaction.
+    # Best-effort: None on failure (never blocks the export). The final video is
+    # already in R2 here, so ffmpeg reads its presigned URL.
+    # T5090: thread the project's ordered working-clip segment data so the reel
+    # poster is the clearest frame in the first half of the first slow-mo section
+    # (no slow-mo -> first frame). Loaded outside the write transaction below.
+    clip_segments = load_project_clip_segments(project_id)
+    poster_fn = generate_and_store_poster(user_id, output_filename, clip_segments)
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -1307,12 +1315,16 @@ async def export_final(
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
-        # T4890: extract + store the first-frame poster (og:image for share links),
-        # frozen on the row at finalize. Done here -- right after the R2 upload and
-        # BEFORE any DB write -- so the ffmpeg/R2 work never runs inside an open write
+        # T4890: extract + store the poster (og:image for share links), frozen on
+        # the row at finalize. Done here -- right after the R2 upload and BEFORE any
+        # DB write -- so the ffmpeg/R2 work never runs inside an open write
         # transaction (parity with _finalize_overlay_export, which hoists it too).
         # Best-effort: None on failure (never blocks the export).
-        poster_fn = generate_and_store_poster(user_id, filename)
+        # T5090: reuse the already-open cursor to read the project's ordered
+        # working-clip segment data (only SELECTs have run so far) so the reel
+        # poster follows the slow-mo-first policy; no slow-mo -> first frame.
+        clip_segments = read_clip_segments_for_project(cursor, project_id)
+        poster_fn = generate_and_store_poster(user_id, filename, clip_segments)
 
         # Get next version number for final video
         cursor.execute("""
