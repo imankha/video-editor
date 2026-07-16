@@ -112,13 +112,21 @@ export function ClipDetailsEditor({
     onUpdate({ name: e.target.value });
   };
 
+  // T5185: the rate_clip step ("Rate & Tag the Play") completes the moment the clip
+  // has BOTH a star rating (>=1) AND at least one tag — fired from whichever gesture
+  // completes the pair, immediately (not on save). recordAchievement is fire-and-forget
+  // and session-deduped, so calling it from both handlers POSTs once per session.
+  const maybeRecordRatedAndTagged = (rating, tags) => {
+    if (rating >= 1 && (tags?.length ?? 0) >= 1) {
+      useQuestStore.getState().recordAchievement('clip_rated');
+    }
+  };
+
   const handleRatingChange = (newRating) => {
     // Only update rating, don't touch the name
     onUpdate({ rating: newRating });
-    // T5150: the rate_clip quest step completes on the RATING gesture (not on
-    // save). recordAchievement is fire-and-forget and session-deduped, so firing
-    // on every star click is safe — it POSTs once per session.
-    useQuestStore.getState().recordAchievement('clip_rated');
+    // Fire only if the clip will now have both a rating and a tag.
+    maybeRecordRatedAndTagged(newRating, region.tags);
   };
 
   const handleTagToggle = (tagName) => {
@@ -129,6 +137,8 @@ export function ClipDetailsEditor({
 
     // Only update tags, don't touch the name
     onUpdate({ tags: newTags });
+    // Fire only if the clip now has both a rating and a tag.
+    maybeRecordRatedAndTagged(region.rating, newTags);
   };
 
   // During drag: only update local state (instant, no parent re-render)
