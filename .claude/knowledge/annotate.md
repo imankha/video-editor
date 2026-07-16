@@ -1,6 +1,6 @@
 ---
 domain: annotate
-updated: 2026-07-11 (T4220/T4260/T4270 bug sweep)
+updated: 2026-07-16 (T4933 landscape sidebar scroll region)
 ---
 # Annotate — Domain Knowledge
 
@@ -129,6 +129,23 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   viewed-duration high-water when viewed/duration < 0.95 (annotateVideoLoad.js:90-105).
 
 ## Landmines & history
+- **Landscape-phone sidebar = the DESKTOP sidebar (T4933).** The `sm` breakpoint (>=640px) is
+  width-only, so a phone in LANDSCAPE ≥640px wide (iPhone 14 844x390, Pixel 7 915x412) renders the
+  full desktop `ClipsSidePanel` (`hidden sm:flex`, `w-[352px]`) — NOT the mobile sidebar. Its
+  clip-editor content (`ClipDetailsEditor`, all desktop fields ~546px tall; or the `layout="inline"`
+  add-clip form) then lives inside the `h-dvh overflow-hidden` app shell (App.jsx ~726) but the
+  landscape viewport is only ~390px, so bottom controls (Delete Clip / Create Reel / Save) get
+  clipped below the fold with no scroller. **Fix pattern (T4933): each bottom pane owns a scroll
+  region.** In `ClipsSidePanel`, the desktop `ClipDetailsEditor` is wrapped in `min-h-0
+  overflow-y-auto`, the add-clip form's inline wrapper (`AnnotateFullscreenOverlay` `layout='inline'`)
+  got `min-h-0` added to its existing `overflow-y-auto`, and the clip list keeps a `min-h-[64px]`
+  floor (not `min-h-0`) so it stays visible instead of collapsing to 0 when a bottom pane shares a
+  short sidebar. `min-h-0` is the key: a flex child won't shrink below content (so `overflow-y-auto`
+  never engages) until its `min-height:auto` is overridden. On tall desktop/portrait these are no-ops
+  (content fits, no scrollbar). Guarded by the T4930 usability matrix (`screen-usability.spec.js`,
+  Annotate landscape) — the audit throws the exact "dead scroll trap … 546px in a 390px clip box"
+  if it regresses. NOTE: reproducing needs an account whose game has clips (a clip auto-selects →
+  editor mounts); an empty-clip game hides the bug (no tall pane renders).
 - **T4060 load-order coupling (fixed)**: annotations stopped rendering in Annotate for ALL accounts
   because T4000's early `/video` src (seeded by `peekPendingGame` on first render) made
   AnnotateScreen's old `if (annotateVideoUrl) return` guard skip `handleLoadGame` → `/load` never
@@ -157,6 +174,22 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   before assuming load is read-only.
 - **Upload duplicates game state**: one-time upload-store restore effect (`[]` deps, L280-298) +
   active-upload video restore (L323-333) re-hydrate state when navigating back mid-upload.
+- **Landscape-phone renders the DESKTOP clip sidebar (T4933 landmine).** The `sm` breakpoint is
+  width-only: a phone in LANDSCAPE ≥640px wide (iPhone 14 844×390, Pixel 7 915×412) trips
+  `hidden sm:flex` (AnnotateScreen.jsx:599) and `useIsMobile()` → false, so it gets the full
+  desktop `ClipsSidePanel` (`w-[352px]`, ClipsSidePanel.jsx:115) with ALL editor fields
+  (~546px tall), NOT the mobile off-canvas drawer — inside the `h-dvh overflow-hidden` app shell
+  (App.jsx:726) whose landscape height is only ~390px. **Sidebar scroll-region pattern (T4933):**
+  each bottom pane owns its own scroller so its controls stay reachable — clip list is
+  `flex-1 min-h-[64px] overflow-y-auto` (min-h floor, not min-h-0, so it doesn't collapse to 0
+  when a bottom pane is present), the desktop `ClipDetailsEditor` is wrapped in
+  `min-h-0 overflow-y-auto`, and the inline add-clip form (`AnnotateFullscreenOverlay` `layout="inline"`)
+  carries `min-h-0 overflow-y-auto` (the min-h-0 is a no-op where the inline form is not a flex
+  child — mobile inline / fullscreen). Without an inner scroller the usability audit
+  (screen-usability.spec.js) throws `dead scroll trap: "Save" clipped ... 546px in a 390px clip
+  box`. Desktop/portrait unchanged (natural height, nothing to scroll). NOTE: this env's dev DB
+  data may not reproduce the height overflow (sparse clip) even though prod does — verify by
+  selecting a clip to mount the tall editor at 844×390.
 
 ## Perf attribution (T4770, 2026-07-09)
 - **Annotate video 302→R2 is FAST live (~100ms), NOT slow.** `GET /api/games/{id}/load` and

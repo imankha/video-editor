@@ -537,8 +537,12 @@ export function AnnotateFullscreenOverlay({
   }
 
   if (layout === 'inline') {
+    // min-h-0 lets this pane shrink inside a flex column (the ClipsSidePanel
+    // sidebar) so its own overflow-y-auto actually scrolls and the Save/Cancel
+    // controls stay reachable on a short landscape-phone sidebar (T4933). It is a
+    // no-op where the inline form is not a flex child (mobile inline / fullscreen).
     return (
-      <div data-add-clip-form className="border-t border-gray-700 p-3 overflow-y-auto">
+      <div data-add-clip-form className="border-t border-gray-700 p-3 min-h-0 overflow-y-auto">
         {formContent}
       </div>
     );

@@ -222,8 +222,10 @@ export function ClipsSidePanel({
             </div>
           )}
 
-          {/* Clip List - scrollable with custom scrollbar */}
-          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin">
+          {/* Clip List - scrollable with custom scrollbar. min-h floor (not
+              min-h-0) keeps the list visible when the details/add-clip pane
+              below shares a short landscape sidebar instead of collapsing to 0 (T4933). */}
+          <div className="flex-1 min-h-[64px] overflow-y-auto scrollbar-thin">
             {isLoading ? (
               <div className="p-4 text-gray-400 text-sm text-center flex flex-col items-center gap-2">
                 <Loader size={20} className="animate-spin text-green-400" />
@@ -258,20 +260,25 @@ export function ClipsSidePanel({
             )}
           </div>
 
-          {/* Details Editor (desktop only - on mobile it takes over the full panel) */}
+          {/* Details Editor (desktop only - on mobile it takes over the full panel).
+              min-h-0 overflow-y-auto gives the editor its own scroll region so its
+              controls (Delete Clip / Create Reel) stay reachable when the sidebar is
+              shorter than the editor content — e.g. the landscape-phone sm sidebar (T4933). */}
           {!isMobile && selectedRegion && !showAddClipForm && (
-            <ClipDetailsEditor
-              region={selectedRegion}
-              onUpdate={(updates) => onUpdateRegion(selectedRegion.id, updates)}
-              onDelete={() => onDeleteRegion(selectedRegion.id)}
-              maxNotesLength={maxNotesLength}
-              videoDuration={videoDuration}
-              onSeek={onSeek}
-              videoController={videoController}
-              onScrubLock={onScrubLock}
-              onScrubUnlock={onScrubUnlock}
-              teammateSuggestions={teammateSuggestions}
-            />
+            <div className="min-h-0 overflow-y-auto">
+              <ClipDetailsEditor
+                region={selectedRegion}
+                onUpdate={(updates) => onUpdateRegion(selectedRegion.id, updates)}
+                onDelete={() => onDeleteRegion(selectedRegion.id)}
+                maxNotesLength={maxNotesLength}
+                videoDuration={videoDuration}
+                onSeek={onSeek}
+                videoController={videoController}
+                onScrubLock={onScrubLock}
+                onScrubUnlock={onScrubUnlock}
+                teammateSuggestions={teammateSuggestions}
+              />
+            </div>
           )}
 
           {/* Add Clip form (desktop, non-fullscreen only) */}
