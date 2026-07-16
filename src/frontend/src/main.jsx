@@ -2,6 +2,9 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { AuthGateModal } from './components/AuthGateModal.jsx'
+// Used in JSX below; same pre-existing JSX-detection gap as the other
+// component imports in this file (see AuthGateModal above).
+import { UpdateGateModal } from './components/UpdateGateModal.jsx' // eslint-disable-line no-unused-vars
 import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
 import { ReportProblemButton } from './components/ReportProblemButton.jsx'
 import { ToastContainer } from './components/shared'
@@ -24,6 +27,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
     <AuthGateModal />
+    {/* T5070: mounted AFTER AuthGateModal so its z-[60] paints above the
+        auth/login surface -- an un-updated client can't log in either. */}
+    <UpdateGateModal />
     <AuthErrorBanner />
     {/* Single global mount — renders toasts on every screen, incl. sign-in and shared views */}
     <ToastContainer />

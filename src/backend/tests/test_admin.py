@@ -302,3 +302,188 @@ class TestAdminGrantCredits:
             headers=_auth_headers("admin-user"),
         )
         assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# T4860: Bulk user actions
+# ---------------------------------------------------------------------------
+
+class TestAdminBulkGrantCredits:
+    def test_non_admin_gets_403(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": ["regular-user"], "amount": 10},
+            headers=_auth_headers("regular-user"),
+        )
+        assert resp.status_code == 403
+
+    def test_happy_path_grants_each_user(self, client):
+        """Proves the bulk route is reachable (not captured by the
+        /users/{user_id}/grant-credits route) and grants each user."""
+        from app.services.user_db import get_credit_balance
+        before = get_credit_balance("regular-user")["balance"]
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": ["admin-user", "regular-user"], "amount": 15},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["granted"] == 2
+        assert data["failed"] == 0
+        by_id = {r["user_id"]: r for r in data["results"]}
+        assert by_id["regular-user"]["ok"] is True
+        assert by_id["regular-user"]["balance"] == before + 15
+
+    def test_unknown_id_is_partial_failure(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": ["regular-user", "nope-nobody"], "amount": 5},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["granted"] == 1
+        assert data["failed"] == 1
+        by_id = {r["user_id"]: r for r in data["results"]}
+        assert by_id["regular-user"]["ok"] is True
+        assert by_id["nope-nobody"]["ok"] is False
+        assert by_id["nope-nobody"]["error"] == "user not found"
+
+    def test_over_cap_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": [f"u{i}" for i in range(101)], "amount": 1},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+    def test_empty_ids_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": [], "amount": 1},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+    def test_zero_amount_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/grant-credits",
+            json={"user_ids": ["regular-user"], "amount": 0},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+
+class TestAdminBulkEmail:
+    @pytest.fixture(autouse=True)
+    def _dev_mode(self, monkeypatch):
+        """Force dev-mode email: with RESEND_API_KEY unset, send_admin_update_email
+        logs and returns True instead of hitting the network (never 500s)."""
+        monkeypatch.delenv("RESEND_API_KEY", raising=False)
+
+    def test_non_admin_gets_403(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={"user_ids": ["regular-user"], "subject": "Hi", "body": "Hello"},
+            headers=_auth_headers("regular-user"),
+        )
+        assert resp.status_code == 403
+
+    def test_happy_path_sends_each_recipient(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={
+                "user_ids": ["admin-user", "regular-user"],
+                "subject": "New features",
+                "body": "We shipped bulk actions.\n\nEnjoy!",
+            },
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sent"] == 2
+        assert data["failed"] == 0
+        by_id = {r["user_id"]: r for r in data["results"]}
+        assert by_id["regular-user"]["ok"] is True
+        assert by_id["regular-user"]["email"] == "other@test.local"
+
+    def test_test_send_ignores_ids_and_hits_only_caller(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={
+                "user_ids": ["regular-user", "admin-user"],
+                "subject": "Preview",
+                "body": "Test body",
+                "test": True,
+            },
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sent"] == 1
+        assert data["failed"] == 0
+        assert len(data["results"]) == 1
+        assert data["results"][0]["user_id"] == "admin-user"
+        assert data["results"][0]["email"] == "test-admin@test.local"
+
+    def test_dev_mode_does_not_500(self, client):
+        """With RESEND_API_KEY unset, the endpoint returns 200 (logs), not 500."""
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={"user_ids": ["regular-user"], "subject": "Yo", "body": "Body"},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 200
+        assert resp.json()["sent"] == 1
+
+    def test_over_cap_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={
+                "user_ids": [f"u{i}" for i in range(101)],
+                "subject": "Hi",
+                "body": "Body",
+            },
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+    def test_empty_subject_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={"user_ids": ["regular-user"], "subject": "   ", "body": "Body"},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+    def test_whitespace_only_body_rejected(self, client):
+        resp = client.post(
+            "/api/admin/users/bulk/email",
+            json={"user_ids": ["regular-user"], "subject": "Hi", "body": "\n\n  \n"},
+            headers=_auth_headers("admin-user"),
+        )
+        assert resp.status_code == 400
+
+
+class TestAdminUpdateEmailBuilder:
+    """Unit tests for the branded update-email builder (no network)."""
+
+    def test_body_text_to_html_escapes_and_paragraphs(self):
+        from app.services.email import body_text_to_html
+        html = body_text_to_html("Line one\nLine two\n\nSecond para")
+        assert "<p " in html
+        assert "Line one<br>Line two" in html
+        assert html.count("<p ") == 2  # two blank-line-separated paragraphs
+
+    def test_body_text_to_html_never_emits_raw_html(self):
+        from app.services.email import body_text_to_html
+        html = body_text_to_html("<script>alert(1)</script>")
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+
+    def test_update_email_escapes_subject(self):
+        from app.services.email import _build_update_email, body_text_to_html
+        html = _build_update_email("<b>Hi</b>", body_text_to_html("body"))
+        assert "<b>Hi</b>" not in html
+        assert "&lt;b&gt;Hi&lt;/b&gt;" in html

@@ -9,7 +9,7 @@ import { formatClock } from '@editor/utils/timeFormat';
 import type { TutorialAsset } from '../config/tutorials';
 
 const PLAYBACK_RATES = [0.5, 0.85, 1, 1.25, 1.5, 2];
-const DEFAULT_RATE = 0.85; // 1x narration runs too fast — match the in-app default.
+const DEFAULT_RATE = 0.8; // 1x narration runs too fast — match the in-app default.
 
 interface Chapter {
   startTime: number;

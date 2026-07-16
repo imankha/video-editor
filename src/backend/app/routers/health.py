@@ -8,18 +8,61 @@ import logging
 import time
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 logger = logging.getLogger(__name__)
 
-from ..database import get_database_path, get_user_data_path, is_database_initialized, sync_db_to_cloud
+from ..database import (
+    get_database_path,
+    get_user_data_path,
+    has_sync_pending,
+    is_database_initialized,
+    sync_db_to_cloud,
+)
 from ..middleware.db_sync import set_sync_failed
 from ..models import HelloResponse
 from ..storage import R2_ENABLED
 from ..user_context import get_current_user_id
+from ..version import APP_VERSION
 from ..websocket import export_progress
 
 router = APIRouter(tags=["health"])
+
+
+@router.get("/api/version")
+async def get_version(response: Response):
+    """T5070: unauthenticated version handshake — lets the client (pre- or
+    post-login) detect a backend-only deploy (no new service worker, so the
+    normal PWA update prompt never fires) and raise the update gate.
+    """
+    response.headers["Cache-Control"] = "no-store"
+    return {"version": APP_VERSION}
+
+
+@router.post("/api/sync/flush-verify")
+async def flush_verify():
+    """T5070: barrier endpoint for the update-gate's step-3 durable flush.
+
+    Being a POST (a WRITE method), RequestContextMiddleware's pending-sync
+    retry (T930/T1150, db_sync.py `_sync_aware_flow`) already ran -- awaited,
+    inside this user's per-request write lock -- BEFORE this handler executed.
+    That retry either had nothing to do (nothing was pending) or just landed
+    (or re-confirmed the failure of) any previously deferred fire-and-forget
+    sync (the 0.5s upload-lock defer window, T3250). This handler makes no
+    writes of its own: the barrier confirms EXISTING state landed, it does not
+    create new state to sync.
+    """
+    user_id = get_current_user_id()
+    if has_sync_pending(user_id):
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "code": "sync_failed",
+                "retryable": True,
+                "detail": "Could not confirm your latest changes were saved. Please try again.",
+            },
+        )
+    return {"status": "ok"}
 
 
 @router.get("/")

@@ -378,6 +378,15 @@ export function FramingScreen({
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
+  // T5070: expose this mounted screen's saveCurrentClipState to the update-gate's
+  // step-3 flush (updateFlush.js), which runs outside the framing component tree.
+  // Registration only -- no persistence happens here; the flush calls the
+  // function itself, gesture-triggered by the "Update now" click.
+  useEffect(() => {
+    useFramingStore.getState().registerSaveCurrentClipState(framingSaveCurrentClipState);
+    return () => useFramingStore.getState().clearSaveCurrentClipState();
+  }, [framingSaveCurrentClipState]);
+
   // Track the last loaded URL to detect when clip changes
   const lastLoadedUrlRef = useRef(null);
   const stateRestoredForUrlRef = useRef(null); // Guard against infinite restore loops

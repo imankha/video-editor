@@ -230,6 +230,139 @@ async def list_users(
     }
 
 
+# ---------------------------------------------------------------------------
+# T4860: Bulk user actions (grant credits / send update email)
+#
+# These MUST be registered before /users/{user_id}/grant-credits below: FastAPI
+# matches routes in definition order, and /users/bulk/grant-credits would
+# otherwise be captured by the {user_id} route with user_id="bulk". A max of
+# 100 ids per request keeps the sequential loops bounded. Partial failure is a
+# first-class outcome (per-user result), never an all-or-nothing error.
+# ---------------------------------------------------------------------------
+
+BULK_MAX_IDS = 100
+BULK_SUBJECT_MAX = 200
+BULK_BODY_MAX = 10000
+
+
+class BulkGrantCreditsRequest(BaseModel):
+    user_ids: list[str]
+    amount: int
+
+
+class BulkEmailRequest(BaseModel):
+    user_ids: list[str] = []
+    subject: str
+    body: str
+    test: bool = False
+
+
+@router.post("/users/bulk/grant-credits")
+async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
+    """Grant credits to many users at once. Admin only.
+
+    Loops the existing single-user grant_credits() sequentially (each opens that
+    user's own SQLite under a per-user write lock — asyncio.gather would deadlock
+    on the lock). Unknown ids are skipped and recorded, not fatal.
+    """
+    _require_admin()
+
+    if request.amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if not request.user_ids:
+        raise HTTPException(status_code=400, detail="user_ids must not be empty")
+    if len(request.user_ids) > BULK_MAX_IDS:
+        raise HTTPException(status_code=400, detail=f"Too many users (max {BULK_MAX_IDS})")
+
+    results: list[dict] = []
+    granted = 0
+    failed = 0
+    for uid in request.user_ids:
+        user = get_user_by_id(uid)
+        if not user:
+            results.append({"user_id": uid, "ok": False, "error": "user not found"})
+            failed += 1
+            continue
+        try:
+            balance = grant_credits(uid, request.amount, source="admin_grant")
+            results.append({"user_id": uid, "ok": True, "balance": balance})
+            granted += 1
+        except Exception as exc:
+            logger.exception(f"[Admin] bulk grant-credits failed for {uid}")
+            results.append({"user_id": uid, "ok": False, "error": str(exc)})
+            failed += 1
+
+    return {"results": results, "granted": granted, "failed": failed}
+
+
+@router.post("/users/bulk/email")
+async def admin_bulk_email(request: BulkEmailRequest):
+    """Send an individual branded update email to many users at once. Admin only.
+
+    Renders the template body once, then sends one email per recipient
+    sequentially via send_admin_update_email (never one email with many
+    recipients — that would leak user emails to each other). Emails are resolved
+    from the Postgres users table (project rule, never auth.sqlite). Awaits real
+    per-recipient results — no background_tasks, the admin is watching. When
+    test=true, user_ids is ignored and one email goes to the calling admin's own
+    address so they can confirm rendering before any bulk send.
+    """
+    _require_admin()
+
+    subject = request.subject.strip()
+    body = request.body
+    if not (1 <= len(subject) <= BULK_SUBJECT_MAX):
+        raise HTTPException(status_code=400, detail=f"subject must be 1..{BULK_SUBJECT_MAX} chars")
+    if not body.strip() or len(body) > BULK_BODY_MAX:
+        raise HTTPException(status_code=400, detail=f"body must be 1..{BULK_BODY_MAX} chars")
+
+    from ..services.email import body_text_to_html, send_admin_update_email
+    body_html = body_text_to_html(body)
+
+    if request.test:
+        admin_id = get_current_user_id()
+        admin = get_user_by_id(admin_id)
+        admin_email = admin.get("email") if admin else None
+        if not admin_email:
+            raise HTTPException(status_code=400, detail="Admin account has no email on file")
+        ok = await send_admin_update_email(admin_email, subject, body_html)
+        result = {"user_id": admin_id, "email": admin_email, "ok": ok}
+        if not ok:
+            result["error"] = "send failed"
+        return {"results": [result], "sent": 1 if ok else 0, "failed": 0 if ok else 1}
+
+    if not request.user_ids:
+        raise HTTPException(status_code=400, detail="user_ids must not be empty")
+    if len(request.user_ids) > BULK_MAX_IDS:
+        raise HTTPException(status_code=400, detail=f"Too many users (max {BULK_MAX_IDS})")
+
+    results: list[dict] = []
+    sent = 0
+    failed = 0
+    for uid in request.user_ids:
+        user = get_user_by_id(uid)
+        email = user.get("email") if user else None
+        if not email:
+            results.append({"user_id": uid, "ok": False, "error": "no email on file"})
+            failed += 1
+            continue
+        try:
+            ok = await send_admin_update_email(email, subject, body_html)
+        except Exception as exc:
+            logger.exception(f"[Admin] bulk email failed for {uid}")
+            results.append({"user_id": uid, "email": email, "ok": False, "error": str(exc)})
+            failed += 1
+            continue
+        if ok:
+            results.append({"user_id": uid, "email": email, "ok": True})
+            sent += 1
+        else:
+            results.append({"user_id": uid, "email": email, "ok": False, "error": "send failed"})
+            failed += 1
+
+    return {"results": results, "sent": sent, "failed": failed}
+
+
 class GrantCreditsRequest(BaseModel):
     amount: int
 

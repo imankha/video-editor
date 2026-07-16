@@ -14,7 +14,7 @@ const QUEST_ACHIEVEMENT_KEY = {
 };
 
 const PLAYBACK_RATES = [0.5, 0.85, 1, 1.25, 1.5, 2];
-const DEFAULT_RATE = 0.85;
+const DEFAULT_RATE = 0.8;
 
 // Minimum leftover viewport height (video box already subtracted) needed to
 // place the caption strip below the player instead of overlaying the video.
@@ -44,7 +44,8 @@ function readActiveCaption(track) {
  * TutorialVideoModal - Full-screen tutorial video player with subtitles and chapters
  *
  * Opened via useTutorialStore (quest step 0 for each quest).
- * Records the watched_*_tutorial achievement at 80% watch or 10s+ on close.
+ * Records the watched_*_tutorial achievement at 85% watch OR when the user
+ * closes (X-es out of) the video — closing counts as completing the step.
  *
  * CRITICAL: crossOrigin="anonymous" is required for cross-origin <track> cue loading
  * (videos served from assets.reelballers.com). Without it the browser silently blocks tracks.
@@ -97,10 +98,9 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
   }, [achievementKey]);
 
   const handleClose = useCallback(() => {
-    // Fire achievement if watched >= 10s
-    if (!completedRef.current && videoRef.current && videoRef.current.currentTime >= 10) {
-      fireAchievement();
-    }
+    // X-ing out of the tutorial completes the watch step. fireAchievement is
+    // idempotent (completedRef guard), so this is a no-op if 85% already fired.
+    fireAchievement();
     onClose?.();
   }, [fireAchievement, onClose]);
 
@@ -304,12 +304,12 @@ export function TutorialVideoModal({ questId, assets, onClose }) {
     return () => { chapCleanupRef.current?.(); subCleanupRef.current?.(); };
   }, []);
 
-  // onTimeUpdate: call original + check 80% completion
+  // onTimeUpdate: call original + check 85% completion
   const handleTimeUpdate = useCallback((e) => {
     handlers.onTimeUpdate(e);
     if (!completedRef.current && videoRef.current) {
       const v = videoRef.current;
-      if (v.duration > 0 && v.currentTime / v.duration >= 0.8) {
+      if (v.duration > 0 && v.currentTime / v.duration >= 0.85) {
         fireAchievement();
       }
     }

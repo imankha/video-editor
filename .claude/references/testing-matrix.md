@@ -4,15 +4,32 @@ Guide for determining appropriate test coverage based on change type.
 
 ## Quick Reference
 
-| Change Type | Unit | Integration | E2E | Manual |
-|-------------|:----:|:-----------:|:---:|:------:|
-| UI only (styling) | - | - | - | ✅ Visual |
-| UI with interaction | - | - | ✅ | ✅ |
-| State logic (hook) | ✅ | - | - | - |
-| State + UI | ✅ | - | ✅ | ✅ |
-| API endpoint | ✅ | ✅ | - | - |
-| Full feature | ✅ | ✅ | ✅ | ✅ |
-| Refactoring | ✅ Existing | ✅ Existing | ✅ Existing | - |
+| Change Type | Unit | Integration | E2E | Mobile Audit | Manual |
+|-------------|:----:|:-----------:|:---:|:------------:|:------:|
+| UI only (styling) | - | - | - | ✅ if layout | ✅ Visual |
+| UI with interaction | - | - | ✅ | ✅ | ✅ |
+| State logic (hook) | ✅ | - | - | - | - |
+| State + UI | ✅ | - | ✅ | ✅ if layout | ✅ |
+| API endpoint | ✅ | ✅ | - | - | - |
+| Full feature | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Refactoring | ✅ Existing | ✅ Existing | ✅ Existing | ✅ if layout | - |
+| Viewport-unit (vh/dvh/h-screen) | - | - | ✅ | ✅ | ✅ **Real device** |
+
+**Mobile Audit** = the T4930 screen-usability matrix (`e2e/screen-usability.spec.js`):
+every primary action reachable + clickable, no horizontal overflow, no dead scroll
+trap, run across iPhone / iPhone SE / Pixel 7 / iPad / desktop (phones in portrait +
+landscape). **Any UI/layout change must be covered by it** — a layout that breaks below
+the fold on a phone (the T4880 class) is invisible to desktop E2E. See
+[Mobile Viewport Usability](#mobile-viewport-usability-t4930) below.
+
+> **Real-device check required for viewport-unit changes.** Playwright emulation does
+> NOT reproduce iOS Safari's dynamic browser toolbar (the `100vh`-vs-`100dvh` clipping
+> that caused T4880). Any change touching viewport units (`vh`/`dvh`/`h-screen`/
+> `h-dvh`/fullscreen layout) must ALSO be checked on a real iPhone before it is called
+> done — the emulator will pass a layout that clips on the device. The
+> `scripts/check-viewport-units.mjs` gate bans `h-screen`/`100vh` in the app tree to
+> block the emulator-invisible form at the source, but it is not a substitute for the
+> device check.
 
 ---
 
@@ -100,6 +117,38 @@ test('user can toggle player boxes via layer icon', async ({ page }) => {
   // Verify
   await expect(page.locator('.player-box')).toBeHidden();
 });
+```
+
+### Mobile Viewport Usability (T4930)
+
+**Examples**: Any UI/layout change — a new screen, a repositioned control, a new modal,
+a header/sidebar/timeline restructure, a fullscreen mode, a `vh`/`dvh` change.
+
+**Why it exists**: T4880 (mobile Framing/Overlay controls unreachable below the timeline)
+shipped to production and was found by a user, not by us, because the E2E suite ran a
+single Desktop-Chrome project and asserted *functionality*, never *usability*. Nothing
+ran at a mobile viewport.
+
+**What it asserts** (behavioral, not pixel snapshots), per screen, per viewport:
+1. Every primary action is reachable (scrolled into view) + clickable (not covered/clipped).
+2. No horizontal overflow.
+3. No dead scroll trap (content clipped below a non-scrolling shell — the T4880 shape).
+
+**Testing**:
+- ✅ Add/extend the screen's manifest in `e2e/manifests/screenManifests.js` (declarative
+  list of primary actions) — do NOT copy-paste a whole new test.
+- ✅ The audit runs across `iphone`, `iphone-se`, `android`, `tablet`, `chromium` projects
+  (phones portrait + landscape) via `e2e/screen-usability.spec.js`.
+- ✅ **Real device** for any viewport-unit change (see the callout above) — the emulator
+  cannot reproduce the iOS toolbar.
+- The `check-viewport-units.mjs` gate (wired into the lint hook + branch CI) bans new
+  `h-screen`/`100vh` in `src/frontend/src`.
+
+```bash
+# Run the whole matrix (starts the stack in a container):
+bash scripts/dev-verify.sh e2e/screen-usability.spec.js
+# Or a single viewport project:
+cd src/frontend && npx playwright test screen-usability.spec.js --project=iphone
 ```
 
 ### Backend - API Endpoint
