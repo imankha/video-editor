@@ -17,6 +17,8 @@ export const QUEST_DEFINITIONS = [
     title: 'Frame Your Highlight',
     reward: 25,
     step_ids: [
+      // T5195: Return Home is quest_2's first step (kept in sync with quest_config.py)
+      'return_home',
       'watch_framing_tutorial',
       'open_framing',
       'position_crop',

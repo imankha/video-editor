@@ -30,6 +30,10 @@ QUEST_DEFINITIONS = [
         "title": "Frame Your Highlight",
         "reward": 25,
         "step_ids": [
+            # T5195: guide the first-run user back to the home (games) screen after
+            # saving their first reel in Annotate, so they can pick it and start
+            # framing. This is quest_2's first step, before the framing tutorial.
+            "return_home",
             "watch_framing_tutorial",
             "open_framing",
             "position_crop",

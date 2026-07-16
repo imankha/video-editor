@@ -141,6 +141,7 @@ export const STEP_TITLES = {
   annotate_brilliant: 'Save Your Reel',
   playback_annotations: 'Watch Your Clips Back',
   // Quest 2 — Frame Your Highlight
+  return_home: 'Head Back Home',
   open_framing: 'Open Your Reel',
   position_crop: 'Keep Your Player in Frame',
   add_slowmo: 'Add a Slow-Mo Moment',
@@ -172,6 +173,7 @@ export const STEP_DESCRIPTIONS = {
   annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
+  return_home: <>Nice reel! Now <OpenReelLink /> to head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
   open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,

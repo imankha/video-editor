@@ -422,6 +422,21 @@ function App() {
     }
   }, [editorMode, isCheckingSession, selectedProjectId]);
 
+  // T5195: quest_2 "return home" — record when the user lands on the home
+  // (project-manager) screen AFTER saving their first reel. Gated on quest_1's
+  // annotate_brilliant step because home is also the app's default landing
+  // screen: an ungated fire would pre-complete the step on a brand-new user's
+  // very first load, before quest 1 even starts. Same mode-entry pattern as
+  // T540/T3700 above; recordAchievement is session-deduped + fire-and-forget.
+  const annotateBrilliantDone = useQuestStore(
+    (s) => s.quests?.find?.((q) => q.id === 'quest_1')?.steps?.annotate_brilliant === true
+  );
+  useEffect(() => {
+    if (!isCheckingSession && editorMode === EDITOR_MODES.PROJECT_MANAGER && annotateBrilliantDone) {
+      useQuestStore.getState().recordAchievement('returned_home');
+    }
+  }, [editorMode, isCheckingSession, annotateBrilliantDone]);
+
   // Export button ref (for triggering export programmatically from mode switch dialog)
   const exportButtonRef = useRef(null);
 
