@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { X, Download, Loader, Pencil, Scale } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { RATIO } from '../../constants/aspectRatios';
@@ -51,6 +51,8 @@ export function CollectionPlayer({
 }) {
   const videoRef = useRef(null);
   const pointerStart = useRef(null);
+  // Ephemeral view state: which timeline segment the cursor is over (tooltip).
+  const [hoverIndex, setHoverIndex] = useState(null);
 
   const handleAllEnded = useCallback(() => onEnded?.(), [onEnded]);
   const handleReelChange = useCallback(
@@ -64,6 +66,7 @@ export function CollectionPlayer({
     segmentProgress,
     next,
     prev,
+    goTo,
     togglePlay,
   } = useStoryPlayback(videoRef, reels, {
     initialIndex,
@@ -104,26 +107,66 @@ export function CollectionPlayer({
     else togglePlay();
   };
 
+  // Tooltip / accessible label for a timeline segment. Mirrors the header:
+  // game name + in-match clock (T3920), falling back to the reel's own name.
+  const reelLabel = (reel) => {
+    if (reel.gameName) {
+      const clock = formatGameClock(reel.gameStartTime);
+      return clock ? `${reel.gameName} ${clock}` : reel.gameName;
+    }
+    return reel.name || title;
+  };
+
+  // Click a segment -> jump to that reel and seek to the fraction of its
+  // duration matching where along the bar the click landed. The View only
+  // computes the fraction from the DOM; the hook owns the seek behavior.
+  const handleSegmentClick = (e, i) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = rect.width ? (e.clientX - rect.left) / rect.width : 0;
+    goTo(i, frac);
+  };
+
   if (!activeReel) return null;
 
   const isPortrait = activeReel.aspect_ratio === RATIO.PORTRAIT;
 
   return (
     <div className="fixed inset-0 z-[70] bg-black flex flex-col select-none md:inset-12 md:rounded-xl md:overflow-hidden">
-      {/* Segmented progress bar */}
-      <div className="flex gap-1 px-3 pt-3">
-        {reels.map((_, i) => (
-          <div key={i} className="h-1 flex-1 rounded-full bg-white/25 overflow-hidden">
-            <div
-              className="h-full bg-white rounded-full"
-              style={{
-                width: i < activeIndex ? '100%'
-                  : i === activeIndex ? `${segmentProgress * 100}%`
-                  : '0%',
-              }}
-            />
-          </div>
-        ))}
+      {/* Segmented progress bar — each segment is a scrub target: hover shows the
+          reel name, click jumps to that reel and seeks to the clicked fraction.
+          The visible bar stays 4px; a taller transparent hit region (py-2) makes
+          it easy to hit (T4760 pattern) without changing the visual. */}
+      <div className="flex gap-1 px-3 pt-2">
+        {reels.map((reel, i) => {
+          const label = reelLabel(reel);
+          return (
+            <button
+              key={i}
+              type="button"
+              aria-label={label}
+              onClick={(e) => handleSegmentClick(e, i)}
+              onMouseEnter={() => setHoverIndex(i)}
+              onMouseLeave={() => setHoverIndex((h) => (h === i ? null : h))}
+              className="group relative flex-1 py-2 cursor-pointer"
+            >
+              <div className="h-1 rounded-full bg-white/25 overflow-hidden">
+                <div
+                  className="h-full bg-white rounded-full"
+                  style={{
+                    width: i < activeIndex ? '100%'
+                      : i === activeIndex ? `${segmentProgress * 100}%`
+                      : '0%',
+                  }}
+                />
+              </div>
+              {hoverIndex === i && label && (
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 max-w-[80vw] -translate-x-1/2 truncate rounded bg-black/80 px-2 py-1 text-xs text-white shadow">
+                  {label}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Header: source game + in-match minute for the active reel (T3920),
