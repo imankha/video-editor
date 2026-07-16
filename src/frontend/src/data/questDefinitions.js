@@ -7,6 +7,7 @@ export const QUEST_DEFINITIONS = [
       'watch_annotate_tutorial',
       'upload_game',
       'add_clip',
+      'rate_clip',
       'annotate_brilliant',
       'playback_annotations',
     ],
@@ -16,6 +17,8 @@ export const QUEST_DEFINITIONS = [
     title: 'Frame Your Highlight',
     reward: 25,
     step_ids: [
+      // T5195: Return Home is quest_2's first step (kept in sync with quest_config.py)
+      'return_home',
       'watch_framing_tutorial',
       'open_framing',
       'position_crop',
@@ -34,6 +37,9 @@ export const QUEST_DEFINITIONS = [
       'select_players',
       'choose_color',
       'choose_shape',
+      // T5170: render steps moved here from quest_4 (kept in sync with quest_config.py)
+      'export_overlay',
+      'wait_for_overlay',
     ],
   },
   {
@@ -42,8 +48,6 @@ export const QUEST_DEFINITIONS = [
     reward: 15,
     step_ids: [
       'watch_publish_tutorial',
-      'export_overlay',
-      'wait_for_overlay',
       'move_to_my_reels',
       'view_gallery_video',
     ],

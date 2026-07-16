@@ -37,6 +37,12 @@ TUTORIAL_STEPS = [
     ("quest_4", "watch_publish_tutorial", "watched_publish_tutorial"),
 ]
 
+# T5195: quest_2 gained a `return_home` step BEFORE its tutorial (guide the
+# user back to the home screen after saving their first reel), so the old
+# "tutorial is always first" invariant becomes "tutorial is at its expected
+# index" — index 1 for quest_2, index 0 everywhere else.
+EXPECTED_TUTORIAL_INDEX = {"quest_1": 0, "quest_2": 1, "quest_3": 0, "quest_4": 0}
+
 
 @pytest.fixture(autouse=True)
 def _ctx():
@@ -46,13 +52,18 @@ def _ctx():
 
 
 def test_tutorial_step_is_first_in_each_quest():
-    """QUEST_DEFINITIONS has tutorial step_id as the first step of each quest."""
+    """QUEST_DEFINITIONS has each tutorial step_id at its expected index.
+
+    quest_2's tutorial sits at index 1 (behind T5195's return_home); all other
+    quests keep the tutorial first.
+    """
     quest_by_id = {q["id"]: q for q in quest_config.QUEST_DEFINITIONS}
     for quest_id, step_id, _ in TUTORIAL_STEPS:
         quest = quest_by_id[quest_id]
-        assert quest["step_ids"][0] == step_id, (
-            f"{quest_id}: expected first step to be '{step_id}', "
-            f"got '{quest['step_ids'][0]}'"
+        idx = EXPECTED_TUTORIAL_INDEX[quest_id]
+        assert quest["step_ids"][idx] == step_id, (
+            f"{quest_id}: expected step_ids[{idx}] to be '{step_id}', "
+            f"got '{quest['step_ids'][idx]}'"
         )
 
 
@@ -68,9 +79,10 @@ def test_definitions_endpoint_tutorial_step_first():
     by_id = {q["id"]: q for q in definitions}
     for quest_id, step_id, _ in TUTORIAL_STEPS:
         quest = by_id[quest_id]
-        assert quest["step_ids"][0] == step_id, (
-            f"{quest_id}: expected first step_id '{step_id}', "
-            f"got '{quest['step_ids'][0]}'"
+        idx = EXPECTED_TUTORIAL_INDEX[quest_id]
+        assert quest["step_ids"][idx] == step_id, (
+            f"{quest_id}: expected step_ids[{idx}] to be '{step_id}', "
+            f"got '{quest['step_ids'][idx]}'"
         )
 
 

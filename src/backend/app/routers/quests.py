@@ -49,6 +49,12 @@ KNOWN_ACHIEVEMENT_KEYS = {
     "overlay_shape_set",
     # Publish-quest step event (Move to My Reels button)
     "moved_to_my_reels",
+    # T5185: rate_clip step event — fires on the annotate gesture that leaves the
+    # clip both rated AND tagged (not on save; see ClipDetailsEditor).
+    "clip_rated",
+    # T5195: return_home step event — fires when the user lands on the home
+    # (games/drafts) screen; quest_2's first step guides them there to frame.
+    "returned_home",
     # T4780: tutorial-watch step events (one per quest, fires at 80% watch or 10s+close)
     "watched_annotate_tutorial",
     "watched_framing_tutorial",
@@ -91,6 +97,8 @@ _STEP_ACHIEVEMENT_KEYS = [
     "overlay_color_set",
     "overlay_shape_set",
     "moved_to_my_reels",
+    "clip_rated",
+    "returned_home",
     "watched_gallery_video_1s",
     # T4780: tutorial-watch steps (ride the same batched IN query — no new DB queries)
     "watched_annotate_tutorial",
@@ -165,10 +173,22 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # by "any clip exists" so it auto-completes on save and for users who clipped before
     # this step existed (you can't have a clip without having opened the form).
     steps["add_clip"] = 'add_clip_opened' in achieved or rc["total"] >= 1
+    # T5185: rate_clip ("Rate & Tag the Play") — completed when the `clip_rated`
+    # achievement fires. That achievement now fires ONLY when a clip is both rated
+    # (>=1 star) AND tagged (>=1 tag), from whichever annotate gesture completes the
+    # pair (ClipDetailsEditor) — not on save. Backfilled by "any reel exists" so it
+    # auto-completes for users who saved a reel before this step existed: you can't
+    # save a reel without rating a clip, so a reel is proof the step was satisfied.
+    steps["rate_clip"] = 'clip_rated' in achieved or rc["reels"] >= 1
     steps["annotate_brilliant"] = rc["reels"] >= 1
     steps["playback_annotations"] = 'played_annotations' in achieved
 
     # --- Quest 2: Frame Your Highlight ---
+    # T5195: return_home — completed when the user lands on the home (games) screen
+    # (achievement fired on arrival). Backfilled by "any framing export started": a
+    # user who has begun framing was necessarily home first, mirroring add_clip's
+    # backfill, so the new step auto-completes for mid-quest_2 users.
+    steps["return_home"] = 'returned_home' in achieved or framing_total >= 1
     steps["open_framing"] = 'opened_framing_editor' in achieved
     steps["position_crop"] = 'crop_adjusted' in achieved
     steps["add_slowmo"] = 'speed_segment_created' in achieved

@@ -5,6 +5,7 @@ import { generateClipName } from '../../../utils/clipDisplayName';
 import { TagSelector } from '../../../components/shared/TagSelector';
 import { TeammateTagInput } from '../../../components/shared/TeammateTagInput';
 import { useCurrentProfile } from '../../../stores';
+import { maybeRecordRatedAndTagged } from '../../../utils/questAchievements';
 import { useIsMobile } from '../../../hooks/useIsMobile';
 import ClipScrubRegion from './ClipScrubRegion';
 import { Button } from '../../../components/shared/Button';
@@ -114,6 +115,8 @@ export function ClipDetailsEditor({
   const handleRatingChange = (newRating) => {
     // Only update rating, don't touch the name
     onUpdate({ rating: newRating });
+    // Fire only if the clip will now have both a rating and a tag.
+    maybeRecordRatedAndTagged(newRating, region.tags);
   };
 
   const handleTagToggle = (tagName) => {
@@ -124,6 +127,8 @@ export function ClipDetailsEditor({
 
     // Only update tags, don't touch the name
     onUpdate({ tags: newTags });
+    // Fire only if the clip now has both a rating and a tag.
+    maybeRecordRatedAndTagged(region.rating, newTags);
   };
 
   // During drag: only update local state (instant, no parent re-render)

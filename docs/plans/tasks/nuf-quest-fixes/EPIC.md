@@ -44,6 +44,17 @@ because they all edit the same quest system, and two of them touch the same file
   the overlay/publish step boundaries, so the reshoot must film the final structure — already
   cross-referenced from T5140.
 
+## Follow-up fixes (user direction 2026-07-15, same epic)
+
+4. **[T5185](T5185-rate-tag-completes-clip-step.md) — Rate & Tag completes the clip step.**
+   `rate_clip` fires the moment a clip is BOTH rated AND tagged (whichever gesture completes the
+   pair), reflected in the panel immediately — not at save. No trigger/migration change.
+5. **[T5195](T5195-return-home-step.md) — Return Home step.** quest_2 gains `return_home` as its
+   FIRST step (before the framing tutorial): fires `returned_home` on entering the home screen,
+   gated on `annotate_brilliant` so the app's default landing doesn't pre-complete it; backfills
+   via `framing_total >= 1`. The "tutorial is first" test invariant became tutorial-at-expected-index.
+   (Also consolidated here: **T5175** — tutorial videos complete on X-out or 85% watched.)
+
 ## Completion criteria
 
 - [ ] Quest 1 rating stars never wrap; annotate step split into `rate_clip` + `annotate_brilliant`
@@ -51,5 +62,7 @@ because they all edit the same quest system, and two of them touch the same file
 - [ ] Quest 2 export-wait copy keeps first-run users on-task (no "frame another reel").
 - [ ] `export_overlay` + `wait_for_overlay` live in quest_3; quest_4 is publish-only; no un-claim /
       double-grant for existing users.
+- [ ] `rate_clip` completes at the rate+tag gesture (not save); quest_2 opens with `return_home`
+      (gated, backfilled); tutorial watch steps complete on X-out or 85%.
 - [ ] All three definition sources (quest_config.py + 2 frontend mirrors) in sync; tests updated;
       no migration needed (or the one T5170 edge reconciled).

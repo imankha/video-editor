@@ -20,6 +20,7 @@ QUEST_DEFINITIONS = [
             "watch_annotate_tutorial",
             "upload_game",
             "add_clip",
+            "rate_clip",
             "annotate_brilliant",
             "playback_annotations",
         ],
@@ -29,6 +30,10 @@ QUEST_DEFINITIONS = [
         "title": "Frame Your Highlight",
         "reward": 25,
         "step_ids": [
+            # T5195: guide the first-run user back to the home (games) screen after
+            # saving their first reel in Annotate, so they can pick it and start
+            # framing. This is quest_2's first step, before the framing tutorial.
+            "return_home",
             "watch_framing_tutorial",
             "open_framing",
             "position_crop",
@@ -47,6 +52,11 @@ QUEST_DEFINITIONS = [
             "select_players",
             "choose_color",
             "choose_shape",
+            # T5170: rendering the spotlight belongs with configuring it — the
+            # user adds AND renders the spotlight in one sitting, so these two
+            # render steps live at the end of the overlay quest, not in Publish.
+            "export_overlay",
+            "wait_for_overlay",
         ],
     },
     {
@@ -55,8 +65,6 @@ QUEST_DEFINITIONS = [
         "reward": 15,
         "step_ids": [
             "watch_publish_tutorial",
-            "export_overlay",
-            "wait_for_overlay",
             "move_to_my_reels",
             "view_gallery_video",
         ],

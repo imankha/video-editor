@@ -10,7 +10,7 @@
  * terminal buttons: "Export" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle, Video } from 'lucide-react';
+import { Image, Play, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
@@ -30,22 +30,6 @@ function GreenSquare() {
   );
 }
 
-/**
- * "Open your reel" deep link — sends the parent straight to the Reel Drafts
- * (Home) screen so they can tap their reel, instead of describing the clicks.
- *
- * Reuses the app's existing Home navigation: it points the URL at /home and
- * fires the same popstate handler the browser back-button uses (registered in
- * editorStore). That handler owns the clearSelection / fetchProjects / video
- * reset side effects, so we don't duplicate a parallel nav path here.
- */
-function navigateToReelDrafts() {
-  if (window.location.pathname !== '/home') {
-    window.history.pushState({ mode: 'project-manager' }, '', '/home');
-  }
-  window.dispatchEvent(new PopStateEvent('popstate'));
-}
-
 /** Maps each tutorial "watch" step to its quest so the modal can be relaunched
  *  after the step is already complete (see QuestPanel "Watch again"). */
 export const TUTORIAL_STEP_QUEST = {
@@ -55,8 +39,22 @@ export const TUTORIAL_STEP_QUEST = {
   watch_publish_tutorial: 'quest_4',
 };
 
-/** "Watch tutorial" button — opens TutorialVideoModal for the quest's video */
-export function WatchTutorialButton({ questId, label = 'Watch tutorial' }) {
+/** "Watch tutorial" button — opens TutorialVideoModal for the quest's video.
+ *  `variant="primary"` is the unmissable current-step CTA (standalone, pulsing);
+ *  the default inline pill is for the low-key "Watch again" replay after done. */
+export function WatchTutorialButton({ questId, label = 'Watch tutorial', variant = 'inline' }) {
+  if (variant === 'primary') {
+    return (
+      <button
+        type="button"
+        onClick={() => useTutorialStore.getState().openTutorial(questId)}
+        className="quest-tutorial-pulse w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold bg-purple-600 text-white hover:bg-purple-500 transition-colors cursor-pointer"
+      >
+        <Video size={15} />
+        {label}
+      </button>
+    );
+  }
   return (
     <button
       type="button"
@@ -65,20 +63,6 @@ export function WatchTutorialButton({ questId, label = 'Watch tutorial' }) {
     >
       <QIcon icon={Video} className="text-purple-400" />
       {label}
-    </button>
-  );
-}
-
-/** Clickable "Open your reel" pill — styled like the cyan section buttons */
-function OpenReelLink() {
-  return (
-    <button
-      type="button"
-      onClick={navigateToReelDrafts}
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/10 transition-colors cursor-pointer"
-    >
-      <QIcon icon={Folder} className="text-cyan-400" />
-      Open your reel
     </button>
   );
 }
@@ -118,6 +102,7 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
     purple: 'bg-purple-600 text-white',
     green: 'bg-green-600 text-white',
     cyan: 'bg-transparent text-cyan-400 border border-cyan-500/50',
+    gray: 'bg-gray-700 text-white',
   };
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 ${colors[variant]}`}>
@@ -137,9 +122,11 @@ export const STEP_TITLES = {
   // Quest 1 — Get Started
   upload_game: 'Add Your First Game',
   add_clip: 'Find an Amazing Play',
-  annotate_brilliant: 'Rate 5 Stars & Save',
+  rate_clip: 'Rate & Tag the Play',
+  annotate_brilliant: 'Save Your Reel',
   playback_annotations: 'Watch Your Clips Back',
   // Quest 2 — Frame Your Highlight
+  return_home: 'Head Back Home',
   open_framing: 'Open Your Reel',
   position_crop: 'Keep Your Player in Frame',
   add_slowmo: 'Add a Slow-Mo Moment',
@@ -160,21 +147,23 @@ export const STEP_TITLES = {
 /** Step descriptions keyed by step ID — JSX with inline icons */
 export const STEP_DESCRIPTIONS = {
   // Quest tutorial steps — T4780
-  watch_annotate_tutorial: <><WatchTutorialButton questId="quest_1" /> Watch how to clip your best plays from a game.</>,
-  watch_framing_tutorial: <><WatchTutorialButton questId="quest_2" /> Watch how to crop and upscale your highlight.</>,
-  watch_overlay_tutorial: <><WatchTutorialButton questId="quest_3" /> Watch how to spotlight your player on the highlight.</>,
-  watch_publish_tutorial: <><WatchTutorialButton questId="quest_4" /> Watch how to publish your finished reel.</>,
+  watch_annotate_tutorial: 'Watch how to clip your best plays from a game.',
+  watch_framing_tutorial: 'Watch how to crop and upscale your highlight.',
+  watch_overlay_tutorial: 'Watch how to spotlight your player on the highlight.',
+  watch_publish_tutorial: 'Watch how to publish your finished reel.',
   // Quest 1 — Get Started
   upload_game: 'Add a game to start clipping highlights',
   add_clip: <>Find an amazing play, then click <MiniButton icon={Plus} variant="green">Add Clip</MiniButton> to start a highlight.</>,
-  annotate_brilliant: <>Set start time and end time precisely to isolate the action. Rate the play <FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /> and tag it, maybe add a note. Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
+  rate_clip: <>Set start time and end time precisely to isolate the action. Rate the play <span className="whitespace-nowrap"><FilledStar /><FilledStar /><FilledStar /><FilledStar /><FilledStar /></span> and tag it, maybe add a note.</>,
+  annotate_brilliant: <>Notice <strong>My Athlete</strong> and <strong>Create Reel</strong> are switched on. Then <strong>Save</strong>. We'll create a reel you can edit and share automatically.</>,
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
-  open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
+  return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
+  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.DRAFTS}</MiniButton> and tap your reel's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
-  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
+  add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. Splitting near a clip's start or end also lets you trim it.</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,
-  wait_for_export: 'We are upscaling your highlight to crisp 1080p. Feel free to go back home and frame your next reel while you wait.',
+  wait_for_export: 'We are upscaling your highlight to crisp 1080p -- this takes a minute. Sit tight; next you will add a spotlight to your player on this same reel.',
   // Quest 3 — Spotlight Your Player
   open_overlay: <>Click the reel's card under <strong>{SECTION_NAMES.DRAFTS}</strong> to open it in Overlay mode and add a spotlight to your player. On the card, the progress strip <MiniStrip /> shows Framing complete (green) and Overlay not yet started (blue).</>,
   select_players: <>Click each <GreenSquare /> green marker on the timeline and tap your player. Can't spot them? Drag the circle right onto them.</>,
