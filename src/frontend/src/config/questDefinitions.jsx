@@ -10,7 +10,7 @@
  * terminal buttons: "Export" (framing) and "Add Spotlight" (overlay).
  */
 
-import { Image, Play, Plus, Star, Film, Crosshair, Folder, CheckCircle, Video } from 'lucide-react';
+import { Image, Play, Plus, Star, Film, Crosshair, FolderOpen, CheckCircle, Video } from 'lucide-react';
 import { SECTION_NAMES } from './displayNames';
 import { useTutorialStore } from '../stores/useTutorialStore';
 
@@ -28,22 +28,6 @@ function GreenSquare() {
       <Crosshair size={10} className="text-white" />
     </span>
   );
-}
-
-/**
- * "Open your reel" deep link — sends the parent straight to the Reel Drafts
- * (Home) screen so they can tap their reel, instead of describing the clicks.
- *
- * Reuses the app's existing Home navigation: it points the URL at /home and
- * fires the same popstate handler the browser back-button uses (registered in
- * editorStore). That handler owns the clearSelection / fetchProjects / video
- * reset side effects, so we don't duplicate a parallel nav path here.
- */
-function navigateToReelDrafts() {
-  if (window.location.pathname !== '/home') {
-    window.history.pushState({ mode: 'project-manager' }, '', '/home');
-  }
-  window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 /** Maps each tutorial "watch" step to its quest so the modal can be relaunched
@@ -83,20 +67,6 @@ export function WatchTutorialButton({ questId, label = 'Watch tutorial', variant
   );
 }
 
-/** Clickable "Open your reel" pill — styled like the cyan section buttons */
-function OpenReelLink() {
-  return (
-    <button
-      type="button"
-      onClick={navigateToReelDrafts}
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 bg-transparent text-cyan-400 border border-cyan-500/50 hover:bg-cyan-500/10 transition-colors cursor-pointer"
-    >
-      <QIcon icon={Folder} className="text-cyan-400" />
-      Open your reel
-    </button>
-  );
-}
-
 /** Inline progress chip — mirrors the card's strip: full green Framing, then an
  * Overlay segment on a gray track with blue filling only the bottom half (the
  * "started but not done" shape used on the card) */
@@ -132,6 +102,7 @@ function MiniButton({ icon: IconComponent, children, variant = 'purple' }) {
     purple: 'bg-purple-600 text-white',
     green: 'bg-green-600 text-white',
     cyan: 'bg-transparent text-cyan-400 border border-cyan-500/50',
+    gray: 'bg-gray-700 text-white',
   };
   return (
     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-text-bottom mx-0.5 ${colors[variant]}`}>
@@ -188,7 +159,7 @@ export const STEP_DESCRIPTIONS = {
   playback_annotations: <>Look under the video player controls and click <MiniButton icon={Play} variant="green">Playback Annotations</MiniButton> to watch your annotated clips</>,
   // Quest 2 — Frame Your Highlight
   return_home: <>Nice reel! Now head back to the home screen, where the reel you just saved is waiting for you to frame it.</>,
-  open_framing: <>Your reel is waiting in {SECTION_NAMES.DRAFTS}. <OpenReelLink /> then tap its card to start framing.</>,
+  open_framing: <>Switch to <MiniButton icon={FolderOpen} variant="gray">{SECTION_NAMES.DRAFTS}</MiniButton> and tap your reel's card to start framing.</>,
   position_crop: <>Drag and resize the box to keep your player <em>and</em> the ball in the shot. If they drift out of frame during playback, hit pause where they are out of frame and move the box again.</>,
   add_slowmo: <>On the bottom <strong>Split Segments</strong> layer of the timeline, click once where your big moment starts and again where it ends. Then set the section between those two splits to <strong>0.5x</strong> for slow-mo. (Splitting near a clip's start or end also lets you trim it.)</>,
   export_framing: <>Happy with the shot? Click <MiniButton icon={Film}>Export</MiniButton> and we'll AI-upscale it to crisp 1080p.</>,

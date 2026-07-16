@@ -5,13 +5,17 @@ import { QUEST_DEFINITIONS } from '../data/questDefinitions.js';
 
 // T3780: open_framing text wayfinding ("Click the Home button... open Drafts")
 // replaced with a clickable "Open your reel" deep link.
+// T5150 (follow-up): the deep link was itself confusing -- it let the user skip
+// past the real "Reel Drafts" tab instead of learning where it is. Replaced
+// with a static visual replica of that tab (icon + label, non-clickable) so
+// the copy points at the actual on-screen button.
 
 describe('questDefinitions copy (T3780)', () => {
-  describe('open_framing deep link', () => {
-    it('renders a clickable "Open your reel" control', () => {
-      const { getByRole } = render(<>{STEP_DESCRIPTIONS.open_framing}</>);
-      const button = getByRole('button', { name: /open your reel/i });
-      expect(button).toBeTruthy();
+  describe('open_framing wayfinding', () => {
+    it('visually references the Reel Drafts tab by icon + label, not a deep link', () => {
+      const { container, queryByRole } = render(<>{STEP_DESCRIPTIONS.open_framing}</>);
+      expect(container.textContent).toMatch(/Reel Drafts/i);
+      expect(queryByRole('button')).toBeNull();
     });
 
     it('drops the old "Home button" text wayfinding', () => {
