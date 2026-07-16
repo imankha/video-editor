@@ -4,7 +4,7 @@
 >
 > (Renumbered from T4950 -> T5070 on 2026-07-13: a concurrent session had already claimed T4950-T5060.)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 8
 **Complexity:** 7
 **Created:** 2026-07-13

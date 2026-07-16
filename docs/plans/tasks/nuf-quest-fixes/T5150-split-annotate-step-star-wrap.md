@@ -1,6 +1,6 @@
 # T5150: Split the Annotate Step + Fix Star-Rating Wrap (Quest 1)
 
-**Status:** STAGING
+**Status:** DONE
 **Priority:** P2
 **Impact:** 7 | **Complexity:** 5
 **Reported:** NUF feedback 2026-07-15 (Item 1 of 3)

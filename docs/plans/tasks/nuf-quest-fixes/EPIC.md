@@ -57,12 +57,15 @@ because they all edit the same quest system, and two of them touch the same file
 
 ## Completion criteria
 
-- [ ] Quest 1 rating stars never wrap; annotate step split into `rate_clip` + `annotate_brilliant`
+DONE (deployed 2026-07-16 prod).
+
+- [x] Quest 1 rating stars never wrap; annotate step split into `rate_clip` + `annotate_brilliant`
       (both measurable), pre-existing users unaffected.
-- [ ] Quest 2 export-wait copy keeps first-run users on-task (no "frame another reel").
-- [ ] `export_overlay` + `wait_for_overlay` live in quest_3; quest_4 is publish-only; no un-claim /
+- [x] Quest 2 export-wait copy keeps first-run users on-task (no "frame another reel").
+- [x] `export_overlay` + `wait_for_overlay` live in quest_3; quest_4 is publish-only; no un-claim /
       double-grant for existing users.
-- [ ] `rate_clip` completes at the rate+tag gesture (not save); quest_2 opens with `return_home`
-      (gated, backfilled); tutorial watch steps complete on X-out or 85%.
-- [ ] All three definition sources (quest_config.py + 2 frontend mirrors) in sync; tests updated;
-      no migration needed (or the one T5170 edge reconciled).
+- [x] `rate_clip` completes at the rate+tag gesture (not save, and from every annotate UI — the
+      fullscreen/mobile overlay needed the same fix as the sidebar editor); quest_2 opens with
+      `return_home` (gated, backfilled); tutorial watch steps complete on X-out or 85%.
+- [x] All three definition sources (quest_config.py + 2 frontend mirrors) in sync; tests updated;
+      no migration needed (self-heal covered every case).

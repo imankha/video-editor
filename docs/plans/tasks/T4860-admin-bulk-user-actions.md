@@ -1,6 +1,6 @@
 # T4860: Admin Bulk User Actions (Select Users -> Grant Credits / Send Update Email)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 4
 **Created:** 2026-07-10

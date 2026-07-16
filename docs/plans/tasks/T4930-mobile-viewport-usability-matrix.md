@@ -1,6 +1,6 @@
 # T4930: Playwright mobile/viewport usability matrix (every screen, popular sizes)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 5
 **Created:** 2026-07-11

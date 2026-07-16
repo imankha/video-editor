@@ -1,6 +1,6 @@
 # T4290: ESLint Guardrails — Machine-Enforce the Persistence & Constants Rules
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 7
 **Complexity:** 3
 **Created:** 2026-07-03

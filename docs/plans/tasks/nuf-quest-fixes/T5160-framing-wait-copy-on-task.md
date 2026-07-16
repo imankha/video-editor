@@ -1,6 +1,6 @@
 # T5160: Keep First-Run Users On-Task During Export Wait (Quest 2)
 
-**Status:** STAGING
+**Status:** DONE
 **Priority:** P2
 **Impact:** 6 | **Complexity:** 1
 **Reported:** NUF feedback 2026-07-15 (Item 2 of 3)

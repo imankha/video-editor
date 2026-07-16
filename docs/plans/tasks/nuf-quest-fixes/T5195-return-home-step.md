@@ -1,6 +1,6 @@
 # T5195: Add "Return Home" as Quest 2's First Step (Before the Framing Tutorial)
 
-**Status:** STAGING
+**Status:** DONE
 **Priority:** P2
 **Impact:** 6 | **Complexity:** 3
 **Reported:** User direction 2026-07-15

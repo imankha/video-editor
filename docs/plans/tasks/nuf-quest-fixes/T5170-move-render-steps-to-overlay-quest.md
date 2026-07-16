@@ -1,6 +1,6 @@
 # T5170: Move "Add the Spotlight" + "Render the Spotlight" into the Overlay Quest
 
-**Status:** STAGING
+**Status:** DONE
 **Priority:** P2
 **Impact:** 6 | **Complexity:** 4
 **Reported:** NUF feedback 2026-07-15 (Item 3 of 3)

@@ -1,6 +1,6 @@
 # T4300: Codify Refactor Process Rules (CLAUDE.md + skills)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 2
 **Created:** 2026-07-03

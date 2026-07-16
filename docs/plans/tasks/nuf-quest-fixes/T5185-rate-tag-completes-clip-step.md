@@ -1,6 +1,6 @@
 # T5185: "Rate & Tag the Play" Completes on Rated AND Tagged (Not at Save)
 
-**Status:** STAGING
+**Status:** DONE
 **Priority:** P2
 **Impact:** 6 | **Complexity:** 2
 **Reported:** User direction 2026-07-15 (follow-up to T5150)
