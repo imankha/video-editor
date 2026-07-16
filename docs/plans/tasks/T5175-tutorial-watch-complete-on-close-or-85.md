@@ -1,6 +1,6 @@
 # T5175: Tutorial watch step completes on X-out OR 85% watched
 
-**Status:** TODO
+**Status:** STAGING
 **Impact:** 5
 **Complexity:** 1
 **Created:** 2026-07-15
