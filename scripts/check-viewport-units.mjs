@@ -58,12 +58,6 @@ const VH_100 = /100vh/;
  */
 const KNOWN_DEBT = [
   {
-    file: 'src/frontend/src/components/RecapPlayerModal.jsx',
-    needle: 'w-screen h-screen',
-    task: 'T4931',
-    note: 'fullscreen recap player takeover — convert h-screen -> h-dvh',
-  },
-  {
     file: 'src/frontend/src/modes/AnnotateModeView.jsx',
     needle: "mobilePlaybackFs ? '100vh' : 'calc(100vh - 120px)'",
     task: 'T4932',
