@@ -56,14 +56,7 @@ const VH_100 = /100vh/;
  * converted — a KNOWN_DEBT entry whose source no longer contains the needle FAILS
  * the gate (prevents the catalogue from rotting).
  */
-const KNOWN_DEBT = [
-  {
-    file: 'src/frontend/src/modes/AnnotateModeView.jsx',
-    needle: "mobilePlaybackFs ? '100vh' : 'calc(100vh - 120px)'",
-    task: 'T4932',
-    note: 'mobile Annotate playback maxHeight — convert 100vh -> 100dvh',
-  },
-];
+const KNOWN_DEBT = [];
 
 /** Collapse the `:fullscreen` / `:-webkit-full-screen` rule bodies to spaces so a
  *  `100vh` inside native fullscreen is structurally exempt (offsets preserved so
