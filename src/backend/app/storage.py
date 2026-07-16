@@ -655,6 +655,53 @@ def upload_bytes_to_r2(
         return False
 
 
+def upload_bytes_to_r2_global(
+    key: str,
+    data: bytes,
+    *,
+    fast: bool = False,
+    content_type: str | None = None,
+    metadata: dict | None = None,
+) -> bool:
+    """Upload bytes to a FULL (env-prefixed) R2 key, not a user-scoped path.
+
+    Mirrors upload_bytes_to_r2 but takes the complete object key (the same key
+    space as r2_head_object_global / generate_presigned_url_global). Used to write
+    objects under another profile's prefix from an unauthenticated context (e.g.
+    the recap poster cache at
+    `{env}/users/{sharer}/profiles/{profile}/recaps/posters/{game_id}.jpg`, T5180)
+    where the request's ContextVar profile is NOT the object owner. Returns True
+    on success, False otherwise (never raises)."""
+    from io import BytesIO
+
+    client = get_r2_sync_client() if fast else get_r2_client()
+    if not client:
+        logger.error(f"R2 client unavailable (fast={fast}) - cannot upload bytes to {key}")
+        return False
+
+    try:
+        from .utils.retry import TIER_1, retry_r2_call
+
+        extra_args = {}
+        if content_type:
+            extra_args["ContentType"] = content_type
+        if metadata:
+            extra_args["Metadata"] = {k: str(v) for k, v in metadata.items()}
+
+        def _upload():
+            client.upload_fileobj(BytesIO(data), R2_BUCKET, key, ExtraArgs=extra_args)
+
+        retry_r2_call(_upload, operation=f"upload_bytes_global {key}", **TIER_1)
+        logger.debug(f"Uploaded bytes to R2 (global): {key} ({len(data)} bytes)")
+        return True
+    except Exception as e:
+        logger.error(
+            f"Failed to upload bytes to R2 (global): {key} ({len(data)} bytes, "
+            f"fast={fast}) - {type(e).__name__}: {e}", exc_info=True,
+        )
+        return False
+
+
 def delete_from_r2(user_id: str, relative_path: str) -> bool:
     """
     Delete a file from R2.

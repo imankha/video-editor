@@ -382,6 +382,62 @@ def generate_and_store_poster(
     return basename
 
 
+def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
+    """Generate-on-first-request poster for a game recap (T5180).
+
+    `recap_key` / `recap_poster_key` are FULL (env-prefixed) R2 keys under the
+    SHARER's profile prefix: `.../recaps/{game_id}.mp4` ->
+    `.../recaps/posters/{game_id}.jpg`. Whole-clip clearest-frame heuristic
+    (recaps are stitched artifacts with no per-segment slow-mo data, so the reel
+    slow-mo-first policy does NOT apply -- and the selection helper is NOT
+    modified here).
+
+    Idempotent + overwrite-safe:
+      - poster already cached -> True without re-encoding (cheap HEAD);
+      - recap source missing (reclaimed / never generated) -> False (caller 404s,
+        the edge function falls back to the branded card -- never a broken image);
+      - else extract + upload to the deterministic key, then True.
+    Concurrent crawler hits both write the same key (overwrite-safe). Never raises.
+    """
+    from ..storage import (
+        generate_presigned_url_global,
+        r2_head_object_global,
+        upload_bytes_to_r2_global,
+    )
+    try:
+        if r2_head_object_global(recap_poster_key) is not None:
+            return True
+        if r2_head_object_global(recap_key) is None:
+            logger.info(f"[RecapPoster] no recap source at {recap_key}; skipping")
+            return False
+        recap_url = generate_presigned_url_global(recap_key, expires_in=3600)
+        if not recap_url:
+            logger.info(f"[RecapPoster] presign failed for {recap_key}; skipping")
+            return False
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = str(Path(tmp) / "recap_poster.jpg")
+            if not extract_clearest_frame_jpeg(recap_url, out_path):
+                logger.info(f"[RecapPoster] extraction failed for {recap_key}")
+                return False
+            data = Path(out_path).read_bytes()
+            dims = _jpeg_dimensions(out_path)
+        metadata = {"width": dims[0], "height": dims[1]} if dims else None
+        if not upload_bytes_to_r2_global(
+            recap_poster_key, data, fast=True,
+            content_type="image/jpeg", metadata=metadata,
+        ):
+            logger.info(f"[RecapPoster] R2 upload failed for {recap_poster_key}")
+            return False
+        logger.info(
+            f"[RecapPoster] stored {recap_poster_key} ({len(data)} bytes, "
+            f"dims={dims or 'unknown'})"
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"[RecapPoster] unexpected error for {recap_key}: {e}")
+        return False
+
+
 def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:
     """Admin-triggered one-off: generate posters for PUBLISHED reels that have none
     (T4890). Pre-existing reels published before this feature carry no poster, so

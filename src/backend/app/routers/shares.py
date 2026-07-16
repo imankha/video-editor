@@ -156,6 +156,48 @@ def _build_poster_r2_key(share: dict) -> str:
     )
 
 
+def _recap_r2_key(share: dict) -> str:
+    """Full R2 key for a game share's recap master under the SHARER's profile
+    prefix (`recaps/{game_id}.mp4`, hi-q since T4140)."""
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}"
+        f"/recaps/{share['game_id']}.mp4"
+    )
+
+
+def _recap_poster_r2_key(share: dict) -> str:
+    """Full R2 key for a game share's recap POSTER (T5180). Deterministic key,
+    generate-on-first-request, overwrite-safe -- mirrors the reel poster prefix
+    convention (`recaps/posters/{game_id}.jpg`)."""
+    return (
+        f"{APP_ENV}/users/{share['sharer_user_id']}"
+        f"/profiles/{share['sharer_profile_id']}"
+        f"/recaps/posters/{share['game_id']}.jpg"
+    )
+
+
+def _resolve_recap_poster_url(share: dict) -> str | None:
+    """Stable teammate-poster proxy URL when a recap frame is available, else None
+    (T5180). A poster is available iff its object is already cached OR the recap
+    source exists (the /poster.jpg endpoint generates it on first request). Never
+    a presigned URL -- the edge function absolutizes this relative path with its
+    API base. No recap -> None so the edge keeps the branded card (never a broken
+    image)."""
+    if not share.get("game_id"):
+        return None
+    if (
+        r2_head_object_global(_recap_poster_r2_key(share)) is not None
+        or r2_head_object_global(_recap_r2_key(share)) is not None
+    ):
+        return f"/api/shared/teammate/{share['share_token']}/poster.jpg"
+    logger.info(
+        f"[Share] no recap for teammate token={share.get('share_token')}; "
+        f"branded card fallback"
+    )
+    return None
+
+
 def _resolve_poster(share: dict) -> tuple[str | None, int | None, int | None]:
     """(url, width, height) for a share's poster, or (None, None, None) if absent.
 
@@ -354,6 +396,10 @@ async def get_shared_teammate(share_token: str, request: Request):
     if game_blake3:
         video_warm_url = generate_presigned_url_global(f"games/{game_blake3}.mp4", expires_in=14400)
 
+    # T5180: real recap frame for the unfurl (og:image) when a recap exists;
+    # None -> the edge function keeps the branded card. Stable proxy URL only.
+    poster_url = _resolve_recap_poster_url(share)
+
     if share["materialized_at"]:
         return {
             "materialized": True,
@@ -365,6 +411,7 @@ async def get_shared_teammate(share_token: str, request: Request):
             "clip_count": len(clip_names),
             "clip_names": clip_names,
             "video_warm_url": video_warm_url,
+            "poster_url": poster_url,
         }
 
     recipient_user = get_user_by_email(share["recipient_email"])
@@ -386,6 +433,7 @@ async def get_shared_teammate(share_token: str, request: Request):
         "clip_count": len(clip_names),
         "clip_names": clip_names,
         "video_warm_url": video_warm_url,
+        "poster_url": poster_url,
     }
 
 
@@ -492,6 +540,30 @@ async def get_shared_collection_poster(share_token: str):
     if poster_key is None:
         raise HTTPException(404, "No poster for this share")
     return await _serve_poster_jpeg(poster_key)
+
+
+@shared_router.get("/teammate/{share_token}/poster.jpg")
+async def get_shared_teammate_poster(share_token: str):
+    """Stable unfurl image for a TEAMMATE (game) share: the game recap's clearest
+    frame (T5180). Generated-on-first-request and cached at the deterministic key
+    `recaps/posters/{game_id}.jpg`, then reused. Whole-clip clearest-frame policy
+    (recaps have no slow-mo data). Never a presigned URL in og:image (T4890). 404
+    when no recap exists/reclaimed -> the edge function falls back to the branded
+    card (never a broken image)."""
+    share = get_game_share_by_token(share_token)
+    if (
+        not share
+        or share["revoked_at"]
+        or share["share_type"] not in ("game", "annotation_playback")
+        or not share.get("game_id")
+    ):
+        raise HTTPException(404, "Share not found")
+
+    from ..services.poster import ensure_recap_poster
+    recap_poster_key = _recap_poster_r2_key(share)
+    if not ensure_recap_poster(_recap_r2_key(share), recap_poster_key):
+        raise HTTPException(404, "No recap poster for this share")
+    return await _serve_poster_jpeg(recap_poster_key)
 
 
 @shared_router.get("/{share_token}/poster.jpg")
