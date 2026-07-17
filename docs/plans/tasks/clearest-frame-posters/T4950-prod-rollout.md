@@ -40,6 +40,10 @@ fly ssh console -a reel-ballers-api -C 'python -c "from app.services.pg import i
 python scripts/verify_share_unfurl.py https://app.reelballers.com/shared/{token} --attempts 3
 ```
 Run on a real prod **reel** link, a **collection** link, and a **teammate** link (3/3 each).
+**Latency gate (messenger crawlers):** `time curl` each link's `poster.jpg` COLD (fresh share,
+no cache) and warm — both must return comfortably under ~2s or WhatsApp/iMessage will show no
+image at all. T5270 (warm-at-share-creation) must be merged before this rollout so crawlers
+never pay the generation cost; pre-warm all existing recap posters as part of the regen.
 Also confirm the app-root og:image `app.reelballers.com/og-card.jpg` serves `image/jpeg` (goes
 live with the deploy; staging + landing already verified).
 
