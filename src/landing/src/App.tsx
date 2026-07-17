@@ -91,7 +91,9 @@ function App() {
       {/* Hero Section */}
       <div className="container mx-auto px-4 py-16">
         <nav className="flex justify-between items-center mb-16">
-          <LogoWithText />
+          <a href={ctaHref} aria-label="Reel Ballers home">
+            <LogoWithText />
+          </a>
         </nav>
 
         <div className="max-w-4xl mx-auto text-center">
