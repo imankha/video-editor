@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
+import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -35,87 +36,13 @@ export default function HighlightOverlay({
   // even if React hasn't re-rendered yet after the last mouse move
   const latestHighlightRef = useRef(null);
 
-  const [videoDisplayRect, setVideoDisplayRect] = useState(null);
-
-  /**
-   * Update video display dimensions when video size changes
-   */
-  useEffect(() => {
-    if (!videoRef?.current) return;
-
-    const video = videoRef.current;
-
-    const updateVideoRect = () => {
-      const videoAspect = videoMetadata.width / videoMetadata.height;
-
-      const container = video.closest('.video-container');
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      const containerHeight = containerRect.height;
-      const containerAspect = containerWidth / containerHeight;
-
-      let baseDisplayWidth, baseDisplayHeight;
-
-      if (containerAspect > videoAspect) {
-        baseDisplayHeight = containerHeight;
-        baseDisplayWidth = baseDisplayHeight * videoAspect;
-      } else {
-        baseDisplayWidth = containerWidth;
-        baseDisplayHeight = baseDisplayWidth / videoAspect;
-      }
-
-      const displayWidth = baseDisplayWidth * zoom;
-      const displayHeight = baseDisplayHeight * zoom;
-
-      const videoOffsetX = (containerWidth - displayWidth) / 2 + panOffset.x;
-      const videoOffsetY = (containerHeight - displayHeight) / 2 + panOffset.y;
-
-      setVideoDisplayRect({
-        offsetX: videoOffsetX,
-        offsetY: videoOffsetY,
-        width: displayWidth,
-        height: displayHeight,
-        scaleX: displayWidth / videoMetadata.width,
-        scaleY: displayHeight / videoMetadata.height,
-        zoom: zoom,
-        panOffset: panOffset
-      });
-    };
-
-    updateVideoRect();
-    window.addEventListener('resize', updateVideoRect);
-
-    // Double RAF ensures layout settles after fullscreen toggle.
-    // Track both frame IDs so cleanup cancels the inner one too.
-    let innerRafId;
-    const outerRafId = requestAnimationFrame(() => {
-      innerRafId = requestAnimationFrame(updateVideoRect);
-    });
-
-    return () => {
-      window.removeEventListener('resize', updateVideoRect);
-      cancelAnimationFrame(outerRafId);
-      cancelAnimationFrame(innerRafId);
-    };
-  }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
-
-  /**
-   * Convert video coordinates to screen coordinates
-   */
-  const videoToScreen = useCallback((x, y, radiusX, radiusY) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, radiusX: 0, radiusY: 0 };
-
-    return {
-      x: x * videoDisplayRect.scaleX + videoDisplayRect.offsetX,
-      y: y * videoDisplayRect.scaleY + videoDisplayRect.offsetY,
-      radiusX: radiusX * videoDisplayRect.scaleX,
-      radiusY: radiusY * videoDisplayRect.scaleY
-    };
-  }, [videoDisplayRect]);
-
-  const round3 = (value) => Math.round(value * 1000) / 1000;
+  // Single source of truth for the video->screen transform. Ships both fixes
+  // (first-paint layout effect + rAF-leak/fullscreen settle) by construction.
+  const { rect: videoDisplayRect, videoToScreen } = useVideoDisplayRect(
+    videoRef,
+    videoMetadata,
+    { zoom, panOffset, isFullscreen }
+  );
 
   /**
    * Constrain highlight ellipse to video bounds
@@ -290,13 +217,10 @@ export default function HighlightOverlay({
     displayRadiusY = currentHighlight.radiusY * 0.3;
   }
 
-  // Convert highlight to screen coordinates
-  const screenHighlight = videoToScreen(
-    displayX,
-    displayY,
-    displayRadiusX,
-    displayRadiusY
-  );
+  // Convert highlight to screen coordinates. The shared transform returns
+  // {x, y, width, height}; an ellipse's radii scale exactly like width/height.
+  const s = videoToScreen(displayX, displayY, displayRadiusX, displayRadiusY);
+  const screenHighlight = { x: s.x, y: s.y, radiusX: s.width, radiusY: s.height };
 
   const fillColor = currentHighlight.color || '#FFFFFF';
   const strokeColor = fillColor;

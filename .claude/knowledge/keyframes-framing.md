@@ -165,6 +165,16 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
 - **T4020 shadow versions (fixed, deployed 2026-06-26)**: a redundant post-export full-state save
   persisted empty crop + default segments as a NEW working_clips version, shadowing the real one.
   Full-state saves only on explicit gesture.
+- **Video→screen transform unified (T4550, ~2026-07-17)**: the aspect-fit letterbox + zoom/pan
+  math (`videoDisplayRect`, `videoToScreen`, `screenToVideo`, `round3`) was copied 3x, each in a
+  different bug state. Now one hook `src/frontend/src/hooks/useVideoDisplayRect.js`
+  (`useVideoDisplayRect(videoRef, videoMetadata, {zoom,panOffset,isFullscreen}) -> {rect,
+  videoToScreen, screenToVideo}`) with BOTH fixes: `useLayoutEffect` first-paint + double-rAF
+  fullscreen settle with both frame ids cancelled. Pure `computeVideoDisplayRect`/
+  `videoToScreenRect`/`screenToVideoRect` are exported + unit-tested. CropOverlay, HighlightOverlay,
+  PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
+  `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
+  still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy

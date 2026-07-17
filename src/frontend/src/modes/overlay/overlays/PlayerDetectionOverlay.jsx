@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import useVideoDisplayRect from '../../../hooks/useVideoDisplayRect';
 
 /**
  * PlayerDetectionOverlay - Renders clickable bounding boxes around detected players
@@ -19,75 +20,17 @@ export default function PlayerDetectionOverlay({
   isFullscreen = false,
   isDisabled = false,
 }) {
-  const [videoDisplayRect, setVideoDisplayRect] = useState(null);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const lastLoggedDetections = useRef(null);
 
-  /**
-   * Update video display dimensions when video size changes
-   */
-  useEffect(() => {
-    if (!videoRef?.current || !videoMetadata) return;
-
-    const updateVideoRect = () => {
-      const video = videoRef.current;
-      const videoAspect = videoMetadata.width / videoMetadata.height;
-
-      const container = video.closest('.video-container');
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      const containerHeight = containerRect.height;
-      const containerAspect = containerWidth / containerHeight;
-
-      let baseDisplayWidth, baseDisplayHeight;
-
-      if (containerAspect > videoAspect) {
-        baseDisplayHeight = containerHeight;
-        baseDisplayWidth = baseDisplayHeight * videoAspect;
-      } else {
-        baseDisplayWidth = containerWidth;
-        baseDisplayHeight = baseDisplayWidth / videoAspect;
-      }
-
-      const displayWidth = baseDisplayWidth * zoom;
-      const displayHeight = baseDisplayHeight * zoom;
-
-      const videoOffsetX = (containerWidth - displayWidth) / 2 + panOffset.x;
-      const videoOffsetY = (containerHeight - displayHeight) / 2 + panOffset.y;
-
-      setVideoDisplayRect({
-        offsetX: videoOffsetX,
-        offsetY: videoOffsetY,
-        width: displayWidth,
-        height: displayHeight,
-        scaleX: displayWidth / videoMetadata.width,
-        scaleY: displayHeight / videoMetadata.height,
-        zoom: zoom,
-        panOffset: panOffset
-      });
-    };
-
-    updateVideoRect();
-    window.addEventListener('resize', updateVideoRect);
-
-    return () => window.removeEventListener('resize', updateVideoRect);
-  }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
-
-  /**
-   * Convert video coordinates to screen coordinates
-   */
-  const videoToScreen = useCallback((x, y, width, height) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
-
-    return {
-      x: x * videoDisplayRect.scaleX + videoDisplayRect.offsetX,
-      y: y * videoDisplayRect.scaleY + videoDisplayRect.offsetY,
-      width: width * videoDisplayRect.scaleX,
-      height: height * videoDisplayRect.scaleY
-    };
-  }, [videoDisplayRect]);
+  // Single source of truth for the video->screen transform. Ships both fixes
+  // (first-paint layout effect + rAF-leak/fullscreen settle) by construction --
+  // this copy previously had neither.
+  const { rect: videoDisplayRect, videoToScreen } = useVideoDisplayRect(
+    videoRef,
+    videoMetadata,
+    { zoom, panOffset, isFullscreen }
+  );
 
   /**
    * Handle click on a player detection box
