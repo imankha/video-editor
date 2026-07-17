@@ -151,6 +151,57 @@ bash scripts/dev-verify.sh e2e/screen-usability.spec.js
 cd src/frontend && npx playwright test screen-usability.spec.js --project=iphone
 ```
 
+### Running the E2E Suite Against Staging (T4934)
+
+The Playwright suite runs against EITHER local dev servers (default) OR a deployed
+target (staging CF Pages + Fly API). Switch to a deployed target by setting the base
+URLs — `playwright.config.js` reads them:
+
+```bash
+cd src/frontend
+E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
+E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
+npm run test:e2e
+```
+
+**Local-only seam contract.** A few specs depend on dev/local-ONLY backend seams under
+`/api/test/*` (gated by `_test_seams_enabled` in `src/backend/app/storage.py` — the
+router is mounted only in dev/development/local/test, NEVER prod/staging). Those specs
+are tagged to SKIP on a deployed target, with the reason logged in `global-setup` output
+(never a silent skip — CLAUDE.md). The authoritative inventory lives in
+`e2e/helpers/targetEnv.js` (`LOCAL_ONLY_SPECS`):
+
+| Spec | Seams | Why local-only |
+|------|-------|----------------|
+| `T4120-self-verify-durability.spec.js` | `/api/test/sync-fault`, `/api/test/simulate-machine-cycle` | fault-injection — perturbs real R2 sync + machine lifecycle; never safe on staging |
+| `T4850-move-reels.spec.js` | `/api/test/seed-final-video`, `/api/test/ensure-pg-user` | dev-only data-seeding seams; not mounted on staging |
+
+All OTHER auth bypasses the suite uses — `POST /api/auth/test-login`, `POST
+/api/auth/dev-login` (`loginAsRealUser`), and the `X-User-ID` header — ARE available on
+staging (gated on `APP_ENV != production`, not on `_test_seams_enabled`), so those specs
+stay in the staging set. `dev-login` real-account specs still require the account to
+exist in the target env's Postgres; a missing account fails fast (realAuth throws), it
+does not hang.
+
+**How the tag/skip + fail-fast works** (`e2e/helpers/targetEnv.js`):
+- `IS_DEPLOYED_TARGET` = `!!process.env.E2E_BASE_URL`.
+- `skipOnDeployedTarget(test, reason)` — call at the top of a test body or describe
+  callback to skip seam-dependent specs on a deployed target with a logged reason.
+- `assertSeamAvailable(res, seamName)` — wrap a `/api/test/*` response; throws INSTANTLY
+  with a self-documenting message if the seam 404s (Fly JSON 404 or CF Pages HTML
+  fallback), instead of letting `res.json()` blow up or a UI wait hang to the timeout.
+- `global-setup.js` prints the target + the `LOCAL_ONLY_SPECS` list when deployed.
+
+**Runtime / timeout.** Local per-test timeout stays 5m (real video processing). On a
+deployed target it drops to 2m (`PER_TEST_TIMEOUT` in `playwright.config.js`) so a real
+regression can't cost 5 minutes of wall-clock per test. Override with `E2E_TIMEOUT_MS`
+for a slower target. The project memory `reference_staging_test_account` documents the
+seeded `e2e@test.local` staging account and this seam gap.
+
+> A full 4.3-hour-class staging run (real deployed target + network) is a
+> supervisor/CI follow-up, not something the in-container worker can do — it needs the
+> live staging stack.
+
 ### Backend - API Endpoint
 
 **Examples**: New route, endpoint modification
