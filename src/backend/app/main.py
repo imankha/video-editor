@@ -348,6 +348,33 @@ def _graceful_shutdown(signum, frame):
                     failed += 1
                     logger.error(f"[Shutdown] Error syncing user={user_id} profile={profile_id}: {e}")
 
+            # T4320: user.sqlite was NOT covered by shutdown sync before — a SIGTERM
+            # after a user.sqlite write (credits, profile registry, quests) could lose
+            # it on the next cold machine. Mirror the profile.sqlite block for it.
+            from app.database import get_local_user_db_version
+            from app.storage import sync_user_db_to_r2_with_version
+
+            for db_file in USER_DATA_BASE.glob("*/user.sqlite"):
+                user_id = db_file.relative_to(USER_DATA_BASE).parts[0]
+                try:
+                    # WAL checkpoint
+                    conn = sqlite3.connect(str(db_file))
+                    pages = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()
+                    conn.close()
+                    logger.info(f"[Shutdown] WAL checkpoint for user={user_id} user.sqlite: {pages}")
+
+                    # Sync to R2
+                    version = get_local_user_db_version(user_id)
+                    success, new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
+                    if success:
+                        synced += 1
+                    else:
+                        failed += 1
+                        logger.warning(f"[Shutdown] R2 sync failed for user={user_id} user.sqlite")
+                except Exception as e:
+                    failed += 1
+                    logger.error(f"[Shutdown] Error syncing user={user_id} user.sqlite: {e}")
+
         elapsed = time.perf_counter() - shutdown_start
         logger.info(f"[Shutdown] Graceful shutdown completed in {elapsed:.2f}s ({synced} synced, {failed} failed)")
 

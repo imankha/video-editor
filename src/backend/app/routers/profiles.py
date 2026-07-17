@@ -16,9 +16,11 @@ Endpoints:
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import set_current_profile_id
 from app.services.user_db import (
     create_profile as db_create_profile,
@@ -95,10 +97,21 @@ async def list_profiles():
 
 
 @router.post("")
-async def create_profile(request: CreateProfileRequest):
+async def create_profile(
+    request: CreateProfileRequest,
+    _durable: None = Depends(durable_sync),  # T5310: sync user.sqlite registry to R2 before 200
+):
     """Create a new profile.
 
     Writes to user.sqlite (source of truth, synced to R2 automatically).
+
+    T5310 durability: the new profile.sqlite is durably synced to R2 BEFORE its
+    registry row is written to user.sqlite, and `Depends(durable_sync)` then makes
+    the middleware AWAIT the user.sqlite (registry) R2 sync inside the write lock.
+    A profile is therefore never REGISTERED without its R2 object existing. This
+    closes the create-without-durable-sync race that lost 2 of arshia's profiles on
+    prod (registry rows present, no R2 profile.sqlite) when a second profile was
+    created seconds after the first and its fire-and-forget sync was lost.
     """
     user_id = get_current_user_id()
     profiles = get_profiles(user_id)
@@ -110,15 +123,29 @@ async def create_profile(request: CreateProfileRequest):
 
     new_id = uuid4().hex[:8]
     name = request.name.strip()
-
     sport = request.sport or "soccer"
+
+    # T5310: create the new profile.sqlite locally and durably push it to R2 FIRST,
+    # before the registry row is written. Ordering the object sync ahead of the
+    # registration means a mid-op machine death yields at worst a benign R2 orphan
+    # (a profile dir with no registry row — the Direction-B class the migration
+    # runner already tolerates), never a "missing" registered profile (Direction A).
+    set_current_profile_id(new_id)
+    from app.database import ensure_database, sync_db_to_r2_explicit
+    ensure_database()  # create local profile.sqlite for the new profile
+    if not sync_db_to_r2_explicit(user_id, new_id):
+        logger.warning(
+            f"[Profiles] durable R2 sync of new profile.sqlite FAILED for "
+            f"user={user_id} profile={new_id} — not registering; returning 503"
+        )
+        # Same top-level {code, retryable} shape the middleware durable path emits,
+        # so the frontend's `error.code === 'sync_failed'` retry handling applies.
+        return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+
+    # Profile object is now durable in R2 -> register it. Depends(durable_sync) makes
+    # the middleware AWAIT the user.sqlite (registry) R2 sync and 503 on failure.
     db_create_profile(user_id, new_id, name, request.color, sport=sport)
     set_selected_profile_id(user_id, new_id)
-
-    # Initialize DB for new profile
-    set_current_profile_id(new_id)
-    from app.database import ensure_database
-    ensure_database()
 
     invalidate_user_cache(user_id)
 

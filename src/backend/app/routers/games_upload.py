@@ -14,11 +14,12 @@ import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.constants import UploadStatus
 from app.database import get_db_connection
+from app.middleware.db_sync import durable_sync
 from app.services.storage_credits import calculate_upload_cost
 from app.services.user_db import get_credit_balance
 from app.storage import (
@@ -260,7 +261,10 @@ async def prepare_upload(request: PrepareUploadRequest):
 
 
 @router.post("/finalize-upload")
-async def finalize_upload(request: FinalizeUploadRequest):
+async def finalize_upload(
+    request: FinalizeUploadRequest,
+    _durable: None = Depends(durable_sync),  # T4320: sync the pending_uploads cleanup to R2 before 200
+):
     """
     Complete a multipart upload after all parts have been uploaded.
 
