@@ -469,6 +469,63 @@ def generate_and_store_poster(
     return basename
 
 
+def generate_poster_at_publish(
+    user_id: str,
+    final_video_id: int,
+    final_filename: str,
+    project_id: int | None,
+    frozen_start=None,
+    frozen_end=None,
+) -> str | None:
+    """Capture + store the share poster at PUBLISH ("Move to My Reels"), T5280.
+
+    The poster's ONLY consumers are share links / og:image, which cannot exist
+    before publish -- so the JPEG is captured at the publish gesture, NOT at
+    render. Drafts that never get published no longer pay the ~5-seek ffmpeg
+    cost, and publish is the same freeze point T5260 uses for the reel name.
+
+    Section resolution mirrors backfill_posters (single policy everywhere):
+    prefer the FROZEN slow-mo columns (written at render finalize, durable
+    across the publish-time working_clips prune); when unfrozen, reconstruct
+    from live working_clips (still present -- publish archives AFTER this runs)
+    or the R2 archive, and HEAL the frozen columns so a later regen skips the
+    work. No slow-mo / unreconstructable -> plain first frame (no fabrication,
+    T5090).
+
+    Blocking (ffmpeg + R2): the publish endpoint runs this via asyncio.to_thread
+    INSIDE the request, so the poster object + poster_filename both land before
+    the endpoint's durable-sync barrier (T4110) -- never fire-and-forget.
+    Idempotent: the R2 poster key is deterministic, so a re-publish overwrites
+    in place (same policy -> same frame). Best-effort: any failure returns None
+    and is logged at info; publish NEVER fails because of the poster. Returns the
+    stored poster basename (also written to final_videos.poster_filename) or None.
+    """
+    try:
+        section = _decode_frozen_section(frozen_start, frozen_end)
+        if section is None:
+            section, src = resolve_slowmo_section(user_id, project_id)
+            if section is not None:
+                _set_slowmo_section(final_video_id, section)
+                logger.info(
+                    f"[PublishPoster] fv={final_video_id} section reconstructed via "
+                    f"{src}: {section}"
+                )
+        stored = generate_and_store_poster(user_id, final_filename, section)
+        if stored:
+            _set_poster_filename(final_video_id, stored)
+            logger.info(f"[PublishPoster] fv={final_video_id} stored poster {stored}")
+        else:
+            logger.info(
+                f"[PublishPoster] fv={final_video_id} no poster stored (best effort); "
+                f"share unfurl falls back to text until backfilled"
+            )
+        return stored
+    except Exception as e:
+        # Never let poster work fail publish (same invariant as render finalize).
+        logger.info(f"[PublishPoster] fv={final_video_id} poster capture error: {e}")
+        return None
+
+
 def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
     """Generate-on-first-request poster for a game recap (T5180).
 

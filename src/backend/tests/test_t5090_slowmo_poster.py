@@ -467,26 +467,20 @@ def _seed_full_project(db_path, segments):
 
 
 def test_finalize_freezes_slowmo_section(db):
+    # T5280: render still FREEZES the section (cheap, no ffmpeg) but no longer
+    # extracts a poster -- poster_filename stays NULL until publish fills it.
     from app.routers.export import overlay
 
     segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
     pid = _seed_full_project(db, segments)
-    seen = {}
 
-    def capture(user_id, filename, slowmo_section=None):
-        seen["section"] = slowmo_section
-        return "out.mp4.jpg"
-
-    with patch("app.analytics.record_milestone"), \
-         patch.object(overlay, "generate_and_store_poster", side_effect=capture):
+    with patch("app.analytics.record_milestone"):
         fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
 
-    # The computed section reached the poster generator AND was frozen on the row.
-    assert seen["section"] == (2.0, 6.0)
     row = _connect(db).execute(
         "SELECT poster_filename, slowmo_section_start, slowmo_section_end "
         "FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
-    assert row["poster_filename"] == "out.mp4.jpg"
+    assert row["poster_filename"] is None  # T5280: no poster at render
     assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)
 
 
@@ -494,25 +488,12 @@ def test_finalize_freezes_null_when_no_slowmo(db):
     from app.routers.export import overlay
 
     pid = _seed_full_project(db, {"boundaries": [0, 6], "segmentSpeeds": {}})
-    with patch("app.analytics.record_milestone"), \
-         patch.object(overlay, "generate_and_store_poster", return_value="out.mp4.jpg"):
+    with patch("app.analytics.record_milestone"):
         fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
     row = _connect(db).execute(
         "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id = ?",
         (fv_id,)).fetchone()
     assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (None, None)
-
-
-def test_finalize_best_effort_when_poster_fails(db):
-    from app.routers.export import overlay
-
-    pid = _seed_full_project(db, {"boundaries": [0, 6], "segmentSpeeds": {}})
-    with patch("app.analytics.record_milestone"), \
-         patch.object(overlay, "generate_and_store_poster", return_value=None):
-        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
-    row = _connect(db).execute(
-        "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
-    assert row["poster_filename"] is None  # export still succeeded
 
 
 # ---------------------------------------------------------------------------
