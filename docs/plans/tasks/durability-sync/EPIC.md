@@ -1,9 +1,25 @@
 # Durability & Sync Hardening Epic
 
-**Status:** TODO
+**Status:** TOP PRIORITY (escalated 2026-07-17)
 **Started:** -
 **Completed:** -
 **Source:** [Code quality audit 2026-07-03](../../audit-2026-07-03-code-quality.md) items B2, B3, B5, B6, B7, B8, C8, G1, G3
+
+> **Escalation (2026-07-17):** T5310 proved this epic's failure mode is LIVE ON PROD — arshia lost
+> 2 profiles to a create-without-durable-sync race (same class as T4320). This epic is now the top
+> priority. The campaign extends beyond these 6 tasks to same-class siblings in other epics —
+> coordinate them as one push:
+> - **T4400** (export-write-path epic) — backend-authoritative export; client full-state PUT
+>   clobbers newer surgical edits, multi-clip stamps DB "exported" without reconciling (DB≠video).
+>   Impact 9, Architect gate.
+> - **T2260** (session-scaling epic) — data-loss detection + recovery on reconnect after a crash.
+> - **T5310 source-fix** — `POST /api/profiles` create must durably sync the new profile.sqlite
+>   before returning (the exact bug that lost arshia's profiles). **Fold into T4320** — same
+>   `Depends(durable_sync)` mechanism, same file family.
+>
+> **Sequence:** T4320 first (prod-proven, complexity 3, no design gate) → T4310 + T4400 (both
+> Impact 9, need the Architect design gate) → T4330/T4340/T4350/T4360 + T2260. Sequenced campaign
+> with design approvals, NOT a parallel fan-out (these share db_sync.py/overlay.py/segments_data).
 
 ## Goal
 
