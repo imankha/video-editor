@@ -1246,10 +1246,33 @@ async def publish_to_my_reels(
             )
             raise HTTPException(status_code=404, detail="No final video found for this project")
 
-        cursor.execute(
-            "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL WHERE id = ?",
-            (row['id'],),
-        )
+        # T5260: the name is frozen once at render time (overlay.py INSERT), but the
+        # draft stays renameable in Reel Drafts right up until this gesture. Publish
+        # is the correct freeze point (post-publish rename goes through the gallery
+        # endpoint at /{download_id}/name instead) -- re-read the CURRENT project name
+        # here so a rename-after-render isn't silently lost in My Reels.
+        cursor.execute("SELECT name FROM projects WHERE id = ?", (project_id,))
+        project_row = cursor.fetchone()
+        current_name = project_row['name'] if project_row else None
+
+        if current_name:
+            cursor.execute(
+                "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL, "
+                "name = ? WHERE id = ?",
+                (current_name, row['id']),
+            )
+        else:
+            # No silent NULL over an existing name (CLAUDE.md: no silent fallbacks for
+            # internal data) -- keep the render-time frozen name and surface why.
+            cursor.execute(
+                "UPDATE final_videos SET published_at = CURRENT_TIMESTAMP, watched_at = NULL WHERE id = ?",
+                (row['id'],),
+            )
+            logger.info(
+                f"[Publish] project name missing or empty for project={project_id} "
+                f"final_video_id={row['id']} user={user_id} req_id={req_id} - keeping "
+                f"existing frozen final_video name, not overwriting with NULL"
+            )
         conn.commit()
         logger.info(
             f"[Publish] published_at committed LOCALLY project={project_id} "
