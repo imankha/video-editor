@@ -212,7 +212,7 @@ export function AnnotateModeView({
           >
             <div className={`relative ${isFS ? 'w-full' : 'h-[40vh] sm:h-[60vh]'}`}
               style={isFS ? {
-                maxHeight: mobilePlaybackFs ? '100vh' : 'calc(100vh - 120px)',
+                maxHeight: mobilePlaybackFs ? '100dvh' : 'calc(100dvh - 120px)',
                 aspectRatio: `${annotateVideoMetadata?.width || 16} / ${annotateVideoMetadata?.height || 9}`,
               } : undefined}
             >

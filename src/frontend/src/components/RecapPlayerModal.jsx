@@ -250,7 +250,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         ref={contentRef}
         className={`relative bg-gray-800 shadow-2xl flex flex-col ${
           isFullscreen
-            ? 'w-screen h-screen'
+            ? 'w-screen h-dvh'
             : 'rounded-xl border border-gray-700 w-full max-w-6xl mx-4 max-h-[90vh]'
         }`}
       >
