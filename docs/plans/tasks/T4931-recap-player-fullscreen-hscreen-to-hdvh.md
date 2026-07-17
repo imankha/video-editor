@@ -1,6 +1,6 @@
 # T4931: RecapPlayerModal fullscreen uses h-screen (should be h-dvh)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-07-15

@@ -1,6 +1,6 @@
 # T5270: Warm recap poster at share creation (crawlers must never pay the ffmpeg cost)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6 | **Complexity:** 2
 **Epic:** [Clearest-Frame Posters](EPIC.md) — follow-up to T5180
 **Created:** 2026-07-17

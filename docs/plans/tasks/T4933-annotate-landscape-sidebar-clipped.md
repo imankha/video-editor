@@ -1,6 +1,6 @@
 # T4933: Annotate clip-editor sidebar controls unreachable on phone landscape
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 3
 **Created:** 2026-07-15

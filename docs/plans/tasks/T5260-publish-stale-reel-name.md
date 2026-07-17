@@ -1,6 +1,6 @@
 # T5260: Draft rename doesn't reach My Reels (publish freezes a stale name)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6
 **Complexity:** 2
 **Created:** 2026-07-17

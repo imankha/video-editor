@@ -1,6 +1,6 @@
 # T5100: Compilation timeline: hover a reel segment for its name, click to jump + seek
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5
 **Complexity:** 3
 **Created:** 2026-07-13

@@ -1,6 +1,6 @@
 # T5090: Slow-mo-first reel poster (clearest frame in first half of slow-mo)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5 | **Complexity:** 4
 **Epic:** [Clearest-Frame Posters](EPIC.md) — child 1 of 3
 **Created:** 2026-07-13

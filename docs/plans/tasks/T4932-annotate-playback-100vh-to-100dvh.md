@@ -1,6 +1,6 @@
 # T4932: Annotate mobile playback maxHeight uses 100vh (should be 100dvh)
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 4
 **Complexity:** 1
 **Created:** 2026-07-15

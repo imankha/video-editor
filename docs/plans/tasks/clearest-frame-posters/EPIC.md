@@ -53,22 +53,27 @@ toward frames where the spotlight-overlay region has motion. Do NOT reach for sc
 
 | Order | Task | What it does |
 |-------|------|--------------|
-| 1 | T5090 — Slow-mo-first reel poster | Rescope reel poster selection to the first half of the first slow-mo section (final timeline); no slow-mo -> first frame. Multi-clip offsets + trimRange + backfill reconstruction. |
-| 2 | T5180 — Game/teammate recap footage on links | Poster game recaps with the whole-clip clearest-frame helper; new token-gated `/poster.jpg` endpoint + teammate edge function; branded card as no-recap fallback. |
-| 3 | T4950 — Prod rollout + verify | After 1 & 2 land and `/deploy` ships: single prod force-regen of reel posters, verify all surfaces (reel, collection, teammate) with `verify_share_unfurl.py`, confirm `og-card.jpg` serves image/jpeg. |
+| 1 | T5090 — Slow-mo-first reel poster | DONE (deployed 2026-07-16 prod). Rescope reel poster selection to the first half of the first slow-mo section (final timeline); no slow-mo -> first frame. Multi-clip offsets + trimRange + backfill reconstruction. |
+| 2 | T5180 — Game/teammate recap footage on links | DONE (deployed 2026-07-16 prod). Poster game recaps with the whole-clip clearest-frame helper; new token-gated `/poster.jpg` endpoint + teammate edge function; branded card as no-recap fallback. |
+| 3 | T5270 — Warm recap poster at share creation | DONE (deployed 2026-07-16 prod). Warm `ensure_recap_poster` at teammate-share creation (gesture) so the first crawler hit is never cold; on-demand GET stays as self-heal fallback. |
+| 4 | T5280 — Capture share poster at Move to My Reels | DONE (deployed 2026-07-16 prod). Move poster JPEG capture from render (finalize) to the publish gesture; render keeps only the v025 slow-mo-section freeze. |
+| 5 | T4950 — Prod rollout + verify | TODO — now unblocked (T5090+T5180+T5270+T5280 all deployed 2026-07-16). Single prod force-regen of reel posters, verify all surfaces (reel, collection, teammate) with `verify_share_unfurl.py`, confirm `og-card.jpg` serves image/jpeg. |
 
 Sequencing: T5090 first (defines the final reel policy). T5180 reuses the shipped whole-clip
-helper and is independent of the reel-heuristic change, but land it before T4950 so the rollout
-verifies teammate links too. T4950 is the terminal deploy+regen+verify pass.
+helper and is independent of the reel-heuristic change. T5270/T5280 (added 2026-07-16, capture
+timing refinements) landed after both. T4950 remains the terminal deploy+regen+verify pass --
+deliberately NOT auto-run by the deploy reconciliation (it force-regenerates prod data and needs
+its own explicit go-ahead).
 
 ## Epic completion criteria
 
-- [ ] Reels WITH slow-mo -> poster is the clearest frame in the first half of the first slow-mo
+- [x] Reels WITH slow-mo -> poster is the clearest frame in the first half of the first slow-mo
       section (correct multi-clip offset + trimRange); reels WITHOUT slow-mo -> first frame.
-- [ ] Game/teammate links unfurl with a real recap frame (whole-clip clearest) when a recap
+- [x] Game/teammate links unfurl with a real recap frame (whole-clip clearest) when a recap
       exists, branded card when not.
-- [ ] Live publish and admin backfill/force-regen apply the SAME policy; missing data -> first
+- [x] Live publish and admin backfill/force-regen apply the SAME policy; missing data -> first
       frame (logged, no fabrication).
 - [ ] Prod posters regenerated once with the final policy (0 failed); `verify_share_unfurl.py`
       passes 3/3 on a prod reel, collection, and teammate link; `og-card.jpg` serves image/jpeg.
-- [ ] Poster failure never fails export. Tests pass.
+      (T4950 -- not yet run.)
+- [x] Poster failure never fails export. Tests pass.

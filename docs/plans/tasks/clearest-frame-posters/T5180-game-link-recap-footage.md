@@ -1,6 +1,6 @@
 # T5180: Real recap footage on game/teammate links
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6 | **Complexity:** 3
 **Epic:** [Clearest-Frame Posters](EPIC.md) — child 2 of 3
 **Created:** 2026-07-15 (split from T4950)

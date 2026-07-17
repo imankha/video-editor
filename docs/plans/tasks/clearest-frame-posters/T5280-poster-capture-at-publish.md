@@ -1,6 +1,6 @@
 # T5280: Capture the share poster at "Move to My Reels", not at render
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 5 | **Complexity:** 3
 **Epic:** [Clearest-Frame Posters](EPIC.md) — follow-up; user direction 2026-07-16
 **Created:** 2026-07-17
