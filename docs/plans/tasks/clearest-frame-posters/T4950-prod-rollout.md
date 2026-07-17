@@ -11,10 +11,20 @@
 > dueling regens).
 
 ## Prerequisites
-- [ ] T5090 merged (reel poster policy final).
-- [ ] T5180 merged (teammate link poster proxy + edge function exist to verify).
+- [x] T5090 merged (reel poster policy final). (2026-07-17, incl. v025 slowmo-section freeze)
+- [x] T5180 merged (teammate link poster proxy + edge function exist to verify). (2026-07-17)
 - [ ] `/deploy` has shipped the above to prod.
+- [ ] **Run migrations FIRST on each env** (v025 profile_db freezes/backfills
+      `final_videos.slowmo_section_start/end` from the R2 publish archives). Published reels
+      have their working_clips PRUNED at publish, so a force-regen WITHOUT v025 applied would
+      downgrade every existing reel poster to a plain first frame. Order per env is always:
+      deploy -> migrate -> force-regen. Dev already migrated + verified 2026-07-17
+      (12/12 profile DBs v25, sections backfilled where slow-mo existed).
 - [ ] Re-run STAGING force-regen with the final policy and visual-QA a sample before touching prod.
+- [ ] KNOWN BLOCKER for the postgres migration track: `shares_share_type_check` constraint is
+      violated by existing rows on dev (likely staging/prod too) and errors the postgres track
+      (profile_db/user_db tracks still run). Doesn't block v025, but triage before relying on
+      any pending postgres migration.
 
 ## Scope
 
