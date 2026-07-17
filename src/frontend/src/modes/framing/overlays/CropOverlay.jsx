@@ -1,5 +1,6 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import versionInfo from '../../../version.json';
+import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 
 /**
  * CropOverlay component - renders a draggable/resizable crop rectangle
@@ -26,121 +27,13 @@ export default function CropOverlay({
   const [cropStart, setCropStart] = useState(null);
   const overlayRef = useRef(null);
 
-  // Video element dimensions on screen (scaled)
-  const [videoDisplayRect, setVideoDisplayRect] = useState(null);
-
-  /**
-   * Update video display dimensions when video size changes or zoom/pan changes
-   */
-  // useLayoutEffect ensures videoDisplayRect is calculated before paint,
-  // so the crop rectangle is visible on first render (not delayed by useEffect).
-  useLayoutEffect(() => {
-    if (!videoRef?.current) return;
-
-    const updateVideoRect = () => {
-      const video = videoRef.current;
-      if (!video) return;
-
-      // The video element's natural dimensions
-      const videoAspect = videoMetadata.width / videoMetadata.height;
-
-      // Get the container (parent of video)
-      const container = video.closest('.video-container');
-      if (!container) return;
-
-      const containerRect = container.getBoundingClientRect();
-      const containerWidth = containerRect.width;
-      const containerHeight = containerRect.height;
-      const containerAspect = containerWidth / containerHeight;
-
-      let baseDisplayWidth, baseDisplayHeight;
-
-      if (containerAspect > videoAspect) {
-        // Container is wider - video is constrained by height
-        baseDisplayHeight = containerHeight;
-        baseDisplayWidth = baseDisplayHeight * videoAspect;
-      } else {
-        // Container is taller - video is constrained by width
-        baseDisplayWidth = containerWidth;
-        baseDisplayHeight = baseDisplayWidth / videoAspect;
-      }
-
-      // Apply zoom to dimensions
-      const displayWidth = baseDisplayWidth * zoom;
-      const displayHeight = baseDisplayHeight * zoom;
-
-      // Calculate center position of container
-      const containerCenterX = containerRect.left + containerWidth / 2;
-      const containerCenterY = containerRect.top + containerHeight / 2;
-
-      // Calculate video position accounting for zoom and pan
-      const videoLeft = containerCenterX - (displayWidth / 2) + panOffset.x;
-      const videoTop = containerCenterY - (displayHeight / 2) + panOffset.y;
-
-      // Calculate video position relative to container (not screen)
-      const videoOffsetX = (containerWidth - displayWidth) / 2 + panOffset.x;
-      const videoOffsetY = (containerHeight - displayHeight) / 2 + panOffset.y;
-
-      setVideoDisplayRect({
-        left: videoLeft,
-        top: videoTop,
-        offsetX: videoOffsetX,
-        offsetY: videoOffsetY,
-        width: displayWidth,
-        height: displayHeight,
-        scaleX: displayWidth / videoMetadata.width,
-        scaleY: displayHeight / videoMetadata.height,
-        zoom: zoom,
-        panOffset: panOffset
-      });
-    };
-
-    updateVideoRect();
-    window.addEventListener('resize', updateVideoRect);
-
-    // When fullscreen changes, recalculate after layout settles
-    const rafId = requestAnimationFrame(() => {
-      requestAnimationFrame(updateVideoRect);
-    });
-
-    return () => {
-      window.removeEventListener('resize', updateVideoRect);
-      cancelAnimationFrame(rafId);
-    };
-  }, [videoRef, videoMetadata, zoom, panOffset, isFullscreen]);
-
-  /**
-   * Convert video coordinates to screen coordinates (relative to container)
-   */
-  const videoToScreen = useCallback((x, y, width, height) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
-
-    return {
-      x: x * videoDisplayRect.scaleX + videoDisplayRect.offsetX,
-      y: y * videoDisplayRect.scaleY + videoDisplayRect.offsetY,
-      width: width * videoDisplayRect.scaleX,
-      height: height * videoDisplayRect.scaleY
-    };
-  }, [videoDisplayRect]);
-
-  /**
-   * Round to 3 decimal places for precision
-   */
-  const round3 = (value) => Math.round(value * 1000) / 1000;
-
-  /**
-   * Convert screen coordinates (relative to container) to video coordinates
-   */
-  const screenToVideo = useCallback((x, y, width, height) => {
-    if (!videoDisplayRect) return { x: 0, y: 0, width: 0, height: 0 };
-
-    return {
-      x: round3((x - videoDisplayRect.offsetX) / videoDisplayRect.scaleX),
-      y: round3((y - videoDisplayRect.offsetY) / videoDisplayRect.scaleY),
-      width: round3(width / videoDisplayRect.scaleX),
-      height: round3(height / videoDisplayRect.scaleY)
-    };
-  }, [videoDisplayRect]);
+  // Single source of truth for the video->screen transform. Ships both fixes
+  // (first-paint layout effect + rAF-leak/fullscreen settle) by construction.
+  const { rect: videoDisplayRect, videoToScreen } = useVideoDisplayRect(
+    videoRef,
+    videoMetadata,
+    { zoom, panOffset, isFullscreen }
+  );
 
   /**
    * Constrain crop rectangle to video bounds while maintaining aspect ratio
