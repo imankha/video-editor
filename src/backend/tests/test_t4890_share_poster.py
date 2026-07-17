@@ -153,22 +153,14 @@ def _seed_project(db_path, name="My Reel", aspect="9:16", duration=12.0):
     return pid
 
 
-def test_finalize_freezes_poster_filename(db):
+def test_finalize_does_not_set_poster_filename(db):
+    # T5280: render no longer extracts a poster; poster_filename stays NULL at
+    # finalize (publish fills it). generate_and_store_poster is no longer even
+    # imported into the overlay module.
     from app.routers.export import overlay
+    assert not hasattr(overlay, "generate_and_store_poster")
     pid = _seed_project(db)
-    with patch("app.analytics.record_milestone"), \
-         patch.object(overlay, "generate_and_store_poster", return_value="out.mp4.jpg"):
-        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
-    row = _connect(db).execute(
-        "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
-    assert row["poster_filename"] == "out.mp4.jpg"
-
-
-def test_finalize_best_effort_when_no_poster(db):
-    from app.routers.export import overlay
-    pid = _seed_project(db)
-    with patch("app.analytics.record_milestone"), \
-         patch.object(overlay, "generate_and_store_poster", return_value=None):
+    with patch("app.analytics.record_milestone"):
         fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
     row = _connect(db).execute(
         "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)).fetchone()

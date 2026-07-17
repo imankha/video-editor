@@ -56,7 +56,6 @@ from ...services.image_extractor import (
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
     first_slowmo_section,
-    generate_and_store_poster,
     load_project_clip_segments,
     read_clip_segments_for_project,
 )
@@ -122,18 +121,16 @@ def _finalize_overlay_export(
     Shared by all overlay export completion paths (no-keyframes copy, local,
     Modal GPU, test mode). Returns the final_video_id.
     """
-    # T4890: extract + store the poster (og:image for share links) BEFORE opening
-    # the DB connection so the ffmpeg/R2 work never extends the write transaction.
-    # Best-effort: None on failure (never blocks the export). The final video is
-    # already in R2 here, so ffmpeg reads its presigned URL.
-    # T5090: compute the reel's first slow-mo section from the project's ordered
-    # working clips (loaded outside the write transaction below). The poster is the
-    # clearest frame in the first half of it (no slow-mo -> first frame). FREEZE the
-    # section onto the final_videos row so backfill/regen never depends on
-    # working_clips surviving the publish-time prune (they get pruned; the frozen
-    # columns are the durable source of truth).
+    # T5280: the poster (og:image JPEG) is NO LONGER extracted here. Its only
+    # consumers are share links, which can't exist before publish, so the ~5-seek
+    # ffmpeg capture moved to the "Move to My Reels" gesture (downloads.py
+    # publish_to_my_reels). A draft that never publishes now pays nothing.
+    # T5090 (KEPT): still compute the reel's first slow-mo section from the
+    # project's ordered working clips and FREEZE it onto the final_videos row --
+    # this is cheap (no ffmpeg) and is the durable source of truth publish/backfill
+    # read after the publish-time working_clips prune. poster_filename is left NULL
+    # here; publish fills it.
     slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
-    poster_fn = generate_and_store_poster(user_id, output_filename, slowmo_section)
     slowmo_start = slowmo_section[0] if slowmo_section else None
     slowmo_end = slowmo_section[1] if slowmo_section else None
 
@@ -187,7 +184,7 @@ def _finalize_overlay_export(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn,
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
               slowmo_start, slowmo_end))
         final_video_id = cursor.lastrowid
 
@@ -1322,18 +1319,16 @@ async def export_final(
             raise HTTPException(status_code=500, detail="Failed to upload final video to R2")
         logger.info(f"[Final Export] Uploaded final video to R2: {filename} ({len(content)} bytes)")
 
-        # T4890: extract + store the poster (og:image for share links), frozen on
-        # the row at finalize. Done here -- right after the R2 upload and BEFORE any
-        # DB write -- so the ffmpeg/R2 work never runs inside an open write
-        # transaction (parity with _finalize_overlay_export, which hoists it too).
-        # Best-effort: None on failure (never blocks the export).
-        # T5090: reuse the already-open cursor to read the project's ordered
+        # T5280: no poster (og:image JPEG) extraction here -- it moved to the
+        # publish gesture (downloads.py publish_to_my_reels), since share links are
+        # the poster's only consumer and can't exist before publish. Drafts that
+        # never publish skip the ffmpeg cost entirely.
+        # T5090 (KEPT): reuse the already-open cursor to read the project's ordered
         # working-clip segment data (only SELECTs have run so far) and compute the
-        # first slow-mo section; the poster follows the slow-mo-first policy (no
-        # slow-mo -> first frame). FREEZE the section on the row below so
-        # backfill/regen survives the publish-time working_clips prune.
+        # first slow-mo section; FREEZE it on the row below so publish/backfill
+        # survive the publish-time working_clips prune. poster_filename stays NULL
+        # here; publish fills it.
         slowmo_section = first_slowmo_section(read_clip_segments_for_project(cursor, project_id))
-        poster_fn = generate_and_store_poster(user_id, filename, slowmo_section)
         slowmo_start = slowmo_section[0] if slowmo_section else None
         slowmo_end = slowmo_section[1] if slowmo_section else None
 
@@ -1377,7 +1372,7 @@ async def export_final(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn,
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, None,
               slowmo_start, slowmo_end))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")

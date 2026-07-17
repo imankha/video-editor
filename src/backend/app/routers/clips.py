@@ -2481,6 +2481,13 @@ async def share_with_teammates(request: ShareWithTeammatesRequest):
 
     sent_tags = [r["tag_name"] for r in results if r["status"] == "sent"]
     failed_tags = [r["tag_name"] for r in results if r["status"] == "failed"]
+
+    if sent_tags:
+        # T5270: warm the recap poster now (share-creation gesture) so the
+        # crawler that pastes this link never pays the ffmpeg cost.
+        from app.services.poster import warm_recap_poster
+        await warm_recap_poster(user_id, profile_id, request.game_id)
+
     return {"results": results, "sent_tags": sent_tags, "failed_tags": failed_tags}
 
 

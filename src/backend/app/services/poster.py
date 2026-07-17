@@ -19,6 +19,7 @@ without a poster simply omits the `og:image` tag at share-resolution time and
 logs at info -- no silent fallback that hides missing data (CLAUDE.md).
 """
 
+import asyncio
 import logging
 import math
 import subprocess
@@ -468,6 +469,63 @@ def generate_and_store_poster(
     return basename
 
 
+def generate_poster_at_publish(
+    user_id: str,
+    final_video_id: int,
+    final_filename: str,
+    project_id: int | None,
+    frozen_start=None,
+    frozen_end=None,
+) -> str | None:
+    """Capture + store the share poster at PUBLISH ("Move to My Reels"), T5280.
+
+    The poster's ONLY consumers are share links / og:image, which cannot exist
+    before publish -- so the JPEG is captured at the publish gesture, NOT at
+    render. Drafts that never get published no longer pay the ~5-seek ffmpeg
+    cost, and publish is the same freeze point T5260 uses for the reel name.
+
+    Section resolution mirrors backfill_posters (single policy everywhere):
+    prefer the FROZEN slow-mo columns (written at render finalize, durable
+    across the publish-time working_clips prune); when unfrozen, reconstruct
+    from live working_clips (still present -- publish archives AFTER this runs)
+    or the R2 archive, and HEAL the frozen columns so a later regen skips the
+    work. No slow-mo / unreconstructable -> plain first frame (no fabrication,
+    T5090).
+
+    Blocking (ffmpeg + R2): the publish endpoint runs this via asyncio.to_thread
+    INSIDE the request, so the poster object + poster_filename both land before
+    the endpoint's durable-sync barrier (T4110) -- never fire-and-forget.
+    Idempotent: the R2 poster key is deterministic, so a re-publish overwrites
+    in place (same policy -> same frame). Best-effort: any failure returns None
+    and is logged at info; publish NEVER fails because of the poster. Returns the
+    stored poster basename (also written to final_videos.poster_filename) or None.
+    """
+    try:
+        section = _decode_frozen_section(frozen_start, frozen_end)
+        if section is None:
+            section, src = resolve_slowmo_section(user_id, project_id)
+            if section is not None:
+                _set_slowmo_section(final_video_id, section)
+                logger.info(
+                    f"[PublishPoster] fv={final_video_id} section reconstructed via "
+                    f"{src}: {section}"
+                )
+        stored = generate_and_store_poster(user_id, final_filename, section)
+        if stored:
+            _set_poster_filename(final_video_id, stored)
+            logger.info(f"[PublishPoster] fv={final_video_id} stored poster {stored}")
+        else:
+            logger.info(
+                f"[PublishPoster] fv={final_video_id} no poster stored (best effort); "
+                f"share unfurl falls back to text until backfilled"
+            )
+        return stored
+    except Exception as e:
+        # Never let poster work fail publish (same invariant as render finalize).
+        logger.info(f"[PublishPoster] fv={final_video_id} poster capture error: {e}")
+        return None
+
+
 def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
     """Generate-on-first-request poster for a game recap (T5180).
 
@@ -522,6 +580,38 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
     except Exception as e:
         logger.warning(f"[RecapPoster] unexpected error for {recap_key}: {e}")
         return False
+
+
+def recap_poster_r2_keys(user_id: str, profile_id: str, game_id: int) -> tuple[str, str]:
+    """Full R2 keys for a game's recap master and its poster, under the sharer's
+    profile prefix. Deterministic -- mirrors the key scheme `ensure_recap_poster`
+    expects (`recaps/{game_id}.mp4` -> `recaps/posters/{game_id}.jpg`)."""
+    from ..storage import profile_r2_key
+    return (
+        profile_r2_key(user_id, profile_id, f"recaps/{game_id}.mp4"),
+        profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}.jpg"),
+    )
+
+
+async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None:
+    """Warm the recap poster cache at teammate-share-CREATION time (T5270), so
+    the R2 object exists before the link can be pasted into a messenger -- the
+    old generate-on-first-request path made the first crawler pay the ffmpeg
+    cost, which is too slow for the few seconds a crawler allots og:image.
+
+    Best-effort only: `ensure_recap_poster` already never raises (missing recap,
+    ffmpeg failure, R2 hiccup all return False), but this wrapper never lets an
+    unexpected error escape either -- share creation must never fail or slow
+    meaningfully because of poster warming. Runs off the event loop
+    (`asyncio.to_thread`) since generation shells out to ffmpeg. The on-demand
+    GET path (`shares.py::get_shared_teammate_poster`) stays as the fallback for
+    shares created before this warmed, or whose cached object was evicted.
+    """
+    recap_key, poster_key = recap_poster_r2_keys(user_id, profile_id, game_id)
+    try:
+        await asyncio.to_thread(ensure_recap_poster, recap_key, poster_key)
+    except Exception as e:
+        logger.info(f"[RecapPoster] warm-at-share-creation failed for game_id={game_id}: {e}")
 
 
 def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:

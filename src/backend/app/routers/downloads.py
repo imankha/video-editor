@@ -23,7 +23,7 @@ from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
 from app.services.materialization import _open_profile_db, ensure_profile_db_local
-from app.services.poster import poster_rel_path
+from app.services.poster import generate_poster_at_publish, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
     R2_ENABLED,
@@ -1232,7 +1232,8 @@ async def publish_to_my_reels(
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT id FROM final_videos
+            SELECT id, filename, slowmo_section_start, slowmo_section_end
+            FROM final_videos
             WHERE project_id = ?
             ORDER BY version DESC
             LIMIT 1
@@ -1279,6 +1280,23 @@ async def publish_to_my_reels(
             f"final_video_id={row['id']} user={user_id} req_id={req_id} "
             f"(R2 sync still pending - runs in middleware background task)"
         )
+
+    # T5280: capture the share poster HERE (the publish gesture), not at render.
+    # Runs BEFORE archive_project prunes working_clips, so a reel whose slow-mo
+    # section columns are unfrozen (pre-v025) can still reconstruct from live clips.
+    # Blocking ffmpeg+R2 runs off the event loop but WITHIN the request, so the
+    # poster object + poster_filename land before this endpoint's durable-sync
+    # barrier (T4110) -- NOT fire-and-forget. Poster failure NEVER fails publish
+    # (generate_poster_at_publish is best-effort and never raises).
+    poster_fn = await asyncio.to_thread(
+        generate_poster_at_publish,
+        user_id, row['id'], row['filename'], project_id,
+        row['slowmo_section_start'], row['slowmo_section_end'],
+    )
+    logger.info(
+        f"[Publish] poster capture project={project_id} final_video_id={row['id']} "
+        f"user={user_id} req_id={req_id} poster={poster_fn or 'none'}"
+    )
 
     archived = await asyncio.to_thread(archive_project, project_id, user_id)
     if archived:

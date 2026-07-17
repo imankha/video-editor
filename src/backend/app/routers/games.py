@@ -1764,6 +1764,12 @@ async def share_game(game_id: int, body: ShareGameRequest):
             logger.error(f"[share-game] Failed to create share record: {e}")
             share_records.append(None)
 
+    if any(share_records):
+        # T5270: warm the recap poster now (share-creation gesture) so the
+        # crawler that pastes this link never pays the ffmpeg cost.
+        from app.services.poster import warm_recap_poster
+        await warm_recap_poster(user_id, profile_id, game_id)
+
     tasks = {}
     for email, share in zip(body.emails, share_records):
         is_first_touch = not _is_existing_user(email)
@@ -1943,6 +1949,12 @@ async def share_playback(game_id: int, body: SharePlaybackRequest):
         except Exception as e:
             logger.error(f"[share-playback] Failed to create share record: {e}")
             share_records.append(None)
+
+    if any(share_records):
+        # T5270: warm the recap poster now (share-creation gesture) so the
+        # crawler that pastes this link never pays the ffmpeg cost.
+        from app.services.poster import warm_recap_poster
+        await warm_recap_poster(user_id, profile_id, game_id)
 
     if not os.getenv("RESEND_API_KEY"):
         from app.services.email import _get_share_url
