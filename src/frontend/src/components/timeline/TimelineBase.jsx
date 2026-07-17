@@ -271,6 +271,24 @@ export function TimelineBase({
     }
   }, [progress, timelineScale, isPlaying]);
 
+  // Scroll the timeline back to the start when the playhead jumps to the start
+  // (Restart / reset button seeks to 0). The auto-scroll above only follows
+  // during playback, so on a zoomed-in timeline a manual seek-to-start would
+  // move the playhead off-screen while the view stayed scrolled away. Reset is
+  // an explicit gesture, so it overrides the recent-manual-scroll guard. We key
+  // off the transition *to* the start, not being idle there, so it doesn't
+  // fight a user who scrolled while parked at the beginning.
+  const prevProgressRef = React.useRef(progress);
+  React.useEffect(() => {
+    const prevProgress = prevProgressRef.current;
+    prevProgressRef.current = progress;
+    const container = scrollContainerRef.current;
+    if (!container || timelineScale <= 1) return;
+    if (progress < 0.5 && prevProgress >= 0.5) {
+      container.scrollLeft = 0;
+    }
+  }, [progress, timelineScale]);
+
   return (
     <div className="timeline-container py-0.5 lg:py-4">
       {/* Zoom indicator (timestamps removed - redundant with player timecode) */}
