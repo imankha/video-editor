@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Play, Plus, Eye, EyeOff } from 'lucide-react';
+import { X, Play, Plus, Eye, EyeOff, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from './shared/Button';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
@@ -15,7 +15,6 @@ import { useProjectsStore } from '../stores/projectsStore';
 import { useRawClipSave } from '../hooks/useRawClipSave';
 import { formatGameClock } from '../utils/timeFormat';
 import { generateClipName } from '../utils/clipDisplayName';
-import { useIsMobile } from '../hooks/useIsMobile';
 import { toast } from './shared/Toast';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
@@ -30,7 +29,16 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [showShareDialog, setShowShareDialog] = useState(false);
   // T4130: per-clip annotation overlay — visible by default on the Annotations tab.
   const [showOverlay, setShowOverlay] = useState(true);
-  const isMobile = useIsMobile();
+  // T5290: on a portrait phone (< sm) the modal opens immersive — the video is
+  // maximized and the clip list is collapsed into a reachable pull-up handle
+  // beneath it. Expanding restores the stacked list. This is ephemeral view
+  // state (never persisted). It only drives the < sm layout; at >= sm the list
+  // is always shown (the sm: classes ignore this flag).
+  const [clipsCollapsed, setClipsCollapsed] = useState(() => {
+    // Guard matchMedia for SSR/jsdom (test env has window but no matchMedia).
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(max-width: 639px)').matches;
+  });
   const { updateClip, isSaving } = useRawClipSave();
   const recapVideoRef = useRef(null);
   const highlightsVideoRef = useRef(null);
@@ -251,7 +259,9 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
         className={`relative bg-gray-800 shadow-2xl flex flex-col ${
           isFullscreen
             ? 'w-screen h-dvh'
-            : 'rounded-xl border border-gray-700 w-full max-w-6xl mx-4 max-h-[90vh]'
+            // T5290: full-bleed h-dvh player on phones (< sm); the desktop card
+            // (rounded, bordered, max-w-6xl, max-h-[90vh]) returns at >= sm.
+            : 'w-full h-dvh sm:h-auto sm:rounded-xl sm:border sm:border-gray-700 sm:max-w-6xl sm:mx-4 sm:max-h-[90vh]'
         }`}
       >
         {/* Header — hidden in fullscreen */}
@@ -305,35 +315,48 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
 
         {/* Content: sidebar + video */}
         {effectiveTab === 'annotations' ? (
-          <div className="flex flex-1 min-h-0">
-            {/* Clips sidebar — hidden in fullscreen */}
+          // T5290: column on phones (video on top, clip list below), row at >= sm.
+          <div className="flex flex-col sm:flex-row flex-1 min-h-0">
+            {/* Clips sidebar — hidden in fullscreen. On phones it drops BELOW the
+                video (order-2) as a full-width, height-capped, collapsible panel. */}
             {hasRecapClips && !isFullscreen && (() => {
               const activeClip = recapData.clips.find(c => c.id === recap.activeClipId);
               const tags = activeClip && Array.isArray(activeClip.tags) ? activeClip.tags : [];
               const notes = activeClip?.notes || '';
 
               return (
-                <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
-                  <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2">
+                <div className="order-2 sm:order-1 w-full sm:w-64 max-h-[38dvh] sm:max-h-none border-t sm:border-t-0 sm:border-r border-gray-700 flex-shrink-0 flex flex-col min-h-0">
+                  <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
                     <span className="text-xs text-gray-400 font-medium">
                       {recapData.clips.length} clips
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Plus}
-                      onClick={handleCreateRecapClip}
-                      disabled={!createClipEnabled || isSaving}
-                      title={
-                        !canCreateClip ? 'Video source unavailable'
-                          : activeRecapClip?.in_drafts ? 'This clip is already a draft reel'
-                          : 'Create a draft reel from this clip'
-                      }
-                    >
-                      Create clip
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={Plus}
+                        onClick={handleCreateRecapClip}
+                        disabled={!createClipEnabled || isSaving}
+                        title={
+                          !canCreateClip ? 'Video source unavailable'
+                            : activeRecapClip?.in_drafts ? 'This clip is already a draft reel'
+                            : 'Create a draft reel from this clip'
+                        }
+                      >
+                        Create clip
+                      </Button>
+                      {/* Pull-up handle — phones only; toggles the immersive collapse. */}
+                      <button
+                        onClick={() => setClipsCollapsed(v => !v)}
+                        className="sm:hidden flex items-center justify-center min-h-11 min-w-11 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+                        aria-label={clipsCollapsed ? 'Show clip list' : 'Hide clip list'}
+                        aria-expanded={!clipsCollapsed}
+                      >
+                        {clipsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto min-h-0">
+                  <div className={`flex-1 overflow-y-auto min-h-0 ${clipsCollapsed ? 'hidden sm:block' : ''}`}>
                     <RecapClipsSidebar
                       clips={recapData.clips}
                       activeClipId={recap.activeClipId}
@@ -341,7 +364,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     />
                   </div>
                   {(notes || tags.length > 0) && (
-                    <div className="border-t border-gray-700 p-3 flex-shrink-0">
+                    <div className={`border-t border-gray-700 p-3 flex-shrink-0 ${clipsCollapsed ? 'hidden sm:block' : ''}`}>
                       {tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-1.5">
                           {tags.map(tag => (
@@ -361,7 +384,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             })()}
 
             {/* Video + controls */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="order-1 sm:order-2 flex-1 flex flex-col min-w-0 min-h-0">
               <div className={
                 isFullscreen
                   ? 'relative flex-1 min-h-0 bg-black'
@@ -397,7 +420,6 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     gameClock={formatGameClock(activeRecapClip.game_start_time)}
                     isVisible={showOverlay}
                     isFullscreen={isFullscreen}
-                    isMobile={isMobile}
                   />
                 )}
                 {recapData?.url && (
@@ -442,27 +464,40 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             </div>
           </div>
         ) : (
-          <div className="flex flex-1 min-h-0">
-            {/* Highlights sidebar — hidden in fullscreen */}
+          // T5290: same stacked-on-phones treatment as the Annotations tab.
+          <div className="flex flex-col sm:flex-row flex-1 min-h-0">
+            {/* Highlights sidebar — hidden in fullscreen; drops below the video
+                (order-2) as a collapsible panel on phones. */}
             {!isFullscreen && (
-              <div className="w-64 border-r border-gray-700 flex-shrink-0 flex flex-col">
-                <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2">
+              <div className="order-2 sm:order-1 w-full sm:w-64 max-h-[38dvh] sm:max-h-none border-t sm:border-t-0 sm:border-r border-gray-700 flex-shrink-0 flex flex-col min-h-0">
+                <div className="p-2 border-b border-gray-700 flex items-center justify-between gap-2 flex-shrink-0">
                   <span className="text-xs text-gray-400 font-medium">
                     {(brilliantClips || []).length} highlights
                   </span>
-                  {canCreateClip && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={Plus}
-                      onClick={handleCreateClip}
-                      title="Create a clip in Annotate at this moment"
+                  <div className="flex items-center gap-1">
+                    {canCreateClip && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={Plus}
+                        onClick={handleCreateClip}
+                        title="Create a clip in Annotate at this moment"
+                      >
+                        Create clip
+                      </Button>
+                    )}
+                    {/* Pull-up handle — phones only; toggles the immersive collapse. */}
+                    <button
+                      onClick={() => setClipsCollapsed(v => !v)}
+                      className="sm:hidden flex items-center justify-center min-h-11 min-w-11 p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+                      aria-label={clipsCollapsed ? 'Show highlights list' : 'Hide highlights list'}
+                      aria-expanded={!clipsCollapsed}
                     >
-                      Create clip
-                    </Button>
-                  )}
+                      {clipsCollapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-1 overflow-y-auto min-h-0">
+                <div className={`flex-1 overflow-y-auto min-h-0 ${clipsCollapsed ? 'hidden sm:block' : ''}`}>
                   <RecapClipsSidebar
                     clips={highlightsSidebarClips}
                     activeClipId={highlights.activeClipId}
@@ -473,7 +508,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
             )}
 
             {/* Video + controls */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="order-1 sm:order-2 flex-1 flex flex-col min-w-0 min-h-0">
               <div className={
                 isFullscreen
                   ? 'relative flex-1 min-h-0 bg-black'

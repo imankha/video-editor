@@ -34,7 +34,7 @@ const RATING_COLORS = {
  *
  * Only visible when playhead is in a clip region with a name or notes.
  */
-export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible, isFullscreen = false, isMobile = false }) {
+export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible, isFullscreen = false }) {
   if (!isVisible || (!name && !notes)) {
     return null;
   }
@@ -45,7 +45,7 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
   return (
     <div
       className={`absolute left-1/2 -translate-x-1/2 w-4/5 max-w-2xl z-50 pointer-events-none ${
-        isMobile ? 'top-0' : isFullscreen ? 'top-16' : 'top-2'
+        isFullscreen ? 'top-16' : 'top-2'
       }`}
       style={{
         // Using inline styles for precise control per spec
@@ -60,15 +60,22 @@ export function NotesOverlay({ name, notes, rating, gameClock = null, isVisible,
       }}
     >
       {name && (
-        <div style={{ position: 'relative', textAlign: 'center', fontWeight: 'bold', marginBottom: notes ? '4px' : 0 }}>
+        // T5290: below sm the narrow pill laid the absolutely-positioned game clock
+        // over the centered name (`8'56"Good Control`). Below sm, lay time + notation
+        // + name out inline with a gap so they read as `8'56" ! Good Control`; at sm+
+        // the original absolute-left clock / centered name returns (byte-identical).
+        // Pure Tailwind sm: treatment (640px) — matches the recap layout breakpoint,
+        // no JS, and stays consistent across every NotesOverlay consumer.
+        <div
+          className="font-bold flex flex-wrap items-baseline justify-center gap-1.5 sm:block sm:relative sm:text-center"
+          style={{ marginBottom: notes ? '4px' : 0 }}
+        >
           {/* T4070: in-match time (soccer notation) on the left, name centered. */}
           {gameClock && (
-            <span style={{ position: 'absolute', left: 0, top: 0, fontVariantNumeric: 'tabular-nums', color: '#666' }}>
-              {gameClock}
-            </span>
+            <span className="tabular-nums text-[#666] sm:absolute sm:left-0 sm:top-0">{gameClock}</span>
           )}
-          {notation && <span style={{ marginRight: '6px', color: '#666' }}>{notation}</span>}
-          {name}
+          {notation && <span className="text-[#666] sm:mr-1.5">{notation}</span>}
+          <span>{name}</span>
         </div>
       )}
       {notes && <div>{notes}</div>}
