@@ -13,13 +13,23 @@
 ## Prerequisites
 - [x] T5090 merged (reel poster policy final). (2026-07-17, incl. v025 slowmo-section freeze)
 - [x] T5180 merged (teammate link poster proxy + edge function exist to verify). (2026-07-17)
-- [ ] `/deploy` has shipped the above to prod.
-- [ ] **Run migrations FIRST on each env** (v025 profile_db freezes/backfills
+- [x] `/deploy` has shipped the above to prod. (2026-07-16, deploy/backend/2026-07-16-2 +
+      deploy/frontend/2026-07-16-2; also ships T5270/T5280 poster-timing refinements)
+- [x] **Run migrations FIRST on each env** (v025 profile_db freezes/backfills
       `final_videos.slowmo_section_start/end` from the R2 publish archives). Published reels
       have their working_clips PRUNED at publish, so a force-regen WITHOUT v025 applied would
       downgrade every existing reel poster to a plain first frame. Order per env is always:
       deploy -> migrate -> force-regen. Dev already migrated + verified 2026-07-17
       (12/12 profile DBs v25, sections backfilled where slow-mo existed).
+      **Staging (2026-07-17):** `run_all_migrations()` — 0 applied / 6 skipped (already at
+      head) / 0 errors; postgres already v18 (no pending). **Prod (2026-07-17):**
+      8/9 users migrated, 0 errors on the migration itself. Two pre-existing, unrelated data
+      gaps surfaced (not migration failures, not fixed here): user
+      937e5e54-d49a-4ebb-8b54-fdd878e15df9 (arshia.kalantari@gmail.com) has 2 profiles whose R2
+      data is `missing` (stale registry entries, nothing to migrate); user
+      3ed03fb5-949d-4cfd-b708-0c758ea68ef3 (imankh@gmail.com) has 1 orphan profile `b95eb93b`
+      not in their registry (skipped, logged). Postgres track clean (v18, no pending) — the
+      EPIC's noted `shares_share_type_check` blocker did not surface this run.
 - [ ] Re-run STAGING force-regen with the final policy and visual-QA a sample before touching prod.
 - [ ] KNOWN BLOCKER for the postgres migration track: `shares_share_type_check` constraint is
       violated by existing rows on dev (likely staging/prod too) and errors the postgres track
