@@ -71,25 +71,11 @@ export const SCREENS = [
   {
     id: 'annotate',
     name: 'Annotate',
-    // FOUND BY THIS AUDIT (T4930 first matrix run), filed as T4933: on a phone in
-    // LANDSCAPE wide enough (>=640px) to render the desktop clip-editor sidebar
-    // (`hidden sm:flex`, ~546px tall), its Save / Delete Clip / Distribution
-    // controls are clipped below the ~390px landscape fold of the `h-dvh
-    // overflow-hidden` shell with no inner scroller — the T4880 failure class that
-    // T4880 fixed for Framing/Overlay but not for Annotate's landscape sidebar.
-    // Tracked here (loud log, suite stays green) until T4933 lands; self-heals.
-    knownIssues: [
-      {
-        orientation: 'landscape',
-        // Only reproduces when the landscape width reaches the `sm` breakpoint
-        // (>=640px) that renders the desktop clip-editor sidebar. On a narrow
-        // landscape (e.g. iPhone SE, 568px) the sidebar stays hidden and the
-        // audit legitimately passes — so this is scoped, not a blanket skip.
-        appliesWhen: (vp) => vp.width >= 640,
-        task: 'T4933',
-        note: 'clip-editor sidebar controls clipped below the fold on phone landscape (no inner scroller)',
-      },
-    ],
+    // T4933 (landscape clip-editor sidebar clipped below the fold) is FIXED: the
+    // desktop clip list, details editor, and add-clip form each own a scroll region
+    // inside the h-dvh sidebar, so their controls stay reachable on a short
+    // landscape-phone sm sidebar. The knownIssues entry was removed when the fix
+    // landed (the audit self-heals — it throws if a stale entry no longer repros).
     setup: async (page) => {
       await openGameInAnnotate(page, AUDIT_GAME_ID);
       // Fullest state: the source video is attached (clips sidebar + timeline render).
