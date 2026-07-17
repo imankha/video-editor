@@ -37,3 +37,40 @@
 - [ ] All three overlays have both fixes (leak + first-paint) by construction
 - [ ] Coordinate math unit-tested incl. letterbox + zoom/pan + fullscreen
 - [ ] Manual placement-accuracy check recorded per overlay
+
+---
+
+## Progress Log
+
+### Step 1 — Line-diff of the 3 copies (BEFORE unifying)
+
+**Core aspect-fit math is byte-identical across all three copies.** The `videoAspect` /
+`containerAspect` branch, `baseDisplayWidth/Height`, `displayWidth/Height = base * zoom`,
+`offsetX/Y = (container - display)/2 + panOffset`, and `scaleX/Y = display / metadata` lines
+are the same in Crop, Highlight, and PlayerDetection. **There is no placement-math drift** —
+the only *behavioral* divergences are the two known fix-axes below. No extra placement bug was
+found, so no additional fix beyond the unification is warranted.
+
+**Intended divergence (the two known fixes):**
+
+| Fix axis | CropOverlay (framing) | HighlightOverlay (overlay) | PlayerDetectionOverlay (overlay) |
+|----------|-----------------------|----------------------------|----------------------------------|
+| first-paint (`useLayoutEffect`) | ✅ `useLayoutEffect` | ❌ `useEffect` | ❌ `useEffect` |
+| rAF-leak (inner frame cancelled) | ❌ double-rAF settle present but only the **outer** id is captured/cancelled — inner frame leaks on unmount (:102-108) | ✅ both ids tracked + cancelled (:92-101) | ❌ **no rAF at all** — also no fullscreen settle |
+
+Unified hook has BOTH by construction: `useLayoutEffect` + double-rAF settle with both frame
+ids cancelled.
+
+**Incidental drift (beyond the two fixes) — surfaced, none is a placement bug:**
+
+| # | Drift | Copies | Resolution in unified hook |
+|---|-------|--------|----------------------------|
+| D1 | Computes dead `left`/`top` fields (screen-absolute video pos via `containerRect.left/top`, `videoLeft`, `videoTop`) that nothing reads | Crop only | **Dropped** — no consumer reads `rect.left`/`rect.top` (verified by grep) |
+| D2 | Defines `screenToVideo` inverse but never calls it — drag handler hand-rolls `delta / scaleX` instead | Crop only | **Kept & exposed** to all three via `screenToVideo`; drag handlers left hand-rolling (no behavior change; inverse now available for the next feature) |
+| D3 | `videoToScreen` signature: `(x,y,radiusX,radiusY)→{x,y,radiusX,radiusY}` | Highlight (Crop/PD use `w,h→width,height`) | **Unified** on `(x,y,w,h)→{x,y,width,height}`; Highlight maps `width→radiusX, height→radiusY` at its one call site (identical math) |
+| D4 | Guards `!videoMetadata` before computing | PD only (Crop/Highlight would throw on null metadata) | **Unified** on the `!videoMetadata` guard (safe superset → `rect` stays `null`, overlays already null-guard `rect`) |
+| D5 | Local `round3` copy (used for constrain rounding too) | Crop, Highlight (PD has none) | Exported `round3` from hook module; Crop/Highlight import it, deleting their local copies |
+| D6 | Captures `const video = videoRef.current` once outside `updateRect` | Highlight (Crop/PD re-read each call) | **Unified** on re-reading `videoRef.current` inside `updateRect` (safer if the ref target swaps) |
+
+**Conclusion:** no divergence beyond the two known fixes changes on-screen placement. Proceeding
+to unify (hook + tests, then one overlay per commit).
