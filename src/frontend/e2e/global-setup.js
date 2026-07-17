@@ -45,11 +45,11 @@ export default async function globalSetup() {
     console.log('Mode: DEPLOYED TARGET (staging/remote) — servers NOT auto-started\n');
     console.log(`  Frontend (E2E_BASE_URL): ${process.env.E2E_BASE_URL}`);
     console.log(`  API      (E2E_API_BASE): ${process.env.E2E_API_BASE || '(unset — relative /api against the frontend host)'}\n`);
-    console.log('Local-only specs SKIPPED on this target (depend on dev/local-only /api/test/* seams):');
+    console.log('Local-only specs SKIPPED on this target (dev/local-only seams or Vite-dev module imports):');
     for (const s of LOCAL_ONLY_SPECS) {
-      console.log(`  • ${s.file}`);
-      console.log(`      seams: ${s.seams.join(', ')}`);
-      console.log(`      why:   ${s.reason}`);
+      console.log(`  • ${s.file}  [${s.category}]`);
+      console.log(`      depends: ${s.depends.join(', ')}`);
+      console.log(`      why:     ${s.reason}`);
     }
     console.log('\n  All other specs run against the deployed target. Any /api/test/* call that');
     console.log('  slips through fails FAST (assertSeamAvailable) instead of hanging to timeout.\n');

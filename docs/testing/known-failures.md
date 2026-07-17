@@ -21,6 +21,7 @@ so a brand-new throwaway PG (`docker run postgres:16`, or a local
 | Layer | Test | Failure | Root cause | Handling |
 |-------|------|---------|-----------|----------|
 | Backend | `test_collection_metadata.py::test_stamps_aspect_ratio_and_tags` | ffprobe not found | Needs ffmpeg on PATH | CI installs ffmpeg; local Windows devs need it on PATH |
+| Frontend E2E | `keyframe-integrity.spec.js › all guards verified with a project in framing mode` | `g1a_frame0` expected `0`, received `50` (RESTORE no longer reconstitutes a permanent frame-0 boundary from the nearest keyframe) | Keyframe-controller `restoreKeyframes` / `removeBoundaryDuplicates` behavior drifted away from the T340 spec's expectation; the spec is stale, not the app (needs a task to re-pin the expected invariants). Verified on a clean `master` checkout 2026-07-17 (`git show master:...` run: Expected 0, Received 50). | Pre-existing; NOT introduced by T5320. Spec also now skips on a deployed target (Vite-dev module import — see targetEnv.js). Burn down with a dedicated task. |
 
 Observed 2026-07-04 during the first /dotask wave (bug27p, T4190, T4100, T3980
 workers all independently hit subsets of these).

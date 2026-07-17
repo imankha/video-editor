@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T340: Keyframe Integrity Guards - Playwright Tests
@@ -32,6 +33,12 @@ test.describe('T340: Keyframe Integrity Guards', () => {
    * just navigate to the app so Vite can serve the module imports.
    */
   test('Live: all guards verified with user a project in framing mode', async ({ page }) => {
+    // T5320: this test import()s /src/controllers/keyframeController.js +
+    // /src/utils/keyframeUtils.js straight from the Vite dev server. Those source
+    // paths exist only under `npm run dev`; on a deployed CF Pages BUILD the code is
+    // bundled/hashed, so the import 404s. Skip loudly on a deployed target (the
+    // controller/utils logic is also covered by Vitest). See e2e/FIXTURE-CONTRACT.md.
+    skipOnDeployedTarget(test, 'import()s /src Vite-dev module paths that do not exist on a deployed build');
     // Navigate to app root so Vite dev server is available for module imports
     await page.goto('/');
     await page.waitForLoadState('networkidle');

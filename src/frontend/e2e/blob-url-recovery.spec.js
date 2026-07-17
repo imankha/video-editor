@@ -15,11 +15,19 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const DEV_BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const CLASSIFIER_URL = `${DEV_BASE}/src/utils/videoErrorClassifier.js`;
 
 test.describe('T1360 blob URL recovery', () => {
+  // T5320: every test here import()s /src/utils/videoErrorClassifier.js from the Vite
+  // dev server. That /src path exists only under `npm run dev`; on a deployed CF Pages
+  // BUILD the module is bundled/hashed and the import 404s ("Failed to fetch
+  // dynamically imported module"). The classifier is environment-independent pure JS,
+  // so a deployed run adds no coverage — skip loudly there. See e2e/FIXTURE-CONTRACT.md.
+  skipOnDeployedTarget(test, 'import()s a /src Vite-dev module path that does not exist on a deployed build');
+
   test('classifier module exists and exports classifyVideoError', async ({ page }) => {
     // Navigate to the dev server so same-origin dynamic imports work.
     await page.goto(DEV_BASE);

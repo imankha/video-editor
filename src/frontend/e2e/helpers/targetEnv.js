@@ -70,30 +70,60 @@ export function assertSeamAvailable(res, seamName) {
 }
 
 /**
- * Authoritative inventory of specs that CANNOT run against a deployed target because
- * they depend on the dev/local-only `/api/test/*` seams. global-setup prints this
- * loudly when IS_DEPLOYED_TARGET so a staging run's skips are self-explaining.
+ * Authoritative inventory of specs that CANNOT run against a deployed target, with the
+ * reason per spec. global-setup prints this loudly when IS_DEPLOYED_TARGET so a staging
+ * run's skips are self-explaining (never a silent skip). Keep in sync with the
+ * `skipOnDeployedTarget()` calls in the listed specs.
  *
- * Keep in sync with the `skipOnDeployedTarget()` calls in the listed specs. These are
- * the ONLY two specs in the suite that touch `/api/test/*` (scripted grep, T4934); all
- * other auth bypasses the suite uses (`test-login`, `dev-login`, the `X-User-ID`
- * header) ARE available on staging (they are gated on `APP_ENV != production`, not on
- * `_test_seams_enabled`), so those specs stay in the staging set.
+ * Two categories (the `depends` field names the concrete dependency):
+ *
+ *  - `seam`  — depends on the dev/local-only `/api/test/*` seams (T4934). These are the
+ *    ONLY specs in the suite that touch `/api/test/*` (scripted grep). All OTHER auth
+ *    bypasses (`test-login`, `dev-login`, the `X-User-ID` header) ARE available on
+ *    staging (gated on `APP_ENV != production`, not on `_test_seams_enabled`), so those
+ *    specs stay in the staging set.
+ *  - `vite-module` — dynamically `import()`s a Vite-dev source path (e.g.
+ *    `/src/utils/foo.js`) to unit-test a browser module in-page (T5320). Those paths
+ *    exist only under the Vite dev server; on a deployed CF Pages BUILD the source is
+ *    bundled/hashed, so the import 404s ("Failed to fetch dynamically imported module").
+ *    This is a test-vs-deployed-bundle mismatch, NOT a staging bug and NOT a data gap —
+ *    the module logic is also covered by Vitest, so these run locally only.
  */
 export const LOCAL_ONLY_SPECS = [
   {
     file: 'T4120-self-verify-durability.spec.js',
-    seams: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle', '/api/test/migrate-current-profile'],
+    category: 'seam',
+    depends: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle', '/api/test/migrate-current-profile'],
     reason:
       'durability FAULT-INJECTION seams (deliberately perturb R2 sync + machine ' +
       'lifecycle) — never safe to run against real staging infra',
   },
   {
     file: 'T4850-move-reels.spec.js',
-    seams: ['/api/test/seed-final-video', '/api/test/ensure-pg-user'],
+    category: 'seam',
+    depends: ['/api/test/seed-final-video', '/api/test/ensure-pg-user'],
     reason:
       'dev-only data-seeding seams (seed-final-video uploads a tiny MP4 to the ' +
       'per-profile R2 prefix; ensure-pg-user registers the isolated test user) ' +
       '— not mounted on staging',
+  },
+  {
+    file: 'keyframe-integrity.spec.js',
+    category: 'vite-module',
+    depends: ['/src/controllers/keyframeController.js', '/src/utils/keyframeUtils.js'],
+    reason:
+      'in-page unit test that import()s the keyframe controller/utils from the Vite ' +
+      'dev server; those /src paths do not exist on a deployed BUILD. Logic is also ' +
+      'covered by Vitest (controllers/keyframeController.test.js).',
+  },
+  {
+    file: 'blob-url-recovery.spec.js',
+    category: 'vite-module',
+    depends: ['/src/utils/videoErrorClassifier.js'],
+    reason:
+      'in-page unit test that import()s the video-error classifier from the Vite dev ' +
+      'server; that /src path does not exist on a deployed BUILD. The classifier is ' +
+      'environment-independent pure JS, so a deployed run adds no coverage. (No Vitest ' +
+      'exists for it yet — porting these assertions to Vitest is a worthwhile follow-up.)',
   },
 ];

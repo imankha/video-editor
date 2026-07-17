@@ -44,14 +44,18 @@ const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 // duplicated. Never auto-start when pointed at a deployed target.
 const AUTOSTART = process.env.E2E_AUTOSTART === '1' && !process.env.E2E_BASE_URL;
 
-// T4934: per-test timeout. Local video-processing tests can legitimately take
+// T4934/T5320: per-test timeout. Local video-processing tests can legitimately take
 // minutes, so local stays at 5m. On a DEPLOYED target the seam-dependent hangs are
-// removed by tagging (see e2e/helpers/targetEnv.js), so a much shorter cap keeps a
-// real regression from costing 5 minutes of wall-clock per test and makes the suite
-// usable as a pre-deploy gate. Override with E2E_TIMEOUT_MS for a slower target.
+// removed by tagging (see e2e/helpers/targetEnv.js) and every data-needing spec logs
+// in against the seeded fixture account (see e2e/FIXTURE-CONTRACT.md), so nothing
+// should legitimately take minutes. T5320 tightens the deployed default from 120s to
+// 60s: a genuine data/config miss (fixture not seeded, wrong profile) then fails fast
+// (~60s) instead of hanging, so a full staging run finishes in minutes and stays a
+// usable pre-deploy gate. A real regression reads as a fast, specific failure — not a
+// data-less hang. Override with E2E_TIMEOUT_MS for a slower target.
 const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
   ? Number(process.env.E2E_TIMEOUT_MS)
-  : (process.env.E2E_BASE_URL ? 120000 : 300000);
+  : (process.env.E2E_BASE_URL ? 60000 : 300000);
 
 export default defineConfig({
   testDir: './e2e',
