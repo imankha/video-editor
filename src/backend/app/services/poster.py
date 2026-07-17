@@ -19,6 +19,7 @@ without a poster simply omits the `og:image` tag at share-resolution time and
 logs at info -- no silent fallback that hides missing data (CLAUDE.md).
 """
 
+import asyncio
 import logging
 import math
 import subprocess
@@ -522,6 +523,38 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
     except Exception as e:
         logger.warning(f"[RecapPoster] unexpected error for {recap_key}: {e}")
         return False
+
+
+def recap_poster_r2_keys(user_id: str, profile_id: str, game_id: int) -> tuple[str, str]:
+    """Full R2 keys for a game's recap master and its poster, under the sharer's
+    profile prefix. Deterministic -- mirrors the key scheme `ensure_recap_poster`
+    expects (`recaps/{game_id}.mp4` -> `recaps/posters/{game_id}.jpg`)."""
+    from ..storage import profile_r2_key
+    return (
+        profile_r2_key(user_id, profile_id, f"recaps/{game_id}.mp4"),
+        profile_r2_key(user_id, profile_id, f"recaps/posters/{game_id}.jpg"),
+    )
+
+
+async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None:
+    """Warm the recap poster cache at teammate-share-CREATION time (T5270), so
+    the R2 object exists before the link can be pasted into a messenger -- the
+    old generate-on-first-request path made the first crawler pay the ffmpeg
+    cost, which is too slow for the few seconds a crawler allots og:image.
+
+    Best-effort only: `ensure_recap_poster` already never raises (missing recap,
+    ffmpeg failure, R2 hiccup all return False), but this wrapper never lets an
+    unexpected error escape either -- share creation must never fail or slow
+    meaningfully because of poster warming. Runs off the event loop
+    (`asyncio.to_thread`) since generation shells out to ffmpeg. The on-demand
+    GET path (`shares.py::get_shared_teammate_poster`) stays as the fallback for
+    shares created before this warmed, or whose cached object was evicted.
+    """
+    recap_key, poster_key = recap_poster_r2_keys(user_id, profile_id, game_id)
+    try:
+        await asyncio.to_thread(ensure_recap_poster, recap_key, poster_key)
+    except Exception as e:
+        logger.info(f"[RecapPoster] warm-at-share-creation failed for game_id={game_id}: {e}")
 
 
 def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:
