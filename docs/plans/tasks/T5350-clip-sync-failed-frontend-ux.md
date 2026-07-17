@@ -1,4 +1,4 @@
-# T5330: Clip-gesture sync_failed 503 is confusing/invisible on the frontend
+# T5350: Clip-gesture sync_failed 503 is confusing/invisible on the frontend
 
 **Status:** TODO
 **Impact:** 5
