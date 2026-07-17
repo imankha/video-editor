@@ -16,7 +16,7 @@ import os
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -25,6 +25,7 @@ from app.database import (
     get_db_connection,
     get_raw_clips_path,
 )
+from app.middleware.db_sync import durable_sync
 from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
 from app.services.default_crop import refit_crop_keyframes
 from app.services.pg import get_pg
@@ -973,7 +974,11 @@ def _sync_clip_teammates(cursor, clip_id: int, tagged_teammates: list[str] | Non
 
 
 @router.post("/raw/save", response_model=RawClipSaveResponse)
-async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTasks):
+async def save_raw_clip(
+    clip_data: RawClipCreate,
+    background_tasks: BackgroundTasks,
+    _durable: None = Depends(durable_sync),  # T4320: sync the new clip row to R2 before 200
+):
     """
     Save a raw clip during annotation (real-time save).
 
@@ -1114,7 +1119,12 @@ async def save_raw_clip(clip_data: RawClipCreate, background_tasks: BackgroundTa
 
 
 @router.put("/raw/{clip_id}")
-async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks: BackgroundTasks):
+async def update_raw_clip(
+    clip_id: int,
+    update: RawClipUpdate,
+    background_tasks: BackgroundTasks,
+    _durable: None = Depends(durable_sync),  # T4320: sync the edited clip to R2 before 200
+):
     """
     Update a raw clip's metadata.
 
@@ -1244,7 +1254,10 @@ async def update_raw_clip(clip_id: int, update: RawClipUpdate, background_tasks:
 
 
 @router.delete("/raw/{clip_id}")
-async def delete_raw_clip(clip_id: int):
+async def delete_raw_clip(
+    clip_id: int,
+    _durable: None = Depends(durable_sync),  # T4320: sync the deletion to R2 before 200
+):
     """
     Delete a raw clip from the library.
 
