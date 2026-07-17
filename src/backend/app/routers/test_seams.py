@@ -58,6 +58,56 @@ async def set_sync_fault(req: SyncFaultRequest):
     return {"status": "ok", "force_r2_sync_failure": req.enabled}
 
 
+@router.post("/migrate-current-profile")
+async def migrate_current_profile():
+    """Migrate the logged-in user's current profile (+ user.sqlite) to HEAD schema (test seam).
+
+    The durability self-verify spec drives a REAL overlay render, and the export
+    finalize INSERT requires the head profile schema (e.g. v025's
+    final_videos.slowmo_section_start/end). A /dotask container pulls the user's DB
+    from R2 at whatever version R2 holds and does NOT auto-run migrations (CLAUDE.md:
+    migrations are admin-triggered, never on startup), so a behind-head profile.sqlite
+    makes the render throw a schema error BEFORE the durable boundary — masking the very
+    thing the test checks (the render dies with a plain `error`, never a `sync_failed`).
+
+    This migrates ONLY the current user's current profile to head — reproducing, in the
+    container, exactly what an admin migrate does in prod (where DBs are at head before any
+    render runs). It reuses the same migration machinery as POST /api/admin/migrate; it is
+    NOT a schema shortcut. Non-prod only (gated three ways like every seam).
+
+    Call with the sync fault CLEARED: this does its own durable R2 upload+verify, which a
+    forced FORCE_R2_SYNC_FAILURE would short-circuit to failure (status != 'ok')."""
+    _require_seams_enabled()
+
+    import asyncio
+
+    from ..migrations import (
+        PROFILE_DB_RUNNER,
+        _migrate_profile_db,
+        _migrate_user_db,
+    )
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    # Blocking (R2 round-trips + sqlite) — offload off the event loop, mirroring the
+    # admin migrate endpoint's asyncio.to_thread pattern.
+    user_applied = await asyncio.to_thread(_migrate_user_db, user_id)
+    result = await asyncio.to_thread(_migrate_profile_db, user_id, profile_id)
+
+    logger.warning(
+        f"[TEST] migrate-current-profile user={user_id} profile={profile_id} "
+        f"status={result.status} profile_applied={[m.version for m in result.applied]} "
+        f"user_applied={[m.version for m in user_applied]}"
+    )
+    return {
+        "status": result.status,
+        "head_version": PROFILE_DB_RUNNER.latest_version,
+        "profile_applied": [m.version for m in result.applied],
+        "user_applied": [m.version for m in user_applied],
+    }
+
+
 def _unlink_db_files(base: Path, name: str) -> bool:
     """Delete <base>/<name> plus its -wal/-shm sidecars. Returns True if the
     main file existed."""

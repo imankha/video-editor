@@ -83,7 +83,7 @@ export function assertSeamAvailable(res, seamName) {
 export const LOCAL_ONLY_SPECS = [
   {
     file: 'T4120-self-verify-durability.spec.js',
-    seams: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle'],
+    seams: ['/api/test/sync-fault', '/api/test/simulate-machine-cycle', '/api/test/migrate-current-profile'],
     reason:
       'durability FAULT-INJECTION seams (deliberately perturb R2 sync + machine ' +
       'lifecycle) — never safe to run against real staging infra',

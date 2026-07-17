@@ -40,7 +40,11 @@ test('T4120 self-verify: durable export boundary + machine-cycle (real local ren
   const getJson = async (res) => { try { return await res.json(); } catch { return null; } };
 
   // --- auth -----------------------------------------------------------------
-  await loginAsRealUser(context, REAL_EMAIL);
+  // Target the profile the test operates on (X-Profile-ID below) explicitly, so the
+  // session's active profile IS that profile even if the container's local profile
+  // registry was never seeded — otherwise dev-login picks a default/new profile and
+  // the render finds no export-ready project.
+  await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 
   // --- 1. local render mode (proves D1/D3: MODAL_ENABLED=false) --------------
   const health = await req.get('/api/health', { headers: H });
@@ -53,6 +57,21 @@ test('T4120 self-verify: durable export boundary + machine-cycle (real local ren
   const clearFault = await req.post('/api/test/sync-fault', { headers: H, data: { enabled: false } });
   assertSeamAvailable(clearFault, 'sync-fault');
   expect(clearFault.status()).toBe(200);
+
+  // Migrate this profile to HEAD schema before the REAL render below.
+  // A /dotask container pulls the user's DB from R2 at whatever version R2 holds and
+  // does NOT auto-run migrations (CLAUDE.md: migrations are admin-triggered, never on
+  // startup). A behind-head profile.sqlite makes the render throw a schema error (e.g.
+  // missing final_videos.slowmo_section_start, v025) at the finalize INSERT — BEFORE
+  // the durable boundary — so the terminal event is a plain `error`, never the
+  // `sync_failed` this test verifies. Bring the profile to head first (exactly what an
+  // admin migrate does in prod, where DBs are at head before any render runs).
+  const migrate = await req.post('/api/test/migrate-current-profile', { headers: H });
+  assertSeamAvailable(migrate, 'migrate-current-profile');
+  expect(migrate.status(), 'migrate-current-profile').toBe(200);
+  const migrateJson = await getJson(migrate);
+  console.log(`[T4120] migrate-current-profile: ${JSON.stringify(migrateJson)}`);
+  expect(migrateJson?.status, 'profile must migrate to head cleanly').toBe('ok');
 
   // --- 2. find a real export-ready project ----------------------------------
   const projectsRes = await req.get('/api/projects', { headers: H });
