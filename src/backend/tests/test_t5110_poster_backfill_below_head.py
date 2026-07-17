@@ -46,15 +46,20 @@ def _make_below_head_profile(base):
 
     path = _profile_path(base, OLD_PROFILE)
     conn = sqlite3.connect(str(path))
+    # project_id is a long-standing base column (predates poster_filename by many
+    # versions) so any real below-head profile has it; only poster_filename (v024)
+    # is missing here. T5090's backfill reconstruction reads project_id.
     conn.execute(
-        "CREATE TABLE final_videos (id INTEGER PRIMARY KEY, filename TEXT, "
-        "published_at TEXT)"
+        "CREATE TABLE final_videos (id INTEGER PRIMARY KEY, project_id INTEGER, "
+        "filename TEXT, published_at TEXT)"
     )
     conn.execute(
-        "INSERT INTO final_videos (id, filename, published_at) VALUES (1, 'old.mp4', '2026-01-01')"
+        "INSERT INTO final_videos (id, project_id, filename, published_at) "
+        "VALUES (1, NULL, 'old.mp4', '2026-01-01')"
     )
-    # One below head so exactly the pending v024 (add poster_filename) applies.
-    conn.execute(f"PRAGMA user_version = {PROFILE_DB_RUNNER.latest_version - 1}")
+    # Below head so the pending column-adding migrations (v024 poster_filename +
+    # v025 slowmo_section_start/end) both apply and heal the schema.
+    conn.execute("PRAGMA user_version = 23")
     conn.commit()
     conn.close()
     return path

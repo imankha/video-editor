@@ -210,7 +210,8 @@ def test_v024_adds_column_and_is_idempotent(tmp_path):
     applied = RUNNER.run(conn, "profile_db")
     assert 24 in [m.version for m in applied]
     assert "poster_filename" in _cols()
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 24
+    # v25+ also apply from this below-head DB (v23) -> DB lands at head.
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == RUNNER.latest_version
 
     # Re-run: nothing pending, column stays, no error.
     assert RUNNER.run(conn, "profile_db") == []
@@ -254,7 +255,9 @@ def test_backfill_generates_heals_skips_and_is_idempotent(db):
     assert set(res["generated"]) == {1}
     assert set(res["already_present"]) == {2}
     assert set(res["skipped_gone"]) == {3}
-    gen.assert_called_once_with(USER_ID, "r1.mp4")
+    # T5090: backfill now resolves + passes the reel's frozen/reconstructed slow-mo
+    # section. r1 has no project rows here (unreconstructable) -> None (first frame).
+    gen.assert_called_once_with(USER_ID, "r1.mp4", None)
 
     # Columns healed/set for r1 + r2.
     rows = {r["id"]: r["poster_filename"]

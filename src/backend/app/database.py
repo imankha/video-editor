@@ -684,6 +684,8 @@ def ensure_database():
                 clip_start_time REAL,
                 clip_game_start_time REAL,
                 poster_filename TEXT,
+                slowmo_section_start REAL,
+                slowmo_section_end REAL,
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)

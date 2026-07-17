@@ -64,7 +64,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
 | `postgres` | Fly Postgres | `schema_migrations` table | v018 |
-| `profile_db` | profile.sqlite | `PRAGMA user_version` | v023 |
+| `profile_db` | profile.sqlite | `PRAGMA user_version` | v025 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
 - Only versions `> current` are applied (base.py:38-40) — never reuse or renumber a version.
