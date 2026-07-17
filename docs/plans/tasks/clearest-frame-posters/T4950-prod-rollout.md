@@ -1,6 +1,6 @@
 # T4950: Clearest-Frame Posters — prod rollout + verify
 
-**Status:** TODO
+**Status:** DONE
 **Impact:** 6 | **Complexity:** 3
 **Epic:** [Clearest-Frame Posters](EPIC.md) — child 3 of 3 (terminal deploy/regen/verify pass)
 **Created:** 2026-07-12
@@ -30,11 +30,19 @@
       3ed03fb5-949d-4cfd-b708-0c758ea68ef3 (imankh@gmail.com) has 1 orphan profile `b95eb93b`
       not in their registry (skipped, logged). Postgres track clean (v18, no pending) — the
       EPIC's noted `shares_share_type_check` blocker did not surface this run.
-- [ ] Re-run STAGING force-regen with the final policy and visual-QA a sample before touching prod.
-- [ ] KNOWN BLOCKER for the postgres migration track: `shares_share_type_check` constraint is
+- [x] Re-run STAGING force-regen with the final policy and visual-QA a sample before touching prod.
+      (2026-07-17: 33 scanned / 33 generated / 0 failed, partial=false. Visual-QA'd the reel
+      poster download directly -- sharp in-action dribble frame, matches the slow-mo-first
+      policy. Reel + collection unfurls 2/2 clean; a teammate/game link correctly fell back to
+      the branded card for a game with no recap generated -- expected, not a miss.)
+- [x] KNOWN BLOCKER for the postgres migration track: `shares_share_type_check` constraint is
       violated by existing rows on dev (likely staging/prod too) and errors the postgres track
       (profile_db/user_db tracks still run). Doesn't block v025, but triage before relying on
       any pending postgres migration.
+      (2026-07-17: did not surface on this run -- both staging and prod postgres tracks reported
+      `current_version: 18, latest_version: 18, applied: [], error: null`, i.e. nothing pending
+      to trigger it. Leaving this note in place since the underlying row-level constraint
+      violation was never fixed, only not exercised.)
 
 ## Scope
 
@@ -70,7 +78,15 @@ S/M-tier ops task: no new code in the common case (runs shipped `backfill_poster
 cross-surface verification. Coordinate regen timing with any T4890 follow-ups.
 
 ## Acceptance criteria
-- [ ] Prod posters regenerated once with the final policy (force backfill, 0 failed)
-- [ ] `verify_share_unfurl.py` passes 3/3 on a prod reel, collection, and teammate link
-- [ ] Game/teammate links unfurl with a real recap frame when a recap exists, branded card when not
-- [ ] `app.reelballers.com/og-card.jpg` serves image/jpeg on prod
+- [x] Prod posters regenerated once with the final policy (force backfill, 0 failed)
+      (2026-07-17: 58 scanned / 58 generated / 0 failed, partial=false, one batch.)
+- [x] `verify_share_unfurl.py` passes 3/3 on a prod reel, collection, and teammate link
+      (2026-07-17: reel 3/3, collection 3/3, teammate/game 3/3 -- all clean.)
+- [x] Game/teammate links unfurl with a real recap frame when a recap exists, branded card when not
+      (2026-07-17: verified the tested teammate link's game has NO recap in R2 -- confirmed via
+      direct R2 listing, not inferred -- so its branded-card fallback is correct per T5180 spec,
+      not a gap. The code path serving a real recap frame when one exists was independently
+      verified during deploy reconciliation.)
+- [x] `app.reelballers.com/og-card.jpg` serves image/jpeg on prod
+      (2026-07-17: 200, image/jpeg, 116ms. Reel poster fetch 839ms -- both comfortably under
+      the ~2s crawler latency gate.)

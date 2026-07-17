@@ -57,7 +57,7 @@ toward frames where the spotlight-overlay region has motion. Do NOT reach for sc
 | 2 | T5180 — Game/teammate recap footage on links | DONE (deployed 2026-07-16 prod). Poster game recaps with the whole-clip clearest-frame helper; new token-gated `/poster.jpg` endpoint + teammate edge function; branded card as no-recap fallback. |
 | 3 | T5270 — Warm recap poster at share creation | DONE (deployed 2026-07-16 prod). Warm `ensure_recap_poster` at teammate-share creation (gesture) so the first crawler hit is never cold; on-demand GET stays as self-heal fallback. |
 | 4 | T5280 — Capture share poster at Move to My Reels | DONE (deployed 2026-07-16 prod). Move poster JPEG capture from render (finalize) to the publish gesture; render keeps only the v025 slow-mo-section freeze. |
-| 5 | T4950 — Prod rollout + verify | TODO — now unblocked (T5090+T5180+T5270+T5280 all deployed 2026-07-16). Single prod force-regen of reel posters, verify all surfaces (reel, collection, teammate) with `verify_share_unfurl.py`, confirm `og-card.jpg` serves image/jpeg. |
+| 5 | T4950 — Prod rollout + verify | DONE (2026-07-17). Staging regen 33/33, prod regen 58/58, 0 failed either env. `verify_share_unfurl.py` 3/3 clean on reel, collection, and teammate links; `og-card.jpg` + poster latency both well under the crawler gate. |
 
 Sequencing: T5090 first (defines the final reel policy). T5180 reuses the shipped whole-clip
 helper and is independent of the reel-heuristic change. T5270/T5280 (added 2026-07-16, capture
@@ -73,7 +73,7 @@ its own explicit go-ahead).
       exists, branded card when not.
 - [x] Live publish and admin backfill/force-regen apply the SAME policy; missing data -> first
       frame (logged, no fabrication).
-- [ ] Prod posters regenerated once with the final policy (0 failed); `verify_share_unfurl.py`
+- [x] Prod posters regenerated once with the final policy (0 failed); `verify_share_unfurl.py`
       passes 3/3 on a prod reel, collection, and teammate link; `og-card.jpg` serves image/jpeg.
-      (T4950 -- not yet run.)
+      (T4950 -- done 2026-07-17.)
 - [x] Poster failure never fails export. Tests pass.
