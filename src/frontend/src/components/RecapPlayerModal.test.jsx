@@ -527,3 +527,62 @@ describe('RecapPlayerModal - annotations overlay + create clip (T4130)', () => {
     );
   });
 });
+
+// T5290: mobile stacked layout — the clip list drops below the video as a
+// collapsible pull-up. useIsMobile is mocked false + jsdom has no matchMedia, so
+// the list starts EXPANDED here; we exercise the pull-up handle wiring directly.
+describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.HTMLMediaElement.prototype.play = vi.fn();
+    window.HTMLMediaElement.prototype.pause = vi.fn();
+    recapState.activeClipId = 1;
+    globalThis.fetch = mockFetch(T4130_DATA);
+  });
+
+  it('renders the clip list stacked below the video (order-2 sidebar, order-1 video)', async () => {
+    const { container } = render(
+      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />
+    );
+    await waitFor(() => screen.getByTestId('clips-sidebar'));
+    // The content row stacks as a column on phones and a row at >= sm.
+    const contentRow = container.querySelector('.sm\\:flex-row');
+    expect(contentRow).toBeTruthy();
+    expect(contentRow.className).toContain('flex-col');
+    // Sidebar sits after the video in DOM but is reordered below on phones.
+    const sidebar = screen.getByTestId('clips-sidebar').closest('.order-2');
+    expect(sidebar).toBeTruthy();
+    expect(sidebar.className).toContain('w-full');
+    expect(sidebar.className).toContain('sm:w-64');
+  });
+
+  it('pull-up handle collapses and re-expands the clip list', async () => {
+    render(
+      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />
+    );
+    await waitFor(() => screen.getByTestId('clips-sidebar'));
+
+    // Expanded by default (desktop-mocked): the list wrapper is not hidden.
+    const listWrapper = screen.getByTestId('clips-sidebar').parentElement;
+    expect(listWrapper.className).not.toContain('hidden');
+
+    // Tap the pull-up handle -> collapse (list wrapper hidden on phones).
+    fireEvent.click(screen.getByLabelText('Hide clip list'));
+    expect(screen.getByTestId('clips-sidebar').parentElement.className).toContain('hidden');
+    expect(screen.getByLabelText('Show clip list')).toBeTruthy();
+
+    // Tap again -> expand.
+    fireEvent.click(screen.getByLabelText('Show clip list'));
+    expect(screen.getByTestId('clips-sidebar').parentElement.className).not.toContain('hidden');
+  });
+
+  it('Highlights tab has the same pull-up handle', async () => {
+    globalThis.fetch = mockFetch(T4130_DATA, [{ id: 101, name: 'Highlight 1', duration: 5 }]);
+    render(
+      <RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="highlights" onClose={vi.fn()} />
+    );
+    await waitFor(() => screen.getByTestId('clips-sidebar'));
+    fireEvent.click(screen.getByLabelText('Hide highlights list'));
+    expect(screen.getByLabelText('Show highlights list')).toBeTruthy();
+  });
+});
