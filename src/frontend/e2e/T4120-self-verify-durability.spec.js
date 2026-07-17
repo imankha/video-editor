@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
+import { skipOnDeployedTarget, assertSeamAvailable } from './helpers/targetEnv.js';
 
 /**
  * T4120 — self-verify the durable-export boundary (T4110) end to end, IN-CONTAINER,
@@ -31,6 +32,8 @@ const H = { 'X-Profile-ID': PROFILE_ID };
 test.describe.configure({ mode: 'serial' });
 
 test('T4120 self-verify: durable export boundary + machine-cycle (real local render)', async ({ context }) => {
+  // T4934: fault-injection seams are dev/local-only — never run against staging.
+  skipOnDeployedTarget(test, 'uses /api/test/sync-fault + /api/test/simulate-machine-cycle fault-injection seams (dev/local-only)');
   test.setTimeout(240000); // real ffmpeg render + R2 round-trips
 
   const req = context.request;
@@ -45,8 +48,11 @@ test('T4120 self-verify: durable export boundary + machine-cycle (real local ren
   const healthJson = await getJson(health);
   expect(healthJson?.modal_enabled, 'render must be LOCAL (modal_enabled=false) for verify').toBe(false);
 
-  // Clear any leftover fault from a prior run.
-  expect((await req.post('/api/test/sync-fault', { headers: H, data: { enabled: false } })).status()).toBe(200);
+  // Clear any leftover fault from a prior run. Fail fast (self-documenting) if the
+  // seam isn't mounted, instead of hanging on a 404 — T4934.
+  const clearFault = await req.post('/api/test/sync-fault', { headers: H, data: { enabled: false } });
+  assertSeamAvailable(clearFault, 'sync-fault');
+  expect(clearFault.status()).toBe(200);
 
   // --- 2. find a real export-ready project ----------------------------------
   const projectsRes = await req.get('/api/projects', { headers: H });

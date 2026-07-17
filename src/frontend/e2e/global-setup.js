@@ -6,6 +6,7 @@
  */
 
 import net from 'net';
+import { IS_DEPLOYED_TARGET, LOCAL_ONLY_SPECS } from './helpers/targetEnv.js';
 
 /**
  * Check if a port is in use
@@ -36,7 +37,26 @@ function isPortInUse(port) {
 export default async function globalSetup() {
   console.log('\n=== E2E Test Setup ===\n');
 
-  // Always use dev ports - simpler configuration
+  // T4934: when pointed at a deployed target (E2E_BASE_URL set) there are no local
+  // ports to reuse. Print the target + the authoritative list of specs that SKIP on
+  // a deployed target and WHY, so a staging run's skips are self-explaining (never a
+  // silent skip). See e2e/helpers/targetEnv.js.
+  if (IS_DEPLOYED_TARGET) {
+    console.log('Mode: DEPLOYED TARGET (staging/remote) — servers NOT auto-started\n');
+    console.log(`  Frontend (E2E_BASE_URL): ${process.env.E2E_BASE_URL}`);
+    console.log(`  API      (E2E_API_BASE): ${process.env.E2E_API_BASE || '(unset — relative /api against the frontend host)'}\n`);
+    console.log('Local-only specs SKIPPED on this target (depend on dev/local-only /api/test/* seams):');
+    for (const s of LOCAL_ONLY_SPECS) {
+      console.log(`  • ${s.file}`);
+      console.log(`      seams: ${s.seams.join(', ')}`);
+      console.log(`      why:   ${s.reason}`);
+    }
+    console.log('\n  All other specs run against the deployed target. Any /api/test/* call that');
+    console.log('  slips through fails FAST (assertSeamAvailable) instead of hanging to timeout.\n');
+    return;
+  }
+
+  // Local dev: always use dev ports - simpler configuration
   const backendPort = 8000;
   const frontendPort = 5173;
   const modeLabel = 'Dev ports (8000/5173)';

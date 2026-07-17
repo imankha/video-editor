@@ -44,6 +44,15 @@ const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
 // duplicated. Never auto-start when pointed at a deployed target.
 const AUTOSTART = process.env.E2E_AUTOSTART === '1' && !process.env.E2E_BASE_URL;
 
+// T4934: per-test timeout. Local video-processing tests can legitimately take
+// minutes, so local stays at 5m. On a DEPLOYED target the seam-dependent hangs are
+// removed by tagging (see e2e/helpers/targetEnv.js), so a much shorter cap keeps a
+// real regression from costing 5 minutes of wall-clock per test and makes the suite
+// usable as a pre-deploy gate. Override with E2E_TIMEOUT_MS for a slower target.
+const PER_TEST_TIMEOUT = process.env.E2E_TIMEOUT_MS
+  ? Number(process.env.E2E_TIMEOUT_MS)
+  : (process.env.E2E_BASE_URL ? 120000 : 300000);
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false, // Run tests sequentially for workflow tests
@@ -149,8 +158,9 @@ export default defineConfig({
     ],
   } : {}),
 
-  // Increase timeout for video processing operations
-  timeout: 300000, // 5 minutes per test (video uploads take time)
+  // Increase timeout for video processing operations. Local: 5m (video uploads take
+  // time). Deployed target: shorter (see PER_TEST_TIMEOUT above) — T4934.
+  timeout: PER_TEST_TIMEOUT,
   expect: {
     timeout: 60000, // 60 seconds for assertions
   },

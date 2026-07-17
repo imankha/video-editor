@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget, assertSeamAvailable, IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
 
 /**
  * T4850 — Transfer reels between profiles (multi-athlete accounts).
@@ -38,6 +39,7 @@ async function seedReel(request, profileId, name) {
   const res = await request.post(`${API_BASE}/test/seed-final-video`, {
     headers: hdr(profileId), data: { name },
   });
+  assertSeamAvailable(res, 'seed-final-video'); // fail fast if seam not mounted (T4934)
   expect(res.ok(), `seed ${name}`).toBeTruthy();
   const body = await res.json();
   expect(body.media_uploaded, 'seed uploaded real media to R2').toBeTruthy();
@@ -79,7 +81,14 @@ let B; // second profile (target)
 test.describe.configure({ mode: 'serial' });
 
 test.describe('T4850 move reels between profiles', () => {
+  // T4934: depends on dev/local-only /api/test/* seams (seed-final-video,
+  // ensure-pg-user) — skip the whole group on a deployed target. The beforeAll
+  // early-return below is a belt to this suspenders (beforeAll would otherwise run
+  // before a per-test skip could fire).
+  skipOnDeployedTarget(test, 'uses /api/test/seed-final-video + /api/test/ensure-pg-user (dev/local-only seams)');
+
   test.beforeAll(async ({ request }) => {
+    if (IS_DEPLOYED_TARGET) return; // group is skipped; do not touch seams on staging
     for (let i = 0; i < 15; i++) {
       try { if ((await request.get(`${API_BASE}/health`)).ok()) break; } catch { /* retry */ }
       await new Promise((r) => setTimeout(r, 1000));
