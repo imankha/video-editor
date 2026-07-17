@@ -96,6 +96,64 @@ rather than waiting for it to surface as a support ticket.
   profile create path.
 - `scripts/edit-user-db.py` / a read-only admin path — for inspecting arshia's `profiles` table.
 
+## INVESTIGATION FINDINGS (2026-07-17, supervisor-run read-only prod diagnostic)
+
+Read-only prod scan (`fly ssh` + `get_all_users_for_admin` + `get_profiles` registry read +
+R2 `head_object` per profile). No writes.
+
+### Blast radius (full fleet, 9 prod users)
+- **7 clean.**
+- **Direction A "missing" — 1 user, 2 profiles:** arshia.kalantari@gmail.com (937e5e54):
+  `6ff007e6` ("Ella U13") + `22c7616a` ("Ella 12U") — registry rows exist, no R2 profile.sqlite.
+- **Direction B "orphan" — 1 user, 1 profile:** imankh@gmail.com (3ed03fb5) `b95eb93b` — the
+  known 0-reel orphan (poster-backfill-orphan-gotcha memory). Confirmed still orphan.
+- So the mismatch is NOT widespread; it's the two accounts the migration already named.
+
+### Root cause of Direction A (create-without-durable-sync) — HIGH confidence
+arshia's profiles were created in rapid PAIRS, and in each pair the SECOND profile is the missing one:
+| created_at | profile | R2 profile.sqlite |
+|---|---|---|
+| 2026-07-10 01:10:23 | b0a81fe1 "Maddie U13" | ✅ present |
+| 2026-07-10 01:10:35 (+12s) | **6ff007e6 "Ella U13"** | ❌ MISSING |
+| 2026-07-11 03:37:49 | 7d9f31c7 "Maddie 12U" | ✅ present |
+| 2026-07-11 03:38:04 (+15s) | **22c7616a "Ella 12U"** | ❌ MISSING |
+
+The `POST /api/profiles` handler ([profiles.py:98-127](../../src/backend/app/routers/profiles.py#L98))
+does: `db_create_profile` (writes the registry row to user.sqlite) → `set_selected_profile_id`
+→ `ensure_database()` (creates profile.sqlite **locally only**) → return. **There is NO explicit
+durable R2 sync of the new profile.sqlite before returning** — it relies on the middleware's
+fire-and-forget background sync (db_sync.py, 0.5s lock timeout → `.sync_pending`). The user.sqlite
+registry (one file, synced on many later requests) reliably reaches R2 with BOTH rows; but each
+new profile.sqlite is a SEPARATE R2 object whose only sync is the fire-and-forget one. When a
+second profile is created seconds after the first, that second profile.sqlite's sync loses the
+lock / is coalesced / the machine cycles before it completes → registered profile, no R2 object.
+
+**This is a specific instance of the [T4320] durability gap** (a create that returned success does
+not survive a machine cycle because it rode fire-and-forget sync). Same class, different gesture.
+
+### Fix-at-source recommendation
+`create_profile` must **durably** sync the new profile.sqlite (and the user.sqlite registry) to
+R2 BEFORE returning — an explicit `sync_db_to_r2_explicit` on the new profile, or `Depends(durable_sync)`
+— so a profile is never REGISTERED without its R2 object existing. Fold into T4320's durable-sync
+work (same mechanism) rather than a bespoke fix.
+
+### Data-loss assessment + repair
+The 2 arshia profiles most likely were created-then-abandoned (she used the "Maddie" of each pair).
+Any data added while on Ella's profiles would have died with the ephemeral machine (never synced) —
+but there's no evidence she added any. Repair options: (a) create empty profile.sqlite R2 objects for
+`6ff007e6`/`22c7616a` so the registry pointers resolve (preserves her intent; she re-adds data), or
+(b) remove the 2 dangling registry rows. Prefer (a). NEEDS a user decision before touching prod data.
+
+### Discrepancy to note (care)
+A first per-account probe returned b95eb93b inside arshia's registry+R2 list, while the systematic
+fleet scan attributes b95eb93b to imankh (orphan). The fleet scan (per-user, context-reset) is the
+trustworthy one; the first probe likely hit a `get_profiles`/`_get_profile_ids` ContextVar/caching
+artifact when called repeatedly. Worth care if anyone re-runs a per-account read.
+
+### Direction B disposition
+imankh `b95eb93b`: known 0-reel orphan; recommend the T4830 archive-not-delete cleanup (never run
+on prod) OR leave benign-and-documented. No data at risk (0 reels).
+
 ## Acceptance criteria
 - [ ] Root cause identified for Direction A: WHY do `22c7616a` / `6ff007e6` exist in arshia's
       registry with no R2 `profile.sqlite` (create-without-sync vs. deleted-object vs. other),
