@@ -336,9 +336,13 @@ def _graceful_shutdown(signum, frame):
                     conn.close()
                     logger.info(f"[Shutdown] WAL checkpoint for user={user_id} profile={profile_id}: {pages}")
 
-                    # Sync to R2
+                    # Sync to R2. T5340: pass profile_id explicitly — the SIGTERM
+                    # handler runs with NO request context, so the ContextVar is
+                    # unset (r2_key would raise) or stale (mis-keys). Key off the
+                    # profile_id parsed from the path.
                     version = get_local_db_version(user_id, profile_id)
-                    success, new_version = sync_database_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
+                    success, new_version = sync_database_to_r2_with_version(
+                        user_id, db_file, version, skip_version_check=True, profile_id=profile_id)
                     if success:
                         synced += 1
                     else:

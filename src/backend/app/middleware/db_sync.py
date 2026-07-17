@@ -263,11 +263,14 @@ def retry_pending_sync(user_id: str, profile_id: str | None = None) -> bool:
     from app import storage as storage_module
 
     profile_ok = True
-    db_path = db_module.get_database_path()
-    if db_path.exists() and profile_id:
+    # T5340: key the local file AND the R2 upload off the profile_id ARG, not the
+    # ContextVar (get_database_path()/r2_key()), so the docstring's "works in any
+    # calling context" claim is actually true.
+    db_path = db_module.get_user_data_path_explicit(user_id, profile_id) / "profile.sqlite" if profile_id else None
+    if db_path is not None and db_path.exists():
         current_version = db_module.get_local_db_version(user_id, profile_id)
         success, new_version = storage_module.sync_database_to_r2_with_version(
-            user_id, db_path, current_version, skip_version_check=True,
+            user_id, db_path, current_version, skip_version_check=True, profile_id=profile_id,
         )
         if success and new_version is not None:
             db_module.set_local_db_version(user_id, profile_id, new_version)

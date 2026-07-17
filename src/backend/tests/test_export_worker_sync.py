@@ -48,7 +48,10 @@ class TestSyncDbToR2Explicit:
              _patch_path_exists(db_path):
             result = sync_db_to_r2_explicit("u1", "p1")
 
-        mock_sync.assert_called_once_with("u1", db_path, 5, skip_version_check=True, lock_timeout=None)
+        # T5340: profile_id is threaded through so the R2 upload key is derived
+        # from the ARG (profile_r2_key), never get_current_profile_id().
+        mock_sync.assert_called_once_with(
+            "u1", db_path, 5, skip_version_check=True, lock_timeout=None, profile_id="p1")
         assert result is True
 
     @patch("app.database.R2_ENABLED", True)

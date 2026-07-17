@@ -1225,8 +1225,22 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | 
     Designed for background workers (e.g. export_worker) that run outside
     the request-response lifecycle where ContextVars are no longer valid.
 
+    Both halves are keyed off the ARGS: the local file comes from
+    get_user_data_path_explicit(user_id, profile_id) and the R2 upload key is
+    derived from profile_id via profile_r2_key (NOT get_current_profile_id())
+    (T5340). Before T5340 the key silently came from the ContextVar, so a caller
+    whose ContextVar disagreed with profile_id (e.g. move_reels_to_profile
+    syncing the target while the request profile is the source) uploaded the
+    right DB to the WRONG profile's key.
+
     Returns True on success (or if R2 is disabled), False on failure.
     """
+    # T5340: no silent fallback — the whole point of this function is ContextVar
+    # independence. A missing profile_id is a caller bug; fail loudly rather than
+    # letting the key derivation fall back to the ContextVar.
+    if not profile_id:
+        raise ValueError("sync_db_to_r2_explicit requires a profile_id (no ContextVar fallback)")
+
     # T4120: durability test seam (gated; inert on prod/staging). Returning False
     # — never raising — exercises the REAL failure handling (mark_sync_pending,
     # sync_status="failed", the retryable sync_failed surfaces) exactly as a true
@@ -1249,7 +1263,7 @@ def sync_db_to_r2_explicit(user_id: str, profile_id: str, lock_timeout: float | 
 
     success, new_version = sync_database_to_r2_with_version(
         user_id, db_path, current_version, skip_version_check=True,
-        lock_timeout=lock_timeout,
+        lock_timeout=lock_timeout, profile_id=profile_id,
     )
 
     if success and new_version is not None:

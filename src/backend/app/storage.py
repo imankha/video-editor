@@ -289,7 +289,8 @@ def r2_user_prefix(user_id: str) -> str:
     return f"{APP_ENV}/users/{user_id}/profiles/{profile_id}"
 
 
-def download_from_r2(user_id: str, relative_path: str, local_path: Path, progress_callback=None) -> bool:
+def download_from_r2(user_id: str, relative_path: str, local_path: Path, progress_callback=None,
+                     profile_id: str | None = None) -> bool:
     """
     Download a file from R2 to local filesystem.
 
@@ -298,6 +299,10 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path, progres
         relative_path: Path relative to user_data/<user_id>/
         local_path: Local path to save the file
         progress_callback: Optional callback(bytes_transferred) for download progress
+        profile_id: If given, key the object under THIS profile (arg, not the
+            ContextVar). Required for background/cross-profile callers where the
+            ContextVar is dead or points at a different profile (T5340). When None,
+            falls back to the request-scoped ContextVar via r2_key().
 
     Returns:
         True if download succeeded, False otherwise
@@ -308,7 +313,7 @@ def download_from_r2(user_id: str, relative_path: str, local_path: Path, progres
     if not client:
         return False
 
-    key = r2_key(user_id, relative_path)
+    key = profile_r2_key(user_id, profile_id, relative_path) if profile_id else r2_key(user_id, relative_path)
     try:
         # Ensure parent directory exists
         local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -856,7 +861,8 @@ def file_exists_in_r2(user_id: str, relative_path: str) -> bool:
 _request_context = threading.local()
 
 
-def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionResult]:
+def get_db_version_from_r2(user_id: str, client=None,
+                           profile_id: str | None = None) -> Union[int, R2VersionResult]:
     """
     Get the version number of the database in R2.
 
@@ -869,13 +875,15 @@ def get_db_version_from_r2(user_id: str, client=None) -> Union[int, R2VersionRes
     Args:
         user_id: User namespace
         client: Optional boto3 client override (e.g. fast-timeout sync client)
+        profile_id: If given, HEAD the object under THIS profile (arg, not the
+            ContextVar) — see download_from_r2 (T5340). When None, uses r2_key().
     """
     if client is None:
         client = get_r2_client()
     if not client:
         return R2VersionResult.ERROR  # No client = can't check
 
-    key = r2_key(user_id, "profile.sqlite")
+    key = profile_r2_key(user_id, profile_id, "profile.sqlite") if profile_id else r2_key(user_id, "profile.sqlite")
     t0 = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import TIER_2, retry_r2_call
@@ -960,6 +968,7 @@ def sync_database_to_r2_with_version(
     current_version: int | None,
     skip_version_check: bool = False,
     lock_timeout: float | None = None,
+    profile_id: str | None = None,
 ) -> tuple[bool, int | None]:
     """
     Upload the user's database to R2 with version metadata.
@@ -972,6 +981,12 @@ def sync_database_to_r2_with_version(
         current_version: Version we loaded from (for conflict detection)
         skip_version_check: If True, skip the HEAD call and use current_version directly.
             Safe when version is tracked in-memory and no multi-device writes expected.
+        profile_id: If given, the R2 object KEY is derived from THIS profile id (the
+            arg), NOT get_current_profile_id() (the ContextVar). Background/cross-profile
+            callers (export worker, shutdown sync, move-reels, migrations) MUST pass it —
+            the ContextVar is dead or points at a different profile there, and keying off
+            it uploads the right DB to the wrong profile's key (T5340). When None, the key
+            comes from the request-scoped ContextVar via r2_key() (the request path only).
 
     Returns:
         Tuple of (success, new_version)
@@ -999,7 +1014,7 @@ def sync_database_to_r2_with_version(
     else:
         # Check for conflicts (another request may have written)
         t_head = time.perf_counter() if PROFILING_ENABLED else 0
-        r2_result = get_db_version_from_r2(user_id, client=client)
+        r2_result = get_db_version_from_r2(user_id, client=client, profile_id=profile_id)
         if PROFILING_ENABLED:
             head_ms = (time.perf_counter() - t_head) * 1000
 
@@ -1018,7 +1033,7 @@ def sync_database_to_r2_with_version(
             )
             # Re-download the newer version so next request uses fresh data
             try:
-                if download_from_r2(user_id, "profile.sqlite", local_db_path):
+                if download_from_r2(user_id, "profile.sqlite", local_db_path, profile_id=profile_id):
                     logger.info(f"[SYNC] Re-downloaded v{r2_version} from R2 after conflict")
             except Exception as e:
                 logger.warning(f"[SYNC] Failed to re-download after conflict: {e}")
@@ -1027,7 +1042,9 @@ def sync_database_to_r2_with_version(
         # Calculate new version
         new_version = (max(r2_version, current_version or 0)) + 1
 
-    key = r2_key(user_id, "profile.sqlite")
+    # T5340: explicit profile_id → key off the arg; else fall back to the ContextVar
+    # (request path). Background/cross-profile callers MUST pass profile_id.
+    key = profile_r2_key(user_id, profile_id, "profile.sqlite") if profile_id else r2_key(user_id, "profile.sqlite")
     t_upload = time.perf_counter() if PROFILING_ENABLED else 0
     try:
         from .utils.retry import TIER_1, retry_r2_call
