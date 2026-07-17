@@ -25,21 +25,33 @@ export function useStoryPlayback(videoRef, reels, {
   const [isPlaying, setIsPlaying] = useState(false);
   const [segmentProgress, setSegmentProgress] = useState(0); // 0..1 of current element
   const rafRef = useRef(null);
+  // Seek requested via goTo(i, fraction). Applied once the target element's LIVE
+  // duration is known (switching reels calls v.load(), so duration isn't ready
+  // synchronously). Never uses a reel's frozen duration — that may be null.
+  const pendingSeekRef = useRef(null);
 
   const count = reels?.length || 0;
   const safeIndex = count ? Math.min(activeIndex, count - 1) : 0;
   const activeReel = count ? reels[safeIndex] : null;
 
   const next = useCallback(() => {
+    pendingSeekRef.current = null; // stepping cancels a seek meant for another reel
     setActiveIndex((i) => Math.min(i + 1, count - 1));
   }, [count]);
 
   const prev = useCallback(() => {
+    pendingSeekRef.current = null;
     setActiveIndex((i) => Math.max(i - 1, 0));
   }, []);
 
-  const goTo = useCallback((i) => {
-    if (i >= 0 && i < count) setActiveIndex(i);
+  // Jump to reel i, optionally seeking to a fraction (0..1) of its duration.
+  // Stashing the fraction (rather than seeking here) lets the rAF tick apply it
+  // once duration > 0 — whether i is a new reel that must load first or the reel
+  // already playing (duration already known, so it applies on the next frame).
+  const goTo = useCallback((i, fraction) => {
+    if (i < 0 || i >= count) return;
+    if (fraction != null) pendingSeekRef.current = Math.max(0, Math.min(1, fraction));
+    setActiveIndex(i);
   }, [count]);
 
   const togglePlay = useCallback(() => {
@@ -72,6 +84,7 @@ export function useStoryPlayback(videoRef, reels, {
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => {
+      pendingSeekRef.current = null; // auto-advance cancels a seek meant for another reel
       setActiveIndex((i) => {
         if (i + 1 < count) return i + 1;
         onAllEnded?.();
@@ -80,6 +93,12 @@ export function useStoryPlayback(videoRef, reels, {
     };
     const tick = () => {
       if (v.duration > 0) {
+        // Apply a pending seek once the live duration is known, then resume play.
+        if (pendingSeekRef.current != null) {
+          v.currentTime = pendingSeekRef.current * v.duration;
+          pendingSeekRef.current = null;
+          v.play().catch(() => {}); // autoplay may be blocked until a user gesture
+        }
         setSegmentProgress(Math.min(1, v.currentTime / v.duration));
       }
       rafRef.current = requestAnimationFrame(tick);

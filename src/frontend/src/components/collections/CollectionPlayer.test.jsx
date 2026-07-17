@@ -10,6 +10,7 @@ vi.mock('../shared/Button', () => ({
 }));
 
 // Drive activeReel deterministically from the first passed reel.
+const { mockGoTo } = vi.hoisted(() => ({ mockGoTo: vi.fn() }));
 vi.mock('./useStoryPlayback', () => ({
   useStoryPlayback: (_ref, reels) => ({
     activeIndex: 0,
@@ -17,9 +18,61 @@ vi.mock('./useStoryPlayback', () => ({
     segmentProgress: 0,
     next: vi.fn(),
     prev: vi.fn(),
+    goTo: mockGoTo,
     togglePlay: vi.fn(),
   }),
 }));
+
+describe('CollectionPlayer timeline segments (T5100)', () => {
+  // reel0 is the active reel (its name shows in the bottom overlay); hover
+  // assertions target reels 1 and 2 so the tooltip is the only place the text
+  // appears. reel2 carries a game -> header-style "gameName clock" label.
+  const segReels = [
+    { id: 1, name: 'Active', streamUrl: 'a', aspect_ratio: '9:16', duration: null },
+    { id: 2, name: 'Reel Two', streamUrl: 'b', aspect_ratio: '9:16', duration: null },
+    { id: 3, name: 'plain', streamUrl: 'c', aspect_ratio: '9:16', duration: null,
+      gameName: 'Lakers', gameStartTime: 750 },
+  ];
+
+  beforeEach(() => mockGoTo.mockClear());
+
+  const segmentButtons = () =>
+    screen.getAllByRole('button').filter((b) => /^(Active|Reel Two|Lakers)/.test(b.getAttribute('aria-label') || ''));
+
+  it('shows the reel name on hover (game-name + clock semantics like the header)', () => {
+    render(<CollectionPlayer reels={segReels} title="T" onClose={vi.fn()} />);
+    const [, seg1, seg2] = segmentButtons();
+
+    // No tooltip until hovered.
+    expect(screen.queryByText('Reel Two')).toBeNull();
+    fireEvent.mouseEnter(seg1);
+    expect(screen.getByText('Reel Two')).toBeTruthy();
+
+    // Reel with a game uses "gameName clock" (matches the header), not the plain name.
+    fireEvent.mouseLeave(seg1);
+    fireEvent.mouseEnter(seg2);
+    expect(screen.getByText('Lakers 12\'30"')).toBeTruthy();
+    expect(screen.queryByText('plain')).toBeNull(); // name is superseded by the game label
+  });
+
+  it('clicking a segment jumps to that reel and seeks to the clicked fraction', () => {
+    render(<CollectionPlayer reels={segReels} title="T" onClose={vi.fn()} />);
+    const [, seg1] = segmentButtons();
+    seg1.getBoundingClientRect = () => ({ left: 0, width: 100, top: 0, right: 100, bottom: 0, height: 20, x: 0, y: 0 });
+
+    fireEvent.click(seg1, { clientX: 60 });
+    expect(mockGoTo).toHaveBeenCalledWith(1, 0.6);
+  });
+
+  it('computes the fraction relative to the segment left edge', () => {
+    render(<CollectionPlayer reels={segReels} title="T" onClose={vi.fn()} />);
+    const [seg0] = segmentButtons();
+    seg0.getBoundingClientRect = () => ({ left: 10, width: 100, top: 0, right: 110, bottom: 0, height: 20, x: 10, y: 0 });
+
+    fireEvent.click(seg0, { clientX: 60 }); // (60 - 10) / 100
+    expect(mockGoTo).toHaveBeenLastCalledWith(0, 0.5);
+  });
+});
 
 const RE_EDIT = 'Re-edit this reel';
 const reelWith = (project_id) => [{ id: 99, name: 'R', streamUrl: 's', aspect_ratio: '9:16', duration: null, project_id }];
