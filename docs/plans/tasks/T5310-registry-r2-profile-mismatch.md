@@ -154,6 +154,19 @@ artifact when called repeatedly. Worth care if anyone re-runs a per-account read
 imankh `b95eb93b`: known 0-reel orphan; recommend the T4830 archive-not-delete cleanup (never run
 on prod) OR leave benign-and-documented. No data at risk (0 reels).
 
+### REPAIR APPLIED (2026-07-17, user-approved)
+Recreated empty head-schema profile.sqlite R2 objects for arshia's 2 missing profiles
+(`ensure_database()` in each profile context → `sync_db_to_r2_explicit`; guarded to skip if
+present). Both `CREATED+SYNCED` at `user_version=25` (head). Re-scan confirms **arshia clean,
+`missing_A: []`, 8/9 users clean**. Her next session downloads them from R2 as empty profiles
+(intent preserved; she re-adds data). No user.sqlite/registry change; non-destructive.
+
+**Still OWED (code, not done here):**
+- **Source fix** — `create_profile` must durably sync the new profile.sqlite before returning
+  (folds into [T4320]); until then the create-without-durable-sync race can recur for a rapidly
+  created second profile.
+- **Direction B** — imankh orphan `b95eb93b` disposition (T4830 archive-cleanup or leave benign).
+
 ## Acceptance criteria
 - [ ] Root cause identified for Direction A: WHY do `22c7616a` / `6ff007e6` exist in arshia's
       registry with no R2 `profile.sqlite` (create-without-sync vs. deleted-object vs. other),
