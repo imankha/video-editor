@@ -123,10 +123,9 @@ def test_generate_poster_slowmo_samples_first_half(monkeypatch):
     monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: (100, 200))
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
-    clips = [({"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}, 6.0)]
-    res = generate_and_store_poster(USER_ID, "reel.mp4", clips)
+    # Caller resolves the FULL section; the poster samples the FIRST HALF.
+    res = generate_and_store_poster(USER_ID, "reel.mp4", (2.0, 6.0))
     assert res == "reel.mp4.jpg"
-    # Section is [2, 6]; poster samples the FIRST HALF only -> (2.0, 4.0).
     assert captured["window"] == (2.0, 4.0)
 
 
@@ -148,8 +147,8 @@ def test_generate_poster_no_slowmo_uses_first_frame(monkeypatch):
     monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: (100, 200))
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
-    clips = [({"boundaries": [0, 2, 4], "segmentSpeeds": {}}, 4.0)]
-    assert generate_and_store_poster(USER_ID, "reel.mp4", clips) == "reel.mp4.jpg"
+    # No section resolved (no slow-mo) -> first frame.
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
     assert called.get("yes")
 
 
@@ -171,8 +170,8 @@ def test_generate_poster_missing_segments_uses_first_frame(monkeypatch):
     monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: None)
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
-    # Unreconstructable ([]) AND default None both -> first frame.
-    assert generate_and_store_poster(USER_ID, "reel.mp4", []) == "reel.mp4.jpg"
+    # Explicit None AND the default both -> first frame (no fabricated section).
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
     assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.jpg"
     assert called.get("yes")
 
@@ -276,6 +275,148 @@ def test_load_project_clip_segments_none_and_missing(db):
     assert load_project_clip_segments(999999) == []  # no such project -> [] (first frame)
 
 
+# ---------------------------------------------------------------------------
+# Archive reconstruction: segments_from_archive / resolve_slowmo_section
+# ---------------------------------------------------------------------------
+
+def test_segments_from_archive_latest_version_and_order():
+    from app.services.poster import segments_from_archive
+
+    s_old = {"boundaries": [0, 3], "segmentSpeeds": {}}
+    s_new = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
+    s_first = {"boundaries": [0, 3], "segmentSpeeds": {}}
+    archive = {"working_clips": [
+        {"raw_clip_id": 9, "version": 1, "sort_order": 1, "segments_data": encode_data(s_old)},
+        {"raw_clip_id": 9, "version": 2, "sort_order": 1, "segments_data": encode_data(s_new)},
+        {"raw_clip_id": 5, "version": 1, "sort_order": 0, "segments_data": encode_data(s_first)},
+    ]}
+    # Latest version per identity (clip 9 -> v2), ordered by sort_order (clip 5 first).
+    assert segments_from_archive(archive) == [(s_first, None), (s_new, None)]
+
+
+def test_segments_from_archive_empty():
+    from app.services.poster import segments_from_archive
+    assert segments_from_archive(None) == []
+    assert segments_from_archive({"working_clips": []}) == []
+
+
+def test_resolve_slowmo_section_prefers_working_clips(db):
+    segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
+    pid = _seed_slowmo_project(db, segments)
+    with patch("app.services.project_archive.load_archive") as la:
+        section, src = poster_mod.resolve_slowmo_section(USER_ID, pid)
+    assert section == (2.0, 6.0)
+    assert src == "working_clips"
+    la.assert_not_called()  # live clips present -> never touch the archive
+
+
+def test_resolve_slowmo_section_falls_back_to_archive(db):
+    # No live working clips (pruned at publish) -> reconstruct from the R2 archive.
+    segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
+    archive = {"working_clips": [
+        {"raw_clip_id": 9, "version": 1, "sort_order": 0, "segments_data": encode_data(segments)},
+    ]}
+    with patch("app.services.project_archive.load_archive", return_value=archive):
+        section, src = poster_mod.resolve_slowmo_section(USER_ID, 123456)
+    assert section == (2.0, 6.0)
+    assert src == "archive"
+
+
+def test_resolve_slowmo_section_unreconstructable(db):
+    with patch("app.services.project_archive.load_archive", return_value=None):
+        section, src = poster_mod.resolve_slowmo_section(USER_ID, 999999)
+    assert section is None
+    assert src == "unreconstructable"
+
+
+# ---------------------------------------------------------------------------
+# v025 migration: adds columns + backfills from the R2 archive (tuple rows)
+# ---------------------------------------------------------------------------
+
+def test_v025_adds_columns_and_backfills_from_archive(tmp_path):
+    from app.migrations.profile_db import RUNNER
+    from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
+
+    path = tmp_path / "profile.sqlite"
+    # Raw sqlite3.connect -> TUPLE row factory, exactly like the migration runner.
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        "CREATE TABLE final_videos (id INTEGER PRIMARY KEY, project_id INTEGER, "
+        "filename TEXT, published_at TIMESTAMP, poster_filename TEXT)"
+    )
+    # id=1: has a slow-mo archive; id=2: no archive; id=3: unpublished (never a candidate).
+    conn.execute("INSERT INTO final_videos VALUES (1, 500, 'r.mp4', '2026-01-01', NULL)")
+    conn.execute("INSERT INTO final_videos VALUES (2, 501, 'n.mp4', '2026-01-01', NULL)")
+    conn.execute("INSERT INTO final_videos VALUES (3, 502, 'd.mp4', NULL, NULL)")
+    conn.execute("PRAGMA user_version = 24")
+    conn.commit()
+
+    set_current_user_id("u-v025")
+    set_current_profile_id("p-v025")
+
+    slowmo = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
+    archives = {
+        500: {"working_clips": [
+            {"raw_clip_id": 9, "version": 1, "sort_order": 0, "segments_data": encode_data(slowmo)},
+        ]},
+    }
+
+    def fake_load_archive(project_id, user_id=None):
+        return archives.get(project_id)
+
+    with patch("app.services.project_archive.load_archive", side_effect=fake_load_archive):
+        applied = RUNNER.run(conn, "sqlite")
+
+    assert 25 in [m.version for m in applied]
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(final_videos)").fetchall()}
+    assert {"slowmo_section_start", "slowmo_section_end"} <= cols
+    # id=1 backfilled from archive; id=2 (no archive) + id=3 (unpublished) stay NULL.
+    assert conn.execute(
+        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id=1"
+    ).fetchone() == (2.0, 6.0)
+    assert conn.execute(
+        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id=2"
+    ).fetchone() == (None, None)
+    assert conn.execute(
+        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id=3"
+    ).fetchone() == (None, None)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 25
+
+    # Idempotent: re-running finds nothing pending, columns intact.
+    assert RUNNER.run(conn, "sqlite") == []
+    conn.close()
+
+
+def test_v025_backfill_survives_archive_error(tmp_path):
+    # An archive load that RAISES must not abort the migration (best-effort per row).
+    from app.migrations.profile_db import RUNNER
+    from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
+
+    path = tmp_path / "profile.sqlite"
+    conn = sqlite3.connect(str(path))
+    conn.execute(
+        "CREATE TABLE final_videos (id INTEGER PRIMARY KEY, project_id INTEGER, "
+        "filename TEXT, published_at TIMESTAMP, poster_filename TEXT)"
+    )
+    conn.execute("INSERT INTO final_videos VALUES (1, 500, 'r.mp4', '2026-01-01', NULL)")
+    conn.execute("PRAGMA user_version = 24")
+    conn.commit()
+    set_current_user_id("u-v025b")
+    set_current_profile_id("p-v025b")
+
+    with patch("app.services.project_archive.load_archive", side_effect=RuntimeError("R2 down")):
+        applied = RUNNER.run(conn, "sqlite")
+
+    assert 25 in [m.version for m in applied]  # migration still completed
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 25
+    assert conn.execute(
+        "SELECT slowmo_section_start FROM final_videos WHERE id=1"
+    ).fetchone() == (None,)  # left NULL, no crash
+    conn.close()
+
+
 def test_read_clip_segments_null_segments(db):
     # A working clip with no segments_data -> (None, source_duration); no crash.
     conn = _connect(db)
@@ -325,26 +466,41 @@ def _seed_full_project(db_path, segments):
     return pid
 
 
-def test_finalize_threads_slowmo_segments(db):
+def test_finalize_freezes_slowmo_section(db):
     from app.routers.export import overlay
 
     segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
     pid = _seed_full_project(db, segments)
     seen = {}
 
-    def capture(user_id, filename, clip_segments=None):
-        seen["clip_segments"] = clip_segments
+    def capture(user_id, filename, slowmo_section=None):
+        seen["section"] = slowmo_section
         return "out.mp4.jpg"
 
     with patch("app.analytics.record_milestone"), \
          patch.object(overlay, "generate_and_store_poster", side_effect=capture):
         fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
 
-    # The project's ordered slow-mo segments reached the poster generator.
-    assert seen["clip_segments"] == [(segments, 6.0)]
+    # The computed section reached the poster generator AND was frozen on the row.
+    assert seen["section"] == (2.0, 6.0)
     row = _connect(db).execute(
-        "SELECT poster_filename FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
+        "SELECT poster_filename, slowmo_section_start, slowmo_section_end "
+        "FROM final_videos WHERE id = ?", (fv_id,)).fetchone()
     assert row["poster_filename"] == "out.mp4.jpg"
+    assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)
+
+
+def test_finalize_freezes_null_when_no_slowmo(db):
+    from app.routers.export import overlay
+
+    pid = _seed_full_project(db, {"boundaries": [0, 6], "segmentSpeeds": {}})
+    with patch("app.analytics.record_milestone"), \
+         patch.object(overlay, "generate_and_store_poster", return_value="out.mp4.jpg"):
+        fv_id = overlay._finalize_overlay_export(pid, "out.mp4", "expP", USER_ID)
+    row = _connect(db).execute(
+        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id = ?",
+        (fv_id,)).fetchone()
+    assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (None, None)
 
 
 def test_finalize_best_effort_when_poster_fails(db):
@@ -363,13 +519,51 @@ def test_finalize_best_effort_when_poster_fails(db):
 # Backfill reconstructs segments per final video (same policy as live)
 # ---------------------------------------------------------------------------
 
-def test_backfill_reconstructs_segments(db):
-    # A published reel whose project still has its slow-mo working clip.
+def test_backfill_prefers_frozen_section(db):
+    # A published reel with a FROZEN section -> backfill uses it directly (no
+    # reconstruction), passes it to the poster generator.
+    conn = _connect(db)
+    conn.execute(
+        "INSERT INTO final_videos (id, filename, published_at, "
+        "slowmo_section_start, slowmo_section_end) VALUES (88, 'f.mp4', '2026-01-01', 1.5, 5.5)"
+    )
+    conn.commit()
+    conn.close()
+
+    seen = {}
+
+    def capture(user_id, filename, slowmo_section=None):
+        seen["section"] = slowmo_section
+        return "f.mp4.jpg"
+
+    def fake_exists(user_id, rel_path):
+        return rel_path == "final_videos/f.mp4"
+
+    with patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}]), \
+         patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID]), \
+         patch("app.migrations._migrate_profile_db") as mig, \
+         patch("app.storage.file_exists_in_r2", side_effect=fake_exists), \
+         patch.object(poster_mod, "generate_and_store_poster", side_effect=capture), \
+         patch.object(poster_mod, "resolve_slowmo_section") as reconstruct, \
+         patch("app.database.sync_db_to_r2_explicit", return_value=True):
+        mig.return_value = type("R", (), {"status": "ok"})()
+        res = poster_mod.backfill_posters(limit=25, dry_run=False)
+
+    assert set(res["generated"]) == {88}
+    assert seen["section"] == (1.5, 5.5)
+    reconstruct.assert_not_called()  # frozen columns win; no reconstruction
+
+
+def test_backfill_reconstructs_and_heals_when_unfrozen(db):
+    # A published reel with NULL section but live working_clips still present ->
+    # backfill reconstructs the section, passes it to the generator, AND heals the
+    # frozen columns so a future regen skips reconstruction.
     segments = {"boundaries": [0, 2, 4, 6], "segmentSpeeds": {"1": 0.5}}
     pid = _seed_full_project(db, segments)
     conn = _connect(db)
     conn.execute(
-        "INSERT INTO final_videos (id, project_id, filename, published_at) VALUES (77, ?, 'r.mp4', '2026-01-01')",
+        "INSERT INTO final_videos (id, project_id, filename, published_at) "
+        "VALUES (77, ?, 'r.mp4', '2026-01-01')",
         (pid,),
     )
     conn.commit()
@@ -377,8 +571,8 @@ def test_backfill_reconstructs_segments(db):
 
     seen = {}
 
-    def capture(user_id, filename, clip_segments=None):
-        seen["clip_segments"] = clip_segments
+    def capture(user_id, filename, slowmo_section=None):
+        seen["section"] = slowmo_section
         return "r.mp4.jpg"
 
     def fake_exists(user_id, rel_path):
@@ -394,5 +588,10 @@ def test_backfill_reconstructs_segments(db):
         res = poster_mod.backfill_posters(limit=25, dry_run=False)
 
     assert set(res["generated"]) == {77}
-    # Backfill reconstructed the SAME ordered segments live publish would use.
-    assert seen["clip_segments"] == [(segments, 6.0)]
+    # Reconstructed the SAME section live publish would freeze...
+    assert seen["section"] == (2.0, 6.0)
+    # ...and healed the frozen columns on the row.
+    row = _connect(db).execute(
+        "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id = 77"
+    ).fetchone()
+    assert (row["slowmo_section_start"], row["slowmo_section_end"]) == (2.0, 6.0)

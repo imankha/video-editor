@@ -23,6 +23,7 @@ from .v021_unpublish_unframed_sweep_reels import V021UnpublishUnframedSweepReels
 from .v022_repoint_orphaned_final_video import V022RepointOrphanedFinalVideo
 from .v023_repair_sourceless_active_games import V023RepairSourcelessActiveGames
 from .v024_add_poster_filename import V024AddPosterFilename
+from .v025_freeze_slowmo_section import V025FreezeSlowmoSection
 
 MIGRATIONS = [
     V001Baseline(),
@@ -49,6 +50,7 @@ MIGRATIONS = [
     V022RepointOrphanedFinalVideo(),
     V023RepairSourcelessActiveGames(),
     V024AddPosterFilename(),
+    V025FreezeSlowmoSection(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)

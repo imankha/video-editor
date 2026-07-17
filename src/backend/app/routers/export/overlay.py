@@ -55,6 +55,7 @@ from ...services.image_extractor import (
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
 from ...services.poster import (
+    first_slowmo_section,
     generate_and_store_poster,
     load_project_clip_segments,
     read_clip_segments_for_project,
@@ -125,11 +126,16 @@ def _finalize_overlay_export(
     # the DB connection so the ffmpeg/R2 work never extends the write transaction.
     # Best-effort: None on failure (never blocks the export). The final video is
     # already in R2 here, so ffmpeg reads its presigned URL.
-    # T5090: thread the project's ordered working-clip segment data so the reel
-    # poster is the clearest frame in the first half of the first slow-mo section
-    # (no slow-mo -> first frame). Loaded outside the write transaction below.
-    clip_segments = load_project_clip_segments(project_id)
-    poster_fn = generate_and_store_poster(user_id, output_filename, clip_segments)
+    # T5090: compute the reel's first slow-mo section from the project's ordered
+    # working clips (loaded outside the write transaction below). The poster is the
+    # clearest frame in the first half of it (no slow-mo -> first frame). FREEZE the
+    # section onto the final_videos row so backfill/regen never depends on
+    # working_clips surviving the publish-time prune (they get pruned; the frozen
+    # columns are the durable source of truth).
+    slowmo_section = first_slowmo_section(load_project_clip_segments(project_id))
+    poster_fn = generate_and_store_poster(user_id, output_filename, slowmo_section)
+    slowmo_start = slowmo_section[0] if slowmo_section else None
+    slowmo_end = slowmo_section[1] if slowmo_section else None
 
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -177,11 +183,12 @@ def _finalize_overlay_export(
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
                 rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                poster_filename, slowmo_section_start, slowmo_section_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
         """, (project_id, output_filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn,
+              slowmo_start, slowmo_end))
         final_video_id = cursor.lastrowid
 
         cursor.execute("UPDATE projects SET final_video_id = ? WHERE id = ?", (final_video_id, project_id))
@@ -1321,10 +1328,14 @@ async def export_final(
         # transaction (parity with _finalize_overlay_export, which hoists it too).
         # Best-effort: None on failure (never blocks the export).
         # T5090: reuse the already-open cursor to read the project's ordered
-        # working-clip segment data (only SELECTs have run so far) so the reel
-        # poster follows the slow-mo-first policy; no slow-mo -> first frame.
-        clip_segments = read_clip_segments_for_project(cursor, project_id)
-        poster_fn = generate_and_store_poster(user_id, filename, clip_segments)
+        # working-clip segment data (only SELECTs have run so far) and compute the
+        # first slow-mo section; the poster follows the slow-mo-first policy (no
+        # slow-mo -> first frame). FREEZE the section on the row below so
+        # backfill/regen survives the publish-time working_clips prune.
+        slowmo_section = first_slowmo_section(read_clip_segments_for_project(cursor, project_id))
+        poster_fn = generate_and_store_poster(user_id, filename, slowmo_section)
+        slowmo_start = slowmo_section[0] if slowmo_section else None
+        slowmo_end = slowmo_section[1] if slowmo_section else None
 
         # Get next version number for final video
         cursor.execute("""
@@ -1362,11 +1373,12 @@ async def export_final(
             INSERT INTO final_videos (project_id, filename, version, source_type, name,
                 duration, aspect_ratio, tags, game_ids, clip_count, quality_score,
                 rating, rd, match_count, source_clip_id, clip_start_time, clip_game_start_time,
-                poster_filename)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                poster_filename, slowmo_section_start, slowmo_section_end)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
         """, (project_id, filename, next_version, source_type, fv_name,
               duration, aspect_ratio, tags_blob, game_ids_blob, clip_count, quality_score,
-              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn))
+              rating, rd, source_clip_id, clip_start_time, clip_game_start_time, poster_fn,
+              slowmo_start, slowmo_end))
         final_video_id = cursor.lastrowid
         logger.info(f"[Final Export] Created final video id={final_video_id} with source_type={source_type}")
 

@@ -315,10 +315,93 @@ def load_project_clip_segments(
         return []
 
 
+def segments_from_archive(archive: dict | None) -> list[tuple[dict | None, float | None]]:
+    """Ordered [(segments_data|None, source_duration|None), ...] reconstructed from
+    a project's R2 msgpack archive (T5090 freeze).
+
+    `archive` is the decoded `archive/{project_id}.msgpack` (project_archive.py):
+    `working_clips` holds ALL versions (msgpack-decoded dicts; `segments_data` is
+    raw bytes). We pick the LATEST version per clip identity and order by
+    sort_order, mirroring `latest_working_clips_subquery` -- within ONE project the
+    identity is `COALESCE(raw_clip_id, uploaded_filename)` (raw_clip_id <-> a raw
+    clip's end_time is 1:1, so grouping by it matches the live partition). The
+    archive carries no raw_clips, so `source_duration` is unknown (None); that only
+    affects canonicalization of splits-only boundaries (full-format rows, what
+    saveCurrentClipState writes, need no duration). Empty/missing -> []."""
+    if not archive:
+        return []
+    from ..utils.encoding import decode_data
+
+    clips = archive.get("working_clips") or []
+    best: dict = {}
+    for c in clips:
+        rc_id = c.get("raw_clip_id")
+        identity = ("rc", rc_id) if rc_id is not None else ("upl", c.get("uploaded_filename"))
+        version = c.get("version") or 0
+        if identity not in best or version > best[identity][0]:
+            best[identity] = (version, c)
+    ordered = sorted(best.values(), key=lambda pair: (pair[1].get("sort_order") or 0))
+    result: list[tuple[dict | None, float | None]] = []
+    for _, c in ordered:
+        raw = c.get("segments_data")
+        segments = decode_data(raw) if raw else None
+        result.append((segments, None))
+    return result
+
+
+def resolve_slowmo_section(
+    user_id: str, project_id: int | None
+) -> tuple[tuple[float, float] | None, str]:
+    """Resolve a reel's first slow-mo section in FINAL time WITHOUT the frozen
+    columns -- reconstruction fallback for backfill/regen and the v025 migration.
+
+    Order (T5090): (1) LIVE working_clips (present at finalize; pruned after
+    publish); (2) the R2 project archive (`archive/{project_id}.msgpack`, written
+    BEFORE publish prunes working_clips) when the live read is empty. Returns
+    `(section_or_None, source)` where source is 'working_clips' | 'archive' |
+    'unreconstructable'. A present-but-no-slow-mo reel yields (None,
+    'working_clips'/'archive') -- a legitimate first-frame result, NOT a failure.
+    Never fabricates a section; unreconstructable -> (None, 'unreconstructable')."""
+    from .project_archive import load_archive
+
+    clips = load_project_clip_segments(project_id)
+    if clips:
+        return (first_slowmo_section(clips), "working_clips")
+
+    archive = load_archive(project_id, user_id) if project_id is not None else None
+    archived_clips = segments_from_archive(archive)
+    if archived_clips:
+        return (first_slowmo_section(archived_clips), "archive")
+
+    return (None, "unreconstructable")
+
+
+def _decode_frozen_section(start, end) -> tuple[float, float] | None:
+    """A frozen `(slowmo_section_start, slowmo_section_end)` pair -> a section
+    tuple, or None when either is NULL (no frozen slow-mo / not yet computed)."""
+    if start is None or end is None:
+        return None
+    return (float(start), float(end))
+
+
+def _set_slowmo_section(final_video_id: int, section: tuple[float, float] | None) -> None:
+    """Freeze the first slow-mo section [start, end] onto a final_videos row in the
+    CURRENT profile DB (heals frozen columns during backfill/regen)."""
+    from ..database import get_db_connection
+    start = section[0] if section else None
+    end = section[1] if section else None
+    with get_db_connection() as conn:
+        conn.execute(
+            "UPDATE final_videos SET slowmo_section_start = ?, slowmo_section_end = ? WHERE id = ?",
+            (start, end, final_video_id),
+        )
+        conn.commit()
+
+
 def generate_and_store_poster(
     user_id: str,
     final_filename: str,
-    clip_segments: list[tuple[dict | None, float | None]] | None = None,
+    slowmo_section: tuple[float, float] | None = None,
 ) -> str | None:
     """Extract a poster frame of a final video and store it in R2.
 
@@ -328,13 +411,13 @@ def generate_and_store_poster(
     `final_videos` row, or None when the poster could not be produced (best
     effort -- the caller stores NULL and the export still succeeds).
 
-    Reel poster policy (T5090): when `clip_segments` (ordered
-    (segments_data, source_duration) per working clip, in concatenation order)
-    contains a slow-mo section, the poster is the clearest frame within the FIRST
-    HALF of the first slow-mo section on the final timeline. No slow-mo section,
-    no segment data, or unreconstructable data -> the plain first frame (logged at
-    info; never a fabricated slow-mo region). Recap posters do NOT go through here
-    -- they call extract_clearest_frame_jpeg directly (whole-clip, T5180).
+    Reel poster policy (T5090): `slowmo_section` is the FULL first slow-mo section
+    `[start, end]` in FINAL-video time (resolved by the caller from frozen columns,
+    live working clips, or the R2 archive -- see resolve_slowmo_section). When
+    present, the poster is the clearest frame within the FIRST HALF of that section.
+    None (no slow-mo / unreconstructable) -> the plain first frame (logged at info;
+    never a fabricated slow-mo region). Recap posters do NOT go through here -- they
+    call extract_clearest_frame_jpeg directly (whole-clip, T5180).
     """
     video_url = generate_presigned_url(user_id, f"final_videos/{final_filename}", expires_in=3600)
     if not video_url:
@@ -343,19 +426,17 @@ def generate_and_store_poster(
         logger.info(f"[Poster] no presigned URL for final_videos/{final_filename}; skipping poster")
         return None
 
-    section = first_slowmo_section(clip_segments)
     window: tuple[float, float] | None = None
-    if section is not None:
-        start, end = section
+    if slowmo_section is not None and slowmo_section[1] > slowmo_section[0]:
+        start, end = slowmo_section
         window = (start, start + (end - start) / 2.0)  # first half of the section
         logger.info(
-            f"[Poster] {final_filename}: first slow-mo section {section} on the "
-            f"final timeline -> sampling clearest frame in first half {window}"
+            f"[Poster] {final_filename}: first slow-mo section {slowmo_section} on "
+            f"the final timeline -> sampling clearest frame in first half {window}"
         )
     else:
         logger.info(
-            f"[Poster] {final_filename}: no slow-mo section (or no segment data) "
-            f"-> plain first frame"
+            f"[Poster] {final_filename}: no slow-mo section -> plain first frame"
         )
 
     basename = poster_basename(final_filename)
@@ -525,7 +606,8 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                 continue
 
             candidate_sql = (
-                "SELECT id, filename, project_id FROM final_videos "
+                "SELECT id, filename, project_id, "
+                "slowmo_section_start, slowmo_section_end FROM final_videos "
                 "WHERE published_at IS NOT NULL"
                 + ("" if force else " AND poster_filename IS NULL")
             )
@@ -577,13 +659,25 @@ def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False
                     continue
 
                 try:
-                    # Reconstruct the reel's segment data per final video from the
-                    # DB (project -> latest working_clips -> segments_data) so
-                    # backfill applies the SAME slow-mo-first policy as live
-                    # publish. Unreconstructable (archived project, no clips) ->
-                    # [] -> first frame (T5090, no fabrication).
-                    clip_segments = load_project_clip_segments(project_id)
-                    stored = generate_and_store_poster(user_id, filename, clip_segments)
+                    # Resolve the reel's first slow-mo section so backfill applies
+                    # the SAME slow-mo-first policy as live publish. Prefer the
+                    # FROZEN columns (durable across working_clips pruning); only
+                    # fall back to reconstruction (live clips -> R2 archive) when
+                    # unfrozen, and heal the columns so future regens skip the work.
+                    # Unreconstructable -> None -> first frame (T5090, no fabrication).
+                    section = _decode_frozen_section(
+                        row["slowmo_section_start"], row["slowmo_section_end"]
+                    )
+                    if section is None:
+                        section, src = resolve_slowmo_section(user_id, project_id)
+                        logger.info(
+                            f"[PosterBackfill] fv={fv_id} section reconstructed via "
+                            f"{src}: {section}"
+                        )
+                        if section is not None and not dry_run:
+                            _set_slowmo_section(fv_id, section)
+                            profile_changed = True
+                    stored = generate_and_store_poster(user_id, filename, section)
                     if not stored:
                         result["failed"].append({"id": fv_id, "error": "poster generation returned None"})
                         continue
