@@ -74,3 +74,46 @@ ids cancelled.
 
 **Conclusion:** no divergence beyond the two known fixes changes on-screen placement. Proceeding
 to unify (hook + tests, then one overlay per commit).
+
+### Steps 2-4 — Unify + migrate (commits)
+
+| Commit | What |
+|--------|------|
+| `feat(T4550)` | `hooks/useVideoDisplayRect.js` (useLayoutEffect + double-rAF settle, both frame ids cancelled) + pure `computeVideoDisplayRect` / `videoToScreenRect` / `screenToVideoRect` / `round3` + 15 unit tests |
+| `refactor(T4550)` CropOverlay | consumes hook; **gains rAF-leak fix**; drops dead `left/top` (D1) and dead `screenToVideo` (D2) |
+| `refactor(T4550)` HighlightOverlay | consumes hook; **gains first-paint fix**; maps `{width,height}->{radiusX,radiusY}` at the one call site (D3) |
+| `refactor(T4550)` PlayerDetectionOverlay | consumes hook; **gains BOTH fixes** (had neither); uniform `!videoMetadata` guard (D4) |
+| `test(T4550)` | live-drive QA spec `e2e/T4550-overlay-transform.qa.spec.js` |
+
+### QA results
+
+- **Math/hook unit tests:** `src/hooks/__tests__/useVideoDisplayRect.test.js` — 15/15 green
+  (letterbox wide-video + tall-video + matching-aspect; zoom+pan; fullscreen container
+  resize; exact `screenToVideo(videoToScreen(p)) === p` inverse; null-rect guard; first-paint
+  synchronous rect; rAF double-cancel on unmount).
+- **Full frontend unit sweep (touched + whole suite):** 100 files / **1075 tests passed**,
+  exit 0. No new failures vs `docs/testing/known-failures.md` (its only entry is an unrelated
+  backend ffprobe test).
+- **Live-drive** (`bash scripts/dev-verify.sh e2e/T4550-overlay-transform.qa.spec.js`,
+  real user `imankh@gmail.com` profile `9fa7378c`): **1 passed, 1 skipped**, exit 0.
+  - Framing crop: box placed with finite/positive geometry on first paint; a (-40,-30)px
+    drag landed within 6px on both axes (round-trip inverse accurate); **zero rAF / stale-update
+    / NaN console warnings**. Evidence: `qa/T4550-crop-overlay-placed.png` (8 handles centered
+    over the 1920x1080 video while pixels still loading — placement is metadata-driven),
+    `qa/T4550-crop-overlay-dragged.png`.
+  - Overlay (highlight + player-detection): **skipped honestly** — this account's first draft
+    isn't exported, so Overlay mode is gated (same gate T4880 documents; Modal is off in the
+    container so detection wouldn't run anyway). Placement of both is covered by the hook unit
+    tests + `OverlayModeView` Vitest suites.
+
+### Acceptance criteria -> evidence
+
+| Criterion | Evidence |
+|-----------|----------|
+| One transform implementation; three consumers | `useVideoDisplayRect.js`; the 3 overlay commits each delete their local copy and destructure the hook |
+| All three overlays have both fixes by construction | Hook ships both; Crop gains leak fix, Highlight gains first-paint, PD gains both (commit diffs) |
+| Coordinate math unit-tested incl. letterbox + zoom/pan + fullscreen | 15/15 in `useVideoDisplayRect.test.js` |
+| Manual placement-accuracy per overlay | Crop: live drag within 6px + evidence PNGs. Highlight/PD: unit + Vitest coverage; live skipped (unexported draft) — noted, not silently passed |
+
+**Left for supervisor:** push branch; user tests on staging (esp. Overlay-mode highlight +
+player-detection placement + fullscreen zoom/pan, which the container couldn't reach live).
