@@ -88,7 +88,9 @@ class TestSyncDatabaseToR2WithVersion:
              patch(f"{RETRY_MODULE}.retry_r2_call"), \
              patch(f"{MODULE}.download_from_r2", return_value=True) as mock_dl:
             sync_database_to_r2_with_version("user1", local_db, current_version=5)
-            mock_dl.assert_called_once_with("user1", "profile.sqlite", local_db)
+            # T5340: sync_database_to_r2_with_version threads profile_id through the
+            # re-download; None here keeps the ContextVar request-path behavior.
+            mock_dl.assert_called_once_with("user1", "profile.sqlite", local_db, profile_id=None)
 
     def test_r2_disabled(self, local_db):
         """R2 disabled → returns (False, None)."""
