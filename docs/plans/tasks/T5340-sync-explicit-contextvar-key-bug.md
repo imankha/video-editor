@@ -58,6 +58,16 @@ dev — maybe the tested path had the ContextVar set to target by luck, or maybe
 affected). Scan for source profiles whose R2 profile.sqlite unexpectedly contains another profile's
 reels. Repair from a pre-move R2 snapshot if found. Do NOT assume clean; do NOT assume loss.
 
+## PROD SCAN RESULT (2026-07-17, supervisor-run, read-only)
+HEAD-only scan of every prod user with >=2 profiles for the corruption signature (two sibling
+`profile.sqlite` objects sharing identical content = one overwrote the other). **No corruption
+found.** The only ETag collision was arshia's `22c7616a` + `6ff007e6` — the two EMPTY profiles the
+T5310 repair recreated (both `db-version=1`, 237568 bytes = identical empty head-schema DBs, identical
+by construction), NOT move-reels corruption. Every other profile has a distinct ETag. Conclusion: the
+move-reels wrong-key write either was never triggered on prod (niche multi-athlete feature) or the
+end-of-request `durable_sync` re-synced the correct source DB over the transient bad write. **No prod
+data repair needed** — the code fix (this task) prevents recurrence.
+
 ## Relevant files
 - `src/backend/app/database.py` — `sync_db_to_r2_explicit` (:1221), `sync_user_db_to_r2_explicit` (check the user.sqlite analog for the same trap)
 - `src/backend/app/storage.py` — `sync_database_to_r2_with_version` (:957), `r2_key` (:266)

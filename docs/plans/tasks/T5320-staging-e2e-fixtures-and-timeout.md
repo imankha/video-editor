@@ -77,6 +77,16 @@ fast, specific failure — not indistinguishable from a data-less hang.
 - `reference_staging_test_account`, `reference_copy_account_script` (memory) — staging account
   ids + copy mechanics
 
+## FOLLOW-UP surfaced by the staging retest (2026-07-17)
+After seeding the fixture (imankh dev->staging) + the spec fixes, **T4550 PASSES on staging**. But two
+workflow specs (`game-loading`, `annotate-game-clock`) STILL fail because they call
+`page.waitForLoadState('networkidle')`, which **never settles against a deployed target** (CDN +
+analytics + any polling keep the network busy) — it times out at the deployed cap. This is a
+local-dev-only ready-signal. Remaining work in this task (or a fast-follow): replace `networkidle`
+waits in deployed-run specs with a deterministic ready-signal (await a specific rendered element /
+`domcontentloaded` + explicit locator), so workflow specs pass against staging the way T4550 does.
+The CropOverlay first-drag product bug found here is filed separately as **T5380**.
+
 ## Acceptance Criteria
 - [ ] The staging e2e account is seeded (idempotently, prod-guarded) with a documented fixture
       (game + clips + framed project + published reel); fixture contract written down.
