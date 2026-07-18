@@ -45,6 +45,8 @@ Binary blobs are msgpack via `app/utils/encoding.py` (`encode_data`/`decode_data
 
 Tutorial achievement keys: `watched_annotate_tutorial`, `watched_framing_tutorial`, `watched_overlay_tutorial`, `watched_publish_tutorial`. These ride the existing batched IN query — no extra DB queries. No migration needed: achievement keys are row-based (new keys just get inserted as rows, no schema change).
 
+**T5330 (2026-07-18): onboarding must be blind to content shared into a profile.** quest_1's DB-derived backfills (`upload_game`, `add_clip`, `rate_clip`, `annotate_brilliant` — the `rc[...] >= 1` / `games` probes in `_check_all_steps`) now exclude shared-in rows by provenance: `raw_clips.shared_by` (pre-existing) and the new `games.shared_by TEXT DEFAULT NULL` (`_copy_game`, materialization.py) are **never NULL for a shared row** — precedence `sharer_email -> sharer_user_id -> "lost"` (`materialization.SHARED_PROVENANCE_LOST`), own content stays NULL. The 5-star auto-draft-reel needs no marker of its own: its `auto_project_id` lives on the shared clip row, so it's excluded transitively via `raw_clips.shared_by`. Migration `v026_games_shared_by.py` adds the column AND backfills legacy shared games by deriving provenance from their own already-shared clips in-profile (no Postgres read) — a legacy **game-only** share (zero clips) has no in-profile signal and is left NULL (documented residual: `upload_game` alone may read pre-checked for that one legacy cohort, but quest_1 as a whole is still correctly incomplete since there are no shared clips to inflate the other three steps either). Any future materialization path (e.g. T4910 link-share) MUST route through `materialize_game_share`/`_copy_game`/`_materialize_clips` to inherit this — see the T4910 acceptance criterion.
+
 **`/progress` and `/claim-reward` must AGREE (bugs 34p/35p).** `GET /progress` reports a quest complete when it is in the user-scoped completed/claimed set (`get_completed_and_claimed_quest_ids`, user.sqlite — survives profile switch) WITHOUT re-deriving steps. `claim_reward` now honors that SAME set FIRST (returns idempotent `already_claimed`) before re-checking `_check_all_steps` against the active profile. Pre-fix, claim ignored the set and re-derived steps → a quest `/progress` showed complete 400'd on claim ("step 'watch_annotate_tutorial' is incomplete") whenever the active profile lacked the step data (zombie/resurrected account, or a different selected profile). This is idempotency, not a loosened gate: a quest only enters completed/claimed via a prior legitimate grant, so an UNclaimed quest still faces the full step check.
 
 ## Invariants & rules
@@ -64,7 +66,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
 | `postgres` | Fly Postgres | `schema_migrations` table | v018 |
-| `profile_db` | profile.sqlite | `PRAGMA user_version` | v025 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive) |
+| `profile_db` | profile.sqlite | `PRAGMA user_version` | v026 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
 - Only versions `> current` are applied (base.py:38-40) — never reuse or renumber a version.

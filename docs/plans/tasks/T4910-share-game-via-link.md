@@ -66,3 +66,15 @@ Storage/expiry: claimed games reference the same R2 source (`games/{blake3}.mp4`
 - [ ] Link unfurls with game preview image + game title in chat apps
 - [ ] Shared game carries Team highlights (per T4920), not the sharer's My Player highlights
 - [ ] Tests pass; migrations written and runnable via admin endpoint
+- [ ] **NUF-blindness carries over (T5330):** the claim path MUST route the materialized
+      game/clips through `materialize_game_share` (`app/services/materialization.py`) —
+      specifically its `_copy_game` / `_materialize_clips` calls — so the copied game and
+      any copied clips get a non-null `shared_by` provenance marker (precedence
+      `sharer_email -> sharer_user_id -> "lost"`). This is what makes quest_1's DB-derived
+      steps (`upload_game`/`add_clip`/`rate_clip`/`annotate_brilliant`,
+      `app/routers/quests.py` `_check_all_steps`) invisible to a link-claimed game, exactly
+      like an email teammate share. If the claim flow needs a code path that does NOT go
+      through `materialize_game_share`, it must independently stamp the same provenance
+      marker on the copied game/clip rows — do not ship a claim path that leaves
+      `shared_by` NULL for shared-in content, or a link-share recipient will regress to
+      T5330's original bug (onboarding silently skipped).

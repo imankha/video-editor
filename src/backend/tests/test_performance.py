@@ -38,6 +38,7 @@ class TestQuestProgressPerformance:
                 blake3_hash TEXT,
                 video_filename TEXT,
                 video_size INTEGER,
+                shared_by TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS raw_clips (
@@ -45,6 +46,7 @@ class TestQuestProgressPerformance:
                 game_id INTEGER,
                 rating INTEGER DEFAULT 0,
                 auto_project_id INTEGER,
+                shared_by TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE TABLE IF NOT EXISTS export_jobs (

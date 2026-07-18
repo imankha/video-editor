@@ -59,7 +59,8 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             video_fps REAL,
             status TEXT DEFAULT 'ready',
             auto_export_status TEXT,
-            recap_video_url TEXT
+            recap_video_url TEXT,
+            shared_by TEXT DEFAULT NULL
         );
         CREATE TABLE IF NOT EXISTS game_videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -329,3 +330,130 @@ class TestAutoMaterialize:
             )
             row = cur.fetchone()
             assert row["resolved_at"] is None
+
+
+def _quest1_steps(db_path):
+    """Compute quest-step booleans against a recipient's materialized profile DB."""
+    from app.routers.quests import _check_all_steps
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        return _check_all_steps("recipient-user", conn)
+    finally:
+        conn.close()
+
+
+class TestShareIsNufBlind:
+    """T5330: content shared into a profile must be invisible to NUF quest progress.
+
+    A recipient's quest_1 steps derive from THEIR OWN content only — a materialized
+    share (game + clips + the 5-star auto-draft-reel) must not pre-complete any step.
+    """
+
+    def test_share_recipient_still_sees_quest1(self, pg_conn, tmp_path):
+        """A never-started recipient lands on quest_1 with all DB-derived steps
+        incomplete, even though a shared game (with a 5-star clip → auto-reel) was
+        just materialized into their fresh profile."""
+        from app.services.auth_db import create_user
+
+        create_user(SHARER_ID, email=SHARER_EMAIL)
+        create_user(RECIPIENT_ID, email=RECIPIENT_EMAIL)
+
+        # Sharer has a game with a 5-star clip (→ auto-draft-reel on materialize).
+        sharer_db_path = tmp_path / SHARER_ID / "profiles" / SHARER_PROFILE / "profile.sqlite"
+        s_conn = _create_profile_db(sharer_db_path)
+        game_id = _insert_game(s_conn, name="Vs LA Breakers")
+        _insert_clip(s_conn, game_id, 10.0, 15.0, name="Golazo", rating=5,
+                     tagged_teammates=["Nico"])
+        s_conn.close()
+
+        clip_data = [
+            {"name": "Golazo", "start_time": 10.0, "end_time": 15.0,
+             "rating": 5, "video_sequence": None, "tagged_teammates": ["Nico"]},
+        ]
+        _seed_postgres_share(pg_conn, game_id, "Nico", clip_data)
+
+        # Recipient: single profile in user.sqlite, NO pre-created profile DB —
+        # session_init's ensure_database creates it fresh (with games.shared_by).
+        recipient_profile_id = "recip-prof"
+        _create_user_db(tmp_path, RECIPIENT_ID, [recipient_profile_id])
+        recipient_db_path = (
+            tmp_path / RECIPIENT_ID / "profiles" / recipient_profile_id / "profile.sqlite"
+        )
+
+        invalidate_user_cache(RECIPIENT_ID)
+        set_current_user_id(RECIPIENT_ID)
+        with _common_patches(tmp_path):
+            user_session_init(RECIPIENT_ID)
+
+        # Data is present + usable (T3230 unchanged) and carries provenance.
+        r_conn = sqlite3.connect(str(recipient_db_path))
+        r_conn.row_factory = sqlite3.Row
+        g = r_conn.execute("SELECT id, shared_by FROM games").fetchall()
+        assert len(g) == 1
+        assert g[0]["shared_by"] == SHARER_EMAIL   # never NULL for a share
+        c = r_conn.execute("SELECT shared_by, auto_project_id FROM raw_clips").fetchall()
+        assert len(c) == 1
+        assert c[0]["shared_by"] == SHARER_EMAIL
+        assert c[0]["auto_project_id"] is not None  # 5-star auto-reel was created
+        r_conn.close()
+
+        # ...but NONE of quest_1's DB-derived steps are pre-completed.
+        steps = _quest1_steps(recipient_db_path)
+        assert steps["upload_game"] is False
+        assert steps["add_clip"] is False
+        assert steps["rate_clip"] is False
+        assert steps["annotate_brilliant"] is False
+
+    def test_mid_nuf_recipient_keeps_own_progress(self, pg_conn, tmp_path):
+        """A recipient who earned upload_game via their OWN game keeps exactly that —
+        a materialized share neither rolls it back nor advances the clip/reel steps."""
+        from app.services.auth_db import create_user
+
+        create_user(SHARER_ID, email=SHARER_EMAIL)
+        create_user(RECIPIENT_ID, email=RECIPIENT_EMAIL)
+
+        # Sharer game with a 5-star clip.
+        sharer_db_path = tmp_path / SHARER_ID / "profiles" / SHARER_PROFILE / "profile.sqlite"
+        s_conn = _create_profile_db(sharer_db_path)
+        game_id = _insert_game(s_conn, name="Vs LA Breakers", blake3_hash="sharerhash")
+        _insert_clip(s_conn, game_id, 10.0, 15.0, name="Golazo", rating=5,
+                     tagged_teammates=["Nico"])
+        s_conn.close()
+
+        clip_data = [
+            {"name": "Golazo", "start_time": 10.0, "end_time": 15.0,
+             "rating": 5, "video_sequence": None, "tagged_teammates": ["Nico"]},
+        ]
+        _seed_postgres_share(pg_conn, game_id, "Nico", clip_data)
+
+        # Recipient: single profile, NO pre-created profile DB — session_init's
+        # ensure_database() creates the real (full) schema fresh, same as the
+        # first test. The recipient's OWN game is inserted afterward, directly
+        # against that real schema, to simulate earned pre-share progress.
+        recipient_profile_id = "recip-prof"
+        _create_user_db(tmp_path, RECIPIENT_ID, [recipient_profile_id])
+        recipient_db_path = (
+            tmp_path / RECIPIENT_ID / "profiles" / recipient_profile_id / "profile.sqlite"
+        )
+
+        invalidate_user_cache(RECIPIENT_ID)
+        set_current_user_id(RECIPIENT_ID)
+        with _common_patches(tmp_path):
+            user_session_init(RECIPIENT_ID)
+
+        r_conn = sqlite3.connect(str(recipient_db_path))
+        r_conn.execute(
+            "INSERT INTO games (name, blake3_hash) VALUES (?, ?)",
+            ("My Own Game", "ownhash"),  # shared_by NULL (default) — own content
+        )
+        r_conn.commit()
+        r_conn.close()
+
+        steps = _quest1_steps(recipient_db_path)
+        # Own game still counts (earned progress preserved, not rolled back).
+        assert steps["upload_game"] is True
+        # Shared game/clip/auto-reel do NOT advance the remaining steps.
+        assert steps["add_clip"] is False
+        assert steps["rate_clip"] is False
+        assert steps["annotate_brilliant"] is False

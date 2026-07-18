@@ -721,7 +721,8 @@ def ensure_database():
                 status TEXT DEFAULT 'ready',
                 auto_export_status TEXT,
                 auto_export_attempts INTEGER DEFAULT 0,
-                recap_video_url TEXT
+                recap_video_url TEXT,
+                shared_by TEXT DEFAULT NULL
             )
         """)
 

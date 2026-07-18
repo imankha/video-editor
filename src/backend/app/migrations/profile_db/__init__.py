@@ -24,6 +24,7 @@ from .v022_repoint_orphaned_final_video import V022RepointOrphanedFinalVideo
 from .v023_repair_sourceless_active_games import V023RepairSourcelessActiveGames
 from .v024_add_poster_filename import V024AddPosterFilename
 from .v025_freeze_slowmo_section import V025FreezeSlowmoSection
+from .v026_games_shared_by import V026GamesSharedBy
 
 MIGRATIONS = [
     V001Baseline(),
@@ -51,6 +52,7 @@ MIGRATIONS = [
     V023RepairSourcelessActiveGames(),
     V024AddPosterFilename(),
     V025FreezeSlowmoSection(),
+    V026GamesSharedBy(),
 ]
 
 RUNNER = MigrationRunner(MIGRATIONS)
