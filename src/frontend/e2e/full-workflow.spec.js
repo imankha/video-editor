@@ -73,7 +73,7 @@ const TEST_TSV = path.join(TEST_DATA_DIR, 'test.short.tsv');
 async function enterAnnotateModeWithClips(page) {
   console.log('[Setup] Navigating to annotate mode...');
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 
   // Click Games tab to show Add Game button
   await page.locator('button:has-text("Games")').click();
@@ -200,7 +200,7 @@ test.describe('Full Workflow Tests', () => {
 
   test('1. Project Manager loads correctly', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Should see Project Manager tabs
     await expect(page.locator('button:has-text("Games")')).toBeVisible();

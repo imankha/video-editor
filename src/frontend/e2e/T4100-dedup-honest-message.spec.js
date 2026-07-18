@@ -47,7 +47,7 @@ test('dedup upload shows the honest message, not a fake progress crawl', async (
 
   // Let the SPA settle: after dev-login it may client-side redirect from '/',
   // which would destroy an evaluate context fired too early.
-  await page.goto('/', { waitUntil: 'networkidle' });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(1500);
 
   // Drive the real store; record every activeUpload {phase,message} transition.

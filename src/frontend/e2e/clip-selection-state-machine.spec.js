@@ -53,7 +53,7 @@ async function clearBrowserState(page) {
 async function enterAnnotateMode(page) {
   console.log('[Setup] Navigating to home...');
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);

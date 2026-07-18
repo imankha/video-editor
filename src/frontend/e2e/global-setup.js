@@ -6,7 +6,7 @@
  */
 
 import net from 'net';
-import { IS_DEPLOYED_TARGET, LOCAL_ONLY_SPECS } from './helpers/targetEnv.js';
+import { IS_DEPLOYED_TARGET, LOCAL_ONLY_SPECS, STAGING_GATE_SPECS } from './helpers/targetEnv.js';
 
 /**
  * Check if a port is in use
@@ -53,6 +53,17 @@ export default async function globalSetup() {
     }
     console.log('\n  All other specs run against the deployed target. Any /api/test/* call that');
     console.log('  slips through fails FAST (assertSeamAvailable) instead of hanging to timeout.\n');
+
+    // T5400: when running the curated pre-deploy gate (`npm run test:e2e:staging-gate`,
+    // i.e. --grep @staging-gate), announce exactly what the gate covers. Printed on
+    // every deployed-target run so a gate run is self-documenting; harmless otherwise.
+    console.log('Curated @staging-gate subset (run: npm run test:e2e:staging-gate — THE pre-deploy gate):');
+    for (const s of STAGING_GATE_SPECS) {
+      console.log(`  • ${s.file}`);
+      console.log(`      covers: ${s.covers}`);
+    }
+    console.log('\n  Data-dependent gate specs SKIP LOUDLY when the fixture lacks data (never a');
+    console.log('  silent green pass). See e2e/STAGING-GATE.md for the run command + fixture.\n');
     return;
   }
 

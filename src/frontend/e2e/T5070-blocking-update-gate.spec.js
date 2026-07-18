@@ -38,7 +38,7 @@ test.describe('T5070 blocking update gate', () => {
   test('A — gate blocks interaction/login, no dismiss affordance', async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Sanity: nothing gates the app before requireUpdate fires.
     await expect(page.locator(GATE_SELECTOR)).toHaveCount(0);
@@ -80,7 +80,7 @@ test.describe('T5070 blocking update gate', () => {
   test('B — backend version mismatch raises the gate', async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // The real first /api responses latch the client's boot version
     // (whatever this container's backend advertises) before we mock.
@@ -124,7 +124,7 @@ test.describe('T5070 blocking update gate', () => {
   test('C — flush failure keeps the gate up, shows an error, and never reloads', async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await context.route('**/api/sync/flush-verify', (route) =>
       route.fulfill({
@@ -168,7 +168,7 @@ test.describe('T5070 blocking update gate', () => {
   test('D — successful flush proceeds past the barrier (no waiting SW -> reload)', async ({ context, page }) => {
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // No route mock: a clean session's real /api/sync/flush-verify returns 200
     // (nothing pending to sync) — the "cheap verify" ideal outcome from the
@@ -185,7 +185,7 @@ test.describe('T5070 blocking update gate', () => {
     await gate.getByRole('button', { name: /update now/i }).click();
     await navigationPromise;
 
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     // Fresh bundle boots with the gate down again.
     await expect(page.locator(GATE_SELECTOR)).toHaveCount(0);
     await saveEvidence(page, 'T5070-D-successful-flush-reloaded');

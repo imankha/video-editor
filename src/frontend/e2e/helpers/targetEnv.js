@@ -89,6 +89,47 @@ export function assertSeamAvailable(res, seamName) {
  *    This is a test-vs-deployed-bundle mismatch, NOT a staging bug and NOT a data gap —
  *    the module logic is also covered by Vitest, so these run locally only.
  */
+/**
+ * The curated `@staging-gate` subset (T5400) — the reliable, fast specs that ARE
+ * the pre-deploy gate. Run them with `npm run test:e2e:staging-gate` (which greps
+ * the `@staging-gate` tag in the test titles); this inventory is the human-readable
+ * companion global-setup prints so a gate run announces exactly what it covers.
+ *
+ * MUST stay in sync with the `@staging-gate` tags in the listed spec titles. The
+ * set is deliberately small: specs that key on the seeded fixture account and give
+ * real signal on changed surfaces, and are reliable on a deployed target. It
+ * EXCLUDES the `LOCAL_ONLY_SPECS` (seam / vite-module) and the `screen-usability`
+ * viewport-emulation audit (its iOS-Safari dynamic-toolbar blind spot is documented
+ * in usabilityAudit.js + gated at source by check-viewport-units.mjs — it is not a
+ * staging-gate signal). Target wall-clock: well under ~15 min against staging.
+ *
+ * Data-dependent gate specs SKIP LOUDLY (never a silent green pass) when the fixture
+ * lacks the required data, so a real regression and a missing fixture never look
+ * alike. See e2e/STAGING-GATE.md.
+ */
+export const STAGING_GATE_SPECS = [
+  {
+    file: 'staging-smoke.spec.js',
+    covers: 'API /health 200 + dev-login session + app shell renders (fastest signal)',
+  },
+  {
+    file: 'T5290-recap-mobile-redesign.spec.js',
+    covers: 'recap player responsive layout (portrait/landscape/narrow/desktop), no overflow',
+  },
+  {
+    file: 'T4550-overlay-transform.qa.spec.js',
+    covers: 'framing crop-overlay placement + drag round-trip; overlay/detection layer (rAF-leak free)',
+  },
+  {
+    file: 'derisk-staging-export.qa.spec.js',
+    covers: 'export pipeline (framing -> overlay -> final) + publish, on a DISCOVERED draft',
+  },
+  {
+    file: 'derisk-staging-endcard-copylink.qa.spec.js',
+    covers: 'branded end card on shared reel + collection; copy-link POST/toast dedup',
+  },
+];
+
 export const LOCAL_ONLY_SPECS = [
   {
     file: 'T4120-self-verify-durability.spec.js',

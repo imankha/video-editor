@@ -65,7 +65,7 @@ async function bootAs(page, profileId) {
     const { useAuthStore } = await import('/src/stores/authStore.js');
     useAuthStore.setState({ isAuthenticated: true, email: 'test@e2e.local', showAuthModal: false });
   });
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   await page.evaluate(async () => {
     const { useProfileStore } = await import('/src/stores/profileStore.js');
     await useProfileStore.getState().fetchProfiles({ force: true });

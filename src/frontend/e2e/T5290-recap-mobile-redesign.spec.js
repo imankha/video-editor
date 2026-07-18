@@ -116,7 +116,7 @@ async function measure(page) {
   });
 }
 
-test.describe('T5290 recap player mobile redesign', () => {
+test.describe('T5290 recap player mobile redesign @staging-gate', () => {
   test('portrait: full-width video, no overflow, immersive collapse', async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: PORTRAIT, hasTouch: true, isMobile: true });

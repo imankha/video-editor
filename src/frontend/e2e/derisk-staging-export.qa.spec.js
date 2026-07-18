@@ -1,27 +1,36 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
+import { waitForAppReady } from './helpers/appReady.js';
 
 /**
- * Derisk sweep (2026-07-12): staging smoke + export durability probe.
+ * Derisk sweep: staging smoke + export durability probe (T5400 de-hardcoded).
  *
- * Drives the REAL staging app as the dedicated test account (e2e@test.local):
- *   login -> Reel Drafts -> open framing draft -> Export -> wait for the
+ * Drives the REAL app as the SEEDED FIXTURE account (imankh@gmail.com / profile
+ * 9fa7378c, per e2e/FIXTURE-CONTRACT.md — env-overridable via E2E_REAL_EMAIL /
+ * E2E_REAL_PROFILE):
+ *   login -> Reel Drafts -> open a DISCOVERED draft -> Export -> wait for the
  *   pipeline (framing render -> overlay render -> final video) -> publish
  *   ("Move to My Reels") -> My Reels lists the reel.
  *
- * Durability probe (T4200/T4110 sync-then-announce): we poll
- * /api/exports/active during the export and log every status transition.
- * A `sync_failed` status is the feature working (retryable), not a bug.
+ * T5400: the target draft is DISCOVERED from /api/projects (a non-finalized reel
+ * draft), NOT hardcoded to project id 1 / a "Wonder Goal" chip. If the fixture has
+ * no such draft the test SKIPS LOUDLY (never a silent green pass) so a real
+ * regression and a missing fixture never look alike.
+ *
+ * Durability probe (T4200/T4110 sync-then-announce): we poll /api/exports/active
+ * during the export and log every status transition. A `sync_failed` status is the
+ * feature working (retryable), not a bug.
  *
  * Run:
  *   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
  *   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
- *   E2E_REAL_EMAIL=e2e@test.local \
+ *   E2E_REAL_EMAIL=imankh@gmail.com E2E_REAL_PROFILE=9fa7378c \
  *   npx playwright test e2e/derisk-staging-export.qa.spec.js
  */
 
 const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000/api';
-const EMAIL = process.env.E2E_REAL_EMAIL || 'e2e@test.local';
+const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const EVID = 'test-results/derisk-evidence';
 
 async function apiGet(context, path) {
@@ -31,41 +40,50 @@ async function apiGet(context, path) {
   return res.ok() ? res.json() : { __status: res.status() };
 }
 
-async function projectState(context, projectId) {
+async function listProjects(context) {
   const data = await apiGet(context, '/projects');
-  const list = Array.isArray(data) ? data : data.projects || [];
-  return list.find((p) => p.id === projectId);
+  return Array.isArray(data) ? data : data.projects || [];
 }
 
-test('staging export pipeline + publish (smoke + durability)', async ({ context, page }) => {
+async function projectState(context, projectId) {
+  return (await listProjects(context)).find((p) => p.id === projectId);
+}
+
+/** Open the Reel Drafts tab, then open a draft card by its (discovered) name. */
+async function openDraftCard(page, name) {
+  await page.goto('/');
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Reel Drafts' }) });
+  await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
+  const card = page.locator('[data-testid="project-card"]').filter({ hasText: name }).first();
+  await card.waitFor({ timeout: 30000 });
+  await card.click();
+}
+
+const EXPORT_BTN = /^Export( \(\d+\/\d+\))?$/;
+
+test('staging export pipeline + publish (smoke + durability) @staging-gate', async ({ context, page }) => {
   test.setTimeout(900_000);
 
-  // Staging PG pool serves a dead connection after idle -> first login can 500.
-  // Retry up to 3x (documented finding; retry always succeeds).
-  let lastErr;
-  for (let i = 0; i < 3; i++) {
-    try { await loginAsRealUser(context, EMAIL); lastErr = null; break; }
-    catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, 2000)); }
-  }
-  if (lastErr) throw lastErr;
+  // Retry baked into loginAsRealUser (staging PG stale-pool 5xx blip) — T5400.
+  await loginAsRealUser(context, EMAIL, PROFILE);
 
-  // --- home -> Reel Drafts -> open the first framing draft
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
-  await page.screenshot({ path: `${EVID}/01-reel-drafts.png` });
+  // --- DISCOVER a reel draft to drive (no hardcoded id/name). Prefer one already
+  //     framed (has_working_video) but not finalized -> exercises overlay -> final
+  //     -> publish. Fall back to any non-finalized draft with clips.
+  const projects = await listProjects(context);
+  const candidates = projects.filter((p) => !p.has_final_video && !p.is_published && p.clip_count > 0);
+  const target = candidates.find((p) => p.has_working_video) || candidates[0];
+  if (!target) {
+    console.log('[T5400][SKIP] fixture has no un-finalized reel draft ' +
+      '(need clip_count>0 && !has_final_video); seed imankh per FIXTURE-CONTRACT');
+  }
+  test.skip(!target, '[T5400] fixture has no un-finalized reel draft; seed imankh per FIXTURE-CONTRACT');
+  const targetId = target.id;
+  console.log(`[derisk] target draft: id=${targetId} name=${JSON.stringify(target.name)} ` +
+    `has_working_video=${target.has_working_video} has_final_video=${target.has_final_video}`);
 
   const transitions = [];
-  const alreadyFramed = (await projectState(context, 1))?.has_working_video;
-  if (!alreadyFramed) {
-
-  // Target project 1's chip by NAME (a generic first() chip can hit the wrong draft)
-  const framingChip = page.getByTitle(/Wonder Goal.*\(click to open\)/).first();
-  await framingChip.waitFor({ timeout: 30000 });
-  await framingChip.click();
-  await page.locator('.crop-handle').first().waitFor({ timeout: 120000 });
-  await page.screenshot({ path: `${EVID}/02-framing-loaded.png` });
-
-  // --- export from framing; watch /api/exports/active transitions
+  // Durability probe: log every /api/exports/active transition during the run.
   (async () => {
     for (let i = 0; i < 180; i++) {
       const active = await apiGet(context, '/exports/active');
@@ -79,54 +97,53 @@ test('staging export pipeline + publish (smoke + durability)', async ({ context,
     }
   })();
 
-  const exportBtn = page.getByRole('button', { name: /^Export( \(\d+\/\d+\))?$/ }).first();
-  await exportBtn.waitFor({ timeout: 30000 });
-  await exportBtn.click();
-  console.log('[derisk] framing Export clicked');
-  await page.screenshot({ path: `${EVID}/03-export-clicked.png` });
-  } // end !alreadyFramed
+  // --- PHASE 1: framing export (only if the discovered draft is not yet framed) ---
+  if (!target.has_working_video) {
+    await openDraftCard(page, target.name);
+    await page.locator('.crop-handle').first().waitFor({ timeout: 120000 }).catch(() => {});
+    await page.screenshot({ path: `${EVID}/02-framing-loaded.png` });
+    const exportBtn = page.getByRole('button', { name: EXPORT_BTN }).first();
+    await exportBtn.waitFor({ timeout: 30000 });
+    await exportBtn.click();
+    console.log('[derisk] framing Export clicked');
+    await page.screenshot({ path: `${EVID}/03-export-clicked.png` });
 
-  // --- wait until the framing render lands (working video), max 8 min
-  let proj = null;
-  let deadline = Date.now() + 480_000;
-  while (Date.now() < deadline) {
-    proj = await projectState(context, 1);
-    if (proj?.has_working_video) break;
-    await page.waitForTimeout(5000);
+    let deadline = Date.now() + 480_000;
+    let proj = null;
+    while (Date.now() < deadline) {
+      proj = await projectState(context, targetId);
+      if (proj?.has_working_video) break;
+      await page.waitForTimeout(5000);
+    }
+    console.log('[derisk] after framing export:', JSON.stringify(proj));
+    expect(proj?.has_working_video, 'framing export produced a working video').toBeTruthy();
   }
-  console.log('[derisk] after framing export:', JSON.stringify(proj));
-  console.log('[derisk] transitions:', JSON.stringify(transitions));
-  await page.screenshot({ path: `${EVID}/04-after-export.png` });
-  expect(proj?.has_working_video, 'framing export produced a working video').toBeTruthy();
 
-  // --- overlay step: open the draft (now in Overlay) and export the final
-  if (!proj.has_final_video) {
-    await page.goto('/');
-    await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
-    // Project 1 is the started-overlay draft; project 2's chip says "Not Started"
-    const overlayChip = page.getByTitle(/Overlay: Started.*\(click to open\)/).first();
-    await overlayChip.waitFor({ timeout: 30000 });
-    await overlayChip.click();
-    // overlay editor ready: its Export button appears
-    const overlayExport = page.getByRole('button', { name: /^Export( \(\d+\/\d+\))?$/ }).first();
+  // --- PHASE 2: overlay export -> final video ---
+  let proj = await projectState(context, targetId);
+  if (!proj?.has_final_video) {
+    await openDraftCard(page, target.name);
+    const overlayExport = page.getByRole('button', { name: EXPORT_BTN }).first();
     await overlayExport.waitFor({ timeout: 120000 });
     await page.screenshot({ path: `${EVID}/04b-overlay-loaded.png` });
     await overlayExport.click();
     console.log('[derisk] overlay Export clicked');
 
-    deadline = Date.now() + 480_000;
+    const deadline = Date.now() + 480_000;
     while (Date.now() < deadline) {
-      proj = await projectState(context, 1);
+      proj = await projectState(context, targetId);
       if (proj?.has_final_video) break;
       await page.waitForTimeout(5000);
     }
     console.log('[derisk] after overlay export:', JSON.stringify(proj));
+    console.log('[derisk] transitions:', JSON.stringify(transitions));
     await page.screenshot({ path: `${EVID}/04c-after-overlay-export.png` });
   }
   expect(proj?.has_final_video, 'pipeline produced a final video').toBeTruthy();
 
-  // --- publish: Reel Drafts card shows "Move to My Reels"
+  // --- PUBLISH: the ready-to-publish card shows "Move to My Reels" ---
   await page.goto('/');
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: 'Reel Drafts' }) });
   await page.getByRole('button', { name: 'Reel Drafts' }).first().click({ timeout: 30000 });
   const moveBtn = page.getByRole('button', { name: /Move to My Reels/i }).first();
   await moveBtn.waitFor({ timeout: 60000 });

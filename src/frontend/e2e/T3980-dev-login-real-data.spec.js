@@ -74,7 +74,7 @@ test('T3980 dev-login drives the real Games screen (real opponent names render)'
   // Drive the actual UI: boot authenticates from the dev-login cookie, then open
   // the Games tab of the project manager.
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   const gamesTab = page.locator('button:has-text("Games")');
   await expect(gamesTab, 'Games tab renders for the authenticated real account').toBeVisible({ timeout: 30000 });
   await gamesTab.click();

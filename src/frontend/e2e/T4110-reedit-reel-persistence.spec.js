@@ -96,7 +96,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
   await summarizeGame6('baseline');
 
   await page.goto('/');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // --- open My Reels --------------------------------------------------------
   const myReelsBtn = page.getByRole('button', { name: /My Reels/i }).first();
@@ -178,7 +178,7 @@ test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload'
 
   // --- reload and re-check --------------------------------------------------
   await page.goto('/');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page.getByRole('button', { name: /My Reels/i }).first().click({ timeout: 30000 }).catch(() => {});
   await page.getByText('Game Highlights').first().waitFor({ timeout: 30000 }).catch(() => note('post-reload: no Game Highlights card'));
   await countGameHighlightsCards('after-reload');
