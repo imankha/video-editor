@@ -128,9 +128,44 @@ export async function assertNoDeadScrollTrap(page) {
 }
 
 /**
- * Run the three invariants against the currently-loaded screen.
+ * Invariant #4: every listed control is a large-enough TOUCH TARGET.
+ * On coarse-pointer (touch) viewports, each action's rendered box must be
+ * >= 44x44 CSS px (Apple HIG / WCAG 2.5.5 AAA). This is the T5360 dimension: a
+ * tablet is wide AND touch, so width-keyed sizing (the old `sm:min-w-0`) collapsed
+ * its icon controls to ~26px; the fix floors them via a pointer media query, and
+ * this asserts the floor actually took.
+ *
+ * Callers pass the SET to check via the manifest's `actions` field — auditScreen
+ * feeds it the screen's `touchTargets` (the pressable icon controls), NOT the
+ * reachability `actions` (which include nav/text chrome that is intentionally not a
+ * 44px icon target). The self-check spec calls it directly with a synthetic
+ * single-action manifest to pin both assertion directions.
+ *
+ * A per-action `minTarget` lets a deliberately-small dense marker (e.g. a packed
+ * timeline diamond) document a lower floor rather than force overlap — use it only
+ * with a written justification in the manifest.
+ *
  * @param {import('@playwright/test').Page} page
- * @param {{ id: string, name: string, actions: Array<{label:string, locator:(p)=>any, reachOnly?:boolean}> }} manifest
+ * @param {{ name: string, actions: Array<{label:string, locator:(p)=>any, minTarget?:number}> }} manifest
+ * @param {{ min?: number }} [opts]
+ */
+export async function assertTouchTargetSizes(page, manifest, { min = 44 } = {}) {
+  for (const action of manifest.actions) {
+    const loc = action.locator(page);
+    await loc.scrollIntoViewIfNeeded();
+    const box = await loc.boundingBox();
+    expect(box, `${manifest.name} > ${action.label}: should have a rendered box`).not.toBeNull();
+    const floor = action.minTarget ?? min; // dense timeline markers may justify a lower, documented floor
+    // Sub-pixel slack: a 44px min-w/min-h can render at 43.99 after zoom/rounding.
+    expect(box.width, `${manifest.name} > ${action.label}: touch target width`).toBeGreaterThanOrEqual(floor - 0.5);
+    expect(box.height, `${manifest.name} > ${action.label}: touch target height`).toBeGreaterThanOrEqual(floor - 0.5);
+  }
+}
+
+/**
+ * Run the usability invariants against the currently-loaded screen.
+ * @param {import('@playwright/test').Page} page
+ * @param {{ id: string, name: string, actions: Array<{label:string, locator:(p)=>any, reachOnly?:boolean}>, touchTargets?: Array<{label:string, locator:(p)=>any, minTarget?:number}> }} manifest
  * @param {string} [tag] suffix for evidence screenshots (e.g. orientation)
  */
 export async function auditScreen(page, manifest, tag = '') {
@@ -140,6 +175,24 @@ export async function auditScreen(page, manifest, tag = '') {
     await assertReachable(page, action.locator(page), `${manifest.name} > ${action.label}`, {
       reachOnly: action.reachOnly,
     });
+  }
+  // Invariant #4 (touch-target sizes) runs ONLY on coarse-pointer projects — the
+  // exact same media query the CSS 44px floor keys off (see tailwind.config.js
+  // `coarse-pointer`). Gating on it (not on a viewport width) keeps the check and
+  // the fix in lockstep: where the floor applies, we assert it; on fine-pointer
+  // desktop the smaller mouse targets are intentional and not checked.
+  //
+  // It checks the manifest's `touchTargets` — the pressable ICON controls this task
+  // floors — which are DISTINCT from `actions` (invariant #1's reachability set). A
+  // manifest's nav/text chrome (mode tabs, breadcrumbs, text buttons) is deliberately
+  // NOT a 44px icon target, so it lives only in `actions`; floor-checking it would
+  // false-fail on controls T5360 never touched. Screens with no touch icon controls
+  // omit `touchTargets` (invariant #4 is then a no-op there).
+  const coarse = await page.evaluate(
+    () => window.matchMedia('(hover: none) and (pointer: coarse)').matches,
+  );
+  if (coarse && manifest.touchTargets?.length) {
+    await assertTouchTargetSizes(page, { ...manifest, actions: manifest.touchTargets });
   }
   await saveEvidence(page, `usability-${manifest.id}${tag ? '-' + tag : ''}`);
 }
