@@ -36,6 +36,15 @@ Bugs reported or discovered on staging. Populated from Postgres `bug_reports` ta
 
 The stack is currently ONE server. The multi-machine durability work — chiefly [T4310](tasks/durability-sync/T4310-r2-version-conflict-detection.md) (two machines both live, last upload silently wins) — is **deferred until the stack scales past one server** and stays parked in the [Durability & Sync Hardening epic](tasks/durability-sync/EPIC.md). These three milestones are the bugs that actually bite on the CURRENT single-server stack, ahead of the multi-server prep and the refactor epics. (See the plain-English explainer for why the rest is safely deferred.)
 
+### Milestone 0: Tooling first — make the staging gate trustworthy (NEXT PRIORITY)
+
+Do this before the feature bugs: right now "is staging green?" can't be answered by one run, so
+every derisk is manual. Fixing it de-risks all the rest.
+
+| ID | Task | Impact | Cmplx | Pri | Status | Migr | Description |
+|------|------|------|------|------|------|------|------|
+| T5400 | [Make the staging e2e suite a trustworthy pre-deploy gate](tasks/T5400-staging-e2e-trustworthy-gate.md) | 7 | 4 | 1.8 | TODO | [ ] | NEXT PRIORITY (user, 2026-07-18). Finishes T4934 + T5320: the suite is staging-*targetable* but not a *trustworthy gate* — a real regression and an env/data flake look identical, and the full run is ~1.8h. Root gaps found in the 2026-07-18 derisk: (1) `waitForLoadState('networkidle')` never settles on a live CDN -> every workflow spec using it times out (replace with a deterministic ready-signal: domcontentloaded + an explicit rendered locator); (2) the `derisk-staging-*.qa` specs hardcode `e2e@test.local` + a `Wonder Goal` draft / public collection they don't have -> point them at the seeded fixture (imankh/9fa7378c per FIXTURE-CONTRACT.md), discover a draft dynamically, skip-with-reason if genuinely absent; (3) define a curated `@staging-gate` subset that runs green in one shot < ~15 min and IS the documented pre-deploy gate; (4) bake the first-login stale-pool-500 retry into realAuth. Prove it fails on a seeded break. Frontend test-infra only, M-tier, no product code. |
+
 ### Milestone A: Do Now — user-reported single-server bugs (no blockers)
 
 Standalone, immediately actionable — no epic prerequisites.
