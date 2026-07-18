@@ -175,6 +175,29 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
   PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
   `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
   still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
+- **Overlay circle input = Pointer Events + select-then-manipulate on touch (T5390, 2026-07-18)**:
+  `HighlightOverlay` is now `onPointerDown` + `setPointerCapture` (mouse+touch one path);
+  move/up are handled ONCE on the root div via event bubbling from the captured element
+  (no window listeners). Transient drag data lives in refs (`draggingRef`/`resizingRef`/
+  `resizeHandleRef`/`dragStartRef`/`highlightStartRef`) so the first move after pointerdown
+  has zero re-render lag. Interactive SVG elements carry `touch-action:none`. The delta/scale
+  drag math is UNCHANGED (still hand-rolled, not `screenToVideo`) so desktop mouse is
+  byte-identical. On a COARSE pointer (`useIsCoarsePointer` -> `(pointer: coarse)`) the model is
+  select-then-manipulate: first tap selects (ephemeral view state, NEVER persisted -- a
+  select-only tap fires no `onHighlightChange`/`onHighlightComplete`), which reveals >=44px
+  handle hit circles (r=22) and a transparent full-container backdrop; the body then drags to
+  move / handles to resize; a tap on the backdrop deselects. Selection is CONTROLLED by
+  `OverlayModeView` (`isHighlightSelected` useState -> `isSelected`/`onSelectedChange`), single
+  source of truth, so the mobileFs tap-nav wrapper YIELDS while selected: `onClick={togglePlay}`
+  and the long-press `onTouch*` handlers are gated on `!isHighlightSelected` (pointer
+  `stopPropagation` can NOT cancel those TOUCH handlers -- gating is required, the backdrop alone
+  is insufficient). Test IDs: `highlight-body`/`highlight-handle-horizontal`/`-vertical`/
+  `highlight-backdrop`. A `useEffect` deselects when the circle stops rendering (playhead leaves
+  the region) so selection can't latch and wedge the tap-nav -- view-state reconciliation, NOT
+  reactive persistence. **Sibling still mouse-only**: `PlayerDetectionOverlay` uses
+  `onClick`/`onMouseEnter` (relies on synthesized click) -- same touch gap, not fixed by T5390.
+  Coverage: Vitest `HighlightOverlay.touch.test.jsx` (9 cases); E2E
+  `e2e/T5390-overlay-circle-touch.qa.spec.js` (honest-skips without an exported-reel fixture).
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy

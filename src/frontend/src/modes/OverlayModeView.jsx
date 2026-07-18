@@ -245,6 +245,11 @@ export function OverlayModeView({
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
 
+  // T5390: ephemeral selection of the spotlight circle (touch select-then-manipulate).
+  // Owned here so the video tap-nav wrapper below can YIELD while a circle is selected
+  // — a drag must not be stolen by play/seek. Never persisted; view state only.
+  const [isHighlightSelected, setIsHighlightSelected] = useState(false);
+
   return (
     <>
       {/* T740: Outdated framing banner */}
@@ -340,10 +345,14 @@ export function OverlayModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
-            onClick={mobileFs ? togglePlay : undefined}
-            onTouchStart={mobileFs ? fsControls.handleLongPressTouchStart : undefined}
-            onTouchMove={mobileFs ? fsControls.handleLongPressTouchMove : undefined}
-            onTouchEnd={mobileFs ? fsControls.handleLongPressTouchEnd : undefined}
+            // While a spotlight circle is selected the tap-nav owner YIELDS: no
+            // play toggle, no long-press speed control — so a move/resize drag can't
+            // be stolen (T5390). Pointer stopPropagation can't cancel these TOUCH
+            // handlers, so they must be gated on the selection state.
+            onClick={mobileFs && !isHighlightSelected ? togglePlay : undefined}
+            onTouchStart={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchStart : undefined}
+            onTouchMove={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchMove : undefined}
+            onTouchEnd={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchEnd : undefined}
           >
             <VideoPlayer
             videoRef={videoRef}
@@ -368,6 +377,8 @@ export function OverlayModeView({
                   zoom={zoom}
                   panOffset={panOffset}
                   isFullscreen={isFullscreen}
+                  isSelected={isHighlightSelected}
+                  onSelectedChange={setIsHighlightSelected}
                 />
               ),
               effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
