@@ -94,6 +94,16 @@ open game → pendingGame breadcrumb → useAnnotateState seeds early /video src
   L295-319) has ZERO callers — orphaned pair slated for deletion (T4270).
 - **Selection state machine**: `useClipSelection()` is the single source of truth for selection +
   overlay (AnnotateContainer:188-201); `useAnnotate` delegates selection out via `onSelect`.
+- **`shared_annotation_flow` sessionStorage flag lifecycle (T5330b).** `SharedAnnotationView`
+  (the `/shared/teammate/{token}` landing) SETS it on mount; `QuestPanel.jsx:165,173` READS it to
+  `return null` (suppresses the onboarding NUF while on the shared view — sessionStorage, not
+  component state, so it survives the share→login page reload). It has exactly ONE clearer:
+  `App.jsx` clears it in a `useEffect` guarded on `isAuthenticated && !teammateShareToken` — i.e.
+  once the recipient is in their OWN authenticated app and off the shared route. Keying on "left
+  the shared view" (NOT merely "authenticated") is required: an existing user actively viewing a
+  shared annotation must keep the suppression. Without the clear, a signed-up share recipient never
+  saw the NUF for the whole tab session (T5330 fixed the backend quest counts but not this frontend
+  gate). Proven in a real browser (jsdom insufficient): e2e/T5330b-*.spec.js.
 - **Auto-reel draft dies with its last source clip (T4800).** Deleting a raw clip deletes its
   auto-created reel draft when no other source clip remains (unless the reel is PUBLISHED). This is
   the ONLY orphan producer, so it's fixed at the root — there is deliberately NO read-time
