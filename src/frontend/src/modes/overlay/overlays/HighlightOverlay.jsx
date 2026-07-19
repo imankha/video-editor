@@ -1,11 +1,31 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
+import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
+
+// Touch target sizing (T5390). On coarse pointers the resize handles only appear
+// once the circle is SELECTED, and their invisible hit circle is >=44px (radius 22)
+// per the mobile touch-target rule (matches T5360). Desktop keeps the original 7px.
+const HANDLE_VISIBLE_RADIUS_DESKTOP = 7;
+const HANDLE_VISIBLE_RADIUS_TOUCH = 12;
+const HANDLE_HIT_RADIUS_TOUCH = 22; // 44px diameter
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
  * over the video player to indicate the highlighted player
  * Uses a vertical ellipse (taller than wide) for upright players
+ *
+ * Input is unified on Pointer Events (mouse + touch share one path) with
+ * setPointerCapture, so a drag stays glued to the circle even if the finger/cursor
+ * leaves it (T5390, replaces the old mouse-only + window-listener model).
+ *
+ * On coarse (touch) pointers the interaction is SELECT-THEN-MANIPULATE: one tap on
+ * the ellipse selects it (ephemeral view state, never persisted), which reveals the
+ * >=44px resize handles and lets the body drag to move / handles drag to resize. A
+ * tap elsewhere deselects. Desktop (fine pointer) is byte-identical to before: no
+ * selection step, direct drag/resize. Selection is controlled by the parent
+ * (`isSelected`/`onSelectedChange`) so the video tap-nav owner can yield while a
+ * circle is selected; it falls back to internal state when uncontrolled.
  */
 export default function HighlightOverlay({
   videoRef,
@@ -23,17 +43,36 @@ export default function HighlightOverlay({
   fillEnabled = false,
   fillOpacity = 0.10,
   dimStrength = 0.15,
+  isSelected,
+  onSelectedChange,
 }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [resizeHandle, setResizeHandle] = useState(null); // 'horizontal' or 'vertical'
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [highlightStart, setHighlightStart] = useState(null);
   const overlayRef = useRef(null);
 
+  const isCoarse = useIsCoarsePointer();
+
+  // Controlled/uncontrolled selection. The parent (OverlayModeView) owns the state
+  // so the video tap-nav can yield while selected; when no handler is passed we keep
+  // a local copy so other render paths / tests still work.
+  const [internalSelected, setInternalSelected] = useState(false);
+  const selected = onSelectedChange ? !!isSelected : internalSelected;
+  const setSelected = useCallback((next) => {
+    if (onSelectedChange) onSelectedChange(next);
+    else setInternalSelected(next);
+  }, [onSelectedChange]);
+
+  // Transient interaction data kept in refs (not state) so the pointer-move handler
+  // reads the current values with zero re-render lag between pointerdown and the
+  // first move — the flags/geometry are set synchronously when the drag begins.
+  const activePointerIdRef = useRef(null);
+  const draggingRef = useRef(false);
+  const resizingRef = useRef(false);
+  const resizeHandleRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const highlightStartRef = useRef(null);
+
   // Ref to track the latest highlight during drag/resize
-  // This ensures handleMouseUp always has the most recent position,
-  // even if React hasn't re-rendered yet after the last mouse move
+  // This ensures the pointer-up commit always has the most recent position,
+  // even if React hasn't re-rendered yet after the last pointer move
   const latestHighlightRef = useRef(null);
 
   // Single source of truth for the video->screen transform. Ships both fixes
@@ -86,89 +125,127 @@ export default function HighlightOverlay({
   }, [videoMetadata]);
 
   /**
-   * Handle mouse down on highlight ellipse (start drag)
+   * Begin a body drag. Captures the pointer so the move stays glued to the circle
+   * even if the finger/cursor leaves it, and snapshots the start geometry.
    */
-  const handleEllipseMouseDown = (e) => {
+  const beginDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    activePointerIdRef.current = e.pointerId;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    highlightStartRef.current = currentHighlight;
+    draggingRef.current = true;
+    resizingRef.current = false;
+    resizeHandleRef.current = null;
+  };
+
+  /**
+   * Begin a handle resize.
+   */
+  const beginResize = (e, handle) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    activePointerIdRef.current = e.pointerId;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    highlightStartRef.current = currentHighlight;
+    resizingRef.current = true;
+    draggingRef.current = false;
+    resizeHandleRef.current = handle;
+  };
+
+  /**
+   * Pointer down on the ellipse body. On a coarse pointer the FIRST tap only
+   * selects (no move); once selected the body drags. Fine pointers (mouse) drag
+   * immediately, exactly as before — no selection step.
+   */
+  const handleEllipsePointerDown = (e) => {
     if (e.target.classList.contains('resize-handle')) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+    if (isCoarse && !selected) {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelected(true);
+      return;
+    }
 
-    setIsDragging(true);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setHighlightStart(currentHighlight);
+    beginDrag(e);
   };
 
   /**
-   * Handle mouse down on resize handle
+   * Pointer down on a resize handle. Handles only render when draggable
+   * (desktop always; touch once selected), so reaching here means resize.
    */
-  const handleResizeMouseDown = (e, handle) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    setIsResizing(true);
-    setResizeHandle(handle);
-    setDragStart({ x: e.clientX, y: e.clientY });
-    setHighlightStart(currentHighlight);
+  const handleResizePointerDown = (e, handle) => {
+    beginResize(e, handle);
   };
 
   /**
-   * Handle mouse move (drag or resize)
+   * Pointer down on the deselect backdrop (only rendered while selected on touch).
+   * A tap anywhere off the circle deselects and does NOT reach the video tap-nav.
    */
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging && !isResizing) return;
+  const handleBackdropPointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected(false);
+  };
+
+  /**
+   * Handle pointer move (drag or resize). Reads transient state from refs so the
+   * very first move after pointerdown is honoured with no re-render lag.
+   */
+  const handlePointerMove = (e) => {
+    if (e.pointerId !== activePointerIdRef.current) return;
+    if (!draggingRef.current && !resizingRef.current) return;
+    const highlightStart = highlightStartRef.current;
     if (!highlightStart || !videoDisplayRect) return;
 
-    const deltaX = (e.clientX - dragStart.x) / videoDisplayRect.scaleX;
-    const deltaY = (e.clientY - dragStart.y) / videoDisplayRect.scaleY;
+    const deltaX = (e.clientX - dragStartRef.current.x) / videoDisplayRect.scaleX;
+    const deltaY = (e.clientY - dragStartRef.current.y) / videoDisplayRect.scaleY;
 
     let constrained;
 
-    if (isDragging) {
-      const newHighlight = {
+    if (draggingRef.current) {
+      constrained = constrainHighlight({
         ...highlightStart,
         x: highlightStart.x + deltaX,
-        y: highlightStart.y + deltaY
-      };
-
-      constrained = constrainHighlight(newHighlight);
-    } else if (isResizing) {
+        y: highlightStart.y + deltaY,
+      });
+    } else {
       // Delta-based resizing - much more intuitive
       let newRadiusX = highlightStart.radiusX;
       let newRadiusY = highlightStart.radiusY;
 
-      if (resizeHandle === 'horizontal') {
-        // Horizontal handle - adjust radiusX
+      if (resizeHandleRef.current === 'horizontal') {
         newRadiusX = highlightStart.radiusX + deltaX;
-      } else if (resizeHandle === 'vertical') {
-        // Vertical handle - adjust radiusY
+      } else if (resizeHandleRef.current === 'vertical') {
         newRadiusY = highlightStart.radiusY + deltaY;
       }
 
-      const newHighlight = {
+      constrained = constrainHighlight({
         ...highlightStart,
         radiusX: newRadiusX,
-        radiusY: newRadiusY
-      };
-
-      constrained = constrainHighlight(newHighlight);
+        radiusY: newRadiusY,
+      });
     }
 
     if (constrained) {
-      // Store in ref for handleMouseUp to use (avoids stale closure issues)
+      // Store in ref for pointer-up to use (avoids stale closure issues)
       latestHighlightRef.current = constrained;
       onHighlightChange(constrained);
     }
-  }, [isDragging, isResizing, resizeHandle, highlightStart, dragStart, videoDisplayRect, constrainHighlight, onHighlightChange]);
+  };
 
   /**
-   * Handle mouse up
+   * Handle pointer up / cancel — commit the final geometry once.
    */
-  const handleMouseUp = useCallback(() => {
-    if (isDragging || isResizing) {
-      // Use the ref which has the most recent highlight position
-      // This avoids stale closure issues where currentHighlight prop
-      // hasn't updated yet from the last mouse move
+  const handlePointerUp = (e) => {
+    if (e.pointerId !== activePointerIdRef.current) return;
+
+    if (draggingRef.current || resizingRef.current) {
+      // Use the ref which has the most recent highlight position, avoiding stale
+      // closure issues where currentHighlight hasn't updated from the last move
       const finalHighlight = latestHighlightRef.current || currentHighlight;
       onHighlightComplete({
         x: round3(finalHighlight.x),
@@ -181,29 +258,35 @@ export default function HighlightOverlay({
       });
     }
 
-    setIsDragging(false);
-    setIsResizing(false);
-    setResizeHandle(null);
-    setHighlightStart(null);
+    activePointerIdRef.current = null;
+    draggingRef.current = false;
+    resizingRef.current = false;
+    resizeHandleRef.current = null;
+    highlightStartRef.current = null;
     latestHighlightRef.current = null;  // Clear the ref
-  }, [isDragging, isResizing, currentHighlight, onHighlightComplete]);
+  };
 
-  // Attach global mouse handlers
+  // Reconcile ephemeral selection when the circle is no longer interactable (e.g.
+  // the playhead leaves the region and the overlay stops rendering). Without this
+  // the parent's selection would stay latched and keep the video tap-nav suppressed
+  // even though no circle is visible. This is view-state reconciliation, NOT reactive
+  // persistence — it writes no store/DB (see CLAUDE.md gesture-persistence rule).
+  const shouldRender = isEnabled && currentHighlight && videoDisplayRect;
   useEffect(() => {
-    if (isDragging || isResizing) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+    if (!shouldRender && selected) setSelected(false);
+  }, [shouldRender, selected, setSelected]);
 
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
-
-  if (!isEnabled || !currentHighlight || !videoDisplayRect) {
+  if (!shouldRender) {
     return null;
   }
+
+  // Handles are draggable (and thus rendered) whenever direct manipulation is
+  // available: desktop always, touch only once the circle is selected.
+  const showHandles = !isCoarse || selected;
+  const handleVisibleRadius = (isCoarse && selected)
+    ? HANDLE_VISIBLE_RADIUS_TOUCH
+    : HANDLE_VISIBLE_RADIUS_DESKTOP;
+  const handleHitRadius = isCoarse ? HANDLE_HIT_RADIUS_TOUCH : HANDLE_VISIBLE_RADIUS_DESKTOP;
 
   // Apply ground spotlight transform: shift center to feet, flatten ellipse
   let displayX = currentHighlight.x;
@@ -266,6 +349,11 @@ export default function HighlightOverlay({
         width: '100%',
         height: '100%'
       }}
+      // Captured pointer events bubble here from the ellipse/handle even when the
+      // finger/cursor leaves them, so the whole drag is handled in one place.
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     >
       {/* Highlight ellipse using SVG */}
       <svg
@@ -284,6 +372,23 @@ export default function HighlightOverlay({
             />
           </mask>
         </defs>
+
+        {/* Deselect backdrop (touch, while selected): a tap off the circle deselects
+            and — because it captures the tap — keeps it off the video's play/seek
+            tap-nav. Rendered first so the circle + handles sit on top of it. */}
+        {isCoarse && selected && (
+          <rect
+            x="0"
+            y="0"
+            width="100%"
+            height="100%"
+            fill="transparent"
+            className="pointer-events-auto"
+            style={{ touchAction: 'none' }}
+            data-testid="highlight-backdrop"
+            onPointerDown={handleBackdropPointerDown}
+          />
+        )}
 
         {/* Dark overlay effect - dim everything outside the ellipse */}
         {effectType === HighlightEffect.DARK_OVERLAY && (
@@ -347,7 +452,9 @@ export default function HighlightOverlay({
             strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
             strokeLinecap="round"
             className="pointer-events-auto cursor-move"
-            onMouseDown={handleEllipseMouseDown}
+            style={{ touchAction: 'none' }}
+            data-testid="highlight-body"
+            onPointerDown={handleEllipsePointerDown}
           />
         ) : (
           <ellipse
@@ -360,33 +467,59 @@ export default function HighlightOverlay({
             strokeWidth={strokeWidth}
             strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
             className="pointer-events-auto cursor-move"
-            onMouseDown={handleEllipseMouseDown}
+            style={{ touchAction: 'none' }}
+            data-testid="highlight-body"
+            onPointerDown={handleEllipsePointerDown}
           />
         )}
 
-        {/* Horizontal resize handle (right edge) */}
-        <circle
-          cx={screenHighlight.x + screenHighlight.radiusX}
-          cy={screenHighlight.y}
-          r="7"
-          fill="white"
-          stroke={strokeColor}
-          strokeWidth="2"
-          className="resize-handle pointer-events-auto cursor-ew-resize"
-          onMouseDown={(e) => handleResizeMouseDown(e, 'horizontal')}
-        />
+        {/* Resize handles — desktop always; touch only once selected. Each is a
+            visible marker plus a >=44px invisible hit circle on coarse pointers. */}
+        {showHandles && (
+          <>
+            {/* Horizontal resize handle (right edge) */}
+            <circle
+              cx={screenHighlight.x + screenHighlight.radiusX}
+              cy={screenHighlight.y}
+              r={handleVisibleRadius}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="2"
+              className="pointer-events-none"
+            />
+            <circle
+              cx={screenHighlight.x + screenHighlight.radiusX}
+              cy={screenHighlight.y}
+              r={handleHitRadius}
+              fill="transparent"
+              className="resize-handle pointer-events-auto cursor-ew-resize"
+              style={{ touchAction: 'none' }}
+              data-testid="highlight-handle-horizontal"
+              onPointerDown={(e) => handleResizePointerDown(e, 'horizontal')}
+            />
 
-        {/* Vertical resize handle (bottom edge) */}
-        <circle
-          cx={screenHighlight.x}
-          cy={screenHighlight.y + screenHighlight.radiusY}
-          r="7"
-          fill="white"
-          stroke={strokeColor}
-          strokeWidth="2"
-          className="resize-handle pointer-events-auto cursor-ns-resize"
-          onMouseDown={(e) => handleResizeMouseDown(e, 'vertical')}
-        />
+            {/* Vertical resize handle (bottom edge) */}
+            <circle
+              cx={screenHighlight.x}
+              cy={screenHighlight.y + screenHighlight.radiusY}
+              r={handleVisibleRadius}
+              fill="white"
+              stroke={strokeColor}
+              strokeWidth="2"
+              className="pointer-events-none"
+            />
+            <circle
+              cx={screenHighlight.x}
+              cy={screenHighlight.y + screenHighlight.radiusY}
+              r={handleHitRadius}
+              fill="transparent"
+              className="resize-handle pointer-events-auto cursor-ns-resize"
+              style={{ touchAction: 'none' }}
+              data-testid="highlight-handle-vertical"
+              onPointerDown={(e) => handleResizePointerDown(e, 'vertical')}
+            />
+          </>
+        )}
 
         {/* Center indicator */}
         <circle
