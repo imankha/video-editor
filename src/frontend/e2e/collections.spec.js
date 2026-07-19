@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Collections tab E2E (T3610).
@@ -48,6 +49,12 @@ test.afterEach(async ({ request }) => {
 });
 
 test.describe('My Reels single view', () => {
+  // T5420: setup bypasses the auth gate by import()ing /src/stores/authStore.js in-page
+  // and drives an EMPTY test-login session — the Vite-dev /src path 404s on a deployed
+  // CF Pages BUILD, and the empty-session premise means it can't migrate to the real
+  // seeded account. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js for an empty test-login session (Vite-dev path; 404s on a deployed build)");
+
   test('one view: no Collections/All switcher, no source-type filter pills', async ({ page }) => {
     await setupAndAuth(page);
     await openGallery(page);

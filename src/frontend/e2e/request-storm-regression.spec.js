@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Request Storm Regression Test
@@ -65,6 +66,10 @@ function countGetGameRequests(page) {
 }
 
 test.describe.serial('request storm regression', () => {
+  // T5420: beforeAll uploads a LOCAL test video + TSV to create a game, then drives the
+  // request-storm scenario — a local-dev flow needing host media that would hit staging
+  // infra. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full pipeline (local-dev flow; needs host media, would hit staging infra)');
   test.beforeAll(async ({ request }) => {
     if (!fs.existsSync(TEST_VIDEO)) {
       throw new Error(`Test video not found: ${TEST_VIDEO}`);

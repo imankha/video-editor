@@ -16,6 +16,10 @@ import { loginAsRealUser } from './helpers/realAuth';
 const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const PROFILE_ID = process.env.E2E_PROFILE_ID || '9fa7378c';
 const H = { 'X-Profile-ID': PROFILE_ID };
+// T5420: on a deployed target the frontend host (CF Pages) does NOT proxy /api, so a
+// relative `/api/...` returns the SPA HTML fallback and res.json() throws. Point API
+// calls at E2E_API_BASE (staging Fly API); locally it stays relative (Vite proxy).
+const API_BASE = process.env.E2E_API_BASE || '/api';
 
 test('T3980 dev-login yields the real account data (populated games)', async ({ context }) => {
   test.setTimeout(120000); // first R2 download of user.sqlite + profile.sqlite
@@ -28,7 +32,7 @@ test('T3980 dev-login yields the real account data (populated games)', async ({ 
   // The populated-games assertions below are the real faithfulness proof.
   expect(login.profile_id, 'dev-login returns a resolved profile_id').toBeTruthy();
 
-  const res = await context.request.get('/api/games', { headers: H });
+  const res = await context.request.get(`${API_BASE}/games`, { headers: H });
   expect(res.ok(), `GET /api/games (${res.status()})`).toBeTruthy();
   const body = await res.json();
   const games = body.games; // GET /api/games returns a {games: [...]} envelope
@@ -66,7 +70,7 @@ test('T3980 dev-login drives the real Games screen (real opponent names render)'
   await loginAsRealUser(context, REAL_EMAIL, PROFILE_ID);
 
   // Source of truth for what SHOULD be on screen.
-  const res = await context.request.get('/api/games', { headers: H });
+  const res = await context.request.get(`${API_BASE}/games`, { headers: H });
   expect(res.ok(), `GET /api/games (${res.status()})`).toBeTruthy();
   const games = (await res.json()).games;
   expect(games.length, 'real profile has games').toBeGreaterThan(0);

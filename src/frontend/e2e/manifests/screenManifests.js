@@ -155,13 +155,29 @@ export const SCREENS = [
     name: 'Profile management',
     setup: async (page) => {
       await reachHome(page);
+      // T5420: ProfileSportButton mounts ASYNCHRONOUSLY — it renders null until the
+      // profile store finishes init (isAuthenticated && isInitialized), which lands a
+      // beat after the Home shell's Games button. Checking count()/clicking immediately
+      // was a race: on a slow/mobile project it read count 0 and SKIPPED with a MISLEADING
+      // "single-profile account" reason (imankh is multi-profile), or clicked before the
+      // button was actionable and hit a locator.click timeout. WAIT for it to render first,
+      // so this only skips when the switcher is GENUINELY absent, and a real un-clickable
+      // switcher surfaces as an honest failure (not a silent skip). Verified on staging:
+      // once rendered, the button is clickable on desktop AND mobile (opens the modal).
       const switcher = page.getByRole('button', { name: /Switch sport or profile/i }).first();
-      if (!(await switcher.count())) return { ready: false, reason: 'profile switcher not present (single-profile account)' };
+      const rendered = await switcher.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+      if (!rendered) return { ready: false, reason: 'profile switcher never rendered (single-profile account or profile store did not initialize)' };
       await switcher.click();
       return { ready: true };
     },
     actions: [
-      { label: 'Profile/sport switcher', locator: (p) => p.getByRole('button', { name: /Switch sport or profile/i }).first() },
+      // The Profile-management SCREEN is the ManageProfilesModal the setup opens. Audit a
+      // primary control INSIDE that modal ("+ Add Profile"), NOT the switcher button that
+      // opened it — once the modal is up, the switcher is occluded by the modal, so a
+      // trial-click on it fails "receives events" and read as a false click-timeout (T5420:
+      // that was the reported iphone/android/tablet failure — a manifest bug auditing the
+      // wrong element, NOT a product usability regression; the modal itself is reachable).
+      { label: 'Add Profile', locator: (p) => p.getByRole('button', { name: /Add Profile/i }).first() },
     ],
   },
 ];

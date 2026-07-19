@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Full Workflow E2E Test
@@ -160,6 +161,8 @@ async function enterAnnotateMode(page) {
 // ============================================================================
 
 test.describe('Full Workflow Tests', () => {
+  // T5420: uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — a local-dev flow that would hit staging media infra + Modal; not a deployed-target guardrail');
   // Increase beforeAll timeout to allow for server startup
   test.beforeAll(async ({ request }) => {
     // Check if test files exist first (fast check)
@@ -245,6 +248,8 @@ test.describe('Full Workflow Tests', () => {
 });
 
 test.describe('Clip Editing Tests', () => {
+  // T5420: uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — a local-dev flow that would hit staging media infra + Modal; not a deployed-target guardrail');
   test.beforeEach(async ({ page }) => {
     await setupTestUserContext(page);
   });
@@ -291,6 +296,8 @@ test.describe('Clip Editing Tests', () => {
 });
 
 test.describe('UI Component Tests', () => {
+  // T5420: uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — a local-dev flow that would hit staging media infra + Modal; not a deployed-target guardrail');
   test.beforeEach(async ({ page }) => {
     await setupTestUserContext(page);
   });
@@ -320,6 +327,10 @@ test.describe('UI Component Tests', () => {
 });
 
 test.describe('API Integration Tests', () => {
+  // T5420: uses the X-User-ID empty-user context + relative /api against the frontend host
+  // (CF Pages returns SPA HTML on a deployed target). Part of the local upload/pipeline
+  // suite. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'X-User-ID empty-user API tests over relative /api (CF Pages returns SPA HTML on a deployed target)');
   // Helper to add test user header to API requests
   const testHeaders = { 'X-User-ID': TEST_USER_ID, 'Content-Type': 'application/json' };
 

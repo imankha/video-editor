@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Debug test: Sidebar ClipScrubRegion handle dragging
@@ -101,6 +102,10 @@ async function createClip(page, seekTime) {
 }
 
 test.describe('Sidebar scrub handle debug', () => {
+  // T5420: bypasses the auth gate by import()ing /src/stores/authStore.js in-page and
+  // drives an EMPTY test-login session — the Vite-dev /src path 404s on a deployed CF
+  // Pages BUILD. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js for an empty test-login session (Vite-dev path; 404s on a deployed build)");
   test.use({ viewport: { width: 900, height: 600 } });
 
   test.beforeEach(async ({ page }) => {

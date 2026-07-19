@@ -9,6 +9,7 @@
 import { test } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
 import { OVERLAY_INIT, makeKit, finishCapture } from './helpers/tutorialCapture';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 import fs from 'fs';
 
 const QUEST_DIR = 'C:/Users/imank/Videos/Captures/ReelBallersTutroials/annotate';
@@ -17,7 +18,16 @@ const W = 1920, H = 1080;
 // The demo RECONSTITUTES a real clip that was deleted for the shoot — its exact
 // settings live in annotate/reconstitute_clip.json (name, rating, tags, notes,
 // start/end). After the recording, the new clip is corrected to those exact values.
-const ORIG = JSON.parse(fs.readFileSync(`${QUEST_DIR}/reconstitute_clip.json`, 'utf-8'));
+// T5420: this capture script reads a host-local fixture from QUEST_DIR (a Windows
+// Captures dir that exists only on the tutorial author's machine). Reading it at
+// MODULE TOP-LEVEL threw during Playwright test COLLECTION on any other machine,
+// which aborted the ENTIRE suite (0 tests collected) — including a full staging run.
+// Guard it so collection never crashes; the capture test is gated + skips anyway
+// (skipOnDeployedTarget) and cannot run without the host recording assets.
+const RECONSTITUTE_PATH = `${QUEST_DIR}/reconstitute_clip.json`;
+const ORIG = fs.existsSync(RECONSTITUTE_PATH)
+  ? JSON.parse(fs.readFileSync(RECONSTITUTE_PATH, 'utf-8'))
+  : {};
 const CLIP_NAME = ORIG.name;                  // 'Brilliant Assist'
 const GAME_ID = 6;                            // 'at Legends Mar 28'
 // SUPPORTED_SPORTS mirror (frontend tagRegistry.js) for the fake sport dropdown —
@@ -36,6 +46,10 @@ const SPORTS = [
 ];
 
 test('capture annotate tutorial footage', async ({ browser }) => {
+  // T5420: developer screen-RECORDING script (records to a host-local Windows QUEST_DIR
+  // and reads host fixtures) for producing tutorial footage — not a functional test.
+  // It cannot run on a deployed target (or any machine without the capture assets).
+  skipOnDeployedTarget(test, 'tutorial-capture recording script — records to a host-local QUEST_DIR (not a functional test)');
   test.setTimeout(300_000);
   const context = await browser.newContext({
     baseURL: BASE,

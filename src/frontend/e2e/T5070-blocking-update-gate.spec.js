@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T5070 — Blocking update gate + guaranteed cache flush + state sync flow.
@@ -33,6 +34,10 @@ const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const GATE_SELECTOR = '[role="alertdialog"]';
 
 test.describe('T5070 blocking update gate', () => {
+  // T5420: every test drives the gate by import()ing /src/stores/updateGateStore.js
+  // in-page — that Vite-dev source path 404s on a deployed CF Pages BUILD. Gate logic
+  // is also covered by Vitest. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/updateGateStore.js (Vite-dev path; 404s on a deployed build)");
   test.setTimeout(60_000);
 
   test('A — gate blocks interaction/login, no dismiss affordance', async ({ context, page }) => {

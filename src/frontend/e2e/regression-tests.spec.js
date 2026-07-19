@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Regression Tests for Video Editor
@@ -1104,6 +1105,11 @@ async function ensureWorkingVideoExists(page) {
 // ============================================================================
 
 test.describe('Smoke Tests @smoke', () => {
+  // T5420: uploads a LOCAL test video (formal annotations/test.short) and drives the full
+  // upload -> extract -> annotate -> export pipeline against the target. That is a local-dev
+  // flow — it needs the host test-media files and would push media into staging infra + Modal.
+  // Skip loudly on a deployed target (functional coverage runs locally).
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full upload/extract/export pipeline (local-dev flow; needs host media, would hit staging infra)');
   // Run smoke tests in parallel for speed
   test.describe.configure({ mode: 'parallel' });
 
@@ -1420,6 +1426,9 @@ test.describe('Smoke Tests @smoke', () => {
 // ============================================================================
 
 test.describe('Full Coverage Tests @full', () => {
+  // T5420: same as @smoke — uploads a LOCAL test video and drives the full pipeline; a
+  // local-dev flow, not a deployed-target guardrail. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'uploads a local test video + drives the full upload/extract/export pipeline (local-dev flow; needs host media, would hit staging infra)');
   // Run full tests sequentially - they depend on shared state
   test.describe.configure({ mode: 'serial' });
 

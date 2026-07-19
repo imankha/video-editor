@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * Profile Switch Isolation E2E Test
@@ -106,6 +107,12 @@ test.describe('Profile Switch — Game Isolation', () => {
   });
 
   test('browser shows correct games after profile switch via header', async ({ page }) => {
+    // T5420: this test makes BROWSER-SIDE fetch('/api/games') calls (relative), which on a
+    // deployed target hit the CF Pages host (no /api proxy) and return the SPA HTML — and
+    // the X-User-ID same-origin header-injection isolation premise is a local-dev construct
+    // (the deployed app authenticates cross-origin via its own session). The API-level
+    // isolation test above already runs on staging. Skip this one loudly on a deployed target.
+    skipOnDeployedTarget(test, 'browser-side relative fetch(/api) + X-User-ID same-origin isolation is a local-dev construct (API-level test covers staging)');
     // Log /api/games requests and responses
     page.on('response', async (response) => {
       if (response.url().includes('/api/games') && response.request().method() === 'GET') {
