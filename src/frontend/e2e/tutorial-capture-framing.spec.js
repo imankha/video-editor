@@ -9,12 +9,17 @@
 import { test } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { OVERLAY_INIT, makeKit, finishCapture } from './helpers/tutorialCapture';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const QUEST_DIR = 'C:/Users/imank/Videos/Captures/ReelBallersTutroials/framing';
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const W = 1920, H = 1080;
 
 test('capture framing tutorial footage', async ({ browser }) => {
+  // T5420: developer screen-RECORDING script (records to a host-local Windows QUEST_DIR)
+  // for producing tutorial footage — not a functional test. It cannot run on a deployed
+  // target (or any machine without the capture assets).
+  skipOnDeployedTarget(test, 'tutorial-capture recording script — records to a host-local QUEST_DIR (not a functional test)');
   test.setTimeout(300_000);
   const context = await browser.newContext({
     baseURL: BASE,

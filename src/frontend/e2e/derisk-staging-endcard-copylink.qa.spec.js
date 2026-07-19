@@ -116,22 +116,21 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-g
   console.log(`[derisk] shared collection token: ${token} (game ${pick.game.game_id}, ${pick.ratio})`);
 
   await page.goto(`/shared/collection/${token}`);
-  // collection page lists reels; start the first video
-  const playCta = page.getByRole('button', { name: /play|watch/i }).first();
-  if (await playCta.count()) await playCta.click().catch(() => {});
   const video = page.locator('video').first();
   await video.waitFor({ timeout: 30000 });
-  // The collection end card shows when the PLAYLIST ends; fast-forward each
-  // reel to its end until the card appears (bounded at 12 advances).
+  // The collection end card shows when the story player's PLAYLIST ends: the last
+  // reel's native 'ended' event fires onAllEnded -> BrandedEndCard (SharedCollectionView
+  // + useStoryPlayback). Real-time playback of every reel is slow AND flaky on a deployed
+  // target (presigned URLs load at network speed, seek-near-end may not reach 'ended'
+  // within a fixed wait), so drive the player to its end DETERMINISTICALLY: dispatch a
+  // native 'ended' per reel — exactly the event the story player advances on. Bounded by
+  // the discovered reel count (+ margin) so a broken advance can't loop forever.
+  const reelCount = pick.game.ratio_counts?.[pick.ratio] || 1;
   const cta = page.getByText('Make your own reel at www.reelballers.com');
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < reelCount + 3; i++) {
     if (await cta.isVisible().catch(() => false)) break;
-    await video.evaluate(async (v) => {
-      v.muted = true;
-      await v.play().catch(() => {});
-      if (Number.isFinite(v.duration)) v.currentTime = Math.max(0, v.duration - 0.3);
-    }).catch(() => {});
-    await page.waitForTimeout(1500);
+    await video.evaluate((v) => { v.muted = true; v.dispatchEvent(new Event('ended')); }).catch(() => {});
+    await page.waitForTimeout(500);
   }
   await expect(cta).toBeVisible({ timeout: 20000 });
   // z-order regression check: the card must actually be hit-able (not covered
@@ -165,18 +164,26 @@ test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({
   await page.goto('/');
   await waitForAppReady(page, { ready: page.getByRole('button', { name: /My Reels/ }) });
   await page.getByRole('button', { name: /My Reels/ }).first().click({ timeout: 30000 });
-  // Expand the DISCOVERED game group (CollapsibleGroup header text = game name).
+  // Expand the DISCOVERED game group so its reel cards render. There are TWO buttons
+  // whose name contains the game name (the Games-tab group + the My Reels group); the
+  // My Reels CollapsibleGroup header is the LAST one, and its reel cards load LAZILY on
+  // toggle-open (T5420 verified). A single force-click is brittle — it can land while the
+  // group is mid-render, or the group may already be open — so TOGGLE UNTIL a reel card
+  // actually appears rather than assuming one click expands it.
   const group = page.getByRole('button', { name: new RegExp(escapeRegExp(pick.game.game_name)) }).last();
   await group.waitFor({ timeout: 30000 });
-  await page.keyboard.press('Escape'); // dismiss any overlay backdrop
-  await page.waitForTimeout(500);
-  await group.click({ force: true });
-  await page.waitForTimeout(800);
+  await page.keyboard.press('Escape'); // dismiss any stray overlay/modal backdrop
+  await page.waitForTimeout(300);
   // Scope to a REEL card's copy link (posts /api/gallery/{id}/share) — NOT the
   // group-level collection copy link (which posts /api/collections/share and would
   // leave sharePosts at 0). The action row is hover-revealed; attach + force-click.
   const reelCard = page.locator('[data-testid="reel-card"]').first();
-  await reelCard.waitFor({ timeout: 30000 });
+  for (let i = 0; i < 4; i++) {
+    if (await reelCard.isVisible().catch(() => false)) break;
+    await group.click({ force: true });
+    if (await reelCard.waitFor({ state: 'visible', timeout: 12000 }).then(() => true).catch(() => false)) break;
+  }
+  await reelCard.waitFor({ state: 'visible', timeout: 15000 });
   const copyBtn = reelCard.getByTitle('Copy link').first();
   await copyBtn.waitFor({ state: 'attached', timeout: 30000 });
   // The card action row is hover-revealed; hover the card then force the

@@ -46,6 +46,33 @@ When seeded, the account is guaranteed to have, on profile `9fa7378c`:
    is also covered by Vitest. See `T4550` test 2 (`mode-overlay` gate). Do not write a
    spec that hard-requires a published reel until the seed is extended to produce one.
 
+### Published-reel + shareable-collection guarantees (T5420 — the `@staging-gate` derisk specs)
+
+The `@staging-gate` derisk specs key on these. On the current staging copy of imankh they
+hold (27 published reels via `/api/downloads`, 5 non-empty game collections via
+`/api/collections/summary`), so the specs run **green**; if a re-seed drops them the specs
+**skip loudly** (never a silent pass):
+
+- **`derisk-staging-endcard-copylink.qa.spec.js`** needs (a) `>= 1` published reel
+  (`/api/downloads` non-empty) to mint a public reel share, and (b) `>= 1` non-empty game
+  collection (a `/api/collections/summary` game with a `ratio_counts[ratio] > 0`) to mint a
+  collection share **and** to expand a My Reels game group with `[data-testid="reel-card"]`s.
+  The collection end card is driven to appear by dispatching a native `ended` per reel on
+  the story player (deterministic; real-time playback is too slow/flaky on a deployed
+  target), so the group's reel count must match `ratio_counts[ratio]`.
+
+- **`derisk-staging-export.qa.spec.js`** needs a draft that can reach **overlay-export**.
+  **KNOWN GAP (T5420):** a *pre-framed single-clip* draft opened directly into Overlay on
+  staging streams its `working_video` but does **not** hydrate `framingVideoUrl`, so the
+  Overlay export panel (and the Export button) **never mounts** — neither the Export button
+  nor the "Export required" message appears (verified: waited 90s). The spec therefore waits
+  a bounded 60s for the overlay Export button and **skips loudly** when it never mounts. To
+  make this spec **run green**, the seed must guarantee a draft that reaches overlay-export
+  (e.g. a multi-clip / edited draft that hydrates `framingVideoUrl`, or a draft already
+  exported to a final video). If a *pre-framed single-clip* draft genuinely should reach
+  overlay-export, that overlay-export-mount gap is a **product bug to file** — the derisk
+  spec is not the place to work around it.
+
 ### Framed-project position note (T5320)
 
 The framed project's crop keyframe may sit anywhere in the frame. A spec that drags the

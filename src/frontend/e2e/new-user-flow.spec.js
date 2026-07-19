@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * New User Flow E2E Test — Complete quest journey from landing page to "Vamos!" dialog.
@@ -308,6 +309,12 @@ async function waitWithProgress(page, checkFn, { label = 'condition', stallTimeo
 // ============================================================================
 
 test.describe('New User Flow — Landing Page to Vamos!', () => {
+  // T5420: drives an EMPTY new-user session (X-User-ID + test-login) and bypasses the
+  // auth gate / seeds quest state by import()ing /src/stores/*.js in-page (e.g.
+  // questStore.js) — those Vite-dev /src paths 404 on a deployed CF Pages BUILD, and it
+  // also uploads local test-data video + shells out (execSync). Skip loudly on a
+  // deployed target.
+  skipOnDeployedTarget(test, "empty new-user flow: import()s /src/stores/*.js + uploads local test video (Vite-dev paths 404 on a deployed build)");
   // This test involves video uploads and exports — needs extended timeout
   test.setTimeout(1200000); // 20 minutes
 

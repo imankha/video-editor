@@ -75,7 +75,7 @@ export function assertSeamAvailable(res, seamName) {
  * run's skips are self-explaining (never a silent skip). Keep in sync with the
  * `skipOnDeployedTarget()` calls in the listed specs.
  *
- * Two categories (the `depends` field names the concrete dependency):
+ * Categories (the `depends` field names the concrete dependency):
  *
  *  - `seam`  — depends on the dev/local-only `/api/test/*` seams (T4934). These are the
  *    ONLY specs in the suite that touch `/api/test/*` (scripted grep). All OTHER auth
@@ -88,6 +88,18 @@ export function assertSeamAvailable(res, seamName) {
  *    bundled/hashed, so the import 404s ("Failed to fetch dynamically imported module").
  *    This is a test-vs-deployed-bundle mismatch, NOT a staging bug and NOT a data gap —
  *    the module logic is also covered by Vitest, so these run locally only.
+ *  - `capture` (T5420) — a developer screen-RECORDING script that records to a host-local
+ *    directory (QUEST_DIR) to produce tutorial footage; not a functional test and cannot
+ *    run without the host recording assets.
+ *  - `local-fixture` (T5420) — needs a local-only DB/data fixture the staging seed does
+ *    not provide (e.g. a game flipped `storage_expires_at` into the past), OR drives a
+ *    full local upload/extract/export pipeline (X-User-ID empty user + local media) that
+ *    is a dev-run flow, not a deployed-target guardrail. Some entries gate only PART of a
+ *    file (noted in `reason`); the rest of that file still runs on staging.
+ *
+ * NOTE: specs that only made RELATIVE `/api/...` calls (which 404 to the CF Pages SPA on a
+ * deployed target) were MIGRATED to `E2E_API_BASE` instead of gated (T5420: T3980, T4190,
+ * annotate-game-clock) and KEEP running on staging — they are deliberately NOT listed here.
  */
 /**
  * The curated `@staging-gate` subset (T5400) — the reliable, fast specs that ARE
@@ -166,5 +178,134 @@ export const LOCAL_ONLY_SPECS = [
       'server; that /src path does not exist on a deployed BUILD. The classifier is ' +
       'environment-independent pure JS, so a deployed run adds no coverage. (No Vitest ' +
       'exists for it yet — porting these assertions to Vitest is a worthwhile follow-up.)',
+  },
+  // --- T5420: in-page store/module unit tests (import()s a Vite-dev /src path) --------
+  {
+    file: 'T5070-blocking-update-gate.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/updateGateStore.js'],
+    reason: 'drives the blocking update gate by import()ing the updateGateStore in-page; the /src path 404s on a deployed BUILD (gate logic also Vitest-covered).',
+  },
+  {
+    file: 'T4900-overlay-action-failure-visibility.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/overlayActionStore.js'],
+    reason: 'injects overlay-action failures via dispatchOverlayAction/useOverlayActionStore import()ed in-page; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 'T4100-dedup-honest-message.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/uploadStore.js'],
+    reason: 'inspects upload-dedup state by import()ing the uploadStore in-page; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 'collections.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/authStore.js'],
+    reason: 'bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD and the empty-session premise cannot use the real seeded account.',
+  },
+  {
+    file: 'clip-selection-state-machine.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/authStore.js'],
+    reason: 'bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 'sidebar-scrub-debug.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/authStore.js'],
+    reason: 'bypasses the auth gate via an in-page authStore import for an EMPTY test-login session; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 'cache-warming-console.spec.js',
+    category: 'vite-module',
+    depends: ['/src/utils/cacheWarming.js'],
+    reason: 'in-page unit test that import()s cacheWarming.js from the Vite dev server; the /src path 404s on a deployed BUILD.',
+  },
+  {
+    file: 'new-user-flow.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/questStore.js', 'local test-data video', 'execSync'],
+    reason: 'EMPTY new-user flow: seeds quest state via an in-page /src/stores import and uploads a local test video / shells out; the /src paths 404 on a deployed BUILD.',
+  },
+  {
+    file: 'T4780-tutorial-quest-steps.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/questStore.js', '/src/config/questDefinitions.jsx', '/src/config/tutorialVideos.js'],
+    reason: 'asserts quest-step definitions via in-page /src imports on an EMPTY test-login session; the /src paths 404 on a deployed BUILD.',
+  },
+  {
+    file: 'T4860-admin-bulk-actions.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/authStore.js'],
+    reason: 'surfaces the admin header by import()ing authStore.checkAdmin() in-page; the /src path 404s on a deployed BUILD (and admin rights are env-specific).',
+  },
+  // --- T5420: developer screen-recording capture scripts (record to a host QUEST_DIR) --
+  {
+    file: 'tutorial-capture-annotate.spec.js',
+    category: 'capture',
+    depends: ['host QUEST_DIR (Windows Captures dir) + reconstitute_clip.json'],
+    reason: 'tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test; cannot run without the host capture assets.',
+  },
+  {
+    file: 'tutorial-capture-framing.spec.js',
+    category: 'capture',
+    depends: ['host QUEST_DIR (Windows Captures dir)'],
+    reason: 'tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.',
+  },
+  {
+    file: 'tutorial-capture-overlay.spec.js',
+    category: 'capture',
+    depends: ['host QUEST_DIR (Windows Captures dir)'],
+    reason: 'tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.',
+  },
+  {
+    file: 'tutorial-capture-publish.spec.js',
+    category: 'capture',
+    depends: ['host QUEST_DIR (Windows Captures dir)'],
+    reason: 'tutorial-footage RECORDING script (records video to a host-local dir) — not a functional test.',
+  },
+  // --- T5420: local-only fixtures / dev-run pipelines ---------------------------------
+  {
+    file: 'bug27p-expired-annotations.spec.js',
+    category: 'local-fixture',
+    depends: ['QA-harness expired-game DB fixture (game_storage.storage_expires_at flipped past)'],
+    reason: 'beforeAll requires a game flipped to storage_status "expired" (+ a healthy game) by the local QA harness; the staging seed does not flip an expired game. Expired-render path is unit-covered (AnnotateModeView.expired.test.jsx).',
+  },
+  {
+    file: 'T4110-reedit-reel-persistence.spec.js',
+    category: 'local-fixture',
+    depends: ['dev machine-cycle repro + overlay-export pipeline'],
+    reason: 'DEV INVESTIGATION spec (its own header documents the dev-vs-prod limitation): drives a full re-edit->overlay-export->publish pipeline whose overlay-export panel does not mount on staging.',
+  },
+  {
+    file: 'full-workflow.spec.js',
+    category: 'local-fixture',
+    depends: ['local test video (formal annotations/test.short) + full upload/extract/export pipeline'],
+    reason: 'uploads a local test video and drives the full upload/extract/annotate/export pipeline (X-User-ID empty user) — a local-dev flow that would hit staging media infra + Modal; not a deployed-target guardrail.',
+  },
+  {
+    file: 'profile-switch-isolation.spec.js',
+    category: 'local-fixture',
+    depends: ['browser-side relative fetch(/api) + X-User-ID same-origin isolation (ONE test only)'],
+    reason: 'PARTIAL: only the "browser shows correct games after profile switch" test is gated (browser-side relative /api + X-User-ID same-origin premise is a local-dev construct). The API-level isolation test still runs on staging.',
+  },
+  {
+    file: 'regression-tests.spec.js',
+    category: 'local-fixture',
+    depends: ['local test video (formal annotations/test.short) + full upload/extract/export pipeline'],
+    reason: 'both @smoke and @full describes upload a LOCAL test video and drive the full upload/extract/annotate/export pipeline — a local-dev flow that needs host media and would hit staging infra + Modal.',
+  },
+  {
+    file: 'request-storm-regression.spec.js',
+    category: 'local-fixture',
+    depends: ['local test video (formal annotations/test.short)'],
+    reason: 'beforeAll uploads a LOCAL test video + TSV to create a game, then drives the request-storm scenario — a local-dev flow needing host media.',
+  },
+  {
+    file: 't4800-orphan-drafts.qa.spec.js',
+    category: 'vite-module',
+    depends: ['/src/stores/authStore.js', 'local draft fixtures'],
+    reason: 'authenticates via an in-page authStore import and SEEDS local draft fixtures; the /src path 404s on a deployed BUILD and the seeding is a local-dev construct.',
   },
 ];

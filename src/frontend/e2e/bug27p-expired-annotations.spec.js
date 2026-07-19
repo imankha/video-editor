@@ -22,12 +22,21 @@
  */
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser, openGameInAnnotate } from './helpers/realAuth';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const EXPIRED_GAME = process.env.E2E_EXPIRED_GAME || '5';
 const HEALTHY_GAME = process.env.E2E_HEALTHY_GAME || '7';
 
 test.describe('bug 27p expired-source Annotate + bug 28p games-menu order', () => {
+  // T5420: requires a QA-harness DB fixture that flips game_storage.storage_expires_at
+  // into the past for E2E_EXPIRED_GAME on the LOCAL profile DB (the beforeAll asserts
+  // game 5 == 'expired', game 7 == 'active'). The staging seed does not flip an expired
+  // game, and the beforeAll also reads a relative /api (CF Pages returns SPA HTML). Skip
+  // loudly on a deployed target; the expired-render path is unit-covered
+  // (src/modes/AnnotateModeView.expired.test.jsx).
+  skipOnDeployedTarget(test, 'needs the QA-harness expired-game DB fixture (game flipped storage_expires_at) — not present on staging');
+
   test.beforeAll(async ({ request }) => {
     // Authenticate the shared request context and confirm the DB fixture is live.
     await request.post('/api/auth/dev-login', { data: { email: EMAIL } });

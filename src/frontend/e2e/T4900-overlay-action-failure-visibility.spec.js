@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
 import { saveEvidence } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T4900 / prod bug 31p — Overlay action failure visibility + export gate.
@@ -42,6 +43,10 @@ const REAL_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 const ACTIONS_PATH = /\/api\/export\/projects\/\d+\/overlay\/actions/;
 
 test.describe('T4900 overlay action failure visibility', () => {
+  // T5420: both tests inject failures by import()ing /src/stores/overlayActionStore.js
+  // in-page (dispatchOverlayAction / useOverlayActionStore) — that Vite-dev source path
+  // 404s on a deployed CF Pages BUILD. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/overlayActionStore.js (Vite-dev path; 404s on a deployed build)");
   test.setTimeout(120_000);
 
   test('B+C+D+E — happy path then failure burst then retry-success', async ({ context, page }) => {

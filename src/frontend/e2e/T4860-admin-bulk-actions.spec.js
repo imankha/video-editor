@@ -10,6 +10,7 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const ADMIN_EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
 
@@ -23,6 +24,10 @@ async function readCredits(row) {
 }
 
 test('T4860 admin bulk grant + email test-send + confirm', async ({ context, page }) => {
+  // T5420: surfaces the admin-only header by import()ing /src/stores/authStore.js in-page
+  // to call checkAdmin() — that Vite-dev /src path 404s on a deployed CF Pages BUILD (and
+  // the admin panel requires admin rights in the target env). Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js to call checkAdmin() (Vite-dev path; 404s on a deployed build)");
   test.setTimeout(120000);
   await loginAsRealUser(context, ADMIN_EMAIL);
   await page.goto('/');

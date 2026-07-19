@@ -9,6 +9,7 @@
 
 import { test, expect } from '@playwright/test';
 import { saveEvidence, responsiveSweep } from './helpers/qa.js';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 
@@ -56,6 +57,11 @@ async function openTutorialModal(page) {
 }
 
 test.describe('T4780 — Tutorial quest steps', () => {
+  // T5420: drives an EMPTY test-login (X-User-ID) session and asserts quest-step
+  // definitions by import()ing /src/stores/questStore.js, /src/config/questDefinitions.jsx
+  // and /src/config/tutorialVideos.js in-page — those Vite-dev /src paths 404 on a
+  // deployed CF Pages BUILD. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/questStore.js + /src/config/quest* (Vite-dev paths; 404 on a deployed build)");
   test.beforeEach(async ({ page }, testInfo) => {
     // Each test gets its own isolated user so achievement state doesn't bleed between tests.
     const safeId = testInfo.title.slice(0, 10).replace(/[^a-z0-9]/gi, '');

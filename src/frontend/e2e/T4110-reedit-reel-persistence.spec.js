@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 /**
  * T4110 — Edit-a-reel re-export/publish silently lost end to end (STEP 1: LIVE REPRO).
@@ -44,6 +45,12 @@ const WATCH = [
 ];
 
 test('T4110 live repro: re-edit a game-6 reel, export, move to My Reels, reload', async ({ context, page }) => {
+  // T5420: explicitly a DEV INVESTIGATION spec (not a guardrail) — it drives a full
+  // re-edit -> reframe -> overlay-export -> publish -> reload pipeline whose overlay-export
+  // panel does not mount on staging (see derisk-staging-export + FIXTURE-CONTRACT), and
+  // reads a relative /api (CF Pages returns SPA HTML). Its own header documents the
+  // dev-vs-prod machine-cycle limitation. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, 'dev investigation spec: full re-edit->overlay-export->publish pipeline (overlay-export does not mount on staging) + relative /api');
   const cap = {
     net: [],        // {method, url, status} for WATCHed paths
     console: [],     // page console messages

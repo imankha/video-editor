@@ -17,7 +17,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
-import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
+import { IS_DEPLOYED_TARGET, skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API = process.env.E2E_API_BASE || 'http://localhost:8000/api';
@@ -56,6 +56,10 @@ function hasCard(names, label) {
 }
 
 test('clip-delete drops the exported auto-reel draft (root cause) and keeps published reels', async ({ page }) => {
+  // T5420: authenticates by import()ing /src/stores/authStore.js in-page and SEEDS local
+  // draft fixtures (Exported Draft A, etc.) — the Vite-dev /src path 404s on a deployed CF
+  // Pages BUILD and the seeding is a local-dev construct. Skip loudly on a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/stores/authStore.js + seeds local draft fixtures (Vite-dev path; 404s on a deployed build)");
   test.setTimeout(120_000);
   await authenticate(page);
 

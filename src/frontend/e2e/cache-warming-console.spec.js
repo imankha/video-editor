@@ -21,11 +21,17 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { skipOnDeployedTarget } from './helpers/targetEnv.js';
 
 const DEV_BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const CACHE_WARMING_URL = `${DEV_BASE}/src/utils/cacheWarming.js`;
 
 test.describe('T1350 cache warming CORS cleanup', () => {
+  // T5420: import()s /src/utils/cacheWarming.js from the Vite dev server to unit-test
+  // warmUrl in-page — that /src path 404s on a deployed CF Pages BUILD. Skip loudly on
+  // a deployed target.
+  skipOnDeployedTarget(test, "import()s /src/utils/cacheWarming.js (Vite-dev path; 404s on a deployed build)");
+
   test('warmUrl skips cross-origin URLs and produces no CORS console errors', async ({ page }) => {
     const consoleMessages = [];
     page.on('console', (msg) => {
