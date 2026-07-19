@@ -1,6 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import versionInfo from '../../../version.json';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
+
+/**
+ * Get clientX/clientY from a pointer or touch event
+ */
+function getEventPosition(e) {
+  if (e.touches && e.touches.length > 0) {
+    return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+  }
+  return { clientX: e.clientX, clientY: e.clientY };
+}
 
 /**
  * CropOverlay component - renders a draggable/resizable crop rectangle
@@ -20,11 +30,17 @@ export default function CropOverlay({
   dimOpacity = 0.2,
   interactive = true
 }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const [resizeHandle, setResizeHandle] = useState(null);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [cropStart, setCropStart] = useState(null);
+  // Transient drag/resize state lives in refs (not useState) so the window
+  // move/up listeners can be attached synchronously in the pointer-down handler
+  // and the FIRST move after mount is never dropped (T5380). An isDragging-gated
+  // useEffect commits a tick after the state update, so a fast down->move can fire
+  // before the listeners exist. None of this state drives rendering — the crop box
+  // re-renders off the currentCrop prop (updated via onCropChange).
+  const draggingRef = useRef(false);
+  const resizingRef = useRef(false);
+  const resizeHandleRef = useRef(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const cropStartRef = useRef(null);
   const overlayRef = useRef(null);
 
   // Single source of truth for the video->screen transform. Ships both fixes
@@ -117,57 +133,39 @@ export default function CropOverlay({
     return { width: round3(width), height: round3(height) };
   }, [aspectRatio]);
 
-  /**
-   * Get clientX/clientY from a pointer or touch event
-   */
-  const getEventPosition = (e) => {
-    if (e.touches && e.touches.length > 0) {
-      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-    }
-    return { clientX: e.clientX, clientY: e.clientY };
-  };
+  // Mirror the latest props/derived values into refs so the drag handlers below
+  // can be identity-stable (empty deps). Stable identity is required so that
+  // add/removeEventListener always operate on the SAME function reference even if
+  // the component re-renders mid-drag (currentCrop changes on every move).
+  const videoDisplayRectRef = useRef(videoDisplayRect);
+  videoDisplayRectRef.current = videoDisplayRect;
+  const currentCropRef = useRef(currentCrop);
+  currentCropRef.current = currentCrop;
+  const onCropChangeRef = useRef(onCropChange);
+  onCropChangeRef.current = onCropChange;
+  const onCropCompleteRef = useRef(onCropComplete);
+  onCropCompleteRef.current = onCropComplete;
+  const constrainCropRef = useRef(constrainCrop);
+  constrainCropRef.current = constrainCrop;
+  const applyAspectRatioRef = useRef(applyAspectRatio);
+  applyAspectRatioRef.current = applyAspectRatio;
 
   /**
-   * Handle pointer/touch down on crop rectangle (start drag)
-   */
-  const handleCropPointerDown = (e) => {
-    if (e.target.classList.contains('crop-handle')) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    const pos = getEventPosition(e);
-    setIsDragging(true);
-    setDragStart({ x: pos.clientX, y: pos.clientY });
-    setCropStart(currentCrop);
-  };
-
-  /**
-   * Handle pointer/touch down on resize handle
-   */
-  const handleResizePointerDown = (e, handle) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const pos = getEventPosition(e);
-    setIsResizing(true);
-    setResizeHandle(handle);
-    setDragStart({ x: pos.clientX, y: pos.clientY });
-    setCropStart(currentCrop);
-  };
-
-  /**
-   * Handle pointer/touch move (drag or resize)
+   * Handle pointer/touch move (drag or resize). Reads all transient state from
+   * refs so it never sees a stale closure and is safe to attach on the very first
+   * mousedown (T5380). Gated on the drag/resize refs — inert when not dragging.
    */
   const handlePointerMove = useCallback((e) => {
-    if (!isDragging && !isResizing) return;
-    if (!cropStart || !videoDisplayRect) return;
+    if (!draggingRef.current && !resizingRef.current) return;
+    const cropStart = cropStartRef.current;
+    const rect = videoDisplayRectRef.current;
+    if (!cropStart || !rect) return;
 
     const pos = getEventPosition(e);
-    const deltaX = (pos.clientX - dragStart.x) / videoDisplayRect.scaleX;
-    const deltaY = (pos.clientY - dragStart.y) / videoDisplayRect.scaleY;
+    const deltaX = (pos.clientX - dragStartRef.current.x) / rect.scaleX;
+    const deltaY = (pos.clientY - dragStartRef.current.y) / rect.scaleY;
 
-    if (isDragging) {
+    if (draggingRef.current) {
       // Move crop rectangle
       const newCrop = {
         x: cropStart.x + deltaX,
@@ -176,10 +174,10 @@ export default function CropOverlay({
         height: cropStart.height
       };
 
-      const constrained = constrainCrop(newCrop);
-      onCropChange(constrained);
-    } else if (isResizing) {
+      onCropChangeRef.current(constrainCropRef.current(newCrop));
+    } else if (resizingRef.current) {
       // Resize crop rectangle
+      const resizeHandle = resizeHandleRef.current;
       let newCrop = { ...cropStart };
 
       if (resizeHandle.includes('n')) {
@@ -198,7 +196,7 @@ export default function CropOverlay({
       }
 
       // Apply aspect ratio constraint
-      const sized = applyAspectRatio(newCrop.width, newCrop.height, resizeHandle);
+      const sized = applyAspectRatioRef.current(newCrop.width, newCrop.height, resizeHandle);
       newCrop.width = sized.width;
       newCrop.height = sized.height;
 
@@ -210,50 +208,96 @@ export default function CropOverlay({
         newCrop.x = cropStart.x + cropStart.width - newCrop.width;
       }
 
-      const constrained = constrainCrop(newCrop);
-      onCropChange(constrained);
+      onCropChangeRef.current(constrainCropRef.current(newCrop));
     }
-  }, [isDragging, isResizing, cropStart, dragStart, resizeHandle, videoDisplayRect, constrainCrop, applyAspectRatio, onCropChange]);
+  }, []);
 
   /**
-   * Handle pointer/touch up (end drag or resize)
+   * Handle pointer/touch up (end drag or resize). Detaches the window listeners
+   * and emits the completed crop. Reads currentCrop from a ref so the final
+   * keyframe reflects the drag, not the value captured at mousedown.
    */
   const handlePointerUp = useCallback(() => {
-    if (isDragging || isResizing) {
+    const wasActive = draggingRef.current || resizingRef.current;
+
+    draggingRef.current = false;
+    resizingRef.current = false;
+    resizeHandleRef.current = null;
+    cropStartRef.current = null;
+
+    window.removeEventListener('mousemove', handlePointerMove);
+    window.removeEventListener('mouseup', handlePointerUp);
+    window.removeEventListener('touchmove', handlePointerMove);
+    window.removeEventListener('touchend', handlePointerUp);
+
+    if (wasActive) {
       // Notify parent that crop change is complete (create keyframe)
       // IMPORTANT: Only emit spatial properties (x, y, width, height)
       // Do NOT include 'time' - that's managed at the App level
       // Round to 3 decimal places to ensure sync with backend
-      onCropComplete({
-        x: round3(currentCrop.x),
-        y: round3(currentCrop.y),
-        width: round3(currentCrop.width),
-        height: round3(currentCrop.height)
+      const crop = currentCropRef.current;
+      onCropCompleteRef.current({
+        x: round3(crop.x),
+        y: round3(crop.y),
+        width: round3(crop.width),
+        height: round3(crop.height)
       });
     }
+  }, [handlePointerMove]);
 
-    setIsDragging(false);
-    setIsResizing(false);
-    setResizeHandle(null);
-    setCropStart(null);
-  }, [isDragging, isResizing, currentCrop, onCropComplete]);
+  /**
+   * Attach the window move+up listeners synchronously (mouse + touch). Called from
+   * the pointer-down handlers so the first move is captured with zero re-render lag.
+   */
+  const attachDragListeners = useCallback(() => {
+    window.addEventListener('mousemove', handlePointerMove);
+    window.addEventListener('mouseup', handlePointerUp);
+    window.addEventListener('touchmove', handlePointerMove, { passive: false });
+    window.addEventListener('touchend', handlePointerUp);
+  }, [handlePointerMove, handlePointerUp]);
 
-  // Attach global pointer+touch handlers
+  /**
+   * Handle pointer/touch down on crop rectangle (start drag)
+   */
+  const handleCropPointerDown = (e) => {
+    if (e.target.classList.contains('crop-handle')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pos = getEventPosition(e);
+    draggingRef.current = true;
+    resizingRef.current = false;
+    dragStartRef.current = { x: pos.clientX, y: pos.clientY };
+    cropStartRef.current = currentCrop;
+    attachDragListeners();
+  };
+
+  /**
+   * Handle pointer/touch down on resize handle
+   */
+  const handleResizePointerDown = (e, handle) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const pos = getEventPosition(e);
+    resizingRef.current = true;
+    draggingRef.current = false;
+    resizeHandleRef.current = handle;
+    dragStartRef.current = { x: pos.clientX, y: pos.clientY };
+    cropStartRef.current = currentCrop;
+    attachDragListeners();
+  };
+
+  // Safety net: if the component unmounts mid-drag, detach the window listeners.
   useEffect(() => {
-    if (isDragging || isResizing) {
-      window.addEventListener('mousemove', handlePointerMove);
-      window.addEventListener('mouseup', handlePointerUp);
-      window.addEventListener('touchmove', handlePointerMove, { passive: false });
-      window.addEventListener('touchend', handlePointerUp);
-
-      return () => {
-        window.removeEventListener('mousemove', handlePointerMove);
-        window.removeEventListener('mouseup', handlePointerUp);
-        window.removeEventListener('touchmove', handlePointerMove);
-        window.removeEventListener('touchend', handlePointerUp);
-      };
-    }
-  }, [isDragging, isResizing, handlePointerMove, handlePointerUp]);
+    return () => {
+      window.removeEventListener('mousemove', handlePointerMove);
+      window.removeEventListener('mouseup', handlePointerUp);
+      window.removeEventListener('touchmove', handlePointerMove);
+      window.removeEventListener('touchend', handlePointerUp);
+    };
+  }, [handlePointerMove, handlePointerUp]);
 
   if (!currentCrop || !videoDisplayRect) {
     return null;
