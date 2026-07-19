@@ -198,6 +198,29 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
   `onClick`/`onMouseEnter` (relies on synthesized click) -- same touch gap, not fixed by T5390.
   Coverage: Vitest `HighlightOverlay.touch.test.jsx` (9 cases); E2E
   `e2e/T5390-overlay-circle-touch.qa.spec.js` (honest-skips without an exported-reel fixture).
+- **Overlay spotlight loop playback (T5370, 2026-07-19)**: primary "Play spotlight"
+  loops the span of ALL highlight regions `[min(startTime), max(endTime)]`; secondary
+  "Play full" plays straight through. The loop is enforced by
+  `src/frontend/src/modes/overlay/hooks/useSpotlightLoop.js` — a reactive effect that
+  calls `seek(span.start)` once `currentTime >= span.end - LOOP_EPS` (0.03s) in loop
+  mode. **`seek()` is ephemeral PLAYBACK control, NOT a store/DB write — this is not a
+  T350-class persistence violation** (the banned pattern is a `useEffect` writing editing
+  state; watching `currentTime` to wrap the playhead touches no persistent data).
+  `spotlightPlayMode` (`'loop'|'full'`, default `'loop'`) is EPHEMERAL view state owned by
+  `OverlayContainer`, never persisted/restored, reset to `'loop'` on clip change
+  (`effectiveOverlayVideoUrl`). `spotlightSpan` is a `useMemo` over `highlightRegions`
+  (single source, no duplicated state); null with zero regions → primary = plain
+  Play/Pause, no secondary, no pill. **`useVideo` stays mode-agnostic** — no loop logic
+  there; it's shared by Annotate/Framing. The overlay hook is the only new playback
+  behavior. `Controls` got OPTIONAL props `isLooping` (loop accent+`Repeat` glyph on the
+  primary) + `secondaryPlay` ({onClick,title,active} ghost button); **byte-identical when
+  omitted** (HTML-equality pinned by `Controls.test.jsx`). "Back to spotlight" pill
+  (`aria-label="Back to spotlight"`) renders in `OverlayModeView` over the lower video
+  area when `isPastSpotlight` (`currentTime > span.end + LOOP_EPS`); its onClick
+  `stopPropagation`s so the mobileFs tap-nav wrapper doesn't also toggle play. Coverage:
+  Vitest `useSpotlightLoop.test.js` (8 cases) + `Controls.test.js[x]`; E2E
+  `e2e/T5370-spotlight-loop-playback.qa.spec.js` (honest-skips without an exported-reel
+  fixture, like T5390/T4550).
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy

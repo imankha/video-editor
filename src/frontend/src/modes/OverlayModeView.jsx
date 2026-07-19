@@ -150,6 +150,14 @@ export function OverlayModeView({
   restart,
   seek,
 
+  // Spotlight loop playback (T5370)
+  spotlightSpan,
+  spotlightPlayMode,
+  isPastSpotlight,
+  onPlaySpotlight,
+  onPlayFull,
+  onReturnToSpotlight,
+
   // Highlight state
   currentHighlightState,
   highlightRegions,
@@ -249,6 +257,32 @@ export function OverlayModeView({
   // Owned here so the video tap-nav wrapper below can YIELD while a circle is selected
   // — a drag must not be stolen by play/seek. Never persisted; view state only.
   const [isHighlightSelected, setIsHighlightSelected] = useState(false);
+
+  // T5370: spotlight-loop Controls wiring. Primary Play = "Play spotlight" (loops);
+  // secondary = de-emphasized "Play full". With zero regions (spotlightSpan null) the
+  // primary is plain Play/Pause (onPlaySpotlight falls back to a plain toggle) and no
+  // secondary button renders. Shared across both Controls instances (desktop + mobile).
+  const spotlightControlsProps = {
+    onTogglePlay: onPlaySpotlight || togglePlay,
+    isLooping: spotlightPlayMode === 'loop' && !!spotlightSpan,
+    secondaryPlay: spotlightSpan
+      ? { onClick: onPlayFull, title: 'Play full clip', active: spotlightPlayMode === 'full' }
+      : undefined,
+  };
+
+  // "Back to spotlight" pill — shown over the lower video area once the playhead
+  // runs past the span. Mirrors the mobile-expand button styling; >=44px touch
+  // target (min-h-11) via T5360's conventions.
+  const backToSpotlightPill = isPastSpotlight ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onReturnToSpotlight?.(); }}
+      className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 px-4 min-h-11 flex items-center justify-center gap-1.5 rounded-full bg-purple-600/90 text-white text-sm font-medium shadow-lg hover:bg-purple-500"
+      title="Return to the spotlight and loop it"
+      aria-label="Back to spotlight"
+    >
+      <span aria-hidden="true">&#10554;</span> Back to spotlight
+    </button>
+  ) : null;
 
   return (
     <>
@@ -428,18 +462,21 @@ export function OverlayModeView({
               </div>
             )}
 
+            {/* Back to spotlight pill — over the lower video area (T5370) */}
+            {backToSpotlightPill}
+
             {/* Controls - desktop fullscreen & non-fullscreen */}
             {!mobileFs && effectiveOverlayVideoUrl && (
               <Controls
                 isPlaying={isPlaying}
                 currentTime={currentTime}
                 duration={effectiveOverlayMetadata?.duration || duration}
-                onTogglePlay={togglePlay}
                 onStepForward={stepForward}
                 onStepBackward={stepBackward}
                 onRestart={restart}
                 isFullscreen={isFullscreen}
                 onToggleFullscreen={onToggleFullscreen}
+                {...spotlightControlsProps}
               />
             )}
 
@@ -532,12 +569,12 @@ export function OverlayModeView({
                       isPlaying={isPlaying}
                       currentTime={currentTime}
                       duration={effectiveOverlayMetadata?.duration || duration}
-                      onTogglePlay={togglePlay}
                       onStepForward={stepForward}
                       onStepBackward={stepBackward}
                       onRestart={restart}
                       isFullscreen={isFullscreen}
                       onToggleFullscreen={onToggleFullscreen}
+                      {...spotlightControlsProps}
                     />
                   )}
                   {effectiveOverlayVideoUrl && (

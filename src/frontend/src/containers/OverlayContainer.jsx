@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useMemo, useState } from 'react';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from '../modes/overlay';
+import { useSpotlightLoop } from '../modes/overlay/hooks/useSpotlightLoop';
 import { extractVideoMetadata } from '../utils/videoMetadata';
 import { EDITOR_MODES } from '../stores';
 import { useQuestStore } from '../stores/questStore';
@@ -29,7 +30,9 @@ export function OverlayContainer({
   currentTime,
   duration,
   isPlaying,
+  isSeeking,
   seek,
+  togglePlay,
 
   // Framing video state (for pass-through mode)
   framingVideoUrl,
@@ -137,6 +140,65 @@ export function OverlayContainer({
     if (overlayVideoFile) return overlayVideoFile;
     return null;
   }, [overlayVideoFile]);
+
+  // =========================================
+  // SPOTLIGHT LOOP PLAYBACK (T5370)
+  // =========================================
+  // Primary "Play spotlight" loops the span of ALL highlight regions; the
+  // de-emphasized "Play full" plays straight through. `spotlightPlayMode` is
+  // EPHEMERAL view state — never persisted, never restored (a stale saved
+  // play-mode would read as a broken player). Reset to 'loop' on clip change.
+  const LOOP_EPS = 0.03; // ~1 frame at 30fps; mirrors useSpotlightLoop
+  const [spotlightPlayMode, setSpotlightPlayMode] = useState('loop');
+
+  // Span is derived from highlightRegions (single source) — no duplicated state.
+  // Null when there are zero regions (nothing to loop).
+  const spotlightSpan = useMemo(() => {
+    if (!highlightRegions?.length) return null;
+    const start = Math.min(...highlightRegions.map(r => r.startTime));
+    const end = Math.max(...highlightRegions.map(r => r.endTime));
+    return { start, end };
+  }, [highlightRegions]);
+
+  // Reset play-mode when the overlay clip changes (new video URL). This is a
+  // lifecycle reset of ephemeral view state, NOT reactive persistence.
+  useEffect(() => { setSpotlightPlayMode('loop'); }, [effectiveOverlayVideoUrl]);
+
+  // The playhead has run past the spotlight — surfaces the "Back to spotlight" pill.
+  const isPastSpotlight = !!spotlightSpan && currentTime > spotlightSpan.end + LOOP_EPS;
+
+  // Enforce the loop while playing in loop mode. seek() is ephemeral PLAYBACK
+  // control (moves the <video> playhead), not a store/DB write — not a T350-class
+  // persistence violation.
+  useSpotlightLoop({
+    playMode: spotlightPlayMode,
+    span: spotlightSpan,
+    currentTime,
+    isPlaying,
+    isSeeking,
+    seek,
+  });
+
+  const handlePlaySpotlight = useCallback(() => {
+    if (!spotlightSpan) { togglePlay(); return; } // no regions → plain play/pause
+    setSpotlightPlayMode('loop');
+    const outside = currentTime < spotlightSpan.start || currentTime >= spotlightSpan.end;
+    if (outside) seek(spotlightSpan.start);
+    // Play if paused; if already playing in loop, pressing returns-to-start (the
+    // seek above) and keeps playing.
+    if (videoRef.current?.paused) togglePlay();
+  }, [spotlightSpan, currentTime, seek, togglePlay, videoRef]);
+
+  const handlePlayFull = useCallback(() => {
+    setSpotlightPlayMode('full');
+    if (videoRef.current?.paused) togglePlay();
+  }, [togglePlay, videoRef]);
+
+  const handleReturnToSpotlight = useCallback(() => {
+    if (!spotlightSpan) return;
+    setSpotlightPlayMode('loop');
+    seek(spotlightSpan.start);
+  }, [spotlightSpan, seek]);
 
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);
@@ -554,6 +616,14 @@ export function OverlayContainer({
     // Derived state
     hasFramingEdits,
     hasMultipleClips,
+
+    // Spotlight loop playback (T5370)
+    spotlightSpan,
+    spotlightPlayMode,
+    isPastSpotlight,
+    handlePlaySpotlight,
+    handlePlayFull,
+    handleReturnToSpotlight,
 
     // Handlers
     handlePlayerSelect,
