@@ -2,6 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
+import { resolve } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 // API port configuration
 // - Default: 8000 for manual development
@@ -113,6 +117,12 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    exclude: ['**/node_modules/**', '**/e2e/**', '**/tests/perf/**']
+    exclude: ['**/node_modules/**', '**/e2e/**', '**/tests/perf/**'],
+    // src/version.json is gitignored/build-generated (generate-version.js runs
+    // pre-dev/build) and absent on a clean CI checkout. Redirect the import to a
+    // committed stub so tests don't depend on that build step having run.
+    alias: [
+      { find: /^\.\.\/\.\.\/\.\.\/version\.json$/, replacement: resolve(__dirname, 'src/version.stub.json') },
+    ]
   }
 })
