@@ -195,6 +195,7 @@ export function OverlayScreen({
     isPlaying,
     currentTime,
     duration,
+    isSeeking,
     error,
     isLoading,
     isVideoElementLoading,
@@ -794,7 +795,9 @@ export function OverlayScreen({
     currentTime,
     duration,
     isPlaying,
+    isSeeking,
     seek,
+    togglePlay,
     framingVideoUrl,
     framingMetadata,
     keyframes: [], // No framing keyframes in overlay mode
@@ -865,6 +868,13 @@ export function OverlayScreen({
     handleHighlightChange,
     handleHighlightComplete,
     handleDetectionMarkerClick,
+    // Spotlight loop playback (T5370)
+    spotlightSpan,
+    spotlightPlayMode,
+    isPastSpotlight,
+    handlePlaySpotlight,
+    handlePlayFull,
+    handleReturnToSpotlight,
   } = overlay;
 
   // =========================================
@@ -1042,6 +1052,13 @@ export function OverlayScreen({
       stepBackward={stepBackward}
       restart={restart}
       seek={seek}
+      // Spotlight loop playback (T5370)
+      spotlightSpan={spotlightSpan}
+      spotlightPlayMode={spotlightPlayMode}
+      isPastSpotlight={isPastSpotlight}
+      onPlaySpotlight={handlePlaySpotlight}
+      onPlayFull={handlePlayFull}
+      onReturnToSpotlight={handleReturnToSpotlight}
       // Highlight state
       currentHighlightState={currentHighlightState}
       highlightRegions={highlightRegions}
