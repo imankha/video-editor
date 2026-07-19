@@ -89,7 +89,7 @@ test.describe('Game Loading', () => {
     });
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const game = await firstActiveGame(page);
     console.log(`Loading active fixture game ${game.id} ("${game.name}", ${game.clip_count} clips)`);
@@ -116,7 +116,7 @@ test.describe('Game Loading', () => {
     });
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     const game = await firstActiveGame(page);
     await openGamesTab(page);

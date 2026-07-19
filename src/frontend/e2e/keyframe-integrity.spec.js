@@ -41,7 +41,7 @@ test.describe('T340: Keyframe Integrity Guards', () => {
     skipOnDeployedTarget(test, 'import()s /src Vite-dev module paths that do not exist on a deployed build');
     // Navigate to app root so Vite dev server is available for module imports
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     console.log('[T340] App loaded, running keyframe guard tests via browser modules');
 
     // Run all guard tests via the actual browser-served modules

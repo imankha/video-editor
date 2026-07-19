@@ -67,7 +67,7 @@ test('T4190: My Reels group headers show real game names + collapsed-group new c
 
   // --- open the My Reels panel (DownloadsPanel slide-out) --------------------
   await page.goto('/');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
   await page.getByRole('button', { name: /My Reels/i }).first().click({ timeout: 30000 });
 
   // Scope EVERYTHING to the fixed slide-out panel so we assert the collections

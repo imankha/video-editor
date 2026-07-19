@@ -104,7 +104,7 @@ async function openRankingGame(context, page) {
   await setupRankingMocks(page);
 
   await page.goto('/');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('domcontentloaded').catch(() => {});
 
   // GalleryButton has title="My Reels" (SECTION_NAMES.LIBRARY)
   await page.getByTitle('My Reels').first().click({ timeout: 15000 });

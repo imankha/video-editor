@@ -40,7 +40,7 @@ async function setupTestUserContext(page) {
 
 async function navigateToGamesTab(page) {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   await page.locator('button:has-text("Games")').click();
   await page.waitForSelector('text="Loading games..."', { state: 'hidden', timeout: 30000 }).catch(() => null);
   await expect(page.locator('[data-game-id]').first()).toBeVisible({ timeout: 15000 });
@@ -100,7 +100,7 @@ test.describe.serial('request storm regression', () => {
 
   test('setup: create game with video and clips', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await page.locator('button:has-text("Add Game")').click();
     await page.waitForTimeout(500);

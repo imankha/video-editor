@@ -31,7 +31,7 @@ async function setupAndAuth(page) {
     useAuthStore.setState({ isAuthenticated: true, email: 'collections@e2e.local', showAuthModal: false });
   });
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 }
 
 async function openGallery(page) {

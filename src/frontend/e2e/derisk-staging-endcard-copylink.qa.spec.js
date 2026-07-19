@@ -1,34 +1,83 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth.js';
+import { waitForAppReady } from './helpers/appReady.js';
 
 /**
- * Derisk sweep (2026-07-12): branded end card on share surfaces (T3950) +
- * copy-link dedup (share POST in-flight dedup + toast dedupKey).
+ * Derisk sweep: branded end card on share surfaces (T3950) + copy-link dedup
+ * (share POST in-flight dedup + toast dedupKey). T5400 de-hardcoded.
+ *
+ * Drives the REAL app as the SEEDED FIXTURE account (imankh@gmail.com / profile
+ * 9fa7378c, per e2e/FIXTURE-CONTRACT.md — env-overridable via E2E_REAL_EMAIL /
+ * E2E_REAL_PROFILE). The share tokens are DISCOVERED from the account's own data
+ * (mint an idempotent public reel share from /api/downloads; a collection share
+ * from /api/collections/summary) — NO baked GUID tokens. Each test SKIPS LOUDLY
+ * (never a silent green pass) when the fixture lacks the required data.
  *
  * Run:
  *   E2E_BASE_URL=https://reel-ballers-staging.pages.dev \
  *   E2E_API_BASE=https://reel-ballers-api-staging.fly.dev/api \
- *   E2E_REAL_EMAIL=e2e@test.local \
+ *   E2E_REAL_EMAIL=imankh@gmail.com E2E_REAL_PROFILE=9fa7378c \
  *   npx playwright test e2e/derisk-staging-endcard-copylink.qa.spec.js
  */
 
-const REEL_TOKEN = process.env.DERISK_REEL_TOKEN || 'b904abab-38ec-4ec0-bd3e-cb292cb85780';
-const COLLECTION_TOKEN = process.env.DERISK_COLLECTION_TOKEN || 'a194a306-cdcf-4bc4-8d3b-36fc62f5ddb5';
-const EMAIL = process.env.E2E_REAL_EMAIL || 'e2e@test.local';
+const API_BASE = process.env.E2E_API_BASE || 'http://localhost:8000/api';
+const EMAIL = process.env.E2E_REAL_EMAIL || 'imankh@gmail.com';
+const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const EVID = 'test-results/derisk-evidence';
 
-async function retryLogin(context) {
-  let lastErr;
-  for (let i = 0; i < 3; i++) {
-    try { await loginAsRealUser(context, EMAIL); return; }
-    catch (e) { lastErr = e; await new Promise((r) => setTimeout(r, 2000)); }
-  }
-  throw lastErr;
+async function apiGet(context, path) {
+  const res = await context.request.get(`${API_BASE}${path}`, {
+    headers: { 'X-Test-Mode': 'true' },
+  });
+  return res.ok() ? res.json() : { __status: res.status() };
 }
 
-test('T3950: end card appears at end of a shared REEL with UTM CTA', async ({ page }) => {
+async function apiPost(context, path, data) {
+  const res = await context.request.post(`${API_BASE}${path}`, {
+    data,
+    headers: { 'X-Test-Mode': 'true' },
+  });
+  return res.ok() ? res.json() : { __status: res.status() };
+}
+
+/** Escape a discovered string for safe use inside a RegExp locator. */
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** First game collection that has at least one reel in some aspect ratio. */
+function firstNonEmptyGameCollection(summary) {
+  const games = summary?.games || [];
+  for (const g of games) {
+    const ratio = Object.entries(g.ratio_counts || {}).find(([, n]) => n > 0)?.[0];
+    if (ratio) return { game: g, ratio };
+  }
+  return null;
+}
+
+test('T3950: end card appears at end of a shared REEL with UTM CTA @staging-gate', async ({ context, page }) => {
   test.setTimeout(120_000);
-  await page.goto(`/shared/${REEL_TOKEN}`);
+  await loginAsRealUser(context, EMAIL, PROFILE);
+
+  // Discover a published reel and mint an idempotent PUBLIC share link (the same
+  // path "Copy link" uses) — no baked token.
+  const dl = await apiGet(context, '/downloads');
+  const reels = dl.downloads || [];
+  if (!reels.length) {
+    console.log('[T5400][SKIP] fixture has no published reel to share; seed imankh per FIXTURE-CONTRACT');
+  }
+  test.skip(!reels.length, '[T5400] fixture has no published reel; seed imankh per FIXTURE-CONTRACT');
+  // Same body the app's "Copy link" sends (createShareUrl in useWebShare.js):
+  // recipient_emails is REQUIRED by ShareCreateRequest (empty => idempotent public link).
+  const share = await apiPost(context, `/gallery/${reels[0].id}/share`, { recipient_emails: [], is_public: true });
+  const token = share?.shares?.[0]?.share_token;
+  if (!token) {
+    console.log(`[T5400][SKIP] could not mint a public reel share (resp ${JSON.stringify(share)})`);
+  }
+  test.skip(!token, '[T5400] could not mint a public reel share token');
+  console.log(`[derisk] shared reel token: ${token} (reel id ${reels[0].id})`);
+
+  await page.goto(`/shared/${token}`);
   const video = page.locator('video').first();
   await video.waitFor({ timeout: 30000 });
   // start playback (muted so autoplay policy allows it), then jump near the end
@@ -44,9 +93,29 @@ test('T3950: end card appears at end of a shared REEL with UTM CTA', async ({ pa
   await page.screenshot({ path: `${EVID}/endcard-reel.png` });
 });
 
-test('T3950: end card appears ABOVE the player on a shared COLLECTION', async ({ page }) => {
+test('T3950: end card appears ABOVE the player on a shared COLLECTION @staging-gate', async ({ context, page }) => {
   test.setTimeout(120_000);
-  await page.goto(`/shared/collection/${COLLECTION_TOKEN}`);
+  await loginAsRealUser(context, EMAIL, PROFILE);
+
+  // Discover a non-empty game collection and mint a PUBLIC collection share link.
+  const summary = await apiGet(context, '/collections/summary');
+  const pick = firstNonEmptyGameCollection(summary);
+  if (!pick) {
+    console.log('[T5400][SKIP] fixture has no non-empty game collection to share; seed imankh per FIXTURE-CONTRACT');
+  }
+  test.skip(!pick, '[T5400] fixture has no shareable collection; seed imankh per FIXTURE-CONTRACT');
+  const shareResp = await apiPost(context, '/collections/share', {
+    definition: { scope: { type: 'game', game_id: pick.game.game_id }, aspect_ratio: pick.ratio },
+    is_public: true,
+  });
+  const token = shareResp?.shares?.[0]?.share_token;
+  if (!token) {
+    console.log(`[T5400][SKIP] could not mint a public collection share (resp ${JSON.stringify(shareResp)})`);
+  }
+  test.skip(!token, '[T5400] could not mint a public collection share token');
+  console.log(`[derisk] shared collection token: ${token} (game ${pick.game.game_id}, ${pick.ratio})`);
+
+  await page.goto(`/shared/collection/${token}`);
   // collection page lists reels; start the first video
   const playCta = page.getByRole('button', { name: /play|watch/i }).first();
   if (await playCta.count()) await playCta.click().catch(() => {});
@@ -72,9 +141,19 @@ test('T3950: end card appears ABOVE the player on a shared COLLECTION', async ({
   await page.screenshot({ path: `${EVID}/endcard-collection.png` });
 });
 
-test('copy-link 5x fast: one toast, deduped share POSTs', async ({ context, page }) => {
+test('copy-link 5x fast: one toast, deduped share POSTs @staging-gate', async ({ context, page }) => {
   test.setTimeout(120_000);
-  await retryLogin(context);
+  await loginAsRealUser(context, EMAIL, PROFILE);
+
+  // Discover the game group to expand (its header text is the game name) — no
+  // hardcoded "Vs Derisk FC Jul 12".
+  const summary = await apiGet(context, '/collections/summary');
+  const pick = firstNonEmptyGameCollection(summary);
+  if (!pick) {
+    console.log('[T5400][SKIP] fixture has no reel group in My Reels; seed imankh per FIXTURE-CONTRACT');
+  }
+  test.skip(!pick, '[T5400] fixture has no reel group in My Reels; seed imankh per FIXTURE-CONTRACT');
+  console.log(`[derisk] expanding My Reels group: ${JSON.stringify(pick.game.game_name)}`);
 
   const sharePosts = [];
   page.on('request', (req) => {
@@ -84,17 +163,21 @@ test('copy-link 5x fast: one toast, deduped share POSTs', async ({ context, page
   });
 
   await page.goto('/');
+  await waitForAppReady(page, { ready: page.getByRole('button', { name: /My Reels/ }) });
   await page.getByRole('button', { name: /My Reels/ }).first().click({ timeout: 30000 });
-  // The reel lives inside a collapsed game group — expand it first. The group
-  // header is a button named after the game; exclude the home-screen
-  // "continue" card (its name carries "clips annotated").
-  const group = page.getByRole('button', { name: /^Vs Derisk FC Jul 12(?!.*annotated)/ }).last();
+  // Expand the DISCOVERED game group (CollapsibleGroup header text = game name).
+  const group = page.getByRole('button', { name: new RegExp(escapeRegExp(pick.game.game_name)) }).last();
   await group.waitFor({ timeout: 30000 });
   await page.keyboard.press('Escape'); // dismiss any overlay backdrop
   await page.waitForTimeout(500);
   await group.click({ force: true });
   await page.waitForTimeout(800);
-  const copyBtn = page.getByTitle('Copy link').first();
+  // Scope to a REEL card's copy link (posts /api/gallery/{id}/share) — NOT the
+  // group-level collection copy link (which posts /api/collections/share and would
+  // leave sharePosts at 0). The action row is hover-revealed; attach + force-click.
+  const reelCard = page.locator('[data-testid="reel-card"]').first();
+  await reelCard.waitFor({ timeout: 30000 });
+  const copyBtn = reelCard.getByTitle('Copy link').first();
   await copyBtn.waitFor({ state: 'attached', timeout: 30000 });
   // The card action row is hover-revealed; hover the card then force the
   // rapid clicks (we are testing handler-level dedup, not hover ergonomics).

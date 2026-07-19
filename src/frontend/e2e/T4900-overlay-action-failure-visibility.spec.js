@@ -63,7 +63,7 @@ test.describe('T4900 overlay action failure visibility', () => {
     // ------------------------------------------------------------------ auth
     await loginAsRealUser(context, REAL_EMAIL);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Navigate to overlay: open "Reel Drafts" and pick any "In Overlay" draft.
     // If none exists, we fall back to the store-based injection path (criterion B

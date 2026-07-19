@@ -40,7 +40,7 @@ async function clearBrowserState(page) {
 
 async function enterAnnotateMode(page) {
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
   await page.locator('button:has-text("Games")').click();
   await page.waitForTimeout(500);
   await page.locator('button:has-text("Add Game")').click();

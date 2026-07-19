@@ -52,7 +52,7 @@ async function openFramingDraft(page) {
   await page.locator('.crop-handle').first().waitFor({ timeout: 90000 });
 }
 
-test.describe('T4550 unified overlay transform', () => {
+test.describe('T4550 unified overlay transform @staging-gate', () => {
   test('Framing: crop overlay placed + drag lands accurately, no rAF warnings', async ({ browser }) => {
     test.setTimeout(180_000);
     const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });

@@ -17,6 +17,7 @@
  */
 import { test, expect } from '@playwright/test';
 import { saveEvidence } from './helpers/qa.js';
+import { IS_DEPLOYED_TARGET } from './helpers/targetEnv.js';
 
 const BASE = process.env.E2E_BASE_URL || 'http://localhost:5173';
 const API = process.env.E2E_API_BASE || 'http://localhost:8000/api';
@@ -35,7 +36,9 @@ async function authenticate(page) {
     useAuthStore.setState({ isAuthenticated: true, email: 't4800_livedrive@test.local', showAuthModal: false });
   });
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  // The caller waits on the concrete `[data-testid="project-card"]` locator next,
+  // so committing the navigation is enough here (T5400: no networkidle).
+  await page.waitForLoadState('domcontentloaded');
 }
 
 /** Names of the project cards currently rendered in Reel Drafts. */
@@ -69,7 +72,12 @@ test('clip-delete drops the exported auto-reel draft (root cause) and keeps publ
   const delA = await page.request.delete(`${API}/clips/raw/1`, { headers: HEADERS });
   expect(delA.ok(), `delete clip A: ${delA.status()}`).toBe(true);
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  // LOCAL-only QA spec: renderedDraftNames reads the drafts feed straight from the
+  // DOM with no per-card wait, so it genuinely needs the feed fetch to settle after
+  // reload to avoid a false "card gone" read. networkidle never settles on a deployed
+  // CDN (T5400) — but this spec's seeded profile data only exists locally, so it never
+  // runs deployed. Gate the settle to local so we never leave a bare networkidle.
+  if (!IS_DEPLOYED_TARGET) await page.waitForLoadState('networkidle');
   names = await renderedDraftNames(page);
   console.log('[qa] rendered drafts (after deleting A clip):', JSON.stringify(names));
   expect(hasCard(names, 'Exported Draft A'), 'exported draft A must be gone (deleted, not left as a 0-clip orphan)').toBe(false);

@@ -29,7 +29,7 @@ async function loginAsTestUser(page, testId = 'shared') {
   // page.goto triggers initSession → GET /api/auth/me (which returns 200 for X-User-ID
   // in dev) → POST /api/auth/init → sets isAuthenticated=true. No test-login needed.
   await page.goto(`${BASE}/`);
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 }
 
 async function openQuestPanel(page) {

@@ -83,7 +83,7 @@ async function authenticateTestUser(page) {
   }
 
   await page.reload();
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 }
 
 async function clearBrowserState(page) {
@@ -391,7 +391,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q1.1] Add Your First Game');
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Verify fresh user sees the home page with Games tab
     await expect(page.locator('button:has-text("Games")')).toBeVisible();
@@ -534,7 +534,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q2.1] Open a Project');
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
@@ -568,7 +568,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Reload to pick up framing data, re-enter project
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
@@ -593,7 +593,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Reload page to ensure framing export result is reflected in UI
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
     await page.locator('.bg-gray-800.rounded-lg h3.text-white').first().click();
@@ -637,7 +637,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q2.5] Watch Your Highlight (Gallery)');
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Record achievement via page session (viewing gallery is hard to automate reliably)
     await recordAchievement(page, 'viewed_gallery_video');
@@ -694,7 +694,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Navigate to project and trigger export
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
@@ -772,7 +772,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q4.1] Add Second Game');
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
     await page.locator('button:has-text("Add Game")').click();
@@ -829,7 +829,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
     console.log('[Q4.3] Create custom project');
 
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
@@ -873,7 +873,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
 
     // Navigate to the custom project and click Frame Video
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(1000);
 
@@ -942,7 +942,7 @@ test.describe('New User Flow — Landing Page to Vamos!', () => {
       console.log('\n=== CLAIMING QUEST 4 VIA UI -- expecting Vamos! dialog ===');
 
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       await page.waitForTimeout(2000);
 
       await page.evaluate(async () => {

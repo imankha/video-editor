@@ -126,7 +126,7 @@ test.describe('Profile Switch — Game Isolation', () => {
       'X-Profile-ID': defaultProfileId,
     });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Default profile should have the game
     const defaultGames = await page.evaluate(async () => {
@@ -144,7 +144,7 @@ test.describe('Profile Switch — Game Isolation', () => {
       'X-Profile-ID': secondProfileId,
     });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // P2 should have 0 games
     const p2Games = await page.evaluate(async () => {
@@ -161,7 +161,7 @@ test.describe('Profile Switch — Game Isolation', () => {
       'X-Profile-ID': defaultProfileId,
     });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Game should be back
     const restoredGames = await page.evaluate(async () => {

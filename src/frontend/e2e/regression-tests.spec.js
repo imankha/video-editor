@@ -560,7 +560,7 @@ async function ensureAnnotateModeWithClips(page) {
 
   // Navigate to home and enter annotate mode
   await page.goto('/');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
 
   // Click Games tab and Add Game button to open modal
   await page.locator('button:has-text("Games")').click();
@@ -654,7 +654,7 @@ async function navigateToProjectFromHome(page) {
   console.log('[Test] Navigating to home then back to project for fresh load...');
   await page.goto('/', { timeout: 30000 });
   await Promise.race([
-    page.waitForLoadState('networkidle'),
+    page.waitForLoadState('domcontentloaded'),
     page.waitForTimeout(10000),
   ]);
 
@@ -836,7 +836,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
   const url = page.url();
   if (!url || url === 'about:blank' || !url.includes('localhost')) {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   }
 
   // Use page.evaluate(fetch) with relative URL so it goes through Vite proxy + route interceptor
@@ -852,7 +852,7 @@ async function ensureProjectsExist(page, navigateToFraming = true) {
     if (navigateToFraming) {
       // Go to project manager first
       await page.goto('/');
-      await page.waitForLoadState('networkidle');
+      await page.waitForLoadState('domcontentloaded');
       await page.locator('button:has-text("Reel Drafts")').click();
       await page.waitForTimeout(500);
 
@@ -1064,7 +1064,7 @@ async function ensureWorkingVideoExists(page) {
   const url = page.url();
   if (!url || url === 'about:blank' || !url.includes('localhost')) {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
   }
 
   // Use page.evaluate(fetch) with relative URL so it goes through Vite proxy + route interceptor
@@ -1127,7 +1127,7 @@ test.describe('Smoke Tests @smoke', () => {
 
   test('Annotate: video first frame loads @smoke', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
@@ -1158,7 +1158,7 @@ test.describe('Smoke Tests @smoke', () => {
 
   test('Annotate: TSV import shows clips @smoke', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
@@ -1203,7 +1203,7 @@ test.describe('Smoke Tests @smoke', () => {
 
   test('Annotate: timeline click moves playhead @smoke', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
@@ -1270,7 +1270,7 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Navigate back to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Switch to Projects tab
     await page.locator('button:has-text("Reel Drafts")').click();
@@ -1325,7 +1325,7 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Navigate back to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Switch to Projects tab
     await page.locator('button:has-text("Reel Drafts")').click();
@@ -1369,7 +1369,7 @@ test.describe('Smoke Tests @smoke', () => {
 
     // Navigate back to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Switch to Projects tab
     await page.locator('button:has-text("Reel Drafts")').click();
@@ -1461,7 +1461,7 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 1: Create clips via Add Game modal (clips auto-save to library)
     console.log('[Full] Step 1: Creating clips via Add Game...');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // Click Games tab and Add Game to open modal
     await page.locator('button:has-text("Games")').click();
@@ -1508,7 +1508,7 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 2: Navigate to project manager and create project from clips
     console.log('[Full] Step 2: Creating project from library clips...');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
@@ -1639,7 +1639,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to project manager and open overlay mode
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await navigateToProjectManager(page);
 
     // Click on project with clips
@@ -1665,7 +1665,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to project manager and open overlay mode
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await navigateToProjectManager(page);
 
     // Navigate to overlay mode
@@ -1708,7 +1708,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await navigateToProjectManager(page);
 
     // Click on a project with clips - this should open framing mode
@@ -1945,7 +1945,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await navigateToProjectManager(page);
 
     // Click on a project with multiple clips
@@ -2216,7 +2216,7 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 1: Create a game via Add Game modal
     console.log('[Full Pipeline] Step 1: Creating game via Add Game modal...');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     await page.locator('button:has-text("Games")').click();
     await page.waitForTimeout(500);
@@ -2290,7 +2290,7 @@ test.describe('Full Coverage Tests @full', () => {
     // STEP 3: Create project from library clips via New Project modal
     console.log('[Full Pipeline] Step 3: Creating project from library clips...');
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await page.locator('button:has-text("Reel Drafts")').click();
     await page.waitForTimeout(500);
 
@@ -2340,7 +2340,7 @@ test.describe('Full Coverage Tests @full', () => {
     console.log(`[Full Pipeline] Set crop_data on ${pipelineFramedCount} clips`);
 
     // Reload to pick up crop_data changes
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     await navigateToFramingAndWaitForVideo(page);
 
@@ -2460,7 +2460,7 @@ test.describe('Full Coverage Tests @full', () => {
 
     // Navigate to project manager
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     await navigateToProjectManager(page);
 
     // Get list of projects via API

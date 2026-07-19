@@ -53,6 +53,8 @@ trust** — the automated staging signal is split into a reliable subset and a f
 - `src/frontend/e2e/helpers/targetEnv.js` (T4934) — deployed-target detection + `@staging-gate` set
 - `src/frontend/e2e/FIXTURE-CONTRACT.md` (T5320) — the seeded-account contract these rely on
 - `src/frontend/playwright.config.js` — timeout + the gate project/tag
+- `src/frontend/e2e/helpers/appReady.js` — the `waitForAppReady` networkidle replacement (T5400)
+- `src/frontend/e2e/STAGING-GATE.md` — the curated `@staging-gate` subset doc + run command (T5400)
 
 ## Acceptance Criteria
 - [ ] No deployed-target spec waits on `networkidle`; each uses a deterministic ready-signal
