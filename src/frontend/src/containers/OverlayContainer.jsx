@@ -181,12 +181,15 @@ export function OverlayContainer({
 
   const handlePlaySpotlight = useCallback(() => {
     if (!spotlightSpan) { togglePlay(); return; } // no regions → plain play/pause
+    // True play/pause toggle (T5450). If PLAYING, pressing pauses — the earlier bug
+    // only ever called togglePlay() when paused, so a looping clip could never be
+    // paused from this button. If PAUSED, enter loop mode, seek to the span start ONLY
+    // when the playhead is outside [start, end), then play.
+    if (!videoRef.current?.paused) { togglePlay(); return; } // playing → pause
     setSpotlightPlayMode('loop');
     const outside = currentTime < spotlightSpan.start || currentTime >= spotlightSpan.end;
     if (outside) seek(spotlightSpan.start);
-    // Play if paused; if already playing in loop, pressing returns-to-start (the
-    // seek above) and keeps playing.
-    if (videoRef.current?.paused) togglePlay();
+    togglePlay(); // paused → play
   }, [spotlightSpan, currentTime, seek, togglePlay, videoRef]);
 
   const handlePlayFull = useCallback(() => {
