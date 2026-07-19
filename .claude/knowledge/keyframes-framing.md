@@ -165,6 +165,27 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
 - **T4020 shadow versions (fixed, deployed 2026-06-26)**: a redundant post-export full-state save
   persisted empty crop + default segments as a NEW working_clips version, shadowing the real one.
   Full-state saves only on explicit gesture.
+- **First crop drag dropped = VideoLoadingOverlay ate it, NOT a CropOverlay listener race
+  (T5380b, 2026-07-19).** The reported bug: the FIRST crop-adjust drag after opening a Framing
+  draft moves nothing (movedX=0); every later drag works. T5380's first fix assumed a listener
+  race (down→move before an isDragging-gated `useEffect` attached the window listeners) and
+  refactored CropOverlay to refs + synchronous attach. That was a MISDIAGNOSIS — the events
+  never reach CropOverlay at all. REAL cause: while the video is still buffering
+  (`isVideoElementLoading` true), `VideoPlayer` renders the DETAILED `VideoLoadingOverlay`
+  (`src/frontend/src/components/shared/VideoLoadingOverlay.jsx`) — an `absolute inset-0 z-40`
+  element that (unlike its `simple`-mode sibling) was MISSING `pointer-events-none`. The crop/
+  highlight reticule renders off `videoMetadata` (before buffering finishes), so during that
+  window the z-40 overlay sits ON TOP of the reticule and swallows the first mousedown; once
+  buffering ends the overlay unmounts and later drags land. Fix = add `pointer-events-none` to
+  the detailed overlay (dim+spinner still paints; input passes through), matching simple mode.
+  Covers Overlay-mode highlight drags too (same VideoPlayer). **Why it never reproduced in a
+  component test (jsdom OR real-browser Playwright):** the drop needs the real buffering state
+  (`isVideoElementLoading`), not the CropOverlay component — an isolated CropOverlay/useCrop/
+  VideoPlayer harness passes the first drag pre- AND post-T5380-fix. Repro requires VideoPlayer
+  with `isVideoElementLoading` set. Standing proof: real-chromium `e2e/T5380b-cropoverlay-first-drag.qa.spec.js`
+  drives a dev-only harness (`src/frontend/cropdiag.html` + `src/cropdiag/main.jsx`, NOT a vite
+  build input) and asserts the first drag moves WITH the loading overlay up; it FAILS pre-fix.
+  T5380's CropOverlay ref-refactor was left in place (harmless hardening, not the cause).
 - **Video→screen transform unified (T4550, ~2026-07-17)**: the aspect-fit letterbox + zoom/pan
   math (`videoDisplayRect`, `videoToScreen`, `screenToVideo`, `round3`) was copied 3x, each in a
   different bug state. Now one hook `src/frontend/src/hooks/useVideoDisplayRect.js`

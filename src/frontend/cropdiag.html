@@ -1,0 +1,27 @@
+<!doctype html>
+<!--
+  T5380b DEV-ONLY diagnostic harness for CropOverlay first-drag.
+  NOT a production page: it is not listed in vite build rollupOptions.input
+  (only index.html is), so it never ships in the built app. Served by the dev
+  server only, for the Playwright real-browser regression test.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CropOverlay diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="cropdiag-root"></div>
+    <!-- Capture diag params SYNCHRONOUSLY, before the deferred module runs: an
+         imported app module side-effects a history pushState to /framing, which
+         would otherwise wipe the hash before main.jsx could read it. -->
+    <script>
+      window.__CROPDIAG = (location.hash.replace(/^#/, '') || location.search.replace(/^\?/, ''));
+    </script>
+    <script type="module" src="/src/cropdiag/main.jsx"></script>
+  </body>
+</html>

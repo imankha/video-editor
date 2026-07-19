@@ -44,7 +44,14 @@ export function VideoLoadingOverlay({
   }
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-40">
+    // pointer-events-none: this is a purely informational loading indicator (dim +
+    // spinner + progress, no interactive children). Without it, the z-40 overlay sits
+    // ON TOP of the always-interactive crop/highlight reticule (rendered off metadata,
+    // before the video finishes buffering) and swallows the user's FIRST drag — the box
+    // is visible and looks draggable, but the gesture never reaches it, so the first
+    // crop-adjust after opening a draft is silently dropped until buffering ends (T5380b).
+    // The simple-mode variant above already sets this; the detailed mode omitted it.
+    <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 z-40 pointer-events-none">
       <div className="text-center w-64">
         <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-gray-600 border-t-purple-500" />
         <p className="mt-4 text-sm text-gray-300">{message}</p>
