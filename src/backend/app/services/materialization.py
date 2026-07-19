@@ -19,6 +19,12 @@ from app.utils.encoding import decode_data, encode_data
 
 logger = logging.getLogger(__name__)
 
+# T5330: provenance sentinel written to games.shared_by / raw_clips.shared_by when a
+# share has no resolvable sharer identity at all. The marker is NEVER NULL for a shared
+# item (precedence: sharer_email -> sharer_user_id -> this sentinel) so onboarding-blind
+# quest counts (quests._check_all_steps) can rely on `shared_by IS NOT NULL` == shared-in.
+SHARED_PROVENANCE_LOST = "lost"
+
 
 def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None:
     """Open a profile SQLite database directly (bypasses ContextVar).
@@ -147,8 +153,14 @@ def _copy_game(
     sharer_conn: sqlite3.Connection,
     recipient_conn: sqlite3.Connection,
     game_id: int,
+    shared_by: str | None = None,
 ) -> int:
-    """Copy game + game_videos rows from sharer to recipient. Returns new game_id."""
+    """Copy game + game_videos rows from sharer to recipient. Returns new game_id.
+
+    shared_by stamps the copied game row's provenance (T5330) so onboarding-blind
+    quest counts can exclude it. Callers via materialize_game_share pass a non-null
+    marker; the default None path is only for direct unit tests of the copy itself.
+    """
     cur = sharer_conn.cursor()
     cur.execute(
         """SELECT name, blake3_hash, video_duration, video_width, video_height,
@@ -166,13 +178,13 @@ def _copy_game(
         """INSERT INTO games
            (name, blake3_hash, video_duration, video_width, video_height,
             video_size, opponent_name, game_date, game_type, tournament_name,
-            video_fps, video_filename, viewed_duration, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'ready')""",
+            video_fps, video_filename, viewed_duration, status, shared_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 'ready', ?)""",
         (
             game["name"], game["blake3_hash"], game["video_duration"],
             game["video_width"], game["video_height"], game["video_size"],
             game["opponent_name"], game["game_date"], game["game_type"],
-            game["tournament_name"], game["video_fps"],
+            game["tournament_name"], game["video_fps"], shared_by,
         ),
     )
     new_game_id = rcur.lastrowid
@@ -432,6 +444,12 @@ def materialize_game_share(
     """
     sharer_conn = _open_profile_db(sharer_user_id, sharer_profile_id)
 
+    # T5330: provenance marker for every shared-in row — NEVER NULL for a share, so
+    # onboarding-blind quest counts can exclude it. Precedence: sharer_email ->
+    # sharer_user_id -> "lost". (Distinct from sharer_profile_name below, which is the
+    # athlete-attribution display name.)
+    shared_by = sharer_email or sharer_user_id or SHARED_PROVENANCE_LOST
+
     # Query sharer's profile name for athlete attribution (fall back to email)
     sharer_profile_name = sharer_email
     try:
@@ -482,7 +500,8 @@ def materialize_game_share(
                 f"{'game-only' if game_only else 'merging clips'}"
             )
         elif sharer_conn:
-            recipient_game_id = _copy_game(sharer_conn, recipient_conn, game_id)
+            recipient_game_id = _copy_game(
+                sharer_conn, recipient_conn, game_id, shared_by=shared_by)
             logger.info(
                 f"[Materialize] Created game {recipient_game_id} in recipient's DB"
             )
@@ -497,7 +516,7 @@ def materialize_game_share(
         else:
             result = _materialize_clips(
                 recipient_conn, recipient_game_id, clip_data,
-                shared_by=sharer_email, sharer_profile_name=sharer_profile_name,
+                shared_by=shared_by, sharer_profile_name=sharer_profile_name,
             )
 
         # Auto-create a draft reel for each shared 5-star clip, using the exact

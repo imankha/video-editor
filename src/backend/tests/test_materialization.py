@@ -57,7 +57,8 @@ def _create_profile_db(path: Path) -> sqlite3.Connection:
             video_fps REAL,
             status TEXT DEFAULT 'ready',
             auto_export_status TEXT,
-            recap_video_url TEXT
+            recap_video_url TEXT,
+            shared_by TEXT DEFAULT NULL
         );
         CREATE TABLE IF NOT EXISTS game_videos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

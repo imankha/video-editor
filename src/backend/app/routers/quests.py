@@ -155,8 +155,16 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     # published (archived) reel still counts. Do not add an archived_at gate
     # here (it would un-complete quests on publish); drafts-list semantics
     # live in projects.py/games.py instead.
+    # T5330: onboarding is a function of the user's OWN content only. Content
+    # materialized from a teammate share carries shared_by (set at
+    # materialization); exclude it so a shared game/clip/auto-reel never
+    # pre-completes add_clip/rate_clip/annotate_brilliant. The 5-star
+    # auto-draft-reel is excluded transitively: its auto_project_id sits on the
+    # shared raw_clip row, which has shared_by set. Own content (shared_by NULL)
+    # still counts, so pre-existing-user backfills are unaffected.
     rc = cursor.execute(
-        "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels FROM raw_clips"
+        "SELECT count(*) as total, count(CASE WHEN auto_project_id IS NOT NULL THEN 1 END) as reels "
+        "FROM raw_clips WHERE shared_by IS NULL"
     ).fetchone()
 
     steps = {}
@@ -168,7 +176,12 @@ def _check_all_steps(user_id: str, conn, skip_quest_ids: set | None = None) -> d
     steps["watch_overlay_tutorial"]  = 'watched_overlay_tutorial' in achieved
     steps["watch_publish_tutorial"]  = 'watched_publish_tutorial' in achieved
 
-    steps["upload_game"] = cursor.execute("SELECT 1 FROM games LIMIT 1").fetchone() is not None
+    # T5330: exclude games materialized from a share (games.shared_by set at
+    # materialization). Own games have shared_by NULL, so a genuine upload still
+    # completes this step.
+    steps["upload_game"] = cursor.execute(
+        "SELECT 1 FROM games WHERE shared_by IS NULL LIMIT 1"
+    ).fetchone() is not None
     # add_clip: completed when the user opens the Add Clip form (achievement). Backfilled
     # by "any clip exists" so it auto-completes on save and for users who clipped before
     # this step existed (you can't have a clip without having opened the form).
