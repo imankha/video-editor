@@ -68,10 +68,16 @@ export function KeyframeMarker({
       {/* Invisible hit area that keeps buttons visible when moving mouse between elements */}
       <div className="absolute -top-7 -bottom-4 -left-4 -right-4 pointer-events-none" />
 
-      {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead */}
+      {/* Copy button (shown when selected, above keyframe) - z-50 to appear above all UI including playhead.
+          On coarse (touch) pointers the button becomes a 44px flex box (icon stays 13px, centered).
+          When the delete button ALSO renders (Overlay/RegionLayer) the two 44px boxes stacked at
+          -top-5 / top-4 would overlap, so lift copy to -top-12 on coarse pointers to clear delete
+          and the diamond. Fine pointers keep the compact -top-5. */}
       {showCopyButton && onCopy && (
         <button
-          className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 ${getCopyButtonTransform()} ${
+          className={`absolute -top-5 left-1/2 transform transition-opacity bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 z-50 coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center ${
+            showDeleteButton && onDelete ? 'coarse-pointer:-top-12' : ''
+          } ${getCopyButtonTransform()} ${
             isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
           onClick={(e) => {
@@ -90,7 +96,7 @@ export function KeyframeMarker({
         onClick={onClick}
         title={tooltip}
       >
-        <div className="absolute -inset-3 bg-transparent" />
+        <div className="absolute -inset-3 coarse-pointer:-inset-4 bg-transparent" />
         <div className={`w-3 h-3 transform rotate-45 transition-all ${markerColorClass}`} />
       </div>
 
@@ -99,7 +105,7 @@ export function KeyframeMarker({
           being hidden behind the next layer below */}
       {showDeleteButton && onDelete && (
         <button
-          className={`absolute left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 ${
+          className={`absolute left-1/2 transform -translate-x-1/2 transition-opacity bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 z-50 coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center ${
             !showCopyButton || !onCopy ? '-top-5' : 'top-4'
           } ${
             isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none'

@@ -106,6 +106,22 @@ export const SCREENS = [
       // either so this asserts reachability cross-viewport, not desktop-only chrome.
       { label: 'Home / Back nav', locator: (p) => p.getByRole('button', { name: /^(Home|Back)$/ }).first() },
     ],
+    // T5360 (invariant #4, coarse-pointer projects only): the icon-only playback
+    // controls (shared Button size="sm" iconOnly via Controls.jsx) that collapsed to
+    // ~26px on tablets. Each must render >= 44px on touch. Kept SEPARATE from
+    // `actions` (the reachability set) because these are size-checked, not part of
+    // T4880's reachability list — and because a nav/text control is legitimately
+    // shorter than a 44px icon box. Verified present+visible+enabled at 44x44 on the
+    // iPad project. (Zoom controls live in ZoomControls.jsx but are hidden in the
+    // mobile/tablet Framing layout, so they are not listed here; the shared-Button
+    // fix covers them on any touch layout that DOES render them.)
+    touchTargets: [
+      { label: 'Step backward', locator: (p) => p.locator('[title="Step backward (one frame)"]') },
+      // Play/Pause share one control; its title toggles with playback state.
+      { label: 'Play/Pause', locator: (p) => p.locator('[title="Play"], [title="Pause"]') },
+      { label: 'Restart', locator: (p) => p.locator('[title="Restart (go to beginning)"]') },
+      { label: 'Step forward', locator: (p) => p.locator('[title="Step forward (one frame)"]') },
+    ],
   },
   {
     id: 'overlay',

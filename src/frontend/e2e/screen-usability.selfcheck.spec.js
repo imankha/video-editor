@@ -23,11 +23,29 @@ import {
   assertReachable,
   assertNoDeadScrollTrap,
   assertNoHorizontalOverflow,
+  assertTouchTargetSizes,
 } from './helpers/usabilityAudit.js';
 
 const PHONE = { width: 390, height: 844 };
 
 const ACTION = `<button id="primary" style="padding:12px 20px">Primary Action</button>`;
+
+/** A single-action manifest around #primary — lets the size assertion run against
+ *  a synthetic page exactly as it runs against a real screen manifest. */
+const sizeManifest = { name: 'synthetic', actions: [{ label: 'primary', locator: (p) => p.locator('#primary') }] };
+
+/** The T5360 defect shape: an icon-only control that renders ~26px on touch (the
+ *  tablet regression). Explicit box so the measurement is deterministic. */
+const SMALL_26 = `<!doctype html><html><head><style>
+  html,body{margin:0}
+  #primary{width:26px;height:26px;padding:0;border:0;display:inline-flex;align-items:center;justify-content:center}
+</style></head><body>${ACTION}</body></html>`;
+
+/** The fixed shape: the same control floored to the 44px touch minimum. */
+const TARGET_44 = `<!doctype html><html><head><style>
+  html,body{margin:0}
+  #primary{width:44px;height:44px;padding:0;border:0;display:inline-flex;align-items:center;justify-content:center}
+</style></head><body>${ACTION}</body></html>`;
 
 /** Reachable in a normal scrollable document, well below the fold. */
 const GOOD = `<!doctype html><html><head><style>
@@ -107,5 +125,21 @@ test.describe('usability audit self-check (synthetic layouts, no backend)', () =
   test('BAD horizontal overflow is caught', async ({ page }) => {
     await page.setContent(BAD_HOVERFLOW);
     await expectThrows(() => assertNoHorizontalOverflow(page), 'horizontal overflow should be detected');
+  });
+
+  // T5360 invariant #4: the touch-target-size assertion must catch a sub-44px
+  // control (the reported tablet regression) and pass a floored one — both
+  // directions, or it could silently rubber-stamp under-sized buttons.
+  test('BAD 26px touch target is caught', async ({ page }) => {
+    await page.setContent(SMALL_26);
+    await expectThrows(
+      () => assertTouchTargetSizes(page, sizeManifest, { min: 44 }),
+      '26px control should fail the 44px touch-target floor',
+    );
+  });
+
+  test('GOOD 44px touch target passes', async ({ page }) => {
+    await page.setContent(TARGET_44);
+    await assertTouchTargetSizes(page, sizeManifest, { min: 44 });
   });
 });
