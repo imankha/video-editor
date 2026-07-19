@@ -1,9 +1,60 @@
 import { useState, useCallback, useRef } from 'react';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
+import { toast } from '../components/shared/Toast';
 import { useQuestStore } from '../stores/questStore';
 
 const API_BASE_URL = `${API_BASE}/api`;
+
+/**
+ * T5350: clip-gesture-appropriate copy for a durable sync failure (503
+ * `{code:'sync_failed'}`, from T4320's `Depends(durable_sync)` on the clip routes).
+ *
+ * The backend reuses the shared `DURABLE_SYNC_FAILED_RESPONSE`, whose `detail` reads
+ * "Your reel was not moved" — nonsensical for a clip save/update/delete. So we key the
+ * user-facing copy on the GESTURE here instead of surfacing the backend `detail`. Same
+ * title as the publish/move durable-fail UX (`useMoveReels`), clip-specific body.
+ */
+export const CLIP_SYNC_FAILED_COPY = {
+  save: {
+    title: 'Could not save to the cloud',
+    message: "Your clip wasn't saved. Please try again.",
+  },
+  update: {
+    title: 'Could not save to the cloud',
+    message: "Your clip changes weren't saved. Please try again.",
+  },
+  delete: {
+    title: 'Could not save to the cloud',
+    message: "Your clip wasn't deleted. Please try again.",
+  },
+};
+
+/**
+ * Extract the durable-sync-failure code from a non-ok response body. The middleware
+ * returns the payload at the top level (`{detail, code, retryable}`), but tolerate an
+ * HTTPException-wrapped `{detail: {code}}` too so any route shape is handled.
+ */
+function syncFailedCode(body) {
+  return body?.code || body?.detail?.code || null;
+}
+
+/**
+ * Surface the clip-not-saved state for a durable sync failure: a persistent toast
+ * (mirrors the overlay/publish durable-fail UX) carrying a Retry that re-runs the
+ * SAME gesture. The retry is a user click — NOT a reactive re-send. `dedupKey` keeps
+ * repeated failures of one gesture to a single toast instead of stacking.
+ */
+export function surfaceClipSyncFailed(gesture, retry) {
+  const copy = CLIP_SYNC_FAILED_COPY[gesture];
+  console.warn(`[useRawClipSave] ${gesture} sync_failed (503) — clip not saved, offering Retry`);
+  toast.error(copy.title, {
+    message: copy.message,
+    duration: 0, // persistent until retried/dismissed
+    dedupKey: `clip-sync-failed-${gesture}`,
+    action: { label: 'Retry', onClick: retry },
+  });
+}
 
 /**
  * T540: Refresh quest progress after any clip mutation.
@@ -91,6 +142,13 @@ export function useRawClipSave() {
         if (clipData.create_project) {
           console.error('[CreateReel] saveClip got HTTP error:', response.status, errorData);
         }
+        // T5350: durable clip save committed locally but never reached R2 (T4320).
+        // Surface a clip-appropriate not-saved state + Retry — never a silent success.
+        if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
+          setError(CLIP_SYNC_FAILED_COPY.save.message);
+          surfaceClipSyncFailed('save', () => saveClip(gameId, clipData));
+          return null;
+        }
         throw new Error(errorData.detail || 'Failed to save clip');
       }
 
@@ -143,6 +201,12 @@ export function useRawClipSave() {
         if (updates.create_project) {
           console.error('[CreateReel] updateClip got HTTP error:', response.status, errorData);
         }
+        // T5350: durable clip update committed locally but never reached R2 (T4320).
+        if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
+          setError(CLIP_SYNC_FAILED_COPY.update.message);
+          surfaceClipSyncFailed('update', () => updateClip(clipId, updates));
+          return null;
+        }
         throw new Error(errorData.detail || 'Failed to update clip');
       }
 
@@ -188,6 +252,12 @@ export function useRawClipSave() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        // T5350: durable clip delete committed locally but never reached R2 (T4320).
+        if (response.status === 503 && syncFailedCode(errorData) === 'sync_failed') {
+          setError(CLIP_SYNC_FAILED_COPY.delete.message);
+          surfaceClipSyncFailed('delete', () => deleteClip(clipId));
+          return false;
+        }
         throw new Error(errorData.detail || 'Failed to delete clip');
       }
 
