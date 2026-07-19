@@ -386,6 +386,20 @@ function App() {
     window.history.replaceState({}, '', '/');
   }, []);
 
+  // T5330b: SharedAnnotationView sets sessionStorage 'shared_annotation_flow' to
+  // suppress the onboarding QuestPanel while the recipient is on the /shared/teammate
+  // view (kept in sessionStorage so it survives the share->login reload). It has no
+  // owner that clears it, so a signed-up recipient never sees their new-user flow.
+  // Clear it once the user is in their OWN authenticated app and no longer on the
+  // shared-annotation route. Keyed on "left the shared view" (not merely
+  // "authenticated"), so an existing user actively viewing a shared annotation keeps
+  // the intended suppression.
+  useEffect(() => {
+    if (isAuthenticated && !teammateShareToken) {
+      sessionStorage.removeItem('shared_annotation_flow');
+    }
+  }, [isAuthenticated, teammateShareToken]);
+
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
 
