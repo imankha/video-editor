@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-// eslint-disable-next-line no-unused-vars -- both icons are used in JSX below; the config's no-unused-vars doesn't recognize JSX usage
 import { X, Send } from 'lucide-react';
 import { useAdminStore } from '../../stores/adminStore';
 

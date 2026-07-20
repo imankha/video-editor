@@ -2,9 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { AuthGateModal } from './components/AuthGateModal.jsx'
-// Used in JSX below; same pre-existing JSX-detection gap as the other
-// component imports in this file (see AuthGateModal above).
-import { UpdateGateModal } from './components/UpdateGateModal.jsx' // eslint-disable-line no-unused-vars
+import { UpdateGateModal } from './components/UpdateGateModal.jsx'
 import { AuthErrorBanner } from './components/AuthErrorBanner.jsx'
 import { ReportProblemButton } from './components/ReportProblemButton.jsx'
 import { ToastContainer } from './components/shared'

@@ -46,6 +46,11 @@ export default [
       // React rules
       "react/jsx-uses-react": "off", // Not needed with React 17+ JSX transform
       "react/react-in-jsx-scope": "off", // Not needed with React 17+ JSX transform
+      // T5580: marks a variable referenced only in JSX (`<Foo />`) as "used" so
+      // no-unused-vars stops false-flagging component/icon imports used only in
+      // markup. Without it, every JSX-only import read as unused (most of the
+      // frozen warning backlog + forced eslint-disable workarounds).
+      "react/jsx-uses-vars": "error",
       "react/prop-types": "off", // No PropTypes in this project
       "react/jsx-key": "warn",
       "react/no-unescaped-entities": "warn",
