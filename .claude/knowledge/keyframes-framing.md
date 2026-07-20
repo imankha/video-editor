@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-12 (T4900 overlay render read path + extended-segment keyframes)
+updated: 2026-07-20 (T5600 video-level detection store, decoupled from region delete/create)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -127,6 +127,52 @@ reached the backend) was the primary cause — the DB held only the auto keyfram
 nothing to render. Failure mode 3 (render clipping extended-segment keyframes) was ruled out
 but sealed by the helper refactor as a defence-in-depth. The frontend `overlayActionStore`
 failure-visibility fix is the correct fix for the primary cause (see persistence-sync.md).
+
+## Video-level player-detection store (T5600)
+
+Player-detection "tracking squares" used to live ONLY inside each highlight region's
+`detections` array in `working_videos.highlights_data`, so `delete_region` (`del
+highlights[idx]`, overlay.py) destroyed a region's tracking along with its spotlight span.
+Fixed by decoupling storage onto a new column: **`working_videos.detections_data`** (BLOB,
+msgpack, `profile_db`, migration `v027`) holds a flat, whole-timeline payload
+`{videoWidth, videoHeight, fps, detections:[{timestamp,frame,boxes}]}` — detection
+timestamps are already absolute concatenated-timeline time
+(`calculate_detection_timestamps`, multi_clip.py), so slicing by `[start,end]` needs no
+per-clip remapping.
+
+- **`region.detections` is now a read-time PROJECTION, never persisted per-region.**
+  `GET /overlay-data` (overlay.py:~1593) decodes `detections_data`, then for every region
+  sets `region['detections'] = slice_detections(vd, bounds)` and
+  `videoWidth/videoHeight/fps` from the payload meta — `_region_bounds` (existing helper)
+  supplies the bounds. This happens on EVERY read, so a region's detections always reflect
+  the canonical store, never a stale embedded copy.
+- **`create_region`/`delete_region` (overlay.py) are UNCHANGED** — they only ever touch
+  `highlights_data`. That is the whole point: decoupling the store means delete/create need
+  no detection-specific logic to "protect tracking".
+- **Shared hoist/slice logic**: `app/services/video_detections.py` —
+  `hoist_video_detections(regions)` (union of all regions' embedded `detections`, dedup by
+  `(round(timestamp,2), frame)`, meta from the first region carrying
+  videoWidth/videoHeight/fps, `None` if nothing to hoist) and `slice_detections(vd, start,
+  end, eps=0.04)`. Used by BOTH the v027 migration backfill and the `/overlay-data`
+  read-time fallback (when `detections_data` is NULL — un-migrated row, or a row the
+  migration couldn't backfill) — one implementation, two callers, never persisted from the
+  read-time fallback path.
+- **Frontend mirror**: `sliceDetections` in `useHighlightRegions.js` (T5600) — keep it in
+  sync with the Python `slice_detections`. The hook holds the flat payload in state
+  (`videoDetections`, set via `setVideoDetections` from the `/overlay-data` response) and
+  `addRegion` slices it locally so a newly created region shows tracking squares instantly,
+  without waiting for a reload. `restoreRegions` is UNCHANGED — the backend already delivers
+  `saved.detections` as the projected slice.
+- **Export producer**: `run_player_detection_for_highlights` (multi_clip.py) now returns
+  `(regions, video_detections)` instead of just `regions` — the flat payload is the union of
+  all per-clip `clip_detections` already built for the (unchanged, additive) region blobs.
+  All three internal early-return/fallback paths return an empty `_empty_video_detections()`
+  payload alongside `generate_default_highlight_regions(...)`. Only the Modal/local-YOLO
+  producer at multi_clip.py's primary INSERT site (~1427) was wired to persist
+  `detections_data`; the sibling local-file export path (`run_local_detection_on_video_file`,
+  second INSERT ~1739) was deliberately left untouched (design: minimal/additive diff, no
+  characterization net on the export path) — that path's rows rely on the `/overlay-data`
+  read-time hoist fallback until a follow-up wires it too.
 
 ## Landmines & history
 - **Mobile editor layout invariant (T4880).** The editor shell (`App.jsx`, the non-Annotate

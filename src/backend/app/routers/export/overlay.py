@@ -59,6 +59,7 @@ from ...services.poster import (
     load_project_clip_segments,
     read_clip_segments_for_project,
 )
+from ...services.video_detections import hoist_video_detections, slice_detections
 from ...storage import (
     delete_from_r2,
     generate_presigned_url,
@@ -1600,7 +1601,11 @@ async def get_overlay_data(project_id: int):
     default highlight data (from previous projects using the same clips).
 
     Response:
-    - highlights_data: Parsed JSON array of highlight regions
+    - highlights_data: Parsed JSON array of highlight regions (each region's
+      `detections` is a read-time projection of `detections_data`, see below)
+    - detections_data: flat, whole-timeline detection payload
+      {videoWidth, videoHeight, fps, detections:[{timestamp,frame,boxes}]},
+      or null if the video has none (T5600 -- canonical store, survives region delete)
     - text_overlays: Parsed JSON array of text overlay configs
     - effect_type: 'brightness_boost' | 'dark_overlay'
     - highlight_color: Hex color string or null (user's last selected color)
@@ -1612,7 +1617,8 @@ async def get_overlay_data(project_id: int):
 
         cursor.execute("""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
-                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength
+                   highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
+                   detections_data
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1631,6 +1637,7 @@ async def get_overlay_data(project_id: int):
         fill_enabled = True
         fill_opacity = 0.20
         dim_strength = 0.20
+        video_detections = None
 
         if result:
             if result['highlights_data']:
@@ -1641,6 +1648,16 @@ async def get_overlay_data(project_id: int):
 
             if result['text_overlays']:
                 text_overlays = decode_data(result['text_overlays']) or []
+
+            if result['detections_data']:
+                try:
+                    video_detections = decode_data(result['detections_data'])
+                except Exception:
+                    logger.error(
+                        f"[Overlay Data] Failed to decode detections_data for project {project_id}",
+                        exc_info=True,
+                    )
+                    video_detections = None
 
             effect_type = normalize_effect_type(result['effect_type'])
             highlight_color = result['highlight_color']
@@ -1658,6 +1675,24 @@ async def get_overlay_data(project_id: int):
                 from_raw_clip = True
                 logger.info(f"[Overlay Data] Using default highlights from raw_clip for project {project_id}")
 
+        # T5600: detections_data is the canonical store. Old exports (pre-migration,
+        # or a row the migration couldn't backfill) have it NULL -- hoist a flat
+        # payload from the regions' embedded detections at read time. Read-only:
+        # never persisted here, only in the v027 migration.
+        if video_detections is None:
+            video_detections = hoist_video_detections(highlights)
+
+        # Project the canonical payload onto each region as a read-time slice
+        # (never persisted) so region.detections/videoWidth/videoHeight/fps stay
+        # correct even though detections_data is now their source of truth.
+        for region in highlights:
+            start, end = _region_bounds(region)
+            region['detections'] = slice_detections(video_detections, start, end)
+            if video_detections:
+                region['videoWidth'] = video_detections.get('videoWidth')
+                region['videoHeight'] = video_detections.get('videoHeight')
+                region['fps'] = video_detections.get('fps')
+
         # Diagnostic logging
         total_boxes = sum(len(d.get('boxes', [])) for h in highlights for d in (h.get('detections') or []))
         logger.info(f"[Overlay Data] project={project_id}: {len(highlights)} regions, {total_boxes} detection boxes, duration={video_duration}, from_raw_clip={from_raw_clip}")
@@ -1667,6 +1702,7 @@ async def get_overlay_data(project_id: int):
 
         return JSONResponse({
             'highlights_data': highlights,
+            'detections_data': video_detections,
             'text_overlays': text_overlays,
             'effect_type': effect_type,
             'highlight_color': highlight_color,

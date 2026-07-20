@@ -738,13 +738,18 @@ def calculate_detection_timestamps(source_clips: list[dict[str, Any]], fps: int 
     return detection_points
 
 
+def _empty_video_detections(fps: int = 30) -> dict[str, Any]:
+    """Empty video-level detection payload for fallback/default paths (T5600)."""
+    return {"videoWidth": None, "videoHeight": None, "fps": fps, "detections": []}
+
+
 async def run_player_detection_for_highlights(
     user_id: str,
     output_key: str,
     source_clips: list[dict[str, Any]],
     progress_callback=None,
     fps: int = 30,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Run batch player detection and enhance highlight regions with detected player boxes.
 
@@ -758,14 +763,15 @@ async def run_player_detection_for_highlights(
         fps: Frame rate of the working video (for frame number calculation)
 
     Returns:
-        List of highlight regions with detection-enhanced keyframes
+        Tuple of (highlight regions with detection-enhanced keyframes, video-level
+        detections payload: {videoWidth, videoHeight, fps, detections:[{timestamp,frame,boxes}]})
     """
     # Calculate detection timestamps and frame numbers
     detection_points = calculate_detection_timestamps(source_clips, fps)
 
     if not detection_points:
         logger.warning("[Player Detection] No timestamps to detect, returning default regions")
-        return generate_default_highlight_regions(source_clips)
+        return generate_default_highlight_regions(source_clips), _empty_video_detections(fps)
 
     # Extract just timestamps for the detection API (it returns boxes keyed by timestamp)
     timestamps = [p['timestamp'] for p in detection_points]
@@ -815,7 +821,7 @@ async def run_player_detection_for_highlights(
 
         if detection_result.get("status") != "success":
             logger.warning(f"[Player Detection] Detection FAILED: {detection_result.get('error')}, using default regions")
-            return generate_default_highlight_regions(source_clips)
+            return generate_default_highlight_regions(source_clips), _empty_video_detections(fps)
 
         detections = detection_result.get("detections", [])
         video_width = detection_result.get("video_width", 810)
@@ -829,7 +835,7 @@ async def run_player_detection_for_highlights(
 
     except Exception as e:
         logger.error(f"[Player Detection] Detection EXCEPTION: {e}, using default regions", exc_info=True)
-        return generate_default_highlight_regions(source_clips)
+        return generate_default_highlight_regions(source_clips), _empty_video_detections(fps)
 
     # Build detection lookup by timestamp (with small tolerance for floating point)
     detection_by_time = {}
@@ -896,7 +902,15 @@ async def run_player_detection_for_highlights(
 
     total_boxes = sum(len(d.get('boxes', [])) for r in regions for d in r.get('detections', []))
     logger.info(f"[Player Detection] Generated {len(regions)} highlight regions with {total_boxes} total detection boxes")
-    return regions
+
+    # T5600: flat, video-level detection payload (canonical store, decoupled from regions)
+    video_detections = {
+        'videoWidth': video_width,
+        'videoHeight': video_height,
+        'fps': fps,
+        'detections': [d for r in regions for d in r.get('detections', [])],
+    }
+    return regions, video_detections
 
 
 def calculate_multi_clip_resolution(
@@ -1383,7 +1397,7 @@ async def _export_clips(
                 source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
 
                 try:
-                    highlight_regions = await run_player_detection_for_highlights(
+                    highlight_regions, video_detections = await run_player_detection_for_highlights(
                         user_id=user_id,
                         output_key=output_key,
                         source_clips=source_clips,
@@ -1393,6 +1407,7 @@ async def _export_clips(
                 except Exception as det_error:
                     logger.warning(f"[Multi-Clip Export] Player detection failed, using defaults: {det_error}")
                     highlight_regions = generate_default_highlight_regions(source_clips)
+                    video_detections = _empty_video_detections()
 
                 try:
                     with get_db_connection() as conn:
@@ -1405,13 +1420,14 @@ async def _export_clips(
                         next_version = cursor.fetchone()['next_version']
 
                         highlights_encoded = encode_data(highlight_regions)
+                        detections_encoded = encode_data(video_detections)
 
                         logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
 
                         cursor.execute("""
-                            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
-                            VALUES (?, ?, ?, ?, ?)
-                        """, (project_id, output_filename, next_version, video_duration, highlights_encoded))
+                            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, detections_data)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        """, (project_id, output_filename, next_version, video_duration, highlights_encoded, detections_encoded))
                         working_video_id = cursor.lastrowid
 
                         cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))

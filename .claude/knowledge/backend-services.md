@@ -1,6 +1,6 @@
 ---
 domain: backend-services
-updated: 2026-07-15 (T4860: admin bulk user actions — POST /admin/users/bulk/grant-credits + /bulk/email, plus the `hello@reelballers.com` sender / `send_admin_update_email` path in email.py. T5060: app startup/shutdown now via fastapi `lifespan=` (not `@app.on_event`); pytest.ini added with a scoped filterwarnings guard + `local_disk_timing` marker. T5020: fastapi 0.110.1 / starlette 0.37.2 -- TestClient no longer passes removed `app=` kwarg, test and prod now both use httpx 0.28.1)
+updated: 2026-07-20 (T5600: working_videos.detections_data column + v027 migration; T4860: admin bulk user actions — POST /admin/users/bulk/grant-credits + /bulk/email, plus the `hello@reelballers.com` sender / `send_admin_update_email` path in email.py. T5060: app startup/shutdown now via fastapi `lifespan=` (not `@app.on_event`); pytest.ini added with a scoped filterwarnings guard + `local_disk_timing` marker. T5020: fastapi 0.110.1 / starlette 0.37.2 -- TestClient no longer passes removed `app=` kwarg, test and prod now both use httpx 0.28.1)
 ---
 # Backend Services & Structure — Domain Knowledge
 
@@ -66,7 +66,7 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
 | Track | DB | Version mechanism | Latest (2026-07-03) |
 |---|---|---|---|
 | `postgres` | Fly Postgres | `schema_migrations` table | v018 |
-| `profile_db` | profile.sqlite | `PRAGMA user_version` | v026 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section) |
+| `profile_db` | profile.sqlite | `PRAGMA user_version` | v027 (v024 poster_filename T4890; v025 slowmo_section_start/end freeze T5090 — backfills from R2 archive; v026 `games.shared_by` + backfill T5330 — see Quest system section; **v027 `working_videos.detections_data` T5600** — video-level player-detection store, backfills by hoisting the union of existing regions' embedded detections via `app/services/video_detections.hoist_video_detections`, see keyframes-framing.md § Video-level player-detection store) |
 | `user_db` | user.sqlite | `PRAGMA user_version` | v006 |
 
 - Only versions `> current` are applied (base.py:38-40) — never reuse or renumber a version.
