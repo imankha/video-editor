@@ -91,19 +91,27 @@ const corner = (id) => screen.queryByTestId(`highlight-corner-${id}`);
 beforeEach(() => setCoarse(false));
 afterEach(() => cleanup());
 
-describe('HighlightOverlay — hidden when NOT editable (player boxes ON)', () => {
-  it('renders nothing at all (fine pointer)', () => {
-    renderOverlay(false);
-    expect(body()).toBeNull();
-    expect(corner('se')).toBeNull();
-    expect(corner('nw')).toBeNull();
+describe('HighlightOverlay — display-only when NOT editable (player boxes ON)', () => {
+  it('shows the circle but no editing UI, and intercepts no pointer events', () => {
+    const { onChange, onComplete } = renderOverlay(false);
+    expect(body()).toBeTruthy(); // the spotlight circle is still visible with tracking on
+    expect(body().getAttribute('class')).toContain('pointer-events-none');
+    for (const id of ['nw', 'ne', 'sw', 'se']) expect(corner(id)).toBeNull();
+    expect(screen.queryByTestId('highlight-move-lever')).toBeNull();
+    // A drag on the display-only body must not move or commit anything.
+    fireEvent.pointerDown(body(), { pointerId: 1, pointerType: 'mouse', clientX: 320, clientY: 180 });
+    fireEvent.pointerMove(body(), { pointerId: 1, pointerType: 'mouse', clientX: 360, clientY: 180 });
+    fireEvent.pointerUp(body(), { pointerId: 1, pointerType: 'mouse', clientX: 360, clientY: 180 });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
-  it('renders nothing at all (coarse pointer)', () => {
+  it('no editing UI on coarse either (no lever, no corners)', () => {
     setCoarse(true);
     renderOverlay(false);
-    expect(body()).toBeNull();
+    expect(body()).toBeTruthy();
     expect(corner('se')).toBeNull();
+    expect(screen.queryByTestId('highlight-move-lever')).toBeNull();
   });
 });
 
