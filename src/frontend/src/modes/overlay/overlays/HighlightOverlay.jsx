@@ -242,10 +242,10 @@ export default function HighlightOverlay({
   // document-level touchmove blocker never lingers — a stray one would freeze page scroll.
   useEffect(() => () => window.removeEventListener('touchmove', preventDefaultTouch), []);
 
-  // The spotlight circle + its editing frame render ONLY when the player-tracking
-  // layer is OFF (editable). With tracking on you're picking a player; with it off
-  // you're placing/adjusting the spotlight (user request, 2026-07-20).
-  const shouldRender = isEnabled && currentHighlight && videoDisplayRect && editable;
+  // The spotlight circle ALWAYS renders (so the highlight is visible with the tracking
+  // layer on, too). Only the EDITING UI — selection frame, corner handles, move lever
+  // and pointer interaction — is gated on `editable` (= player boxes OFF).
+  const shouldRender = isEnabled && currentHighlight && videoDisplayRect;
   if (!shouldRender) {
     return null;
   }
@@ -257,14 +257,16 @@ export default function HighlightOverlay({
   const cornerHitR = isCoarse ? 26 : 12;
   const frameMargin = isCoarse ? 12 : 8; // gap between the ellipse edge and the frame
 
-  // Move by dragging the ELLIPSE INTERIOR. pointerEvents:'all' makes the transparent
-  // inside grabbable (a plain transparent fill is not hit-tested) — that is what let
-  // the body-drag fail before.
-  const bodyPointerProps = {
-    className: 'cursor-move',
-    style: { pointerEvents: 'all', touchAction: 'none' },
-    onPointerDown: handleEllipsePointerDown,
-  };
+  // The ellipse interior drags to move ONLY while editable. When the tracking layer is
+  // on, the circle is display-only and intercepts no pointer events (video tap-nav
+  // passes through). pointerEvents:'all' makes the transparent inside grabbable.
+  const bodyPointerProps = editable
+    ? {
+        className: 'cursor-move',
+        style: { pointerEvents: 'all', touchAction: 'none' },
+        onPointerDown: handleEllipsePointerDown,
+      }
+    : { className: 'pointer-events-none' };
 
   // Apply ground spotlight transform: shift center to feet, flatten ellipse
   let displayX = currentHighlight.x;
@@ -426,11 +428,11 @@ export default function HighlightOverlay({
           />
         )}
 
-        {/* Selection frame + corner resize handles (T5570c bounding-box model). The
-            dashed frame hugs the ellipse; the four corner handles sit at its corners —
-            always outside the ellipse, so they never cover the spotlight. Drag a
-            corner to resize both radii around the fixed center. */}
-        {(() => {
+        {/* Selection frame + corner resize handles (T5570c bounding-box model), shown
+            only while editable (player boxes OFF). The dashed frame hugs the ellipse;
+            the four corner handles sit at its corners — always outside the ellipse, so
+            they never cover the spotlight. Drag a corner to resize both radii. */}
+        {editable && (() => {
           const bx = screenHighlight.x;
           const by = screenHighlight.y;
           const hrx = screenHighlight.radiusX + frameMargin;
@@ -487,8 +489,8 @@ export default function HighlightOverlay({
       {/* Move lever (mobile) — the 4-arrow move icon sitting ABOVE the bounding box;
           drag it to move the circle. An HTML element (not SVG) so touch-action:none is
           honored on touch, and placed above the box so it never occludes the spotlight.
-          Touch only — desktop moves by dragging the circle body. */}
-      {isCoarse && (
+          Touch only — desktop moves by dragging the circle body. Editable only. */}
+      {editable && isCoarse && (
         <div
           data-testid="highlight-move-lever"
           role="button"
