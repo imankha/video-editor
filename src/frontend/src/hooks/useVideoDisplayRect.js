@@ -133,6 +133,20 @@ export default function useVideoDisplayRect(
     updateRect();
     window.addEventListener('resize', updateRect);
 
+    // T5590: recompute whenever the video CONTAINER itself resizes, not just on a
+    // window resize. Mobile fullscreen (OverlayModeView `mobileFs`) re-parents the
+    // player to `fixed inset-0 w-full h-full` — the container changes size but the
+    // window does NOT, so no `resize` event fires and `isFullscreen` (desktop-only)
+    // never flips. Without this the transform stays at the pre-fullscreen geometry
+    // and every overlay (detection boxes, spotlight circle) drifts off the players.
+    // A ResizeObserver catches fullscreen, orientation, and any layout shift.
+    const container = videoRef.current?.closest('.video-container');
+    let resizeObserver;
+    if (container && typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(updateRect);
+      resizeObserver.observe(container);
+    }
+
     // Double rAF lets layout settle after a fullscreen toggle; track BOTH frame ids
     // so cleanup cancels the inner frame too (no leaked rAF callback on unmount).
     let innerRafId;
@@ -142,6 +156,7 @@ export default function useVideoDisplayRect(
 
     return () => {
       window.removeEventListener('resize', updateRect);
+      resizeObserver?.disconnect();
       cancelAnimationFrame(outerRafId);
       cancelAnimationFrame(innerRafId);
     };
