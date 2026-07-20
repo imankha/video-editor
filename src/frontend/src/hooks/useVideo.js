@@ -27,12 +27,25 @@ const RANGE_FALLBACK_WATCHDOG_MS = 5000;
  * @see stores/videoStore.js for the underlying state store
  * @see APP_REFACTOR_PLAN.md for refactoring context
  */
+// T5620: format-error (code 4) backoff retry tuning — module-scoped so they're
+// stable and don't churn hook dependency arrays.
+const FORMAT_MAX_RETRIES = 3;
+const FORMAT_RETRY_BASE_MS = 400; // 400ms, 1.2s, 3.6s
 export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
   const videoRef = useRef(null);
 
   // Track retry attempts to prevent infinite loops
   const retryAttemptRef = useRef(0);
   const MAX_RETRY_ATTEMPTS = 2;
+
+  // T5620: a VALID streaming video occasionally fails to initialize with
+  // MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) on first load — a transient decode-
+  // pipeline race, not a real format problem (the file is a valid 206). Retry a
+  // few times with exponential backoff before surfacing the error, so the user
+  // never sees a spurious "format not supported". Separate from retryAttemptRef
+  // (network/stall) so a format retry has its own budget. Reset on each load.
+  const formatRetryRef = useRef(0);
+  const formatRetryTimerRef = useRef(null);
 
   // T1360: when loadVideoFromUrl creates a blob from a streaming URL, stash
   // the original streaming URL so we can recover if the blob becomes stale.
@@ -313,6 +326,12 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
     }, RANGE_FALLBACK_WATCHDOG_MS);
     setError(null);
     retryAttemptRef.current = 0; // Reset retry counter on new video load
+    // T5620: reset the format-error backoff budget + cancel any pending retry.
+    formatRetryRef.current = 0;
+    if (formatRetryTimerRef.current) {
+      clearTimeout(formatRetryTimerRef.current);
+      formatRetryTimerRef.current = null;
+    }
     // T1360: streaming load — no blob to recover, clear any previous stash.
     streamingFallbackUrlRef.current = null;
     isRecoveringRef.current = false;
@@ -1113,6 +1132,33 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           .catch(() => { /* diag probe failed */ });
       }
     } else if (kind === VideoErrorKind.FORMAT_ERROR) {
+      // T5620: a streaming (non-blob) format error is usually a transient init
+      // race on a VALID file — retry a few times with exponential backoff before
+      // giving up. A blob format error is real (no retry). If retries are
+      // exhausted, fall through to the diagnostic probe + user-facing error.
+      if (formatRetryRef.current < FORMAT_MAX_RETRIES && video.src && !video.src.startsWith('blob:')) {
+        const resumeAt = video.currentTime;
+        formatRetryRef.current += 1;
+        const delay = FORMAT_RETRY_BASE_MS * Math.pow(3, formatRetryRef.current - 1); // 400ms, 1.2s, 3.6s
+        console.warn(
+          `[VIDEO] Format error, retrying with backoff (attempt ${formatRetryRef.current}/${FORMAT_MAX_RETRIES}, ${delay}ms)`,
+          { url: video.src.substring(0, 80) },
+        );
+        const restoreTime = () => {
+          if (videoRef.current && !Number.isNaN(resumeAt) && resumeAt > 0) {
+            try { videoRef.current.currentTime = resumeAt; } catch { /* not ready yet */ }
+          }
+        };
+        formatRetryTimerRef.current = setTimeout(() => {
+          formatRetryTimerRef.current = null;
+          const v = videoRef.current;
+          if (!v) return;
+          v.addEventListener('loadeddata', restoreTime, { once: true });
+          try { v.load(); } catch { /* load may throw if detached */ }
+        }, delay);
+        return; // don't surface the error while a retry is pending
+      }
+
       userMessage = 'Video format not supported.';
       const diagUrl = video.src;
       if (diagUrl && !diagUrl.startsWith('blob:')) {
@@ -1257,6 +1303,10 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
       if (stallTimerRef.current) {
         clearTimeout(stallTimerRef.current);
         stallTimerRef.current = null;
+      }
+      if (formatRetryTimerRef.current) {
+        clearTimeout(formatRetryTimerRef.current);
+        formatRetryTimerRef.current = null;
       }
       if (loadNudgeTimerRef.current) {
         clearTimeout(loadNudgeTimerRef.current);
