@@ -1,14 +1,19 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
+// eslint-disable-next-line no-unused-vars -- used in JSX (move grip); repo eslint lacks react/jsx-uses-vars
+import { Move } from 'lucide-react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 
-// Touch target sizing (T5390). On coarse pointers the resize handles only appear
-// once the circle is SELECTED, and their invisible hit circle is >=44px (radius 22)
+// Touch target sizing (T5450). When the circle is EDITABLE the resize handles and
+// the center move grip render; on coarse pointers each carries a >=44px hit target
 // per the mobile touch-target rule (matches T5360). Desktop keeps the original 7px.
 const HANDLE_VISIBLE_RADIUS_DESKTOP = 7;
 const HANDLE_VISIBLE_RADIUS_TOUCH = 12;
 const HANDLE_HIT_RADIUS_TOUCH = 22; // 44px diameter
+// Center move grip: an HTML button drawn over the circle center. >=44px on coarse.
+const MOVE_GRIP_SIZE_DESKTOP = 32;
+const MOVE_GRIP_SIZE_TOUCH = 44;
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -19,13 +24,12 @@ const HANDLE_HIT_RADIUS_TOUCH = 22; // 44px diameter
  * setPointerCapture, so a drag stays glued to the circle even if the finger/cursor
  * leaves it (T5390, replaces the old mouse-only + window-listener model).
  *
- * On coarse (touch) pointers the interaction is SELECT-THEN-MANIPULATE: one tap on
- * the ellipse selects it (ephemeral view state, never persisted), which reveals the
- * >=44px resize handles and lets the body drag to move / handles drag to resize. A
- * tap elsewhere deselects. Desktop (fine pointer) is byte-identical to before: no
- * selection step, direct drag/resize. Selection is controlled by the parent
- * (`isSelected`/`onSelectedChange`) so the video tap-nav owner can yield while a
- * circle is selected; it falls back to internal state when uncontrolled.
+ * The circle's edit levers are gated on the `editable` prop (= player boxes OFF),
+ * consistently on mobile + desktop (T5450, replaces T5390's touch select-then-
+ * manipulate). When `editable`: the rim resize handles AND a center 4-arrow move grip
+ * render — drag the grip (or body) to move, drag a handle to resize. When NOT
+ * editable the circle is DISPLAY-ONLY: it intercepts no pointer events so the video's
+ * tap-nav behaves normally. There is no tap-to-select and no deselect backdrop.
  */
 export default function HighlightOverlay({
   videoRef,
@@ -43,22 +47,11 @@ export default function HighlightOverlay({
   fillEnabled = false,
   fillOpacity = 0.10,
   dimStrength = 0.15,
-  isSelected,
-  onSelectedChange,
+  editable = false,
 }) {
   const overlayRef = useRef(null);
 
   const isCoarse = useIsCoarsePointer();
-
-  // Controlled/uncontrolled selection. The parent (OverlayModeView) owns the state
-  // so the video tap-nav can yield while selected; when no handler is passed we keep
-  // a local copy so other render paths / tests still work.
-  const [internalSelected, setInternalSelected] = useState(false);
-  const selected = onSelectedChange ? !!isSelected : internalSelected;
-  const setSelected = useCallback((next) => {
-    if (onSelectedChange) onSelectedChange(next);
-    else setInternalSelected(next);
-  }, [onSelectedChange]);
 
   // Transient interaction data kept in refs (not state) so the pointer-move handler
   // reads the current values with zero re-render lag between pointerdown and the
@@ -126,7 +119,8 @@ export default function HighlightOverlay({
 
   /**
    * Begin a body drag. Captures the pointer so the move stays glued to the circle
-   * even if the finger/cursor leaves it, and snapshots the start geometry.
+   * even if the finger/cursor leaves it, and snapshots the start geometry. Shared by
+   * the ellipse body and the center move grip.
    */
   const beginDrag = (e) => {
     e.preventDefault();
@@ -156,39 +150,21 @@ export default function HighlightOverlay({
   };
 
   /**
-   * Pointer down on the ellipse body. On a coarse pointer the FIRST tap only
-   * selects (no move); once selected the body drags. Fine pointers (mouse) drag
-   * immediately, exactly as before — no selection step.
+   * Pointer down on the ellipse body or the center move grip. Only wired when the
+   * circle is editable, so reaching here always starts a body drag (move). Handles
+   * have their own resize path and stop propagation.
    */
   const handleEllipsePointerDown = (e) => {
     if (e.target.classList.contains('resize-handle')) return;
-
-    if (isCoarse && !selected) {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelected(true);
-      return;
-    }
-
     beginDrag(e);
   };
 
   /**
-   * Pointer down on a resize handle. Handles only render when draggable
-   * (desktop always; touch once selected), so reaching here means resize.
+   * Pointer down on a resize handle. Handles only render when editable, so reaching
+   * here means resize.
    */
   const handleResizePointerDown = (e, handle) => {
     beginResize(e, handle);
-  };
-
-  /**
-   * Pointer down on the deselect backdrop (only rendered while selected on touch).
-   * A tap anywhere off the circle deselects and does NOT reach the video tap-nav.
-   */
-  const handleBackdropPointerDown = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setSelected(false);
   };
 
   /**
@@ -266,27 +242,29 @@ export default function HighlightOverlay({
     latestHighlightRef.current = null;  // Clear the ref
   };
 
-  // Reconcile ephemeral selection when the circle is no longer interactable (e.g.
-  // the playhead leaves the region and the overlay stops rendering). Without this
-  // the parent's selection would stay latched and keep the video tap-nav suppressed
-  // even though no circle is visible. This is view-state reconciliation, NOT reactive
-  // persistence — it writes no store/DB (see CLAUDE.md gesture-persistence rule).
   const shouldRender = isEnabled && currentHighlight && videoDisplayRect;
-  useEffect(() => {
-    if (!shouldRender && selected) setSelected(false);
-  }, [shouldRender, selected, setSelected]);
-
   if (!shouldRender) {
     return null;
   }
 
-  // Handles are draggable (and thus rendered) whenever direct manipulation is
-  // available: desktop always, touch only once the circle is selected.
-  const showHandles = !isCoarse || selected;
-  const handleVisibleRadius = (isCoarse && selected)
+  // Levers (rim handles + center move grip) render only when the circle is editable
+  // (player boxes OFF). On coarse pointers the hit targets are >=44px.
+  const showHandles = editable;
+  const handleVisibleRadius = isCoarse
     ? HANDLE_VISIBLE_RADIUS_TOUCH
     : HANDLE_VISIBLE_RADIUS_DESKTOP;
   const handleHitRadius = isCoarse ? HANDLE_HIT_RADIUS_TOUCH : HANDLE_VISIBLE_RADIUS_DESKTOP;
+  const moveGripSize = isCoarse ? MOVE_GRIP_SIZE_TOUCH : MOVE_GRIP_SIZE_DESKTOP;
+
+  // The ellipse body drags to move only while editable. When display-only it must
+  // intercept no pointer events so the video's tap-nav behaves normally.
+  const bodyPointerProps = editable
+    ? {
+        className: 'pointer-events-auto cursor-move',
+        style: { touchAction: 'none' },
+        onPointerDown: handleEllipsePointerDown,
+      }
+    : { className: 'pointer-events-none' };
 
   // Apply ground spotlight transform: shift center to feet, flatten ellipse
   let displayX = currentHighlight.x;
@@ -315,10 +293,6 @@ export default function HighlightOverlay({
     const b = Math.round(parseInt(hex.slice(4, 6), 16) * 0.3);
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   })();
-
-  // Calculate container dimensions for dark_overlay effect
-  const containerWidth = videoDisplayRect.offsetX * 2 + videoDisplayRect.width;
-  const containerHeight = videoDisplayRect.offsetY * 2 + videoDisplayRect.height;
 
   // Ground spotlight: bottom arc path (240°, skipping top 120° where player body is)
   const isGround = highlightShape === 'ground';
@@ -372,23 +346,6 @@ export default function HighlightOverlay({
             />
           </mask>
         </defs>
-
-        {/* Deselect backdrop (touch, while selected): a tap off the circle deselects
-            and — because it captures the tap — keeps it off the video's play/seek
-            tap-nav. Rendered first so the circle + handles sit on top of it. */}
-        {isCoarse && selected && (
-          <rect
-            x="0"
-            y="0"
-            width="100%"
-            height="100%"
-            fill="transparent"
-            className="pointer-events-auto"
-            style={{ touchAction: 'none' }}
-            data-testid="highlight-backdrop"
-            onPointerDown={handleBackdropPointerDown}
-          />
-        )}
 
         {/* Dark overlay effect - dim everything outside the ellipse */}
         {effectType === HighlightEffect.DARK_OVERLAY && (
@@ -451,10 +408,8 @@ export default function HighlightOverlay({
             strokeWidth={strokeWidth}
             strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
             strokeLinecap="round"
-            className="pointer-events-auto cursor-move"
-            style={{ touchAction: 'none' }}
             data-testid="highlight-body"
-            onPointerDown={handleEllipsePointerDown}
+            {...bodyPointerProps}
           />
         ) : (
           <ellipse
@@ -466,10 +421,8 @@ export default function HighlightOverlay({
             stroke={strokeColor}
             strokeWidth={strokeWidth}
             strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
-            className="pointer-events-auto cursor-move"
-            style={{ touchAction: 'none' }}
             data-testid="highlight-body"
-            onPointerDown={handleEllipsePointerDown}
+            {...bodyPointerProps}
           />
         )}
 
@@ -521,17 +474,45 @@ export default function HighlightOverlay({
           </>
         )}
 
-        {/* Center indicator */}
-        <circle
-          cx={screenHighlight.x}
-          cy={screenHighlight.y}
-          r="3"
-          fill="white"
-          stroke={strokeColor}
-          strokeWidth="1"
-          className="pointer-events-none"
-        />
+        {/* Center indicator — hidden behind the move grip while editable */}
+        {!editable && (
+          <circle
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            r="3"
+            fill="white"
+            stroke={strokeColor}
+            strokeWidth="1"
+            className="pointer-events-none"
+          />
+        )}
       </svg>
+
+      {/* Center move grip (T5450) — a 4-arrow handle at the circle center; drag it to
+          MOVE the circle. Reuses the body-drag path (beginDrag + captured pointer-move
+          math). Rendered only when editable; >=44px hit target on coarse pointers. An
+          HTML element (not SVG) so the lucide Move glyph renders cleanly; its captured
+          pointer events still bubble to the root div's move/up handlers. */}
+      {editable && (
+        <div
+          data-testid="highlight-move-grip"
+          role="button"
+          aria-label="Move spotlight"
+          className="absolute pointer-events-auto cursor-move flex items-center justify-center rounded-full bg-white/90 shadow"
+          style={{
+            left: screenHighlight.x,
+            top: screenHighlight.y,
+            width: moveGripSize,
+            height: moveGripSize,
+            transform: 'translate(-50%, -50%)',
+            border: `2px solid ${strokeColor}`,
+            touchAction: 'none',
+          }}
+          onPointerDown={handleEllipsePointerDown}
+        >
+          <Move size={Math.round(moveGripSize * 0.5)} color={outlineColor} />
+        </div>
+      )}
     </div>
   );
 }

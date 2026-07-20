@@ -196,29 +196,36 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
   PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
   `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
   still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
-- **Overlay circle input = Pointer Events + select-then-manipulate on touch (T5390, 2026-07-18)**:
-  `HighlightOverlay` is now `onPointerDown` + `setPointerCapture` (mouse+touch one path);
-  move/up are handled ONCE on the root div via event bubbling from the captured element
-  (no window listeners). Transient drag data lives in refs (`draggingRef`/`resizingRef`/
-  `resizeHandleRef`/`dragStartRef`/`highlightStartRef`) so the first move after pointerdown
-  has zero re-render lag. Interactive SVG elements carry `touch-action:none`. The delta/scale
-  drag math is UNCHANGED (still hand-rolled, not `screenToVideo`) so desktop mouse is
-  byte-identical. On a COARSE pointer (`useIsCoarsePointer` -> `(pointer: coarse)`) the model is
-  select-then-manipulate: first tap selects (ephemeral view state, NEVER persisted -- a
-  select-only tap fires no `onHighlightChange`/`onHighlightComplete`), which reveals >=44px
-  handle hit circles (r=22) and a transparent full-container backdrop; the body then drags to
-  move / handles to resize; a tap on the backdrop deselects. Selection is CONTROLLED by
-  `OverlayModeView` (`isHighlightSelected` useState -> `isSelected`/`onSelectedChange`), single
-  source of truth, so the mobileFs tap-nav wrapper YIELDS while selected: `onClick={togglePlay}`
-  and the long-press `onTouch*` handlers are gated on `!isHighlightSelected` (pointer
-  `stopPropagation` can NOT cancel those TOUCH handlers -- gating is required, the backdrop alone
-  is insufficient). Test IDs: `highlight-body`/`highlight-handle-horizontal`/`-vertical`/
-  `highlight-backdrop`. A `useEffect` deselects when the circle stops rendering (playhead leaves
-  the region) so selection can't latch and wedge the tap-nav -- view-state reconciliation, NOT
-  reactive persistence. **Sibling still mouse-only**: `PlayerDetectionOverlay` uses
-  `onClick`/`onMouseEnter` (relies on synthesized click) -- same touch gap, not fixed by T5390.
-  Coverage: Vitest `HighlightOverlay.touch.test.jsx` (9 cases); E2E
-  `e2e/T5390-overlay-circle-touch.qa.spec.js` (honest-skips without an exported-reel fixture).
+- **Overlay circle input = Pointer Events; edit levers gated on the tracking layer (T5450,
+  2026-07-19, SUPERSEDES T5390's select-then-manipulate)**:
+  `HighlightOverlay` is `onPointerDown` + `setPointerCapture` (mouse+touch one path); move/up
+  are handled ONCE on the root div via event bubbling from the captured element (no window
+  listeners). Transient drag data lives in refs (`draggingRef`/`resizingRef`/`resizeHandleRef`/
+  `dragStartRef`/`highlightStartRef`) so the first move after pointerdown has zero re-render lag.
+  The delta/scale drag math is UNCHANGED (still hand-rolled, not `screenToVideo`) so desktop
+  mouse is byte-identical. **Interaction model is now a single `editable` prop (= `!showPlayerBoxes`),
+  consistent on mobile + desktop — NO tap-to-select, NO deselect backdrop.** When `editable`
+  (player-tracking layer OFF) the circle shows its levers: rim resize handles PLUS a **center
+  4-arrow move grip** (lucide `Move` in an HTML `<div>` over the circle center, `data-testid=
+  "highlight-move-grip"`; it starts a body drag via the shared `beginDrag`, and its captured
+  pointer events bubble to the root div's move/up handlers). The ellipse body also drags to move
+  while editable. When NOT editable the circle is DISPLAY-ONLY: body renders with
+  `pointer-events-none`, no handles, no grip — so the video's tap-nav passes through. On a COARSE
+  pointer (`useIsCoarsePointer` -> `(pointer: coarse)`) the handle hit circles are >=44px (r=22)
+  and the grip is 44px (desktop grip 32px, handle 7px). `editable` is threaded from
+  `OverlayContainer` (`showPlayerBoxes` state, the "Hide/Show player boxes" toggle) through
+  `OverlayScreen`/`OverlayModeView`. The mobileFs tap-nav wrapper YIELDS while editable:
+  `onClick={togglePlay}` + the long-press `onTouch*` handlers are gated on `!editable` (pointer
+  `stopPropagation` can NOT cancel those TOUCH handlers — gating is required). Test IDs:
+  `highlight-body`/`highlight-handle-horizontal`/`-vertical`/`highlight-move-grip`. **Sibling
+  still mouse-only**: `PlayerDetectionOverlay` uses `onClick`/`onMouseEnter` — same touch gap,
+  untouched here. Coverage: Vitest `HighlightOverlay.touch.test.jsx` (editable model, 10 cases);
+  REAL-browser `e2e/T5450-overlay-circle-and-loop.qa.spec.js` (coarse + fine chromium) driving a
+  dev-only harness (`overlaydiag.html` + `src/overlaydiag/main.jsx`, NOT a vite build input) that
+  mounts the REAL `HighlightOverlay` + REAL `OverlayContainer` hook against a real ffmpeg-generated
+  `<video>` — proves lever gating, grip-move, handle-resize, tap-nav yield, >=44px, and the loop
+  play/pause toggle. jsdom is insufficient here (T5390's first attempt passed jsdom, failed on
+  real touch).
 - **Overlay spotlight loop playback (T5370, 2026-07-19)**: primary "Play spotlight"
   loops the span of ALL highlight regions `[min(startTime), max(endTime)]`; secondary
   "Play full" plays straight through. The loop is enforced by
@@ -242,6 +249,13 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
   Vitest `useSpotlightLoop.test.js` (8 cases) + `Controls.test.js[x]`; E2E
   `e2e/T5370-spotlight-loop-playback.qa.spec.js` (honest-skips without an exported-reel
   fixture, like T5390/T4550).
+  **T5450 fix: `handlePlaySpotlight` is now a TRUE play/pause toggle** (OverlayContainer):
+  if `!videoRef.current.paused` -> `togglePlay()` (PAUSE) and return; else set loop mode,
+  seek to `spotlightSpan.start` ONLY if `currentTime` is outside `[start, end)`, then
+  `togglePlay()` (play). The earlier bug only called `togglePlay()` when paused, so pressing
+  while looping never paused. Zero regions -> plain play/pause (unchanged). Real-browser proof
+  in `e2e/T5450-overlay-circle-and-loop.qa.spec.js` (loop wraps at span end; press-while-playing
+  pauses).
 - **Spline fork (live bug → T4250)**: `interpolateCropSpline` (splineInterpolation.js:116-154,
   fields x/y/width/height) and `interpolateHighlightSpline` (L163-206) are near-identical copies;
   `interpolateGenericSpline` (L217-255) was built to replace both but is UNUSED. The highlight copy

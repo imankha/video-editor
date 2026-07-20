@@ -253,10 +253,12 @@ export function OverlayModeView({
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
 
-  // T5390: ephemeral selection of the spotlight circle (touch select-then-manipulate).
-  // Owned here so the video tap-nav wrapper below can YIELD while a circle is selected
-  // — a drag must not be stolen by play/seek. Never persisted; view state only.
-  const [isHighlightSelected, setIsHighlightSelected] = useState(false);
+  // T5450: the spotlight circle's edit levers are gated on the player-tracking layer.
+  // Player boxes OFF => editable (resize handles + center move grip render; the circle
+  // body/grip drags). Player boxes ON => display-only, video tap-nav is normal. This
+  // replaces T5390's touch select-then-manipulate. The tap-nav wrapper below YIELDS
+  // while editable so a move/resize drag is never stolen by play/seek.
+  const editable = !showPlayerBoxes;
 
   // T5370: spotlight-loop Controls wiring. Primary Play = "Play spotlight" (loops);
   // secondary = de-emphasized "Play full". With zero regions (spotlightSpan null) the
@@ -379,14 +381,14 @@ export function OverlayModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
-            // While a spotlight circle is selected the tap-nav owner YIELDS: no
-            // play toggle, no long-press speed control — so a move/resize drag can't
-            // be stolen (T5390). Pointer stopPropagation can't cancel these TOUCH
-            // handlers, so they must be gated on the selection state.
-            onClick={mobileFs && !isHighlightSelected ? togglePlay : undefined}
-            onTouchStart={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchStart : undefined}
-            onTouchMove={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchMove : undefined}
-            onTouchEnd={mobileFs && !isHighlightSelected ? fsControls.handleLongPressTouchEnd : undefined}
+            // While the circle is editable (player boxes OFF) the tap-nav owner
+            // YIELDS: no play toggle, no long-press speed control — so a move/resize
+            // drag can't be stolen (T5450). Pointer stopPropagation can't cancel these
+            // TOUCH handlers, so they must be gated on `editable`.
+            onClick={mobileFs && !editable ? togglePlay : undefined}
+            onTouchStart={mobileFs && !editable ? fsControls.handleLongPressTouchStart : undefined}
+            onTouchMove={mobileFs && !editable ? fsControls.handleLongPressTouchMove : undefined}
+            onTouchEnd={mobileFs && !editable ? fsControls.handleLongPressTouchEnd : undefined}
           >
             <VideoPlayer
             videoRef={videoRef}
@@ -411,8 +413,7 @@ export function OverlayModeView({
                   zoom={zoom}
                   panOffset={panOffset}
                   isFullscreen={isFullscreen}
-                  isSelected={isHighlightSelected}
-                  onSelectedChange={setIsHighlightSelected}
+                  editable={editable}
                 />
               ),
               effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
