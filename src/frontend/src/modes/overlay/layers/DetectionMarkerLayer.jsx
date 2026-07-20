@@ -128,6 +128,17 @@ export default function DetectionMarkerLayer({
                 ? `Player assigned at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to revisit`
                 : `${marker.boxCount} player${marker.boxCount > 1 ? 's' : ''} detected at frame ${marker.frame ?? Math.round(marker.timestamp * 30)} - Click to assign`}
           >
+            {/* T5430: transparent 44px touch hit-pad, centered on the marker point.
+                Expands the tap area to Apple-HIG/WCAG-AAA size on coarse pointers
+                without enlarging the visible 24px marker or shifting the badge. Uses
+                a hit-pad (not a 44px box) because these markers are dense: adjacent
+                pads legitimately overlap and taps resolve to the topmost — the
+                documented compromise for a packed timeline. Hidden on fine pointers
+                (desktop byte-identical). */}
+            <span
+              aria-hidden="true"
+              className="detection-marker-touch hidden coarse-pointer:block absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11"
+            />
             {/* Marker with icon - gray when disabled, checked once a player is assigned */}
             <div className={`w-6 h-6 rounded flex items-center justify-center shadow-lg border ${
               isDisabled

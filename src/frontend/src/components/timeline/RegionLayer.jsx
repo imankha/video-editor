@@ -252,7 +252,9 @@ export default function RegionLayer({
   const renderHighlightControls = (region) => {
     return (
       <button
-        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
+        // T5430: 44px touch floor on coarse pointers (icon stays 12px, centered);
+        // desktop keeps the compact p-1 box.
+        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center"
         onClick={(e) => {
           e.stopPropagation();
           onRegionAction?.(region.index, 'delete');

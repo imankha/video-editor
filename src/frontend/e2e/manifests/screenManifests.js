@@ -132,6 +132,26 @@ export const SCREENS = [
       { label: 'Add Spotlight button', locator: (p) => p.getByRole('button', { name: /Add Spotlight/ }) },
       { label: 'Framing mode tab', locator: (p) => p.getByTestId('mode-framing'), reachOnly: true },
     ],
+    // T5430 (invariant #4, coarse-pointer projects only): Overlay-specific icon
+    // controls that T5360 never covered and still collapsed to ~24px on touch.
+    //
+    // Only the spotlight color swatches are asserted here: they render
+    // UNCONDITIONALLY in the Overlay export settings (disabled until a spotlight is
+    // enabled, but always present + sized), so checking them mutates NOTHING on the
+    // real fixture account. The other two T5430 controls are deliberately NOT in the
+    // automated set:
+    //   - "Delete region" only exists once a spotlight REGION exists, and
+    //   - the player-detection timeline markers only exist with detection data.
+    // Reaching either would require ADDING a spotlight in setup, which — persistence
+    // being gesture-based (CLAUDE.md) — would POST a region to the seeded account and
+    // corrupt the fixture. Their 44px floors (RegionLayer delete: coarse min-w/h-11;
+    // DetectionMarkerLayer: a coarse 44px hit-pad) are verified on a real coarse
+    // pointer / staging instead. Swatches carry the automated regression guard.
+    touchTargets: [
+      { label: 'Highlight color: White', locator: (p) => p.getByRole('button', { name: 'White', exact: true }) },
+      { label: 'Highlight color: Cyan', locator: (p) => p.getByRole('button', { name: 'Cyan', exact: true }) },
+      { label: 'Highlight color: None', locator: (p) => p.getByRole('button', { name: 'None', exact: true }) },
+    ],
   },
   {
     id: 'my-reels',

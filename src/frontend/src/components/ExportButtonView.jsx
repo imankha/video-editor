@@ -126,7 +126,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
               </span>
             </div>
 
-            <div className="flex gap-1.5">
+            {/* flex-wrap so the wider 44px coarse-pointer targets (T5430) can wrap
+                on narrow phones instead of overflowing; on desktop they fit one
+                row so wrap is a no-op (layout byte-identical). */}
+            <div className="flex flex-wrap justify-end gap-1.5">
               {HIGHLIGHT_COLOR_ORDER.map((color) => {
                 const isNone = color === 'none';
                 const isColorValue = color && !isNone;
@@ -135,26 +138,36 @@ const ExportButtonView = forwardRef(function ExportButtonView({
                     key={color}
                     onClick={() => onHighlightColorChange?.(color)}
                     disabled={isCurrentlyExporting || !isHighlightEnabled}
+                    aria-label={HIGHLIGHT_COLOR_LABELS[color]}
                     className={`
-                      w-6 h-6 rounded-full border-2 transition-all
-                      flex items-center justify-center
-                      ${highlightColor === color
-                        ? 'border-white ring-2 ring-white/30'
-                        : 'border-gray-600 hover:border-gray-400'}
+                      flex items-center justify-center transition-all
+                      w-6 h-6 coarse-pointer:w-11 coarse-pointer:h-11
                       ${(isCurrentlyExporting || !isHighlightEnabled) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                     `}
-                    style={{
-                      backgroundColor: isColorValue ? color : 'transparent',
-                      backgroundImage: isNone ? 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)' : 'none'
-                    }}
                     title={HIGHLIGHT_COLOR_LABELS[color]}
                   >
-                    {highlightColor === color && isColorValue && (
-                      <Check size={12} className="text-gray-800" strokeWidth={3} />
-                    )}
-                    {highlightColor === color && isNone && (
-                      <Check size={12} className="text-white" strokeWidth={3} />
-                    )}
+                    {/* Visible swatch stays 24px on every pointer; the button around
+                        it grows to a 44px touch target on coarse pointers (T5430),
+                        keeping the swatch centered. */}
+                    <span
+                      className={`
+                        w-6 h-6 rounded-full border-2 flex items-center justify-center
+                        ${highlightColor === color
+                          ? 'border-white ring-2 ring-white/30'
+                          : 'border-gray-600 hover:border-gray-400'}
+                      `}
+                      style={{
+                        backgroundColor: isColorValue ? color : 'transparent',
+                        backgroundImage: isNone ? 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)' : 'none'
+                      }}
+                    >
+                      {highlightColor === color && isColorValue && (
+                        <Check size={12} className="text-gray-800" strokeWidth={3} />
+                      )}
+                      {highlightColor === color && isNone && (
+                        <Check size={12} className="text-white" strokeWidth={3} />
+                      )}
+                    </span>
                   </button>
                 );
               })}
