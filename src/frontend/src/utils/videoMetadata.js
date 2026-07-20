@@ -214,6 +214,24 @@ function _findMoov(view, bufferAbsStart = 0) {
 const HEAD_PROBE_BYTES = 1024 * 1024; // 1 MB
 
 /**
+ * A video asset is genuinely gone (T5440): the backend returned a hard 404/410 for
+ * the stream URL — a dangling DB ref whose R2 object was pruned (cf. the T4020
+ * shadow working-clip prune), NOT a transient/expired-presign failure a retry can
+ * fix. Thrown by extractVideoMetadataFromUrl so callers can show a single
+ * "re-export to rebuild" state instead of running the transient-retry +
+ * diagnostic-probe storm. `assetMissing` is the flag callers key on.
+ */
+export class VideoAssetMissingError extends Error {
+  constructor(url, status) {
+    super('Video is no longer available');
+    this.name = 'VideoAssetMissingError';
+    this.status = status;
+    this.assetMissing = true;
+    this.url = typeof url === 'string' ? url.substring(0, 120) : url;
+  }
+}
+
+/**
  * Extract metadata from a video URL using fetch() + MP4 box parsing.
  *
  * Why not use a `<video>` element? Chrome defers cross-origin `<video>` element
@@ -285,6 +303,15 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
       ...fetchOpts,
     });
     if (!resp.ok && resp.status !== 206) {
+      // T5440: a hard 404/410 means the object is genuinely gone (dangling DB ref /
+      // R2 prune) — distinct from a transient/expired-presign error a retry can fix.
+      // Throw a typed error with ONE concise log and skip failWithDiagnostic's
+      // probe storm (another HEAD + head-range + tail-range, each 404) so callers
+      // show a clean "re-export" state instead of a retry+console flood.
+      if (resp.status === 404 || resp.status === 410) {
+        console.warn(`[videoMetadata] Video asset missing (HTTP ${resp.status}) — re-export to rebuild: ${url?.substring(0, 120)}`);
+        throw new VideoAssetMissingError(url, resp.status);
+      }
       return failWithDiagnostic(`HEAD fetch returned ${resp.status}`, { status: resp.status });
     }
     const cr = resp.headers.get('content-range');
@@ -297,6 +324,9 @@ export async function extractVideoMetadataFromUrl(url, fileName = 'clip.mp4') {
     }
     headBuf = new Uint8Array(await resp.arrayBuffer());
   } catch (e) {
+    // A genuine asset-missing (404/410) escapes as-is; only real network throws
+    // (DNS/CORS/offline) fall through to the transient diagnostic path.
+    if (e instanceof VideoAssetMissingError) throw e;
     return failWithDiagnostic(`head fetch threw: ${e.message}`, { error: e.message });
   }
 

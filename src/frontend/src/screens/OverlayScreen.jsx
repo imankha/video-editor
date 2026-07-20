@@ -6,7 +6,7 @@ import { useVideo } from '../hooks/useVideo';
 import useZoom from '../hooks/useZoom';
 import useTimelineZoom from '../hooks/useTimelineZoom';
 import { useFullscreenWorthwhile } from '../hooks/useFullscreenWorthwhile';
-import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { extractVideoMetadata, extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { frameToTime, timeToFrame } from '../utils/videoUtils';
@@ -143,6 +143,10 @@ export function OverlayScreen({
   const workingVideoAttemptsRef = useRef(0); // Count metadata-load attempts for the current URL
   const MAX_WORKING_VIDEO_ATTEMPTS = 2;
   const [workingVideoLoadError, setWorkingVideoLoadError] = useState(null);
+  // T5440: distinguishes a hard 404 (asset genuinely gone — re-export, no retry)
+  // from a transient load error (retry offered). Drives the "video unavailable"
+  // state and suppresses the misleading "Retry Loading Video" button.
+  const [workingVideoMissing, setWorkingVideoMissing] = useState(false);
 
   // =========================================
   // DETERMINE EFFECTIVE VIDEO SOURCE
@@ -338,6 +342,7 @@ export function OverlayScreen({
       workingVideoRecoveryAttemptedRef.current = false; // Reset recovery guard
       workingVideoAttemptsRef.current = 0;
       setWorkingVideoLoadError(null);
+      setWorkingVideoMissing(false);
       setIsLoadingWorkingVideo(true);
 
       const attemptLoad = async () => {
@@ -351,6 +356,19 @@ export function OverlayScreen({
           setWorkingVideo({ file: null, url: workingVideoUrl, metadata: meta });
           setIsLoadingWorkingVideo(false);
         } catch (err) {
+          // T5440: a hard 404 means the working video's R2 object is gone (dangling
+          // DB ref / prune) — retrying cannot recover it. Show a single "re-export"
+          // state, do NOT run the transient retry (no attempt-2, no probe storm).
+          if (err instanceof VideoAssetMissingError) {
+            console.warn(`[OverlayScreen] Working video no longer available (HTTP ${err.status}) — re-export to rebuild.`, {
+              projectId,
+              workingVideoId: project?.working_video_id,
+            });
+            setWorkingVideoMissing(true);
+            setWorkingVideoLoadError('This reel’s video is no longer available. Re-export to rebuild it.');
+            setIsLoadingWorkingVideo(false);
+            return;
+          }
           console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
             url: workingVideoUrl?.substring(0, 80),
             projectId,
@@ -993,6 +1011,7 @@ export function OverlayScreen({
   const handleRetryWorkingVideo = useCallback(async () => {
     console.log('[OverlayScreen] Manual retry of working video load');
     setWorkingVideoLoadError(null);
+    setWorkingVideoMissing(false);
     workingVideoFetchIdRef.current = null;
     workingVideoAttemptsRef.current = 0;
     await refreshProject();
@@ -1043,7 +1062,10 @@ export function OverlayScreen({
       loadingProgress={loadingProgress}
       loadingElapsedSeconds={loadingElapsedSeconds}
       error={workingVideoLoadError || error}
-      isUrlExpiredError={workingVideoLoadError ? () => true : isUrlExpiredError}
+      // T5440: a missing asset (hard 404) is NOT retryable — suppress the "Retry
+      // Loading Video" button so the state reads as "re-export", not "try again".
+      // A transient working-video load error still offers retry, as before.
+      isUrlExpiredError={workingVideoMissing ? () => false : (workingVideoLoadError ? () => true : isUrlExpiredError)}
       onRetryVideo={workingVideoLoadError ? handleRetryWorkingVideo : handleRetryVideo}
       loadingMessage={isLoadingWorkingVideo || shouldWaitForWorkingVideo ? 'Loading working video...' : 'Loading video...'}
       // Playback controls

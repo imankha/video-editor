@@ -7,7 +7,7 @@ import { useOverlayStore } from '../stores/overlayStore';
 import { useVideoStore } from '../stores/videoStore';
 // T1500: metadata probe removed from project load — dims live on working_clips.
 import { getClipDisplayName } from '../utils/clipDisplayName';
-import { extractVideoMetadataFromUrl } from '../utils/videoMetadata';
+import { extractVideoMetadataFromUrl, VideoAssetMissingError } from '../utils/videoMetadata';
 
 /**
  * Helper to calculate effective duration for a clip (accounting for speed changes)
@@ -228,7 +228,15 @@ export function useProjectLoader() {
 
           console.log('[useProjectLoader] Loaded working video via streaming URL');
         } catch (err) {
-          console.error('[useProjectLoader] Error loading working video:', err);
+          // T5440: a missing asset (hard 404) is a known data-rot case (dangling DB
+          // ref / R2 prune), not a code fault — log ONE concise line, not an error
+          // stack. OverlayScreen owns the user-facing "re-export" state; here we
+          // just leave workingVideo null and continue loading the rest of the project.
+          if (err instanceof VideoAssetMissingError) {
+            console.warn(`[useProjectLoader] Working video no longer available (HTTP ${err.status}) — re-export to rebuild. project=${projectId}`);
+          } else {
+            console.error('[useProjectLoader] Error loading working video:', err);
+          }
         }
       }
 
