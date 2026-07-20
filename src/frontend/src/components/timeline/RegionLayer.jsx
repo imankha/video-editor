@@ -252,9 +252,11 @@ export default function RegionLayer({
   const renderHighlightControls = (region) => {
     return (
       <button
-        // T5430: 44px touch floor on coarse pointers (icon stays 12px, centered);
-        // desktop keeps the compact p-1 box.
-        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white coarse-pointer:min-w-11 coarse-pointer:min-h-11 coarse-pointer:flex coarse-pointer:items-center coarse-pointer:justify-center"
+        // T5430: intentionally NOT enlarged on coarse pointers. This is a
+        // destructive control (deletes the highlight region); keeping it small on
+        // mobile avoids accidental fat-finger deletion. (Swatches + detection
+        // markers still get the 44px floor.)
+        className="p-1 rounded transition-colors bg-red-600 hover:bg-red-700 text-white"
         onClick={(e) => {
           e.stopPropagation();
           onRegionAction?.(region.index, 'delete');
