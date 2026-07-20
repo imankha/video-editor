@@ -4,17 +4,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import HighlightOverlay from './HighlightOverlay';
 
 /**
- * T5450 — Overlay spotlight circle: levers gated on the player-tracking layer.
+ * T5570c — Overlay spotlight circle: bounding-box editing model.
  *
- * The edit levers (rim resize handles + a center move grip) render when `editable`
- * (= player boxes OFF), consistently on mobile + desktop; there is no tap-to-select
- * and no deselect backdrop (supersedes T5390). When NOT editable the circle is
- * display-only and intercepts no pointer events.
+ * The circle + its editing UI render ONLY when `editable` (= player boxes OFF). While
+ * editable it shows a selection frame and FOUR corner resize handles (outside the
+ * ellipse, so they never occlude it); the ellipse INTERIOR drags to move. There is no
+ * center move grip and no rim handles (supersedes T5450). When NOT editable nothing
+ * renders at all (circle hidden while the tracking layer is on).
  *
- * Driven with REAL Pointer Events. The video->screen transform is mocked to an
- * identity/unit-scale rect so the drag math is deterministic (video coords == screen
- * coords, scaleX/Y == 1). Coarse-ness is driven through window.matchMedia, which
- * useIsCoarsePointer reads, so the >=44px touch targets can be asserted.
+ * Driven with REAL Pointer Events. The video->screen transform is mocked to unit scale
+ * (video coords == screen coords, scaleX/Y == 1) so drag math is deterministic. Coarse
+ * pointer is driven through window.matchMedia (read by useIsCoarsePointer).
  */
 
 vi.mock('../../../hooks/useVideoDisplayRect', () => {
@@ -84,101 +84,80 @@ function renderOverlay(editable) {
   return { onChange, onComplete };
 }
 
-const body = () => screen.getByTestId('highlight-body');
+const body = () => screen.queryByTestId('highlight-body');
 const grip = () => screen.queryByTestId('highlight-move-grip');
-const hHandle = () => screen.queryByTestId('highlight-handle-horizontal');
-const vHandle = () => screen.queryByTestId('highlight-handle-vertical');
+const corner = (id) => screen.queryByTestId(`highlight-corner-${id}`);
 
 beforeEach(() => setCoarse(false));
 afterEach(() => cleanup());
 
-describe('HighlightOverlay — display-only when NOT editable (player boxes ON)', () => {
-  it('renders no resize handles and no move grip (fine pointer)', () => {
+describe('HighlightOverlay — hidden when NOT editable (player boxes ON)', () => {
+  it('renders nothing at all (fine pointer)', () => {
     renderOverlay(false);
-    expect(hHandle()).toBeNull();
-    expect(vHandle()).toBeNull();
-    expect(grip()).toBeNull();
+    expect(body()).toBeNull();
+    expect(corner('se')).toBeNull();
+    expect(corner('nw')).toBeNull();
   });
 
-  it('renders no resize handles and no move grip (coarse pointer)', () => {
+  it('renders nothing at all (coarse pointer)', () => {
     setCoarse(true);
     renderOverlay(false);
-    expect(hHandle()).toBeNull();
-    expect(vHandle()).toBeNull();
-    expect(grip()).toBeNull();
-  });
-
-  it('the body intercepts no pointer events (tap-nav can pass through)', () => {
-    const { onChange, onComplete } = renderOverlay(false);
-    expect(body().getAttribute('class')).toContain('pointer-events-none');
-    // A drag on the display-only body must not move or commit anything.
-    fireEvent.pointerDown(body(), { pointerId: 1, pointerType: 'mouse', clientX: 320, clientY: 180 });
-    fireEvent.pointerMove(body(), { pointerId: 1, pointerType: 'mouse', clientX: 360, clientY: 180 });
-    fireEvent.pointerUp(body(), { pointerId: 1, pointerType: 'mouse', clientX: 360, clientY: 180 });
-    expect(onChange).not.toHaveBeenCalled();
-    expect(onComplete).not.toHaveBeenCalled();
+    expect(body()).toBeNull();
+    expect(corner('se')).toBeNull();
   });
 });
 
-describe('HighlightOverlay — editable (player boxes OFF), desktop + touch', () => {
-  it('shows resize handles AND the center move grip with no tap-to-select', () => {
+describe('HighlightOverlay — editable (player boxes OFF): bounding-box model', () => {
+  it('shows the body + four corner handles, and no grip / no rim handles', () => {
     renderOverlay(true);
-    expect(hHandle()).toBeTruthy();
-    expect(vHandle()).toBeTruthy();
-    expect(grip()).toBeTruthy();
+    expect(body()).toBeTruthy();
+    for (const id of ['nw', 'ne', 'sw', 'se']) expect(corner(id)).toBeTruthy();
+    expect(grip()).toBeNull(); // center move grip removed
+    expect(screen.queryByTestId('highlight-handle-horizontal')).toBeNull();
+    expect(screen.queryByTestId('highlight-handle-vertical')).toBeNull();
   });
 
-  it('drags the center move grip to MOVE the circle (mouse)', () => {
-    const { onChange, onComplete } = renderOverlay(true);
-    fireEvent.pointerDown(grip(), { pointerId: 1, pointerType: 'mouse', clientX: 320, clientY: 180 });
-    fireEvent.pointerMove(grip(), { pointerId: 1, pointerType: 'mouse', clientX: 350, clientY: 210 });
-    fireEvent.pointerUp(grip(), { pointerId: 1, pointerType: 'mouse', clientX: 350, clientY: 210 });
-    expect(onChange.mock.calls.at(-1)[0].x).toBe(350); // moved +30 in x
-    expect(onChange.mock.calls.at(-1)[0].y).toBe(210); // moved +30 in y
-    expect(onComplete).toHaveBeenCalledTimes(1);
-    expect(onComplete.mock.calls[0][0].x).toBe(350);
-  });
-
-  it('drags the center move grip to MOVE the circle (touch)', () => {
-    setCoarse(true);
-    const { onChange, onComplete } = renderOverlay(true);
-    fireEvent.pointerDown(grip(), { pointerId: 5, pointerType: 'touch', clientX: 320, clientY: 180 });
-    fireEvent.pointerMove(grip(), { pointerId: 5, pointerType: 'touch', clientX: 320, clientY: 240 });
-    fireEvent.pointerUp(grip(), { pointerId: 5, pointerType: 'touch', clientX: 320, clientY: 240 });
-    expect(onChange.mock.calls.at(-1)[0].y).toBe(240); // moved +60 in y
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it('drags the body to MOVE the circle immediately (no selection step)', () => {
+  it('drags the ellipse interior to MOVE the circle (mouse)', () => {
     const { onChange, onComplete } = renderOverlay(true);
     fireEvent.pointerDown(body(), { pointerId: 2, pointerType: 'mouse', clientX: 320, clientY: 180 });
-    fireEvent.pointerMove(body(), { pointerId: 2, pointerType: 'mouse', clientX: 340, clientY: 180 });
-    fireEvent.pointerUp(body(), { pointerId: 2, pointerType: 'mouse', clientX: 340, clientY: 180 });
-    expect(onChange.mock.calls.at(-1)[0].x).toBe(340);
+    fireEvent.pointerMove(body(), { pointerId: 2, pointerType: 'mouse', clientX: 350, clientY: 210 });
+    fireEvent.pointerUp(body(), { pointerId: 2, pointerType: 'mouse', clientX: 350, clientY: 210 });
+    expect(onChange.mock.calls.at(-1)[0].x).toBe(350); // +30 x
+    expect(onChange.mock.calls.at(-1)[0].y).toBe(210); // +30 y
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
 
-  it('drags a rim handle to RESIZE', () => {
-    const { onChange, onComplete } = renderOverlay(true);
-    fireEvent.pointerDown(hHandle(), { pointerId: 3, pointerType: 'mouse', clientX: 360, clientY: 180 });
-    fireEvent.pointerMove(hHandle(), { pointerId: 3, pointerType: 'mouse', clientX: 380, clientY: 180 });
-    fireEvent.pointerUp(hHandle(), { pointerId: 3, pointerType: 'mouse', clientX: 380, clientY: 180 });
-    expect(onChange.mock.calls.at(-1)[0].radiusX).toBe(60); // grew +20
-    expect(onComplete).toHaveBeenCalledTimes(1);
-  });
-
-  it('desktop handle markers stay at the original 7px', () => {
+  it('the move surface is hit-testable (pointerEvents:all, not none)', () => {
     renderOverlay(true);
-    expect(hHandle().getAttribute('r')).toBe('7');
+    expect(body().style.pointerEvents).toBe('all');
   });
 
-  it('exposes >=44px handle hit targets AND a >=44px move grip on coarse pointers', () => {
+  it('drags the SE corner to RESIZE both radii around the center', () => {
+    const { onChange, onComplete } = renderOverlay(true);
+    fireEvent.pointerDown(corner('se'), { pointerId: 3, pointerType: 'mouse', clientX: 372, clientY: 252 });
+    fireEvent.pointerMove(corner('se'), { pointerId: 3, pointerType: 'mouse', clientX: 392, clientY: 272 });
+    fireEvent.pointerUp(corner('se'), { pointerId: 3, pointerType: 'mouse', clientX: 392, clientY: 272 });
+    const last = onChange.mock.calls.at(-1)[0];
+    expect(last.radiusX).toBe(60); // 40 + 20 (drag east grows x)
+    expect(last.radiusY).toBe(80); // 60 + 20 (drag south grows y)
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('drags the NW corner outward to also GROW (sign follows the corner)', () => {
+    const { onChange } = renderOverlay(true);
+    fireEvent.pointerDown(corner('nw'), { pointerId: 4, pointerType: 'mouse', clientX: 268, clientY: 108 });
+    fireEvent.pointerMove(corner('nw'), { pointerId: 4, pointerType: 'mouse', clientX: 248, clientY: 88 });
+    fireEvent.pointerUp(corner('nw'), { pointerId: 4, pointerType: 'mouse', clientX: 248, clientY: 88 });
+    const last = onChange.mock.calls.at(-1)[0];
+    expect(last.radiusX).toBe(60); // 40 + 20 (drag west grows x)
+    expect(last.radiusY).toBe(80); // 60 + 20 (drag north grows y)
+  });
+
+  it('corner hit targets are >=44px on coarse pointers', () => {
     setCoarse(true);
     renderOverlay(true);
-    // radius 22 => 44px diameter hit target.
-    expect(Number(hHandle().getAttribute('r'))).toBeGreaterThanOrEqual(22);
-    expect(Number(vHandle().getAttribute('r'))).toBeGreaterThanOrEqual(22);
-    expect(parseInt(grip().style.width, 10)).toBeGreaterThanOrEqual(44);
-    expect(parseInt(grip().style.height, 10)).toBeGreaterThanOrEqual(44);
+    for (const id of ['nw', 'ne', 'sw', 'se']) {
+      expect(Number(corner(id).getAttribute('r'))).toBeGreaterThanOrEqual(22); // r22 => 44px
+    }
   });
 });
