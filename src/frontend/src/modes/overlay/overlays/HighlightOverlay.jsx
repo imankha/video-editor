@@ -11,9 +11,9 @@ import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 const HANDLE_VISIBLE_RADIUS_DESKTOP = 7;
 const HANDLE_VISIBLE_RADIUS_TOUCH = 12;
 const HANDLE_HIT_RADIUS_TOUCH = 22; // 44px diameter
-// Center move grip: an HTML button drawn over the circle center. >=44px on coarse.
-const MOVE_GRIP_SIZE_DESKTOP = 32;
-const MOVE_GRIP_SIZE_TOUCH = 44;
+// Center move grip: its VISIBLE dot matches a resize handle's visible size (so it
+// doesn't occlude the spotlight); its hit target still meets the 44px touch floor via
+// a larger transparent wrapper (same visible-vs-hit split the resize handles use).
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -254,7 +254,10 @@ export default function HighlightOverlay({
     ? HANDLE_VISIBLE_RADIUS_TOUCH
     : HANDLE_VISIBLE_RADIUS_DESKTOP;
   const handleHitRadius = isCoarse ? HANDLE_HIT_RADIUS_TOUCH : HANDLE_VISIBLE_RADIUS_DESKTOP;
-  const moveGripSize = isCoarse ? MOVE_GRIP_SIZE_TOUCH : MOVE_GRIP_SIZE_DESKTOP;
+  // Move grip: visible dot == a resize handle's visible size; hit box == the handle
+  // hit size (>=44px on coarse) so it's tappable without occluding the circle.
+  const gripVisibleSize = handleVisibleRadius * 2;
+  const gripHitSize = handleHitRadius * 2;
 
   // The ellipse body drags to move only while editable. When display-only it must
   // intercept no pointer events so the video's tap-nav behaves normally.
@@ -498,19 +501,28 @@ export default function HighlightOverlay({
           data-testid="highlight-move-grip"
           role="button"
           aria-label="Move spotlight"
-          className="absolute pointer-events-auto cursor-move flex items-center justify-center rounded-full bg-white/90 shadow"
+          className="absolute pointer-events-auto cursor-move flex items-center justify-center"
           style={{
             left: screenHighlight.x,
             top: screenHighlight.y,
-            width: moveGripSize,
-            height: moveGripSize,
+            width: gripHitSize,
+            height: gripHitSize,
             transform: 'translate(-50%, -50%)',
-            border: `2px solid ${strokeColor}`,
             touchAction: 'none',
           }}
           onPointerDown={handleEllipsePointerDown}
         >
-          <Move size={Math.round(moveGripSize * 0.5)} color={outlineColor} />
+          {/* Visible dot — same size as a resize handle so it never occludes the circle. */}
+          <div
+            className="rounded-full bg-white/90 shadow flex items-center justify-center"
+            style={{
+              width: gripVisibleSize,
+              height: gripVisibleSize,
+              border: `2px solid ${strokeColor}`,
+            }}
+          >
+            <Move size={Math.round(gripVisibleSize * 0.6)} color={outlineColor} />
+          </div>
         </div>
       )}
     </div>
