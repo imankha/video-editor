@@ -1,7 +1,16 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
+// eslint-disable-next-line no-unused-vars -- rendered as JSX (mobile move lever); repo eslint lacks react/jsx-uses-vars
+import { Move } from 'lucide-react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
+
+// Non-passive touchmove blocker used ONLY during an active drag/resize. On touch,
+// preventDefault on pointerdown does NOT stop the page from panning/scrolling, and
+// `touch-action:none` is unreliable on SVG children — so while a gesture is in flight
+// we suppress the browser's default touch scroll at the document level, then remove it
+// on pointer up. Module-level so add/removeEventListener share one stable reference.
+const preventDefaultTouch = (e) => { e.preventDefault(); };
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -114,6 +123,7 @@ export default function HighlightOverlay({
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    window.addEventListener('touchmove', preventDefaultTouch, { passive: false });
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
@@ -129,6 +139,7 @@ export default function HighlightOverlay({
     e.preventDefault();
     e.stopPropagation();
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    window.addEventListener('touchmove', preventDefaultTouch, { passive: false });
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
@@ -218,6 +229,7 @@ export default function HighlightOverlay({
       });
     }
 
+    window.removeEventListener('touchmove', preventDefaultTouch);
     activePointerIdRef.current = null;
     draggingRef.current = false;
     resizingRef.current = false;
@@ -225,6 +237,10 @@ export default function HighlightOverlay({
     highlightStartRef.current = null;
     latestHighlightRef.current = null;  // Clear the ref
   };
+
+  // Unmount safety: if the component unmounts mid-drag (e.g. navigation), make sure the
+  // document-level touchmove blocker never lingers — a stray one would freeze page scroll.
+  useEffect(() => () => window.removeEventListener('touchmove', preventDefaultTouch), []);
 
   // The spotlight circle + its editing frame render ONLY when the player-tracking
   // layer is OFF (editable). With tracking on you're picking a player; with it off
@@ -468,6 +484,30 @@ export default function HighlightOverlay({
         })()}
       </svg>
 
+      {/* Move lever (mobile) — the 4-arrow move icon sitting ABOVE the bounding box;
+          drag it to move the circle. An HTML element (not SVG) so touch-action:none is
+          honored on touch, and placed above the box so it never occludes the spotlight.
+          Touch only — desktop moves by dragging the circle body. */}
+      {isCoarse && (
+        <div
+          data-testid="highlight-move-lever"
+          role="button"
+          aria-label="Move spotlight"
+          className="absolute pointer-events-auto cursor-move flex items-center justify-center rounded-full bg-white shadow"
+          style={{
+            left: screenHighlight.x,
+            top: screenHighlight.y - (screenHighlight.radiusY + frameMargin) - 26,
+            width: 44,
+            height: 44,
+            transform: 'translate(-50%, -50%)',
+            border: `2px solid ${strokeColor}`,
+            touchAction: 'none',
+          }}
+          onPointerDown={handleEllipsePointerDown}
+        >
+          <Move size={22} color={outlineColor} strokeWidth={2.5} />
+        </div>
+      )}
     </div>
   );
 }

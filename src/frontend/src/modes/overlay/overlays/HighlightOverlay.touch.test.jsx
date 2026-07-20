@@ -160,4 +160,27 @@ describe('HighlightOverlay — editable (player boxes OFF): bounding-box model',
       expect(Number(corner(id).getAttribute('r'))).toBeGreaterThanOrEqual(22); // r22 => 44px
     }
   });
+
+  it('shows a 44px move lever above the box on coarse (mobile) only', () => {
+    renderOverlay(true); // fine pointer -> no lever (desktop moves by body drag)
+    expect(screen.queryByTestId('highlight-move-lever')).toBeNull();
+    cleanup();
+    setCoarse(true);
+    renderOverlay(true);
+    const lever = screen.getByTestId('highlight-move-lever');
+    expect(parseInt(lever.style.width, 10)).toBeGreaterThanOrEqual(44);
+    expect(parseInt(lever.style.height, 10)).toBeGreaterThanOrEqual(44);
+  });
+
+  it('drags the move lever to MOVE the circle (touch)', () => {
+    setCoarse(true);
+    const { onChange, onComplete } = renderOverlay(true);
+    const lever = screen.getByTestId('highlight-move-lever');
+    fireEvent.pointerDown(lever, { pointerId: 7, pointerType: 'touch', clientX: 320, clientY: 100 });
+    fireEvent.pointerMove(lever, { pointerId: 7, pointerType: 'touch', clientX: 350, clientY: 130 });
+    fireEvent.pointerUp(lever, { pointerId: 7, pointerType: 'touch', clientX: 350, clientY: 130 });
+    expect(onChange.mock.calls.at(-1)[0].x).toBe(350); // +30 x
+    expect(onChange.mock.calls.at(-1)[0].y).toBe(210); // 180 + 30
+    expect(onComplete).toHaveBeenCalledTimes(1);
+  });
 });
