@@ -1,11 +1,7 @@
 import { useState, useMemo } from 'react';
-// eslint-disable-next-line no-unused-vars -- all icons are used in JSX below; the config's no-unused-vars doesn't recognize JSX usage
 import { Plus, Search, ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, ChevronLeft, Activity, CheckSquare, Square } from 'lucide-react';
-// eslint-disable-next-line no-unused-vars -- used in JSX below
 import { CreditGrantModal } from './CreditGrantModal';
-// eslint-disable-next-line no-unused-vars -- used in JSX below
 import { BulkEmailModal } from './BulkEmailModal';
-// eslint-disable-next-line no-unused-vars -- used in JSX below
 import { BulkActionBar } from './BulkActionBar';
 import { useAuthStore } from '../../stores/authStore';
 import { useAdminStore } from '../../stores/adminStore';

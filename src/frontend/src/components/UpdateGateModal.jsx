@@ -1,7 +1,4 @@
-// Used in JSX below; core no-unused-vars doesn't see JSX-only usage without
-// react/jsx-uses-vars, a pre-existing repo-wide gap (see AuthGateModal.jsx's
-// identically-flagged `X` import).
-import { RefreshCw } from 'lucide-react'; // eslint-disable-line no-unused-vars
+import { RefreshCw } from 'lucide-react';
 import { useUpdateGateStore } from '../stores/updateGateStore';
 
 /**

@@ -45,7 +45,9 @@ jobs:
         # error, or warnings past the baseline, fails the branch. Ratchet these
         # numbers DOWN as the warning backlog is cleared; never up.
         # T5030: ratcheted down to 998 (burned React imports + dead local vars).
-        run: npx eslint src --max-warnings 998
+        # T5580: enabled react/jsx-uses-vars so JSX-only imports stop false-
+        # flagging as no-unused-vars; that cleared ~635 phantom warnings -> 360.
+        run: npx eslint src --max-warnings 360
       - name: Viewport-unit gate (T4930 — no h-screen/100vh in the app tree)
         # Blocks the emulator-invisible iOS 100vh-vs-100dvh failure mode at the
         # source (root cause of T4880). Bans h-screen/100vh in src/frontend/src in

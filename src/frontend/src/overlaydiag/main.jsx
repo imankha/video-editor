@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-// eslint-disable-next-line no-unused-vars -- rendered as JSX below; repo eslint lacks react/jsx-uses-vars
 import HighlightOverlay from '../modes/overlay/overlays/HighlightOverlay';
 import { OverlayContainer } from '../containers/OverlayContainer';
 import '../index.css'; // Tailwind — the move grip's rounded-full/flex classes need it
@@ -33,7 +32,6 @@ const INITIAL_HIGHLIGHT = {
   strokeOpacity: 0.85, fillOpacity: 0.05, color: '#FFD400',
 };
 
-// eslint-disable-next-line no-unused-vars -- rendered as JSX at the bottom; repo eslint lacks react/jsx-uses-vars
 function OverlayDiagHarness() {
   const videoRef = useRef(null);
   const [highlight, setHighlight] = useState(INITIAL_HIGHLIGHT);

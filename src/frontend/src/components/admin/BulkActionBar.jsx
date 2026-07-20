@@ -1,4 +1,3 @@
-// eslint-disable-next-line no-unused-vars -- all icons are used in JSX below; the config's no-unused-vars doesn't recognize JSX usage
 import { Plus, Mail, X } from 'lucide-react';
 
 /**

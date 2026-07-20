@@ -1,5 +1,4 @@
 import { useRef, useCallback, useEffect } from 'react';
-// eslint-disable-next-line no-unused-vars -- rendered as JSX (mobile move lever); repo eslint lacks react/jsx-uses-vars
 import { Move } from 'lucide-react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
