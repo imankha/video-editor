@@ -272,6 +272,41 @@ per-clip remapping.
   `<video>` — proves lever gating, grip-move, handle-resize, tap-nav yield, >=44px, and the loop
   play/pause toggle. jsdom is insufficient here (T5390's first attempt passed jsdom, failed on
   real touch).
+- **Manual override now has TWO entry paths + a discoverability hint (T5610, 2026-07-20,
+  EVOLVES T5450 — additive, not a revert of T5390)**: the spotlight is editable when
+  `editable = !showPlayerBoxes || circleEditActive`. Path 1 (T5570 power user): hide the
+  tracking layer. Path 2 (T5610 discoverable): TAP INSIDE THE CIRCLE with tracking still ON —
+  tracking boxes stay visible underneath. `circleEditActive` is EPHEMERAL view state owned
+  LOCAL to `OverlayModeView.jsx` (like `editable` already was) — NEVER persisted, no reactive
+  write; it is an editing affordance, not reel data. `HighlightOverlay` gets an `onCircleTap`
+  prop, wired ONLY in the tracking-ON regime (`showPlayerBoxes ? handleCircleTap : undefined`);
+  when absent the drag path is byte-identical to T5450. **Tap-vs-drag**: a pointerdown→up that
+  moves < `TAP_SLOP` (6 screen px, tracked in `tapRef`) is a TAP (→ `onCircleTap`, enter/exit);
+  past the slop it moves/resizes as before. Hit-priority: inside-circle tap wins (a display-only
+  transparent `highlight-enter-hit` ellipse covers only the interior; the `onClick` `stopClick`
+  swallows the synthetic click so it never reaches the video tap-nav wrapper); outside the circle
+  still reaches player boxes / tap-nav. **Exits**: tap-inside-again, tap OUTSIDE (mobileFs
+  `onClick` → `handleVideoAreaTap` exits when `circleEditActive`), play start, or spotlight no
+  longer visible (both via ephemeral view-state `useEffect` resets — NOT persistence). The
+  mobileFs tap-nav/long-press guard is UNCHANGED — just driven off the WIDENED `editable`
+  (`!editable`). **Hint** (`OverrideHint.jsx`): subtle non-interactive (`pointer-events-none`)
+  pill in the dimmed area (bottom-center, `z-[5]` below handles), copy names BOTH paths
+  (`Tap the spotlight to adjust it — or hide tracking to edit freely`; mobile shortens to
+  `Tap the spotlight to adjust`). Shows only while tracking ON + a region visible + not yet
+  overridden this session; fades out (300ms) + stays gone once `overrideUsed` latches on the
+  first override (either path). `overrideUsed`/`circleEditActive` are `useState` in
+  OverlayModeView — no store, no `useHighlightRegions`/`OverlayScreen` change (T5600 owned those
+  in parallel). Test IDs: `highlight-enter-hit`, `override-hint`. Coverage: Vitest
+  `HighlightOverlay.override.test.jsx` (7, tap/drag hit-priority + enter/exit) + `OverrideHint.test.jsx`
+  (4, show/fade); REAL-browser `e2e/T5610-manual-override.qa.spec.js` (coarse + fine chromium)
+  driving dev-only `overlaydiag-t5610.html` + `src/overlaydiag-t5610/main.jsx` (NOT a vite build
+  input). **LANDMINE that ate ~an hour: a dev harness that does NOT pass a stable `panOffset`
+  to `HighlightOverlay` sends a fresh `{x:0,y:0}` each render → `useVideoDisplayRect`'s layout
+  effect re-runs → `setRect` → infinite "Maximum update depth" loop.** Pass module-const
+  `ZOOM`/`PAN_OFFSET` (as OverlayModeView passes stable props). Second gotcha: multiple orphaned
+  `vite` dev processes served STALE transforms on :5173 (in-memory cache survives `rm -rf
+  node_modules/.vite`); kill ALL `node .../vite` PIDs and start ONE. Verify freshness by curling
+  `/src/.../main.jsx` for an identifier you just added before trusting a browser repro.
 - **Overlay spotlight loop playback (T5370, 2026-07-19)**: primary "Play spotlight"
   loops the span of ALL highlight regions `[min(startTime), max(endTime)]`; secondary
   "Play full" plays straight through. The loop is enforced by

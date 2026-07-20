@@ -11,6 +11,12 @@ import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
 // on pointer up. Module-level so add/removeEventListener share one stable reference.
 const preventDefaultTouch = (e) => { e.preventDefault(); };
 
+// T5610: a pointer down→up that moves less than this (screen px) counts as a TAP, not a
+// drag. A tap inside the circle toggles the manual-override edit state; a drag past the
+// slop resizes/moves as before. Squared to avoid a sqrt in the move handler.
+const TAP_SLOP = 6;
+const TAP_SLOP_SQ = TAP_SLOP * TAP_SLOP;
+
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
  * over the video player to indicate the highlighted player
@@ -26,6 +32,13 @@ const preventDefaultTouch = (e) => { e.preventDefault(); };
  * render — drag the grip (or body) to move, drag a handle to resize. When NOT
  * editable the circle is DISPLAY-ONLY: it intercepts no pointer events so the video's
  * tap-nav behaves normally. There is no tap-to-select and no deselect backdrop.
+ *
+ * T5610 adds a SECOND, discoverable way into edit mode that works WITH tracking on: when
+ * `onCircleTap` is provided (the tracking-on regime), a tap INSIDE the circle toggles the
+ * ephemeral `circleEditActive` state owned by OverlayModeView (enter when display-only,
+ * exit when already editing) — a drag past TAP_SLOP still moves/resizes. When
+ * `onCircleTap` is absent (tracking OFF / power-user toggle path) behaviour is byte-identical
+ * to T5570: no tap-toggle, drag-only.
  */
 export default function HighlightOverlay({
   videoRef,
@@ -44,7 +57,12 @@ export default function HighlightOverlay({
   fillOpacity = 0.10,
   dimStrength = 0.15,
   editable = false,
+  onCircleTap,
 }) {
+  // Tap-to-toggle is only wired in the tracking-ON regime (OverlayModeView passes the
+  // callback only then). In the tracking-OFF regime it is undefined and the drag path is
+  // unchanged from T5570.
+  const tapToToggle = typeof onCircleTap === 'function';
   const overlayRef = useRef(null);
 
   const isCoarse = useIsCoarsePointer();
@@ -58,6 +76,12 @@ export default function HighlightOverlay({
   const resizeHandleRef = useRef(null);
   const dragStartRef = useRef({ x: 0, y: 0 });
   const highlightStartRef = useRef(null);
+
+  // T5610 tap-vs-drag tracking. Set on any pointer-down inside the circle (body, corner,
+  // or the display-only enter target); `moved` flips true once the pointer travels past
+  // TAP_SLOP. On pointer-up a still-unmoved gesture is a TAP (→ onCircleTap) rather than a
+  // move/resize commit. Null when no gesture is in flight.
+  const tapRef = useRef(null);
 
   // Ref to track the latest highlight during drag/resize
   // This ensures the pointer-up commit always has the most recent position,
@@ -126,6 +150,7 @@ export default function HighlightOverlay({
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
+    tapRef.current = { x: e.clientX, y: e.clientY, moved: false };
     draggingRef.current = true;
     resizingRef.current = false;
     resizeHandleRef.current = null;
@@ -142,10 +167,33 @@ export default function HighlightOverlay({
     activePointerIdRef.current = e.pointerId;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     highlightStartRef.current = currentHighlight;
+    tapRef.current = { x: e.clientX, y: e.clientY, moved: false };
     resizingRef.current = true;
     draggingRef.current = false;
     resizeHandleRef.current = handle;
   };
+
+  /**
+   * T5610: pointer down on the display-only ENTER target (a transparent hit ellipse shown
+   * only when tap-to-toggle is wired and the circle is not yet editable). Captures the
+   * pointer to detect a tap, but sets NO drag/resize flags — a display-only circle has no
+   * geometry to change until the tap enters edit mode.
+   */
+  const beginEnterTap = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    activePointerIdRef.current = e.pointerId;
+    tapRef.current = { x: e.clientX, y: e.clientY, moved: false };
+    draggingRef.current = false;
+    resizingRef.current = false;
+    resizeHandleRef.current = null;
+  };
+
+  // Swallow the synthetic click that follows a tap so it can't bubble to the video
+  // tap-nav wrapper (which would toggle play). Pointer stopPropagation does not stop the
+  // click event, so this is required to keep "tap the circle" from also seeking/playing.
+  const stopClick = (e) => e.stopPropagation();
 
   /**
    * Pointer down on the ellipse body or the center move grip. Only wired when the
@@ -171,6 +219,13 @@ export default function HighlightOverlay({
    */
   const handlePointerMove = (e) => {
     if (e.pointerId !== activePointerIdRef.current) return;
+    // Promote to a drag once the pointer leaves the tap slop (runs even for the
+    // display-only enter gesture, which has no drag/resize flags set).
+    if (tapRef.current && !tapRef.current.moved) {
+      const mdx = e.clientX - tapRef.current.x;
+      const mdy = e.clientY - tapRef.current.y;
+      if (mdx * mdx + mdy * mdy > TAP_SLOP_SQ) tapRef.current.moved = true;
+    }
     if (!draggingRef.current && !resizingRef.current) return;
     const highlightStart = highlightStartRef.current;
     if (!highlightStart || !videoDisplayRect) return;
@@ -213,7 +268,14 @@ export default function HighlightOverlay({
   const handlePointerUp = (e) => {
     if (e.pointerId !== activePointerIdRef.current) return;
 
-    if (draggingRef.current || resizingRef.current) {
+    const wasTap = tapRef.current && !tapRef.current.moved;
+    const wasDragging = draggingRef.current || resizingRef.current;
+
+    if (tapToToggle && wasTap) {
+      // A tap inside the circle toggles manual-override edit (enter when display-only,
+      // exit when editing). Do NOT commit geometry — nothing moved.
+      onCircleTap();
+    } else if (wasDragging) {
       // Use the ref which has the most recent highlight position, avoiding stale
       // closure issues where currentHighlight hasn't updated from the last move
       const finalHighlight = latestHighlightRef.current || currentHighlight;
@@ -235,6 +297,7 @@ export default function HighlightOverlay({
     resizeHandleRef.current = null;
     highlightStartRef.current = null;
     latestHighlightRef.current = null;  // Clear the ref
+    tapRef.current = null;
   };
 
   // Unmount safety: if the component unmounts mid-drag (e.g. navigation), make sure the
@@ -264,6 +327,8 @@ export default function HighlightOverlay({
         className: 'cursor-move',
         style: { pointerEvents: 'all', touchAction: 'none' },
         onPointerDown: handleEllipsePointerDown,
+        // Tap (no drag) toggles edit OFF; swallow the click so tap-nav never also fires.
+        onClick: tapToToggle ? stopClick : undefined,
       }
     : { className: 'pointer-events-none' };
 
@@ -424,6 +489,26 @@ export default function HighlightOverlay({
             strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
             data-testid="highlight-body"
             {...bodyPointerProps}
+          />
+        )}
+
+        {/* T5610 display-only ENTER target: a transparent full ellipse over the circle
+            interior, present only when tap-to-toggle is wired (tracking ON) and the circle
+            is not yet editable. A tap here enters manual-override edit; it covers only the
+            circle, so taps outside still reach player boxes / video tap-nav. A closed
+            ellipse (not the ground arc) so the whole interior is grabbable. */}
+        {tapToToggle && !editable && (
+          <ellipse
+            cx={screenHighlight.x}
+            cy={screenHighlight.y}
+            rx={screenHighlight.radiusX}
+            ry={screenHighlight.radiusY}
+            fill="transparent"
+            style={{ pointerEvents: 'all', touchAction: 'none', cursor: 'pointer' }}
+            className="pointer-events-auto"
+            data-testid="highlight-enter-hit"
+            onPointerDown={beginEnterTap}
+            onClick={stopClick}
           />
         )}
 
