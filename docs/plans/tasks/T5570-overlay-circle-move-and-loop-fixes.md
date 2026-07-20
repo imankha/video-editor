@@ -1,9 +1,10 @@
-# T5450: Overlay mobile fixes from testing — circle move-grip + tracking-gated levers; loop play/pause
+# T5570: Overlay mobile fixes from testing — circle move-grip + tracking-gated levers; loop play/pause
 
 **Status:** TODO
 **Impact:** 7
 **Complexity:** 4
 **Created:** 2026-07-19
+**Note:** ID renumbered from a T5450 collision (an existing movement-tracking T5450 already held that id). Shipped on branch `feature/T5450-overlay-circle-move-and-loop-fixes` (branch label keeps the old number; code merged to master as commit 78ec0112).
 **Follows:** T5390 (overlay circle touch) + T5370 (spotlight loop) — corrections from real mobile testing.
 
 ## Problem (user testing 2026-07-19, mobile)
