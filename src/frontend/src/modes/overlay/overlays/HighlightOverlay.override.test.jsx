@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { render, fireEvent, screen, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// eslint-disable-next-line no-unused-vars -- rendered as JSX below; repo eslint lacks react/jsx-uses-vars (fixed by T5580)
 import HighlightOverlay from './HighlightOverlay';
 
 /**
@@ -44,6 +45,7 @@ const HIGHLIGHT = {
  * and `onCircleTap` wired only while tracking is on. The REAL HighlightOverlay is under
  * test — only the parent's trivial state wiring is replicated.
  */
+// eslint-disable-next-line no-unused-vars -- rendered as JSX below; repo eslint lacks react/jsx-uses-vars (fixed by T5580)
 function Harness({ showPlayerBoxes = true, onChange = () => {}, onComplete = () => {} }) {
   const videoRef = useRef(null);
   const [circleEditActive, setCircleEditActive] = useState(false);

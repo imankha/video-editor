@@ -1,5 +1,6 @@
 import { render, screen, act, cleanup } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
+// eslint-disable-next-line no-unused-vars -- rendered as JSX below; repo eslint lacks react/jsx-uses-vars (fixed by T5580)
 import OverrideHint from './OverrideHint';
 
 /**
