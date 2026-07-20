@@ -250,4 +250,54 @@ describe('useVideoDisplayRect (hook)', () => {
     expect(cancelSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     cleanupDom();
   });
+
+  // T5590: mobile fullscreen resizes the .video-container WITHOUT a window resize
+  // event (fixed inset-0 w-full h-full) and without flipping desktop `isFullscreen`,
+  // so before the ResizeObserver the transform stayed stale and detection boxes /
+  // the spotlight circle drifted. This pins that a container resize recomputes.
+  it('recomputes the rect when the container resizes (ResizeObserver, no window resize)', () => {
+    const prevRO = globalThis.ResizeObserver;
+    const observers = [];
+    globalThis.ResizeObserver = class {
+      constructor(cb) { this.cb = cb; observers.push(this); }
+      observe(el) { this.el = el; }
+      disconnect() {}
+    };
+    try {
+      const container = document.createElement('div');
+      container.className = 'video-container';
+      let size = { width: 400, height: 400 };
+      vi.spyOn(container, 'getBoundingClientRect').mockImplementation(() => ({
+        width: size.width, height: size.height, left: 0, top: 0,
+        right: size.width, bottom: size.height, x: 0, y: 0, toJSON: () => {},
+      }));
+      const video = document.createElement('video');
+      container.appendChild(video);
+      document.body.appendChild(container);
+
+      // Stable metadata/panOffset refs — a fresh object each render would re-fire
+      // the effect forever (the effect deps include both).
+      const videoMetadata = { width: 800, height: 400 };
+      const panOffset = { x: 0, y: 0 };
+      const { result } = renderHook(() => {
+        const ref = useRef(video);
+        return useVideoDisplayRect(ref, videoMetadata, { panOffset });
+      });
+
+      // Windowed: 800px video letterboxed in 400px container -> scale 0.5.
+      approx(result.current.rect.scaleX, 0.5);
+      expect(observers.length).toBeGreaterThan(0);
+
+      // Container jumps to a 1000x1000 "fullscreen" box; fire the observer.
+      size = { width: 1000, height: 1000 };
+      act(() => observers.forEach((o) => o.cb([{ target: o.el }])));
+
+      // Recomputed against the new container -> scale 1000/800 = 1.25.
+      approx(result.current.rect.scaleX, 1.25);
+
+      document.body.removeChild(container);
+    } finally {
+      globalThis.ResizeObserver = prevRO;
+    }
+  });
 });
