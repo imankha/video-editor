@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+// eslint-disable-next-line no-unused-vars -- used in JSX (move grip); repo eslint lacks react/jsx-uses-vars
 import { Move } from 'lucide-react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
@@ -292,10 +293,6 @@ export default function HighlightOverlay({
     const b = Math.round(parseInt(hex.slice(4, 6), 16) * 0.3);
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   })();
-
-  // Calculate container dimensions for dark_overlay effect
-  const containerWidth = videoDisplayRect.offsetX * 2 + videoDisplayRect.width;
-  const containerHeight = videoDisplayRect.offsetY * 2 + videoDisplayRect.height;
 
   // Ground spotlight: bottom arc path (240°, skipping top 120° where player body is)
   const isGround = highlightShape === 'ground';
