@@ -1,5 +1,6 @@
-import { forwardRef, useState } from 'react';
+import { forwardRef, useState, useEffect, useCallback } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
+import OverrideHint from './overlay/overlays/OverrideHint';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
 import { useIsMobile } from '../hooks/useIsMobile';
@@ -253,12 +254,65 @@ export function OverlayModeView({
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
 
-  // T5450: the spotlight circle's edit levers are gated on the player-tracking layer.
-  // Player boxes OFF => editable (resize handles + center move grip render; the circle
-  // body/grip drags). Player boxes ON => display-only, video tap-nav is normal. This
-  // replaces T5390's touch select-then-manipulate. The tap-nav wrapper below YIELDS
-  // while editable so a move/resize drag is never stolen by play/seek.
-  const editable = !showPlayerBoxes;
+  // T5610: ephemeral "tap the spotlight to edit" state. NEVER persisted — it is an editing
+  // affordance, not reel data (no store write, no reactive persistence). A tap inside the
+  // circle toggles it; it lets the user fine-tune the circle WITHOUT turning the whole
+  // tracking layer off (tracking boxes stay visible underneath).
+  const [circleEditActive, setCircleEditActive] = useState(false);
+  // One-time teach: once the user has used EITHER override (tapped the circle, or hidden
+  // tracking) the discoverability hint is done for the session. View state, not reel data.
+  const [overrideUsed, setOverrideUsed] = useState(false);
+
+  // T5450 + T5610: the spotlight circle's edit levers are gated on the player-tracking
+  // layer OR the tap-the-circle override. Player boxes OFF (T5570 power-user path) =>
+  // editable. Player boxes ON but the user tapped the circle => also editable, tracking
+  // boxes still visible. Player boxes ON and not tapped => display-only, video tap-nav is
+  // normal. The tap-nav wrapper below YIELDS while editable (either path) so a move/resize
+  // drag is never stolen by play/seek — the T5570 drag-guard, only widened by what turns
+  // `editable` on.
+  const editable = !showPlayerBoxes || circleEditActive;
+
+  // Is the spotlight circle visible right now (a region exists at the current time and it
+  // renders)? Mirrors HighlightOverlay's own render gate.
+  const hasVisibleSpotlight = !!currentHighlightState && isTimeInEnabledRegion(currentTime);
+
+  // The hint teaches manual override: shown only while tracking is ON, a spotlight is
+  // visible, and the user hasn't overridden yet this session.
+  const showOverrideHint = hasVisibleSpotlight && showPlayerBoxes && !overrideUsed;
+  const overrideHintText = isMobile
+    ? 'Tap the spotlight to adjust'
+    : 'Tap the spotlight to adjust it — or hide tracking to edit freely';
+
+  // A tap inside the circle toggles manual-override edit (enter/exit). Wired to the
+  // overlay ONLY while tracking is on — with tracking off the circle is already fully
+  // editable and the tap-toggle would be meaningless.
+  const handleCircleTap = useCallback(() => {
+    setCircleEditActive((v) => !v);
+  }, []);
+
+  // Mark the hint as learned on the FIRST use of either override path (tap-the-circle OR
+  // toggle tracking off). Ephemeral view-state update — not persistence.
+  useEffect(() => {
+    if (circleEditActive || !showPlayerBoxes) setOverrideUsed(true);
+  }, [circleEditActive, showPlayerBoxes]);
+
+  // Exit circle-edit so a stray edit state never lingers: when playback starts, or when
+  // the spotlight is no longer visible (seeked out of / across regions). These reset
+  // ephemeral view state only — no store/backend write.
+  useEffect(() => {
+    if (isPlaying) setCircleEditActive(false);
+  }, [isPlaying]);
+  useEffect(() => {
+    if (!hasVisibleSpotlight) setCircleEditActive(false);
+  }, [hasVisibleSpotlight]);
+
+  // Tap on the video area (mobile fullscreen tap-nav). A tap OUTSIDE the circle exits
+  // circle-edit (the circle's own tap is stopped at the overlay). Otherwise normal
+  // tap-nav, but only when NOT editable so a circle drag is never stolen.
+  const handleVideoAreaTap = useCallback(() => {
+    if (circleEditActive) { setCircleEditActive(false); return; }
+    if (!editable) togglePlay();
+  }, [circleEditActive, editable, togglePlay]);
 
   // T5370: spotlight-loop Controls wiring. Primary Play = "Play spotlight" (loops);
   // secondary = de-emphasized "Play full". With zero regions (spotlightSpan null) the
@@ -381,11 +435,13 @@ export function OverlayModeView({
                 ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
                 : 'rounded-lg'
             }`}
-            // While the circle is editable (player boxes OFF) the tap-nav owner
-            // YIELDS: no play toggle, no long-press speed control — so a move/resize
-            // drag can't be stolen (T5450). Pointer stopPropagation can't cancel these
-            // TOUCH handlers, so they must be gated on `editable`.
-            onClick={mobileFs && !editable ? togglePlay : undefined}
+            // While the circle is editable (tracking OFF or tap-the-circle override) the
+            // tap-nav owner YIELDS: no play toggle, no long-press speed control — so a
+            // move/resize drag can't be stolen (T5450/T5610). Pointer stopPropagation
+            // can't cancel these TOUCH handlers, so they must be gated on `editable`. The
+            // onClick handles a plain tap: it exits circle-edit when tapping OUTSIDE the
+            // circle (the circle's own tap is stopped at the overlay), else normal tap-nav.
+            onClick={mobileFs ? handleVideoAreaTap : undefined}
             onTouchStart={mobileFs && !editable ? fsControls.handleLongPressTouchStart : undefined}
             onTouchMove={mobileFs && !editable ? fsControls.handleLongPressTouchMove : undefined}
             onTouchEnd={mobileFs && !editable ? fsControls.handleLongPressTouchEnd : undefined}
@@ -414,6 +470,9 @@ export function OverlayModeView({
                   panOffset={panOffset}
                   isFullscreen={isFullscreen}
                   editable={editable}
+                  // Tap-the-circle override is wired only while tracking is ON; with
+                  // tracking OFF the circle is already fully editable (T5570 path).
+                  onCircleTap={showPlayerBoxes ? handleCircleTap : undefined}
                 />
               ),
               effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
@@ -465,6 +524,12 @@ export function OverlayModeView({
 
             {/* Back to spotlight pill — over the lower video area (T5370) */}
             {backToSpotlightPill}
+
+            {/* T5610 discoverability hint — subtle pill in the dimmed area, non-interactive,
+                below the handles. Names BOTH override paths; fades on first override. */}
+            {effectiveOverlayVideoUrl && (
+              <OverrideHint visible={showOverrideHint} text={overrideHintText} />
+            )}
 
             {/* Controls - desktop fullscreen & non-fullscreen */}
             {!mobileFs && effectiveOverlayVideoUrl && (
