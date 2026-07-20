@@ -72,7 +72,7 @@ def _patch_modal_pipeline(monkeypatch, sent):
         return {"status": "success", "gpu_seconds": 1.0, "modal_function": "test", "clips_processed": 1}
 
     async def fake_detect(**kwargs):
-        return []
+        return [], {"videoWidth": None, "videoHeight": None, "fps": 30, "detections": []}
 
     async def fake_delete(*a, **k):
         return True

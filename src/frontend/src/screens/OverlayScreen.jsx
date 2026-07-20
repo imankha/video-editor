@@ -243,6 +243,7 @@ export function OverlayScreen({
     getRegionsForExport,
     reset: resetHighlightRegions,
     restoreRegions: restoreHighlightRegions,
+    setVideoDetections: setHighlightVideoDetections,
   } = useHighlightRegions(effectiveOverlayMetadata);
 
   // =========================================
@@ -471,6 +472,10 @@ export function OverlayScreen({
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
+          // Hold the flat video-level detection payload (T5600) so addRegion can
+          // slice instant tracking squares for newly created regions.
+          setHighlightVideoDetections(data.detections_data || null);
+
           // Use video_duration from backend, fall back to video metadata or region end times
           const videoDuration = data.video_duration
             || effectiveOverlayMetadata?.duration
@@ -520,7 +525,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -561,6 +566,10 @@ export function OverlayScreen({
           const response = await apiFetch(`${API_BASE}/api/export/projects/${projectId}/overlay-data`);
           const data = await response.json();
 
+          // Hold the flat video-level detection payload (T5600) so addRegion can
+          // slice instant tracking squares for newly created regions.
+          setHighlightVideoDetections(data.detections_data || null);
+
           if (data.has_data && data.highlights_data?.length > 0) {
             restoreHighlightRegions(data.highlights_data, effectiveDuration);
             console.log('[OverlayScreen] Restored', data.highlights_data.length, 'highlight regions');
@@ -592,7 +601,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)

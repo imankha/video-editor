@@ -25,6 +25,23 @@ const MIN_REGION_DURATION = 0.5; // seconds
 const TIME_EPSILON = 0.04; // ~1 frame at 30fps — frame-to-time conversion can place keyframes slightly past region bounds
 const MIN_KEYFRAME_DISTANCE_FRAMES = 5; // Minimum 5 frames (~0.167s at 30fps) between keyframes
 
+/**
+ * sliceDetections - time-slice the flat, video-level detection payload to a
+ * region's [start, end] bounds (T5600). Mirrors the Python helper
+ * `slice_detections` in `app/services/video_detections.py` -- keep them in sync.
+ *
+ * @param {{detections?: Array<{timestamp:number}>}|null} videoDetections
+ * @param {number} start
+ * @param {number} end
+ * @param {number} eps
+ */
+export function sliceDetections(videoDetections, start, end, eps = TIME_EPSILON) {
+  if (!videoDetections?.detections) return [];
+  return videoDetections.detections.filter(
+    d => start - eps <= d.timestamp && d.timestamp <= end + eps
+  );
+}
+
 export default function useHighlightRegions(videoMetadata) {
   // Store regions directly (not derived from boundaries)
   const [regions, setRegions] = useState([]);
@@ -38,6 +55,13 @@ export default function useHighlightRegions(videoMetadata) {
   // Duration and framerate
   const [duration, setDuration] = useState(null);
   const framerate = 30;
+
+  // T5600: flat, whole-timeline player-detection payload held for this working
+  // video ({videoWidth, videoHeight, fps, detections:[...]}). Canonical source
+  // lives in working_videos.detections_data; this is a memory-only hold set
+  // from the /overlay-data response, never persisted from here. addRegion
+  // slices it locally so tracking squares appear instantly for a new region.
+  const [videoDetections, setVideoDetections] = useState(null);
 
   // Get highlight color from store for new highlights
   const highlightColor = useOverlayHighlightColor();
@@ -132,6 +156,7 @@ export default function useHighlightRegions(videoMetadata) {
     setSelectedRegionId(null);
     setCopiedData(null);
     setDuration(null);
+    setVideoDetections(null);
   }, []);
 
   /**
@@ -320,7 +345,13 @@ export default function useHighlightRegions(videoMetadata) {
           frame: endFrame,
           ...defaultHighlight
         }
-      ]
+      ],
+      // T5600: slice the held video-level payload so tracking squares for this
+      // span appear instantly, even though delete/create never persist detections.
+      detections: sliceDetections(videoDetections, snappedStartTime, snappedEndTime),
+      videoWidth: videoDetections?.videoWidth ?? null,
+      videoHeight: videoDetections?.videoHeight ?? null,
+      fps: videoDetections?.fps ?? null,
     };
 
     setRegions(prev => [...prev, newRegion].sort((a, b) => a.startTime - b.startTime));
@@ -328,7 +359,7 @@ export default function useHighlightRegions(videoMetadata) {
     track('highlight_region_add', { regionId, startTime: Math.round(snappedStartTime * 10) / 10 }, { debugOnly: true });
 
     return regionId;
-  }, [duration, wouldOverlap, calculateDefaultHighlight, videoMetadata, framerate]);
+  }, [duration, wouldOverlap, calculateDefaultHighlight, videoMetadata, framerate, videoDetections]);
 
   /**
    * Delete a region by ID
@@ -814,11 +845,13 @@ export default function useHighlightRegions(videoMetadata) {
     copiedData,
     duration,
     framerate,
+    videoDetections,             // Flat video-level detection payload (T5600)
 
     // Initialization
     initializeWithDuration,
     initializeFromClipMetadata,  // Auto-create regions from clip boundaries
     restoreRegions,              // Restore saved regions from backend
+    setVideoDetections,          // Hold the flat detection payload from /overlay-data (T5600)
 
     // Region operations (new API)
     addRegion,                   // Creates 2-second region with keyframes
