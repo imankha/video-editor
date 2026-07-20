@@ -1,19 +1,7 @@
 import { useRef, useCallback } from 'react';
-// eslint-disable-next-line no-unused-vars -- used in JSX (move grip); repo eslint lacks react/jsx-uses-vars
-import { Move } from 'lucide-react';
 import { HighlightEffect } from '../../../constants/highlightEffects';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
 import { useIsCoarsePointer } from '../../../hooks/useIsMobile';
-
-// Touch target sizing (T5450). When the circle is EDITABLE the resize handles and
-// the center move grip render; on coarse pointers each carries a >=44px hit target
-// per the mobile touch-target rule (matches T5360). Desktop keeps the original 7px.
-const HANDLE_VISIBLE_RADIUS_DESKTOP = 7;
-const HANDLE_VISIBLE_RADIUS_TOUCH = 12;
-const HANDLE_HIT_RADIUS_TOUCH = 22; // 44px diameter
-// Center move grip: its VISIBLE dot matches a resize handle's visible size (so it
-// doesn't occlude the spotlight); its hit target still meets the 44px touch floor via
-// a larger transparent wrapper (same visible-vs-hit split the resize handles use).
 
 /**
  * HighlightOverlay component - renders a draggable/resizable highlight ellipse
@@ -189,20 +177,16 @@ export default function HighlightOverlay({
         y: highlightStart.y + deltaY,
       });
     } else {
-      // Delta-based resizing - much more intuitive
-      let newRadiusX = highlightStart.radiusX;
-      let newRadiusY = highlightStart.radiusY;
-
-      if (resizeHandleRef.current === 'horizontal') {
-        newRadiusX = highlightStart.radiusX + deltaX;
-      } else if (resizeHandleRef.current === 'vertical') {
-        newRadiusY = highlightStart.radiusY + deltaY;
-      }
-
+      // Corner resize (T5570c bounding-box model): drag a corner to grow/shrink BOTH
+      // radii, keeping the center fixed. The sign follows which corner is dragged so
+      // pulling a corner outward always enlarges (e = +x, w = -x, s = +y, n = -y).
+      const corner = resizeHandleRef.current || 'se';
+      const signX = corner.includes('e') ? 1 : -1;
+      const signY = corner.includes('s') ? 1 : -1;
       constrained = constrainHighlight({
         ...highlightStart,
-        radiusX: newRadiusX,
-        radiusY: newRadiusY,
+        radiusX: highlightStart.radiusX + signX * deltaX,
+        radiusY: highlightStart.radiusY + signY * deltaY,
       });
     }
 
@@ -242,32 +226,29 @@ export default function HighlightOverlay({
     latestHighlightRef.current = null;  // Clear the ref
   };
 
-  const shouldRender = isEnabled && currentHighlight && videoDisplayRect;
+  // The spotlight circle + its editing frame render ONLY when the player-tracking
+  // layer is OFF (editable). With tracking on you're picking a player; with it off
+  // you're placing/adjusting the spotlight (user request, 2026-07-20).
+  const shouldRender = isEnabled && currentHighlight && videoDisplayRect && editable;
   if (!shouldRender) {
     return null;
   }
 
-  // Levers (rim handles + center move grip) render only when the circle is editable
-  // (player boxes OFF). On coarse pointers the hit targets are >=44px.
-  const showHandles = editable;
-  const handleVisibleRadius = isCoarse
-    ? HANDLE_VISIBLE_RADIUS_TOUCH
-    : HANDLE_VISIBLE_RADIUS_DESKTOP;
-  const handleHitRadius = isCoarse ? HANDLE_HIT_RADIUS_TOUCH : HANDLE_VISIBLE_RADIUS_DESKTOP;
-  // Move grip: visible dot == a resize handle's visible size; hit box == the handle
-  // hit size (>=44px on coarse) so it's tappable without occluding the circle.
-  const gripVisibleSize = handleVisibleRadius * 2;
-  const gripHitSize = handleHitRadius * 2;
+  // Corner resize handles (T5570c bounding-box model). A bit bigger than the old rim
+  // handles and positioned at the bounding-box corners — always OUTSIDE the ellipse,
+  // so they never occlude it. A large invisible hit circle keeps them easy to grab.
+  const cornerVisibleR = isCoarse ? 13 : 8;
+  const cornerHitR = isCoarse ? 26 : 12;
+  const frameMargin = isCoarse ? 12 : 8; // gap between the ellipse edge and the frame
 
-  // The ellipse body drags to move only while editable. When display-only it must
-  // intercept no pointer events so the video's tap-nav behaves normally.
-  const bodyPointerProps = editable
-    ? {
-        className: 'pointer-events-auto cursor-move',
-        style: { touchAction: 'none' },
-        onPointerDown: handleEllipsePointerDown,
-      }
-    : { className: 'pointer-events-none' };
+  // Move by dragging the ELLIPSE INTERIOR. pointerEvents:'all' makes the transparent
+  // inside grabbable (a plain transparent fill is not hit-tested) — that is what let
+  // the body-drag fail before.
+  const bodyPointerProps = {
+    className: 'cursor-move',
+    style: { pointerEvents: 'all', touchAction: 'none' },
+    onPointerDown: handleEllipsePointerDown,
+  };
 
   // Apply ground spotlight transform: shift center to feet, flatten ellipse
   let displayX = currentHighlight.x;
@@ -429,102 +410,64 @@ export default function HighlightOverlay({
           />
         )}
 
-        {/* Resize handles — desktop always; touch only once selected. Each is a
-            visible marker plus a >=44px invisible hit circle on coarse pointers. */}
-        {showHandles && (
-          <>
-            {/* Horizontal resize handle (right edge) */}
-            <circle
-              cx={screenHighlight.x + screenHighlight.radiusX}
-              cy={screenHighlight.y}
-              r={handleVisibleRadius}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="2"
-              className="pointer-events-none"
-            />
-            <circle
-              cx={screenHighlight.x + screenHighlight.radiusX}
-              cy={screenHighlight.y}
-              r={handleHitRadius}
-              fill="transparent"
-              className="resize-handle pointer-events-auto cursor-ew-resize"
-              style={{ touchAction: 'none' }}
-              data-testid="highlight-handle-horizontal"
-              onPointerDown={(e) => handleResizePointerDown(e, 'horizontal')}
-            />
-
-            {/* Vertical resize handle (bottom edge) */}
-            <circle
-              cx={screenHighlight.x}
-              cy={screenHighlight.y + screenHighlight.radiusY}
-              r={handleVisibleRadius}
-              fill="white"
-              stroke={strokeColor}
-              strokeWidth="2"
-              className="pointer-events-none"
-            />
-            <circle
-              cx={screenHighlight.x}
-              cy={screenHighlight.y + screenHighlight.radiusY}
-              r={handleHitRadius}
-              fill="transparent"
-              className="resize-handle pointer-events-auto cursor-ns-resize"
-              style={{ touchAction: 'none' }}
-              data-testid="highlight-handle-vertical"
-              onPointerDown={(e) => handleResizePointerDown(e, 'vertical')}
-            />
-          </>
-        )}
-
-        {/* Center indicator — hidden behind the move grip while editable */}
-        {!editable && (
-          <circle
-            cx={screenHighlight.x}
-            cy={screenHighlight.y}
-            r="3"
-            fill="white"
-            stroke={strokeColor}
-            strokeWidth="1"
-            className="pointer-events-none"
-          />
-        )}
+        {/* Selection frame + corner resize handles (T5570c bounding-box model). The
+            dashed frame hugs the ellipse; the four corner handles sit at its corners —
+            always outside the ellipse, so they never cover the spotlight. Drag a
+            corner to resize both radii around the fixed center. */}
+        {(() => {
+          const bx = screenHighlight.x;
+          const by = screenHighlight.y;
+          const hrx = screenHighlight.radiusX + frameMargin;
+          const hry = screenHighlight.radiusY + frameMargin;
+          const corners = [
+            { id: 'nw', x: bx - hrx, y: by - hry, cursor: 'nwse-resize' },
+            { id: 'ne', x: bx + hrx, y: by - hry, cursor: 'nesw-resize' },
+            { id: 'sw', x: bx - hrx, y: by + hry, cursor: 'nesw-resize' },
+            { id: 'se', x: bx + hrx, y: by + hry, cursor: 'nwse-resize' },
+          ];
+          return (
+            <>
+              <rect
+                x={bx - hrx}
+                y={by - hry}
+                width={hrx * 2}
+                height={hry * 2}
+                rx={10}
+                fill="none"
+                stroke={strokeColor}
+                strokeOpacity={0.55}
+                strokeWidth={1.5}
+                strokeDasharray="6 5"
+                className="pointer-events-none"
+              />
+              {corners.map((c) => (
+                <g key={c.id}>
+                  <circle
+                    cx={c.x}
+                    cy={c.y}
+                    r={cornerVisibleR}
+                    fill="white"
+                    stroke={strokeColor}
+                    strokeWidth="2"
+                    className="pointer-events-none"
+                  />
+                  <circle
+                    cx={c.x}
+                    cy={c.y}
+                    r={cornerHitR}
+                    fill="transparent"
+                    className="resize-handle pointer-events-auto"
+                    style={{ touchAction: 'none', cursor: c.cursor }}
+                    data-testid={`highlight-corner-${c.id}`}
+                    onPointerDown={(e) => handleResizePointerDown(e, c.id)}
+                  />
+                </g>
+              ))}
+            </>
+          );
+        })()}
       </svg>
 
-      {/* Center move grip (T5450) — a 4-arrow handle at the circle center; drag it to
-          MOVE the circle. Reuses the body-drag path (beginDrag + captured pointer-move
-          math). Rendered only when editable; >=44px hit target on coarse pointers. An
-          HTML element (not SVG) so the lucide Move glyph renders cleanly; its captured
-          pointer events still bubble to the root div's move/up handlers. */}
-      {editable && (
-        <div
-          data-testid="highlight-move-grip"
-          role="button"
-          aria-label="Move spotlight"
-          className="absolute pointer-events-auto cursor-move flex items-center justify-center"
-          style={{
-            left: screenHighlight.x,
-            top: screenHighlight.y,
-            width: gripHitSize,
-            height: gripHitSize,
-            transform: 'translate(-50%, -50%)',
-            touchAction: 'none',
-          }}
-          onPointerDown={handleEllipsePointerDown}
-        >
-          {/* Visible dot — same size as a resize handle so it never occludes the circle. */}
-          <div
-            className="rounded-full bg-white/90 shadow flex items-center justify-center"
-            style={{
-              width: gripVisibleSize,
-              height: gripVisibleSize,
-              border: `2px solid ${strokeColor}`,
-            }}
-          >
-            <Move size={Math.round(gripVisibleSize * 0.6)} color={outlineColor} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
