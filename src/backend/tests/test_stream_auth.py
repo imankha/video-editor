@@ -22,6 +22,7 @@ from app.main import app
 
 STREAM_PATH = "/api/clips/projects/999999/clips/999999/stream"
 WORKING_VIDEO_STREAM_PATH = "/api/projects/999999/working_video/stream"
+WORKING_VIDEO_PLAYBACK_URL_PATH = "/api/projects/999999/working_video/playback-url"
 
 
 def test_stream_without_auth_returns_401():
@@ -68,6 +69,84 @@ def test_working_video_stream_with_auth_header_is_not_401():
     )
     assert r.status_code in (200, 206, 404, 416, 422), (
         f"unexpected status {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_playback_url_without_auth_returns_401():
+    """T5642: the presigned-URL endpoint must be auth-gated (no anonymous access).
+
+    This is the whole point of the endpoint: an authenticated caller trades a
+    session for an anonymous presigned R2 URL. Without a session the middleware
+    must reject the request so the presign is never minted for an anonymous
+    caller.
+    """
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={})
+    assert r.status_code == 401, (
+        f"expected 401 for unauthenticated working_video playback-url, "
+        f"got {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_playback_url_with_auth_header_is_not_401():
+    """T5642: with X-User-ID the request passes middleware; handler 404s for a
+    missing project (never 401)."""
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={"X-User-ID": "testdefault"})
+    assert r.status_code != 401, (
+        f"authenticated request should not be rejected by auth middleware, "
+        f"got 401: {r.text}"
+    )
+    # Project 999999 does not exist → expect 404 from handler (not 401).
+    assert r.status_code in (200, 404), (
+        f"unexpected status {r.status_code}: {r.text}"
+    )
+
+
+def test_working_video_playback_url_returns_url_with_auth(monkeypatch):
+    """T5642: with auth AND an existing working video, the endpoint returns a
+    JSON body carrying a presigned URL string.
+
+    We stub the DB lookup + presign helper so the test does not depend on real
+    account data or R2 credentials — the contract under test is "auth passes →
+    JSON {url}", mirroring clips.py get_clip_playback_url.
+    """
+    from app.routers import projects as projects_router
+
+    class _FakeCursor:
+        def execute(self, *args, **kwargs):
+            return self
+
+        def fetchone(self):
+            return {"filename": "working_999999_deadbeef.mp4"}
+
+    class _FakeConn:
+        def cursor(self):
+            return _FakeCursor()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(projects_router, "get_db_connection", lambda: _FakeConn())
+    monkeypatch.setattr(
+        projects_router,
+        "_generate_working_video_presigned_url",
+        lambda filename: f"https://r2.example.com/working_videos/{filename}?sig=abc",
+    )
+
+    client = TestClient(app)
+    r = client.get(WORKING_VIDEO_PLAYBACK_URL_PATH, headers={"X-User-ID": "testdefault"})
+    assert r.status_code == 200, f"expected 200, got {r.status_code}: {r.text}"
+    body = r.json()
+    assert isinstance(body.get("url"), str) and body["url"].startswith("https://"), (
+        f"expected a presigned url string, got {body!r}"
+    )
+    # The <video> gets an anonymous R2 origin, NOT the same-origin proxy.
+    assert "working_video/stream" not in body["url"], (
+        "playback-url must return the presigned R2 URL, not the proxy path"
     )
 
 

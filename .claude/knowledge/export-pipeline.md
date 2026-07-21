@@ -136,6 +136,23 @@ graph LR
   Chrome's concurrent Range burst). Lever 2 (302→presigned-R2) was NOT needed. `/health` flat (~2ms)
   throughout → not a contention artifact (ledger row 3's proxy-TTFB cost was real, distinct from the
   T4772 storm). Correctness verified live: 200/206/416/HEAD, byte-integrity (full == concatenated ranges).
+- **T5642 (overlay working-video load path — cross-origin 401 fix).** The Overlay `<video>` no
+  longer loads the working-video through the same-origin proxy `working_video/stream`. On staging/prod
+  the frontend is cross-SITE to the API (pages.dev -> fly.dev) and `components/VideoPlayer.jsx`'s
+  `<video>` has NO `crossOrigin` attribute, so its cross-site range request carried no session cookie
+  -> auth middleware 401 -> Chrome `MEDIA_ELEMENT_ERROR` "Format error" (readyState 0). Fix mirrors
+  Framing (`clips.py get_clip_playback_url`): new authed endpoint
+  **`GET /api/projects/{id}/working_video/playback-url`** (`projects.py`, right after
+  `stream_working_video`) returns `{url, expires_in}` where `url` is an ANONYMOUS presigned R2 URL
+  (reuses `_generate_working_video_presigned_url`, key `working_videos/{filename}`, 1h). Middleware
+  auth-gates it (NOT allowlisted -> 401 without a session; the whole point — an authed caller trades a
+  session for an anonymous presign). `OverlayScreen.jsx` `attemptLoad` now `apiFetch`es that endpoint,
+  then sets `<video src>` to the presigned R2 URL (metadata extraction + player both use it). The
+  `working_video/stream` proxy stays for back-compat (Framing/warmer/legacy). LANDMINE: presigned-R2 is
+  anonymous — do NOT put `crossOrigin="use-credentials"` on that `<video>` (R2 sends no
+  `Access-Control-Allow-Credentials` for a specific origin -> breaks CORS). Tests: `test_stream_auth.py`
+  (401 w/o auth, returns presign url w/ auth), real-browser `e2e/T5642-overlay-working-video-presigned.qa.spec.js`
+  (presigned `<video>` loads cross-site 206/no-401/plays; credential-less proxy 401s).
 - **`warmAllUserVideos()` (App.jsx:233,336) is a contention villain.** It streams `working_video/stream`
   for MANY projects at once through the Fly proxy on every home mount (Annotate/Overlay/My Reels opens
   all show the storm), inflating foreground TTFBs 0.5–1.5s. Fix = foreground-first + bounded concurrency
