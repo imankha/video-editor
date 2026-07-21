@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-20 (T5600 video-level detection store, decoupled from region delete/create)
+updated: 2026-07-21 (T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -175,6 +175,56 @@ per-clip remapping.
   read-time hoist fallback until a follow-up wires it too.
 
 ## Landmines & history
+- **Region trim levers are Pointer Events, not mouse (T5644, 2026-07-21).**
+  `RegionLayer.jsx` highlight-mode begin/end levers (the region start/end trim
+  handles) used `onMouseDown` + `document` `mousemove`/`mouseup`. On a phone, touch
+  only synthesizes compat mouse events AFTER touchend (never during a drag), so the
+  lever never moved on mobile. Fix: `onPointerDown` + `setPointerCapture` + `window`
+  `pointermove`/`pointerup`/`pointercancel` (mouse+touch+pen, one path), each handle
+  carries `touch-action: none` (Tailwind `touch-none`) so the browser doesn't hijack
+  the drag for timeline scroll/page zoom, and the drag filters on the owning
+  `pointerId` (ignores a 2nd finger). Coarse pointers (`useIsCoarsePointer`) get a
+  >=44px lever hit-target (fine stays 32px); the missing `lever-handle` class was
+  also added so `handleTrackClick`'s existing `.lever-handle` add-region guard works.
+  Desktop mouse path is behaviourally unchanged. **QA landmine reconfirmed:** a CDP
+  `Input.dispatchTouchEvent` drag in chromium does NOT fire the old `onMouseDown`
+  path (no continuous compat-mouse during a CDP touch drag), so the real-browser spec
+  genuinely discriminates the bug — proven by a negative control (old handlers -> the
+  two touch tests FAIL, mouse tests pass). Coverage: Vitest
+  `RegionLayer.touch.test.jsx` (5, jsdom pointer wiring) + REAL-browser
+  `e2e/T5644-region-lever-touch.qa.spec.js` (coarse touch via CDP + fine mouse)
+  driving dev-only `regiondiag.html` + `src/regiondiag/main.jsx` (NOT a vite build
+  input) that mounts the REAL RegionLayer + REAL useHighlightRegions. **Vite in-mem
+  cache landmine (again): HMR did NOT invalidate on a WSL fs edit and orphaned vite
+  PIDs kept serving stale transforms on :5173** — for a real negative control you
+  MUST kill ALL vite PIDs (`/proc/*/cmdline` grep for `vite`), `rm -rf
+  node_modules/.vite`, start ONE, and `curl /src/.../RegionLayer.jsx` to confirm the
+  handler you expect is served before trusting the result.
+- **Re-added region not persisting = stale `.find()` in OverlayScreen, NOT the hook
+  (T5644, FIXED 2026-07-21).** Symptom: delete a region -> re-add -> reload ->
+  `[Overlay Data] project=31: 0 regions`. Root cause: `wrappedAddHighlightRegion`
+  (`OverlayScreen.jsx:~621`) does `const regionId = addHighlightRegion(clickTime);
+  const region = highlightRegions.find(r => r.id === regionId);` — but
+  `highlightRegions` is React state captured at render, and `addRegion`'s
+  `setRegions` is async, so within the same synchronous gesture the new region is NOT
+  yet in `highlightRegions`. `find` returns `undefined`, the `if (region)` block is
+  skipped, and the surgical `overlayActions.createRegion` POST NEVER fires (delete's
+  POST does, so backend nets 0). This affects EVERY interactive add, not just re-add;
+  it went unnoticed because normal flow persists regions via framing-export
+  (`highlight_transform`) or the full-state export PUT — the surgical create only
+  matters for persistence-without-export, which is exactly the reported flow. The
+  hook (`useHighlightRegions.addRegion`) is CORRECT — it returns the id and updates
+  state; the bug is the caller reading async state. **Fix applied (T5644):**
+  `addRegion` (useHighlightRegions.js) now RETURNS the new region object (was: the id
+  string); `wrappedAddHighlightRegion` (OverlayScreen.jsx) dispatches from it directly
+  `const newRegion = addHighlightRegion(clickTime); if (newRegion && canSyncActions)
+  dispatchOverlayAction('createRegion', () => overlayActions.createRegion(projectId,
+  newRegion.startTime, newRegion.endTime, newRegion.id));` — no stale `.find`, no
+  reactive effect (pure gesture->surgical POST). No existing test depended on
+  `addRegion`'s string return (they read `result.current.regions`), so the return-type
+  change was safe. Coverage: `useHighlightRegions.persistence.test.js` (return contract
+  + delete/re-add gesture fires create_region with the re-added region's own numeric
+  bounds + fresh id).
 - **Mobile editor layout invariant (T4880).** The editor shell (`App.jsx`, the non-Annotate
   branch) uses `h-dvh` — NEVER `h-screen`/`100vh` inside the editor tree — so the
   `flex-1 overflow-auto` content pane maps to iOS Safari's *visible* viewport (100vh spills

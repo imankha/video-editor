@@ -1,0 +1,22 @@
+<!doctype html>
+<!--
+  T5644 DEV-ONLY diagnostic harness for the overlay timeline region trim levers.
+  NOT a production page: it is not listed in vite build rollupOptions.input
+  (only index.html is), so it never ships in the built app. Served by the dev
+  server only, for the Playwright real-browser (coarse touch + fine mouse)
+  verification that the begin/end levers drag with a fingertip on mobile.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Region trim levers diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="regiondiag-root"></div>
+    <script type="module" src="/src/regiondiag/main.jsx"></script>
+  </body>
+</html>
