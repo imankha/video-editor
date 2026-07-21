@@ -1,5 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RecapPlayerModal } from './RecapPlayerModal';
 
 const {
@@ -95,11 +95,13 @@ vi.mock('./recap/RecapClipsSidebar', () => ({
 }));
 
 vi.mock('../modes/annotate/components/PlaybackControls', () => ({
-  PlaybackControls: ({ onShare, isPlaying, onTogglePlay }) => (
+  PlaybackControls: ({ onShare, isPlaying, onTogglePlay, isFullscreen, onToggleFullscreen }) => (
     <div data-testid="playback-controls">
       <span data-testid="is-playing">{isPlaying ? 'playing' : 'paused'}</span>
       <button data-testid="toggle-play" onClick={onTogglePlay}>toggle</button>
       {onShare && <button onClick={onShare} title="Share highlights">Share</button>}
+      <span data-testid="is-fullscreen">{isFullscreen ? 'fullscreen' : 'windowed'}</span>
+      <button data-testid="toggle-fullscreen" onClick={onToggleFullscreen}>fullscreen</button>
     </div>
   ),
 }));
@@ -407,6 +409,70 @@ describe('RecapPlayerModal - transport + create clip (T3970)', () => {
     await waitFor(() =>
       expect(screen.getByTitle('Create a clip in Annotate at this moment')).toBeTruthy()
     );
+  });
+});
+
+// T5645: mobile fullscreen toggle must exit via whichever API the browser
+// actually exposes (standard or webkit-prefixed), and read/derive its state
+// from the browser's real fullscreenElement instead of a flag that can desync.
+describe('RecapPlayerModal - fullscreen toggle (T5645)', () => {
+  const origRequestFullscreen = Element.prototype.requestFullscreen;
+  const origWebkitRequestFullscreen = Element.prototype.webkitRequestFullscreen;
+  const origExitFullscreen = document.exitFullscreen;
+  const origWebkitExitFullscreen = document.webkitExitFullscreen;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch();
+  });
+
+  afterEach(() => {
+    Element.prototype.requestFullscreen = origRequestFullscreen;
+    Element.prototype.webkitRequestFullscreen = origWebkitRequestFullscreen;
+    document.exitFullscreen = origExitFullscreen;
+    document.webkitExitFullscreen = origWebkitExitFullscreen;
+    delete document.fullscreenElement;
+    delete document.webkitFullscreenElement;
+  });
+
+  it('enters via the standard API and exits via document.exitFullscreen when both exist', async () => {
+    Element.prototype.requestFullscreen = vi.fn();
+    document.exitFullscreen = vi.fn();
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+
+    // Browser confirms fullscreen was entered.
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('fullscreenchange'));
+    await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to webkit-prefixed enter/exit when the standard API is unavailable', async () => {
+    delete Element.prototype.requestFullscreen;
+    delete document.exitFullscreen;
+    Element.prototype.webkitRequestFullscreen = vi.fn();
+    document.webkitExitFullscreen = vi.fn();
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    expect(Element.prototype.webkitRequestFullscreen).toHaveBeenCalledTimes(1);
+
+    // Browser confirms fullscreen via the webkit-prefixed property + event.
+    Object.defineProperty(document, 'webkitFullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('webkitfullscreenchange'));
+    await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    expect(document.webkitExitFullscreen).toHaveBeenCalledTimes(1);
   });
 });
 

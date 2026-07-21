@@ -19,6 +19,9 @@ import { toast } from './shared/Toast';
 
 const getStreamUrl = (downloadId) => `${API_BASE}/api/downloads/${downloadId}/stream`;
 
+const getFullscreenElement = () =>
+  document.fullscreenElement || document.webkitFullscreenElement || null;
+
 export function RecapPlayerModal({ game, initialTab, onClose }) {
   const [recapData, setRecapData] = useState(null);
   const [brilliantClips, setBrilliantClips] = useState(null);
@@ -95,16 +98,28 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   }, [game.id]);
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    const handler = () => setIsFullscreen(!!getFullscreenElement());
     document.addEventListener('fullscreenchange', handler);
-    return () => document.removeEventListener('fullscreenchange', handler);
+    document.addEventListener('webkitfullscreenchange', handler);
+    return () => {
+      document.removeEventListener('fullscreenchange', handler);
+      document.removeEventListener('webkitfullscreenchange', handler);
+    };
   }, []);
 
+  // Mobile Safari/Chrome variants only expose the webkit-prefixed methods on
+  // some versions — check both the standard and prefixed API on request/exit,
+  // and read state from either fullscreenElement property so a tap always
+  // matches the browser's actual fullscreen state instead of a stale flag.
   const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      contentRef.current?.requestFullscreen();
-    } else {
+    const el = contentRef.current;
+    if (!getFullscreenElement()) {
+      if (el?.requestFullscreen) el.requestFullscreen();
+      else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    } else if (document.exitFullscreen) {
       document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
     }
   }, []);
 
