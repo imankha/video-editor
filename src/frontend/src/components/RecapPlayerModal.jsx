@@ -107,11 +107,17 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
     };
   }, []);
 
-  // Fullscreen toggle removed (T5659): the exit ("minimize") button did nothing
-  // on Android Chrome and couldn't be fixed reliably, so the recap plays inline
-  // only — no fullscreen enter/exit. The isFullscreen detector below is kept
-  // harmless (it never flips true without an enter path) so the layout gates
-  // render the normal, non-fullscreen view.
+  // Fullscreen ENTER only (T5659): the in-app exit ("minimize") button did
+  // nothing on Android Chrome, so we drop it — users enter fullscreen here and
+  // exit with the browser's native back gesture (which works). The
+  // fullscreenchange listener above flips isFullscreen back and restores the UI
+  // on exit; the enter button is hidden while fullscreen so there's no dead
+  // control.
+  const enterFullscreen = useCallback(() => {
+    const el = contentRef.current;
+    if (el?.requestFullscreen) el.requestFullscreen()?.catch(() => {});
+    else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  }, []);
 
   const recap = useRecapPlayback(recapVideoRef, recapData?.clips || []);
 
@@ -460,6 +466,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                     playbackRate={recap.playbackRate}
                     onPlaybackRateChange={recap.changePlaybackRate}
                     isFullscreen={isFullscreen}
+                    onToggleFullscreen={isFullscreen ? undefined : enterFullscreen}
                     onShare={!isExpired && recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                     videoController={recapVideoController}
                   />
@@ -551,6 +558,7 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
                   playbackRate={highlights.playbackRate}
                   onPlaybackRateChange={highlights.changePlaybackRate}
                   isFullscreen={isFullscreen}
+                  onToggleFullscreen={isFullscreen ? undefined : enterFullscreen}
                   onShare={!isExpired && recapData?.clips?.length > 0 ? () => setShowShareDialog(true) : undefined}
                   videoController={highlightsVideoController}
                 />

@@ -101,7 +101,7 @@ vi.mock('../modes/annotate/components/PlaybackControls', () => ({
       <button data-testid="toggle-play" onClick={onTogglePlay}>toggle</button>
       {onShare && <button onClick={onShare} title="Share highlights">Share</button>}
       <span data-testid="is-fullscreen">{isFullscreen ? 'fullscreen' : 'windowed'}</span>
-      <button data-testid="toggle-fullscreen" onClick={onToggleFullscreen}>fullscreen</button>
+      {onToggleFullscreen && <button data-testid="toggle-fullscreen" onClick={onToggleFullscreen}>fullscreen</button>}
     </div>
   ),
 }));
@@ -586,5 +586,44 @@ describe('RecapPlayerModal - mobile clip-list pull-up (T5290)', () => {
     await waitFor(() => screen.getByTestId('clips-sidebar'));
     fireEvent.click(screen.getByLabelText('Hide highlights list'));
     expect(screen.getByLabelText('Show highlights list')).toBeTruthy();
+  });
+});
+
+// T5659: the in-app exit ("minimize") button did nothing on Android Chrome, so
+// only the ENTER-fullscreen button remains; it hides once fullscreen (exit is
+// the browser's native back gesture, tracked via the fullscreenchange listener).
+describe('RecapPlayerModal - fullscreen enter only (T5659)', () => {
+  const origRequestFullscreen = Element.prototype.requestFullscreen;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch();
+  });
+
+  afterEach(() => {
+    Element.prototype.requestFullscreen = origRequestFullscreen;
+    delete document.fullscreenElement;
+  });
+
+  it('shows the enter button when windowed and calls requestFullscreen on click', async () => {
+    Element.prototype.requestFullscreen = vi.fn(() => Promise.resolve());
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    expect(Element.prototype.requestFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the fullscreen button once fullscreen (no in-app exit control)', async () => {
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+    expect(screen.getByTestId('toggle-fullscreen')).toBeTruthy();
+
+    // Browser confirms fullscreen (e.g. entered, or the native path) -> button hides.
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('fullscreenchange'));
+    await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
+
+    expect(screen.queryByTestId('toggle-fullscreen')).toBeNull();
   });
 });
