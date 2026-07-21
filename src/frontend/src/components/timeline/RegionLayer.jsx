@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { PLAYHEAD_WIDTH_PX } from './TimelineBase';
 import { KeyframeMarker } from './KeyframeMarker';
 import { frameToTime } from '../../utils/videoUtils';
+import { useIsCoarsePointer } from '../../hooks/useIsMobile';
 
 /**
  * RegionLayer - Reusable component for displaying regions on the timeline
@@ -63,8 +64,15 @@ export default function RegionLayer({
   edgePadding = 20
 }) {
   const [hoveredRegionIndex, setHoveredRegionIndex] = useState(null);
-  const [draggingLever, setDraggingLever] = useState(null); // { regionId, type: 'start' | 'end' }
+  const [draggingLever, setDraggingLever] = useState(null); // { regionId, type: 'start' | 'end', pointerId }
   const trackRef = useRef(null);
+
+  // Coarse (touch/pen) pointers get a larger lever hit-target so the begin/end
+  // trim handles are draggable with a fingertip (>=44px per the touch-target
+  // guidance already used by the overlay circle handles, T5450).
+  const isCoarsePointer = useIsCoarsePointer();
+  const leverHitWidth = isCoarsePointer ? 44 : 32;
+  const leverHitOffset = leverHitWidth / 2; // px; centers the hit area on the boundary
 
   // Convert pixel X position to time
   const pixelToTimeValue = useCallback((clientX) => {
@@ -78,11 +86,24 @@ export default function RegionLayer({
     return visualTimeToSourceTime(visualTime);
   }, [edgePadding, visualDuration, duration, visualTimeToSourceTime]);
 
-  // Handle lever drag
+  // Handle lever drag.
+  //
+  // Pointer Events (not mouse events) so a fingertip drag works on mobile: on
+  // touch, `onMouseDown`/`mousemove` only synthesize AFTER touchend (never during
+  // a drag), so the mouse-based version never moved the lever on a phone. Pointer
+  // events fire for mouse, touch and pen through one code path. The handle sets
+  // `touch-action: none` + captures the pointer (see the lever JSX) so the browser
+  // doesn't hijack the gesture for timeline scroll/page zoom. Listeners live on
+  // `window` and still receive the captured pointer's events via bubbling.
   useEffect(() => {
     if (!draggingLever) return;
 
-    const handleMouseMove = (e) => {
+    const handlePointerMove = (e) => {
+      // Only react to the pointer that started this drag (ignore a second finger).
+      if (draggingLever.pointerId != null && e.pointerId !== draggingLever.pointerId) return;
+      // Stop the timeline/page from scrolling mid-drag on touch.
+      if (e.cancelable) e.preventDefault();
+
       const newTime = pixelToTimeValue(e.clientX);
       const region = regions.find(r => r.id === draggingLever.regionId);
       if (!region) return;
@@ -94,16 +115,19 @@ export default function RegionLayer({
       }
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = (e) => {
+      if (draggingLever.pointerId != null && e.pointerId !== draggingLever.pointerId) return;
       setDraggingLever(null);
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('pointermove', handlePointerMove, { passive: false });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
     };
   }, [draggingLever, regions, onMoveRegionStart, onMoveRegionEnd, pixelToTimeValue]);
 
@@ -385,12 +409,14 @@ export default function RegionLayer({
                 <>
                   {/* Start lever (left) */}
                   <div
-                    className="absolute top-0 h-full flex items-end pointer-events-auto"
-                    style={{ left: '-16px', width: '32px', zIndex: 100 }}
-                    onMouseDown={(e) => {
+                    data-testid={`region-lever-start-${region.index}`}
+                    className="lever-handle absolute top-0 h-full flex items-end pointer-events-auto touch-none"
+                    style={{ left: `-${leverHitOffset}px`, width: `${leverHitWidth}px`, zIndex: 100 }}
+                    onPointerDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setDraggingLever({ regionId: region.id, type: 'start' });
+                      e.currentTarget.setPointerCapture?.(e.pointerId);
+                      setDraggingLever({ regionId: region.id, type: 'start', pointerId: e.pointerId });
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -405,12 +431,14 @@ export default function RegionLayer({
 
                   {/* End lever (right) */}
                   <div
-                    className="absolute top-0 h-full flex items-end justify-end pointer-events-auto"
-                    style={{ right: '-16px', width: '32px', zIndex: 100 }}
-                    onMouseDown={(e) => {
+                    data-testid={`region-lever-end-${region.index}`}
+                    className="lever-handle absolute top-0 h-full flex items-end justify-end pointer-events-auto touch-none"
+                    style={{ right: `-${leverHitOffset}px`, width: `${leverHitWidth}px`, zIndex: 100 }}
+                    onPointerDown={(e) => {
                       e.stopPropagation();
                       e.preventDefault();
-                      setDraggingLever({ regionId: region.id, type: 'end' });
+                      e.currentTarget.setPointerCapture?.(e.pointerId);
+                      setDraggingLever({ regionId: region.id, type: 'end', pointerId: e.pointerId });
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
