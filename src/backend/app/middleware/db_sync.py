@@ -328,6 +328,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
         '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/api/shared/',             # T1750: public share links work without auth
+        '/api/client-errors/',      # T5641: video-error beacon must land even when the session is dead
         '/storage/warmup',          # T3310: unauthenticated warmup wakes Fly.io machine
         '/docs',                    # API docs
         '/redoc',                   # API docs
@@ -349,6 +350,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/auth/test-login',
         '/api/health',
         '/api/version',   # T5070: stateless version check, no per-user data needed
+        '/api/client-errors/video',  # T5641: beacon logs only; attribution comes from context, no profile DB needed
     )
 
     def _is_allowlisted(self, request: Request) -> bool:

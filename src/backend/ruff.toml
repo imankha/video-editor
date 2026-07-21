@@ -40,6 +40,9 @@ exclude = [
 "tests/**/*.py" = ["B011", "S101"]
 # Modal functions have different patterns
 "app/modal_functions/**/*.py" = ["E402"]
+# main.py intentionally orders imports after logging config + conditional/deferred
+# imports for app init (same import-after-code pattern as modal functions).
+"app/main.py" = ["E402"]
 
 [lint.isort]
 known-first-party = ["app"]
