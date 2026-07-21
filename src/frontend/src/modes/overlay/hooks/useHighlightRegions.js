@@ -432,10 +432,16 @@ export default function useHighlightRegions(videoMetadata) {
       return {
         ...region,
         startTime: snappedStart,
-        keyframes: updatedKeyframes
+        keyframes: updatedKeyframes,
+        // T5649: re-slice the video-level detection payload to the region's NEW
+        // [start, end] so dragging the begin lever to 0 pulls in the frame-0
+        // detection (and shrinking drops out-of-range ones). Slice mirrors
+        // addRegion; detections are never persisted per-region (read-time
+        // projection, T5600), so this is memory-only render state.
+        detections: sliceDetections(videoDetections, snappedStart, region.endTime),
       };
     }));
-  }, [framerate]);
+  }, [framerate, videoDetections]);
 
   /**
    * Move region end boundary (for lever dragging)
@@ -471,10 +477,14 @@ export default function useHighlightRegions(videoMetadata) {
       return {
         ...region,
         endTime: snappedEnd,
-        keyframes: updatedKeyframes
+        keyframes: updatedKeyframes,
+        // T5649: re-slice detections to the region's NEW [start, end] (mirror of
+        // moveRegionStart) so shrinking the end drops out-of-range detections and
+        // growing it pulls newly-covered ones in. Memory-only, never persisted.
+        detections: sliceDetections(videoDetections, region.startTime, snappedEnd),
       };
     }));
-  }, [duration, framerate]);
+  }, [duration, framerate, videoDetections]);
 
   /**
    * Toggle enabled state for a region by index

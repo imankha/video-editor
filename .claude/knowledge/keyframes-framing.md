@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-21 (T5646 reset() must not null video-level videoDetections; T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
+updated: 2026-07-21 (T5649 lever drags re-slice region detections; T5646 reset() must not null video-level videoDetections; T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -163,6 +163,21 @@ per-clip remapping.
   `addRegion` slices it locally so a newly created region shows tracking squares instantly,
   without waiting for a reload. `restoreRegions` is UNCHANGED — the backend already delivers
   `saved.detections` as the projected slice.
+- **Lever drags RE-SLICE detections (T5649, 2026-07-21).** `moveRegionStart`/`moveRegionEnd`
+  used to return `{...region, startTime/endTime, keyframes}` and OMIT `detections`, so the
+  slice computed once in `addRegion` stayed FROZEN as the levers moved. Symptom: after a
+  delete+re-add, dragging the BEGIN lever to 0 never showed the frame-0 "initial tracker box"
+  because the region kept its old `[3,5]` slice and never pulled in the `timestamp:0`
+  detection. Fix: both handlers now also return
+  `detections: sliceDetections(videoDetections, snappedStart/startTime, endTime/snappedEnd)`
+  (start handler slices to the CLAMPED/overlap-guarded `snappedStart`, not the requested time)
+  and carry `videoDetections` in their dep arrays. Memory-only render state — detections are a
+  read-time projection (never persisted per-region), so this touches NO persistence; the
+  wrapped handler (`OverlayScreen.jsx:~675`) still POSTs only start/end. start/end clamps,
+  `MIN_REGION_DURATION` maxStart, and prev/next overlap guards are untouched. Coverage:
+  `useHighlightRegions.detections.test.js` (T5649 block, 5 cases) — begin-lever-to-0 pulls in
+  frame-0, end shrink drops out-of-range, end grow pulls in, overlap-clamp regression, null
+  payload; negative control confirmed the 3 re-slice tests FAIL on the frozen-slice source.
 - **`videoDetections` is VIDEO-level; `reset()` must NOT null it (T5646, FIXED 2026-07-21).**
   The hold's lifecycle: set ONCE per load from `/overlay-data` (`setVideoDetections`),
   replaced only on the next load, and sliced (never mutated) by `addRegion`. Landmine that
