@@ -100,6 +100,25 @@ ensure_checkout() {
     git clone --local --config core.autocrlf=false "$MAIN_REPO" "$dir" >/dev/null 2>&1 || die "clone failed"
     local origin; origin="$(git -C "$MAIN_REPO" remote get-url origin)"
     git -C "$dir" remote set-url origin "$origin"   # push goes to GitHub, not the local main
+    # Push guard: this checkout is driven by a permission-free worker INSIDE the
+    # container, which has no push creds BY DESIGN (a push sends only commits; the
+    # supervisor pushes from the host via `task.sh push`). Without this, a worker
+    # that runs `git push` fumbles an auth failure ("could not read Username") and
+    # burns tokens diagnosing it. The guard hard-aborts a push from inside the
+    # container (detected via /.dockerenv) in ONE line; host pushes have no
+    # /.dockerenv and pass straight through. `git clone --local` gives a fresh
+    # .git/hooks (default hooksPath), so this pre-push is active without touching
+    # the repo's committed .githooks.
+    mkdir -p "$dir/.git/hooks"
+    cat > "$dir/.git/hooks/pre-push" <<'HOOK'
+#!/bin/sh
+if [ -f /.dockerenv ]; then
+  echo "[dotask] Workers do NOT push (no creds by design). Commit + report; the supervisor runs 'bash scripts/task.sh push <id>'." >&2
+  exit 1
+fi
+exit 0
+HOOK
+    chmod +x "$dir/.git/hooks/pre-push"
     # Base the task on origin/master, NOT whatever branch the shared tree is on
     # (a shared-tree feature branch used to leak sibling commits into task pushes).
     # TASK_BASE overrides when a task must build on an unmerged branch.

@@ -138,6 +138,11 @@ generated the kickoff, and checked file-ownership against other live workers. `S
 - Follow the standard workflow at the task's TIER (CLAUDE.md § Task Tiers); stop at the
   architecture gate if design-gated.
 - Commit with EXPLICIT `git add <paths>` only — never `-A`/`-a`.
+- **NEVER `git push` / `gh pr create`.** The container has NO push creds BY DESIGN, and `task.sh`
+  installs a pre-push guard that hard-aborts inside the container. Commit, then STOP and report
+  (branch + diffstat + QA); the SUPERVISOR pushes via `task.sh push`. Attempting a push only
+  fumbles an auth failure and wastes tokens — don't. (The kickoff must say "commit and report",
+  never "push a branch".)
 - Do NOT change task statuses.
 - Update the task's `.claude/knowledge/` doc(s) before declaring done (Stage 7).
 - QA is part of the task (step 4): live-drive the feature, full test matrix, evidence per
