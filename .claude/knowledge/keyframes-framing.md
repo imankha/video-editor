@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-21 (T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
+updated: 2026-07-21 (T5646 reset() must not null video-level videoDetections; T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -163,6 +163,29 @@ per-clip remapping.
   `addRegion` slices it locally so a newly created region shows tracking squares instantly,
   without waiting for a reload. `restoreRegions` is UNCHANGED — the backend already delivers
   `saved.detections` as the projected slice.
+- **`videoDetections` is VIDEO-level; `reset()` must NOT null it (T5646, FIXED 2026-07-21).**
+  The hold's lifecycle: set ONCE per load from `/overlay-data` (`setVideoDetections`),
+  replaced only on the next load, and sliced (never mutated) by `addRegion`. Landmine that
+  shipped: `useHighlightRegions.reset()` used to also `setVideoDetections(null)` — but
+  `reset()` clears *region* state, and the fresh-export effect in `OverlayScreen.jsx`
+  (~L500) does `setHighlightVideoDetections(payload)` → `resetHighlightRegions()` →
+  `restoreHighlightRegions(...)`, so the reset wiped the payload it had just held. Net:
+  `videoDetections=null`, and a later **delete→re-add** sliced null → region with
+  `detections:[]`, `videoWidth/Height/fps:null` → no `DetectionMarkerLayer` markers
+  (desktop "couldn't get the first tracking frame") and no `PlayerDetectionOverlay` boxes
+  (mobile). Only the fresh-export (framing→overlay) session hit it — the plain-reload load
+  effect (~L578) never calls `reset()`, and initial regions keep their boxes because their
+  `detections` are pre-sliced server-side into `highlights_data` (`overlay.py:~1690`), not
+  from the hook hold. **Fix = drop `setVideoDetections(null)` from `reset()`** (chosen over
+  physically reordering the OverlayScreen set, because `reset()` also nulls `duration`, so it
+  can't be hoisted ahead of the else-branch `addHighlightRegion(0)` which early-returns on
+  null duration; and video-level detections simply aren't per-region reset state). Backend
+  unchanged — the read path already re-slices `detections_data` onto every region each load,
+  which is why a full reload was always fine. Coverage:
+  `useHighlightRegions.persistence.test.js` (T5646 block) reproduces the fresh-export
+  ordering (`setVideoDetections`→`reset`→`restore`) and asserts the payload survives + re-add
+  slices non-empty detections; negative control (re-add the null) fails those two while the
+  plain-reload regression test stays green.
 - **Export producer**: `run_player_detection_for_highlights` (multi_clip.py) now returns
   `(regions, video_detections)` instead of just `regions` — the flat payload is the union of
   all per-clip `clip_detections` already built for the (unchanged, additive) region blobs.

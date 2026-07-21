@@ -98,3 +98,115 @@ describe('useHighlightRegions - re-add persistence gesture (T5644)', () => {
     expect(endArg).toBeGreaterThan(startArg);
   });
 });
+
+/**
+ * T5646 — re-added overlay region loses tracking boxes on a FRESH-EXPORT session.
+ *
+ * Root cause: OverlayScreen's fresh-export effect set the video-level detection
+ * payload (`setVideoDetections`) and THEN called `reset()` to clear regions before
+ * restore — and the old `reset()` nulled `videoDetections`. On a later delete->re-add,
+ * `addRegion` sliced a null payload -> `detections:[]`, videoWidth/Height/fps null ->
+ * no detection markers (desktop) and no on-video boxes (mobile).
+ *
+ * Fix: `reset()` clears only per-region state; the video-level payload survives.
+ * These tests reproduce the fresh-export load ORDERING (set payload -> reset ->
+ * restore) and pin that a subsequent add slices non-empty detections, while the
+ * plain-reload ordering (no reset) stays green (regression guard).
+ */
+describe('useHighlightRegions - video-level detections survive reset (T5646)', () => {
+  const videoMetadata = { width: 1920, height: 1080, fps: 30, duration: 10 };
+
+  const videoDetections = {
+    videoWidth: 1920,
+    videoHeight: 1080,
+    fps: 30,
+    detections: [
+      { timestamp: 0.5, frame: 15, boxes: [{ x: 0.1, y: 0.1 }] },
+      { timestamp: 1.0, frame: 30, boxes: [{ x: 0.2, y: 0.2 }] },
+      { timestamp: 5.0, frame: 150, boxes: [{ x: 0.3, y: 0.3 }] },
+    ],
+  };
+
+  // Backend-projected slice for the restored region — deliberately different from a
+  // local slice of `videoDetections`, to prove restore uses saved.detections as-is.
+  const savedRegions = [
+    {
+      id: 'region-from-export',
+      start_time: 0,
+      end_time: 2,
+      keyframes: [],
+      detections: [{ timestamp: 0.5, frame: 15, boxes: [{ x: 0.9, y: 0.9 }] }],
+      videoWidth: 1920,
+      videoHeight: 1080,
+      fps: 30,
+    },
+  ];
+
+  it('reset() clears regions but does NOT null the video-level detection payload', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+
+    act(() => {
+      result.current.initializeWithDuration(10);
+      result.current.setVideoDetections(videoDetections);
+    });
+    expect(result.current.videoDetections).toEqual(videoDetections);
+
+    act(() => { result.current.reset(); });
+
+    // Regions/duration cleared...
+    expect(result.current.regions).toHaveLength(0);
+    expect(result.current.duration).toBeNull();
+    // ...but the video-level payload survives (the T5646 contract).
+    expect(result.current.videoDetections).toEqual(videoDetections);
+  });
+
+  it('fresh-export ordering (setVideoDetections -> reset -> restore) leaves detections sliceable; re-add gets non-empty detections', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+
+    // Reproduce OverlayScreen's fresh-export effect ordering EXACTLY.
+    act(() => {
+      result.current.setVideoDetections(videoDetections); // set payload first
+      result.current.reset();                             // clear regions before restore
+      result.current.restoreRegions(savedRegions, 10);    // rehydrate from backend
+    });
+
+    // Payload survived the reset.
+    expect(result.current.videoDetections).toEqual(videoDetections);
+    // Restored (initial) region keeps its backend-projected slice.
+    expect(result.current.regions[0].detections).toEqual(savedRegions[0].detections);
+
+    // Now the reported flow: delete the restored region, then re-add over its span.
+    act(() => { result.current.deleteRegion(result.current.regions[0].id); });
+    expect(result.current.regions).toHaveLength(0);
+
+    let readded;
+    act(() => { readded = result.current.addRegion(0); }); // [0, 2]
+
+    expect(readded).toBeTruthy();
+    // Sliced from the still-held video-level payload — NON-EMPTY -> markers + boxes appear.
+    expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([0.5, 1.0]);
+    expect(result.current.regions[0].detections.length).toBeGreaterThan(0);
+    expect(result.current.regions[0].videoWidth).toBe(1920);
+    expect(result.current.regions[0].videoHeight).toBe(1080);
+    expect(result.current.regions[0].fps).toBe(30);
+  });
+
+  it('regression: plain-reload ordering (setVideoDetections -> restore, no reset) still slices on re-add', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+
+    // Plain-reload effect ordering: no resetHighlightRegions() call.
+    act(() => {
+      result.current.setVideoDetections(videoDetections);
+      result.current.restoreRegions(savedRegions, 10);
+    });
+
+    expect(result.current.videoDetections).toEqual(videoDetections);
+
+    act(() => { result.current.deleteRegion(result.current.regions[0].id); });
+    let readded;
+    act(() => { readded = result.current.addRegion(0); });
+
+    expect(readded).toBeTruthy();
+    expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([0.5, 1.0]);
+  });
+});

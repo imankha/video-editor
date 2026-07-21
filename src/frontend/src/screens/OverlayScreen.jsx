@@ -498,6 +498,11 @@ export function OverlayScreen({
 
           // Hold the flat video-level detection payload (T5600) so addRegion can
           // slice instant tracking squares for newly created regions.
+          // T5646: this survives the resetHighlightRegions() below — reset() no
+          // longer nulls the video-level payload (it clears only per-region state),
+          // so the ordering here is safe and a later delete->re-add still slices
+          // detections. (reset() also nulls `duration`, so it cannot be hoisted
+          // above the else-branch addHighlightRegion(0), which needs duration set.)
           setHighlightVideoDetections(data.detections_data || null);
 
           // Use video_duration from backend, fall back to video metadata or region end times
