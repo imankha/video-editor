@@ -307,6 +307,25 @@ per-clip remapping.
   `vite` dev processes served STALE transforms on :5173 (in-memory cache survives `rm -rf
   node_modules/.vite`); kill ALL `node .../vite` PIDs and start ONE. Verify freshness by curling
   `/src/.../main.jsx` for an identifier you just added before trusting a browser repro.
+  **T5643 (2026-07-21) moved + re-gated the hint**: `OverrideHint` now sits at
+  `top-14 right-4` (was `bottom-3` centered) — directly under the "N players detected"
+  badge rendered by `PlayerDetectionOverlay` (`top-4 right-4` inside `.video-container`).
+  Both containers share the same top-left origin (no padding/margin between OverlayModeView's
+  outer `relative` wrapper -> `VideoPlayer`'s `video-player-container` -> its inner
+  `video-container`), so identical `right-4` + a `top` offset below the badge's height
+  lines them up without OverrideHint needing to know about PlayerDetectionOverlay.
+  `showOverrideHint` gained a 4th AND-condition: `selectedHighlightKeyframeIndex === null`
+  (index 0 is a valid selection — falsy but selected, so check `=== null` not `!x`).
+  `selectedHighlightKeyframeIndex` is computed in `OverlayScreen.jsx` from playhead
+  proximity to a highlight keyframe (`findKeyframeIndexNearFrame`, not a click-to-select)
+  and was already threaded into `OverlayModeView.jsx` as a prop — no new prop plumbing
+  needed. Coverage: `OverrideHint.test.jsx` pins the placement classes + the
+  visible=false contract; the gate itself (computed in OverlayModeView, a 4-way boolean
+  AND) is proven end-to-end by a NEW dev-only harness `overlaydiag-t5643.html` +
+  `src/overlaydiag-t5643/main.jsx` (mounts the REAL `PlayerDetectionOverlay` + REAL
+  `OverrideHint` in production-faithful nesting) and `e2e/T5643-move-spotlight-hint.qa.spec.js`.
+  **Built a NEW harness instead of reusing `overlaydiag-t5610.html`** to avoid touching a
+  fixture another task's regression suite depends on — same pattern, different file.
 - **Overlay spotlight loop playback (T5370, 2026-07-19)**: primary "Play spotlight"
   loops the span of ALL highlight regions `[min(startTime), max(endTime)]`; secondary
   "Play full" plays straight through. The loop is enforced by
