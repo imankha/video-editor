@@ -201,7 +201,7 @@ per-clip remapping.
   node_modules/.vite`, start ONE, and `curl /src/.../RegionLayer.jsx` to confirm the
   handler you expect is served before trusting the result.
 - **Re-added region not persisting = stale `.find()` in OverlayScreen, NOT the hook
-  (T5644 diagnosis, fix pending).** Symptom: delete a region -> re-add -> reload ->
+  (T5644, FIXED 2026-07-21).** Symptom: delete a region -> re-add -> reload ->
   `[Overlay Data] project=31: 0 regions`. Root cause: `wrappedAddHighlightRegion`
   (`OverlayScreen.jsx:~621`) does `const regionId = addHighlightRegion(clickTime);
   const region = highlightRegions.find(r => r.id === regionId);` — but
@@ -214,13 +214,17 @@ per-clip remapping.
   (`highlight_transform`) or the full-state export PUT — the surgical create only
   matters for persistence-without-export, which is exactly the reported flow. The
   hook (`useHighlightRegions.addRegion`) is CORRECT — it returns the id and updates
-  state; the bug is the caller reading async state. **Minimal fix (in OverlayScreen,
-  owned by a sibling task in the T5642-45 wave — not applied here):** have `addRegion`
-  return the new region object and dispatch from it directly, e.g.
+  state; the bug is the caller reading async state. **Fix applied (T5644):**
+  `addRegion` (useHighlightRegions.js) now RETURNS the new region object (was: the id
+  string); `wrappedAddHighlightRegion` (OverlayScreen.jsx) dispatches from it directly
   `const newRegion = addHighlightRegion(clickTime); if (newRegion && canSyncActions)
   dispatchOverlayAction('createRegion', () => overlayActions.createRegion(projectId,
   newRegion.startTime, newRegion.endTime, newRegion.id));` — no stale `.find`, no
-  reactive effect (still a pure gesture->surgical POST).
+  reactive effect (pure gesture->surgical POST). No existing test depended on
+  `addRegion`'s string return (they read `result.current.regions`), so the return-type
+  change was safe. Coverage: `useHighlightRegions.persistence.test.js` (return contract
+  + delete/re-add gesture fires create_region with the re-added region's own numeric
+  bounds + fresh id).
 - **Mobile editor layout invariant (T4880).** The editor shell (`App.jsx`, the non-Annotate
   branch) uses `h-dvh` — NEVER `h-screen`/`100vh` inside the editor tree — so the
   `flex-1 overflow-auto` content pane maps to iOS Safari's *visible* viewport (100vh spills

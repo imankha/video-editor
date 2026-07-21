@@ -615,18 +615,19 @@ export function OverlayScreen({
 
   // Wrapped handler: Add highlight region
   const wrappedAddHighlightRegion = useCallback((clickTime) => {
-    const regionId = addHighlightRegion(clickTime);
-    if (regionId && canSyncActions) {
-      // Get the created region to extract times
-      const region = highlightRegions.find(r => r.id === regionId);
-      if (region) {
-        dispatchOverlayAction('createRegion', () =>
-          overlayActions.createRegion(projectId, region.startTime, region.endTime, regionId));
-      }
+    // addHighlightRegion returns the NEW region object. Fire the surgical
+    // create_region POST from it directly — do NOT re-read `highlightRegions`,
+    // which is stale within this gesture tick (addRegion's setState hasn't
+    // flushed yet), so a `.find` returned undefined and the create never
+    // persisted (T5644: delete -> re-add -> reload showed 0 regions).
+    const newRegion = addHighlightRegion(clickTime);
+    if (newRegion && canSyncActions) {
+      dispatchOverlayAction('createRegion', () =>
+        overlayActions.createRegion(projectId, newRegion.startTime, newRegion.endTime, newRegion.id));
     }
     setOverlayChangedSinceExport(true);
-    return regionId;
-  }, [addHighlightRegion, projectId, canSyncActions, highlightRegions, setOverlayChangedSinceExport]);
+    return newRegion?.id ?? null;
+  }, [addHighlightRegion, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Wrapped handler: Delete highlight region
   const wrappedDeleteHighlightRegion = useCallback((regionIndex) => {

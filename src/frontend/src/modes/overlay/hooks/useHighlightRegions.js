@@ -293,6 +293,12 @@ export default function useHighlightRegions(videoMetadata) {
   /**
    * Add a new 2-second region at the given time
    * Creates start and end keyframes automatically
+   *
+   * @returns {Object|null} the newly created region object ({ id, startTime,
+   *   endTime, ... }), or null if it couldn't be created (no duration / overlap /
+   *   too little space). Callers persist via a surgical create_region POST built
+   *   from THIS returned object — never by re-reading async `regions` state, which
+   *   is stale within the same gesture tick (T5644 re-add-not-persisting bug).
    */
   const addRegion = useCallback((clickTime) => {
     if (!duration) return null;
@@ -358,7 +364,10 @@ export default function useHighlightRegions(videoMetadata) {
     setSelectedRegionId(regionId);
     track('highlight_region_add', { regionId, startTime: Math.round(snappedStartTime * 10) / 10 }, { debugOnly: true });
 
-    return regionId;
+    // Return the region OBJECT (not just the id) so the gesture handler can fire the
+    // surgical create_region POST from these values directly, without re-reading the
+    // async `regions` state (which is stale in the same tick — the T5644 bug).
+    return newRegion;
   }, [duration, wouldOverlap, calculateDefaultHighlight, videoMetadata, framerate, videoDetections]);
 
   /**
