@@ -136,6 +136,134 @@ describe('useHighlightRegions - video-level detections survive delete (T5600)', 
   });
 });
 
+/**
+ * T5649: dragging a region lever RE-SLICES detections to the new [start, end].
+ *
+ * Before T5649, `moveRegionStart`/`moveRegionEnd` returned `{...region,
+ * startTime/endTime, keyframes}` and OMITTED `detections`, so the slice computed
+ * once in `addRegion` stayed FROZEN. Dragging the begin lever from 3->0 never
+ * pulled in the timestamp-0 detection (the "initial tracker box" never appeared).
+ * These tests pin the gap the T5600 suite missed.
+ */
+describe('useHighlightRegions - lever drag re-slices detections (T5649)', () => {
+  const videoMetadata = { width: 1920, height: 1080, fps: 30, duration: 10 };
+
+  const videoDetections = {
+    videoWidth: 1920,
+    videoHeight: 1080,
+    fps: 30,
+    detections: [
+      { timestamp: 0.0, frame: 0, boxes: [{ x: 0.1, y: 0.1 }] },   // the frame-0 tracker box
+      { timestamp: 1.0, frame: 30, boxes: [{ x: 0.2, y: 0.2 }] },
+      { timestamp: 3.5, frame: 105, boxes: [{ x: 0.3, y: 0.3 }] },
+      { timestamp: 4.5, frame: 135, boxes: [{ x: 0.4, y: 0.4 }] },
+      { timestamp: 6.0, frame: 180, boxes: [{ x: 0.5, y: 0.5 }] },
+    ],
+  };
+
+  const setup = () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => {
+      result.current.initializeWithDuration(10);
+      result.current.setVideoDetections(videoDetections);
+    });
+    return result;
+  };
+
+  it('moveRegionStart to 0 pulls in the frame-0 detection (begin lever bug)', () => {
+    const result = setup();
+
+    // Region [3, 5]: initial slice has 3.5 and 4.5, NOT the timestamp-0 box.
+    act(() => { result.current.addRegion(3); });
+    const regionId = result.current.regions[0].id;
+    expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([3.5, 4.5]);
+
+    // Drag begin lever to 0 -> region becomes [0, 5] -> pulls in timestamp 0 and 1.0.
+    act(() => { result.current.moveRegionStart(regionId, 0); });
+
+    const region = result.current.regions[0];
+    expect(region.startTime).toBe(0);
+    // Matches the canonical slice for the NEW bounds.
+    expect(region.detections).toEqual(
+      sliceDetections(videoDetections, region.startTime, region.endTime)
+    );
+    expect(region.detections.map(d => d.timestamp)).toEqual([0.0, 1.0, 3.5, 4.5]);
+    // Negative control: the frozen [3,5] slice would NOT contain the frame-0 box.
+    expect(region.detections.map(d => d.timestamp)).not.toEqual([3.5, 4.5]);
+  });
+
+  it('moveRegionEnd shrink drops out-of-range detections', () => {
+    const result = setup();
+
+    // Region [3, 5]: detections 3.5, 4.5.
+    act(() => { result.current.addRegion(3); });
+    const regionId = result.current.regions[0].id;
+    expect(result.current.regions[0].detections.map(d => d.timestamp)).toEqual([3.5, 4.5]);
+
+    // Shrink end to 4 -> [3, 4] -> drops 4.5.
+    act(() => { result.current.moveRegionEnd(regionId, 4); });
+
+    const region = result.current.regions[0];
+    expect(region.endTime).toBe(4);
+    expect(region.detections).toEqual(
+      sliceDetections(videoDetections, region.startTime, region.endTime)
+    );
+    expect(region.detections.map(d => d.timestamp)).toEqual([3.5]);
+    // Negative control: the frozen slice still held 4.5.
+    expect(region.detections.map(d => d.timestamp)).not.toContain(4.5);
+  });
+
+  it('moveRegionEnd grow pulls newly-covered detections in', () => {
+    const result = setup();
+
+    // Region [3, 5]: detections 3.5, 4.5.
+    act(() => { result.current.addRegion(3); });
+    const regionId = result.current.regions[0].id;
+
+    // Grow end to 7 -> [3, 7] -> pulls in 6.0.
+    act(() => { result.current.moveRegionEnd(regionId, 7); });
+
+    const region = result.current.regions[0];
+    expect(region.endTime).toBe(7);
+    expect(region.detections.map(d => d.timestamp)).toEqual([3.5, 4.5, 6.0]);
+  });
+
+  it('re-slice honours the overlap-clamped start, not the requested one (regression)', () => {
+    const result = setup();
+
+    // Region A [0, 2], region B [3, 5].
+    act(() => { result.current.addRegion(0); });
+    act(() => { result.current.addRegion(3); });
+    const regionB = result.current.regions.find(r => r.startTime === 3);
+
+    // Request B start = 0, but prev region A ends at 2 -> clamp to 2.
+    act(() => { result.current.moveRegionStart(regionB.id, 0); });
+
+    const movedB = result.current.regions.find(r => r.id === regionB.id);
+    // Overlap guard intact: start clamped to A.endTime, NOT the requested 0.
+    expect(movedB.startTime).toBe(2);
+    // Detections sliced to the CLAMPED [2, 5], so the timestamp-0 box is NOT included.
+    expect(movedB.detections).toEqual(
+      sliceDetections(videoDetections, 2, movedB.endTime)
+    );
+    expect(movedB.detections.map(d => d.timestamp)).not.toContain(0.0);
+    expect(movedB.detections.map(d => d.timestamp)).toEqual([3.5, 4.5]);
+  });
+
+  it('lever drag with no videoDetections held yields empty detections, no crash', () => {
+    const { result } = renderHook(() => useHighlightRegions(videoMetadata));
+    act(() => { result.current.initializeWithDuration(10); });
+    act(() => { result.current.addRegion(3); });
+    const regionId = result.current.regions[0].id;
+
+    act(() => { result.current.moveRegionStart(regionId, 0); });
+    expect(result.current.regions[0].detections).toEqual([]);
+
+    act(() => { result.current.moveRegionEnd(regionId, 7); });
+    expect(result.current.regions[0].detections).toEqual([]);
+  });
+});
+
 describe('sliceDetections (T5600, Python mirror slice_detections)', () => {
   const videoDetections = {
     videoWidth: 100,
