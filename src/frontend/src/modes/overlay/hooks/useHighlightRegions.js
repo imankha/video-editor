@@ -149,14 +149,21 @@ export default function useHighlightRegions(videoMetadata) {
   }, []);
 
   /**
-   * Reset all state
+   * Reset all REGION state.
+   *
+   * T5646: does NOT clear `videoDetections`. That payload is VIDEO-level
+   * (whole-timeline player detections held for this working video, T5600), not
+   * per-region — resetting the regions must not wipe it, or a caller that clears
+   * regions before rehydrating (OverlayScreen's fresh-export effect) would leave
+   * `addRegion` with a null payload and re-added regions would lose their tracking
+   * boxes. The payload has a single owner (`setVideoDetections`, fed from the
+   * /overlay-data response); it is replaced there, never nulled by a region reset.
    */
   const reset = useCallback(() => {
     setRegions([]);
     setSelectedRegionId(null);
     setCopiedData(null);
     setDuration(null);
-    setVideoDetections(null);
   }, []);
 
   /**
