@@ -1135,6 +1135,44 @@ async def stream_working_video(project_id: int, request: Request):
     )
 
 
+@router.get("/{project_id}/working_video/playback-url")
+async def get_working_video_playback_url(project_id: int):
+    """
+    Return a presigned R2 URL for a project's working video so the browser can
+    load it directly (no per-request auth).
+
+    Why: the same-origin proxy (`/working_video/stream` above) requires the
+    session cookie on every byte-range fetch. On staging/prod the frontend is
+    cross-origin to the API (pages.dev -> fly.dev), and the overlay `<video>`
+    element carries NO `crossOrigin` attribute, so its cross-origin range
+    requests arrive WITHOUT the cookie and the auth middleware 401s them —
+    which Chrome surfaces on a media element as "Format error" (T5642).
+
+    Mirrors the Framing clip path (`clips.py:get_clip_playback_url`): this
+    authenticated endpoint hands back an anonymous presigned R2 URL (a
+    DIFFERENT origin that needs no auth), and the frontend sets `<video src>`
+    to it. The stream proxy stays for back-compat.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT wv.filename
+            FROM projects p
+            LEFT JOIN working_videos wv ON p.working_video_id = wv.id
+            WHERE p.id = ?
+        """, (project_id,))
+        row = cursor.fetchone()
+
+    if not row or not row['filename']:
+        raise HTTPException(status_code=404, detail="Working video not found")
+
+    presigned_url = _generate_working_video_presigned_url(row['filename'])
+    if not presigned_url:
+        raise HTTPException(status_code=404, detail="Failed to generate R2 URL")
+
+    return {"url": presigned_url, "expires_in": 3600}
+
+
 class OutdatedClipInfo(BaseModel):
     working_clip_id: int
     raw_clip_id: int

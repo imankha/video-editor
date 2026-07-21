@@ -11,7 +11,7 @@ import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUt
 import { persistKeyframeEdit } from '../utils/persistKeyframeEdit';
 import { frameToTime, timeToFrame } from '../utils/videoUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
-import { API_BASE, resolveApiUrl } from '../config';
+import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
@@ -349,11 +349,36 @@ export function OverlayScreen({
       const attemptLoad = async () => {
         workingVideoAttemptsRef.current += 1;
         const attempt = workingVideoAttemptsRef.current;
-        const workingVideoUrl = resolveApiUrl(project.working_video_url);
         try {
-          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, workingVideoUrl.substring(0, 80));
+          // T5642: load the working video via a presigned R2 URL, NOT the
+          // same-origin `/working_video/stream` proxy. On staging/prod the
+          // frontend is cross-origin to the API (pages.dev -> fly.dev) and the
+          // overlay <video> element carries no crossOrigin attribute, so its
+          // cross-origin range requests to the proxy arrive without the session
+          // cookie -> 401 -> Chrome "Format error". The presigned R2 URL is a
+          // different, anonymous origin (no cookie needed), mirroring how Framing
+          // already loads clips (clips.py get_clip_playback_url).
+          const presignResp = await apiFetch(
+            `${API_BASE}/api/projects/${projectId}/working_video/playback-url`
+          );
+          if (!presignResp.ok) {
+            // A hard 404 means the working video's R2 object / DB ref is gone —
+            // surface the same "re-export" state videoMetadata raises for 404s.
+            if (presignResp.status === 404) {
+              throw new VideoAssetMissingError(
+                `${API_BASE}/api/projects/${projectId}/working_video/playback-url`,
+                404
+              );
+            }
+            throw new Error(`playback-url fetch returned ${presignResp.status}`);
+          }
+          const { url: workingVideoUrl } = await presignResp.json();
+          if (!workingVideoUrl) {
+            throw new Error('playback-url response missing url');
+          }
+          console.log(`[OverlayScreen] Loading working video (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}) via presigned URL:`, workingVideoUrl.substring(0, 80));
           const meta = await extractVideoMetadataFromUrl(workingVideoUrl, 'working_video.mp4');
-          console.log('[OverlayScreen] Extracted metadata from streaming URL:', meta);
+          console.log('[OverlayScreen] Extracted metadata from presigned URL:', meta);
           setWorkingVideo({ file: null, url: workingVideoUrl, metadata: meta });
           setIsLoadingWorkingVideo(false);
         } catch (err) {
@@ -371,7 +396,6 @@ export function OverlayScreen({
             return;
           }
           console.error(`[OverlayScreen] Working video load failed (attempt ${attempt}/${MAX_WORKING_VIDEO_ATTEMPTS}):`, err.message, {
-            url: workingVideoUrl?.substring(0, 80),
             projectId,
             workingVideoId: project?.working_video_id,
           });
