@@ -9,7 +9,7 @@ import ExportButtonView from '../components/ExportButtonView';
 import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
-import { Minimize, Maximize } from 'lucide-react';
+import { Minimize, Maximize, RotateCcw } from 'lucide-react';
 import { formatTimeSimple } from '../components/shared/clipConstants';
 
 /**
@@ -331,17 +331,18 @@ export function OverlayModeView({
       : undefined,
   };
 
-  // "Back to spotlight" pill — shown over the lower video area once the playhead
-  // runs past the span. Mirrors the mobile-expand button styling; >=44px touch
-  // target (min-h-11) via T5360's conventions.
-  const backToSpotlightPill = isPastSpotlight ? (
+  // "Reset" pill — shown over the lower video area once the playhead runs past the
+  // spotlight span. Seeks to time 0 (T5658: spotlight location isn't guaranteed, so
+  // resetting to the start is the dependable behavior). Mirrors the mobile-expand
+  // button styling; >=44px touch target (min-h-11) via T5360's conventions.
+  const resetPill = isPastSpotlight ? (
     <button
       onClick={(e) => { e.stopPropagation(); onReturnToSpotlight?.(); }}
       className="absolute bottom-16 left-1/2 -translate-x-1/2 z-20 px-4 min-h-11 flex items-center justify-center gap-1.5 rounded-full bg-purple-600/90 text-white text-sm font-medium shadow-lg hover:bg-purple-500"
-      title="Return to the spotlight and loop it"
-      aria-label="Back to spotlight"
+      title="Reset to the start"
+      aria-label="Reset"
     >
-      <span aria-hidden="true">&#10554;</span> Back to spotlight
+      <RotateCcw size={16} aria-hidden="true" /> Reset
     </button>
   ) : null;
 
@@ -527,8 +528,8 @@ export function OverlayModeView({
               </div>
             )}
 
-            {/* Back to spotlight pill — over the lower video area (T5370) */}
-            {backToSpotlightPill}
+            {/* Reset pill — over the lower video area (T5370, relabeled T5658) */}
+            {resetPill}
 
             {/* T5610 discoverability hint — subtle pill, non-interactive, below the
                 handles. Names BOTH override paths; fades on first override. T5643: sits
