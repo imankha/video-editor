@@ -3,6 +3,24 @@ import { Undo2 } from 'lucide-react';
 import { formatTimeSimple } from '../../utils/timeFormat';
 
 /**
+ * Pixel-based follow-playhead target: where the scroll container should sit so the
+ * playhead stays within a 15%-of-viewport margin of either edge. Operates entirely in
+ * pixels (unlike percent-of-content vs percent-of-maxScroll, which diverge once
+ * timelineScale != 1 and let the playhead drift off-screen at zoom).
+ */
+export function computeFollowScrollTarget({ scrollLeft, scrollWidth, clientWidth, maxScroll, progress, edgePadding }) {
+  const playheadPx = edgePadding + (scrollWidth - 2 * edgePadding) * (progress / 100);
+  const margin = clientWidth * 0.15;
+  let target = scrollLeft;
+  if (playheadPx < scrollLeft + margin) {
+    target = playheadPx - margin;
+  } else if (playheadPx > scrollLeft + clientWidth - margin) {
+    target = playheadPx - clientWidth + margin;
+  }
+  return Math.max(0, Math.min(target, maxScroll));
+}
+
+/**
  * Shared timeline foundation used by both Framing and Overlay modes.
  * Handles: playhead, scrubbing, time display, zoom, scroll sync.
  * Does NOT handle: mode-specific layers (passed as children).
@@ -63,6 +81,15 @@ export function TimelineBase({
   const wasPlayingRef = React.useRef(false);
   // Track the progress when playback started to avoid immediate scroll on play
   const playbackStartProgressRef = React.useRef(null);
+  // Set immediately before the auto-scroll effect writes scrollLeft itself, so
+  // handleScroll can tell "our own programmatic scroll" apart from a real user
+  // scroll and skip arming the manual-scroll pause for it. lastAutoScrollValueRef
+  // guards a coalescing race: if a user scroll lands in the same browser task as
+  // our write (before its 'scroll' event has fired), only ONE scroll event is
+  // dispatched, reporting whichever scrollLeft is current - which may be the
+  // user's, not ours. Comparing against the value we actually set catches that.
+  const isAutoScrollingRef = React.useRef(false);
+  const lastAutoScrollValueRef = React.useRef(null);
 
   // Padding at timeline edges for easier keyframe selection (in pixels)
   const EDGE_PADDING = 20;
@@ -195,6 +222,16 @@ export function TimelineBase({
       const scrollPercent = (container.scrollLeft / maxScroll) * 100;
       onTimelineScrollPositionChange(scrollPercent);
 
+      if (isAutoScrollingRef.current) {
+        isAutoScrollingRef.current = false;
+        // Only treat this as "our own" scroll if scrollLeft still matches what
+        // we set - otherwise a user scroll coalesced into the same dispatched
+        // event and must still arm the manual-scroll pause below.
+        if (Math.abs(container.scrollLeft - lastAutoScrollValueRef.current) < 1) {
+          return;
+        }
+      }
+
       // Mark that user manually scrolled - disable auto-scroll for 2 seconds
       userScrolledRef.current = true;
       if (userScrollTimeoutRef.current) {
@@ -252,22 +289,22 @@ export function TimelineBase({
     const maxScroll = container.scrollWidth - container.clientWidth;
     if (maxScroll <= 0) return;
 
-    // Calculate where the playhead is in the scrollable content
-    const playheadPercent = progress / 100;
-    const idealScrollPercent = playheadPercent * 100;
+    const target = computeFollowScrollTarget({
+      scrollLeft: container.scrollLeft,
+      scrollWidth: container.scrollWidth,
+      clientWidth: container.clientWidth,
+      maxScroll,
+      progress,
+      edgePadding: EDGE_PADDING,
+    });
 
-    // Only auto-scroll if the playhead is out of view
-    const currentScrollPercent = (container.scrollLeft / maxScroll) * 100;
-    const viewportWidthPercent = (container.clientWidth / container.scrollWidth) * 100;
-    const leftEdge = currentScrollPercent;
-    const rightEdge = currentScrollPercent + viewportWidthPercent;
-
-    // Check if playhead is outside the current view (with some padding)
-    const playheadPosition = idealScrollPercent;
-    if (playheadPosition < leftEdge + 5 || playheadPosition > rightEdge - 5) {
-      // Center the playhead in view
-      const targetScroll = Math.max(0, Math.min(100, idealScrollPercent - viewportWidthPercent / 2));
-      container.scrollLeft = (targetScroll / 100) * maxScroll;
+    // Only touch scrollLeft (and thus fire a scroll event) when it actually
+    // moves - an unconditional write here would mark every render as an
+    // auto-scroll and could mask a genuine user scroll landing on the same tick.
+    if (target !== container.scrollLeft) {
+      isAutoScrollingRef.current = true;
+      lastAutoScrollValueRef.current = target;
+      container.scrollLeft = target;
     }
   }, [progress, timelineScale, isPlaying]);
 
@@ -359,6 +396,7 @@ export function TimelineBase({
 
               {/* Unified Playhead - extends through all layers */}
               <div
+                data-testid="timeline-playhead"
                 className="absolute top-0 w-1 bg-white shadow-lg pointer-events-none"
                 style={{
                   left: `calc(${EDGE_PADDING}px + (100% - ${EDGE_PADDING * 2}px) * ${progress / 100})`,
@@ -463,6 +501,7 @@ function MobileScrollbar({ scrollContainerRef, timelineScale }) {
   return (
     <div
       ref={trackRef}
+      data-testid="mobile-scrollbar-track"
       className="sm:hidden ml-20 sm:ml-32 mt-1 h-6 bg-gray-800 rounded-full relative touch-none"
       onTouchStart={handleTouchStart}
       onClick={(e) => { handleDrag(e.clientX); }}
