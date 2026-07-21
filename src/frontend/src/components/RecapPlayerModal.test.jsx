@@ -476,6 +476,126 @@ describe('RecapPlayerModal - fullscreen toggle (T5645)', () => {
   });
 });
 
+// T5648: the real Android Chrome exit failure isn't reproducible in-harness —
+// these tests pin the [RECAP_FS] diagnostic logging + the robustness fallback
+// so a real-device /logdump can root-cause it.
+describe('RecapPlayerModal - fullscreen exit instrumentation (T5648)', () => {
+  const origRequestFullscreen = Element.prototype.requestFullscreen;
+  const origWebkitRequestFullscreen = Element.prototype.webkitRequestFullscreen;
+  const origExitFullscreen = document.exitFullscreen;
+  const origWebkitExitFullscreen = document.webkitExitFullscreen;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = mockFetch();
+  });
+
+  afterEach(() => {
+    Element.prototype.requestFullscreen = origRequestFullscreen;
+    Element.prototype.webkitRequestFullscreen = origWebkitRequestFullscreen;
+    document.exitFullscreen = origExitFullscreen;
+    document.webkitExitFullscreen = origWebkitExitFullscreen;
+    delete document.fullscreenElement;
+    delete document.webkitFullscreenElement;
+  });
+
+  it('logs a [RECAP_FS] toggle diagnostic naming the chosen branch', async () => {
+    Element.prototype.requestFullscreen = vi.fn();
+    document.exitFullscreen = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    const toggleLog = warnSpy.mock.calls.find(([msg]) => msg === '[RECAP_FS] toggle');
+    expect(toggleLog).toBeTruthy();
+    expect(toggleLog[1]).toMatchObject({ branch: 'enter', isFullscreenState: false });
+
+    warnSpy.mockRestore();
+  });
+
+  it('logs a [RECAP_FS] fullscreenchange diagnostic with the new fullscreenElement presence', async () => {
+    Element.prototype.requestFullscreen = vi.fn();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('fullscreenchange'));
+
+    const changeLog = warnSpy.mock.calls.find(([msg]) => msg === '[RECAP_FS] fullscreenchange');
+    expect(changeLog).toBeTruthy();
+    expect(changeLog[1]).toEqual({ fullscreenElementPresent: true });
+
+    warnSpy.mockRestore();
+  });
+
+  it('falls back to the isFullscreen state (and calls both exit methods) when fullscreenElement reports absent while still fullscreen', async () => {
+    Element.prototype.requestFullscreen = vi.fn();
+    document.exitFullscreen = vi.fn();
+    document.webkitExitFullscreen = vi.fn();
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('fullscreenchange'));
+    await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
+
+    // Simulate the reported Android Chrome symptom: the browser desyncs and
+    // reports no fullscreenElement even though we're still visually fullscreen.
+    delete document.fullscreenElement;
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+
+    expect(document.exitFullscreen).toHaveBeenCalledTimes(1);
+    expect(document.webkitExitFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it('catches a rejected requestFullscreen promise instead of throwing', async () => {
+    Element.prototype.requestFullscreen = vi.fn(() => Promise.reject(new Error('denied')));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    expect(() => fireEvent.click(screen.getByTestId('toggle-fullscreen'))).not.toThrow();
+
+    await waitFor(() => {
+      const rejected = warnSpy.mock.calls.find(([msg]) => msg === '[RECAP_FS] requestFullscreen rejected');
+      expect(rejected).toBeTruthy();
+    });
+
+    warnSpy.mockRestore();
+  });
+
+  it('catches a rejected exitFullscreen promise instead of throwing', async () => {
+    Element.prototype.requestFullscreen = vi.fn();
+    document.exitFullscreen = vi.fn(() => Promise.reject(new Error('denied')));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    render(<RecapPlayerModal game={{ id: 42, name: 'Big Game' }} initialTab="annotations" onClose={vi.fn()} />);
+    await waitFor(() => screen.getByTestId('playback-controls'));
+
+    fireEvent.click(screen.getByTestId('toggle-fullscreen'));
+    Object.defineProperty(document, 'fullscreenElement', { value: document.body, configurable: true });
+    fireEvent(document, new Event('fullscreenchange'));
+    await waitFor(() => expect(screen.getByTestId('is-fullscreen').textContent).toBe('fullscreen'));
+
+    expect(() => fireEvent.click(screen.getByTestId('toggle-fullscreen'))).not.toThrow();
+
+    await waitFor(() => {
+      const rejected = warnSpy.mock.calls.find(([msg]) => msg === '[RECAP_FS] exitFullscreen rejected');
+      expect(rejected).toBeTruthy();
+    });
+
+    warnSpy.mockRestore();
+  });
+});
+
 const T4130_CLIPS = [
   { id: 1, name: 'Overlay Clip', rating: 4, tags: ['Jake'], notes: 'great pass',
     start_time: 0, end_time: 5, recap_start: 0, recap_end: 5, duration: 5,

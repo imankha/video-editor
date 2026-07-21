@@ -98,7 +98,13 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   }, [game.id]);
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!getFullscreenElement());
+    const handler = () => {
+      const fsElPresent = !!getFullscreenElement();
+      // [RECAP_FS] T5648: greppable diagnostic — a real-device /logdump reveals
+      // whether the browser ever confirms exit via this event.
+      console.warn('[RECAP_FS] fullscreenchange', { fullscreenElementPresent: fsElPresent });
+      setIsFullscreen(fsElPresent);
+    };
     document.addEventListener('fullscreenchange', handler);
     document.addEventListener('webkitfullscreenchange', handler);
     return () => {
@@ -111,17 +117,68 @@ export function RecapPlayerModal({ game, initialTab, onClose }) {
   // some versions — check both the standard and prefixed API on request/exit,
   // and read state from either fullscreenElement property so a tap always
   // matches the browser's actual fullscreen state instead of a stale flag.
+  //
+  // T5648: Android Chrome exit reportedly fails silently in the wild (not
+  // reproducible in any emulator) — [RECAP_FS] console.warn diagnostics below
+  // are the deliverable; they flow into clientLogger's ring buffer and surface
+  // via /logdump. Also falls back to the `isFullscreen` STATE to decide
+  // exit-vs-enter when the browser reports no fullscreenElement despite still
+  // being visually fullscreen, and calls both exit methods if present — the
+  // fullscreenchange handler above remains the authoritative state setter.
   const toggleFullscreen = useCallback(() => {
     const el = contentRef.current;
-    if (!getFullscreenElement()) {
-      if (el?.requestFullscreen) el.requestFullscreen();
-      else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
+    const fsElPresent = !!document.fullscreenElement;
+    const webkitFsElPresent = !!document.webkitFullscreenElement;
+    const shouldExit = (fsElPresent || webkitFsElPresent) || isFullscreen;
+
+    console.warn('[RECAP_FS] toggle', {
+      isFullscreenState: isFullscreen,
+      fullscreenElementPresent: fsElPresent,
+      webkitFullscreenElementPresent: webkitFsElPresent,
+      branch: shouldExit ? 'exit' : 'enter',
+    });
+
+    if (!shouldExit) {
+      const hasRequest = !!el?.requestFullscreen;
+      const hasWebkitRequest = !!el?.webkitRequestFullscreen;
+      console.warn('[RECAP_FS] enter', { hasRequestFullscreen: hasRequest, hasWebkitRequestFullscreen: hasWebkitRequest });
+      if (hasRequest) {
+        try {
+          el.requestFullscreen()?.catch(err =>
+            console.warn('[RECAP_FS] requestFullscreen rejected', { error: String(err) }));
+        } catch (err) {
+          console.warn('[RECAP_FS] requestFullscreen threw', { error: String(err) });
+        }
+      } else if (hasWebkitRequest) {
+        try {
+          el.webkitRequestFullscreen()?.catch(err =>
+            console.warn('[RECAP_FS] webkitRequestFullscreen rejected', { error: String(err) }));
+        } catch (err) {
+          console.warn('[RECAP_FS] webkitRequestFullscreen threw', { error: String(err) });
+        }
+      }
+    } else {
+      const hasExit = !!document.exitFullscreen;
+      const hasWebkitExit = !!document.webkitExitFullscreen;
+      console.warn('[RECAP_FS] exit', { hasExitFullscreen: hasExit, hasWebkitExitFullscreen: hasWebkitExit });
+      if (hasExit) {
+        try {
+          document.exitFullscreen()?.catch(err =>
+            console.warn('[RECAP_FS] exitFullscreen rejected', { error: String(err) }));
+        } catch (err) {
+          console.warn('[RECAP_FS] exitFullscreen threw', { error: String(err) });
+        }
+      }
+      if (hasWebkitExit) {
+        try {
+          document.webkitExitFullscreen()?.catch(err =>
+            console.warn('[RECAP_FS] webkitExitFullscreen rejected', { error: String(err) }));
+        } catch (err) {
+          console.warn('[RECAP_FS] webkitExitFullscreen threw', { error: String(err) });
+        }
+      }
     }
-  }, []);
+  }, [isFullscreen]);
 
   const recap = useRecapPlayback(recapVideoRef, recapData?.clips || []);
 
