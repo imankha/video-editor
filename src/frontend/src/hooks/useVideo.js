@@ -6,6 +6,7 @@ import { invalidateUrl } from '../utils/storageUrls';
 import { probeVideoUrlMoovPosition } from '../utils/probeVideoUrl';
 import { PROFILING_ENABLED } from '../utils/profiling';
 import { classifyVideoError, VideoErrorKind } from '../utils/videoErrorClassifier';
+import { reportVideoError, stripUrlSignature } from '../utils/videoErrorBeacon';
 import { setWarmupPriority, clearForegroundActive, WARMUP_PRIORITY, getWarmedState } from '../utils/cacheWarming';
 import { checkRangeFallback, getTotalBufferedSec } from '../utils/videoLoadWatchdog';
 import { chooseLoadRoute, isDirectForced, ROUTE } from '../utils/videoLoadRoute';
@@ -1132,17 +1133,43 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           .catch(() => { /* diag probe failed */ });
       }
     } else if (kind === VideoErrorKind.FORMAT_ERROR) {
-      // T5620: a streaming (non-blob) format error is usually a transient init
-      // race on a VALID file — retry a few times with exponential backoff before
-      // giving up. A blob format error is real (no retry). If retries are
-      // exhausted, fall through to the diagnostic probe + user-facing error.
+      // T5620/T5641: a streaming (non-blob) format error is usually a transient
+      // init race on a VALID file — retry a few times with exponential backoff
+      // before giving up. A blob format error is real (no retry). If retries are
+      // exhausted, fall through to the diagnostic probe + server beacon + error.
+      //
+      // T5641: snapshot the media-pipeline state AT failure time — readyState /
+      // networkState / buffered all change once we start retrying and probing,
+      // so capturing them later (in the probe .then) would log a misleading
+      // post-recovery state instead of the failure state.
+      const diag = {
+        errorCode,
+        errorMessage,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        bufferedSec: Number(getTotalBufferedSec(video.buffered).toFixed(1)),
+        currentTime: Number((video.currentTime || 0).toFixed(2)),
+        videoWidth: video.videoWidth || null,
+        videoHeight: video.videoHeight || null,
+        srcKey: stripUrlSignature(video.src),
+        // T5641: which screen wedged (framing/overlay/annotate) — derived from
+        // the route so it needs no plumbing through every useVideo caller.
+        context: typeof window !== 'undefined'
+          ? (window.location?.pathname?.match(/\/(framing|overlay|annotate)/)?.[1] || null)
+          : null,
+      };
+
       if (formatRetryRef.current < FORMAT_MAX_RETRIES && video.src && !video.src.startsWith('blob:')) {
         const resumeAt = video.currentTime;
+        const retrySrc = video.src;
         formatRetryRef.current += 1;
         const delay = FORMAT_RETRY_BASE_MS * Math.pow(3, formatRetryRef.current - 1); // 400ms, 1.2s, 3.6s
+        // T5641: log the FULL MediaError context on every attempt (the old log
+        // emitted only { url } — the opaque object users saw). This flows into
+        // clientLogger, so "Report a problem" carries the real diagnostic.
         console.warn(
           `[VIDEO] Format error, retrying with backoff (attempt ${formatRetryRef.current}/${FORMAT_MAX_RETRIES}, ${delay}ms)`,
-          { url: video.src.substring(0, 80) },
+          diag,
         );
         const restoreTime = () => {
           if (videoRef.current && !Number.isNaN(resumeAt) && resumeAt > 0) {
@@ -1154,13 +1181,27 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
           const v = videoRef.current;
           if (!v) return;
           v.addEventListener('loadeddata', restoreTime, { once: true });
-          try { v.load(); } catch { /* load may throw if detached */ }
+          // T5641: HARD reset, not a bare load(). A plain load() re-runs on the
+          // SAME wedged media pipeline (the file already buffered to readyState=4
+          // then threw code 4), so it kept failing. Tearing the element down
+          // (removeAttribute + load) and re-selecting the source is what a page
+          // refresh does — which is what actually recovers this class of error.
+          try {
+            v.removeAttribute('src');
+            v.load();          // tear down the wedged pipeline (no src -> no error event)
+            v.src = retrySrc;  // fresh resource selection + fetch + decoder
+            v.load();
+          } catch { /* load may throw if detached */ }
         }, delay);
         return; // don't surface the error while a retry is pending
       }
 
       userMessage = 'Video format not supported.';
       const diagUrl = video.src;
+      // T5641: retries exhausted — probe the URL for its status/content-type at
+      // THIS moment, then fire-and-forget the beacon so the failure is visible in
+      // server logs. Beacon fires whether the probe succeeds or fails.
+      const exhaustedDiag = { ...diag, retries: formatRetryRef.current };
       if (diagUrl && !diagUrl.startsWith('blob:')) {
         fetch(diagUrl, {
           method: 'GET',
@@ -1185,8 +1226,11 @@ export function useVideo(getSegmentAtTime = null, clampToVisibleRange = null) {
               `is_html=${isHtml} url=${diagUrl.substring(0, 120)} ` +
               `body=${bodySnippet.substring(0, 80).replace(/\n/g, ' ')}`
             );
+            reportVideoError({ ...exhaustedDiag, probeStatus: resp.status, probeContentType: ct, probeIsHtml: isHtml });
           })
-          .catch(() => { /* diag probe failed */ });
+          .catch(() => { reportVideoError(exhaustedDiag); });
+      } else {
+        reportVideoError(exhaustedDiag);
       }
     } else if (kind === VideoErrorKind.STALE_BLOB) {
       // Stale blob but no stashed streaming URL — nothing we can do.

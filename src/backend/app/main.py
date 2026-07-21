@@ -109,6 +109,7 @@ from app.routers import (
 from app.routers.exports import router as exports_router
 from app.routers.privacy import router as privacy_router
 from app.routers.rank import router as rank_router
+from app.routers.telemetry import router as telemetry_router
 from app.websocket import websocket_export_progress
 
 # Environment detection
@@ -228,6 +229,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(gallery_shares_router)
 app.include_router(shared_router)
+app.include_router(telemetry_router)
 app.include_router(users_router)
 app.include_router(bootstrap_router)
 app.include_router(privacy_router)
@@ -341,7 +343,7 @@ def _graceful_shutdown(signum, frame):
                     # unset (r2_key would raise) or stale (mis-keys). Key off the
                     # profile_id parsed from the path.
                     version = get_local_db_version(user_id, profile_id)
-                    success, new_version = sync_database_to_r2_with_version(
+                    success, _new_version = sync_database_to_r2_with_version(
                         user_id, db_file, version, skip_version_check=True, profile_id=profile_id)
                     if success:
                         synced += 1
@@ -369,7 +371,7 @@ def _graceful_shutdown(signum, frame):
 
                     # Sync to R2
                     version = get_local_user_db_version(user_id)
-                    success, new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
+                    success, _new_version = sync_user_db_to_r2_with_version(user_id, db_file, version, skip_version_check=True)
                     if success:
                         synced += 1
                     else:
