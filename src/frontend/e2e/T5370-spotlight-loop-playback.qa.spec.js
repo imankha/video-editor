@@ -7,8 +7,10 @@
  *      the playhead never runs far past span.end (it wraps back).
  *   2. Secondary "Play full" is present + de-emphasized and plays THROUGH the
  *      span end (no wrapping) toward the clip end.
- *   3. The "Back to spotlight" pill appears only once the playhead is past the
- *      span, and pressing it returns to span.start (and re-enters loop mode).
+ *   3. The "Reset" pill (T5658; formerly "Back to spotlight") appears only once
+ *      the playhead is past the span, and pressing it seeks to time 0 — it no
+ *      longer returns to span.start, since the spotlight location isn't
+ *      guaranteed and resetting to the clip start is the dependable behavior.
  *
  * Reaching a live spotlight requires this account to have an EXPORTED reel with
  * highlight regions (overlay mode is gated on it). If none is reachable, the
@@ -28,7 +30,7 @@ const PROFILE = process.env.E2E_REAL_PROFILE || '9fa7378c';
 const PRIMARY_PLAY = 'button[title="Play spotlight (loops)"]';
 const PRIMARY_ANY = 'button[title="Play spotlight (loops)"], button[title="Play"], button[title="Pause"]';
 const SECONDARY_FULL = 'button[title="Play full clip"]';
-const PILL = '[aria-label="Back to spotlight"]';
+const PILL = '[aria-label="Reset"]'; // T5658: was "Back to spotlight"
 const VID = '.video-container video';
 
 /** Best-effort navigation into Overlay mode with rendered highlight regions. */
@@ -89,7 +91,7 @@ test.describe('T5370 spotlight loop playback', () => {
     expect(full.time).toBeGreaterThan(beforeFull.time); // advanced, no wrap pinning it back
     await saveEvidence(page, 'T5370-3-play-full-through');
 
-    // --- Criterion 3: pill appears once past the span, and returns to span start ---
+    // --- Criterion 3 (T5658): pill appears once past the span, and resets to time 0 ---
     // Play full should have carried us past span.end; poll for the pill.
     await page.locator(PILL).waitFor({ timeout: 10000 }).catch(() => {});
     if (await page.locator(PILL).count()) {
@@ -98,9 +100,10 @@ test.describe('T5370 spotlight loop playback', () => {
       await page.locator(PILL).click();
       await page.waitForTimeout(500);
       const returned = await readVideo(page);
-      expect(returned.time).toBeLessThan(past.time); // jumped back to the span start
-      await expect(page.locator(PILL)).toHaveCount(0); // hidden once back inside the span
-      await saveEvidence(page, 'T5370-5-returned-to-spotlight');
+      expect(returned.time).toBeLessThan(past.time); // jumped back toward the start
+      expect(returned.time).toBeLessThan(1); // T5658: resets to time 0, not span.start
+      await expect(page.locator(PILL)).toHaveCount(0); // hidden once back before the span
+      await saveEvidence(page, 'T5370-5-reset-to-start');
     } else {
       console.warn('[qa] T5370: pill not reached (span may span the whole clip) — loop + full-play criteria still evidenced.');
     }

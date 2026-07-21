@@ -197,11 +197,11 @@ export function OverlayContainer({
     if (videoRef.current?.paused) togglePlay();
   }, [togglePlay, videoRef]);
 
+  // T5658: "Reset" pill — seeks to time 0. Spotlight location isn't guaranteed,
+  // so resetting to the start is the dependable behavior (was: return to spotlight span).
   const handleReturnToSpotlight = useCallback(() => {
-    if (!spotlightSpan) return;
-    setSpotlightPlayMode('loop');
-    seek(spotlightSpan.start);
-  }, [spotlightSpan, seek]);
+    seek(0);
+  }, [seek]);
 
   // Toggle for showing/hiding player detection boxes (default: visible)
   const [showPlayerBoxes, setShowPlayerBoxes] = useState(true);
