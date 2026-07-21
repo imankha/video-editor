@@ -277,8 +277,13 @@ export function OverlayModeView({
   const hasVisibleSpotlight = !!currentHighlightState && isTimeInEnabledRegion(currentTime);
 
   // The hint teaches manual override: shown only while tracking is ON, a spotlight is
-  // visible, and the user hasn't overridden yet this session.
-  const showOverrideHint = hasVisibleSpotlight && showPlayerBoxes && !overrideUsed;
+  // visible, the user hasn't overridden yet this session, AND no tracking/spotlight
+  // keyframe is currently selected (T5643) — `selectedHighlightKeyframeIndex` enlarges/
+  // activates a keyframe by playhead proximity (OverlayScreen.jsx), and the hint would be
+  // redundant (and visually competing) with that keyframe's own edit affordance. `null` =
+  // nothing selected; index 0 is a valid selection, so check strictly against `null`.
+  const showOverrideHint = hasVisibleSpotlight && showPlayerBoxes && !overrideUsed
+    && selectedHighlightKeyframeIndex === null;
   const overrideHintText = isMobile
     ? 'Tap the spotlight to adjust'
     : 'Tap the spotlight to adjust it — or hide tracking to edit freely';
@@ -525,8 +530,11 @@ export function OverlayModeView({
             {/* Back to spotlight pill — over the lower video area (T5370) */}
             {backToSpotlightPill}
 
-            {/* T5610 discoverability hint — subtle pill in the dimmed area, non-interactive,
-                below the handles. Names BOTH override paths; fades on first override. */}
+            {/* T5610 discoverability hint — subtle pill, non-interactive, below the
+                handles. Names BOTH override paths; fades on first override. T5643: sits
+                directly under the "N players detected" badge (PlayerDetectionOverlay's
+                top-4 right-4 count, same top-right corner of this relatively-positioned
+                video area) and hides while a tracking/spotlight keyframe is selected. */}
             {effectiveOverlayVideoUrl && (
               <OverrideHint visible={showOverrideHint} text={overrideHintText} />
             )}

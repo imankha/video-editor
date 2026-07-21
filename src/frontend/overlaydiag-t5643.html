@@ -1,0 +1,21 @@
+<!doctype html>
+<!--
+  T5643 DEV-ONLY diagnostic harness for the moved + gated override hint.
+  NOT a production page: it is not listed in vite build rollupOptions.input (only
+  index.html is), so it never ships in the built app. Served by the dev server only,
+  for the Playwright real-browser verification.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Overlay hint placement diag (dev only)</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: #111827; }
+    </style>
+  </head>
+  <body>
+    <div id="overlaydiag-t5643-root"></div>
+    <script type="module" src="/src/overlaydiag-t5643/main.jsx"></script>
+  </body>
+</html>
