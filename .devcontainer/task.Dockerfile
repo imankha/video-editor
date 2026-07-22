@@ -65,6 +65,13 @@ RUN pip install --no-cache-dir -r /tmp/requirements.prod.txt && rm /tmp/requirem
 COPY src/backend/requirements.test.txt /tmp/requirements.test.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.test.txt && rm /tmp/requirements.test.txt
 
+# --- ruff (the backend lint gate) --------------------------------------------
+# The .claude PostToolUse lint hook (lint-changed.cjs) runs `ruff check` on every
+# backend edit and looks for /usr/local/bin/ruff. Baking it here means the hook
+# runs IN-CONTAINER (matching CI's `pip install ... ruff`), not just in CI.
+# Unpinned to match branch-ci.yml, which installs ruff unpinned.
+RUN pip install --no-cache-dir ruff
+
 # --- non-root user -----------------------------------------------------------
 # bypassPermissions refuses to start as root, so sessions run as `dev`.
 # Passwordless sudo so in-container `apt-get` etc. still work if a task needs it.
