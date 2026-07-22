@@ -498,6 +498,7 @@ class AIVideoUpscaler:
         progress_callback=None,
         segment_data: dict[str, Any] | None = None,
         include_audio: bool = True,
+        rotation: float = 0,
         highlight_keyframes: list[dict[str, Any]] | None = None,
         highlight_effect_type: str = "original"
     ) -> dict[str, Any]:
@@ -521,6 +522,10 @@ class AIVideoUpscaler:
         Returns:
             Dict with processing results
         """
+        # T5640: rotate-then-crop per-clip. Reaches FrameProcessor before any
+        # extract_frame_with_crop call (covers crop and pre-upscale crop=None paths).
+        self.frame_processor.rotation = rotation
+
         # Get accurate video metadata using ffprobe (matches browser's duration reporting)
         ffprobe_metadata = get_video_metadata_ffprobe(input_path)
 

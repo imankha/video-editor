@@ -343,7 +343,8 @@ class ClipProcessingPipeline:
             export_mode=ctx.export_mode,
             progress_callback=progress_callback,
             segment_data=ctx.segment_data,
-            include_audio=ctx.include_audio
+            include_audio=ctx.include_audio,
+            rotation=ctx.clip_data.get('rotation', 0) or 0,
         )
 
         # Clean up GPU memory after processing to prevent accumulation between clips

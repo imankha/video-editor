@@ -55,6 +55,7 @@ class FrameProcessor:
         self.device = device
         self.export_mode = export_mode
         self.enable_source_preupscale = enable_source_preupscale
+        self.rotation = 0
 
     def release_video_captures(self):
         """Placeholder for cleanup - kept for API compatibility."""
@@ -96,6 +97,14 @@ class FrameProcessor:
 
         if not ret:
             raise ValueError(f"Failed to read frame {frame_number} from {video_path}")
+
+        # Rotate the full frame about its center (T5640). Kept at source W*H so the
+        # crop coordinate box is preserved; matches the export cv2 rotate_then_crop
+        # primitive. Applies to both the crop and pre-upscale (crop=None) paths.
+        if self.rotation:
+            fh, fw = frame.shape[:2]
+            m = cv2.getRotationMatrix2D((fw / 2, fh / 2), self.rotation, 1.0)
+            frame = cv2.warpAffine(frame, m, (fw, fh), flags=cv2.INTER_LANCZOS4, borderValue=(0, 0, 0))
 
         # Apply crop (de-zoom) if provided
         if crop:
