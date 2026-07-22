@@ -1290,6 +1290,42 @@ export function GamesListSkeleton({ count = 4 }) {
 
 
 /**
+ * GameMetaRow - Metadata line under a game's title (date, clip count, rating
+ * counts, quality score, tag badges). Shared by the expired and normal GameCard
+ * variants so the two never drift.
+ */
+function GameMetaRow({ game }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
+      <span>{new Date(game.created_at).toLocaleDateString()}</span>
+      <span>•</span>
+      <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
+      {game.clip_count > 0 && (
+        <>
+          {game.brilliant_count > 0 && (
+            <>
+              <span>•</span>
+              <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
+            </>
+          )}
+          {game.good_count > 0 && (
+            <>
+              <span>•</span>
+              <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
+            </>
+          )}
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
+            Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+          </span>
+          <TagBadges tagBadges={game.tag_badges} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
  * GameCard - Individual game in the list
  */
 export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShare, onEdit }) {
@@ -1393,32 +1429,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
                 Expired
               </span>
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-              <span>{new Date(game.created_at).toLocaleDateString()}</span>
-              <span>•</span>
-              <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
-              {game.clip_count > 0 && (
-                <>
-                  {game.brilliant_count > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
-                    </>
-                  )}
-                  {game.good_count > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
-                    </>
-                  )}
-                  <span className="hidden sm:inline">•</span>
-                  <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                    Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
-                  </span>
-                  <TagBadges tagBadges={game.tag_badges} />
-                </>
-              )}
-            </div>
+            <GameMetaRow game={game} />
           </div>
 
           {hasAnnotations && (
@@ -1485,32 +1496,7 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
               <span className="text-xs px-1.5 py-0.5 rounded bg-blue-900/50 text-blue-300">New</span>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            <span>{new Date(game.created_at).toLocaleDateString()}</span>
-            <span>•</span>
-            <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
-            {game.clip_count > 0 && (
-              <>
-                {game.brilliant_count > 0 && (
-                  <>
-                    <span>•</span>
-                    <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
-                  </>
-                )}
-                {game.good_count > 0 && (
-                  <>
-                    <span>•</span>
-                    <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
-                  </>
-                )}
-                <span className="hidden sm:inline">•</span>
-                <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-                  Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
-                </span>
-                <TagBadges tagBadges={game.tag_badges} />
-              </>
-            )}
-          </div>
+          <GameMetaRow game={game} />
         </div>
 
         {/* Edit + Share + Delete buttons - hover on desktop, long-press on mobile */}
