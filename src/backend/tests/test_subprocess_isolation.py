@@ -200,6 +200,49 @@ class TestSubprocessImports:
 
 
 
+class TestOverlayProfileContext:
+    """T5250 infra: _overlay_sync must re-establish the profile context in the
+    ProcessPoolExecutor child, since ContextVars do NOT cross the process boundary
+    (T2640). Without this the R2 key builder raises 'Profile ID not set'."""
+
+    def test_overlay_sync_sets_profile_context_from_arg(self, monkeypatch):
+        import app.storage as storage
+        from app.profile_context import get_current_profile_id
+        from app.services.local_processors import _overlay_sync
+
+        captured = {}
+
+        def fake_download(user_id, relative_path, local_path, *args, **kwargs):
+            # This runs inside _overlay_sync, after profile context should be set.
+            captured["profile_id"] = get_current_profile_id()
+            return False  # short-circuit; return error path
+
+        monkeypatch.setattr(storage, "download_from_r2", fake_download)
+
+        result = _overlay_sync(
+            job_id="test-profile-ctx-001",
+            user_id="test-user",
+            input_key="working_videos/input.mp4",
+            output_key="final_videos/output.mp4",
+            highlight_regions=[],
+            profile_id="profile-abc-123",
+        )
+
+        assert captured["profile_id"] == "profile-abc-123"
+        # download stubbed to fail, so overlay reports the download error
+        assert result["status"] == "error"
+
+    def test_overlay_sync_threads_profile_id_kwarg(self):
+        """call_modal_overlay's MODAL-OFF branch must forward profile_id to
+        _overlay_sync's kwargs."""
+        import inspect
+        from app.services.local_processors import _overlay_sync
+
+        params = inspect.signature(_overlay_sync).parameters
+        assert "profile_id" in params
+        assert params["profile_id"].default is None
+
+
 class TestProgressBridging:
     """Test that progress flows correctly from subprocess through queue to async callback."""
 

@@ -225,6 +225,8 @@ class KeyframeInterpolator:
         crop: dict[str, float] | None = None,
         effect_type: str = "original",
         overlay_settings: dict[str, Any] | None = None,
+        reveal_opacity: float = 1.0,
+        reveal_scale: float = 1.0,
     ) -> np.ndarray:
         if highlight is None:
             return frame
@@ -234,8 +236,10 @@ class KeyframeInterpolator:
 
         highlight_x_orig = highlight['x']
         highlight_y_orig = highlight['y']
-        radius_x_orig = highlight['radiusX']
-        radius_y_orig = highlight['radiusY']
+        # T5250: bloom the radii about the ellipse center via the reveal envelope BEFORE
+        # the ground transform (mirrors HighlightOverlay + video_processing). 1.0 = no-op.
+        radius_x_orig = highlight['radiusX'] * reveal_scale
+        radius_y_orig = highlight['radiusY'] * reveal_scale
 
         settings = overlay_settings or {}
         if settings.get('highlight_shape') == 'ground':
@@ -285,9 +289,12 @@ class KeyframeInterpolator:
 
         stroke_width_setting = settings.get('stroke_width', 2)
         fill_enabled = is_ground or settings.get('fill_enabled', False)
-        fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05))
-        stroke_opacity = highlight.get('strokeOpacity', 0.85)
-        dim_strength = settings.get('dim_strength', 0.15)
+        # T5250: fold the reveal opacity factor into every opacity so the whole spotlight
+        # (dim vignette, fill, outline, stroke) fades in/out together. 1.0 = no-op mid-region.
+        fill_opacity = highlight.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05)) * reveal_opacity
+        stroke_opacity = highlight.get('strokeOpacity', 0.85) * reveal_opacity
+        dim_strength = settings.get('dim_strength', 0.15) * reveal_opacity
+        outline_blend = 0.5 * reveal_opacity
 
         stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
         outline_w = stroke_w + 2
@@ -321,7 +328,7 @@ class KeyframeInterpolator:
         outline_overlay = result.copy()
         cv2.ellipse(outline_overlay, center=(center_x, center_y), axes=(radius_x, radius_y),
                    angle=0, startAngle=arc_start, endAngle=arc_end, color=outline_bgr, thickness=outline_w)
-        result = cv2.addWeighted(outline_overlay, 0.5, result, 0.5, 0)
+        result = cv2.addWeighted(outline_overlay, outline_blend, result, 1 - outline_blend, 0)
 
         stroke_overlay = result.copy()
         cv2.ellipse(stroke_overlay, center=(center_x, center_y), axes=(radius_x, radius_y),

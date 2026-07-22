@@ -1,5 +1,6 @@
-import { forwardRef, useState, useEffect, useCallback } from 'react';
+import { forwardRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { computeSpotlightReveal } from '../utils/spotlightReveal';
 import OverrideHint from './overlay/overlays/OverrideHint';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
@@ -276,6 +277,26 @@ export function OverlayModeView({
   // renders)? Mirrors HighlightOverlay's own render gate.
   const hasVisibleSpotlight = !!currentHighlightState && isTimeInEnabledRegion(currentTime);
 
+  // T5250: the entrance/exit reveal envelope for the spotlight, derived from the ACTIVE
+  // region's [startTime, endTime] and currentTime via the shared spec (mirrored on the
+  // backend render path). Passed to HighlightOverlay as a display-only multiplier — it
+  // touches no keyframe data. Null when no region covers the playhead (overlay hidden).
+  // Standard behavior — always applied (no setting), so preview matches the export.
+  const spotlightReveal = useMemo(() => {
+    // EDITOR-ONLY: the exit fade-out plays during preview PLAYBACK. When paused (e.g.
+    // stopped at the region-start frame to edit) return null so HighlightOverlay renders
+    // the spotlight at FULL opacity/size (its `reveal ? ... : 1` fallback) — the full
+    // spotlight stays visible while editing. The BACKEND export ALWAYS applies the fade
+    // (never gated on playing), so preview-during-playback still matches the exported video.
+    if (!isPlaying) return null;
+    if (!highlightRegions?.length) return null;
+    const region = highlightRegions.find(
+      (r) => r.enabled !== false && currentTime >= r.startTime && currentTime <= r.endTime
+    );
+    if (!region) return null;
+    return computeSpotlightReveal(currentTime, region.startTime, region.endTime);
+  }, [isPlaying, highlightRegions, currentTime]);
+
   // The hint teaches manual override: shown only while tracking is ON, a spotlight is
   // visible, the user hasn't overridden yet this session, AND no tracking/spotlight
   // keyframe is currently selected (T5643) — `selectedHighlightKeyframeIndex` enlarges/
@@ -479,6 +500,8 @@ export function OverlayModeView({
                   // Tap-the-circle override is wired only while tracking is ON; with
                   // tracking OFF the circle is already fully editable (T5570 path).
                   onCircleTap={showPlayerBoxes ? handleCircleTap : undefined}
+                  // T5250: entrance/exit reveal envelope (display-only multiplier).
+                  reveal={spotlightReveal}
                 />
               ),
               effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
