@@ -77,6 +77,10 @@ export default function CropOverlay({
   const [straightenLine, setStraightenLine] = useState(null);
   const [liveRotation, setLiveRotation] = useState(null);
   const straightenDragRef = useRef(null); // { pointerId, p0 }
+  // T5690: press-and-hold auto-repeat timer for the ± nudge buttons. Holds a
+  // single recursive-setTimeout handle (the whole hold previews via liveRotation
+  // and commits ONCE on release — never per tick).
+  const holdTimerRef = useRef(null);
 
   // The angle the video is currently shown at: live preview during a gesture,
   // else the committed value.
@@ -395,11 +399,6 @@ export default function CropOverlay({
     onSetRotation?.(theta);
   }, [overlayPoint, onSetRotation]);
 
-  // Fine dial / nudge / reset — each fires ONE commit (not per-tick reactive).
-  const nudgeRotation = useCallback((delta) => {
-    onSetRotation?.(clampRotation(rotation + delta));
-  }, [rotation, onSetRotation]);
-
   const resetRotation = useCallback(() => {
     if (rotation !== 0) onSetRotation?.(0);
   }, [rotation, onSetRotation]);
@@ -416,6 +415,52 @@ export default function CropOverlay({
       onSetRotation?.(theta);
     }
   }, [liveRotation, onSetRotation]);
+
+  // Fine ± nudge with press-and-hold auto-repeat (T5690). Like the slider, the
+  // whole hold PREVIEWS via liveRotation and commits ONE value on release —
+  // never per tick (gesture-based persistence: one hold = one set_rotation).
+  const stepRotation = useCallback((delta) => {
+    // Functional update so accelerating repeat ticks compound without a stale
+    // closure; clamp to ±MAX_ROT so the preview matches what will commit.
+    setLiveRotation((prev) => clampRotation((prev !== null ? prev : rotation) + delta));
+  }, [rotation]);
+
+  const clearHold = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  // Pointer-down: one immediate step (so a quick tap == a single 0.1° nudge),
+  // then after a ~300ms initial delay start an auto-repeat that gently
+  // accelerates (90ms -> floor 45ms) the longer it's held. All preview-only.
+  const handleNudgePointerDown = useCallback((e, delta) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    clearHold();
+    stepRotation(delta);
+    let ticks = 0;
+    const schedule = (ms) => {
+      holdTimerRef.current = setTimeout(() => {
+        stepRotation(delta);
+        ticks += 1;
+        schedule(Math.max(45, 90 - ticks * 5));
+      }, ms);
+    };
+    schedule(300);
+  }, [clearHold, stepRotation]);
+
+  // Pointer-up / leave / cancel: stop repeating and commit ONCE (reuses the
+  // slider's commit path). Idempotent — handleSliderCommit no-ops once
+  // liveRotation is cleared, so a leave-after-up can't double-persist.
+  const handleNudgePointerUp = useCallback(() => {
+    clearHold();
+    handleSliderCommit();
+  }, [clearHold, handleSliderCommit]);
+
+  // Clear any pending hold timer on unmount (no leaked timers).
+  useEffect(() => clearHold, [clearHold]);
 
   if (!currentCrop || !videoDisplayRect) {
     return null;
@@ -666,9 +711,13 @@ export default function CropOverlay({
 
           <button
             type="button"
-            onClick={() => nudgeRotation(-0.1)}
+            onPointerDown={(e) => handleNudgePointerDown(e, -0.1)}
+            onPointerUp={handleNudgePointerUp}
+            onPointerLeave={handleNudgePointerUp}
+            onPointerCancel={handleNudgePointerUp}
             className="flex items-center justify-center h-8 w-8 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
-            title="Rotate -0.1 degrees"
+            style={{ touchAction: 'none' }}
+            title="Rotate -0.1 degrees (hold to repeat)"
             aria-label="Nudge rotation counter"
           >
             <Minus size={14} />
@@ -690,9 +739,13 @@ export default function CropOverlay({
 
           <button
             type="button"
-            onClick={() => nudgeRotation(0.1)}
+            onPointerDown={(e) => handleNudgePointerDown(e, 0.1)}
+            onPointerUp={handleNudgePointerUp}
+            onPointerLeave={handleNudgePointerUp}
+            onPointerCancel={handleNudgePointerUp}
             className="flex items-center justify-center h-8 w-8 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
-            title="Rotate +0.1 degrees"
+            style={{ touchAction: 'none' }}
+            title="Rotate +0.1 degrees (hold to repeat)"
             aria-label="Nudge rotation clockwise"
           >
             <Plus size={14} />
