@@ -39,3 +39,11 @@ export const clipTrimRange = (clip) => {
   if (!clip.timing_data) return null;
   return clip.timing_data.trimRange || null;
 };
+
+/**
+ * The clip's horizon-straighten angle in degrees (content-correction, +CCW).
+ * Stored as the scalar working_clips.rotation (T5640) — mirrors how crop_data
+ * flows: raw off the backend response, defaulted to 0 at read time. Never a
+ * derived/duplicated flag; the store holds the raw value.
+ */
+export const clipRotation = (clip) => Number(clip?.rotation) || 0;

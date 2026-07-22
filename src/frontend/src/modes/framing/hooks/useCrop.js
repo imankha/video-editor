@@ -4,6 +4,8 @@ import { interpolateCropSpline } from '../../../utils/splineInterpolation';
 import useKeyframeController from '../../../hooks/useKeyframeController';
 import { normalizeToFrameKeyframes, validateFrameKeyframes } from '../../../types/keyframes';
 import { track } from '../../../utils/analytics';
+import { clampRotation } from '../../../utils/straighten';
+import { clampCropToSafeArea } from '../../../utils/rotationSafeArea';
 
 /**
  * Default crop sizes optimized for HD upscaling.
@@ -60,10 +62,29 @@ const calculateDefaultPosition = (videoWidth, videoHeight, cropWidth, cropHeight
  * @param {Object} videoMetadata - Video metadata (width, height, duration)
  * @param {Object} trimRange - Optional trim range
  * @param {Array} savedKeyframes - Optional saved keyframes to restore (from clip data)
+ * @param {number} savedRotation - Optional saved horizon-straighten angle (degrees) to seed
  */
-export default function useCrop(videoMetadata, trimRange = null, savedKeyframes = null) {
+export default function useCrop(videoMetadata, trimRange = null, savedKeyframes = null, savedRotation = 0) {
   const [aspectRatio, setAspectRatio] = useState('9:16'); // '16:9', '9:16'
   const framerate = videoMetadata?.framerate || 30;
+
+  // T5640: per-clip horizon-straighten angle (degrees, +CCW). Seeded from the
+  // clip's saved rotation and re-seeded when a different clip is selected. This
+  // is the ONE piece of rotation state; the container reads it for persistence
+  // and the overlay reads it to CSS-rotate the video + draw the mask.
+  const [rotation, setRotationState] = useState(() => clampRotation(savedRotation || 0));
+
+  // Re-seed rotation when the saved value changes (clip switch / reload). Pure
+  // memory sync of loaded data — NOT a persistence write-back (restore is
+  // read-only per the T350 rule), so no gesture is implied and nothing is sent.
+  const lastSavedRotationRef = useRef(savedRotation || 0);
+  useEffect(() => {
+    const next = savedRotation || 0;
+    if (next !== lastSavedRotationRef.current) {
+      lastSavedRotationRef.current = next;
+      setRotationState(clampRotation(next));
+    }
+  }, [savedRotation]);
 
   // Crop data keys for copy/paste operations
   const cropDataKeys = ['x', 'y', 'width', 'height'];
@@ -267,6 +288,71 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     setAspectRatio(newRatio);
   }, [aspectRatio]);
 
+  // The reel aspect ratio (ratioW/ratioH) — the crop's fixed target shape. Kept
+  // in a ref so the rotation callbacks stay identity-stable (they must not churn
+  // on every aspect/metadata render, mirroring the crop drag handlers).
+  const aspectValue = useMemo(() => {
+    const [ratioW, ratioH] = aspectRatio.split(':').map(Number);
+    return ratioW / ratioH;
+  }, [aspectRatio]);
+  const aspectValueRef = useRef(aspectValue);
+  aspectValueRef.current = aspectValue;
+  const videoDimsRef = useRef({ width: videoMetadata?.width, height: videoMetadata?.height });
+  videoDimsRef.current = { width: videoMetadata?.width, height: videoMetadata?.height };
+
+  /**
+   * Clamp a single crop to the inscribed safe area for the CURRENT rotation.
+   * theta === 0 is a pure passthrough (clampCropToSafeArea short-circuits), so the
+   * crop-drag path is byte-identical to today when the clip isn't rotated.
+   * Used by the drag path (FramingContainer.handleCropComplete) when theta != 0.
+   */
+  const clampCropForCurrentRotation = useCallback((crop) => {
+    const { width: W, height: H } = videoDimsRef.current;
+    if (!W || !H) return crop;
+    return clampCropToSafeArea(crop, W, H, rotation, aspectValueRef.current);
+  }, [rotation]);
+
+  /**
+   * Set the horizon-straighten angle (degrees). Clamps to +/- MAX_ROT, updates
+   * state, and re-clamps EVERY crop keyframe against the new theta (they all share
+   * the reel aspect). Returns the list of keyframes that ACTUALLY moved so the
+   * caller can persist only those (surgical update_crop_keyframe follow-ups).
+   *
+   * PURE state update: no useEffect, no API calls. Persistence is the container's
+   * job (gesture handler), per the project-wide gesture-based rule.
+   *
+   * @param {number} deg - requested angle (unclamped)
+   * @returns {{ rotation: number, movedKeyframes: Array<{frame, x, y, width, height, origin}> }}
+   */
+  const setRotation = useCallback((deg) => {
+    const theta = clampRotation(deg);
+    setRotationState(theta);
+
+    const { width: W, height: H } = videoDimsRef.current;
+    const r = aspectValueRef.current;
+    const moved = [];
+    if (W && H) {
+      const current = keyframesRef.current || [];
+      current.forEach((kf) => {
+        const clamped = clampCropToSafeArea(
+          { x: kf.x, y: kf.y, width: kf.width, height: kf.height },
+          W, H, theta, r
+        );
+        const changed =
+          clamped.x !== kf.x ||
+          clamped.y !== kf.y ||
+          clamped.width !== kf.width ||
+          clamped.height !== kf.height;
+        if (changed) {
+          // Frame-based update in place (same frame, clamped box). Preserve origin.
+          addOrUpdateKeyframe(kf.frame / framerate, clamped, undefined, kf.origin);
+          moved.push({ frame: kf.frame, ...clamped, origin: kf.origin });
+        }
+      });
+    }
+    return { rotation: theta, movedKeyframes: moved };
+  }, [addOrUpdateKeyframe, framerate]);
+
   /**
    * Copy the crop keyframe at the specified time
    */
@@ -344,9 +430,12 @@ export default function useCrop(videoMetadata, trimRange = null, savedKeyframes 
     isEndKeyframeExplicit,
     copiedCrop: copiedData,
     framerate,
+    rotation,
 
     // Actions
     updateAspectRatio,
+    setRotation,
+    clampCropForCurrentRotation,
     addOrUpdateKeyframe,
     removeKeyframe,
     deleteKeyframesInRange,

@@ -69,6 +69,9 @@ export function FramingContainer({
   setCropEndFrame,
   restoreCropState,
   updateAspectRatio,
+  rotation,
+  setRotation,
+  clampCropForCurrentRotation,
   resetCrop,
 
   // Segment state and actions (from useSegments in App.jsx)
@@ -312,7 +315,15 @@ export function FramingContainer({
   /**
    * Handle crop complete (create keyframe)
    */
-  const handleCropComplete = useCallback(async (cropData) => {
+  const handleCropComplete = useCallback(async (rawCropData) => {
+    // T5640: when the clip is straightened (theta != 0), clamp the drag result to
+    // the inscribed safe area BEFORE the hook update + persist, so no crop can
+    // bleed the rotated frame's black corners. theta == 0 is a pure passthrough
+    // (clampCropForCurrentRotation short-circuits), so the un-rotated drag path is
+    // byte-identical to before.
+    const cropData = rotation && clampCropForCurrentRotation
+      ? clampCropForCurrentRotation(rawCropData)
+      : rawCropData;
     const frame = Math.round(currentTime * framerate);
     // Resolve identity the same way the reducer does: an edit within snap range
     // of an existing keyframe targets THAT keyframe, not the raw clicked frame.
@@ -370,7 +381,77 @@ export function FramingContainer({
         onError: (error) => toast.error('Failed to save crop keyframe', { message: error }),
       });
     }
-  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData]);
+  }, [currentTime, framerate, duration, keyframes, getCropDataAtTime, addOrUpdateKeyframe, removeKeyframe, onCropChange, onUserEdit, setFramingChangedSinceExport, selectedProjectId, selectedClip, selectedClipId, updateClipData, rotation, clampCropForCurrentRotation]);
+
+  /**
+   * Handle a horizon-straighten commit (T5640). Mirrors handleCropComplete's
+   * optimistic + surgical + rollback pattern. Fired by ONE gesture: straighten
+   * drag-end, dial commit, nudge, or reset. NEVER reactive.
+   *
+   * 1. Optimistically apply the new angle in the hook (setRotation clamps to
+   *    +/- MAX_ROT and re-clamps every crop keyframe against the new theta,
+   *    returning which keyframes moved).
+   * 2. Optimistically write `rotation` to the clip store (sidebar/indicator).
+   * 3. Await ONE surgical set_rotation action; roll back both on failure.
+   * 4. Persist the clamp-corrections: fire a surgical update_crop_keyframe for
+   *    each crop keyframe the clamp moved (design decision #5 — keep the DB ==
+   *    what the export renders). These are fire-and-forget follow-ups.
+   */
+  const handleSetRotation = useCallback(async (deg) => {
+    const callerClipId = selectedClipId;
+    const previousRotation = rotation;
+    const previousStoreKfs = clipCropKeyframes(selectedClip) || [];
+
+    // 1 + 2: optimistic hook + store update.
+    const { rotation: theta, movedKeyframes } = setRotation(deg);
+    clipHasUserEditsRef.current = true;
+    onUserEdit?.();
+    setFramingChangedSinceExport?.(true);
+    track('rotation_set', { clipId: callerClipId, degrees: theta, movedKeyframes: movedKeyframes.length }, { debugOnly: true });
+
+    if (callerClipId) {
+      // Merge the clamped keyframes into the store copy so the sidebar indicator
+      // and any store readers reflect what the hook now holds.
+      const movedByFrame = new Map(movedKeyframes.map(kf => [kf.frame, kf]));
+      const nextStoreKfs = previousStoreKfs.map(kf =>
+        movedByFrame.has(kf.frame)
+          ? { ...kf, ...movedByFrame.get(kf.frame) }
+          : kf
+      );
+      updateClipData(callerClipId, { rotation: theta, crop_data: nextStoreKfs });
+    }
+
+    const clipId = selectedClip?.id;
+    if (!selectedProjectId || !clipId) return;
+
+    // 3: single surgical set_rotation, with rollback on failure.
+    const result = await framingActions.setRotation(selectedProjectId, clipId, theta);
+    if (!result.success) {
+      // Store rollback is keyed by clip id — always safe.
+      if (callerClipId) {
+        updateClipData(callerClipId, { rotation: previousRotation, crop_data: previousStoreKfs });
+      }
+      // Hook rollback only if the user is still on the same clip — the hook now
+      // holds a different clip's rotation/keyframes after a switch.
+      if (latestSelectedClipIdRef.current === callerClipId) {
+        setRotation(previousRotation);
+        clipHasUserEditsRef.current = false;
+        setFramingChangedSinceExport?.(false);
+      }
+      toast.error('Failed to save rotation', { message: result.error });
+      return;
+    }
+
+    // 4: persist each clamp-corrected keyframe surgically (design decision #5).
+    for (const kf of movedKeyframes) {
+      const res = await framingActions.updateCropKeyframe(selectedProjectId, clipId, kf.frame, {
+        x: kf.x, y: kf.y, width: kf.width, height: kf.height, origin: kf.origin,
+      });
+      if (!res.success) {
+        console.error('[FramingContainer] Failed to persist clamped keyframe after rotation:', res.error, { frame: kf.frame });
+      }
+    }
+  }, [rotation, setRotation, selectedClip, selectedClipId, selectedProjectId, updateClipData, onUserEdit, setFramingChangedSinceExport]);
 
   /**
    * Coordinated segment trim handler
@@ -952,6 +1033,7 @@ export function FramingContainer({
     handleAddSplit,
     handleRemoveSplit,
     handleSegmentSpeedChange,
+    handleSetRotation,
 
     // Persistence
     saveCurrentClipState,

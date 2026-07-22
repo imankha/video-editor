@@ -145,6 +145,8 @@ export function FramingModeView({
   // Crop state
   currentCropState,
   aspectRatio,
+  rotation = 0,
+  onSetRotation,
   keyframes,
   framerate,
   selectedCropKeyframeIndex,
@@ -365,6 +367,8 @@ export function FramingModeView({
                     videoMetadata={metadata}
                     currentCrop={currentCropState}
                     aspectRatio={aspectRatio}
+                    rotation={rotation}
+                    onSetRotation={onSetRotation}
                     onCropChange={onCropChange}
                     onCropComplete={onCropComplete}
                     zoom={zoom}
