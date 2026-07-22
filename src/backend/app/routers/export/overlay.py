@@ -360,6 +360,21 @@ def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_t
     """, (encode_data(highlights), effect_type, highlight_color, new_version, working_video_id))
 
 
+def _has_reveal_enabled_column(cursor) -> bool:
+    """T5250 deploy->migrate window tolerance (same class as T5630's _has_stage_columns).
+
+    Migrations do NOT auto-run on deploy (CLAUDE.md) -- v030 (add working_videos.
+    reveal_enabled) is applied by hitting the admin migrate endpoint AFTER a deploy, not
+    by the deploy itself. Between "code deployed" and "migration run", every profile DB
+    still lacks the column, so a hard `SELECT wv.reveal_enabled` 500s /overlay-data and
+    /overlay/render for EVERY user -- losing all regions in the Overlay screen. Checked
+    once per request (cheap; mirrors the migrations' own PRAGMA table_info idempotency
+    check) rather than caching, since a profile DB can be migrated between requests.
+    """
+    cols = {row[1] for row in cursor.execute("PRAGMA table_info(working_videos)").fetchall()}
+    return "reveal_enabled" in cols
+
+
 def _find_region_index(highlights: list, region_id: str) -> int:
     """Find index of region by ID. Returns -1 if not found."""
     for i, region in enumerate(highlights):
@@ -717,6 +732,13 @@ async def overlay_action(project_id: int, action: OverlayAction):
             elif action.action == "set_reveal_enabled":
                 if not action.data or action.data.reveal_enabled is None:
                     raise ValueError("set_reveal_enabled requires data.reveal_enabled")
+                # T5250: the reveal_enabled column requires the v030 migration. If it hasn't
+                # run yet (deploy->migrate window), fail clearly instead of a raw sqlite crash.
+                if not _has_reveal_enabled_column(cursor):
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Reveal animation is unavailable until the v030 migration runs (POST /api/admin/migrate).",
+                    )
                 cursor.execute("UPDATE working_videos SET reveal_enabled = ? WHERE id = ?", (int(action.data.reveal_enabled), working_video_id))
                 logger.info(f"[Overlay Action] Set reveal_enabled to {action.data.reveal_enabled}")
 
@@ -1636,10 +1658,14 @@ async def get_overlay_data(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        # T5250 deploy->migrate window (see _has_reveal_enabled_column): only SELECT the
+        # column when it exists, so a not-yet-migrated profile DB still returns regions
+        # instead of 500ing.
+        has_reveal_col = _has_reveal_enabled_column(cursor)
+        cursor.execute(f"""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
                    highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
-                   reveal_enabled, detections_data
+                   {"reveal_enabled," if has_reveal_col else ""} detections_data
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1689,7 +1715,10 @@ async def get_overlay_data(project_id: int):
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
             dim_strength = result['dim_strength']
-            reveal_enabled = bool(result['reveal_enabled'])
+            if has_reveal_col:
+                reveal_enabled = bool(result['reveal_enabled'])
+            # else: pre-migration row -- reveal_enabled stays at its False default above,
+            # which IS the setting's real default, not a bug-hiding fallback.
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1970,12 +1999,15 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
+        # T5250: tolerate the deploy->migrate window — SELECT reveal_enabled only when the
+        # v030 column exists (see _has_reveal_enabled_column), else default 0 (off).
+        has_reveal_col = _has_reveal_enabled_column(cursor)
+        cursor.execute(f"""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
                    wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
                    wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength,
-                   wv.reveal_enabled
+                   {"wv.reveal_enabled" if has_reveal_col else "0 as reveal_enabled"}
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
