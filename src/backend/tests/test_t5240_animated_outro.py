@@ -53,7 +53,17 @@ def _run_yavg(path: Path, chain: str) -> float:
     )
     lines = [ln for ln in r.stderr.splitlines() if "YAVG" in ln]
     assert lines, f"could not read luma from {path} (chain={chain})"
-    return float(lines[-1].split("YAVG=")[1].strip())
+    # Take the FIRST printed frame, not the last. `-frames:v 1` bounds the null
+    # MUXER to one frame, but does NOT bound the `metadata=print` FILTER — on older
+    # ffmpeg (6.0/6.1, i.e. Ubuntu's apt build used on CI) the filtergraph keeps
+    # pulling frames until the process winds down, so metadata prints for many
+    # frames (6.1 printed 18) even though only one is muxed. Both callers want the
+    # first matching frame (frame 0, or the first frame passing the `select`), which
+    # is always printed first in presentation order. `lines[-1]` silently read a
+    # post-flash DARK frame on CI while ffmpeg 7.1.x printed exactly one line and read
+    # white — the entire cross-build discrepancy. `lines[0]` is 235 (white) on 6.0,
+    # 6.1 AND 7.1.5; the encoded card frame 0 is byte-identical across builds.
+    return float(lines[0].split("YAVG=")[1].strip())
 
 
 def _yavg_at(path: Path, t: float, crop: str | None = None) -> float:
