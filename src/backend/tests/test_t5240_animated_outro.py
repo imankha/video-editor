@@ -45,18 +45,41 @@ def _info(w: int, h: int, has_audio: bool = True) -> dict:
     }
 
 
-def _yavg(path: Path, ss: float, crop: str | None = None) -> float:
-    """Average luma of the frame at `ss` seconds (optionally within a crop region)."""
-    vf = "signalstats,metadata=print:key=lavfi.signalstats.YAVG"
-    if crop:
-        vf = f"{crop},{vf}"
+def _run_yavg(path: Path, chain: str) -> float:
     r = subprocess.run(
-        ["ffmpeg", "-ss", f"{ss}", "-i", str(path), "-vf", vf, "-frames:v", "1", "-f", "null", "-"],
+        ["ffmpeg", "-i", str(path), "-vf", chain, "-vsync", "0",
+         "-frames:v", "1", "-an", "-f", "null", "-"],
         capture_output=True, text=True,
     )
     lines = [ln for ln in r.stderr.splitlines() if "YAVG" in ln]
-    assert lines, f"could not read luma at t={ss}"
+    assert lines, f"could not read luma from {path} (chain={chain})"
     return float(lines[-1].split("YAVG=")[1].strip())
+
+
+def _yavg_at(path: Path, t: float, crop: str | None = None) -> float:
+    """Average luma of the frame at ~`t` seconds, sampled SEEK-FREE.
+
+    Decodes from the start and `select`s the first frame with pts >= t (no `-ss`).
+    Input seeking (`-ss` before `-i`) is keyframe-based and NOT frame-accurate across
+    ffmpeg builds — it returned ~0.4s-shifted frames on CI, which silently moved the
+    flash/stagger samples off their windows (the original failure). Decoding forward and
+    selecting by timestamp is frame-accurate on every build.
+    """
+    chain = f"select='gte(t\\,{t})'"
+    if crop:
+        chain += f",{crop}"
+    chain += ",signalstats,metadata=print:key=lavfi.signalstats.YAVG"
+    return _run_yavg(path, chain)
+
+
+def _yavg_first_frame(path: Path, crop: str | None = None) -> float:
+    """Average luma of the VERY FIRST output frame (t=0), no seek, no select.
+
+    The strongest portable proof of the white-flash entrance: at t=0 the fade-from-white
+    is at fraction 0 => a fully white frame on every ffmpeg build."""
+    chain = f"{crop}," if crop else ""
+    chain += "signalstats,metadata=print:key=lavfi.signalstats.YAVG"
+    return _run_yavg(path, chain)
 
 
 @pytest.fixture
@@ -69,14 +92,15 @@ def card(tmp_path):
 
 
 def test_entrance_is_white_flash_not_black_fade(card):
-    """The card PUNCHES IN from white (bright first frame decaying fast), not a fade up from
+    """The card PUNCHES IN from white (frame 0 is white, decaying fast), not a fade up from
     black. The old T3950 card started near-black (fade=color=black); this pins the flash."""
     c = card()
-    first = _yavg(c, 0.01)          # inside the flash
-    after_flash = _yavg(c, OUTRO_FLASH_IN + 0.10)  # flash gone, card revealed
-    # White flash => the first frame is very bright...
-    assert first > 150.0, f"entrance is not a white flash (first-frame YAVG={first:.1f})"
-    # ...and it decays sharply once the flash clears (regression guard vs a static/lit card).
+    first = _yavg_first_frame(c)                    # t=0: fade-from-white at fraction 0
+    after_flash = _yavg_at(c, OUTRO_FLASH_IN + 0.15)  # flash cleared, card revealed
+    # White flash => the very first frame is (near-)white...
+    assert first > 150.0, f"entrance is not a white flash (frame-0 YAVG={first:.1f})"
+    # ...and it decays sharply once the flash clears (regression guard: a black fade-up
+    # would have frame 0 DARK and rising, the opposite signature).
     assert first - after_flash > 80.0, (
         f"no flash decay: first={first:.1f} after={after_flash:.1f}")
 
@@ -84,8 +108,8 @@ def test_entrance_is_white_flash_not_black_fade(card):
 def test_logo_reveals_over_time(card):
     """The logo fades/slides in: the card is dimmer during the reveal than once settled."""
     c = card()
-    early = _yavg(c, 0.20)   # flash gone, logo mid-reveal (dimmer, partly transparent)
-    settled = _yavg(c, 1.55)  # fully revealed + captions in
+    early = _yavg_at(c, 0.15)   # flash gone, logo mid-reveal (dimmer, partly transparent)
+    settled = _yavg_at(c, 1.55)  # fully revealed + captions in
     assert settled > early + 3.0, (
         f"logo/card does not brighten as it reveals: early={early:.1f} settled={settled:.1f}")
 
@@ -100,12 +124,14 @@ def test_captions_stagger_in(card):
     made_band = "crop=iw:ih*0.09:0:ih*0.13"   # "Made with", just above the logo
     url_band = "crop=iw:ih*0.14:0:ih*0.86"    # the URL, near the bottom edge
 
-    baseline = _yavg(c, OUTRO_MADE_IN_ST - 0.06, crop=made_band)  # before either caption
-    # A moment after "Made with" finishes fading and before the URL starts.
-    t_mid = OUTRO_URL_IN_ST + 0.03
-    made_mid = _yavg(c, t_mid, crop=made_band)
-    url_mid = _yavg(c, t_mid, crop=url_band)
-    url_end = _yavg(c, 1.55, crop=url_band)
+    baseline = _yavg_at(c, OUTRO_MADE_IN_ST - 0.06, crop=made_band)  # before either caption
+    # A moment BEFORE the URL starts (so URL is unambiguously still at baseline) but late
+    # enough that "Made with" has essentially finished fading in -> the two lines' windows
+    # do not overlap at this instant, which is exactly what "staggered" means.
+    t_mid = OUTRO_URL_IN_ST - 0.03
+    made_mid = _yavg_at(c, t_mid, crop=made_band)
+    url_mid = _yavg_at(c, t_mid, crop=url_band)
+    url_end = _yavg_at(c, 1.55, crop=url_band)
 
     # "Made with" has come in by t_mid...
     assert made_mid > baseline + 3.0, (
@@ -124,7 +150,7 @@ def test_captions_stagger_in(card):
 def test_animation_present_without_audio(card):
     """The animation is independent of the audio track (16:9 reels ship without audio)."""
     c = card(1920, 1080, has_audio=False)
-    first = _yavg(c, 0.01)
-    settled = _yavg(c, 1.55)
+    first = _yavg_first_frame(c)
+    settled = _yavg_at(c, 1.55)
     assert first > 150.0, f"no white flash on the no-audio card (first={first:.1f})"
     assert settled < first, "card should settle darker than the flash frame"
