@@ -166,6 +166,73 @@ font-family: ui-monospace, monospace; /* for timecodes */
 
 ---
 
+## Home / Card Patterns
+
+### Brand lockup (`LogoWithText`)
+
+One intentional horizontal unit — emblem left of a **single-line** "Reel Ballers"
+wordmark. Never force a fixed-width column (the old `w-[80px]` column split the
+wordmark into stacked "Reel" / icon / "Ballers" lines — a wrap accident, banned).
+
+```jsx
+<div className="inline-flex items-center gap-2 sm:gap-3">
+  <Logo size={40} />
+  <span className="text-2xl sm:text-3xl font-bold text-white leading-none tracking-tight whitespace-nowrap">
+    Reel Ballers
+  </span>
+</div>
+```
+
+- `whitespace-nowrap` guarantees the wordmark never re-wraps.
+- Sizes to content; center via the parent (`mx-auto` / `justify-center`).
+- Sizes in use: hero 40px / `text-2xl→3xl`, sign-in 64px / `text-xl`, end-card 112px / `text-3xl`.
+
+### Labeled metadata pill (rating / count chips)
+
+Generalized from `TagBadges`. Card metadata must be legible to a non-expert: bare
+dates, bare scores, and developer notation (chess `!!`/`!`) never reach the UI — the
+notation stays in constants (`RATING_NOTATION`), the UI shows the adjective.
+
+```jsx
+<span
+  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold"
+  style={{ color: RATING_BADGE_COLORS[r], backgroundColor: RATING_BACKGROUND_COLORS[r], borderColor: `${RATING_BADGE_COLORS[r]}4D` }}
+  title={label}
+  aria-label={label}
+>
+  <Star size={10} />{count} {RATING_ADJECTIVES[r]}
+</span>
+```
+
+- Every rating/score chip carries a human `title` **and** `aria-label`.
+- Label the noun a value measures: `Uploaded 6/11/2026` (not `6/11/2026`),
+  `Footage quality 25/100` (not `Quality: 25`).
+
+### Borderless inline filter rows
+
+Filter chip groups are borderless — an inline uppercase label followed by wrapping
+chips. Card chrome (`bg-gray-800/50 border rounded-lg`) is reserved for content
+cards, NOT control clusters (it adds weight, not meaning).
+
+```jsx
+<div className="flex flex-wrap items-center gap-1.5">
+  <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Status</span>
+  {/* chip buttons: px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded */}
+</div>
+```
+
+- Dense `text-xs` chips get `coarse-pointer:min-h-[44px]` so mobile taps meet the
+  44px floor while desktop stays compact.
+
+### Compact resume strip (2-item "continue")
+
+The "Continue Where You Left Off" strip is a 2-up `flex-1` row of buttons, shown on
+ALL widths (do not hide on mobile — resume is the highest-value mobile tap). Mobile
+drops the secondary metadata line (`hidden sm:block`) and shows icon + truncated
+name + chevron; `min-h-[44px]`. Distinct from the many-item carousel.
+
+---
+
 ## Layout Patterns
 
 ### Mode Views (Annotate, Framing, Overlay)
@@ -277,3 +344,4 @@ duration-300         /* panel animations */
 | Date | Change | Approved By |
 |------|--------|-------------|
 | 2026-02-09 | Initial style guide created | - |
+| 2026-07-22 | Home/card patterns: brand lockup, labeled metadata pills, borderless filter rows, compact resume strip (T5675) | user |

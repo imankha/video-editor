@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, EyeOff, Play, Crop, Layers, Share2, Target, Zap } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, CheckCircle, Gamepad2, Image, Filter, Star, Folder, Clock, ChevronRight, AlertTriangle, RefreshCw, Tag, Upload, X, FileVideo, Loader2, Pencil, Eye, EyeOff, Play, Crop, Layers, Share2, Target, Zap, Calendar } from 'lucide-react';
 import { LogoWithText } from './Logo';
 import { MediaPlayer } from './MediaPlayer';
 import { useAppState } from '../contexts';
@@ -12,7 +12,7 @@ import { Button } from './shared/Button';
 import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { generateClipName, getProjectDisplayName, getClipDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock, compareGameTime } from '../utils/timeFormat';
-import { RATING_NOTATION, RATING_BADGE_COLORS } from './shared/clipConstants';
+import { RATING_ADJECTIVES, RATING_BADGE_COLORS, RATING_BACKGROUND_COLORS } from './shared/clipConstants';
 import { ProfileDropdown } from './ProfileDropdown';
 import { ProfileSportButton } from './ProfileSportButton';
 import { CreditBalance } from './CreditBalance';
@@ -586,35 +586,35 @@ export function ProjectManager({
       </div>
 
       {/* Header — pt-10 clears the fixed top-right controls on mobile */}
-      <div className="text-center pt-10 sm:pt-0 mb-6">
-        <LogoWithText className="mx-auto mb-4" />
-        <p className="text-gray-400">Share Your Player's Brilliance</p>
+      <div className="text-center pt-10 sm:pt-0 mb-4">
+        <LogoWithText className="mx-auto mb-3" logoSize={40} textClassName="text-2xl sm:text-3xl" />
+        <p className="text-gray-400 text-sm">Share Your Player's Brilliance</p>
       </div>
 
-      {/* Continue Where You Left Off - Recent Section (hidden on mobile) */}
+      {/* Continue Where You Left Off - compact 2-up on mobile, full on desktop */}
       {showRecentSection && (
-        <div className="hidden sm:block w-full max-w-2xl mb-6">
-          <div className="flex items-center gap-2 mb-3">
+        <div className="w-full max-w-2xl mb-4">
+          <div className="flex items-center gap-2 mb-2 sm:mb-3">
             <Clock size={14} className="text-gray-500" />
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Continue Where You Left Off
             </h2>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             {/* Recent Game (left) */}
             {recentItems.recentGame && (
               <button
                 onClick={() => onLoadGame(recentItems.recentGame.id)}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${GAME.bgSubtle} ${GAME.borderSubtle} ${GAME.bgSubtleHover}`}
+                className={`flex-1 min-w-0 min-h-[44px] flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all text-left ${GAME.bgSubtle} ${GAME.borderSubtle} ${GAME.bgSubtleHover}`}
               >
-                <div className={`p-2 rounded-lg ${GAME.bgIcon}`}>
+                <div className={`p-1.5 sm:p-2 rounded-lg ${GAME.bgIcon}`}>
                   <Gamepad2 size={18} className={GAME.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-white font-medium truncate block">
                     {recentItems.recentGame.name}
                   </span>
-                  <div className="text-xs text-gray-500">
+                  <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentGame.clip_count} clip{recentItems.recentGame.clip_count !== 1 ? 's' : ''} annotated
                   </div>
                 </div>
@@ -638,9 +638,9 @@ export function ProjectManager({
                     onSelectProject(p.id);
                   }
                 }}
-                className={`flex-1 flex items-center gap-3 p-3 rounded-lg border transition-all text-left ${REEL.bgSubtle} ${REEL.borderSubtle} ${REEL.bgSubtleHover}`}
+                className={`flex-1 min-w-0 min-h-[44px] flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border transition-all text-left ${REEL.bgSubtle} ${REEL.borderSubtle} ${REEL.bgSubtleHover}`}
               >
-                <div className={`p-2 rounded-lg ${REEL.bgIcon}`}>
+                <div className={`p-1.5 sm:p-2 rounded-lg ${REEL.bgIcon}`}>
                   <FolderOpen size={18} className={REEL.accent} />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -652,7 +652,7 @@ export function ProjectManager({
                       <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="hidden sm:block text-xs text-gray-500">
                     {recentItems.recentProject.clip_count} clip{recentItems.recentProject.clip_count !== 1 ? 's' : ''}
                     {' · '}
                     {recentItems.recentProject.has_final_video ? 'Complete' :
@@ -668,7 +668,7 @@ export function ProjectManager({
       )}
 
       {/* Tab Navigation - styled to match ModeSwitcher */}
-      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-6">
+      <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 mb-4">
         <button
           onClick={() => setActiveTab('games')}
           className={`flex items-center gap-2 px-3 py-2 sm:px-4 rounded-md font-medium text-sm transition-all duration-200 ${
@@ -708,7 +708,7 @@ export function ProjectManager({
       </div>
 
       {/* Action Button */}
-      <div className="mb-4 sm:mb-8">
+      <div className="mb-4 sm:mb-5">
         {activeTab === 'games' ? (
           <Button
             variant="success"
@@ -863,115 +863,109 @@ export function ProjectManager({
           <div className="w-full max-w-2xl">
             {/* Filters - only show when useful */}
             {showFilters && (
-              <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700 space-y-3">
+              <div className="mb-3 space-y-1.5">
                 {/* Status Filter */}
                 {filterCounts.showStatusFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Status</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { value: 'all', label: 'All' },
-                        // T66: 'complete' and 'uncompleted' removed - completed projects are archived
-                        { value: 'overlay', label: 'In Overlay', color: 'blue' },
-                        { value: 'editing', label: 'Framing Started', color: 'blue' },
-                        { value: 'exported', label: 'Exported', color: 'purple' },
-                        { value: 'not_started', label: 'Not Started', color: 'gray' }
-                      ].map(opt => {
-                        const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
-                        // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
-                        if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
-                        return (
-                          <button
-                            key={opt.value}
-                            onClick={() => setStatusFilter(opt.value)}
-                            className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                              statusFilter === opt.value
-                                ? opt.color === 'blue' ? 'bg-blue-600 text-white'
-                                  : opt.color === 'gray' ? 'bg-gray-600 text-white'
-                                  : `${REEL.bg} text-white`
-                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                            }`}
-                          >
-                            {opt.label} ({count})
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Status</span>
+                    {[
+                      { value: 'all', label: 'All' },
+                      // T66: 'complete' and 'uncompleted' removed - completed projects are archived
+                      { value: 'overlay', label: 'In Overlay', color: 'blue' },
+                      { value: 'editing', label: 'Framing Started', color: 'blue' },
+                      { value: 'exported', label: 'Exported', color: 'purple' },
+                      { value: 'not_started', label: 'Not Started', color: 'gray' }
+                    ].map(opt => {
+                      const count = opt.value === 'all' ? filterCounts.all : filterCounts[opt.value];
+                      // Never hide the ACTIVE chip, even at 0 matches — it must stay clickable to clear
+                      if (count === 0 && opt.value !== 'all' && opt.value !== statusFilter) return null;
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => setStatusFilter(opt.value)}
+                          className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                            statusFilter === opt.value
+                              ? opt.color === 'blue' ? 'bg-blue-600 text-white'
+                                : opt.color === 'gray' ? 'bg-gray-600 text-white'
+                                : `${REEL.bg} text-white`
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                        >
+                          {opt.label} ({count})
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
                 {/* Aspect Ratio Filter */}
                 {filterCounts.showAspectFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Aspect Ratio</label>
-                    <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Aspect Ratio</span>
+                    <button
+                      onClick={() => setAspectFilter('all')}
+                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        aspectFilter === 'all'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {Object.entries(filterCounts.aspects).map(([ratio, count]) => (
                       <button
-                        onClick={() => setAspectFilter('all')}
-                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                          aspectFilter === 'all'
+                        key={ratio}
+                        onClick={() => setAspectFilter(ratio)}
+                        className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                          aspectFilter === ratio
                             ? `${REEL.bg} text-white`
                             : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                         }`}
                       >
-                        All
+                        {ratio} ({count})
                       </button>
-                      {Object.entries(filterCounts.aspects).map(([ratio, count]) => (
-                        <button
-                          key={ratio}
-                          onClick={() => setAspectFilter(ratio)}
-                          className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                            aspectFilter === ratio
-                              ? `${REEL.bg} text-white`
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
-                        >
-                          {ratio} ({count})
-                        </button>
-                      ))}
-                    </div>
+                    ))}
                   </div>
                 )}
 
                 {/* Creation Type Filter */}
                 {filterCounts.showCreationFilter && (
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1.5">Created By</label>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        onClick={() => setCreationFilter('all')}
-                        className={`px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'all'
-                            ? `${REEL.bg} text-white`
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                      >
-                        All
-                      </button>
-                      <button
-                        onClick={() => setCreationFilter('auto')}
-                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'auto'
-                            ? 'bg-yellow-600 text-white'
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                        title="Auto-created from 5-star clips"
-                      >
-                        <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
-                        Auto ({filterCounts.auto})
-                      </button>
-                      <button
-                        onClick={() => setCreationFilter('custom')}
-                        className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors ${
-                          creationFilter === 'custom'
-                            ? `${REEL.bg} text-white`
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                        }`}
-                        title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
-                      >
-                        <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
-                        Custom ({filterCounts.custom})
-                      </button>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mr-1">Created By</span>
+                    <button
+                      onClick={() => setCreationFilter('all')}
+                      className={`px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'all'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setCreationFilter('auto')}
+                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'auto'
+                          ? 'bg-yellow-600 text-white'
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title="Auto-created from 5-star clips"
+                    >
+                      <Star size={12} className={creationFilter === 'auto' ? 'text-white' : 'text-yellow-400'} />
+                      Auto ({filterCounts.auto})
+                    </button>
+                    <button
+                      onClick={() => setCreationFilter('custom')}
+                      className={`flex items-center gap-1 px-2.5 py-1 coarse-pointer:min-h-[44px] text-xs rounded transition-colors ${
+                        creationFilter === 'custom'
+                          ? `${REEL.bg} text-white`
+                          : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      }`}
+                      title={`Manually created ${SECTION_NAMES.DRAFTS_LOWER}`}
+                    >
+                      <Folder size={12} className={creationFilter === 'custom' ? 'text-white' : REEL.accent} />
+                      Custom ({filterCounts.custom})
+                    </button>
                   </div>
                 )}
               </div>
@@ -1294,29 +1288,52 @@ export function GamesListSkeleton({ count = 4 }) {
  * counts, quality score, tag badges). Shared by the expired and normal GameCard
  * variants so the two never drift.
  */
-function GameMetaRow({ game }) {
+function RatingChip({ count, rating }) {
+  // Labeled rating pill (TagBadges recipe). The adjective is the human-readable
+  // label; the chess-notation constants (RATING_NOTATION) never surface in the UI.
+  const adjective = RATING_ADJECTIVES[rating];
+  const label = `${count} ${adjective.toLowerCase()} clip${count !== 1 ? 's' : ''}`;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-      <span>{new Date(game.created_at).toLocaleDateString()}</span>
+    <span
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[11px] font-semibold"
+      style={{
+        color: RATING_BADGE_COLORS[rating],
+        backgroundColor: RATING_BACKGROUND_COLORS[rating],
+        borderColor: `${RATING_BADGE_COLORS[rating]}4D`, // ~30% alpha to match TagBadges
+      }}
+      title={label}
+      aria-label={label}
+    >
+      <Star size={10} />
+      {count} {adjective}
+    </span>
+  );
+}
+
+function GameMetaRow({ game }) {
+  const uploadedLabel = `Uploaded ${new Date(game.created_at).toLocaleDateString()}`;
+  const qualityScore = (game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-sm text-gray-400">
+      <span className="inline-flex items-center gap-1" aria-label={uploadedLabel}>
+        <Calendar size={12} className="text-gray-500" />
+        Uploaded {new Date(game.created_at).toLocaleDateString()}
+      </span>
       <span>•</span>
       <span>{game.clip_count} clip{game.clip_count !== 1 ? 's' : ''}</span>
       {game.clip_count > 0 && (
         <>
           {game.brilliant_count > 0 && (
-            <>
-              <span>•</span>
-              <span style={{ color: RATING_BADGE_COLORS[5] }}>{game.brilliant_count}{RATING_NOTATION[5]}</span>
-            </>
+            <RatingChip count={game.brilliant_count} rating={5} />
           )}
           {game.good_count > 0 && (
-            <>
-              <span>•</span>
-              <span style={{ color: RATING_BADGE_COLORS[4] }}>{game.good_count}{RATING_NOTATION[4]}</span>
-            </>
+            <RatingChip count={game.good_count} rating={4} />
           )}
-          <span className="hidden sm:inline">•</span>
-          <span className="hidden sm:inline" title="Quality score: brilliant×3 + good×2 + interesting×0 + mistake×(−1) + blunder×(−2)">
-            Quality: {(game.brilliant_count || 0) * 3 + (game.good_count || 0) * 2 + (game.mistake_count || 0) * -1 + (game.blunder_count || 0) * -2}
+          <span
+            className="hidden sm:inline"
+            title="Footage quality score (0-100), higher is better"
+          >
+            Footage quality {qualityScore}/100
           </span>
           <TagBadges tagBadges={game.tag_badges} />
         </>

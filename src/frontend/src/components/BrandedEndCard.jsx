@@ -26,7 +26,6 @@ export function BrandedEndCard({
           logoAriaLabel="Replay"
           logoSize={112}
           textClassName="text-3xl"
-          widthClassName="w-[150px]"
         />
       </div>
 
