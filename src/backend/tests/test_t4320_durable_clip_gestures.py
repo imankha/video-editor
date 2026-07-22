@@ -272,6 +272,39 @@ async def test_profile_create_survives_machine_replacement(dur_env):
 
 
 @pytest.mark.asyncio
+async def test_two_profiles_created_back_to_back_both_have_r2_objects(dur_env):
+    """The EXACT prod failure mode (T5310): arshia created profiles in rapid pairs
+    and the SECOND of each pair lost its fire-and-forget sync -> registered profile,
+    no R2 profile.sqlite. With the durable-sync fix, two profiles created back-to-back
+    must BOTH have their R2 object present before their 200, and both must survive a
+    machine swap that leaves only R2."""
+    app, fake, base, game_id = dur_env
+    from app.storage import APP_ENV
+
+    async with _client(app) as c:
+        r1 = await c.post("/api/profiles", json={"name": "Maddie U13", "color": "#a11"})
+        r2 = await c.post("/api/profiles", json={"name": "Ella U13", "color": "#b22"})
+    assert r1.status_code == 200, r1.text
+    assert r2.status_code == 200, r2.text
+    id1, id2 = r1.json()["id"], r2.json()["id"]
+
+    key1 = f"{APP_ENV}/users/{USER_ID}/profiles/{id1}/profile.sqlite"
+    key2 = f"{APP_ENV}/users/{USER_ID}/profiles/{id2}/profile.sqlite"
+    # The second profile's object is the one that went missing on prod — assert BOTH.
+    assert fake.has(key1), "first profile.sqlite never reached R2 despite a 200"
+    assert fake.has(key2), "SECOND profile.sqlite never reached R2 despite a 200 (the T5310 prod bug)"
+
+    _simulate_machine_replacement(base)
+    _reload_from_r2()
+
+    from app.services.user_db import get_profiles
+    ids = [p["id"] for p in get_profiles(USER_ID)]
+    assert id1 in ids and id2 in ids, f"a back-to-back profile fell out of the registry (ids={ids})"
+    assert fake.has(key1) and fake.has(key2), \
+        "a registered back-to-back profile has no R2 object after machine swap (Direction-A regression)"
+
+
+@pytest.mark.asyncio
 async def test_profile_create_forced_sync_failure_does_not_register(dur_env):
     """If the new profile.sqlite fails to sync, the create returns 503 and the
     registry row is NEVER written — never a 'missing' registered profile."""
