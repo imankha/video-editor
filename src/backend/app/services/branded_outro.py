@@ -48,9 +48,16 @@ logger = logging.getLogger(__name__)
 # a 1.75s card build on a cold start is negligible).
 _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
 
-# ~2.4s: room for the emblem to spin in, the play button to land, and the captions to
-# stagger — still short enough to not feel like an ad break.
-OUTRO_DURATION = 2.4
+# ~4.5s, structured as READ -> HOLD -> REVEAL -> HOLD so viewers can actually read both
+# lines of text (a fade-in on the brand would eat the read time). Timeline:
+#   0.00       white-flash frame (deterministic white frame 0)
+#   0.00-1.30  logo animates (ring spins in, play button lands) WITH the brand text already
+#              fully visible -- "Made with" + "Reel Ballers" never fade, they are present
+#              from t=0 so there is nothing to wait to read
+#   1.30-2.60  HOLD: logo resolved, "Made With Reel Ballers" static -> ~1.3s to read it
+#   2.60-2.95  REVEAL: tagline + URL fade in TOGETHER (the only staged elements)
+#   2.95-4.50  HOLD: tagline + URL static -> ~1.55s to read them, then the card ends
+OUTRO_DURATION = 4.5
 # Entrance beat: a quick WHITE FLASH (the shared "flash" motion vocabulary with the animated
 # player intro, T5210). It gives a DETERMINISTIC white frame 0 on every ffmpeg build (proven
 # portable) and reveals the spinning emblem beneath it. (Was OUTRO_FADE_IN=0.4 black fade.)
@@ -58,23 +65,22 @@ OUTRO_FLASH_IN = 0.15
 # Emblem reveal (T5240 rework): the logo is assembled from its SVG PARTS, not the flat lockup.
 # The film-reel RING (outer ring + 4 sprocket holes, gradient #a855f7->#6366f1) SPINS in,
 # decelerating (ease-out) to a stop; then the white PLAY triangle LANDS with a button-press
-# bounce (ease-out-back overshoot). Ring + triangle resolve into the whole logo.
-OUTRO_SPIN_D = 1.0            # ring spins over the first second, easing to a stop
+# bounce (ease-out-back overshoot). Ring + triangle resolve into the whole logo. The brand
+# text is present from t=0 alongside this (it does NOT wait for the logo to finish).
+OUTRO_SPIN_D = 1.0           # ring spins over the first second, easing to a stop
 OUTRO_SPIN_TURNS = 3         # full rotations before it settles
 OUTRO_RING_FADE_ST = 0.05
 OUTRO_RING_FADE_D = 0.40
 OUTRO_PLAY_ST = 1.00         # play triangle lands just as the ring comes to rest
 OUTRO_PLAY_D = 0.32          # press/bounce (scale overshoot) duration
 OUTRO_PLAY_FADE_D = 0.12
-# Staggered captions after the logo resolves: the "Made with" + "Reel Ballers" brand unit
-# comes in first, then the tagline, then the URL. Each fades over OUTRO_CAPTION_FADE_D and
-# holds to the end.
-OUTRO_BRAND_IN_ST = 1.30
-OUTRO_TAGLINE_IN_ST = 1.62
-OUTRO_URL_IN_ST = 1.86
-OUTRO_CAPTION_FADE_D = 0.28
+# Staged reveal: "Made with" + "Reel Ballers" are ALWAYS visible (present from t=0, no fade
+# -- viewers must be able to read them). Only the tagline + URL are staged: after a ~1.3s
+# read-hold on the brand, they fade in TOGETHER over OUTRO_REVEAL_FADE_D, then hold to the end.
+OUTRO_REVEAL_ST = 2.60       # tagline + URL begin fading in (after the brand read-hold)
+OUTRO_REVEAL_FADE_D = 0.35
 # Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
-_CARD_VERSION = "v4-spin-play"
+_CARD_VERSION = "v5-read-hold"
 MADE_WITH_TEXT = "Made with"
 BRAND_TEXT = "Reel Ballers"
 TAGLINE_TEXT = "Share Your Player's Brilliance"
@@ -222,10 +228,14 @@ def _probe_media(path: str) -> dict:
     }
 
 
-def _stagger_alpha(start: float) -> str:
-    """drawtext alpha ramp: 0 before `start`, linear up over OUTRO_CAPTION_FADE_D, then holds 1."""
-    end = start + OUTRO_CAPTION_FADE_D
-    return f"if(lt(t,{start}),0,if(lt(t,{end}),(t-{start})/{OUTRO_CAPTION_FADE_D},1))"
+def _reveal_alpha() -> str:
+    """drawtext alpha ramp for the STAGED reveal (tagline + URL): 0 during the brand
+    read-hold, linear up over the reveal fade at OUTRO_REVEAL_ST, then holds 1 to the end."""
+    end = OUTRO_REVEAL_ST + OUTRO_REVEAL_FADE_D
+    return (
+        f"if(lt(t,{OUTRO_REVEAL_ST}),0,"
+        f"if(lt(t,{end}),(t-{OUTRO_REVEAL_ST})/{OUTRO_REVEAL_FADE_D},1))"
+    )
 
 
 def _build_outro_card(card_path: str, info: dict) -> None:
@@ -319,19 +329,20 @@ def _build_outro_card(card_path: str, info: dict) -> None:
             # bounce scales about that center so ring + triangle stay registered).
             f"[0:v][ring]overlay=x=(W-w)/2:y={emblem_top}[base0];"
             f"[base0][play]overlay=x=(W-w)/2:y='{emblem_cy}-h/2'[base];"
-            # Captions stagger in after the logo resolves: brand unit, tagline, URL.
+            # Brand unit ("Made with" + "Reel Ballers"): ALWAYS visible -- present from t=0
+            # with no alpha ramp, so there is nothing to wait to read (the flash whites out
+            # frame 0, then the brand is fully legible immediately behind it).
             f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"
-            f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y}:"
-            f"alpha='{_stagger_alpha(OUTRO_BRAND_IN_ST)}',"
+            f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y},"
             f"drawtext=fontfile='{font}':text='{BRAND_TEXT}':"
-            f"fontsize={brand_fs}:fontcolor={_BRAND_COLOR}:x=(w-text_w)/2:y={brand_y}:"
-            f"alpha='{_stagger_alpha(OUTRO_BRAND_IN_ST)}',"
+            f"fontsize={brand_fs}:fontcolor={_BRAND_COLOR}:x=(w-text_w)/2:y={brand_y},"
+            # Staged reveal: tagline + URL fade in TOGETHER after the brand read-hold.
             f"drawtext=fontfile='{font}':textfile='{tagfile}':"
             f"fontsize={tag_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={tag_y}:"
-            f"alpha='{_stagger_alpha(OUTRO_TAGLINE_IN_ST)}',"
+            f"alpha='{_reveal_alpha()}',"
             f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
             f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y}:"
-            f"alpha='{_stagger_alpha(OUTRO_URL_IN_ST)}',"
+            f"alpha='{_reveal_alpha()}',"
             # Entrance flash: deterministic white frame 0 on every ffmpeg build.
             f"fade=t=in:st=0:d={OUTRO_FLASH_IN}:color=white,"
             f"setsar={info['sar']},format={pix_fmt}[v]"
