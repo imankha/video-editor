@@ -34,7 +34,7 @@ except ImportError:
     torch = None
 
 from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStage, ExportStatus
-from ...database import get_db_connection
+from ...database import column_exists, get_db_connection
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...queries import latest_working_clips_subquery
 from ...services.clip_cache import get_clip_cache
@@ -2083,10 +2083,12 @@ async def _run_multi_clip_background(
 
             with get_db_connection() as conn:
                 cursor = conn.cursor()
+                # T5640: tolerate the deploy->migrate window (v029 rotation column may be absent).
+                _rot = "wc.rotation" if column_exists(cursor, "working_clips", "rotation") else "0.0 as rotation"
                 cursor.execute(f"""
                     SELECT
                         wc.id, wc.raw_clip_id, wc.uploaded_filename,
-                        wc.crop_data, wc.segments_data, wc.sort_order, wc.rotation,
+                        wc.crop_data, wc.segments_data, wc.sort_order, {_rot},
                         rc.filename as raw_filename, rc.name as clip_name,
                         rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
                         rc.end_time as raw_end_time,

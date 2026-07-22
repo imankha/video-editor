@@ -77,6 +77,20 @@ def has_sync_pending(user_id: str) -> bool:
     """Check if this user has unsynced writes from a previous request."""
     return _sync_pending_path(user_id).exists()
 
+
+def column_exists(cursor, table: str, column: str) -> bool:
+    """True if `column` exists on `table`.
+
+    Tolerates the deploy->migrate window: versioned migrations run manually (not on
+    deploy/startup), so a hot read path must not crash on a column a not-yet-run
+    migration will add. Callers SELECT the column only when present and default it
+    otherwise (the column's own default is the correct value during the window).
+    `table`/`column` are internal constants, never user input. Mirrors T5630's
+    _has_stage_columns pattern.
+    """
+    cursor.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cursor.fetchall())
+
 # Query timing threshold for slow query warnings (in seconds)
 SLOW_QUERY_THRESHOLD = 0.1  # 100ms - warn if query takes this long
 

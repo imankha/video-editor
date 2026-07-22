@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from app.analytics import record_milestone
 from app.database import (
+    column_exists,
     get_db_connection,
     get_raw_clips_path,
 )
@@ -575,6 +576,14 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 # (which only writes crop_data/segments_data).
                 if action.data is None or action.data.rotation is None:
                     raise ValueError("set_rotation requires data.rotation")
+                # T5640: the rotation column requires the v029 migration. If it hasn't run
+                # yet (deploy->migrate window), fail with a clear, actionable error rather
+                # than a raw sqlite crash.
+                if not column_exists(cursor, "working_clips", "rotation"):
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Rotation is unavailable until the v029 migration runs (POST /api/admin/migrate).",
+                    )
                 cursor.execute(
                     "UPDATE working_clips SET rotation = ? WHERE id = ? AND project_id = ?",
                     (float(action.data.rotation), clip_id, project_id),
@@ -1349,6 +1358,14 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
 
         # Get working clips with resolved filenames, metadata, and game video info
         # Only show the latest version of each clip (grouped by end_time)
+        # T5640: tolerate the deploy->migrate window — select wc.rotation only when the
+        # v029 column exists, else default 0.0, so this hot path never crashes (and never
+        # loses the whole clip list) on an un-migrated DB.
+        _rot_select = (
+            "wc.rotation as wc_rotation"
+            if column_exists(cursor, "working_clips", "rotation")
+            else "0.0 as wc_rotation"
+        )
         cursor.execute(f"""
             SELECT
                 wc.id,
@@ -1363,7 +1380,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 wc.width as wc_width,
                 wc.height as wc_height,
                 wc.fps as wc_fps,
-                wc.rotation as wc_rotation,
+                {_rot_select},
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -2112,10 +2129,14 @@ async def update_working_clip(
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # T5640: the rotation column arrives with the v029 migration. Tolerate the
+        # deploy->migrate window — read/write it only when present, else treat it as 0.0.
+        _has_rot = column_exists(cursor, "working_clips", "rotation")
+
         # Fetch current clip data
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-                   crop_data, timing_data, segments_data, rotation
+                   crop_data, timing_data, segments_data, {'rotation' if _has_rot else '0.0 as rotation'}
             FROM working_clips
             WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
@@ -2169,13 +2190,8 @@ async def update_working_clip(
             raw_clip = cursor.fetchone()
             raw_clip_version = raw_clip['boundaries_version'] if raw_clip and raw_clip['boundaries_version'] else 1
 
-            cursor.execute("""
-                INSERT INTO working_clips (
-                    project_id, raw_clip_id, uploaded_filename, sort_order, version,
-                    crop_data, timing_data, segments_data, raw_clip_version,
-                    width, height, fps, rotation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
+            # T5640: include the rotation column only when it exists (deploy->migrate window).
+            _insert_params = [
                 project_id,
                 current_clip['raw_clip_id'],
                 current_clip['uploaded_filename'],
@@ -2190,11 +2206,21 @@ async def update_working_clip(
                 current_clip['width'] if 'width' in current_clip.keys() else None,
                 current_clip['height'] if 'height' in current_clip.keys() else None,
                 current_clip['fps'] if 'fps' in current_clip.keys() else None,
-                # T5640: carry the rotation angle forward (use the incoming value if
-                # this PUT changed it, else the current clip's angle).
-                float(update.rotation) if update.rotation is not None else float(current_rotation),
                 # exported_at defaults to NULL for new version (not exported yet)
-            ))
+            ]
+            if _has_rot:
+                # T5640: carry the rotation angle forward (incoming value if this PUT
+                # changed it, else the current clip's angle).
+                _insert_params.append(
+                    float(update.rotation) if update.rotation is not None else float(current_rotation)
+                )
+            cursor.execute(f"""
+                INSERT INTO working_clips (
+                    project_id, raw_clip_id, uploaded_filename, sort_order, version,
+                    crop_data, timing_data, segments_data, raw_clip_version,
+                    width, height, fps{', rotation' if _has_rot else ''}
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?{', ?' if _has_rot else ''})
+            """, _insert_params)
             conn.commit()
 
             new_clip_id = cursor.lastrowid
@@ -2223,7 +2249,7 @@ async def update_working_clip(
         if update.segments_data is not None:
             updates.append("segments_data = ?")
             params.append(normalize_and_encode(update.segments_data))
-        if update.rotation is not None:
+        if update.rotation is not None and _has_rot:
             updates.append("rotation = ?")
             params.append(float(update.rotation))
 
