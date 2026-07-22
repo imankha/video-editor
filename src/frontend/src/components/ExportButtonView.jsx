@@ -60,12 +60,10 @@ const ExportButtonView = forwardRef(function ExportButtonView({
   fillEnabled,
   fillOpacity,
   dimStrength,
-  revealEnabled,
   onStrokeWidthChange,
   onFillEnabledChange,
   onFillOpacityChange,
   onDimStrengthChange,
-  onRevealEnabledChange,
 
   // Config/labels
   HIGHLIGHT_EFFECT_LABELS,
@@ -281,21 +279,6 @@ const ExportButtonView = forwardRef(function ExportButtonView({
                 }}
                 disabled={isCurrentlyExporting}
                 className="w-24 accent-blue-500"
-              />
-            </div>
-
-            {/* Reveal Animation (T5250) — opt-in entrance/exit bloom+fade, default off */}
-            <div className="flex items-center justify-between">
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-gray-200">Reveal Animation</span>
-                <span className="text-xs text-gray-400">
-                  {revealEnabled ? 'Spotlight blooms in / fades out' : 'Off (pops on/off)'}
-                </span>
-              </div>
-              <Toggle
-                checked={!!revealEnabled}
-                onChange={onRevealEnabledChange}
-                disabled={isCurrentlyExporting}
               />
             </div>
           </>

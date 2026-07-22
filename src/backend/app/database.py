@@ -648,7 +648,6 @@ def ensure_database():
                 fill_enabled INTEGER DEFAULT 1,
                 fill_opacity REAL DEFAULT 0.20,
                 dim_strength REAL DEFAULT 0.20,
-                reveal_enabled INTEGER DEFAULT 0,
                 detections_data BLOB,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE

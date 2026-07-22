@@ -21,12 +21,8 @@
  *   - radiusScale:  multiplies radiusX / radiusY about the ellipse center (contract-in:
  *                   starts LARGER than 1 and tightens to 1.0 = form-fitting)
  *
- * SETTING-GATED (default OFF): the reveal is an opt-in per-project setting (alongside the
- * existing spotlight shape/stroke/fill/dim tuning — same panel, same gesture-based surgical
- * persistence pattern). `enabled` is the gate; when false this returns the identity (1, 1)
- * regardless of time/bounds, so the spotlight renders EXACTLY as it did before this feature
- * existed. The gate lives HERE (not scattered at call sites) so preview and export can't
- * drift on how "off" is decided — mirrored identically in the two backend copies.
+ * ALWAYS-ON: the reveal is standard behavior for every spotlight — there is no setting or
+ * gate. Preview and export apply it unconditionally, so they can't drift on whether it's on.
  */
 
 // Timing/easing constants. Mirror in spotlight_reveal.py + video_processing.py.
@@ -45,12 +41,10 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  * @param {number} currentTime
  * @param {number} startTime
  * @param {number} endTime
- * @param {boolean} [enabled=true] - setting gate; false = identity (feature off)
  * @returns {{opacityFactor: number, radiusScale: number}}
  */
-export function computeSpotlightReveal(currentTime, startTime, endTime, enabled = true) {
+export function computeSpotlightReveal(currentTime, startTime, endTime) {
   const NONE = { opacityFactor: 1, radiusScale: 1 };
-  if (!enabled) return NONE;
   if (startTime == null || endTime == null) return NONE;
 
   const dur = endTime - startTime;

@@ -263,10 +263,6 @@ class LocalGPUProcessor(VideoProcessor):
 
             sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
 
-            # T5250: reveal is an opt-in per-project setting (default False — off, byte-
-            # identical to pre-T5250 rendering).
-            reveal_enabled = bool((overlay_settings or {}).get('reveal_enabled', False))
-
             frame_idx = 0
             try:
                 while True:
@@ -293,7 +289,6 @@ class LocalGPUProcessor(VideoProcessor):
                             # render path matches the editor preview + the primary export.
                             reveal_opacity, reveal_scale = compute_spotlight_reveal(
                                 current_time, active_region["start_time"], active_region["end_time"],
-                                reveal_enabled,
                             )
                             frame = KeyframeInterpolator.render_highlight_on_frame(
                                 frame, highlight, (width, height), None, effect_type,

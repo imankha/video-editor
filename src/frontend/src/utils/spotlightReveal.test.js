@@ -91,30 +91,4 @@ describe('computeSpotlightReveal', () => {
     expect(computeSpotlightReveal(1, 5, 5)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // zero-length
     expect(computeSpotlightReveal(1, 5, 2)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // inverted
   });
-
-  // T5250 follow-up: the reveal is an opt-in per-project setting, default OFF. `enabled`
-  // is a 4th param on the shared spec itself (not a pre-check at the call site) so preview
-  // and export decide "off" identically — mirrored in test_spotlight_reveal.py.
-  describe('enabled gate (default OFF setting)', () => {
-    it('defaults to enabled=true when the 4th arg is omitted (back-compat)', () => {
-      const withArg = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5, true);
-      const omitted = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5);
-      expect(omitted).toEqual(withArg);
-    });
-
-    it('enabled=false returns the identity at every point in the cycle — byte-identical to pre-T5250 rendering', () => {
-      const dur = 5;
-      for (const t of [0, ENTRANCE_SEC / 2, ENTRANCE_SEC, 2.5, dur - EXIT_SEC / 2, dur]) {
-        expect(computeSpotlightReveal(t, 0, dur, false)).toEqual({ opacityFactor: 1, radiusScale: 1 });
-      }
-    });
-
-    it('enabled=false at exact region start does NOT pop invisible — identity, not the entrance-start scale', () => {
-      // Sanity check that "off" isn't just "always mid-entrance" — it must skip the
-      // envelope entirely, not evaluate it and hide the result.
-      const r = computeSpotlightReveal(0, 0, 5, false);
-      expect(r.opacityFactor).toBe(1);
-      expect(r.radiusScale).toBe(1);
-    });
-  });
 });

@@ -121,9 +121,9 @@ class TestTrackImports:
         from app.migrations.profile_db import RUNNER, MIGRATIONS
         # Version count/latest asserted dynamically, not hardcoded: sibling in-flight
         # branches (T5630 v028, T5640 v029) add migrations to this same track and will
-        # co-exist with this branch's v030 after merge, so a fixed literal here breaks
-        # on every such addition. Assert invariants instead: no duplicate/out-of-order
-        # versions, starts at 1, and RUNNER.latest_version tracks the actual max.
+        # co-exist after merge, so a fixed literal here breaks on every such addition.
+        # Assert invariants instead: no duplicate/out-of-order versions, starts at 1,
+        # and RUNNER.latest_version tracks the actual max.
         versions = [m.version for m in MIGRATIONS]
         assert versions == sorted(versions)
         assert len(versions) == len(set(versions)), "duplicate migration version"

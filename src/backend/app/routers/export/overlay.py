@@ -279,7 +279,6 @@ class OverlayActionData(BaseModel):
     fill_enabled: bool | None = None
     fill_opacity: float | None = None
     dim_strength: float | None = None
-    reveal_enabled: bool | None = None  # T5250: spotlight entrance/exit reveal animation
 
 
 class OverlayAction(BaseModel):
@@ -358,21 +357,6 @@ def _save_overlay_data(cursor, working_video_id: int, highlights: list, effect_t
         SET highlights_data = ?, effect_type = ?, highlight_color = ?, overlay_version = ?
         WHERE id = ?
     """, (encode_data(highlights), effect_type, highlight_color, new_version, working_video_id))
-
-
-def _has_reveal_enabled_column(cursor) -> bool:
-    """T5250 deploy->migrate window tolerance (same class as T5630's _has_stage_columns).
-
-    Migrations do NOT auto-run on deploy (CLAUDE.md) -- v030 (add working_videos.
-    reveal_enabled) is applied by hitting the admin migrate endpoint AFTER a deploy, not
-    by the deploy itself. Between "code deployed" and "migration run", every profile DB
-    still lacks the column, so a hard `SELECT wv.reveal_enabled` 500s /overlay-data and
-    /overlay/render for EVERY user -- losing all regions in the Overlay screen. Checked
-    once per request (cheap; mirrors the migrations' own PRAGMA table_info idempotency
-    check) rather than caching, since a profile DB can be migrated between requests.
-    """
-    cols = {row[1] for row in cursor.execute("PRAGMA table_info(working_videos)").fetchall()}
-    return "reveal_enabled" in cols
 
 
 def _find_region_index(highlights: list, region_id: str) -> int:
@@ -729,19 +713,6 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
-            elif action.action == "set_reveal_enabled":
-                if not action.data or action.data.reveal_enabled is None:
-                    raise ValueError("set_reveal_enabled requires data.reveal_enabled")
-                # T5250: the reveal_enabled column requires the v030 migration. If it hasn't
-                # run yet (deploy->migrate window), fail clearly instead of a raw sqlite crash.
-                if not _has_reveal_enabled_column(cursor):
-                    raise HTTPException(
-                        status_code=503,
-                        detail="Reveal animation is unavailable until the v030 migration runs (POST /api/admin/migrate).",
-                    )
-                cursor.execute("UPDATE working_videos SET reveal_enabled = ? WHERE id = ?", (int(action.data.reveal_enabled), working_video_id))
-                logger.info(f"[Overlay Action] Set reveal_enabled to {action.data.reveal_enabled}")
-
             else:
                 raise ValueError(f"Unknown action: {action.action}")
 
@@ -865,10 +836,6 @@ def _process_frames_to_ffmpeg(
     # both camelCase (action-written) and snake_case (transform-written) blobs.
     sorted_regions = sorted(highlight_regions, key=lambda r: _region_bounds(r)[0])
 
-    # T5250: reveal is an opt-in per-project setting (default False — off, byte-identical
-    # to pre-T5250 rendering). Read once; overlay_settings doesn't change per-frame.
-    reveal_enabled = bool((overlay_settings or {}).get('reveal_enabled', False))
-
     frame_idx = 0
     try:
         while True:
@@ -894,7 +861,7 @@ def _process_frames_to_ffmpeg(
                 # current_time (shared spec, mirrored in HighlightOverlay + video_processing).
                 # Applied by render_highlight_on_frame — never mutates keyframe data.
                 reveal_opacity, reveal_scale = compute_spotlight_reveal(
-                    current_time, *_region_bounds(active_region), reveal_enabled
+                    current_time, *_region_bounds(active_region)
                 )
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
@@ -1658,14 +1625,10 @@ async def get_overlay_data(project_id: int):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # T5250 deploy->migrate window (see _has_reveal_enabled_column): only SELECT the
-        # column when it exists, so a not-yet-migrated profile DB still returns regions
-        # instead of 500ing.
-        has_reveal_col = _has_reveal_enabled_column(cursor)
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
                    highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
-                   {"reveal_enabled," if has_reveal_col else ""} detections_data
+                   detections_data
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1684,7 +1647,6 @@ async def get_overlay_data(project_id: int):
         fill_enabled = True
         fill_opacity = 0.20
         dim_strength = 0.20
-        reveal_enabled = False  # T5250: default OFF
         video_detections = None
 
         if result:
@@ -1715,10 +1677,6 @@ async def get_overlay_data(project_id: int):
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
             dim_strength = result['dim_strength']
-            if has_reveal_col:
-                reveal_enabled = bool(result['reveal_enabled'])
-            # else: pre-migration row -- reveal_enabled stays at its False default above,
-            # which IS the setting's real default, not a bug-hiding fallback.
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1766,7 +1724,6 @@ async def get_overlay_data(project_id: int):
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
             'dim_strength': dim_strength,
-            'reveal_enabled': reveal_enabled,
         })
 
 
@@ -1999,15 +1956,11 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # T5250: tolerate the deploy->migrate window — SELECT reveal_enabled only when the
-        # v030 column exists (see _has_reveal_enabled_column), else default 0 (off).
-        has_reveal_col = _has_reveal_enabled_column(cursor)
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
                    wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
-                   wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength,
-                   {"wv.reveal_enabled" if has_reveal_col else "0 as reveal_enabled"}
+                   wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -2030,7 +1983,6 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             'fill_enabled': bool(project['fill_enabled']),
             'fill_opacity': project['fill_opacity'],
             'dim_strength': project['dim_strength'],
-            'reveal_enabled': bool(project['reveal_enabled']),
         }
 
         # Create export_jobs record

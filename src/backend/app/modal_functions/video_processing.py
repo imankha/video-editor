@@ -682,12 +682,10 @@ _REVEAL_EXIT_SEC = 0.25
 _REVEAL_ENTRANCE_START_SCALE = 1.35  # radii start 35% LARGER and CONTRACT to 100% (focus-pull)
 
 
-def _spotlight_reveal(current_time, start_time, end_time, enabled=True):
+def _spotlight_reveal(current_time, start_time, end_time):
     """Return (opacity_factor, radius_scale) for the entrance/exit reveal. See the
     shared spec in app/services/spotlight_reveal.py — keep the math identical.
-    `enabled=False` (the setting's default) returns the identity — feature off."""
-    if not enabled:
-        return 1.0, 1.0
+    Always applied (standard behavior, no setting)."""
     if start_time is None or end_time is None:
         return 1.0, 1.0
     dur = end_time - start_time
@@ -739,16 +737,13 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     settings = overlay_settings or {}
 
-    # T5250: entrance/exit reveal envelope (fade + contract focus-pull), derived from the region bounds.
-    # Gated on the `reveal_enabled` setting (default False — feature off, byte-identical
-    # to pre-T5250 rendering).
-    reveal_opacity, reveal_scale = _spotlight_reveal(
-        current_time, start_time, end_time, bool(settings.get('reveal_enabled', False))
-    )
+    # T5250: entrance/exit reveal envelope (fade + contract focus-pull), derived from the
+    # region bounds. Standard behavior — always applied.
+    reveal_opacity, reveal_scale = _spotlight_reveal(current_time, start_time, end_time)
 
     x = result['x']
     y = result['y']
-    # Bloom the radii about the center BEFORE the ground transform (mirrors the other paths).
+    # Scale the radii about the center BEFORE the ground transform (mirrors the other paths).
     radius_x = result['radiusX'] * reveal_scale
     radius_y = result['radiusY'] * reveal_scale
 

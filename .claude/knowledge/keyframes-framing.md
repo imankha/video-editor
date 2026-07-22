@@ -131,13 +131,14 @@ failure-visibility fix is the correct fix for the primary cause (see persistence
 ## Spotlight entrance/exit reveal envelope (T5250)
 
 The spotlight highlight used to POP on/off at a region's `[start, end]`. T5250 adds a
-premium **reveal envelope** — a DERIVED, render-time visual layer (fade + slight
-scale-up on entrance, ease-out; fade-out on exit, ease-in). It NEVER writes keyframes
+premium **reveal envelope** — a DERIVED, render-time visual layer (fade + contract
+focus-pull on entrance, ease-out; fade-out on exit, ease-in). It NEVER writes keyframes
 (T350 corruption class avoided by construction) — it modulates only RENDERED
-opacity/radii between the region bounds.
+opacity/radii between the region bounds. **ALWAYS-ON: standard behavior, no setting/gate**
+(the opt-in toggle was removed — reveal is unconditional so preview always == export).
 
 - **Shared spec, THREE mirrored copies** (crop/default-shape mirroring pattern — keep in
-  sync or preview/export drift):
+  sync or preview/export drift). All take exactly `(t, start, end)` — no `enabled` param:
   - Frontend canonical: `src/frontend/src/utils/spotlightReveal.js`
     (`computeSpotlightReveal(t, start, end) -> {opacityFactor, radiusScale}`).
   - Backend canonical: `src/backend/app/services/spotlight_reveal.py`
@@ -145,24 +146,29 @@ opacity/radii between the region bounds.
   - Modal inline copy: `video_processing._spotlight_reveal` — inlined because the Modal
     image does NOT mount `app`, so it can't import the canonical module. Parity is pinned
     by `tests/test_spotlight_reveal.py::TestModalInlineParity`.
-- **Constants**: entrance 0.35s, exit 0.25s, entrance start-scale 0.85 (radii bloom
-  0.85→1.0). Each ramp is capped at `dur/2` so short regions still fade symmetrically.
-  Easing: entrance ease-out quad `1-(1-p)^2`; exit ease-in quad `q^2` (q = remaining
-  fraction). At exact region start/end opacity is 0 (invisible) → no pop. Mid-region both
-  factors are 1.0 (no-op).
+- **Constants**: entrance 0.35s, exit 0.25s, entrance start-scale **1.35** — the ring
+  appears ~35% LARGER and CONTRACTS to 1.0 (focus-pull, `START + (1-START)*e` interpolates
+  big→fitting since START>1). Each ramp is capped at `dur/2` so short regions still fade
+  symmetrically. Easing: entrance opacity is ease-out **cubic** `1-(1-p)^3` (leads) while
+  the radius contracts on ease-out **quad** `1-(1-p)^2` (trails) — so the big ring reads
+  bold at near-full opacity before it tightens. Exit ease-in quad `q^2` (q = remaining
+  fraction), no scale change. At exact region start opacity is 0 (invisible, scale 1.35) →
+  no pop; at region end opacity 0, scale 1. Mid-region both factors are 1.0 (no-op).
 - **Application (identical in all render paths)**: `radiusX/radiusY *= radius_scale`
   applied to BASE radii BEFORE the ground transform; `opacity_factor` multiplies stroke,
-  fill, dim vignette, AND outline blend so the WHOLE spotlight blooms together.
-  - Frontend: `HighlightOverlay.jsx` takes a `reveal` prop (computed in `OverlayModeView`
-    from the active region's `startTime/endTime` + `currentTime`). Applied DISPLAY-ONLY —
-    the raw `currentHighlight` geometry the drag/resize commit reads is untouched, so
-    editing never persists a scaled/faded value. (Editing exactly at a boundary shows the
-    ramped display while committing true geometry — rare, harmless.)
+  fill, dim vignette, AND outline blend so the WHOLE spotlight animates together.
+  - Frontend: `HighlightOverlay.jsx` takes a `reveal` prop (computed UNCONDITIONALLY in
+    `OverlayModeView`'s `spotlightReveal` useMemo from the active region's
+    `startTime/endTime` + `currentTime`). Applied DISPLAY-ONLY — the raw `currentHighlight`
+    geometry the drag/resize commit reads is untouched, so editing never persists a
+    scaled/faded value. (Editing exactly at a boundary shows the ramped display while
+    committing true geometry — rare, harmless.)
   - Backend local path: `overlay._process_frames_to_ffmpeg` computes reveal from
     `_region_bounds(active_region)` + `current_time` and passes `reveal_opacity`/
-    `reveal_scale` (new optional params, default 1.0) to
+    `reveal_scale` (optional params, default 1.0) to
     `KeyframeInterpolator.render_highlight_on_frame`. `processor_local.py` render loop
-    wired the same way. Modal path: `_render_highlight` computes it internally.
+    wired the same way. Modal path: `_render_highlight` computes it internally. No
+    settings/flag read — always applied.
   - Applied AFTER `_normalize_region_keys` (T5120) — the envelope sits ON TOP of whatever
     the interpolator yields; no bare-key access added to the spline helpers.
 - **Sibling render loops left as no-op** (default reveal 1.0): `frame_processor.py:186`
@@ -171,34 +177,13 @@ opacity/radii between the region bounds.
 - **Modal caveat**: the `video_processing.py` change requires a Modal REDEPLOY before it
   takes effect in prod (separate user-gated step). Local/Fly render (containers, Modal
   off) already applies it via `_process_frames_to_ffmpeg`.
-- Coverage: `spotlightReveal.test.js` (12) + `test_spotlight_reveal.py` (31, incl.
-  Modal-inline parity). Glow/pulse was intentionally SKIPPED (hard to mirror 1:1 in
-  ffmpeg; would jeopardise the preview==export bar).
-- **Opt-in setting, default OFF (T5250 follow-up).** The reveal is NOT always-on — it's a
-  per-project setting alongside the existing highlight_shape/stroke_width/fill_*/
-  dim_strength tuning (same `working_videos` table row, same panel in `ExportButtonView`
-  "Overlay Settings", same gesture-based surgical persist pattern: `wrappedSetX` in
-  `OverlayScreen.jsx` → `dispatchOverlayAction` → `overlayActions.setRevealEnabled` →
-  `overlay.py` `set_reveal_enabled` action → `UPDATE working_videos SET reveal_enabled`).
-  Column `working_videos.reveal_enabled INTEGER DEFAULT 0` (migration
-  `v028_reveal_enabled.py`, mirrors v005/v027's `PRAGMA table_info` idempotent-add
-  pattern). Zustand `overlayStore.revealEnabled` (default `false`), restored from
-  `GET /overlay-data`'s `reveal_enabled` field at BOTH restore call sites in
-  `OverlayScreen.jsx`.
-  - **The gate lives IN the shared spec function, not at each call site.**
-    `computeSpotlightReveal`/`compute_spotlight_reveal`/`_spotlight_reveal` all take a 4th
-    `enabled` param (default `true` — back-compat for direct unit-test calls); when
-    `false` they return the identity `(1, 1)` immediately, before touching time/bounds —
-    this is what makes "off" byte-identical to pre-T5250 rendering rather than a
-    hidden/zeroed envelope. Frontend: `OverlayModeView`'s `spotlightReveal` useMemo passes
-    `revealEnabled` through. Backend: `overlay._process_frames_to_ffmpeg` and
-    `processor_local.apply_overlay` read `overlay_settings.get('reveal_enabled', False)`
-    once before the frame loop; Modal's `_render_highlight` reads
-    `settings.get('reveal_enabled', False)` (settings extraction was reordered to precede
-    the reveal call). `overlay_settings.get(..., False)` means an old/un-migrated row (or
-    any dict missing the key) defaults OFF automatically — no backfill needed.
-  - Read path adds `wv.reveal_enabled` to both `overlay.py` SELECTs that build
-    `overlay_settings` (the GET /overlay-data restore query and the render-endpoint query).
+- **No schema/setting.** T5250 adds NO `working_videos` column and NO profile_db migration
+  (the earlier `reveal_enabled` column + v030 migration were removed when reveal became
+  standard). No `overlayStore.revealEnabled`, no `set_reveal_enabled` action, no toggle in
+  `ExportButtonView`. profile_db migration head on this branch is **v027**.
+- Coverage: `spotlightReveal.test.js` + `test_spotlight_reveal.py` (incl. Modal-inline
+  parity — `TestModalInlineParity`). Glow/pulse was intentionally SKIPPED (hard to mirror
+  1:1 in ffmpeg; would jeopardise the preview==export bar).
 
 ## Video-level player-detection store (T5600)
 
