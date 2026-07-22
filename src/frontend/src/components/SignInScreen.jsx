@@ -54,7 +54,7 @@ export function SignInScreen() {
               <LogoWithText />
             </div>
             <p className="text-gray-400 text-sm">
-              Learn from, organize, and celebrate your athlete's moments.
+              Share Your Player's Brilliance
             </p>
           </div>
 
