@@ -42,6 +42,15 @@ const SCORING_TAGS = new Set([
 ]);
 const PLAYMAKING_TAGS = new Set(['Assist', 'Chance Creation', 'Shot']);
 
+// The active tab is URL state (/home/games -> Games, /home/reels -> Reel Drafts),
+// never persisted. Map a pathname to its tab, or null when the URL names no tab
+// (bare /home) so callers can fall back to a default. (T5677)
+function tabFromPath(pathname) {
+  if (pathname === '/home/games') return 'games';
+  if (pathname === '/home/reels') return 'projects';
+  return null;
+}
+
 function TagBadges({ tagBadges }) {
   if (!tagBadges || Object.keys(tagBadges).length === 0) return null;
   const pills = [];
@@ -116,7 +125,10 @@ export function ProjectManager({
   const unseenReelsCount = unseenReelsCountProp ?? contextUnseenReelsCount ?? 0;
   const exportingProject = exportingProjectProp ?? contextExportingProject;
   const hasClips = games.some(g => g.clip_count > 0);
-  const initialTab = projects.length === 0 ? 'games' : 'projects';
+  // URL-first: a deep link / refresh to /home/games or /home/reels lands on that
+  // tab. Bare /home falls back to the projects-count default. (T5677)
+  const initialTab = tabFromPath(window.location.pathname)
+    ?? (projects.length === 0 ? 'games' : 'projects');
   const [activeTab, setActiveTabRaw] = useState(initialTab);
   const setActiveTab = useCallback((tab) => {
     setActiveTabRaw(tab);
@@ -493,6 +505,12 @@ export function ProjectManager({
     if (hint) {
       sessionStorage.removeItem('projectManagerTab');
       setActiveTab(hint);
+      hasSetInitialTab.current = true;
+      return;
+    }
+    // A URL-named tab is authoritative — don't let the projects-count default
+    // flip a cold /home/games deep link over to Reel Drafts. (T5677)
+    if (tabFromPath(window.location.pathname)) {
       hasSetInitialTab.current = true;
       return;
     }
