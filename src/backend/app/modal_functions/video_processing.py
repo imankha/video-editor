@@ -672,12 +672,43 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
     }
 
 
+# T5250 spotlight reveal envelope — INLINE MIRROR of the shared spec. Kept self-contained
+# because the Modal image does not mount `app`, so `from app.services.spotlight_reveal ...`
+# is unavailable here. MUST stay in sync with:
+#   - src/backend/app/services/spotlight_reveal.py (backend canonical)
+#   - src/frontend/src/utils/spotlightReveal.js     (frontend canonical)
+_REVEAL_ENTRANCE_SEC = 0.35
+_REVEAL_EXIT_SEC = 0.25
+_REVEAL_ENTRANCE_START_SCALE = 0.85
+
+
+def _spotlight_reveal(current_time, start_time, end_time):
+    """Return (opacity_factor, radius_scale) for the entrance/exit reveal. See the
+    shared spec in app/services/spotlight_reveal.py — keep the math identical."""
+    if start_time is None or end_time is None:
+        return 1.0, 1.0
+    dur = end_time - start_time
+    if not dur > 0:
+        return 1.0, 1.0
+    entrance = min(_REVEAL_ENTRANCE_SEC, dur / 2)
+    exit_ = min(_REVEAL_EXIT_SEC, dur / 2)
+    if entrance > 0 and current_time < start_time + entrance:
+        p = max(0.0, min(1.0, (current_time - start_time) / entrance))
+        e = 1 - (1 - p) * (1 - p)  # ease-out quad
+        return e, _REVEAL_ENTRANCE_START_SCALE + (1 - _REVEAL_ENTRANCE_START_SCALE) * e
+    if exit_ > 0 and current_time > end_time - exit_:
+        q = max(0.0, min(1.0, (end_time - current_time) / exit_))
+        return q * q, 1.0  # ease-in quad
+    return 1.0, 1.0
+
+
 def _render_highlight(frame, region: dict, current_time: float, effect_type: str, overlay_settings: dict = None):
     """
     Render highlight overlay on a single frame.
 
     Uses Catmull-Rom cubic spline interpolation matching frontend.
     Supports bold stroke with dark outline, optional fill, configurable dim.
+    Applies the T5250 entrance/exit reveal envelope (fade + bloom) on top.
     """
     import cv2
     import numpy as np
@@ -700,10 +731,14 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     if result is None:
         return frame
 
+    # T5250: entrance/exit reveal envelope (fade + bloom), derived from the region bounds.
+    reveal_opacity, reveal_scale = _spotlight_reveal(current_time, start_time, end_time)
+
     x = result['x']
     y = result['y']
-    radius_x = result['radiusX']
-    radius_y = result['radiusY']
+    # Bloom the radii about the center BEFORE the ground transform (mirrors the other paths).
+    radius_x = result['radiusX'] * reveal_scale
+    radius_y = result['radiusY'] * reveal_scale
 
     settings = overlay_settings or {}
     if settings.get('highlight_shape') == 'ground':
@@ -734,9 +769,12 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     stroke_width_setting = settings.get('stroke_width', 2)
     fill_enabled = is_ground or settings.get('fill_enabled', False)
-    fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05))
-    stroke_opacity = result.get('strokeOpacity', 0.85)
-    dim_strength = settings.get('dim_strength', 0.15)
+    # T5250: fold the reveal opacity factor into every opacity so the whole spotlight
+    # (dim vignette, fill, outline, stroke) fades in/out together. 1.0 = no-op mid-region.
+    fill_opacity = result.get('fillOpacity', settings.get('fill_opacity', 0.15 if is_ground else 0.05)) * reveal_opacity
+    stroke_opacity = result.get('strokeOpacity', 0.85) * reveal_opacity
+    dim_strength = settings.get('dim_strength', 0.15) * reveal_opacity
+    outline_blend = 0.5 * reveal_opacity
 
     stroke_w = max(2, round(stroke_width_setting * frame_h / 1080))
     outline_w = stroke_w + 2
@@ -763,7 +801,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     outline_bgr = tuple(int(c * 0.3) for c in color_bgr)
     outline_overlay = out.copy()
     cv2.ellipse(outline_overlay, center, (radius_x, radius_y), 0, arc_start, arc_end, outline_bgr, outline_w)
-    out = cv2.addWeighted(outline_overlay, 0.5, out, 0.5, 0)
+    out = cv2.addWeighted(outline_overlay, outline_blend, out, 1 - outline_blend, 0)
 
     stroke_overlay = out.copy()
     cv2.ellipse(stroke_overlay, center, (radius_x, radius_y), 0, arc_start, arc_end, color_bgr, stroke_w)

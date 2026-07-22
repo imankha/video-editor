@@ -128,6 +128,53 @@ nothing to render. Failure mode 3 (render clipping extended-segment keyframes) w
 but sealed by the helper refactor as a defence-in-depth. The frontend `overlayActionStore`
 failure-visibility fix is the correct fix for the primary cause (see persistence-sync.md).
 
+## Spotlight entrance/exit reveal envelope (T5250)
+
+The spotlight highlight used to POP on/off at a region's `[start, end]`. T5250 adds a
+premium **reveal envelope** — a DERIVED, render-time visual layer (fade + slight
+scale-up on entrance, ease-out; fade-out on exit, ease-in). It NEVER writes keyframes
+(T350 corruption class avoided by construction) — it modulates only RENDERED
+opacity/radii between the region bounds.
+
+- **Shared spec, THREE mirrored copies** (crop/default-shape mirroring pattern — keep in
+  sync or preview/export drift):
+  - Frontend canonical: `src/frontend/src/utils/spotlightReveal.js`
+    (`computeSpotlightReveal(t, start, end) -> {opacityFactor, radiusScale}`).
+  - Backend canonical: `src/backend/app/services/spotlight_reveal.py`
+    (`compute_spotlight_reveal(t, start, end) -> (opacity_factor, radius_scale)`).
+  - Modal inline copy: `video_processing._spotlight_reveal` — inlined because the Modal
+    image does NOT mount `app`, so it can't import the canonical module. Parity is pinned
+    by `tests/test_spotlight_reveal.py::TestModalInlineParity`.
+- **Constants**: entrance 0.35s, exit 0.25s, entrance start-scale 0.85 (radii bloom
+  0.85→1.0). Each ramp is capped at `dur/2` so short regions still fade symmetrically.
+  Easing: entrance ease-out quad `1-(1-p)^2`; exit ease-in quad `q^2` (q = remaining
+  fraction). At exact region start/end opacity is 0 (invisible) → no pop. Mid-region both
+  factors are 1.0 (no-op).
+- **Application (identical in all render paths)**: `radiusX/radiusY *= radius_scale`
+  applied to BASE radii BEFORE the ground transform; `opacity_factor` multiplies stroke,
+  fill, dim vignette, AND outline blend so the WHOLE spotlight blooms together.
+  - Frontend: `HighlightOverlay.jsx` takes a `reveal` prop (computed in `OverlayModeView`
+    from the active region's `startTime/endTime` + `currentTime`). Applied DISPLAY-ONLY —
+    the raw `currentHighlight` geometry the drag/resize commit reads is untouched, so
+    editing never persists a scaled/faded value. (Editing exactly at a boundary shows the
+    ramped display while committing true geometry — rare, harmless.)
+  - Backend local path: `overlay._process_frames_to_ffmpeg` computes reveal from
+    `_region_bounds(active_region)` + `current_time` and passes `reveal_opacity`/
+    `reveal_scale` (new optional params, default 1.0) to
+    `KeyframeInterpolator.render_highlight_on_frame`. `processor_local.py` render loop
+    wired the same way. Modal path: `_render_highlight` computes it internally.
+  - Applied AFTER `_normalize_region_keys` (T5120) — the envelope sits ON TOP of whatever
+    the interpolator yields; no bare-key access added to the spline helpers.
+- **Sibling render loops left as no-op** (default reveal 1.0): `frame_processor.py:186`
+  and `ai_upscaler/__init__.py:883` are the framing+highlight combined passes using a flat
+  highlight-keyframe model (no region `[start,end]` in scope) — reveal not wired there.
+- **Modal caveat**: the `video_processing.py` change requires a Modal REDEPLOY before it
+  takes effect in prod (separate user-gated step). Local/Fly render (containers, Modal
+  off) already applies it via `_process_frames_to_ffmpeg`.
+- Coverage: `spotlightReveal.test.js` (9) + `test_spotlight_reveal.py` (18, incl.
+  Modal-inline parity). Glow/pulse was intentionally SKIPPED (hard to mirror 1:1 in
+  ffmpeg; would jeopardise the preview==export bar).
+
 ## Video-level player-detection store (T5600)
 
 Player-detection "tracking squares" used to live ONLY inside each highlight region's

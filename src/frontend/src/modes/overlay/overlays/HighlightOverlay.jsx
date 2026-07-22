@@ -58,7 +58,15 @@ export default function HighlightOverlay({
   dimStrength = 0.15,
   editable = false,
   onCircleTap,
+  reveal = null,
 }) {
+  // T5250: entrance/exit reveal envelope ({opacityFactor, radiusScale}) computed by the
+  // parent from the region bounds + currentTime via the shared computeSpotlightReveal
+  // spec. Applied as a DISPLAY-ONLY multiplier below — the raw currentHighlight geometry
+  // (used for the drag/resize commit) is never touched, so no persisted keyframe changes.
+  // Mid-region both factors are 1 (no-op); only the first ~0.35s / last ~0.25s ramp.
+  const revealOpacity = reveal ? reveal.opacityFactor : 1;
+  const revealScale = reveal ? reveal.radiusScale : 1;
   // Tap-to-toggle is only wired in the tracking-ON regime (OverlayModeView passes the
   // callback only then). In the tracking-OFF regime it is undefined and the drag path is
   // unchanged from T5570.
@@ -332,16 +340,22 @@ export default function HighlightOverlay({
       }
     : { className: 'pointer-events-none' };
 
+  // Apply the reveal scale to the BASE radii first (about the ellipse center), then the
+  // ground-spotlight transform — matching the backend, which scales radius_*_orig before
+  // its ground transform. Center x/y is unchanged, so scaling blooms symmetrically.
+  const baseRadiusX = currentHighlight.radiusX * revealScale;
+  const baseRadiusY = currentHighlight.radiusY * revealScale;
+
   // Apply ground spotlight transform: shift center to feet, flatten ellipse
   let displayX = currentHighlight.x;
   let displayY = currentHighlight.y;
-  let displayRadiusX = currentHighlight.radiusX;
-  let displayRadiusY = currentHighlight.radiusY;
+  let displayRadiusX = baseRadiusX;
+  let displayRadiusY = baseRadiusY;
 
   if (highlightShape === 'ground') {
-    displayY = currentHighlight.y + currentHighlight.radiusY / 1.3;
-    displayRadiusX = currentHighlight.radiusX * (2.0 / 1.3);
-    displayRadiusY = currentHighlight.radiusY * 0.3;
+    displayY = currentHighlight.y + baseRadiusY / 1.3;
+    displayRadiusX = baseRadiusX * (2.0 / 1.3);
+    displayRadiusY = baseRadiusY * 0.3;
   }
 
   // Convert highlight to screen coordinates. The shared transform returns
@@ -362,6 +376,16 @@ export default function HighlightOverlay({
 
   // Ground spotlight: bottom arc path (240°, skipping top 120° where player body is)
   const isGround = highlightShape === 'ground';
+
+  // T5250: fold the reveal opacity factor into every opacity the spotlight paints so the
+  // WHOLE spotlight (dim vignette, fill, outline, stroke) blooms/fades together — not just
+  // the ring. Mid-region revealOpacity is 1, so these equal the un-revealed values.
+  const revealedStrokeOpacity = (currentHighlight.strokeOpacity ?? 0.85) * revealOpacity;
+  const revealedFillOpacity =
+    (isGround ? (fillOpacity || 0.15) : (fillOpacity ?? currentHighlight.fillOpacity ?? 0.05)) *
+    revealOpacity;
+  const revealedDim = dimStrength * revealOpacity;
+  const revealedOutlineOpacity = 0.5 * revealOpacity;
   const arcPath = isGround ? (() => {
     const cx = screenHighlight.x;
     const cy = screenHighlight.y;
@@ -421,7 +445,7 @@ export default function HighlightOverlay({
             width="100%"
             height="100%"
             fill="black"
-            fillOpacity={dimStrength}
+            fillOpacity={revealedDim}
             mask="url(#highlight-mask)"
             className="pointer-events-none"
           />
@@ -435,7 +459,7 @@ export default function HighlightOverlay({
             rx={screenHighlight.radiusX}
             ry={screenHighlight.radiusY}
             fill={fillColor}
-            fillOpacity={isGround ? (fillOpacity || 0.15) : (fillOpacity ?? currentHighlight.fillOpacity ?? 0.05)}
+            fillOpacity={revealedFillOpacity}
             className="pointer-events-none"
           />
         )}
@@ -447,7 +471,7 @@ export default function HighlightOverlay({
             fill="none"
             stroke={outlineColor}
             strokeWidth={strokeWidth + 2}
-            strokeOpacity={0.5}
+            strokeOpacity={revealedOutlineOpacity}
             strokeLinecap="round"
             className="pointer-events-none"
           />
@@ -460,7 +484,7 @@ export default function HighlightOverlay({
             fill="transparent"
             stroke={outlineColor}
             strokeWidth={strokeWidth + 2}
-            strokeOpacity={0.5}
+            strokeOpacity={revealedOutlineOpacity}
             className="pointer-events-none"
           />
         )}
@@ -472,7 +496,7 @@ export default function HighlightOverlay({
             fill="none"
             stroke={strokeColor}
             strokeWidth={strokeWidth}
-            strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
+            strokeOpacity={revealedStrokeOpacity}
             strokeLinecap="round"
             data-testid="highlight-body"
             {...bodyPointerProps}
@@ -486,7 +510,7 @@ export default function HighlightOverlay({
             fill="transparent"
             stroke={strokeColor}
             strokeWidth={strokeWidth}
-            strokeOpacity={currentHighlight.strokeOpacity ?? 0.85}
+            strokeOpacity={revealedStrokeOpacity}
             data-testid="highlight-body"
             {...bodyPointerProps}
           />

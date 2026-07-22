@@ -19,6 +19,7 @@ import os
 import tempfile
 from typing import Any
 
+from .spotlight_reveal import compute_spotlight_reveal
 from .video_processor import (
     ProcessingBackend,
     ProcessingConfig,
@@ -283,8 +284,14 @@ class LocalGPUProcessor(VideoProcessor):
                             active_region['keyframes'], current_time
                         )
                         if highlight is not None:
+                            # T5250: entrance/exit reveal envelope (shared spec) so this
+                            # render path matches the editor preview + the primary export.
+                            reveal_opacity, reveal_scale = compute_spotlight_reveal(
+                                current_time, active_region["start_time"], active_region["end_time"]
+                            )
                             frame = KeyframeInterpolator.render_highlight_on_frame(
-                                frame, highlight, (width, height), None, effect_type
+                                frame, highlight, (width, height), None, effect_type,
+                                reveal_opacity=reveal_opacity, reveal_scale=reveal_scale,
                             )
 
                     ffmpeg_proc.stdin.write(frame.tobytes())

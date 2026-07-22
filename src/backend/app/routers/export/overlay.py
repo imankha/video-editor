@@ -54,6 +54,7 @@ from ...services.image_extractor import (
     list_highlight_images,
 )
 from ...services.modal_client import call_modal_overlay_auto, modal_enabled
+from ...services.spotlight_reveal import compute_spotlight_reveal
 from ...services.poster import (
     first_slowmo_section,
     load_project_clip_segments,
@@ -856,6 +857,13 @@ def _process_frames_to_ffmpeg(
             if active_region:
                 region_keyframes = _keyframes_within_bounds(active_region)
 
+                # T5250: entrance/exit reveal envelope, derived from the region bounds +
+                # current_time (shared spec, mirrored in HighlightOverlay + video_processing).
+                # Applied by render_highlight_on_frame — never mutates keyframe data.
+                reveal_opacity, reveal_scale = compute_spotlight_reveal(
+                    current_time, *_region_bounds(active_region)
+                )
+
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
                 if highlight is not None:
                     # Check if keyframe coordinates need to be scaled from detection space to working video space
@@ -882,6 +890,8 @@ def _process_frames_to_ffmpeg(
                         crop=None,
                         effect_type=highlight_effect_type,
                         overlay_settings=overlay_settings,
+                        reveal_opacity=reveal_opacity,
+                        reveal_scale=reveal_scale,
                     )
 
             # Write frame directly to FFmpeg's stdin (no disk I/O!)
