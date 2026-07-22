@@ -33,7 +33,7 @@ try:
 except ImportError:
     torch = None
 
-from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStatus
+from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStage, ExportStatus
 from ...database import get_db_connection
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...queries import latest_working_clips_subquery
@@ -1201,6 +1201,36 @@ def concatenate_clips_with_transition(
             # Continue without chapters - video is still valid
 
 
+def _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition):
+    """T5630 stage='rendered': the render output now exists in R2. Persist
+    output_key AND the config finalize needs to rebuild source_clips so a later
+    recovery no longer depends on Modal being reachable.
+
+    input_data is written unconditionally (original column, so recovery has the
+    clips even during the deploy->v028 window); stage + output_key are
+    best-effort (those columns are absent until v028 runs).
+    """
+    input_blob = encode_data({"clips": normalized_clips_data, "transition": transition})
+    try:
+        with get_db_connection() as conn:
+            conn.cursor().execute(
+                "UPDATE export_jobs SET input_data = ? WHERE id = ?", (input_blob, export_id)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"[Multi-Clip Export] Failed to persist input_data checkpoint for {export_id}: {e}")
+    try:
+        with get_db_connection() as conn:
+            conn.cursor().execute(
+                "UPDATE export_jobs SET stage = ?, output_key = ? WHERE id = ?",
+                (ExportStage.RENDERED.value, output_key, export_id),
+            )
+            conn.commit()
+    except Exception as e:
+        # stage/output_key absent pre-v028 -> recovery falls back to modal_result.output_key.
+        logger.warning(f"[Multi-Clip Export] Could not persist rendered stage/output_key for {export_id}: {e}")
+
+
 async def _export_clips(
     export_id: str,
     clips: list[ClipExportData],
@@ -1302,11 +1332,21 @@ async def _export_clips(
                     try:
                         with get_db_connection() as conn:
                             cursor = conn.cursor()
-                            cursor.execute("""
-                                UPDATE export_jobs
-                                SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
-                                WHERE id = ?
-                            """, (modal_call_id, export_id))
+                            # T5630: this moment IS stage 'rendering' (dispatched,
+                            # Modal maybe still running). Best-effort on `stage`
+                            # (absent during the deploy->v028 window).
+                            try:
+                                cursor.execute("""
+                                    UPDATE export_jobs
+                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP, stage = ?
+                                    WHERE id = ?
+                                """, (modal_call_id, ExportStage.RENDERING.value, export_id))
+                            except Exception:
+                                cursor.execute("""
+                                    UPDATE export_jobs
+                                    SET modal_call_id = ?, started_at = CURRENT_TIMESTAMP
+                                    WHERE id = ?
+                                """, (modal_call_id, export_id))
                             conn.commit()
                         logger.info(f"[Multi-Clip Export] Stored modal_call_id: {modal_call_id} for recovery")
                     except Exception as e:
@@ -1375,6 +1415,11 @@ async def _export_clips(
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
 
+            # T5630 stage='rendered': the video exists in R2. Persist output_key +
+            # the config recovery needs to rebuild source_clips BEFORE detection, so
+            # an interruption here finalizes offline (no Modal round-trip).
+            _persist_rendered_checkpoint(export_id, output_key, normalized_clips_data, transition)
+
             # Measure video duration (download output + ffprobe)
             video_duration = None
             try:
@@ -1391,85 +1436,52 @@ async def _export_clips(
             except Exception as dur_err:
                 logger.warning(f"[Multi-Clip Export] Failed to measure duration: {dur_err}")
 
-            # Save to database if project_id provided
+            # T5630: unified finalize (detect -> persist -> sync). Writer 1 now runs
+            # the SAME finalize_export the recovery path uses, so an in-band export
+            # and a restart-recovered one reach identical state. Detection (fps=30),
+            # the persist transaction, and the durable-sync gate all live in
+            # finalize_export; it reconstructs source_clips from the persisted
+            # input_data (see _persist_rendered_checkpoint above).
             working_video_id = None
             if project_id:
-                source_clips = build_clip_boundaries_from_input(normalized_clips_data, transition)
+                from ...services.export_finalize import finalize_export
+                job_for_finalize = {
+                    "id": export_id,
+                    "project_id": project_id,
+                    "input_data": encode_data({"clips": normalized_clips_data, "transition": transition}),
+                    "output_video_id": None,
+                    "stage": ExportStage.RENDERED.value,
+                    "status": "processing",
+                }
+                finalize_result = await finalize_export(
+                    job_for_finalize,
+                    output_key=output_key,
+                    user_id=user_id,
+                    profile_id=profile_id,
+                    video_duration=video_duration,
+                    gpu_seconds=result.get("gpu_seconds"),
+                    modal_function=result.get("modal_function"),
+                    progress_callback=modal_progress_callback,
+                )
 
-                try:
-                    highlight_regions, video_detections = await run_player_detection_for_highlights(
-                        user_id=user_id,
-                        output_key=output_key,
-                        source_clips=source_clips,
-                        progress_callback=modal_progress_callback,
-                    )
-                    logger.info(f"[Multi-Clip Export] Player detection complete: {len(highlight_regions)} regions with detected keyframes")
-                except Exception as det_error:
-                    logger.warning(f"[Multi-Clip Export] Player detection failed, using defaults: {det_error}")
-                    highlight_regions = generate_default_highlight_regions(source_clips)
-                    video_detections = _empty_video_detections()
+                # T4200 durable boundary: the render succeeded but the R2 sync failed.
+                # Emit the same retryable sync_failed event + 503 as before, WITHOUT
+                # announcing success (the working_video is committed locally + marked
+                # pending for retry).
+                if finalize_result.get("sync_failed"):
+                    from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE
+                    from ...services.export_helpers import export_sync_failed_data
+                    sync_failed = export_sync_failed_data('framing', project_id, project_name)
+                    export_progress[export_id] = sync_failed
+                    await manager.send_progress(export_id, sync_failed)
+                    return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
 
-                try:
-                    with get_db_connection() as conn:
-                        cursor = conn.cursor()
+                # T4200: a persist failure is TERMINAL (no false success). Re-raise so
+                # the outer handler refunds credits, marks the job error, and errors.
+                if not finalize_result.get("finalized"):
+                    raise RuntimeError(finalize_result.get("error", "Export finalize failed"))
 
-                        cursor.execute("""
-                            SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                            FROM working_videos WHERE project_id = ?
-                        """, (project_id,))
-                        next_version = cursor.fetchone()['next_version']
-
-                        highlights_encoded = encode_data(highlight_regions)
-                        detections_encoded = encode_data(video_detections)
-
-                        logger.info(f"[Multi-Clip Export] Generated {len(highlight_regions)} highlight regions for {len(source_clips)} clips")
-
-                        cursor.execute("""
-                            INSERT INTO working_videos (project_id, filename, version, duration, highlights_data, detections_data)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (project_id, output_filename, next_version, video_duration, highlights_encoded, detections_encoded))
-                        working_video_id = cursor.lastrowid
-
-                        cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
-
-                        cursor.execute("""
-                            UPDATE export_jobs
-                            SET status = 'complete', output_video_id = ?, output_filename = ?,
-                                completed_at = CURRENT_TIMESTAMP, gpu_seconds = ?, modal_function = ?
-                            WHERE id = ?
-                        """, (working_video_id, output_filename, result.get("gpu_seconds"), result.get("modal_function"), export_id))
-
-                        cursor.execute(f"""
-                            UPDATE working_clips
-                            SET exported_at = datetime('now'),
-                                raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
-                            WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
-                        """, (project_id, project_id))
-
-                        conn.commit()
-                        logger.info(f"[Multi-Clip Export] Saved to DB: working_video_id={working_video_id}, project updated, export_jobs completed")
-                except Exception as e:
-                    # T4200: a DB-save failure is TERMINAL. The old code logged and fell
-                    # through to the COMPLETE broadcast below, so the user saw success
-                    # while no DB row pointed at the R2 object (T4010 lost-references
-                    # family). Re-raise so the outer handler refunds credits, marks the
-                    # job failed, and broadcasts an error -- never a false success.
-                    logger.error(f"[Multi-Clip Export] Failed to save to database (terminal): {e}", exc_info=True)
-                    raise
-
-            # T4200: durable boundary — sync the new working_videos/export_jobs rows to
-            # R2 BEFORE announcing COMPLETE. If the sync fails, emit the same retryable
-            # sync_failed event overlay uses and return without announcing success, so a
-            # machine cycling after the announce can never strand the export (the same
-            # bug class T4110 fixed for overlay). The finally-block sync stays as a
-            # best-effort backstop; the announce no longer depends on it.
-            from ...middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE
-            from ...services.export_helpers import export_sync_failed_data, sync_export_db_to_r2
-            if not await asyncio.to_thread(sync_export_db_to_r2, user_id, profile_id):
-                sync_failed = export_sync_failed_data('framing', project_id, project_name)
-                export_progress[export_id] = sync_failed
-                await manager.send_progress(export_id, sync_failed)
-                return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+                working_video_id = finalize_result.get("working_video_id")
 
             # Final progress update
             progress_data = {
@@ -1705,61 +1717,39 @@ async def _export_clips(
                 if not upload_result:
                     raise Exception("Failed to upload working video to R2")
 
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
+                # T4010: do NOT null final_video_id on framing re-export; the
+                # published reel stays valid until a new final exists.
+                actual_durations = [get_video_duration(path) for path in processed_paths]
+                source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
 
-                    cursor.execute("""
-                        SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                        FROM working_videos WHERE project_id = ?
-                    """, (project_id,))
-                    next_version = cursor.fetchone()['next_version']
+                try:
+                    highlight_regions = await run_local_detection_on_video_file(
+                        video_path=final_output,
+                        source_clips=source_clips,
+                    )
+                    logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
+                    for r in highlight_regions:
+                        if r.get('videoWidth') or r.get('videoHeight'):
+                            logger.info(f"[Multi-Clip Export] Region '{r.get('label')}' detection dims: {r.get('videoWidth')}x{r.get('videoHeight')}")
+                            break
+                except Exception as det_error:
+                    logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
+                    highlight_regions = generate_default_highlight_regions(source_clips)
 
-                    # T4010: do NOT null final_video_id on framing re-export; the
-                    # published reel stays valid until a new final exists.
-
-                    actual_durations = [get_video_duration(path) for path in processed_paths]
-                    source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
-
-                    try:
-                        highlight_regions = await run_local_detection_on_video_file(
-                            video_path=final_output,
-                            source_clips=source_clips,
-                        )
-                        logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
-                        for r in highlight_regions:
-                            if r.get('videoWidth') or r.get('videoHeight'):
-                                logger.info(f"[Multi-Clip Export] Region '{r.get('label')}' detection dims: {r.get('videoWidth')}x{r.get('videoHeight')}")
-                                break
-                    except Exception as det_error:
-                        logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
-                        highlight_regions = generate_default_highlight_regions(source_clips)
-
-                    highlights_encoded = encode_data(highlight_regions)
-
-                    cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_encoded))
-                    working_video_id = cursor.lastrowid
-
-                    cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
-
-                    cursor.execute("""
-                        UPDATE export_jobs
-                        SET status = 'complete', output_video_id = ?, output_filename = ?,
-                            completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (working_video_id, working_filename, export_id))
-
-                    cursor.execute(f"""
-                        UPDATE working_clips
-                        SET exported_at = datetime('now'),
-                            raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
-                        WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
-                    """, (project_id, project_id))
-
-                    conn.commit()
-                    logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
+                # T5630: share the persist transaction with the Modal path. Local keeps
+                # its own detection (it needs the ephemeral processed clips, absent at
+                # recovery) but writes via the SAME upsert_working_video. detections_data
+                # stays omitted — writer 2's historical shape (regions carry embedded
+                # detections).
+                from ...services.export_finalize import upsert_working_video
+                working_video_id = upsert_working_video(
+                    {"id": export_id, "project_id": project_id, "output_video_id": None},
+                    filename=working_filename,
+                    duration=video_duration if video_duration > 0 else None,
+                    highlights_data=encode_data(highlight_regions),
+                    detections_data=None,
+                )
+                logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
 
             except Exception as e:
                 # T4200: a DB-save (or R2 upload) failure is TERMINAL. The old code set
@@ -1781,6 +1771,10 @@ async def _export_clips(
                 export_progress[export_id] = sync_failed
                 await manager.send_progress(export_id, sync_failed)
                 return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+
+            # T5630: local exports have no resume path, but keep `stage` truthful.
+            from ...services.export_finalize import _set_export_stage
+            _set_export_stage(export_id, ExportStage.COMPLETE.value)
 
         # Complete
         complete_data = {

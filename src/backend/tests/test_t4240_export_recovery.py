@@ -46,27 +46,36 @@ def _patch_conn(monkeypatch, conn):
 
 # --- #3: no fabricated filename ---------------------------------------------
 
-def test_missing_output_key_fails_loudly_no_fabricated_row(monkeypatch):
-    conn = _in_memory_db()
-    exports = _patch_conn(monkeypatch, conn)
-    monkeypatch.setattr(exports, "record_milestone", lambda *a, **k: None)
-    conn.execute("INSERT INTO export_jobs (id, project_id, status) VALUES (?, ?, ?)", ("job-3", 42, "processing"))
-    conn.commit()
+@pytest.mark.asyncio
+async def test_missing_output_key_delegates_empty_and_no_milestone(monkeypatch):
+    """T5630: finalize_modal_export now delegates to finalize_export. With no
+    persisted output_key AND no modal_result output_key, it passes output_key=''
+    (the guard trigger — finalize_export fails loudly / never fabricates a row;
+    that end behavior is covered by test_t5630_finalize_unit +
+    test_t5630_characterization). No recovery milestone on a non-finalized result."""
+    from app.profile_context import set_current_profile_id
+    from app.routers import exports
+    from app.services import export_finalize
 
-    result = exports.finalize_modal_export(
-        job={"id": "job-3", "project_id": 42},
-        modal_result={},  # no output_key
-        user_id="user-1",
+    set_current_profile_id("testprofile")
+    captured = {}
+    milestones = []
+
+    async def fake_finalize_export(job, output_key, user_id, profile_id, **kwargs):
+        captured["output_key"] = output_key
+        return {"finalized": False, "error": "Modal result incomplete: no output_key"}
+
+    monkeypatch.setattr(export_finalize, "finalize_export", fake_finalize_export)
+    monkeypatch.setattr(exports, "record_milestone", lambda *a, **k: milestones.append(a))
+
+    result = await exports.finalize_modal_export(
+        job={"id": "job-3", "project_id": 42}, modal_result={}, user_id="user-1",
     )
 
     assert result["finalized"] is False
     assert "output_key" in result["error"]
-    # No working_videos row was fabricated.
-    assert conn.execute("SELECT COUNT(*) c FROM working_videos").fetchone()["c"] == 0
-    # The job is marked error, not silently left.
-    row = conn.execute("SELECT status, error FROM export_jobs WHERE id = 'job-3'").fetchone()
-    assert row["status"] == "error"
-    assert "output_key" in row["error"]
+    assert captured["output_key"] == ""
+    assert not milestones
 
 
 # --- #2: Modal API error -> unknown, live job untouched ----------------------

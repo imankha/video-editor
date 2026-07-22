@@ -20,6 +20,31 @@ class ExportStatus(str, Enum):
     ERROR = "error"
 
 
+class ExportStage(str, Enum):
+    """Durable finalize checkpoints on export_jobs.stage (T5630).
+
+    Ordered pipeline a Modal export walks; each transition is a small durable
+    UPDATE, so a restart at any point leaves `stage` at the last COMPLETED step
+    and recovery re-runs ONLY the missing stages. Six states (the design dropped
+    the task's 7th `synced` checkpoint — sync is a gate between `persisting` and
+    `complete`, never a persisted state we branch on):
+
+        queued -> rendering -> rendered -> detecting -> persisting -> complete   (| error)
+
+    - rendering:  dispatched, modal_call_id stored (render maybe in flight).
+    - rendered:   the video exists in R2; output_key persisted -> finalize no
+                  longer depends on Modal being reachable.
+    - detecting / persisting / complete: the post-render stages the unified
+                  finalizer owns. `error` is tracked by `status`, not `stage`.
+    """
+    QUEUED = "queued"
+    RENDERING = "rendering"
+    RENDERED = "rendered"
+    DETECTING = "detecting"
+    PERSISTING = "persisting"
+    COMPLETE = "complete"
+
+
 class ExportPhase(str, Enum):
     """
     Progress phases within an export job.
