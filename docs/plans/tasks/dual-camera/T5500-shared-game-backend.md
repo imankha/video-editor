@@ -104,7 +104,7 @@ not landed first; otherwise T5520's file carries both. One migration file, no co
 ### Related Tasks
 - Part of [dual-camera epic](EPIC.md); blocks T5510-T5560
 - Reuses: shares.py token pattern; T2915 deferred link-resolution; T5330 provenance rules
-- Coordinate: T4910 (share-game-via-link) — overlapping token/claim plumbing, whichever lands first owns it
+- Coordinate: Share the Game epic T5720/T5730 (superseded T4910) — overlapping token/claim plumbing, whichever lands first owns it
 
 ### Technical Notes
 - Knowledge docs: [backend-services.md](../../../.claude/knowledge/backend-services.md), [persistence-sync.md](../../../.claude/knowledge/persistence-sync.md)

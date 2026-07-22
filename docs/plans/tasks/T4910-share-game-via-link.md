@@ -1,6 +1,12 @@
 # T4910: Share a game via link (click-to-claim access + rich link preview)
 
-**Status:** TODO
+> **SUPERSEDED (2026-07-21)** by the [Share the Game epic](team-game-share/EPIC.md):
+> the link/unfurl/watch half became [T5720](team-game-share/T5720-public-game-link-watch-page.md),
+> the claim/materialize half became [T5730](team-game-share/T5730-claim-import-flow.md).
+> The T5330 provenance acceptance criterion carries over verbatim into T5730. Do not implement
+> from this file.
+
+**Status:** SUPERSEDED
 **Impact:** 8
 **Complexity:** 6
 **Created:** 2026-07-11

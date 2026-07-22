@@ -79,8 +79,9 @@ stranger (not a teammate) is the core loop.
    `pending_teammate_shares` / T2915 link-snapshot deferred-resolution pattern; the join
    materialization routes through the T2830/T2850 game-reference helper and stamps
    `shared_by` provenance exactly like `materialize_game_share` (T5330 NUF-blindness).
-   **Coordinate with T4910** (share-game-via-link): whichever lands first owns the
-   token-landing-claim plumbing; the other reuses it.
+   **Coordinate with the Share the Game epic** (T5720 public game link + T5730 claim flow,
+   which superseded T4910): whichever lands first owns the token-landing-claim plumbing; the
+   other reuses it.
 8. **Quest provenance nuance:** a game row created at *join* is shared-in content
    (`shared_by` set — onboarding stays blind to it, T5330). But a member later uploading
    their OWN camera to that game is a genuine upload and SHOULD count for `upload_game`.
@@ -156,7 +157,8 @@ user value without it (view-only toggle).
 - Sharing rails: `src/backend/app/services/pg.py` (`shares`/`share_games`/
   `pending_teammate_shares` DDL), `src/backend/app/routers/shares.py` (token pattern),
   `src/backend/app/services/materialization.py` (provenance), T2830/T2850 game-reference
-  helper, T2915 link-snapshot pattern, T4910 (share-game-via-link — overlapping plumbing)
+  helper, T2915 link-snapshot pattern, [Share the Game epic](../team-game-share/EPIC.md)
+  (T5720/T5730 — overlapping token/claim plumbing; superseded T4910)
 - Multi-video timeline: `src/frontend/src/modes/annotate/hooks/useVirtualTimeline.js`
   (`buildFullVideoTimeline`), [.claude/knowledge/annotate.md](../../../.claude/knowledge/annotate.md)
 - Upload/dedupe: `src/backend/app/routers/games_upload.py` (blake3 upload/finalize)

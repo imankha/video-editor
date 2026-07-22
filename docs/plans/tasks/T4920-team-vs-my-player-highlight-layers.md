@@ -1,6 +1,13 @@
 # T4920: Team vs My Player highlight layers in Annotate
 
-**Status:** TODO
+> **SUPERSEDED (2026-07-21)** by the [Share the Game epic](team-game-share/EPIC.md):
+> became [T5700](team-game-share/T5700-team-layer-annotate.md). Key change from this file's
+> plan: the layer reuses the existing `raw_clips.my_athlete` bit (strictly one layer per
+> clip, user decision 2026-07-21) — **no new schema, no backfill migration**. The per-profile
+> vs per-game ownership question this file raised is resolved: the layer is per-profile by
+> construction (it lives on the profile's own raw_clips rows). Do not implement from this file.
+
+**Status:** SUPERSEDED
 **Impact:** 7
 **Complexity:** 6
 **Created:** 2026-07-11
