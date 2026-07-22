@@ -284,3 +284,48 @@ class TestProgressBridging:
         # Some or all progress may have been delivered before the error
         # (depends on timing of queue drain vs process exit)
         # Just verify no crash
+
+
+class TestFramingProfileContext:
+    """T5680 infra: _framing_sync must re-establish the profile context in the
+    ProcessPoolExecutor child, since ContextVars do NOT cross the process boundary
+    (T2640). Without this the R2 key builder raises 'Profile ID not set' for
+    non-games/ inputs (the games/ streaming path uses a global presigned URL)."""
+
+    def test_framing_sync_sets_profile_context_from_arg(self, monkeypatch):
+        import app.storage as storage
+        from app.profile_context import get_current_profile_id
+        from app.services.local_processors import _framing_sync
+
+        captured = {}
+
+        def fake_download(user_id, relative_path, local_path, *args, **kwargs):
+            # This runs inside _framing_sync, after profile context should be set.
+            captured["profile_id"] = get_current_profile_id()
+            return False  # short-circuit; return error path
+
+        monkeypatch.setattr(storage, "download_from_r2", fake_download)
+
+        result = _framing_sync(
+            job_id="test-framing-profile-ctx-001",
+            user_id="test-user",
+            input_key="working_videos/input.mp4",
+            output_key="working_videos/output.mp4",
+            keyframes=[],
+            profile_id="profile-abc-123",
+        )
+
+        assert captured["profile_id"] == "profile-abc-123"
+        # download stubbed to fail, so framing reports the download error
+        assert result["status"] == "error"
+
+    def test_framing_sync_threads_profile_id_kwarg(self):
+        """_framing_sync must accept a profile_id kwarg defaulting to None so
+        call_modal_framing_ai's MODAL-OFF branch can forward it."""
+        import inspect
+
+        from app.services.local_processors import _framing_sync
+
+        params = inspect.signature(_framing_sync).parameters
+        assert "profile_id" in params
+        assert params["profile_id"].default is None
