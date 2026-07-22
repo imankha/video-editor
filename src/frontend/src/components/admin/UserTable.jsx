@@ -17,14 +17,10 @@ function fmtDuration(seconds) {
   if (!seconds) return '—';
   if (seconds < 60) return '<1m';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  return h > 0 ? `${d}d ${h}h` : `${d}d`;
+  // T5660: hours-only — no days branch (26h, not "1d 2h").
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
 function OriginBadge({ origin }) {

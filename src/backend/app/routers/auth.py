@@ -26,7 +26,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 from app.analytics import _determine_origin, close_session, create_user_segment, record_milestone, update_session
@@ -710,6 +710,51 @@ async def logout(request: Request):
     response = JSONResponse(content={"logged_out": True})
     _delete_cookie(response, "rb_session")
     return response
+
+
+@router.post("/heartbeat", status_code=204)
+async def session_heartbeat(request: Request):
+    """T5660: foreground keep-alive from the client (~60s while the tab is
+    visible). Extends the current session so a heavy continuous user's engaged
+    time is measured accurately instead of the session sitting open and unbanked.
+
+    Reuses update_session's banking machinery — no parallel timing model. The
+    per-tick gap is capped by the SAME new-session boundary: a heartbeat arriving
+    after an idle/backgrounded gap starts a fresh session rather than crediting
+    the whole gap, so a backgrounded tab can't inflate usage even if the client
+    keeps pinging.
+    """
+    session_id = request.cookies.get("rb_session")
+    if session_id:
+        session = validate_session(session_id)
+        if session:
+            is_pwa = request.headers.get("X-PWA") == "1"
+            try:
+                import asyncio
+                await asyncio.to_thread(update_session, session["user_id"], is_pwa=is_pwa)
+            except Exception:
+                logger.exception("[Auth] /heartbeat: update_session failed (ignored)")
+    return Response(status_code=204)
+
+
+@router.post("/session-close", status_code=204)
+async def session_close_beacon(request: Request):
+    """T5660: navigator.sendBeacon target fired on tab-close / visibility→hidden.
+
+    Banks the current (often largest) session without requiring a logout or a
+    return visit (fixes D2). Idempotent via close_session's open-session guard, so
+    a beacon followed by a real logout — or a duplicate beacon — never double-banks.
+    """
+    session_id = request.cookies.get("rb_session")
+    if session_id:
+        session = validate_session(session_id)
+        if session:
+            try:
+                import asyncio
+                await asyncio.to_thread(close_session, session["user_id"])
+            except Exception:
+                logger.exception("[Auth] /session-close: close_session failed (ignored)")
+    return Response(status_code=204)
 
 
 # --- T1650: Report a Problem ---
