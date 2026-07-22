@@ -32,10 +32,12 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   fillEnabled,
   fillOpacity,
   dimStrength,
+  revealEnabled,
   onStrokeWidthChange,
   onFillEnabledChange,
   onFillOpacityChange,
   onDimStrengthChange,
+  onRevealEnabledChange,
   includeAudio,
   onIncludeAudioChange,
   onExportComplete,
@@ -96,10 +98,12 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         fillEnabled={fillEnabled}
         fillOpacity={fillOpacity}
         dimStrength={dimStrength}
+        revealEnabled={revealEnabled}
         onStrokeWidthChange={onStrokeWidthChange}
         onFillEnabledChange={onFillEnabledChange}
         onFillOpacityChange={onFillOpacityChange}
         onDimStrengthChange={onDimStrengthChange}
+        onRevealEnabledChange={onRevealEnabledChange}
         HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={null}
@@ -190,11 +194,13 @@ export function OverlayModeView({
   fillEnabled = false,
   fillOpacity = 0.10,
   dimStrength = 0.15,
+  revealEnabled = false,
   onHighlightShapeChange,
   onStrokeWidthChange,
   onFillEnabledChange,
   onFillOpacityChange,
   onDimStrengthChange,
+  onRevealEnabledChange,
 
   // Player detection (auto-detected during framing export)
   playerDetectionEnabled,
@@ -281,14 +287,19 @@ export function OverlayModeView({
   // region's [startTime, endTime] and currentTime via the shared spec (mirrored on the
   // backend render path). Passed to HighlightOverlay as a display-only multiplier — it
   // touches no keyframe data. Null when no region covers the playhead (overlay hidden).
+  // Gated on `revealEnabled` — an opt-in per-project setting (default OFF, same panel +
+  // persistence pattern as the other spotlight tuning settings). The `enabled` arg lives
+  // IN the shared spec function (computeSpotlightReveal), not a pre-check here, so "off"
+  // is decided identically on the backend render paths — when false it returns the
+  // identity (1,1), so the spotlight renders EXACTLY as it did before this feature existed.
   const spotlightReveal = useMemo(() => {
     if (!highlightRegions?.length) return null;
     const region = highlightRegions.find(
       (r) => r.enabled !== false && currentTime >= r.startTime && currentTime <= r.endTime
     );
     if (!region) return null;
-    return computeSpotlightReveal(currentTime, region.startTime, region.endTime);
-  }, [highlightRegions, currentTime]);
+    return computeSpotlightReveal(currentTime, region.startTime, region.endTime, revealEnabled);
+  }, [highlightRegions, currentTime, revealEnabled]);
 
   // The hint teaches manual override: shown only while tracking is ON, a spotlight is
   // visible, the user hasn't overridden yet this session, AND no tracking/spotlight
@@ -771,10 +782,12 @@ export function OverlayModeView({
             fillEnabled={fillEnabled}
             fillOpacity={fillOpacity}
             dimStrength={dimStrength}
+            revealEnabled={revealEnabled}
             onStrokeWidthChange={onStrokeWidthChange}
             onFillEnabledChange={onFillEnabledChange}
             onFillOpacityChange={onFillOpacityChange}
             onDimStrengthChange={onDimStrengthChange}
+            onRevealEnabledChange={onRevealEnabledChange}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onExportComplete={onExportComplete}

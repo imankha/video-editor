@@ -279,6 +279,7 @@ class OverlayActionData(BaseModel):
     fill_enabled: bool | None = None
     fill_opacity: float | None = None
     dim_strength: float | None = None
+    reveal_enabled: bool | None = None  # T5250: spotlight entrance/exit reveal animation
 
 
 class OverlayAction(BaseModel):
@@ -713,6 +714,12 @@ async def overlay_action(project_id: int, action: OverlayAction):
                 cursor.execute("UPDATE working_videos SET highlight_shape = ? WHERE id = ?", (val, working_video_id))
                 logger.info(f"[Overlay Action] Set highlight_shape to {val}")
 
+            elif action.action == "set_reveal_enabled":
+                if not action.data or action.data.reveal_enabled is None:
+                    raise ValueError("set_reveal_enabled requires data.reveal_enabled")
+                cursor.execute("UPDATE working_videos SET reveal_enabled = ? WHERE id = ?", (int(action.data.reveal_enabled), working_video_id))
+                logger.info(f"[Overlay Action] Set reveal_enabled to {action.data.reveal_enabled}")
+
             else:
                 raise ValueError(f"Unknown action: {action.action}")
 
@@ -836,6 +843,10 @@ def _process_frames_to_ffmpeg(
     # both camelCase (action-written) and snake_case (transform-written) blobs.
     sorted_regions = sorted(highlight_regions, key=lambda r: _region_bounds(r)[0])
 
+    # T5250: reveal is an opt-in per-project setting (default False — off, byte-identical
+    # to pre-T5250 rendering). Read once; overlay_settings doesn't change per-frame.
+    reveal_enabled = bool((overlay_settings or {}).get('reveal_enabled', False))
+
     frame_idx = 0
     try:
         while True:
@@ -861,7 +872,7 @@ def _process_frames_to_ffmpeg(
                 # current_time (shared spec, mirrored in HighlightOverlay + video_processing).
                 # Applied by render_highlight_on_frame — never mutates keyframe data.
                 reveal_opacity, reveal_scale = compute_spotlight_reveal(
-                    current_time, *_region_bounds(active_region)
+                    current_time, *_region_bounds(active_region), reveal_enabled
                 )
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)
@@ -1628,7 +1639,7 @@ async def get_overlay_data(project_id: int):
         cursor.execute("""
             SELECT highlights_data, text_overlays, effect_type, highlight_color, duration,
                    highlight_shape, stroke_width, fill_enabled, fill_opacity, dim_strength,
-                   detections_data
+                   reveal_enabled, detections_data
             FROM working_videos
             WHERE project_id = ?
             ORDER BY version DESC
@@ -1647,6 +1658,7 @@ async def get_overlay_data(project_id: int):
         fill_enabled = True
         fill_opacity = 0.20
         dim_strength = 0.20
+        reveal_enabled = False  # T5250: default OFF
         video_detections = None
 
         if result:
@@ -1677,6 +1689,7 @@ async def get_overlay_data(project_id: int):
             fill_enabled = bool(result['fill_enabled'])
             fill_opacity = result['fill_opacity']
             dim_strength = result['dim_strength']
+            reveal_enabled = bool(result['reveal_enabled'])
 
         # If no project-specific highlights, check raw_clips for defaults
         if not highlights:
@@ -1724,6 +1737,7 @@ async def get_overlay_data(project_id: int):
             'fill_enabled': fill_enabled,
             'fill_opacity': fill_opacity,
             'dim_strength': dim_strength,
+            'reveal_enabled': reveal_enabled,
         })
 
 
@@ -1960,7 +1974,8 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             SELECT p.id, p.name, p.working_video_id,
                    wv.filename as working_filename,
                    wv.highlights_data, wv.effect_type, wv.highlight_color, wv.duration,
-                   wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength
+                   wv.highlight_shape, wv.stroke_width, wv.fill_enabled, wv.fill_opacity, wv.dim_strength,
+                   wv.reveal_enabled
             FROM projects p
             JOIN working_videos wv ON p.working_video_id = wv.id
             WHERE p.id = ?
@@ -1983,6 +1998,7 @@ async def render_overlay(request: OverlayRenderRequest, http_request: Request):
             'fill_enabled': bool(project['fill_enabled']),
             'fill_opacity': project['fill_opacity'],
             'dim_strength': project['dim_strength'],
+            'reveal_enabled': bool(project['reveal_enabled']),
         }
 
         # Create export_jobs record

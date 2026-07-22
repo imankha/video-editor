@@ -26,6 +26,9 @@ export const useOverlayStore = create((set) => ({
   fillEnabled: true,
   fillOpacity: 0.20,
   dimStrength: 0.20,
+  // T5250: spotlight entrance/exit reveal animation — opt-in, default OFF so existing
+  // projects keep rendering exactly as before this feature existed.
+  revealEnabled: false,
 
   isLoadingWorkingVideo: false,
 
@@ -40,6 +43,7 @@ export const useOverlayStore = create((set) => ({
   setFillEnabled: (e) => set({ fillEnabled: e }),
   setFillOpacity: (o) => set({ fillOpacity: o }),
   setDimStrength: (d) => set({ dimStrength: d }),
+  setRevealEnabled: (e) => set({ revealEnabled: e }),
 
   setIsLoadingWorkingVideo: (loading) => set({ isLoadingWorkingVideo: loading }),
 
@@ -53,6 +57,7 @@ export const useOverlayStore = create((set) => ({
     fillEnabled: true,
     fillOpacity: 0.20,
     dimStrength: 0.20,
+    revealEnabled: false,
     isLoadingWorkingVideo: false,
     overlayChangedSinceExport: false,
   }),
@@ -67,3 +72,4 @@ export const useOverlayFillEnabled = () => useOverlayStore(state => state.fillEn
 export const useOverlayFillOpacity = () => useOverlayStore(state => state.fillOpacity);
 export const useOverlayHighlightShape = () => useOverlayStore(state => state.highlightShape);
 export const useOverlayDimStrength = () => useOverlayStore(state => state.dimStrength);
+export const useOverlayRevealEnabled = () => useOverlayStore(state => state.revealEnabled);

@@ -61,6 +61,25 @@ class TestComputeSpotlightReveal:
         assert compute_spotlight_reveal(1, 5, 2) == (1.0, 1.0)  # inverted
 
 
+class TestEnabledGate:
+    """T5250 follow-up: the reveal is an opt-in per-project setting (working_videos.
+    reveal_enabled), default OFF. `enabled` lives as a 4th param ON the shared spec
+    itself (not a pre-check at each call site) so preview and backend render paths
+    decide "off" identically -- mirrored in spotlightReveal.test.js."""
+
+    def test_omitted_enabled_defaults_true_backcompat(self):
+        assert compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5) == \
+            compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5, True)
+
+    @pytest.mark.parametrize("t", [0, ENTRANCE_SEC / 2, ENTRANCE_SEC, 2.5, 5 - EXIT_SEC / 2, 5])
+    def test_disabled_is_identity_at_every_point_in_the_cycle(self, t):
+        assert compute_spotlight_reveal(t, 0, 5, False) == (1.0, 1.0)
+
+    def test_disabled_at_region_start_does_not_pop_invisible(self):
+        # "Off" must skip the envelope entirely, not evaluate it and hide the result.
+        assert compute_spotlight_reveal(0, 0, 5, enabled=False) == (1.0, 1.0)
+
+
 class TestModalInlineParity:
     """The Modal image can't import app.services, so video_processing.py inlines a copy.
     It must match the canonical module byte-for-byte in output across the ramp."""
@@ -82,3 +101,7 @@ class TestModalInlineParity:
     )
     def test_matches_canonical(self, t, start, end):
         assert modal_reveal(t, start, end) == compute_spotlight_reveal(t, start, end)
+
+    @pytest.mark.parametrize("t", [0, ENTRANCE_SEC / 2, 2.5, 5 - EXIT_SEC / 2, 5])
+    def test_matches_canonical_when_disabled(self, t):
+        assert modal_reveal(t, 0, 5, False) == compute_spotlight_reveal(t, 0, 5, False) == (1.0, 1.0)

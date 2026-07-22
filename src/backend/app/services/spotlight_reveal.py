@@ -18,6 +18,14 @@ The envelope returns two multipliers the renderer applies on TOP of whatever the
 interpolator yields:
     - opacity_factor: multiplies stroke / fill / dim / outline opacity (0 invisible, 1 full)
     - radius_scale:   multiplies radiusX / radiusY about the ellipse center (bloom-in)
+
+SETTING-GATED (default OFF): the reveal is an opt-in per-project setting (``working_videos.
+reveal_enabled``, alongside the existing highlight_shape/stroke_width/fill_*/dim_strength
+tuning columns -- same table, same gesture-based surgical persistence pattern). ``enabled``
+is the gate; when false this returns the identity ``(1.0, 1.0)`` regardless of time/bounds,
+so the spotlight renders EXACTLY as it did before this feature existed. The gate lives HERE
+(not scattered at call sites) so preview and export can't drift on how "off" is decided --
+mirrored identically in spotlightReveal.js and the video_processing.py inline copy.
 """
 
 # Timing/easing constants. Mirror in spotlightReveal.js + video_processing.py.
@@ -30,9 +38,12 @@ def _clamp01(v: float) -> float:
     return 0.0 if v < 0 else 1.0 if v > 1 else v
 
 
-def compute_spotlight_reveal(current_time, start_time, end_time):
+def compute_spotlight_reveal(current_time, start_time, end_time, enabled=True):
     """Return ``(opacity_factor, radius_scale)`` for a spotlight at ``current_time``
-    within a region spanning ``[start_time, end_time]`` (seconds)."""
+    within a region spanning ``[start_time, end_time]`` (seconds). ``enabled=False``
+    (the setting's default) returns the identity -- feature off."""
+    if not enabled:
+        return 1.0, 1.0
     if start_time is None or end_time is None:
         return 1.0, 1.0
 

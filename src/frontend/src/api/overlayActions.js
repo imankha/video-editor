@@ -173,6 +173,16 @@ export async function setHighlightShape(projectId, highlightShape) {
   return sendAction(projectId, 'set_highlight_shape', null, { highlight_shape: highlightShape });
 }
 
+/**
+ * Set whether the spotlight entrance/exit reveal animation is enabled (T5250)
+ * @param {number} projectId
+ * @param {boolean} revealEnabled
+ * @returns {Promise<{success: boolean, version: number}>}
+ */
+export async function setRevealEnabled(projectId, revealEnabled) {
+  return sendAction(projectId, 'set_reveal_enabled', null, { reveal_enabled: revealEnabled });
+}
+
 export default {
   createRegion,
   deleteRegion,
@@ -188,4 +198,5 @@ export default {
   setFillOpacity,
   setDimStrength,
   setHighlightShape,
+  setRevealEnabled,
 };

@@ -201,7 +201,8 @@ class LocalGPUProcessor(VideoProcessor):
         output_path: str,
         highlight_regions: list[dict[str, Any]],
         effect_type: str = "dark_overlay",
-        progress: ProgressCallback | None = None
+        progress: ProgressCallback | None = None,
+        overlay_settings: dict | None = None,
     ) -> ProcessingResult:
         """
         Apply highlight overlay using local processing.
@@ -262,6 +263,10 @@ class LocalGPUProcessor(VideoProcessor):
 
             sorted_regions = sorted(highlight_regions, key=lambda r: r["start_time"])
 
+            # T5250: reveal is an opt-in per-project setting (default False — off, byte-
+            # identical to pre-T5250 rendering).
+            reveal_enabled = bool((overlay_settings or {}).get('reveal_enabled', False))
+
             frame_idx = 0
             try:
                 while True:
@@ -287,7 +292,8 @@ class LocalGPUProcessor(VideoProcessor):
                             # T5250: entrance/exit reveal envelope (shared spec) so this
                             # render path matches the editor preview + the primary export.
                             reveal_opacity, reveal_scale = compute_spotlight_reveal(
-                                current_time, active_region["start_time"], active_region["end_time"]
+                                current_time, active_region["start_time"], active_region["end_time"],
+                                reveal_enabled,
                             )
                             frame = KeyframeInterpolator.render_highlight_on_frame(
                                 frame, highlight, (width, height), None, effect_type,

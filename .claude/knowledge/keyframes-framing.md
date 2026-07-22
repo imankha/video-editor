@@ -171,9 +171,34 @@ opacity/radii between the region bounds.
 - **Modal caveat**: the `video_processing.py` change requires a Modal REDEPLOY before it
   takes effect in prod (separate user-gated step). Local/Fly render (containers, Modal
   off) already applies it via `_process_frames_to_ffmpeg`.
-- Coverage: `spotlightReveal.test.js` (9) + `test_spotlight_reveal.py` (18, incl.
+- Coverage: `spotlightReveal.test.js` (12) + `test_spotlight_reveal.py` (31, incl.
   Modal-inline parity). Glow/pulse was intentionally SKIPPED (hard to mirror 1:1 in
   ffmpeg; would jeopardise the preview==export bar).
+- **Opt-in setting, default OFF (T5250 follow-up).** The reveal is NOT always-on — it's a
+  per-project setting alongside the existing highlight_shape/stroke_width/fill_*/
+  dim_strength tuning (same `working_videos` table row, same panel in `ExportButtonView`
+  "Overlay Settings", same gesture-based surgical persist pattern: `wrappedSetX` in
+  `OverlayScreen.jsx` → `dispatchOverlayAction` → `overlayActions.setRevealEnabled` →
+  `overlay.py` `set_reveal_enabled` action → `UPDATE working_videos SET reveal_enabled`).
+  Column `working_videos.reveal_enabled INTEGER DEFAULT 0` (migration
+  `v028_reveal_enabled.py`, mirrors v005/v027's `PRAGMA table_info` idempotent-add
+  pattern). Zustand `overlayStore.revealEnabled` (default `false`), restored from
+  `GET /overlay-data`'s `reveal_enabled` field at BOTH restore call sites in
+  `OverlayScreen.jsx`.
+  - **The gate lives IN the shared spec function, not at each call site.**
+    `computeSpotlightReveal`/`compute_spotlight_reveal`/`_spotlight_reveal` all take a 4th
+    `enabled` param (default `true` — back-compat for direct unit-test calls); when
+    `false` they return the identity `(1, 1)` immediately, before touching time/bounds —
+    this is what makes "off" byte-identical to pre-T5250 rendering rather than a
+    hidden/zeroed envelope. Frontend: `OverlayModeView`'s `spotlightReveal` useMemo passes
+    `revealEnabled` through. Backend: `overlay._process_frames_to_ffmpeg` and
+    `processor_local.apply_overlay` read `overlay_settings.get('reveal_enabled', False)`
+    once before the frame loop; Modal's `_render_highlight` reads
+    `settings.get('reveal_enabled', False)` (settings extraction was reordered to precede
+    the reveal call). `overlay_settings.get(..., False)` means an old/un-migrated row (or
+    any dict missing the key) defaults OFF automatically — no backfill needed.
+  - Read path adds `wv.reveal_enabled` to both `overlay.py` SELECTs that build
+    `overlay_settings` (the GET /overlay-data restore query and the render-endpoint query).
 
 ## Video-level player-detection store (T5600)
 

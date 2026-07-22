@@ -79,11 +79,13 @@ export function OverlayScreen({
     fillEnabled,
     fillOpacity,
     dimStrength,
+    revealEnabled,
     setHighlightShape,
     setStrokeWidth,
     setFillEnabled,
     setFillOpacity,
     setDimStrength,
+    setRevealEnabled,
   } = useOverlayStore();
   const hasClips = clips && clips.length > 0;
 
@@ -542,6 +544,7 @@ export function OverlayScreen({
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
           if (data.dim_strength != null) setDimStrength(data.dim_strength);
+          if (data.reveal_enabled != null) setRevealEnabled(data.reveal_enabled);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -554,7 +557,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setHighlightVideoDetections]);
+  }, [overlayClipMetadata, projectId, overlaySyncState, effectiveOverlayMetadata?.duration, setOverlayClipMetadata, resetHighlightRegions, restoreHighlightRegions, addHighlightRegion, setHighlightEffectType, setHighlightColor, setOverlayChangedSinceExport, setOverlaySyncState, setOverlayLoadedProjectId, setHighlightShape, setStrokeWidth, setFillEnabled, setFillOpacity, setDimStrength, setRevealEnabled, setHighlightVideoDetections]);
 
   // =========================================
   // OVERLAY DATA PERSISTENCE
@@ -618,6 +621,7 @@ export function OverlayScreen({
           if (data.fill_enabled != null) setFillEnabled(data.fill_enabled);
           if (data.fill_opacity != null) setFillOpacity(data.fill_opacity);
           if (data.dim_strength != null) setDimStrength(data.dim_strength);
+          if (data.reveal_enabled != null) setRevealEnabled(data.reveal_enabled);
 
           setOverlayLoadedProjectId(projectId);
           setOverlaySyncState('ready');
@@ -630,7 +634,7 @@ export function OverlayScreen({
         }
       })();
     }
-  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections]);
+  }, [projectId, effectiveOverlayMetadata?.duration, overlaySyncState, restoreHighlightRegions, setHighlightEffectType, setHighlightColor, setHighlightShape, setRevealEnabled, overlayClipMetadata, addHighlightRegion, setOverlaySyncState, setOverlayLoadedProjectId, setOverlayChangedSinceExport, setHighlightVideoDetections]);
 
   // =========================================
   // ACTION-BASED SYNC (replaces full-blob saves)
@@ -809,6 +813,15 @@ export function OverlayScreen({
     }
     setOverlayChangedSinceExport(true);
   }, [setHighlightShape, projectId, canSyncActions, setOverlayChangedSinceExport]);
+
+  const wrappedSetRevealEnabled = useCallback((val) => {
+    track('overlay_settings_change', { field: 'revealEnabled', value: val }, { debugOnly: true });
+    setRevealEnabled(val);
+    if (canSyncActions) {
+      dispatchOverlayAction('setRevealEnabled', () => overlayActions.setRevealEnabled(projectId, val));
+    }
+    setOverlayChangedSinceExport(true);
+  }, [setRevealEnabled, projectId, canSyncActions, setOverlayChangedSinceExport]);
 
   // Dismiss "export complete" toast when user makes changes
   // This lets users know they need to re-export after modifying highlights
@@ -1148,11 +1161,13 @@ export function OverlayScreen({
       fillEnabled={fillEnabled}
       fillOpacity={fillOpacity}
       dimStrength={dimStrength}
+      revealEnabled={revealEnabled}
       onHighlightShapeChange={wrappedSetHighlightShape}
       onStrokeWidthChange={wrappedSetStrokeWidth}
       onFillEnabledChange={wrappedSetFillEnabled}
       onFillOpacityChange={wrappedSetFillOpacity}
       onDimStrengthChange={wrappedSetDimStrength}
+      onRevealEnabledChange={wrappedSetRevealEnabled}
       // Player detection
       playerDetectionEnabled={playerDetectionEnabled}
       playerDetections={playerDetections}

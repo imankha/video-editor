@@ -682,9 +682,12 @@ _REVEAL_EXIT_SEC = 0.25
 _REVEAL_ENTRANCE_START_SCALE = 0.85
 
 
-def _spotlight_reveal(current_time, start_time, end_time):
+def _spotlight_reveal(current_time, start_time, end_time, enabled=True):
     """Return (opacity_factor, radius_scale) for the entrance/exit reveal. See the
-    shared spec in app/services/spotlight_reveal.py — keep the math identical."""
+    shared spec in app/services/spotlight_reveal.py — keep the math identical.
+    `enabled=False` (the setting's default) returns the identity — feature off."""
+    if not enabled:
+        return 1.0, 1.0
     if start_time is None or end_time is None:
         return 1.0, 1.0
     dur = end_time - start_time
@@ -731,8 +734,14 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     if result is None:
         return frame
 
+    settings = overlay_settings or {}
+
     # T5250: entrance/exit reveal envelope (fade + bloom), derived from the region bounds.
-    reveal_opacity, reveal_scale = _spotlight_reveal(current_time, start_time, end_time)
+    # Gated on the `reveal_enabled` setting (default False — feature off, byte-identical
+    # to pre-T5250 rendering).
+    reveal_opacity, reveal_scale = _spotlight_reveal(
+        current_time, start_time, end_time, bool(settings.get('reveal_enabled', False))
+    )
 
     x = result['x']
     y = result['y']
@@ -740,7 +749,6 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
     radius_x = result['radiusX'] * reveal_scale
     radius_y = result['radiusY'] * reveal_scale
 
-    settings = overlay_settings or {}
     if settings.get('highlight_shape') == 'ground':
         y = y + radius_y / 1.3
         radius_x = radius_x * (2.0 / 1.3)
