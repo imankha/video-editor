@@ -279,6 +279,22 @@ keyframed** — camera tilt is constant for a recording.
   `pointerId` (real-browser rule, T5644/T5450). `correctionAngle(p0,p1)` =
   `-(atan2(dy,dx) reduced mod 90 into (−45,45])` → levels a horizon OR a vertical
   (goalpost). `utils/straighten.js`.
+- **Straighten controls HIDDEN by default (T5641, 2026-07-22):** the line-drag
+  capture layer + fine dial in `CropOverlay` are gated on a `straightenVisible`
+  prop. Owner = `FramingModeView` `useState(false)` — EPHEMERAL view state, never
+  persisted (no-persisted-view-state rule; precedent T5610 `circleEditActive`).
+  Toggled by a "Straighten" button rendered INLINE with `<ZoomControls>` in the
+  desktop controls bar (`ml-auto` header, `hidden lg:flex` → desktop-only, same as
+  zoom; the rotation EFFECT still applies on mobile, just no editing UI there).
+  **Load-bearing split: only the CONTROLS toggle — the CSS-rotate `useLayoutEffect`
+  and the OOB dim mask are UNGATED**, so a set angle keeps rotating the `<video>`
+  while the tool is hidden (`displayRotation = liveRotation ?? rotation`; hidden →
+  no gesture → `liveRotation` null → falls back to the persisted `rotation` prop).
+  The old in-toolbar `straightenActive` sub-toggle is GONE — one toggle now reveals
+  both the capture layer and the dial together (revealing = a straighten "mode":
+  the z-20 capture layer intercepts crop drags while visible). Coverage: Vitest
+  `CropOverlay.straighten.test.jsx` (default-hidden, reveal, effect-persists-hidden,
+  MAX_ROT range).
 
 ## Landmines & history
 - **Region trim levers are Pointer Events, not mouse (T5644, 2026-07-21).**

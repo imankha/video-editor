@@ -35,6 +35,7 @@ export default function CropOverlay({
   onCropComplete,
   rotation = 0,
   onSetRotation,
+  straightenVisible = false,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   selectedKeyframeIndex = null,
@@ -63,13 +64,16 @@ export default function CropOverlay({
     { zoom, panOffset, isFullscreen }
   );
 
-  // T5640: straighten-tool state. `straightenActive` toggles the pointer tool;
+  // T5640: straighten-tool state. Visibility of the line-drag tool + fine dial is
+  // owned by the parent (`straightenVisible` prop, T5641) — hidden by default,
+  // toggled from the Straighten button inline with the zoom controls. Hiding the
+  // controls does NOT clear the rotation: the CSS-rotate + OOB mask below are
+  // ungated, so a set angle keeps applying while the editing UI is hidden.
   // `straightenLine` holds the live reference line (screen coords) while dragging;
   // `liveRotation` is a memory-only live preview angle (NOT persisted) shown while
   // dragging the straighten line or scrubbing the dial. The committed `rotation`
   // prop is the source of truth; liveRotation just overrides it for the CSS
   // transform during an in-progress gesture.
-  const [straightenActive, setStraightenActive] = useState(false);
   const [straightenLine, setStraightenLine] = useState(null);
   const [liveRotation, setLiveRotation] = useState(null);
   const straightenDragRef = useRef(null); // { pointerId, p0 }
@@ -616,10 +620,11 @@ export default function CropOverlay({
       </div>
 
       {/* T5640: straighten capture layer — full-overlay pointer surface that is
-          ONLY active while the straighten tool is toggled on. Sits above the
-          reticle (z-20) so the whole frame is a straighten target. touch-action:
-          none + pointer capture + pointerId filter per the real-browser rule. */}
-      {straightenActive && onSetRotation && (
+          ONLY active while the straighten tool is revealed (T5641 `straightenVisible`).
+          Sits above the reticle (z-20) so the whole frame is a straighten target.
+          touch-action: none + pointer capture + pointerId filter per the
+          real-browser rule. */}
+      {straightenVisible && onSetRotation && (
         <div
           className="absolute inset-0 pointer-events-auto"
           style={{ touchAction: 'none', cursor: 'crosshair', zIndex: 20 }}
@@ -645,25 +650,19 @@ export default function CropOverlay({
         </div>
       )}
 
-      {/* T5640: straighten toolbar — toggle, fine dial, nudge, readout, reset.
-          pointer-events:auto (parent is none). Toggle button >= 44px per the
-          coarse-pointer rule. Only shown when the container wired onSetRotation. */}
-      {onSetRotation && interactive && (
+      {/* T5640: straighten dial — fine nudge, slider, readout, reset. Revealed only
+          when the Straighten toggle (inline with zoom, T5641) is on. pointer-events:
+          auto (parent is none). Only shown when the container wired onSetRotation. */}
+      {straightenVisible && onSetRotation && interactive && (
         <div
           className="absolute left-1/2 bottom-2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 bg-gray-900/85 border border-gray-700 rounded-lg px-2 py-1.5"
           style={{ zIndex: 30, touchAction: 'none' }}
           onMouseDown={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={() => setStraightenActive((v) => !v)}
-            className={`flex items-center justify-center min-h-11 min-w-11 px-2 rounded-md text-xs font-medium ${straightenActive ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`}
-            title="Straighten: drag along the horizon (or a vertical) to level it"
-            aria-pressed={straightenActive}
-          >
+          <span className="text-xs font-medium text-gray-300 pl-1 pr-0.5 select-none">
             Straighten
-          </button>
+          </span>
 
           <button
             type="button"
