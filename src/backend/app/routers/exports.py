@@ -42,6 +42,15 @@ def get_export_staging_path() -> Path:
     return path
 
 
+def _has_stage_columns(conn) -> bool:
+    """T5630: export_jobs.stage/output_key may be absent during the deploy->v028
+    window (versioned migrations do not auto-run). Hot reads must tolerate a
+    below-head profile DB — probe the columns before naming them in a SELECT so a
+    still-un-migrated profile does not 500. (PRAGMA rows are tuples: index r[1].)"""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(export_jobs)").fetchall()}
+    return "stage" in cols and "output_key" in cols
+
+
 # ============================================================================
 # Pydantic Models
 # ============================================================================
@@ -69,6 +78,9 @@ class ExportJobResponse(BaseModel):
     # T12: Annotate exports use game_id instead of project_id
     game_id: int | None = None
     game_name: str | None = None
+    # T5630: durable finalize stage (payload-only hook for a future progress panel;
+    # None on a below-head profile DB during the deploy->v028 window).
+    stage: str | None = None
 
 
 class ExportJobListResponse(BaseModel):
@@ -101,18 +113,22 @@ def get_export_job(job_id: str) -> dict | None:
     """Get an export job by ID, including project name."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        extra = ", e.stage, e.output_key" if _has_stage_columns(conn) else ""
+        cursor.execute(f"""
             SELECT e.id, e.project_id, p.name as project_name,
                    e.type, e.status, e.error, e.input_data,
                    e.output_video_id, e.output_filename, e.modal_call_id,
-                   e.created_at, e.started_at, e.completed_at
+                   e.created_at, e.started_at, e.completed_at{extra}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.id = ?
         """, (job_id,))
         row = cursor.fetchone()
         if row:
-            return dict(row)
+            d = dict(row)
+            d.setdefault("stage", None)
+            d.setdefault("output_key", None)
+            return d
     return None
 
 
@@ -120,10 +136,11 @@ def get_project_exports(project_id: int) -> list[dict]:
     """Get all exports for a project, ordered by creation time desc."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        extra = ", stage" if _has_stage_columns(conn) else ""
+        cursor.execute(f"""
             SELECT id, project_id, type, status, error,
                    output_video_id, output_filename,
-                   created_at, started_at, completed_at
+                   created_at, started_at, completed_at{extra}
             FROM export_jobs
             WHERE project_id = ?
             ORDER BY created_at DESC
@@ -430,11 +447,12 @@ def get_active_exports() -> list[dict]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # T12: Include game_id and game_name for annotate exports
-        cursor.execute("""
+        extra = ", e.stage" if _has_stage_columns(conn) else ""
+        cursor.execute(f"""
             SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
                    e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
-                   e.game_id, e.game_name
+                   e.game_id, e.game_name{extra}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('pending', 'processing')
@@ -449,10 +467,11 @@ def get_recent_exports(hours: int = 24) -> list[dict]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         # SQLite datetime comparison
-        cursor.execute("""
+        extra = ", stage" if _has_stage_columns(conn) else ""
+        cursor.execute(f"""
             SELECT id, project_id, type, status, error,
                    output_video_id, output_filename,
-                   created_at, started_at, completed_at
+                   created_at, started_at, completed_at{extra}
             FROM export_jobs
             WHERE created_at >= datetime('now', ? || ' hours')
             ORDER BY created_at DESC
@@ -469,10 +488,11 @@ def get_exports_by_status(statuses: list[str]) -> list[dict]:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         placeholders = ','.join(['?' for _ in statuses])
+        extra = ", stage" if _has_stage_columns(conn) else ""
         cursor.execute(f"""
             SELECT id, project_id, type, status, error,
                    output_video_id, output_filename,
-                   created_at, started_at, completed_at
+                   created_at, started_at, completed_at{extra}
             FROM export_jobs
             WHERE status IN ({placeholders})
             ORDER BY created_at DESC
@@ -692,6 +712,7 @@ async def list_active_exports():
                 # T12: Include game_id and game_name for annotate exports
                 game_id=e.get('game_id'),
                 game_name=e.get('game_name'),
+                stage=e.get('stage'),
             )
             for e in exports
         ]
@@ -723,7 +744,8 @@ async def list_recent_exports(hours: int = Query(default=24, ge=1, le=168)):
                 output_filename=e['output_filename'],
                 created_at=e['created_at'],
                 started_at=e['started_at'],
-                completed_at=e['completed_at']
+                completed_at=e['completed_at'],
+                stage=e.get('stage'),
             )
             for e in exports
         ]
@@ -745,11 +767,12 @@ async def list_unacknowledged_exports():
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        extra = ", e.stage" if _has_stage_columns(conn) else ""
+        cursor.execute(f"""
             SELECT e.id, e.project_id, p.name as project_name, e.type, e.status, e.error,
                    e.output_video_id, e.output_filename,
                    e.created_at, e.started_at, e.completed_at,
-                   e.game_id, e.game_name
+                   e.game_id, e.game_name{extra}
             FROM export_jobs e
             LEFT JOIN projects p ON e.project_id = p.id
             WHERE e.status IN ('complete', 'error')
@@ -776,6 +799,7 @@ async def list_unacknowledged_exports():
                 completed_at=e['completed_at'],
                 game_id=e.get('game_id'),
                 game_name=e.get('game_name'),
+                stage=e.get('stage'),
             )
             for e in exports
         ]
@@ -842,7 +866,8 @@ async def get_export_status(job_id: str):
         output_filename=job['output_filename'],
         created_at=job['created_at'],
         started_at=job['started_at'],
-        completed_at=job['completed_at']
+        completed_at=job['completed_at'],
+        stage=job.get('stage'),
     )
 
 
@@ -1226,7 +1251,8 @@ async def list_project_exports(project_id: int):
                 output_filename=e['output_filename'],
                 created_at=e['created_at'],
                 started_at=e['started_at'],
-                completed_at=e['completed_at']
+                completed_at=e['completed_at'],
+                stage=e.get('stage'),
             )
             for e in exports
         ]

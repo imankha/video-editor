@@ -750,6 +750,8 @@ def ensure_database():
                 acknowledged_at TIMESTAMP,
                 gpu_seconds REAL,
                 modal_function TEXT,
+                stage TEXT DEFAULT 'queued',
+                output_key TEXT,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )
         """)
