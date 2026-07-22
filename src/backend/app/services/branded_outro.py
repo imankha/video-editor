@@ -50,10 +50,21 @@ _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
 
 # ~1.75s: long enough to read the wordmark, short enough to not feel like an ad break.
 OUTRO_DURATION = 1.75
-# Fade the whole card up from black over the first fraction of a second (no hard cut).
-OUTRO_FADE_IN = 0.4
-# Bump when the card LAYOUT changes so stale cached cards (old layout) rebuild.
-_CARD_VERSION = "v2-logo"
+# Entrance beat: a quick WHITE FLASH (the shared "flash" motion vocabulary with the animated
+# player intro, T5210 — the intro flashes out, the outro flashes in) instead of a plain
+# fade-from-black. The card punches in; it does not fade up. (Was OUTRO_FADE_IN=0.4 black fade.)
+OUTRO_FLASH_IN = 0.15
+# Logo reveal: the wordmark slides UP into place while fading in over the first ~half second,
+# ease-out cubic. Mirrors the intro's photo push-in so the two cards read as one system.
+OUTRO_LOGO_REVEAL_ST = 0.08
+OUTRO_LOGO_REVEAL_D = 0.55
+# Staggered captions: "Made with" fades in first, then the URL follows on an offset — not both
+# at once. Each fades over OUTRO_CAPTION_FADE_D; both are fully in (and holding) well before the end.
+OUTRO_MADE_IN_ST = 0.50
+OUTRO_URL_IN_ST = 0.82
+OUTRO_CAPTION_FADE_D = 0.32
+# Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
+_CARD_VERSION = "v3-animated"
 MADE_WITH_TEXT = "Made with"
 URL_TEXT = "reelballers.com"
 
@@ -220,14 +231,39 @@ def _build_outro_card(card_path: str, info: dict) -> None:
     made_y = logo_y - made_fs - round(h * 0.02)    # caption sits just above the logo
     url_y = round(h * 0.88)                         # URL near the bottom edge
 
+    # --- Motion (T5240) ----------------------------------------------------------
+    # The logo starts ~5% of the card height LOW and rises to `logo_y` on an ease-out
+    # cubic while fading up from the background; the two captions then stagger in.
+    # `t` is the card timeline (0..OUTRO_DURATION); the logo is looped into a full-length
+    # stream (see cmd below) so the alpha fade has frames to ramp across.
+    slide_px = round(h * 0.05)
+    # p = eased progress 0..1 over the reveal window; y drifts down by slide_px*(1-p).
+    # Expressions are wrapped in single quotes in the filtergraph, so commas inside them
+    # are protected literally (no backslash escaping needed — that would leak backslashes
+    # into the expression evaluator).
+    logo_p = f"clip((t-{OUTRO_LOGO_REVEAL_ST})/{OUTRO_LOGO_REVEAL_D},0,1)"
+    logo_y_expr = f"{logo_y}+{slide_px}*pow(1-{logo_p},3)"
+
+    def _stagger_alpha(start: float) -> str:
+        """drawtext alpha ramp: 0 before `start`, linear up over the fade, then holds 1."""
+        end = start + OUTRO_CAPTION_FADE_D
+        return f"if(lt(t,{start}),0,if(lt(t,{end}),(t-{start})/{OUTRO_CAPTION_FADE_D},1))"
+
     filter_complex = (
-        f"[1:v]scale=-2:{logo_h}[logo];"
-        f"[0:v][logo]overlay=x=(W-w)/2:y={logo_y}[base];"
+        # Logo: scale, give it an alpha channel, fade it up over the reveal window.
+        f"[1:v]scale=-2:{logo_h},format=rgba,"
+        f"fade=t=in:st={OUTRO_LOGO_REVEAL_ST}:d={OUTRO_LOGO_REVEAL_D}:alpha=1[logo];"
+        # Overlay the logo, sliding up into place (ease-out) as it fades in.
+        f"[0:v][logo]overlay=x=(W-w)/2:y='{logo_y_expr}'[base];"
+        # Staggered captions: "Made with" first, the URL on a later offset.
         f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"
-        f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y},"
+        f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y}:"
+        f"alpha='{_stagger_alpha(OUTRO_MADE_IN_ST)}',"
         f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
-        f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y},"
-        f"fade=t=in:st=0:d={OUTRO_FADE_IN}:color=black,"
+        f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y}:"
+        f"alpha='{_stagger_alpha(OUTRO_URL_IN_ST)}',"
+        # Entrance beat: a quick WHITE flash the card punches in from (shared intro vocab).
+        f"fade=t=in:st=0:d={OUTRO_FLASH_IN}:color=white,"
         f"setsar={info['sar']},format={pix_fmt}[v]"
     )
 
@@ -235,7 +271,9 @@ def _build_outro_card(card_path: str, info: dict) -> None:
         "ffmpeg", "-y",
         "-f", "lavfi",
         "-i", f"color=c={_BG_COLOR}:s={w}x{h}:r={fps_str}:d={OUTRO_DURATION}",
-        "-i", logo,
+        # Loop the still logo into a full-length stream so the alpha fade has frames to
+        # ramp over (a single -i image is one frame — a fade filter can't animate it).
+        "-loop", "1", "-framerate", fps_str, "-t", str(OUTRO_DURATION), "-i", logo,
     ]
     audio_idx = 2
     if info["has_audio"]:
