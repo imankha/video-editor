@@ -624,6 +624,7 @@ def ensure_database():
                 width INTEGER,
                 height INTEGER,
                 fps REAL,
+                rotation REAL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (raw_clip_id) REFERENCES raw_clips(id) ON DELETE CASCADE
