@@ -9,16 +9,31 @@ import { computeSpotlightReveal, SPOTLIGHT_REVEAL } from './spotlightReveal';
 describe('computeSpotlightReveal', () => {
   const { ENTRANCE_SEC, EXIT_SEC, ENTRANCE_START_SCALE } = SPOTLIGHT_REVEAL;
 
-  it('is invisible (opacity 0) exactly at region start, and scaled to the entrance-start radius', () => {
+  it('is invisible (opacity 0) exactly at region start, and starts LARGER than form-fitting (contract)', () => {
     const r = computeSpotlightReveal(0, 0, 5);
     expect(r.opacityFactor).toBe(0);
+    // Entrance is a focus-pull: the ring begins oversized (>1) and contracts to 1.0.
+    expect(ENTRANCE_START_SCALE).toBeGreaterThan(1);
     expect(r.radiusScale).toBeCloseTo(ENTRANCE_START_SCALE, 6);
   });
 
-  it('is fully revealed (opacity 1, scale 1) once the entrance ramp completes', () => {
+  it('is fully revealed (opacity 1, scale contracted to 1) once the entrance ramp completes', () => {
     const r = computeSpotlightReveal(ENTRANCE_SEC, 0, 5);
     expect(r.opacityFactor).toBe(1);
     expect(r.radiusScale).toBe(1);
+  });
+
+  it('CONTRACTS the radius monotonically from oversized down to 1.0 across the entrance', () => {
+    const scales = [0, 0.25, 0.5, 0.75, 1].map(
+      (f) => computeSpotlightReveal(ENTRANCE_SEC * f, 0, 5).radiusScale
+    );
+    // Strictly decreasing: big -> fitting. Every intermediate scale stays > 1.
+    for (let i = 1; i < scales.length; i++) {
+      expect(scales[i]).toBeLessThan(scales[i - 1]);
+    }
+    expect(scales[0]).toBeCloseTo(ENTRANCE_START_SCALE, 6);
+    expect(scales.slice(0, -1).every((s) => s > 1)).toBe(true);
+    expect(scales[scales.length - 1]).toBe(1);
   });
 
   it('is a no-op (1, 1) in the steady middle of a region', () => {
@@ -26,12 +41,16 @@ describe('computeSpotlightReveal', () => {
     expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
   });
 
-  it('ramps opacity with ease-OUT on entrance (past the linear midpoint at half-time)', () => {
-    // ease-out quad at p=0.5 => 1 - 0.25 = 0.75 > 0.5 (linear). Decelerating into full.
+  it('ramps opacity with ease-OUT on entrance, FASTER than the contraction so the big ring reads bold', () => {
+    // Opacity is ease-out CUBIC: at p=0.5 => 1 - 0.5^3 = 0.875 (well past linear 0.5).
     const r = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5);
-    expect(r.opacityFactor).toBeCloseTo(0.75, 6);
-    // radius blooms on the same eased curve: 0.85 + 0.15*0.75
+    expect(r.opacityFactor).toBeCloseTo(0.875, 6);
+    // Radius contracts on ease-out QUAD (trails opacity): START + (1-START)*0.75, still > 1.
     expect(r.radiusScale).toBeCloseTo(ENTRANCE_START_SCALE + (1 - ENTRANCE_START_SCALE) * 0.75, 6);
+    expect(r.radiusScale).toBeGreaterThan(1);
+    // Opacity (0.875) leads the contraction progress (0.75) — ring is near-full bright
+    // while still visibly oversized.
+    expect(r.opacityFactor).toBeGreaterThan(0.75);
   });
 
   it('fades to 0 at region end with NO scale change on exit', () => {

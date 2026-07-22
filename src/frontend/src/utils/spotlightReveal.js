@@ -3,10 +3,11 @@
  * highlight (T5250).
  *
  * The spotlight used to POP on/off at a region's [start, end] bounds. This envelope
- * gives it a premium entrance bloom (fade + slight scale-up, ease-out) and an exit
- * fade (ease-in), computed PURELY from the region bounds and the current time. It is a
- * DERIVED, render-time visual layer — it never writes keyframes, so it can't corrupt
- * saved data or violate the gesture-persistence rule (T350 class).
+ * gives it a premium entrance FOCUS-PULL (fade-in while a larger ring CONTRACTS down to
+ * the form-fitting size, ease-out) and an exit fade (ease-in), computed PURELY from the
+ * region bounds and the current time. It is a DERIVED, render-time visual layer — it
+ * never writes keyframes, so it can't corrupt saved data or violate the
+ * gesture-persistence rule (T350 class).
  *
  * SHARED SPEC — this file is the single source of the timing/easing. It is MIRRORED, not
  * imported, on the backend render side (the crop/default-shape mirroring pattern):
@@ -17,7 +18,8 @@
  * The envelope returns two multipliers the renderer applies on TOP of whatever the
  * keyframe interpolator yields:
  *   - opacityFactor: multiplies stroke / fill / dim / outline opacity (0 = invisible, 1 = full)
- *   - radiusScale:  multiplies radiusX / radiusY about the ellipse center (bloom-in)
+ *   - radiusScale:  multiplies radiusX / radiusY about the ellipse center (contract-in:
+ *                   starts LARGER than 1 and tightens to 1.0 = form-fitting)
  *
  * SETTING-GATED (default OFF): the reveal is an opt-in per-project setting (alongside the
  * existing spotlight shape/stroke/fill/dim tuning — same panel, same gesture-based surgical
@@ -29,9 +31,9 @@
 
 // Timing/easing constants. Mirror in spotlight_reveal.py + video_processing.py.
 export const SPOTLIGHT_REVEAL = {
-  ENTRANCE_SEC: 0.35, // entrance ramp length (fade + scale-up)
+  ENTRANCE_SEC: 0.35, // entrance ramp length (fade-in + contract)
   EXIT_SEC: 0.25, // exit fade length
-  ENTRANCE_START_SCALE: 0.85, // radii start at 85% and bloom to 100% over the entrance
+  ENTRANCE_START_SCALE: 1.35, // radii start 35% LARGER and CONTRACT to 100% (focus-pull) over the entrance
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -59,16 +61,21 @@ export function computeSpotlightReveal(currentTime, startTime, endTime, enabled 
   const entrance = Math.min(SPOTLIGHT_REVEAL.ENTRANCE_SEC, dur / 2);
   const exit = Math.min(SPOTLIGHT_REVEAL.EXIT_SEC, dur / 2);
 
-  // Entrance: ease-OUT fade (fast start, decelerate to full) + scale-up from
-  // ENTRANCE_START_SCALE to 1.0 on the same eased curve, so the spotlight blooms on.
+  // Entrance: a FOCUS-PULL. The ring appears ~35% LARGER (ENTRANCE_START_SCALE) and
+  // CONTRACTS down to 1.0 (form-fitting), catching the eye before it tightens onto the
+  // player. Opacity fades in on a FASTER ease-out (cubic) than the contraction (quad), so
+  // the big ring reads clearly at near-full opacity while it's still oversized — it lands
+  // bold, then snaps in, rather than fading up faint. Since ENTRANCE_START_SCALE > 1, the
+  // shared `START + (1 - START) * e` formula interpolates big -> fitting automatically.
   if (entrance > 0 && currentTime < startTime + entrance) {
     const p = clamp01((currentTime - startTime) / entrance);
-    const e = 1 - (1 - p) * (1 - p); // ease-out quad
+    const eFade = 1 - (1 - p) * (1 - p) * (1 - p); // ease-out cubic (opacity leads)
+    const eContract = 1 - (1 - p) * (1 - p); // ease-out quad (radius trails)
     return {
-      opacityFactor: e,
+      opacityFactor: eFade,
       radiusScale:
         SPOTLIGHT_REVEAL.ENTRANCE_START_SCALE +
-        (1 - SPOTLIGHT_REVEAL.ENTRANCE_START_SCALE) * e,
+        (1 - SPOTLIGHT_REVEAL.ENTRANCE_START_SCALE) * eContract,
     };
   }
 

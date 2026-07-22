@@ -679,7 +679,7 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
 #   - src/frontend/src/utils/spotlightReveal.js     (frontend canonical)
 _REVEAL_ENTRANCE_SEC = 0.35
 _REVEAL_EXIT_SEC = 0.25
-_REVEAL_ENTRANCE_START_SCALE = 0.85
+_REVEAL_ENTRANCE_START_SCALE = 1.35  # radii start 35% LARGER and CONTRACT to 100% (focus-pull)
 
 
 def _spotlight_reveal(current_time, start_time, end_time, enabled=True):
@@ -696,9 +696,12 @@ def _spotlight_reveal(current_time, start_time, end_time, enabled=True):
     entrance = min(_REVEAL_ENTRANCE_SEC, dur / 2)
     exit_ = min(_REVEAL_EXIT_SEC, dur / 2)
     if entrance > 0 and current_time < start_time + entrance:
+        # Focus-pull: opacity fades in on a faster ease-out (cubic) than the contraction
+        # (quad), so the ~35%-larger ring reads bold before it tightens to form-fitting.
         p = max(0.0, min(1.0, (current_time - start_time) / entrance))
-        e = 1 - (1 - p) * (1 - p)  # ease-out quad
-        return e, _REVEAL_ENTRANCE_START_SCALE + (1 - _REVEAL_ENTRANCE_START_SCALE) * e
+        e_fade = 1 - (1 - p) * (1 - p) * (1 - p)  # ease-out cubic (opacity leads)
+        e_contract = 1 - (1 - p) * (1 - p)  # ease-out quad (radius trails)
+        return e_fade, _REVEAL_ENTRANCE_START_SCALE + (1 - _REVEAL_ENTRANCE_START_SCALE) * e_contract
     if exit_ > 0 and current_time > end_time - exit_:
         q = max(0.0, min(1.0, (end_time - current_time) / exit_))
         return q * q, 1.0  # ease-in quad
@@ -711,7 +714,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     Uses Catmull-Rom cubic spline interpolation matching frontend.
     Supports bold stroke with dark outline, optional fill, configurable dim.
-    Applies the T5250 entrance/exit reveal envelope (fade + bloom) on top.
+    Applies the T5250 entrance/exit reveal envelope (fade + contract focus-pull) on top.
     """
     import cv2
     import numpy as np
@@ -736,7 +739,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     settings = overlay_settings or {}
 
-    # T5250: entrance/exit reveal envelope (fade + bloom), derived from the region bounds.
+    # T5250: entrance/exit reveal envelope (fade + contract focus-pull), derived from the region bounds.
     # Gated on the `reveal_enabled` setting (default False — feature off, byte-identical
     # to pre-T5250 rendering).
     reveal_opacity, reveal_scale = _spotlight_reveal(

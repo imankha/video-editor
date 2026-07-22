@@ -19,23 +19,40 @@ from app.services.spotlight_reveal import (
 
 
 class TestComputeSpotlightReveal:
-    def test_invisible_at_region_start_scaled_to_entrance_start(self):
+    def test_invisible_at_region_start_starts_larger_than_fitting(self):
         opacity, scale = compute_spotlight_reveal(0, 0, 5)
         assert opacity == 0
+        # Entrance is a focus-pull: the ring begins oversized (>1) and contracts to 1.0.
+        assert ENTRANCE_START_SCALE > 1
         assert scale == pytest.approx(ENTRANCE_START_SCALE)
 
     def test_fully_revealed_after_entrance_ramp(self):
         opacity, scale = compute_spotlight_reveal(ENTRANCE_SEC, 0, 5)
         assert opacity == 1
-        assert scale == 1
+        assert scale == 1  # contracted to form-fitting
+
+    def test_radius_contracts_monotonically_from_oversized_to_one(self):
+        scales = [
+            compute_spotlight_reveal(ENTRANCE_SEC * f, 0, 5)[1]
+            for f in (0, 0.25, 0.5, 0.75, 1)
+        ]
+        # Strictly decreasing: big -> fitting. Every intermediate scale stays > 1.
+        assert all(scales[i] < scales[i - 1] for i in range(1, len(scales)))
+        assert scales[0] == pytest.approx(ENTRANCE_START_SCALE)
+        assert all(s > 1 for s in scales[:-1])
+        assert scales[-1] == 1
 
     def test_noop_in_steady_middle(self):
         assert compute_spotlight_reveal(2.5, 0, 5) == (1.0, 1.0)
 
-    def test_entrance_is_ease_out(self):
+    def test_entrance_opacity_ease_out_leads_contraction(self):
         opacity, scale = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5)
-        assert opacity == pytest.approx(0.75)  # 1 - 0.25, past linear 0.5
+        # Opacity is ease-out CUBIC: 1 - 0.5**3 = 0.875, well past linear 0.5.
+        assert opacity == pytest.approx(0.875)
+        # Radius contracts on ease-out QUAD (trails opacity): START + (1-START)*0.75, > 1.
         assert scale == pytest.approx(ENTRANCE_START_SCALE + (1 - ENTRANCE_START_SCALE) * 0.75)
+        assert scale > 1
+        assert opacity > 0.75  # opacity leads the contraction progress (0.75)
 
     def test_fades_to_zero_at_end_no_scale_change(self):
         opacity, scale = compute_spotlight_reveal(5, 0, 5)
