@@ -17,12 +17,14 @@ import { useProject } from '../contexts/ProjectContext';
 import { useEditorStore, EDITOR_MODES } from '../stores/editorStore';
 import { useOverlayStore } from '../stores/overlayStore';
 import { useProjectDataStore } from '../stores/projectDataStore';
+import { useProjectsStore } from '../stores/projectsStore';
 import { useFramingStore } from '../stores/framingStore';
 import { useExportStore } from '../stores/exportStore';
 import { useQuestStore } from '../stores/questStore';
 import * as overlayActions from '../api/overlayActions';
 import { dispatchOverlayAction, useOverlayActionStore } from '../stores/overlayActionStore';
 import { track } from '../utils/analytics';
+import { clipGameClock } from '../utils/timeFormat';
 
 /**
  * OverlayScreen - Self-contained screen for Overlay mode
@@ -93,6 +95,31 @@ export function OverlayScreen({
     const allTags = clips.flatMap(c => c.tags || []);
     return [...new Set(allTags)]; // Unique tags
   }, [clips]);
+
+  // T5670: game name + in-match game clock for the current reel. Sourced from the
+  // projects list item (already loaded at bootstrap / by fetchProjects) — the detail
+  // response (`project`) carries no game info. `game_names` is the display name and
+  // `clip_game_start_time` is the unified in-match start the backend already computes
+  // for single-clip reels (compute_unified_clip_start, T3920), which equals what
+  // Annotate shows for the same clip. Reuse the shared clipGameClock formatter so the
+  // clock string matches Annotate exactly (single-video reels have no boundaryOffsets
+  // because the offset is already baked into clip_game_start_time).
+  const projectListItem = useProjectsStore(state => state.projects.find(p => p.id === projectId));
+  const gameName = projectListItem?.game_names?.[0] || null;
+  const gameClock = clipGameClock({ startTime: projectListItem?.clip_game_start_time });
+
+  // Surface a real data gap without a silent fallback: a reel that references a game
+  // should resolve a name, and a single-clip reel should resolve its in-match clock.
+  // (A multi-clip reel's clip_game_start_time is intentionally null, so it is NOT a gap.)
+  useEffect(() => {
+    if (!projectListItem?.game_ids?.length) return;
+    if (!gameName) {
+      console.warn(`[OverlayScreen] Project ${projectId} references game(s) ${projectListItem.game_ids} but no game name resolved - data gap.`);
+    }
+    if (projectListItem.clip_count === 1 && gameClock == null) {
+      console.warn(`[OverlayScreen] Single-clip project ${projectId} references a game but has no in-match timestamp - data gap (re-export to backfill).`);
+    }
+  }, [projectId, projectListItem, gameName, gameClock]);
 
   // Framing store - for detecting uncommitted changes
   const hasChangedSinceExport = useFramingStore(state => state.hasChangedSinceExport);
@@ -1091,6 +1118,8 @@ export function OverlayScreen({
       effectiveOverlayFile={effectiveOverlayFile}
       videoTitle={project?.name}
       videoTags={clipTags}
+      gameName={gameName}
+      gameClock={gameClock}
       currentTime={currentTime}
       duration={duration}
       isPlaying={isPlaying}
