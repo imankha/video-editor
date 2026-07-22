@@ -49,7 +49,7 @@ def _set_export_stage(job_id: str, stage: str) -> None:
         with get_db_connection() as conn:
             conn.cursor().execute("UPDATE export_jobs SET stage = ? WHERE id = ?", (stage, job_id))
             conn.commit()
-    except Exception as e:  # noqa: BLE001 — column may not exist pre-v028
+    except Exception as e:
         logger.warning(f"[Finalize] Could not set stage={stage} for job {job_id}: {e}")
 
 
@@ -219,7 +219,7 @@ async def finalize_export(
                     ("Modal result incomplete: no output_key", job_id),
                 )
                 conn.commit()
-        except Exception as db_err:  # noqa: BLE001
+        except Exception as db_err:
             logger.error(f"[Finalize] Also failed to mark job {job_id} error: {db_err}", exc_info=True)
         return {"finalized": False, "error": "Modal result incomplete: no output_key"}
 
@@ -245,7 +245,7 @@ async def finalize_export(
             progress_callback=progress_callback,
         )
         logger.info(f"[Finalize] Detection complete for job {job_id}: {len(regions)} regions")
-    except Exception as det_error:  # noqa: BLE001
+    except Exception as det_error:
         logger.warning(f"[Finalize] Detection failed for job {job_id}, using defaults: {det_error}")
         # Fallback uses _empty_video_detections() — BINDING fidelity rule #2 (NOT None).
         regions = generate_default_highlight_regions(source_clips)

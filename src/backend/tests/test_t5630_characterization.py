@@ -300,23 +300,46 @@ async def test_char_local_inband_complete(project, monkeypatch):
 
 
 # ============================================================================
-# (c) recovery — writer 3 CURRENT BUGGY minimal row (flipped in recovery commit)
+# (c) recovery — writer 3 FLIPPED: recovery == normal export (the T5630 fix)
 # ============================================================================
 
+def _create_rendered_job(export_id, project_id):
+    """A job that reached stage='rendered' (output_key + input_data persisted)
+    but was interrupted before finalize — exactly the Brilliant-Control state."""
+    from app.utils.encoding import encode_data as _enc
+    input_data = _enc({"clips": [{"clipIndex": 0, "duration": 5.0, "clipName": "Clip A"}],
+                       "transition": {"type": "cut", "duration": 0}})
+    with get_db_connection() as conn:
+        conn.cursor().execute(
+            "INSERT INTO export_jobs (id, project_id, type, status, input_data, stage, output_key, modal_call_id) "
+            "VALUES (?, ?, 'framing', 'processing', ?, 'rendered', ?, 'fc-xyz')",
+            (export_id, project_id, input_data, "working_videos/working_rec_abc.mp4"),
+        )
+        conn.commit()
+
+
 @pytest.mark.asyncio
-async def test_char_recovery_current_minimal_row(project, monkeypatch):
-    """CURRENT behavior: finalize_modal_export writes a minimal working_videos
-    row (filename only) — NO highlights_data, NO detections_data, NO duration.
-    This is the Brilliant-Control bug; the recovery-flip commit REPLACES this
-    assertion with the fixed (populated-highlights) expectation."""
+async def test_char_recovery_completes_like_normal_export(project, monkeypatch):
+    """FIXED (T5630): recovery runs the SAME finalize_export as an in-band export,
+    so an interrupted export recovers into FULL overlay data — non-empty
+    highlights_data with a region + populated detections_data — NOT the old lossy
+    minimal row. This is the Brilliant-Control acceptance criterion.
+
+    (Replaces the pre-T5630 characterization that pinned the buggy empty row.)"""
     export_id = f"exp-{uuid.uuid4().hex[:8]}"
-    _create_job(export_id, project)
+    _create_rendered_job(export_id, project)
     monkeypatch.setattr(exports_router, "record_milestone", lambda *a, **k: None)
 
+    async def fake_detect(**kwargs):
+        return FAKE_REGIONS, FAKE_VIDEO_DETECTIONS
+
+    monkeypatch.setattr(mc, "run_player_detection_for_highlights", fake_detect)
+    monkeypatch.setattr(helpers, "sync_export_db_to_r2", lambda *a, **k: True)
+
     job = exports_router.get_export_job(export_id)
-    result = exports_router.finalize_modal_export(
+    result = await exports_router.finalize_modal_export(
         job=job,
-        modal_result={"output_key": "working_videos/working_rec_abc.mp4"},
+        modal_result={"gpu_seconds": 1.0, "modal_function": "test"},  # output_key from persisted checkpoint
         user_id=TEST_USER_ID,
     )
 
@@ -324,17 +347,40 @@ async def test_char_recovery_current_minimal_row(project, monkeypatch):
     with get_db_connection() as conn:
         cur = conn.cursor()
         wv = cur.execute(
-            "SELECT filename, highlights_data, detections_data, duration FROM working_videos WHERE project_id = ?",
+            "SELECT filename, highlights_data, detections_data FROM working_videos WHERE project_id = ?",
             (project,),
         ).fetchone()
         proj_ptr = cur.execute("SELECT working_video_id FROM projects WHERE id = ?", (project,)).fetchone()[0]
-        job_row = cur.execute("SELECT status, output_filename FROM export_jobs WHERE id = ?", (export_id,)).fetchone()
+        job_row = cur.execute("SELECT status, stage, output_filename FROM export_jobs WHERE id = ?", (export_id,)).fetchone()
+        wc_exported = cur.execute("SELECT exported_at FROM working_clips WHERE project_id = ?", (project,)).fetchone()[0]
 
     assert wv["filename"] == "working_rec_abc.mp4"
-    # THE BUG: recovery produced NO overlay data.
-    assert wv["highlights_data"] is None
-    assert wv["detections_data"] is None
-    assert wv["duration"] is None
+    # THE FIX: recovery now produced full overlay data.
+    assert decode_data(wv["highlights_data"]) == FAKE_REGIONS
+    assert decode_data(wv["detections_data"]) == FAKE_VIDEO_DETECTIONS
     assert proj_ptr is not None
     assert job_row["status"] == "complete"
+    assert job_row["stage"] == "complete"
     assert job_row["output_filename"] == "working_rec_abc.mp4"
+    assert wc_exported is not None
+
+
+@pytest.mark.asyncio
+async def test_char_recovery_no_output_key_still_fails_loudly(project, monkeypatch):
+    """A pre-v028 job with no persisted output_key AND a Modal result missing one
+    must still fail loudly (T4240) — never fabricate a filename / empty row."""
+    export_id = f"exp-{uuid.uuid4().hex[:8]}"
+    _create_job(export_id, project)  # input_data='{}', no stage/output_key set
+    monkeypatch.setattr(exports_router, "record_milestone", lambda *a, **k: None)
+
+    job = exports_router.get_export_job(export_id)
+    result = await exports_router.finalize_modal_export(
+        job=job, modal_result={}, user_id=TEST_USER_ID,  # no output_key anywhere
+    )
+
+    assert result["finalized"] is False and "output_key" in result["error"]
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        count = cur.execute("SELECT COUNT(*) c FROM working_videos WHERE project_id = ?", (project,)).fetchone()["c"]
+        status = cur.execute("SELECT status FROM export_jobs WHERE id = ?", (export_id,)).fetchone()[0]
+    assert count == 0 and status == "error"

@@ -15,7 +15,6 @@ Key design principles:
 import json
 import logging
 import math
-import sqlite3
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -202,134 +201,52 @@ def delete_export_job(job_id: str) -> bool:
         return cursor.rowcount > 0
 
 
-def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
+async def finalize_modal_export(job: dict, modal_result: dict, user_id: str) -> dict:
     """
-    Finalize a Modal export that completed while the user was away.
+    Finalize a Modal export discovered complete during recovery (thin adapter).
 
-    This creates the working_video record, updates the project, and marks
-    the export_jobs as complete. Called by /modal-status when it discovers
-    a completed Modal job that our DB doesn't know about yet.
+    T5630: recovery now runs the SAME unified finalize_export as a normal in-band
+    export — detect -> persist -> sync — so a restart-interrupted export recovers
+    into FULL overlay data (highlights + detections), not the old lossy minimal
+    working_videos row that skipped detection (the Brilliant-Control incident).
 
-    SAFETY FEATURES:
-    - Idempotent: checks if already finalized before creating records
-    - User validation: verifies user owns the project before finalizing
+    output_key comes from the persisted 'rendered' checkpoint
+    (export_jobs.output_key). For pre-v028 jobs that never persisted it, fall back
+    to modal_result.output_key (the transitional path). A truly-empty output_key
+    still fails loudly inside finalize_export (T4240: never fabricate a filename).
 
     Args:
-        job: The export_jobs record
-        modal_result: The result dict from Modal
-        user_id: The user's ID for R2 paths
+        job: The export_jobs record (from get_export_job — carries stage/output_key/input_data).
+        modal_result: The result dict from Modal (gpu_seconds/modal_function/fallback output_key).
+        user_id: The user's ID for R2 paths.
 
     Returns:
-        Dict with finalization result
+        Dict with finalization result (finalized/working_video_id/output_filename/error).
     """
-    job_id = job['id']
-    project_id = job['project_id']
-    output_key = modal_result.get('output_key', '')
+    from ..profile_context import get_current_profile_id
+    from ..services.export_finalize import finalize_export
 
-    # T4240: never fabricate a filename. A Modal result with no output_key means the
-    # render produced no output object; inventing recovered_{job_id}.mp4 would create a
-    # working_videos row pointing at an R2 object that doesn't exist (a lost-reference
-    # bug). Fail the recovery loudly for this job and mark it error instead.
-    if not output_key:
-        logger.error(f"[ExportJobs] Cannot finalize job {job_id}: Modal result missing output_key")
-        try:
-            with get_db_connection() as conn:
-                conn.cursor().execute("""
-                    UPDATE export_jobs
-                    SET status = 'error',
-                        error = 'Modal result incomplete: no output_key',
-                        completed_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                """, (job_id,))
-                conn.commit()
-        except sqlite3.Error as db_err:
-            logger.error(f"[ExportJobs] Also failed to mark job {job_id} error: {db_err}", exc_info=True)
-        return {
-            "finalized": False,
-            "error": "Modal result incomplete: no output_key",
-        }
+    # Prefer the durably-persisted render key; fall back to the Modal result for
+    # jobs that predate the output_key checkpoint (deploy->v028 window).
+    output_key = job.get('output_key') or modal_result.get('output_key', '')
+    profile_id = get_current_profile_id()
 
-    # Extract filename from output_key (e.g., "working_videos/working_123_abc.mp4" -> "working_123_abc.mp4")
-    output_filename = output_key.split('/')[-1]
+    result = await finalize_export(
+        job,
+        output_key=output_key,
+        user_id=user_id,
+        profile_id=profile_id,
+        gpu_seconds=modal_result.get('gpu_seconds'),
+        modal_function=modal_result.get('modal_function'),
+    )
 
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
+    # Record the recovery milestone only for a fresh finalize (not an idempotent
+    # no-op on an already-complete job) — preserves the pre-T5630 recovery signal.
+    if result.get('finalized') and not result.get('already_finalized'):
+        record_milestone(user_id, "export_completed", {"export_id": job['id'], "type": "recovered"})
+        logger.info(f"[ExportJobs] Finalized recovered export {job['id']}: working_video_id={result.get('working_video_id')}")
 
-            # IDEMPOTENCY CHECK: If job already finalized, return existing data
-            cursor.execute("""
-                SELECT status, output_video_id, output_filename
-                FROM export_jobs WHERE id = ?
-            """, (job_id,))
-            current_job = cursor.fetchone()
-            if current_job and current_job['status'] == 'complete':
-                logger.info(f"[ExportJobs] Job {job_id} already finalized, returning existing data")
-                return {
-                    "finalized": True,
-                    "already_finalized": True,
-                    "working_video_id": current_job['output_video_id'],
-                    "output_filename": current_job['output_filename'],
-                }
-
-            # USER VALIDATION: Verify user owns this project
-            # The project's user_id should match the requesting user
-            # For now, we check that the project exists (user isolation is handled by middleware)
-            cursor.execute("SELECT id FROM projects WHERE id = ?", (project_id,))
-            if not cursor.fetchone():
-                logger.error(f"[ExportJobs] Project {project_id} not found for job {job_id}")
-                return {
-                    "finalized": False,
-                    "error": "Project not found"
-                }
-
-            # Create working_video record (presigned_url generated on-the-fly, not stored)
-            cursor.execute("""
-                INSERT INTO working_videos (project_id, filename)
-                VALUES (?, ?)
-            """, (project_id, output_filename))
-            working_video_id = cursor.lastrowid
-
-            # Update project to point to the new working video
-            cursor.execute("""
-                UPDATE projects SET working_video_id = ? WHERE id = ?
-            """, (working_video_id, project_id))
-
-            # Update export_jobs to complete
-            cursor.execute("""
-                UPDATE export_jobs
-                SET status = 'complete',
-                    output_video_id = ?,
-                    output_filename = ?,
-                    completed_at = CURRENT_TIMESTAMP
-                WHERE id = ?
-            """, (working_video_id, output_filename, job_id))
-
-            conn.commit()
-
-        record_milestone(user_id, "export_completed", {"export_id": job_id, "type": "recovered"})
-        logger.info(f"[ExportJobs] Finalized recovered export {job_id}: working_video_id={working_video_id}")
-
-        # T4790: presigned_url was an undefined name here (NameError) — working
-        # videos generate URLs on-the-fly (see comment above), they are not stored,
-        # so the finalize response omits it. The idempotency path already omits it
-        # and the caller reads it with .get(), so consumers already tolerate absence.
-        return {
-            "finalized": True,
-            "working_video_id": working_video_id,
-            "output_filename": output_filename,
-        }
-
-    except sqlite3.Error as e:
-        # T4240: narrowed from a bare `except Exception`, which masked programming
-        # errors (e.g. the old undefined-`presigned_url` NameError) as a fake
-        # "finalized: False" for an export that had already committed. Only DB errors
-        # are handled here; anything else propagates (a 500 with a stack trace beats a
-        # lying "not finalized").
-        logger.error(f"[ExportJobs] Failed to finalize export {job_id}: {e}", exc_info=True)
-        return {
-            "finalized": False,
-            "error": str(e)
-        }
+    return result
 
 
 def check_modal_job_running(modal_call_id: str) -> bool | None:
@@ -930,7 +847,7 @@ async def check_modal_status(job_id: str):
                 if result.get('status') == 'success':
                     # Finalize the export (create working_video, update project, etc.)
                     user_id = get_current_user_id()
-                    finalization = finalize_modal_export(job, result, user_id)
+                    finalization = await finalize_modal_export(job, result, user_id)
 
                     if finalization.get('finalized'):
                         return {
@@ -1154,7 +1071,7 @@ async def resume_progress(job_id: str, background_tasks: BackgroundTasks):
 
                     if result.get('status') == 'success':
                         user_id = get_current_user_id()
-                        finalization = finalize_modal_export(job, result, user_id)
+                        finalization = await finalize_modal_export(job, result, user_id)
 
                         progress_data = {
                             "progress": 100,
