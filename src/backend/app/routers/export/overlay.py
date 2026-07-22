@@ -1831,6 +1831,7 @@ async def _run_overlay_export_background(
             progress_callback=progress_callback,
             call_id_callback=modal_call_id_callback,
             overlay_settings=overlay_settings,
+            profile_id=profile_id,
         )
 
         if result.get("status") != "success":

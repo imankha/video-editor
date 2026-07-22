@@ -994,6 +994,7 @@ async def call_modal_overlay(
     progress_callback = None,
     call_id_callback = None,
     overlay_settings: dict = None,
+    profile_id: str | None = None,
 ) -> dict:
     """
     Call Modal render_overlay function for highlight overlays.
@@ -1031,6 +1032,7 @@ async def call_modal_overlay(
                 "effect_type": effect_type,
                 "video_duration": video_duration,
                 "overlay_settings": overlay_settings,
+                "profile_id": profile_id,
             },
             progress_callback=progress_callback,
         )
@@ -1208,6 +1210,7 @@ async def call_modal_overlay_auto(
     progress_callback = None,
     call_id_callback = None,
     overlay_settings: dict = None,
+    profile_id: str | None = None,
 ) -> dict:
     """
     Call Modal overlay with sequential processing.
@@ -1242,6 +1245,7 @@ async def call_modal_overlay_auto(
         progress_callback=progress_callback,
         call_id_callback=call_id_callback,
         overlay_settings=overlay_settings,
+        profile_id=profile_id,
     )
     if result.get("status") == "success":
         result["config"] = "sequential"

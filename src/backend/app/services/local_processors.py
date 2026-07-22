@@ -512,9 +512,16 @@ def _overlay_sync(
     video_duration: float = None,
     progress_callback=None,
     overlay_settings: dict = None,
+    profile_id: str | None = None,
 ) -> dict:
     from app.routers.export.overlay import _process_frames_to_ffmpeg
     from app.storage import download_from_r2, upload_to_r2
+
+    # ContextVars don't cross the process boundary — re-establish the profile context the
+    # R2 key builder needs (this runs in a ProcessPoolExecutor child, T2640).
+    if profile_id:
+        from app.profile_context import set_current_profile_id
+        set_current_profile_id(profile_id)
 
     logger.info(f"[Subprocess] Overlay job {job_id} starting")
     start_time = time.time()
