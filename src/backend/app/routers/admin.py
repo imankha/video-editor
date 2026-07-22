@@ -157,7 +157,7 @@ async def list_users(
         for ar in action_rows:
             actions_by_user.setdefault(ar["user_id"], {})[ar["action"]] = ar["count"]
 
-        from ..analytics import FLOW_EVENTS, FUNNEL_STEPS
+        from ..analytics import FLOW_EVENTS, FUNNEL_STEPS, session_engaged_seconds
 
         funnel_join = f"JOIN user_segments s ON a.user_id = s.user_id {where_clause}" if where_parts else ""
         funnel_params = list(params) if where_parts else []
@@ -187,16 +187,15 @@ async def list_users(
         session_count = user_actions.get("session_started", 0)
         action_count = sum(user_actions.values())
 
+        # T5660: add the still-open session using the SAME accounting as the
+        # write side (analytics.session_engaged_seconds) — confirmed span
+        # (uncapped, so heavy continuous users aren't clamped) plus a capped idle
+        # tail (so an abandoned open tab isn't counted). Symmetric with banking.
         effective_usage = row["total_usage_seconds"] or 0
         if row["current_session_start"] and row["last_active_at"]:
-            now_utc = datetime.now(UTC)
-            if (now_utc - row["last_active_at"]).total_seconds() < 1800:
-                unclosed = int((now_utc - row["current_session_start"]).total_seconds())
-                effective_usage += min(unclosed, 1800)
-            else:
-                expired_duration = int((row["last_active_at"] - row["current_session_start"]).total_seconds())
-                if expired_duration > 0:
-                    effective_usage += min(expired_duration, 1800)
+            effective_usage += session_engaged_seconds(
+                row["current_session_start"], row["last_active_at"], datetime.now(UTC)
+            )
 
         users.append({
             "user_id": user_id,

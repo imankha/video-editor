@@ -1,6 +1,6 @@
 ---
 domain: backend-services
-updated: 2026-07-20 (T5600: working_videos.detections_data column + v027 migration; T4860: admin bulk user actions — POST /admin/users/bulk/grant-credits + /bulk/email, plus the `hello@reelballers.com` sender / `send_admin_update_email` path in email.py. T5060: app startup/shutdown now via fastapi `lifespan=` (not `@app.on_event`); pytest.ini added with a scoped filterwarnings guard + `local_disk_timing` marker. T5020: fastapi 0.110.1 / starlette 0.37.2 -- TestClient no longer passes removed `app=` kwarg, test and prod now both use httpx 0.28.1)
+updated: 2026-07-22 (T5660: engaged-time model — shared SESSION_IDLE_CAP_SECONDS + session_engaged_seconds helper, /api/auth/heartbeat + /session-close endpoints, tab-close beacon, hours-only Usage display. T5600: working_videos.detections_data column + v027 migration; T4860: admin bulk user actions — POST /admin/users/bulk/grant-credits + /bulk/email, plus the `hello@reelballers.com` sender / `send_admin_update_email` path in email.py. T5060: app startup/shutdown now via fastapi `lifespan=` (not `@app.on_event`); pytest.ini added with a scoped filterwarnings guard + `local_disk_timing` marker. T5020: fastapi 0.110.1 / starlette 0.37.2 -- TestClient no longer passes removed `app=` kwarg, test and prod now both use httpx 0.28.1)
 ---
 # Backend Services & Structure — Domain Knowledge
 
@@ -114,6 +114,29 @@ Files: `src/backend/app/migrations/{track}/v{NNN}_{description}.py`; each define
   NULL and the frontend UserTable already renders NULLs as `—` (T4870 null-not-fabricated). An
   origin/date filter still legitimately excludes NULL segments.
 
+- **Engaged-time / admin "Usage" model (T5660).** `total_usage_seconds` on `user_segments`
+  measures engaged time. ONE shared cap constant `analytics.SESSION_IDLE_CAP_SECONDS = 1800`
+  is BOTH the new-session boundary AND the ceiling on the unconfirmed idle tail. ONE shared
+  helper `analytics.session_engaged_seconds(session_start, last_active, now=None)` is used by
+  BOTH the write side (banking) and the read side (`admin.py` list_users estimate) — this
+  symmetry is the whole point: the pre-fix asymmetry (uncapped write vs capped read) inverted
+  heavy-continuous vs come-and-go users (D1). Rules: **confirmed span** (`last_active -
+  session_start`) is UNCAPPED (the 30-min new-session boundary already bounds every internal
+  gap ≤ cap, so a heavy user isn't clamped); **idle tail** (`now - last_active`) is credited
+  only while ≤ cap, else trimmed to ZERO (not clamped to cap — clamping would itself over-count
+  idle, D4). `now=None` banks an ended session with no tail. Banking happens on: new-session
+  transition in `update_session`, `close_session` (now BOTH logout AND the tab-close beacon).
+  Endpoints (auth.py, cookie-resolved via `validate_session`, return 204): `POST
+  /api/auth/heartbeat` (reuses `update_session` — foreground keep-alive so a long session's
+  `last_active` stays fresh; per-tick gap capped by the same new-session boundary so a
+  backgrounded tab can't inflate) and `POST /api/auth/session-close` (reuses `close_session`,
+  idempotent via its open-session guard — banks the last session without a logout, fixes D2).
+  Frontend: `src/frontend/src/hooks/useSessionHeartbeat.js` (wired in App.jsx next to
+  useExportRecovery) — visibility-gated 60s heartbeat + `navigator.sendBeacon` close on
+  `visibilitychange→hidden`/`pagehide`. Admin UI `UserTable.jsx fmtDuration` renders hours-only
+  (no days branch: `26h`, not `1d 2h`). Decisions: NO backfill (values self-correct as new
+  sessions accrue), all-time cumulative window (unchanged). Tests: `test_analytics.py`
+  (`TestSessionEngagedSeconds`, `TestCloseSessionBanking`, `TestHeartbeatGapCap`).
 - **`GET /api/version` + `AppVersionHeaderMiddleware` + `POST /api/sync/flush-verify` (T5070).**
   Backend advertises its build id as `X-App-Version` on every response — middleware added LAST
   (outermost) so the header survives 401s/preflight; CORS `expose_headers` includes it. Value =

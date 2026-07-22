@@ -13,6 +13,51 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Engaged-time accounting (T5660)
+# ---------------------------------------------------------------------------
+# ONE cap constant, shared by the write side (this module) and the read side
+# (admin.py). It is BOTH the new-session boundary (activity older than the cap
+# starts a fresh session) AND the ceiling on the unconfirmed tail credited to a
+# still-open session at read time. Keeping a single constant is what makes the
+# write model and the read estimate symmetric — the asymmetry between an
+# uncapped write and a capped read was the original inversion bug (D1).
+SESSION_IDLE_CAP_SECONDS = 1800  # 30 minutes
+
+
+def session_engaged_seconds(session_start, last_active, now=None) -> int:
+    """Engaged seconds credited to a single session.
+
+    ``confirmed`` = ``last_active - session_start``. This is left UNCAPPED on
+    purpose: activity (the ~60s foreground heartbeat, plus /me pings and
+    milestones) keeps ``last_active`` fresh, and the ``SESSION_IDLE_CAP_SECONDS``
+    new-session boundary guarantees consecutive activities inside one session are
+    never more than the cap apart. So the confirmed span can never already
+    contain an idle gap larger than the cap — no per-gap trim is needed on it,
+    and a genuinely heavy continuous user is not clamped to the cap (fixes D1).
+
+    ``tail`` = ``now - last_active``. The UNCONFIRMED gap since the last recorded
+    activity, relevant only when estimating a still-open session at read time. It
+    is credited only while within the cap; beyond the cap the session is treated
+    as abandoned and the idle tail is trimmed to zero rather than counted as
+    engaged time (fixes D4). Pass ``now=None`` when banking a session that has
+    already ended (its ``last_active`` is the true end) so no tail is added.
+    """
+    if not session_start:
+        return 0
+    last_active = last_active or session_start
+    confirmed = max(0, int((last_active - session_start).total_seconds()))
+    if now is None:
+        return confirmed
+    tail = max(0, int((now - last_active).total_seconds()))
+    if tail > SESSION_IDLE_CAP_SECONDS:
+        # Abandoned tab / dead session: the idle gap beyond the cap is not engaged
+        # time. Trim it entirely instead of clamping to the cap (clamping would
+        # itself over-count idle by up to the full cap — the D4 over-count).
+        tail = 0
+    return confirmed + tail
+
+
+# ---------------------------------------------------------------------------
 # Buffered daily counters — collapse per-row upserts into periodic batch flush
 # ---------------------------------------------------------------------------
 
@@ -320,9 +365,10 @@ def update_session(user_id: str, is_pwa: bool = False):
 
             if is_new_session:
                 if current_session_start is not None and last_active_at is not None:
-                    prev_duration = int((last_active_at - current_session_start).total_seconds())
-                    if prev_duration > 0:
-                        total_usage_seconds += prev_duration
+                    # Bank the just-ended session (now=None -> no idle tail).
+                    total_usage_seconds += session_engaged_seconds(
+                        current_session_start, last_active_at
+                    )
                 cur.execute(
                     """UPDATE user_segments
                        SET last_active_at = now(),
@@ -405,7 +451,13 @@ def update_session(user_id: str, is_pwa: bool = False):
 
 
 def close_session(user_id: str):
-    """Close the current session and accumulate usage. Called on logout."""
+    """Close the current session and accumulate usage.
+
+    Called on logout AND on the tab-close beacon (T5660) — banking the last
+    session no longer requires an explicit logout or a return visit (fixes D2).
+    Idempotent: a session with no open ``current_session_start`` returns early, so
+    a duplicate beacon + logout can't double-bank.
+    """
     # T1515: a logout during impersonation must not write the user's session timing.
     impersonator = get_current_impersonator_id()
     if impersonator:
@@ -423,8 +475,12 @@ def close_session(user_id: str):
             if not row or not row["current_session_start"]:
                 return
 
-            last_active = row["last_active_at"] or row["current_session_start"]
-            duration = max(0, int((last_active - row["current_session_start"]).total_seconds()))
+            # Same accounting as the read-side estimate (admin.py): confirmed span
+            # plus the capped idle tail since the last heartbeat. So the banked
+            # value matches what the admin panel showed for the open session.
+            duration = session_engaged_seconds(
+                row["current_session_start"], row["last_active_at"], datetime.now(UTC)
+            )
             total = (row["total_usage_seconds"] or 0) + duration
 
             cur.execute(

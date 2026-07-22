@@ -16,6 +16,7 @@ import { GlobalExportIndicator } from './components/GlobalExportIndicator';
 import { UploadProgressIndicator } from './components/UploadProgressIndicator';
 import { SyncStatusIndicator } from './components/SyncStatusIndicator';
 import { useExportRecovery } from './hooks/useExportRecovery';
+import { useSessionHeartbeat } from './hooks/useSessionHeartbeat';
 import { useIsMobile } from './hooks/useIsMobile';
 import { ConfirmationDialog, toast, UnifiedHeader } from './components/shared';
 import { getProjectDisplayName } from './utils/clipDisplayName';
@@ -402,6 +403,9 @@ function App() {
 
   // Export recovery - reconnects to active exports on app startup
   useExportRecovery();
+
+  // T5660: foreground heartbeat + tab-close beacon for admin usage measurement
+  useSessionHeartbeat();
 
   // T1540: Warn user before leaving during an active upload
   useEffect(() => {
