@@ -1,6 +1,9 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useLayoutEffect, useState, useCallback } from 'react';
+import { RotateCcw, Minus, Plus } from 'lucide-react';
 import versionInfo from '../../../version.json';
 import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect';
+import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
+import { correctionAngle, clampRotation } from '../../../utils/straighten';
 
 /**
  * Get clientX/clientY from a pointer or touch event
@@ -14,7 +17,14 @@ function getEventPosition(e) {
 
 /**
  * CropOverlay component - renders a draggable/resizable crop rectangle
- * over the video player with 8 resize handles
+ * over the video player with 8 resize handles.
+ *
+ * T5640 — also owns the horizon-straighten UI: it CSS-rotates the <video>
+ * element (rotate(-theta) about the display-rect center), draws an out-of-bounds
+ * dim mask over the rotated frame's black corners, and hosts the straighten
+ * pointer tool + fine dial. The reticle and drag math are UNCHANGED (rotation is
+ * NOT threaded into useVideoDisplayRect — crop coords live in rotated-frame space
+ * which is screen-aligned); only the drag clamp changes, upstream in the hook.
  */
 export default function CropOverlay({
   videoRef,
@@ -23,6 +33,9 @@ export default function CropOverlay({
   aspectRatio,
   onCropChange,
   onCropComplete,
+  rotation = 0,
+  onSetRotation,
+  straightenVisible = false,
   zoom = 1,
   panOffset = { x: 0, y: 0 },
   selectedKeyframeIndex = null,
@@ -50,6 +63,43 @@ export default function CropOverlay({
     videoMetadata,
     { zoom, panOffset, isFullscreen }
   );
+
+  // T5640: straighten-tool state. Visibility of the line-drag tool + fine dial is
+  // owned by the parent (`straightenVisible` prop, T5641) — hidden by default,
+  // toggled from the Straighten button inline with the zoom controls. Hiding the
+  // controls does NOT clear the rotation: the CSS-rotate + OOB mask below are
+  // ungated, so a set angle keeps applying while the editing UI is hidden.
+  // `straightenLine` holds the live reference line (screen coords) while dragging;
+  // `liveRotation` is a memory-only live preview angle (NOT persisted) shown while
+  // dragging the straighten line or scrubbing the dial. The committed `rotation`
+  // prop is the source of truth; liveRotation just overrides it for the CSS
+  // transform during an in-progress gesture.
+  const [straightenLine, setStraightenLine] = useState(null);
+  const [liveRotation, setLiveRotation] = useState(null);
+  const straightenDragRef = useRef(null); // { pointerId, p0 }
+
+  // The angle the video is currently shown at: live preview during a gesture,
+  // else the committed value.
+  const displayRotation = liveRotation !== null ? liveRotation : rotation;
+
+  // Apply the CSS content rotation to the <video> ELEMENT itself. The element is
+  // aspect-fit (object-contain) and centered inside .video-container, so its own
+  // bounding box IS the display rect and transform-origin:center rotates about the
+  // frame center — the SAME center the export rotates about. rotate(-theta)
+  // because CSS positive is clockwise (y-down) while theta is content-CCW.
+  // Imperative (not a prop) so we don't fork the shared VideoPlayer, which is
+  // mode-agnostic; keyed on displayRotation + rect so it re-applies after reloads.
+  useLayoutEffect(() => {
+    const video = videoRef?.current;
+    if (!video) return undefined;
+    video.style.transformOrigin = 'center center';
+    video.style.transform = displayRotation ? `rotate(${-displayRotation}deg)` : '';
+    return () => {
+      // Clear on unmount / when this overlay stops owning the rotation so a
+      // future un-rotated clip isn't left tilted.
+      if (video) video.style.transform = '';
+    };
+  }, [videoRef, displayRotation, videoDisplayRect]);
 
   /**
    * Constrain crop rectangle to video bounds while maintaining aspect ratio
@@ -299,6 +349,74 @@ export default function CropOverlay({
     };
   }, [handlePointerMove, handlePointerUp]);
 
+  // ==========================================================================
+  // T5640 straighten tool — Pointer Events (real-browser rule: touch-action:none
+  // + setPointerCapture + pointerId filter; precedent T5644/T5450).
+  // ==========================================================================
+
+  // Screen point relative to the overlay element (matches the reticle's coord
+  // space; the actual angle only depends on the delta, so the origin is moot).
+  const overlayPoint = useCallback((e) => {
+    const host = overlayRef.current;
+    const box = host?.getBoundingClientRect();
+    return { x: e.clientX - (box?.left || 0), y: e.clientY - (box?.top || 0) };
+  }, []);
+
+  const handleStraightenPointerDown = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    const p0 = overlayPoint(e);
+    straightenDragRef.current = { pointerId: e.pointerId, p0 };
+    setStraightenLine({ p0, p1: p0 });
+    setLiveRotation(rotation); // start preview from the current angle
+  }, [overlayPoint, rotation]);
+
+  const handleStraightenPointerMove = useCallback((e) => {
+    const drag = straightenDragRef.current;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const p1 = overlayPoint(e);
+    setStraightenLine({ p0: drag.p0, p1 });
+    // Live preview (memory-only, NOT persisted) — clamp so the preview matches
+    // what will actually commit.
+    setLiveRotation(clampRotation(correctionAngle(drag.p0, p1)));
+  }, [overlayPoint]);
+
+  const handleStraightenPointerUp = useCallback((e) => {
+    const drag = straightenDragRef.current;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    const p1 = overlayPoint(e);
+    const theta = clampRotation(correctionAngle(drag.p0, p1));
+    straightenDragRef.current = null;
+    setStraightenLine(null);
+    setLiveRotation(null); // committed value takes over via the rotation prop
+    // ONE surgical commit (the single gesture).
+    onSetRotation?.(theta);
+  }, [overlayPoint, onSetRotation]);
+
+  // Fine dial / nudge / reset — each fires ONE commit (not per-tick reactive).
+  const nudgeRotation = useCallback((delta) => {
+    onSetRotation?.(clampRotation(rotation + delta));
+  }, [rotation, onSetRotation]);
+
+  const resetRotation = useCallback(() => {
+    if (rotation !== 0) onSetRotation?.(0);
+  }, [rotation, onSetRotation]);
+
+  // Slider is a preview-while-scrubbing control: onChange previews (memory-only),
+  // onPointerUp/onKeyUp commits ONE value on release.
+  const handleSliderChange = useCallback((e) => {
+    setLiveRotation(clampRotation(Number(e.target.value)));
+  }, []);
+  const handleSliderCommit = useCallback(() => {
+    if (liveRotation !== null) {
+      const theta = liveRotation;
+      setLiveRotation(null);
+      onSetRotation?.(theta);
+    }
+  }, [liveRotation, onSetRotation]);
+
   if (!currentCrop || !videoDisplayRect) {
     return null;
   }
@@ -325,6 +443,18 @@ export default function CropOverlay({
       },
     });
   }
+
+  // T5640: out-of-bounds dim mask. The rotated frame's corners (mapped to screen)
+  // form a quad; anything OUTSIDE that quad but inside the display rect is a black
+  // wedge in the export — dim it as a "here be dragons" cue. Only when rotated.
+  const maskQuadPoints = (displayRotation && videoMetadata?.width && videoMetadata?.height)
+    ? rotatedFrameCorners(videoMetadata.width, videoMetadata.height, displayRotation)
+        .map((c) => {
+          const s = videoToScreen(c.x, c.y, 0, 0);
+          return `${round3(s.x)},${round3(s.y)}`;
+        })
+        .join(' ')
+    : null;
 
   /**
    * Check if crop size requires maximum 4x AI upscaling
@@ -375,6 +505,28 @@ export default function CropOverlay({
         height: '100%'
       }}
     >
+      {/* T5640: out-of-bounds dim mask — the rotated-frame quad as an even-odd hole.
+          pointer-events:none so it never eats crop/straighten input. */}
+      {maskQuadPoints && (
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          style={{ position: 'absolute', top: 0, left: 0 }}
+        >
+          <defs>
+            <mask id="rotationOobMask">
+              <rect width="100%" height="100%" fill="white" />
+              <polygon points={maskQuadPoints} fill="black" />
+            </mask>
+          </defs>
+          <rect
+            width="100%"
+            height="100%"
+            fill="rgba(0, 0, 0, 0.55)"
+            mask="url(#rotationOobMask)"
+          />
+        </svg>
+      )}
+
       {/* Dimmed overlay outside crop area */}
       <svg
         className="absolute inset-0 w-full h-full pointer-events-none"
@@ -466,6 +618,102 @@ export default function CropOverlay({
           />
         ))}
       </div>
+
+      {/* T5640: straighten capture layer — full-overlay pointer surface that is
+          ONLY active while the straighten tool is revealed (T5641 `straightenVisible`).
+          Sits above the reticle (z-20) so the whole frame is a straighten target.
+          touch-action: none + pointer capture + pointerId filter per the
+          real-browser rule. */}
+      {straightenVisible && onSetRotation && (
+        <div
+          className="absolute inset-0 pointer-events-auto"
+          style={{ touchAction: 'none', cursor: 'crosshair', zIndex: 20 }}
+          onPointerDown={handleStraightenPointerDown}
+          onPointerMove={handleStraightenPointerMove}
+          onPointerUp={handleStraightenPointerUp}
+          onPointerCancel={handleStraightenPointerUp}
+        >
+          {/* Live reference line while dragging */}
+          {straightenLine && (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              <line
+                x1={straightenLine.p0.x}
+                y1={straightenLine.p0.y}
+                x2={straightenLine.p1.x}
+                y2={straightenLine.p1.y}
+                stroke="#38bdf8"
+                strokeWidth="2"
+                strokeDasharray="6 4"
+              />
+            </svg>
+          )}
+        </div>
+      )}
+
+      {/* T5640: straighten dial — fine nudge, slider, readout, reset. Revealed only
+          when the Straighten toggle (inline with zoom, T5641) is on. pointer-events:
+          auto (parent is none). Only shown when the container wired onSetRotation. */}
+      {straightenVisible && onSetRotation && interactive && (
+        <div
+          className="absolute left-1/2 bottom-2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 bg-gray-900/85 border border-gray-700 rounded-lg px-2 py-1.5"
+          style={{ zIndex: 30, touchAction: 'none' }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <span className="text-xs font-medium text-gray-300 pl-1 pr-0.5 select-none">
+            Straighten
+          </span>
+
+          <button
+            type="button"
+            onClick={() => nudgeRotation(-0.1)}
+            className="flex items-center justify-center h-8 w-8 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
+            title="Rotate -0.1 degrees"
+            aria-label="Nudge rotation counter"
+          >
+            <Minus size={14} />
+          </button>
+
+          <input
+            type="range"
+            min={-MAX_ROT}
+            max={MAX_ROT}
+            step={0.1}
+            value={displayRotation}
+            onChange={handleSliderChange}
+            onPointerUp={handleSliderCommit}
+            onKeyUp={handleSliderCommit}
+            className="w-28 accent-blue-500"
+            title="Fine rotation"
+            aria-label="Rotation angle"
+          />
+
+          <button
+            type="button"
+            onClick={() => nudgeRotation(0.1)}
+            className="flex items-center justify-center h-8 w-8 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600"
+            title="Rotate +0.1 degrees"
+            aria-label="Nudge rotation clockwise"
+          >
+            <Plus size={14} />
+          </button>
+
+          <span className="text-xs text-gray-200 font-mono tabular-nums w-14 text-center">
+            {displayRotation.toFixed(1)}°
+          </span>
+
+          <button
+            type="button"
+            onClick={resetRotation}
+            className="flex items-center justify-center h-8 w-8 rounded-md bg-gray-700 text-gray-200 hover:bg-gray-600 disabled:opacity-40"
+            title="Reset rotation to 0"
+            aria-label="Reset rotation"
+            disabled={rotation === 0}
+          >
+            <RotateCcw size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 ---
 domain: keyframes-framing
-updated: 2026-07-21 (T5649 lever drags re-slice region detections; T5646 reset() must not null video-level videoDetections; T5644 region trim levers -> Pointer Events for mobile touch drag; re-add persistence root-caused to OverlayScreen stale-find)
+updated: 2026-07-22 (T5640 per-clip rotation / horizon straighten: working_clips.rotation v029, rotate-before-crop, safe-area clamp, CSS-rotate preview)
 ---
 # Keyframes & Framing — Domain Knowledge
 
@@ -211,6 +211,90 @@ per-clip remapping.
   second INSERT ~1739) was deliberately left untouched (design: minimal/additive diff, no
   characterization net on the export path) — that path's rows rely on the `/overlay-data`
   read-time hoist fallback until a follow-up wires it too.
+
+## Rotation / horizon straighten (T5640, 2026-07-22)
+
+Per-clip content rotation to level tilted footage. **Single scalar per clip, NOT
+keyframed** — camera tilt is constant for a recording.
+
+- **Column:** `working_clips.rotation REAL DEFAULT 0` (profile_db **v029**;
+  `database.py` fresh DDL + `v029_working_clips_rotation.py`). DEGREES, positive =
+  content rotated **counter-clockwise**. Returned on `WorkingClipResponse`
+  (`clips.py` GET `/projects/{id}/clips` selects `wc.rotation`); read client-side
+  via `clipRotation(clip)` selector (`Number(clip?.rotation)||0`). **If you add a
+  new clip-read query, SELECT `wc.rotation` or the angle silently drops to 0 on
+  reload** — that's exactly the gap that was almost shipped.
+- **Coordinate model = Option (a), the load-bearing invariant:** crop coords live
+  in the **rotated frame space**; every render is
+  `crop_{x,y,w,h}(rotate_θ_aboutCenter_sameWH(frame))`. Rotation is about the
+  frame center with output kept at source **W×H**, which preserves the crop
+  coordinate box → **θ=0 is byte-identical to pre-T5640 (NO crop-keyframe
+  migration).** Pinned by `tests/test_t5640_rotation_export.py`.
+- **Sign convention (drift is THE failure mode — do not eyeball):** cv2
+  `getRotationMatrix2D(center, angle=θ)` (CCW+); ffmpeg
+  `rotate=a=-radians(θ):ow=iw:oh=ih:c=black` BEFORE crop; CSS preview
+  `transform: rotate(-θdeg)`. The real-browser QA pins the CSS sign — it was NOT
+  browser-verified at implementation time.
+- **The ONE render primitive:** `video_processing.rotate_then_crop(frame,
+  rotation_deg, x,y,w,h)` (θ=0 → plain slice fast path). Applied at all 4 cv2
+  sites in `video_processing.py` (`process_framing_ai`/`_l4`/`_chunk` take a
+  `rotation` param; `process_clips_ai` reads `clip_data['rotation']` per clip).
+  **Live prod render = Modal `process_clips_ai`.** The **local** render path
+  (MODAL_ENABLED=false / dev container) is `AIVideoUpscaler` →
+  `ai_upscaler/frame_processor.py extract_frame_with_crop`, which rotates the full
+  frame via `self.rotation` (set from `process_video_with_upscale(rotation=…)`,
+  threaded from `clip_pipeline` `ctx.clip_data['rotation']`) — **the design's site
+  list omitted this path; it must rotate too or preview↔local-export diverge.**
+  ffmpeg `/crop` endpoint (`framing.py`) prepends the rotate filter (secondary /
+  legacy — no live caller found; `/upscale` doesn't exist despite the docstring).
+- **Threading:** `ClipExportData.rotation` → `_export_clips` `clips_data` /
+  Modal `normalized_clips_data` / local pipeline. `/render` + multi-clip DB-resolve
+  SELECTs carry `wc.rotation`.
+- **Safe-area clamp (no black corners):** closed-form inscribed
+  `rotatedRectWithMaxArea(W,H,θ) ∩ aspect r`, centered. **CLIENT is SSOT** (runs at
+  gesture time, persists clamped crops); Python mirror
+  `services/rotation_safe_area.py` exists ONLY for the char test — **export TRUSTS
+  the stored crop, never re-clamps** ("correct data, not workarounds"). JS SSOT
+  `utils/rotationSafeArea.js` (`clampCropToSafeArea`, `rotatedFrameCorners`,
+  `MAX_ROT=20`). Clamp runs on set-rotation (ALL keyframes) and on crop-drag while
+  θ≠0 (`useCrop.clampCropForCurrentRotation`, θ=0 passthrough).
+- **Preview:** `CropOverlay` CSS-rotates the **`<video>` element** imperatively via
+  `videoRef.current.style.transform` (NOT a `VideoPlayer` prop — VideoPlayer is
+  mode-agnostic/shared; zoom/pan is a `transform` on the WRAPPER div, so rotating
+  the inner `<video>` composes and does not clobber it). Reticle stays
+  **axis-aligned** — `useVideoDisplayRect` (T4550 SSOT) is **NOT forked**; crop
+  drag math unchanged. Out-of-bounds DIM mask (`rgba(0,0,0,0.55)`, SVG mask hole
+  from `rotatedFrameCorners`, `pointer-events:none`).
+- **Persistence:** ONE surgical `set_rotation` action (`framing_action` direct
+  `UPDATE working_clips SET rotation` — does NOT route through
+  `_save_clip_framing_data`; in place, no version bump). Straighten drag-end /
+  dial commit / nudge / reset each fire exactly one `handleSetRotation`
+  (optimistic + rollback, mirrors `handleCropComplete`), plus a surgical
+  `update_crop_keyframe` per clamp-moved keyframe. **No reactive useEffect.**
+  Full-state PUT `WorkingClipUpdate.rotation` versions like crop (rotation ∈
+  `is_framing_change`/`data_actually_changed`, carried forward on version-INSERT);
+  `saveCurrentClipState` currently does NOT resend rotation (surgical action is the
+  persistence path; version-INSERT carries the DB value forward regardless).
+- **Straighten tool:** Pointer Events + `touch-action:none` + `setPointerCapture` +
+  `pointerId` (real-browser rule, T5644/T5450). `correctionAngle(p0,p1)` =
+  `-(atan2(dy,dx) reduced mod 90 into (−45,45])` → levels a horizon OR a vertical
+  (goalpost). `utils/straighten.js`.
+- **Straighten controls HIDDEN by default (T5641, 2026-07-22):** the line-drag
+  capture layer + fine dial in `CropOverlay` are gated on a `straightenVisible`
+  prop. Owner = `FramingModeView` `useState(false)` — EPHEMERAL view state, never
+  persisted (no-persisted-view-state rule; precedent T5610 `circleEditActive`).
+  Toggled by a "Straighten" button rendered INLINE with `<ZoomControls>` in the
+  desktop controls bar (`ml-auto` header, `hidden lg:flex` → desktop-only, same as
+  zoom; the rotation EFFECT still applies on mobile, just no editing UI there).
+  **Load-bearing split: only the CONTROLS toggle — the CSS-rotate `useLayoutEffect`
+  and the OOB dim mask are UNGATED**, so a set angle keeps rotating the `<video>`
+  while the tool is hidden (`displayRotation = liveRotation ?? rotation`; hidden →
+  no gesture → `liveRotation` null → falls back to the persisted `rotation` prop).
+  The old in-toolbar `straightenActive` sub-toggle is GONE — one toggle now reveals
+  both the capture layer and the dial together (revealing = a straighten "mode":
+  the z-20 capture layer intercepts crop drags while visible). Coverage: Vitest
+  `CropOverlay.straighten.test.jsx` (default-hidden, reveal, effect-persists-hidden,
+  MAX_ROT range).
 
 ## Landmines & history
 - **Region trim levers are Pointer Events, not mouse (T5644, 2026-07-21).**

@@ -119,9 +119,13 @@ class TestTrackImports:
 
     def test_profile_db_track(self):
         from app.migrations.profile_db import RUNNER, MIGRATIONS
-        assert len(MIGRATIONS) == 28
+        # Dynamic invariants, not a hardcoded count/head (T5640: v028 -> v029
+        # broke the old `== 28` literals; this track's head moves often).
+        versions = [m.version for m in MIGRATIONS]
+        assert versions == sorted(versions), "migrations must be registered in version order"
+        assert len(versions) == len(set(versions)), "no duplicate migration versions"
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 28
+        assert RUNNER.latest_version == max(versions)
 
     def test_postgres_track(self):
         from app.migrations.postgres import RUNNER, MIGRATIONS
@@ -131,7 +135,12 @@ class TestTrackImports:
 
     def test_orchestrator_imports(self):
         from app.migrations import get_migration_status
+        from app.migrations.postgres import RUNNER as POSTGRES_RUNNER
+        from app.migrations.profile_db import RUNNER as PROFILE_DB_RUNNER
+        from app.migrations.user_db import RUNNER as USER_DB_RUNNER
         status = get_migration_status()
-        assert status["user_db"]["latest_version"] == 6
-        assert status["profile_db"]["latest_version"] == 28
-        assert status["postgres"]["latest_version"] == 18
+        # Compare against each track's own RUNNER.latest_version (dynamic),
+        # not a hardcoded literal that a new migration would break.
+        assert status["user_db"]["latest_version"] == USER_DB_RUNNER.latest_version
+        assert status["profile_db"]["latest_version"] == PROFILE_DB_RUNNER.latest_version
+        assert status["postgres"]["latest_version"] == POSTGRES_RUNNER.latest_version

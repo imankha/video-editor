@@ -1147,6 +1147,31 @@ def _interpolate_crop(sorted_keyframes: list, time: float) -> dict:
     }
 
 
+def rotate_then_crop(frame, rotation_deg, x, y, w, h):
+    """Rotate the full frame about its center (output kept at source W*H) THEN
+    slice the axis-aligned crop (T5640).
+
+    This is the single render primitive for the "crop lives in the rotated frame
+    space" model (design §2.1). rotation_deg is the content-correction angle in
+    DEGREES, positive = counter-clockwise (cv2's positive convention). Keeping the
+    output canvas at the source W*H preserves the crop coordinate box, so
+    rotation_deg == 0 is the byte-identical fast path (plain slice, no warp).
+
+    The safe-area clamp on the client guarantees the crop stays inside the rotated
+    content, so no black wedge can enter this slice.
+    """
+    if rotation_deg:
+        import cv2
+        h0, w0 = frame.shape[:2]
+        m = cv2.getRotationMatrix2D((w0 / 2, h0 / 2), rotation_deg, 1.0)
+        frame = cv2.warpAffine(
+            frame, m, (w0, h0),
+            flags=cv2.INTER_LANCZOS4,
+            borderValue=(0, 0, 0),
+        )
+    return frame[y:y + h, x:x + w]
+
+
 @app.function(
     image=upscale_image,
     gpu="T4",
@@ -1166,6 +1191,7 @@ def process_framing_ai(
     include_audio: bool = True,
     source_start_time: float = 0.0,
     source_end_time: float = None,
+    rotation: float = 0,
 ):
     """
     Process video with AI upscaling using Real-ESRGAN on GPU.
@@ -1358,7 +1384,7 @@ def process_framing_ai(
                     w = min(w, original_width - x)
                     h = min(h, original_height - y)
 
-                    cropped = frame[y:y+h, x:x+w]
+                    cropped = rotate_then_crop(frame, rotation, x, y, w, h)
                 else:
                     cropped = frame
 
@@ -1643,6 +1669,7 @@ def process_framing_ai_l4(
     segment_data: dict = None,
     source_start_time: float = 0.0,
     source_end_time: float = None,
+    rotation: float = 0,
 ) -> dict:
     """
     Process video with AI upscaling using Real-ESRGAN on L4 GPU.
@@ -1744,7 +1771,7 @@ def process_framing_ai_l4(
                     w = min(w, original_width - x)
                     h = min(h, original_height - y)
 
-                    cropped = frame[y:y+h, x:x+w]
+                    cropped = rotate_then_crop(frame, rotation, x, y, w, h)
                 else:
                     cropped = frame
 
@@ -1857,6 +1884,7 @@ def process_framing_ai_chunk(
     output_height: int,
     original_fps: float,
     source_start_time: float = 0.0,
+    rotation: float = 0,
 ) -> dict:
     """
     Process a single chunk of video with Real-ESRGAN upscaling.
@@ -1975,7 +2003,7 @@ def process_framing_ai_chunk(
                     w = min(w, frame_width - x)
                     h = min(h, frame_height - y)
 
-                    cropped = frame[y:y+h, x:x+w]
+                    cropped = rotate_then_crop(frame, rotation, x, y, w, h)
                 else:
                     cropped = frame
 
@@ -2507,6 +2535,7 @@ def process_clips_ai(
 
                 keyframes = clip_data.get('keyframes', [])
                 segment_data = clip_data.get('segment_data', {})
+                clip_rotation = clip_data.get('rotation', 0) or 0
 
                 logger.info(f"[{job_id}] Processing clip {clip_idx+1}/{total_clips}")
 
@@ -2631,7 +2660,7 @@ def process_clips_ai(
                     w = max(1, min(w, original_width - x))
                     h = max(1, min(h, original_height - y))
 
-                    cropped = frame[y:y+h, x:x+w]
+                    cropped = rotate_then_crop(frame, clip_rotation, x, y, w, h)
 
                     # AI upscale with Real-ESRGAN (4x for quality)
                     try:

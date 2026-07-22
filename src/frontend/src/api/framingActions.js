@@ -161,6 +161,21 @@ export async function clearTrimRange(projectId, clipId) {
   return sendAction(projectId, clipId, 'clear_trim_range');
 }
 
+// =============================================================================
+// Rotation Action (T5640)
+// =============================================================================
+
+/**
+ * Set the per-clip horizon-straighten angle (surgical, clip-scalar).
+ * @param {number} projectId
+ * @param {number} clipId
+ * @param {number} degrees - Content-correction angle in degrees (positive = CCW)
+ * @returns {Promise<{success: boolean, refresh_required?: boolean, new_clip_id?: number}>}
+ */
+export async function setRotation(projectId, clipId, degrees) {
+  return sendAction(projectId, clipId, 'set_rotation', null, { rotation: degrees });
+}
+
 export default {
   addCropKeyframe,
   updateCropKeyframe,
@@ -171,4 +186,5 @@ export default {
   setSegmentSpeed,
   setTrimRange,
   clearTrimRange,
+  setRotation,
 };

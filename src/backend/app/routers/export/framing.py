@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
 from ...constants import DEFAULT_HIGHLIGHT_EFFECT, normalize_effect_type
-from ...database import get_db_connection
+from ...database import column_exists, get_db_connection
 from ...highlight_transform import canonicalize_segments_data, get_output_duration
 from ...interpolation import generate_crop_filter
 from ...models import CropKeyframe
@@ -49,7 +49,8 @@ router = APIRouter()
 @router.post("/crop")
 async def export_crop(
     video: UploadFile = File(...),
-    keyframes_json: str = Form(...)
+    keyframes_json: str = Form(...),
+    rotation: float = Form(0)
 ):
     """
     Export video with crop applied.
@@ -103,6 +104,8 @@ async def export_crop(
     # Process video with FFmpeg
     try:
         stream = ffmpeg.input(input_path)
+        if rotation:
+            stream = ffmpeg.filter(stream, 'rotate', a=-math.radians(rotation), ow='iw', oh='ih', c='black')
         stream = ffmpeg.filter(stream, 'crop',
                              w=crop_params['width_expr'],
                              h=crop_params['height_expr'],
@@ -133,6 +136,8 @@ async def export_crop(
         }
 
         stream = ffmpeg.input(input_path)
+        if rotation:
+            stream = ffmpeg.filter(stream, 'rotate', a=-math.radians(rotation), ow='iw', oh='ih', c='black')
         stream = ffmpeg.filter(stream, 'crop',
                              avg_crop['width'], avg_crop['height'],
                              avg_crop['x'], avg_crop['y'])
@@ -389,10 +394,12 @@ async def render_project(request: RenderRequest, http_request: Request):
         from app.services.export_helpers import derive_project_name
         project_name = derive_project_name(project_id, cursor) or project['name']
 
+        # T5640: tolerate the deploy->migrate window (v029 rotation column may be absent).
+        _rot = "wc.rotation" if column_exists(cursor, "working_clips", "rotation") else "0.0 as rotation"
         cursor.execute(f"""
             SELECT
                 wc.id, wc.raw_clip_id, wc.uploaded_filename,
-                wc.crop_data, wc.timing_data, wc.segments_data, wc.sort_order,
+                wc.crop_data, wc.timing_data, wc.segments_data, wc.sort_order, {_rot},
                 rc.filename as raw_filename, rc.name as clip_name,
                 rc.game_id, rc.video_sequence,
                 rc.start_time as raw_start_time, rc.end_time as raw_end_time,
@@ -653,6 +660,7 @@ async def _run_render_background(
             raw_clip_id=clip['raw_clip_id'],
             game_id=clip['game_id'],
             clip_name=clip['clip_name'],
+            rotation=clip['rotation'] if 'rotation' in clip.keys() else 0,  # noqa: SIM118 -- sqlite3.Row `in` checks values, not keys
         )
 
         logger.info(f"[Render] Delegating to _export_clips: aspect={aspect_ratio}, test_mode={is_test_mode}")

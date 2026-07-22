@@ -1,5 +1,5 @@
 import { forwardRef, useState } from 'react';
-import { Minimize, Maximize, Crop } from 'lucide-react';
+import { Minimize, Maximize, Crop, RotateCw } from 'lucide-react';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { Controls } from '../components/Controls';
 import ZoomControls from '../components/ZoomControls';
@@ -145,6 +145,8 @@ export function FramingModeView({
   // Crop state
   currentCropState,
   aspectRatio,
+  rotation = 0,
+  onSetRotation,
   keyframes,
   framerate,
   selectedCropKeyframeIndex,
@@ -226,6 +228,13 @@ export function FramingModeView({
   // (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+  // T5641: straighten tool is a niche affordance (~99% of clips never rotate), so
+  // the line-drag tool + fine dial are HIDDEN by default behind this toggle.
+  // EPHEMERAL view state — local useState, NEVER persisted (no-persisted-view-state
+  // rule, precedent T5610 circleEditActive / T5370 spotlightPlayMode). Hiding the
+  // controls does NOT clear the rotation: a set angle keeps rotating the video
+  // (CropOverlay CSS-rotate + OOB mask stay ungated); only the editing UI toggles.
+  const [straightenVisible, setStraightenVisible] = useState(false);
 
   return (
     <>
@@ -318,6 +327,20 @@ export function FramingModeView({
                 </button>
                 <span className="text-xs text-gray-300 ml-1.5">Dark</span>
               </div>
+              <button
+                type="button"
+                onClick={() => setStraightenVisible((v) => !v)}
+                className={`flex items-center gap-1.5 border rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  straightenVisible
+                    ? 'bg-blue-600 border-blue-500 text-white'
+                    : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                }`}
+                aria-pressed={straightenVisible}
+                title="Straighten: level tilted footage by dragging along the horizon (or a vertical)"
+              >
+                <RotateCw size={14} />
+                Straighten
+              </button>
               <ZoomControls
                 zoom={zoom}
                 onZoomIn={onZoomIn}
@@ -365,6 +388,9 @@ export function FramingModeView({
                     videoMetadata={metadata}
                     currentCrop={currentCropState}
                     aspectRatio={aspectRatio}
+                    rotation={rotation}
+                    onSetRotation={onSetRotation}
+                    straightenVisible={straightenVisible}
                     onCropChange={onCropChange}
                     onCropComplete={onCropComplete}
                     zoom={zoom}

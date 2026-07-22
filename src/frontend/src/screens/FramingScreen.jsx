@@ -17,7 +17,7 @@ import { extractVideoMetadata, extractVideoMetadataFromUrl } from '../utils/vide
 import { findKeyframeIndexNearFrame, FRAME_TOLERANCE } from '../utils/keyframeUtils';
 import { forceRefreshUrl } from '../utils/storageUrls';
 import { warmVideoCache, pushClipRanges } from '../utils/cacheWarming';
-import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments } from '../utils/clipSelectors';
+import { clipFileUrl as getClipFileUrlSelector, clipCropKeyframes, clipSegments, clipRotation } from '../utils/clipSelectors';
 import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { useProjectDataStore, useFramingStore, useEditorStore, useOverlayStore, useProjectsStore, useVideoStore } from '../stores';
@@ -231,6 +231,12 @@ export function FramingScreen({
     return kfs.length > 0 ? kfs : undefined;
   }, [selectedClip]);
 
+  // Seed the horizon-straighten angle from the selected clip (like crop_data).
+  const selectedClipRotation = useMemo(
+    () => (selectedClip ? clipRotation(selectedClip) : 0),
+    [selectedClip]
+  );
+
   // Crop hook
   const {
     aspectRatio,
@@ -238,7 +244,10 @@ export function FramingScreen({
     isEndKeyframeExplicit,
     copiedCrop,
     framerate,
+    rotation,
     updateAspectRatio,
+    setRotation,
+    clampCropForCurrentRotation,
     addOrUpdateKeyframe,
     removeKeyframe,
     deleteKeyframesInRange,
@@ -252,7 +261,7 @@ export function FramingScreen({
     getKeyframesForExport,
     reset: resetCrop,
     restoreState: restoreCropState,
-  } = useCrop(metadata, trimRange, selectedClipCropKeyframes);
+  } = useCrop(metadata, trimRange, selectedClipCropKeyframes, selectedClipRotation);
 
   // Zoom hooks
   const {
@@ -313,6 +322,9 @@ export function FramingScreen({
     setCropEndFrame,
     restoreCropState,
     updateAspectRatio,
+    rotation,
+    setRotation,
+    clampCropForCurrentRotation,
     resetCrop,
     segments,
     segmentBoundaries,
@@ -375,6 +387,7 @@ export function FramingScreen({
     handleAddSplit: framingHandleAddSplit,
     handleRemoveSplit: framingHandleRemoveSplit,
     handleSegmentSpeedChange: framingHandleSegmentSpeedChange,
+    handleSetRotation: framingHandleSetRotation,
     saveCurrentClipState: framingSaveCurrentClipState,
   } = framing;
 
@@ -1155,6 +1168,8 @@ export function FramingScreen({
       seek={seek}
       currentCropState={currentCropState}
       aspectRatio={aspectRatio}
+      rotation={rotation}
+      onSetRotation={framingHandleSetRotation}
       keyframes={keyframes}
       framerate={framerate}
       selectedCropKeyframeIndex={selectedCropKeyframeIndex}

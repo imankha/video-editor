@@ -34,7 +34,7 @@ except ImportError:
     torch = None
 
 from ...constants import AI_UPSCALE_FACTOR, VIDEO_MAX_HEIGHT, VIDEO_MAX_WIDTH, ExportStage, ExportStatus
-from ...database import get_db_connection
+from ...database import column_exists, get_db_connection
 from ...profile_context import get_current_profile_id, set_current_profile_id
 from ...queries import latest_working_clips_subquery
 from ...services.clip_cache import get_clip_cache
@@ -85,6 +85,7 @@ class ClipExportData:
     raw_clip_id: int | None = None
     game_id: int | None = None
     clip_name: str | None = None
+    rotation: float = 0
 
 
 # YOLO model singleton for local detection
@@ -1259,6 +1260,7 @@ async def _export_clips(
             'segments': clip.segments,
             'duration': clip.duration,
             'clipName': clip.clip_name,
+            'rotation': clip.rotation,
         })
         video_files[clip.clip_index] = clip.video_file
 
@@ -1362,6 +1364,7 @@ async def _export_clips(
                     "clipIndex": normalized.get("clipIndex", 0),
                     "duration": clip.get("duration", 15.0),
                     "clipName": clip.get("clipName") or clip.get("fileName"),
+                    "rotation": clip.get("rotation", 0),
                 })
             logger.info(f"[Multi-Clip Export] Normalized {len(normalized_clips_data)} clips for Modal")
 
@@ -2080,10 +2083,12 @@ async def _run_multi_clip_background(
 
             with get_db_connection() as conn:
                 cursor = conn.cursor()
+                # T5640: tolerate the deploy->migrate window (v029 rotation column may be absent).
+                _rot = "wc.rotation" if column_exists(cursor, "working_clips", "rotation") else "0.0 as rotation"
                 cursor.execute(f"""
                     SELECT
                         wc.id, wc.raw_clip_id, wc.uploaded_filename,
-                        wc.crop_data, wc.segments_data, wc.sort_order,
+                        wc.crop_data, wc.segments_data, wc.sort_order, {_rot},
                         rc.filename as raw_filename, rc.name as clip_name,
                         rc.game_id, rc.video_sequence, rc.start_time as raw_start_time,
                         rc.end_time as raw_end_time,
@@ -2140,6 +2145,7 @@ async def _run_multi_clip_background(
                             decode_data(db_clip['segments_data']),
                             clip_data.get('duration'),
                         )
+                    clip_data['rotation'] = db_clip['rotation'] if 'rotation' in db_clip.keys() else 0  # noqa: SIM118 -- sqlite3.Row `in` checks values, not keys
 
                     # Resolve video source. T4175: game clips and post-expiry
                     # drafts share resolve_clip_source (game video while it
@@ -2258,6 +2264,7 @@ async def _run_multi_clip_background(
                 duration=cd.get('duration', 0),
                 video_file=video_files.get(clip_index),
                 clip_name=cd.get('clipName') or cd.get('fileName'),
+                rotation=cd.get('rotation', 0),
             ))
 
         logger.info(f"[T1116] export_multi_clip delegating to _export_clips: {len(clip_export_list)} clips, aspect={global_aspect_ratio}, test_mode={is_test_mode}")
