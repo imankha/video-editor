@@ -1173,6 +1173,56 @@ async def get_working_video_playback_url(project_id: int):
     return {"url": presigned_url, "expires_in": 3600}
 
 
+async def _serve_draft_poster_jpeg(rel_path: str):
+    """Proxy a draft poster object with a FRESH presign per request.
+
+    Mirrors `shares.py::_serve_poster_jpeg`, but the key is PROFILE-scoped (the
+    draft's owner), resolved through `generate_presigned_url` (current-context
+    profile prefix). 404 when the object/presign is absent; 502 on an R2 fetch
+    failure. `private` cache (session-authed, user-specific) with a short TTL so
+    a first-clip change surfaces on the tile without a hard reload.
+    """
+    import httpx
+    from fastapi.responses import Response
+
+    user_id = get_current_user_id()
+    url = generate_presigned_url(user_id, rel_path, expires_in=3600, content_type="image/jpeg")
+    if not url:
+        raise HTTPException(status_code=404, detail="No poster for this draft")
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+        resp = await client.get(url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Poster fetch failed")
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
+
+
+@router.get("/{project_id}/poster.jpg")
+async def get_draft_poster(project_id: int):
+    """Poster thumbnail for a reel DRAFT (T5671).
+
+    Cache-first from R2 (`posters/drafts/{project_id}.jpg`, per-profile);
+    generated on first request from the draft's first clip's source video
+    (clearest frame in the clip's region). Session-authed by the same middleware
+    as every other `/api/projects` route.
+
+    404 when the project has no clips OR the source video is expired/missing --
+    the frontend renders its no-poster fallback tile; we never fabricate an image
+    (no-silent-fallback rule). Poster generation is best-effort and never fails
+    a parent operation.
+    """
+    from app.services.poster import ensure_draft_poster
+
+    user_id = get_current_user_id()
+    rel_path = ensure_draft_poster(project_id, user_id)
+    if not rel_path:
+        raise HTTPException(status_code=404, detail="No poster for this draft")
+    return await _serve_draft_poster_jpeg(rel_path)
+
+
 class OutdatedClipInfo(BaseModel):
     working_clip_id: int
     raw_clip_id: int

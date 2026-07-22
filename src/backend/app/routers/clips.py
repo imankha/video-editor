@@ -30,6 +30,7 @@ from app.middleware.db_sync import durable_sync
 from app.queries import derive_clip_name, latest_working_clips_subquery, normalize_rating
 from app.services.default_crop import refit_crop_keyframes
 from app.services.pg import get_pg
+from app.services.poster import invalidate_draft_poster
 from app.storage import generate_presigned_url, upload_bytes_to_r2
 from app.tfidf_titles import extract_keywords_tfidf
 from app.user_context import get_current_user_id
@@ -1613,6 +1614,11 @@ async def add_clip_to_project(
 
         logger.info(f"Added clip {clip_id} to project {project_id}")
 
+    # T5671: clip composition changed -> the draft's first clip (and thus its
+    # poster thumbnail) may have changed; drop the cached poster so the next GET
+    # regenerates. Best-effort -- never fails the clip action.
+    invalidate_draft_poster(project_id)
+
     return WorkingClipResponse(
         id=clip_id,
         project_id=project_id,
@@ -1727,7 +1733,7 @@ async def upload_clip_with_metadata(
 
         logger.info(f"Created raw_clip {raw_clip_id} and working_clip {working_clip_id} for project {project_id}")
 
-        return WorkingClipResponse(
+        response = WorkingClipResponse(
             id=working_clip_id,
             project_id=project_id,
             raw_clip_id=raw_clip_id,
@@ -1739,6 +1745,11 @@ async def upload_clip_with_metadata(
             exported_at=None,
             sort_order=next_order
         )
+
+    # T5671: a new clip changes composition (and may become the first clip) ->
+    # invalidate the draft poster. Best-effort (never fails the action).
+    invalidate_draft_poster(project_id)
+    return response
 
 
 @router.put("/projects/{project_id}/clips/reorder")
@@ -1755,7 +1766,11 @@ async def reorder_clips(project_id: int, clip_ids: list[int]):
             """, (index, clip_id, project_id))
 
         conn.commit()
-        return {"success": True}
+
+    # T5671: reordering can change which clip is first -> invalidate the draft
+    # poster so the next GET regenerates. Best-effort (never fails the action).
+    invalidate_draft_poster(project_id)
+    return {"success": True}
 
 
 @router.get("/projects/{project_id}/clips/{clip_id}/file")
@@ -2284,7 +2299,11 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
         conn.commit()
 
         logger.info(f"Removed clip {clip_id} from project {project_id}")
-        return {"success": True}
+
+    # T5671: removing a clip can change the draft's first clip -> invalidate the
+    # cached poster so the next GET regenerates. Best-effort (never fails).
+    invalidate_draft_poster(project_id)
+    return {"success": True}
 
 
 # --- T2800: Teammate tag/email endpoints ---
