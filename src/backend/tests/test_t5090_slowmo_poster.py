@@ -381,7 +381,7 @@ def test_v025_adds_columns_and_backfills_from_archive(tmp_path):
     assert conn.execute(
         "SELECT slowmo_section_start, slowmo_section_end FROM final_videos WHERE id=3"
     ).fetchone() == (None, None)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 27
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == RUNNER.latest_version
 
     # Idempotent: re-running finds nothing pending, columns intact.
     assert RUNNER.run(conn, "sqlite") == []
@@ -410,7 +410,7 @@ def test_v025_backfill_survives_archive_error(tmp_path):
         applied = RUNNER.run(conn, "sqlite")
 
     assert 25 in [m.version for m in applied]  # migration still completed
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 27
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == RUNNER.latest_version
     assert conn.execute(
         "SELECT slowmo_section_start FROM final_videos WHERE id=1"
     ).fetchone() == (None,)  # left NULL, no crash
