@@ -130,6 +130,8 @@ export function OverlayModeView({
   effectiveOverlayFile,
   videoTitle,
   videoTags = [],
+  gameName = null,
+  gameClock = null,
   currentTime,
   duration,
   isPlaying,
@@ -378,6 +380,14 @@ export function OverlayModeView({
                   ))}
                 </div>
               )}
+              {/* T5670: game name + in-match game clock (matches Annotate) */}
+              {gameName && gameClock && (
+                <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                  <span className="truncate max-w-[220px]">{gameName}</span>
+                  <span className="text-gray-600">·</span>
+                  <span className="flex-shrink-0">{gameClock}</span>
+                </div>
+              )}
             </div>
             {/* Right: Metadata */}
             <div className="flex items-center gap-3 text-sm text-gray-300">
@@ -569,10 +579,13 @@ export function OverlayModeView({
             )}
           </div>
 
-          {/* Mobile-only clip title — minimal, under video */}
-          {videoTitle && !isFullscreen && !mobileFs && (
+          {/* Mobile-only clip title — minimal, under video (T5670: + game name/clock) */}
+          {(videoTitle || (gameName && gameClock)) && !isFullscreen && !mobileFs && (
             <div className="lg:hidden px-2 py-1 text-sm text-gray-300 truncate">
-              <span className="font-medium text-white">{videoTitle}</span>
+              {videoTitle && <span className="font-medium text-white">{videoTitle}</span>}
+              {gameName && gameClock && (
+                <span className="text-gray-400">{videoTitle ? ' · ' : ''}{gameName} · {gameClock}</span>
+              )}
             </div>
           )}
 
