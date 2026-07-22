@@ -204,6 +204,8 @@ class WorkingClipResponse(BaseModel):
     width: int | None = None
     height: int | None = None
     fps: float | None = None
+    # T5640: per-clip horizon-straighten angle (degrees); NULL/absent -> treated as 0 client-side
+    rotation: float | None = None
 
 
 class WorkingClipUpdate(BaseModel):
@@ -211,6 +213,7 @@ class WorkingClipUpdate(BaseModel):
     crop_data: Any | None = None
     timing_data: Any | None = None
     segments_data: Any | None = None
+    rotation: float | None = None  # T5640: per-clip horizon-straighten angle (degrees)
 
 
 # =============================================================================
@@ -242,6 +245,9 @@ class FramingActionData(BaseModel):
     # Trim fields
     start: float | None = None
     end: float | None = None
+
+    # Rotation field (T5640): per-clip horizon-straighten angle in degrees
+    rotation: float | None = None
 
 
 class FramingAction(BaseModel):
@@ -560,6 +566,22 @@ async def framing_action(project_id: int, clip_id: int, action: FramingAction):
                 # Clear trim range
                 segments_data['trimRange'] = None
                 logger.info("[Framing Action] Cleared trim range")
+
+            elif action.action == "set_rotation":
+                # T5640: per-clip horizon-straighten angle (degrees). Rotation is a
+                # clip SCALAR, not a keyframe, so it writes working_clips.rotation
+                # directly (in place, no version bump — same as other gesture
+                # actions) and does NOT route through _save_clip_framing_data
+                # (which only writes crop_data/segments_data).
+                if action.data is None or action.data.rotation is None:
+                    raise ValueError("set_rotation requires data.rotation")
+                cursor.execute(
+                    "UPDATE working_clips SET rotation = ? WHERE id = ? AND project_id = ?",
+                    (float(action.data.rotation), clip_id, project_id),
+                )
+                conn.commit()
+                logger.info(f"[Framing Action] Set rotation to {action.data.rotation} deg")
+                return {"success": True, "refresh_required": False}
 
             else:
                 raise ValueError(f"Unknown action: {action.action}")
@@ -1341,6 +1363,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 wc.width as wc_width,
                 wc.height as wc_height,
                 wc.fps as wc_fps,
+                wc.rotation as wc_rotation,
                 rc.filename as raw_filename,
                 rc.name as raw_name,
                 rc.notes as raw_notes,
@@ -1430,6 +1453,7 @@ async def list_project_clips(project_id: int, background_tasks: BackgroundTasks)
                 width=clip['wc_width'],
                 height=clip['wc_height'],
                 fps=clip['wc_fps'],
+                rotation=clip['wc_rotation'] if 'wc_rotation' in clip.keys() else 0,
             ))
 
     return result
@@ -2091,7 +2115,7 @@ async def update_working_clip(
         # Fetch current clip data
         cursor.execute("""
             SELECT id, project_id, raw_clip_id, uploaded_filename, exported_at, sort_order, version,
-                   crop_data, timing_data, segments_data
+                   crop_data, timing_data, segments_data, rotation
             FROM working_clips
             WHERE id = ? AND project_id = ?
         """, (clip_id, project_id))
@@ -2101,13 +2125,21 @@ async def update_working_clip(
             raise HTTPException(status_code=404, detail="Working clip not found")
 
 
-        # Check if this is a framing change on an exported clip
+        # Check if this is a framing change on an exported clip.
+        # T5640: a rotation-only change is a framing change too — a rotation edit
+        # on an already-exported clip versions it on the next PUT (design #6).
         is_framing_change = (
             update.crop_data is not None or
             update.timing_data is not None or
-            update.segments_data is not None
+            update.segments_data is not None or
+            update.rotation is not None
         )
         was_exported = current_clip['exported_at'] is not None
+
+        # Current rotation (column may read None on a below-head DB before v029)
+        current_rotation = current_clip['rotation'] if 'rotation' in current_clip.keys() else None
+        if current_rotation is None:
+            current_rotation = 0.0
 
         # Check if data actually changed (avoid creating new versions for no-op saves)
         # Compare by decoding DB bytes and normalizing incoming data to match
@@ -2121,6 +2153,9 @@ async def update_working_clip(
                     data_actually_changed = True
             if update.segments_data is not None:
                 if decode_data(normalize_and_encode(update.segments_data)) != decode_data(current_clip['segments_data']):
+                    data_actually_changed = True
+            if update.rotation is not None:
+                if float(update.rotation) != float(current_rotation):
                     data_actually_changed = True
 
         if is_framing_change and was_exported and data_actually_changed:
@@ -2138,8 +2173,8 @@ async def update_working_clip(
                 INSERT INTO working_clips (
                     project_id, raw_clip_id, uploaded_filename, sort_order, version,
                     crop_data, timing_data, segments_data, raw_clip_version,
-                    width, height, fps
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    width, height, fps, rotation
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 project_id,
                 current_clip['raw_clip_id'],
@@ -2155,6 +2190,9 @@ async def update_working_clip(
                 current_clip['width'] if 'width' in current_clip.keys() else None,
                 current_clip['height'] if 'height' in current_clip.keys() else None,
                 current_clip['fps'] if 'fps' in current_clip.keys() else None,
+                # T5640: carry the rotation angle forward (use the incoming value if
+                # this PUT changed it, else the current clip's angle).
+                float(update.rotation) if update.rotation is not None else float(current_rotation),
                 # exported_at defaults to NULL for new version (not exported yet)
             ))
             conn.commit()
@@ -2185,6 +2223,9 @@ async def update_working_clip(
         if update.segments_data is not None:
             updates.append("segments_data = ?")
             params.append(normalize_and_encode(update.segments_data))
+        if update.rotation is not None:
+            updates.append("rotation = ?")
+            params.append(float(update.rotation))
 
         if updates:
             params.append(clip_id)
