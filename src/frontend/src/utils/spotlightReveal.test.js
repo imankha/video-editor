@@ -91,4 +91,34 @@ describe('computeSpotlightReveal', () => {
     expect(computeSpotlightReveal(1, 5, 5)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // zero-length
     expect(computeSpotlightReveal(1, 5, 2)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // inverted
   });
+
+  // Shape-aware entrance: the 'ground' shape has NO entrance animation (full immediately);
+  // every other shape keeps the contract-in. The exit fade is identical for all shapes.
+  describe('shape-aware entrance', () => {
+    it("ground has NO entrance animation — full (1, 1) immediately at region start", () => {
+      const r = computeSpotlightReveal(0, 0, 5, 'ground');
+      expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
+    });
+
+    it('ground is full (1, 1) throughout the entrance window (no fade-in, no contract)', () => {
+      const r = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5, 'ground');
+      expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
+    });
+
+    it('ground STILL fades out on exit (ease-in), scale unchanged', () => {
+      const end = 5;
+      const r = computeSpotlightReveal(end - EXIT_SEC / 2, 0, end, 'ground');
+      expect(r.opacityFactor).toBeCloseTo(0.25, 6); // 0.5^2, same ease-in as other shapes
+      expect(r.radiusScale).toBe(1);
+      expect(computeSpotlightReveal(end, 0, end, 'ground').opacityFactor).toBe(0);
+    });
+
+    it('body still contracts in on entrance (unchanged from the default)', () => {
+      const withShape = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5, 'body');
+      const noShape = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5);
+      expect(withShape).toEqual(noShape);
+      expect(withShape.opacityFactor).toBeCloseTo(0.875, 6);
+      expect(withShape.radiusScale).toBeGreaterThan(1);
+    });
+  });
 });

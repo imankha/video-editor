@@ -861,7 +861,8 @@ def _process_frames_to_ffmpeg(
                 # current_time (shared spec, mirrored in HighlightOverlay + video_processing).
                 # Applied by render_highlight_on_frame — never mutates keyframe data.
                 reveal_opacity, reveal_scale = compute_spotlight_reveal(
-                    current_time, *_region_bounds(active_region)
+                    current_time, *_region_bounds(active_region),
+                    (overlay_settings or {}).get('highlight_shape'),
                 )
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)

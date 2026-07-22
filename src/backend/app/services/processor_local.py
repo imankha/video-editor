@@ -289,6 +289,7 @@ class LocalGPUProcessor(VideoProcessor):
                             # render path matches the editor preview + the primary export.
                             reveal_opacity, reveal_scale = compute_spotlight_reveal(
                                 current_time, active_region["start_time"], active_region["end_time"],
+                                (overlay_settings or {}).get('highlight_shape'),
                             )
                             frame = KeyframeInterpolator.render_highlight_on_frame(
                                 frame, highlight, (width, height), None, effect_type,

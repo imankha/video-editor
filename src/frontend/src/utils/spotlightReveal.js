@@ -41,9 +41,11 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  * @param {number} currentTime
  * @param {number} startTime
  * @param {number} endTime
+ * @param {string} [shape] highlight shape ('body' | 'circle' | 'ground'). 'ground' has NO
+ *   entrance animation (full immediately) but keeps the exit fade; all others contract in.
  * @returns {{opacityFactor: number, radiusScale: number}}
  */
-export function computeSpotlightReveal(currentTime, startTime, endTime) {
+export function computeSpotlightReveal(currentTime, startTime, endTime, shape) {
   const NONE = { opacityFactor: 1, radiusScale: 1 };
   if (startTime == null || endTime == null) return NONE;
 
@@ -61,7 +63,10 @@ export function computeSpotlightReveal(currentTime, startTime, endTime) {
   // the big ring reads clearly at near-full opacity while it's still oversized — it lands
   // bold, then snaps in, rather than fading up faint. Since ENTRANCE_START_SCALE > 1, the
   // shared `START + (1 - START) * e` formula interpolates big -> fitting automatically.
+  // EXCEPTION: the 'ground' shape has NO entrance animation — it's full immediately (the
+  // contract-in reads wrong on a floor ellipse). Its exit fade below is unchanged.
   if (entrance > 0 && currentTime < startTime + entrance) {
+    if (shape === 'ground') return NONE;
     const p = clamp01((currentTime - startTime) / entrance);
     const eFade = 1 - (1 - p) * (1 - p) * (1 - p); // ease-out cubic (opacity leads)
     const eContract = 1 - (1 - p) * (1 - p); // ease-out quad (radius trails)

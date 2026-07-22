@@ -682,10 +682,11 @@ _REVEAL_EXIT_SEC = 0.25
 _REVEAL_ENTRANCE_START_SCALE = 1.35  # radii start 35% LARGER and CONTRACT to 100% (focus-pull)
 
 
-def _spotlight_reveal(current_time, start_time, end_time):
+def _spotlight_reveal(current_time, start_time, end_time, shape=None):
     """Return (opacity_factor, radius_scale) for the entrance/exit reveal. See the
     shared spec in app/services/spotlight_reveal.py — keep the math identical.
-    Always applied (standard behavior, no setting)."""
+    Always applied (standard behavior, no setting). The 'ground' shape has NO entrance
+    animation (full immediately) but keeps the exit fade; all others contract in."""
     if start_time is None or end_time is None:
         return 1.0, 1.0
     dur = end_time - start_time
@@ -696,6 +697,9 @@ def _spotlight_reveal(current_time, start_time, end_time):
     if entrance > 0 and current_time < start_time + entrance:
         # Focus-pull: opacity fades in on a faster ease-out (cubic) than the contraction
         # (quad), so the ~35%-larger ring reads bold before it tightens to form-fitting.
+        # EXCEPTION: 'ground' has no entrance animation — full immediately.
+        if shape == 'ground':
+            return 1.0, 1.0
         p = max(0.0, min(1.0, (current_time - start_time) / entrance))
         e_fade = 1 - (1 - p) * (1 - p) * (1 - p)  # ease-out cubic (opacity leads)
         e_contract = 1 - (1 - p) * (1 - p)  # ease-out quad (radius trails)
@@ -739,7 +743,9 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     # T5250: entrance/exit reveal envelope (fade + contract focus-pull), derived from the
     # region bounds. Standard behavior — always applied.
-    reveal_opacity, reveal_scale = _spotlight_reveal(current_time, start_time, end_time)
+    reveal_opacity, reveal_scale = _spotlight_reveal(
+        current_time, start_time, end_time, settings.get('highlight_shape')
+    )
 
     x = result['x']
     y = result['y']

@@ -35,9 +35,12 @@ def _clamp01(v: float) -> float:
     return 0.0 if v < 0 else 1.0 if v > 1 else v
 
 
-def compute_spotlight_reveal(current_time, start_time, end_time):
+def compute_spotlight_reveal(current_time, start_time, end_time, shape=None):
     """Return ``(opacity_factor, radius_scale)`` for a spotlight at ``current_time``
-    within a region spanning ``[start_time, end_time]`` (seconds). Always applied."""
+    within a region spanning ``[start_time, end_time]`` (seconds). Always applied.
+
+    ``shape`` ('body' | 'circle' | 'ground'): the 'ground' shape has NO entrance
+    animation (full immediately) but keeps the exit fade; all others contract in."""
     if start_time is None or end_time is None:
         return 1.0, 1.0
 
@@ -56,7 +59,11 @@ def compute_spotlight_reveal(current_time, start_time, end_time):
     # so the big ring reads clearly at near-full opacity while it's still oversized -- it
     # lands bold, then snaps in, rather than fading up faint. Since ENTRANCE_START_SCALE
     # > 1, the shared `START + (1 - START) * e` formula interpolates big -> fitting.
+    # EXCEPTION: the 'ground' shape has NO entrance animation -- full immediately (the
+    # contract-in reads wrong on a floor ellipse). Its exit fade below is unchanged.
     if entrance > 0 and current_time < start_time + entrance:
+        if shape == 'ground':
+            return 1.0, 1.0
         p = _clamp01((current_time - start_time) / entrance)
         e_fade = 1 - (1 - p) * (1 - p) * (1 - p)  # ease-out cubic (opacity leads)
         e_contract = 1 - (1 - p) * (1 - p)  # ease-out quad (radius trails)

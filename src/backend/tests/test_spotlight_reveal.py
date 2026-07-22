@@ -78,6 +78,30 @@ class TestComputeSpotlightReveal:
         assert compute_spotlight_reveal(1, 5, 2) == (1.0, 1.0)  # inverted
 
 
+class TestShapeAwareEntrance:
+    """The 'ground' shape has NO entrance animation (full immediately); every other shape
+    keeps the contract-in. The exit fade is identical for all shapes."""
+
+    def test_ground_no_entrance_animation_full_at_start(self):
+        assert compute_spotlight_reveal(0, 0, 5, 'ground') == (1.0, 1.0)
+
+    def test_ground_full_throughout_entrance_window(self):
+        assert compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5, 'ground') == (1.0, 1.0)
+
+    def test_ground_still_fades_out_on_exit(self):
+        opacity, scale = compute_spotlight_reveal(5 - EXIT_SEC / 2, 0, 5, 'ground')
+        assert opacity == pytest.approx(0.25)  # same ease-in as other shapes
+        assert scale == 1
+        assert compute_spotlight_reveal(5, 0, 5, 'ground')[0] == 0
+
+    def test_body_still_contracts_in_on_entrance(self):
+        with_shape = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5, 'body')
+        no_shape = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5)
+        assert with_shape == no_shape
+        assert with_shape[0] == pytest.approx(0.875)
+        assert with_shape[1] > 1
+
+
 class TestModalInlineParity:
     """The Modal image can't import app.services, so video_processing.py inlines a copy.
     It must match the canonical module byte-for-byte in output across the ramp."""
@@ -99,3 +123,18 @@ class TestModalInlineParity:
     )
     def test_matches_canonical(self, t, start, end):
         assert modal_reveal(t, start, end) == compute_spotlight_reveal(t, start, end)
+
+    @pytest.mark.parametrize("shape", ['ground', 'body', 'circle', None])
+    @pytest.mark.parametrize(
+        "t,start,end",
+        [
+            (0, 0, 5),  # entrance start
+            (ENTRANCE_SEC / 2, 0, 5),  # mid entrance
+            (ENTRANCE_SEC, 0, 5),  # entrance end
+            (2.5, 0, 5),  # steady middle
+            (5 - EXIT_SEC / 2, 0, 5),  # mid exit
+            (5, 0, 5),  # region end
+        ],
+    )
+    def test_matches_canonical_shape_aware(self, t, start, end, shape):
+        assert modal_reveal(t, start, end, shape) == compute_spotlight_reveal(t, start, end, shape)
