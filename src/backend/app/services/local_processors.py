@@ -592,10 +592,17 @@ def _framing_sync(
     source_start_time: float = 0.0,
     source_end_time: float = None,
     progress_callback=None,
+    profile_id: str | None = None,
 ) -> dict:
     import ffmpeg as ffmpeg_lib
 
     from app.storage import download_from_r2, generate_presigned_url_global, upload_to_r2
+
+    # ContextVars don't cross the process boundary — re-establish the profile context the
+    # R2 key builder needs (this runs in a ProcessPoolExecutor child, T2640).
+    if profile_id:
+        from app.profile_context import set_current_profile_id
+        set_current_profile_id(profile_id)
 
     logger.info(f"[Subprocess] Framing job {job_id} starting")
     logger.info(f"[Subprocess] Source range: {source_start_time}s - {source_end_time}s")

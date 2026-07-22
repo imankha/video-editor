@@ -504,6 +504,7 @@ async def call_modal_framing_ai(
     test_mode: bool = False,
     source_start_time: float = 0.0,
     source_end_time: float = None,
+    profile_id: str | None = None,
 ) -> dict:
     """
     Call Modal process_framing_ai function for AI-upscaled crop exports.
@@ -571,6 +572,7 @@ async def call_modal_framing_ai(
                 "export_mode": export_mode,
                 "source_start_time": source_start_time,
                 "source_end_time": source_end_time,
+                "profile_id": profile_id,
             },
             progress_callback=progress_callback,
         )
