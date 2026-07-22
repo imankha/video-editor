@@ -1,58 +1,35 @@
-"""T5250 spotlight reveal envelope — backend canonical + Modal-inline parity.
+"""T5250 spotlight exit-fade envelope — backend canonical + Modal-inline parity.
 
-The reveal envelope is the shared spec that keeps the editor preview and the exported
-video in lockstep. These cases mirror the frontend Vitest cases in
-src/frontend/src/utils/spotlightReveal.test.js number-for-number, and they also assert the
-Modal-inline copy (video_processing._spotlight_reveal) produces identical output to the
-canonical module — the anti-drift guard for the three mirrored copies.
+The envelope is the shared spec that keeps the editor preview and the exported video in
+lockstep. The spotlight is FULL at the region start and stays full through the region; the
+ONLY animation is the exit fade-out (no entrance). These cases mirror the frontend Vitest
+cases in src/frontend/src/utils/spotlightReveal.test.js number-for-number, and they also
+assert the Modal-inline copy (video_processing._spotlight_reveal) produces identical output
+to the canonical module — the anti-drift guard for the three mirrored copies.
 """
 
 import pytest
 
 from app.modal_functions.video_processing import _spotlight_reveal as modal_reveal
 from app.services.spotlight_reveal import (
-    ENTRANCE_SEC,
-    ENTRANCE_START_SCALE,
     EXIT_SEC,
     compute_spotlight_reveal,
 )
 
 
 class TestComputeSpotlightReveal:
-    def test_invisible_at_region_start_starts_larger_than_fitting(self):
-        opacity, scale = compute_spotlight_reveal(0, 0, 5)
-        assert opacity == 0
-        # Entrance is a focus-pull: the ring begins oversized (>1) and contracts to 1.0.
-        assert ENTRANCE_START_SCALE > 1
-        assert scale == pytest.approx(ENTRANCE_START_SCALE)
+    def test_full_at_region_start_no_entrance(self):
+        # No entrance animation: full opacity + full size immediately at the region start.
+        assert compute_spotlight_reveal(0, 0, 5) == (1.0, 1.0)
 
-    def test_fully_revealed_after_entrance_ramp(self):
-        opacity, scale = compute_spotlight_reveal(ENTRANCE_SEC, 0, 5)
-        assert opacity == 1
-        assert scale == 1  # contracted to form-fitting
-
-    def test_radius_contracts_monotonically_from_oversized_to_one(self):
-        scales = [
-            compute_spotlight_reveal(ENTRANCE_SEC * f, 0, 5)[1]
-            for f in (0, 0.25, 0.5, 0.75, 1)
-        ]
-        # Strictly decreasing: big -> fitting. Every intermediate scale stays > 1.
-        assert all(scales[i] < scales[i - 1] for i in range(1, len(scales)))
-        assert scales[0] == pytest.approx(ENTRANCE_START_SCALE)
-        assert all(s > 1 for s in scales[:-1])
-        assert scales[-1] == 1
+    def test_full_just_after_region_start(self):
+        assert compute_spotlight_reveal(0.2, 0, 5) == (1.0, 1.0)
 
     def test_noop_in_steady_middle(self):
         assert compute_spotlight_reveal(2.5, 0, 5) == (1.0, 1.0)
 
-    def test_entrance_opacity_ease_out_leads_contraction(self):
-        opacity, scale = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5)
-        # Opacity is ease-out CUBIC: 1 - 0.5**3 = 0.875, well past linear 0.5.
-        assert opacity == pytest.approx(0.875)
-        # Radius contracts on ease-out QUAD (trails opacity): START + (1-START)*0.75, > 1.
-        assert scale == pytest.approx(ENTRANCE_START_SCALE + (1 - ENTRANCE_START_SCALE) * 0.75)
-        assert scale > 1
-        assert opacity > 0.75  # opacity leads the contraction progress (0.75)
+    def test_still_full_right_before_exit_ramp(self):
+        assert compute_spotlight_reveal(5 - EXIT_SEC - 0.01, 0, 5) == (1.0, 1.0)
 
     def test_fades_to_zero_at_end_no_scale_change(self):
         opacity, scale = compute_spotlight_reveal(5, 0, 5)
@@ -64,13 +41,11 @@ class TestComputeSpotlightReveal:
         assert opacity == pytest.approx(0.25)  # 0.5**2, below linear 0.5
         assert scale == 1
 
-    def test_short_region_caps_ramps_at_half(self):
+    def test_short_region_caps_exit_at_half(self):
         dur = 0.4
-        assert compute_spotlight_reveal(0, 0, dur)[0] == 0
-        assert compute_spotlight_reveal(dur, 0, dur)[0] == 0
-        mid_opacity, mid_scale = compute_spotlight_reveal(0.2, 0, dur)
-        assert mid_opacity == 1
-        assert mid_scale == 1
+        assert compute_spotlight_reveal(0, 0, dur) == (1.0, 1.0)  # full at start
+        assert compute_spotlight_reveal(0.2, 0, dur) == (1.0, 1.0)  # full at middle
+        assert compute_spotlight_reveal(dur, 0, dur)[0] == 0  # faded to 0 at end
 
     def test_degenerate_bounds_are_noop(self):
         assert compute_spotlight_reveal(1, None, 5) == (1.0, 1.0)
@@ -78,63 +53,24 @@ class TestComputeSpotlightReveal:
         assert compute_spotlight_reveal(1, 5, 2) == (1.0, 1.0)  # inverted
 
 
-class TestShapeAwareEntrance:
-    """The 'ground' shape has NO entrance animation (full immediately); every other shape
-    keeps the contract-in. The exit fade is identical for all shapes."""
-
-    def test_ground_no_entrance_animation_full_at_start(self):
-        assert compute_spotlight_reveal(0, 0, 5, 'ground') == (1.0, 1.0)
-
-    def test_ground_full_throughout_entrance_window(self):
-        assert compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5, 'ground') == (1.0, 1.0)
-
-    def test_ground_still_fades_out_on_exit(self):
-        opacity, scale = compute_spotlight_reveal(5 - EXIT_SEC / 2, 0, 5, 'ground')
-        assert opacity == pytest.approx(0.25)  # same ease-in as other shapes
-        assert scale == 1
-        assert compute_spotlight_reveal(5, 0, 5, 'ground')[0] == 0
-
-    def test_body_still_contracts_in_on_entrance(self):
-        with_shape = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5, 'body')
-        no_shape = compute_spotlight_reveal(ENTRANCE_SEC / 2, 0, 5)
-        assert with_shape == no_shape
-        assert with_shape[0] == pytest.approx(0.875)
-        assert with_shape[1] > 1
-
-
 class TestModalInlineParity:
     """The Modal image can't import app.services, so video_processing.py inlines a copy.
-    It must match the canonical module byte-for-byte in output across the ramp."""
+    It must match the canonical module byte-for-byte in output across the region."""
 
     @pytest.mark.parametrize(
         "t,start,end",
         [
-            (0, 0, 5),
-            (0.1, 0, 5),
-            (ENTRANCE_SEC / 2, 0, 5),
-            (ENTRANCE_SEC, 0, 5),
-            (2.5, 0, 5),
-            (5 - EXIT_SEC / 2, 0, 5),
-            (5, 0, 5),
-            (0.2, 0, 0.4),  # short region, capped ramps
+            (0, 0, 5),  # region start (full, no entrance)
+            (0.2, 0, 5),  # just after start
+            (2.5, 0, 5),  # steady middle
+            (5 - EXIT_SEC - 0.01, 0, 5),  # just before exit ramp
+            (5 - EXIT_SEC / 2, 0, 5),  # mid exit
+            (5, 0, 5),  # region end
+            (0.2, 0, 0.4),  # short region, capped exit ramp
+            (0.4, 0, 0.4),  # short region end
             (1, None, 5),
             (1, 5, 5),
         ],
     )
     def test_matches_canonical(self, t, start, end):
         assert modal_reveal(t, start, end) == compute_spotlight_reveal(t, start, end)
-
-    @pytest.mark.parametrize("shape", ['ground', 'body', 'circle', None])
-    @pytest.mark.parametrize(
-        "t,start,end",
-        [
-            (0, 0, 5),  # entrance start
-            (ENTRANCE_SEC / 2, 0, 5),  # mid entrance
-            (ENTRANCE_SEC, 0, 5),  # entrance end
-            (2.5, 0, 5),  # steady middle
-            (5 - EXIT_SEC / 2, 0, 5),  # mid exit
-            (5, 0, 5),  # region end
-        ],
-    )
-    def test_matches_canonical_shape_aware(self, t, start, end, shape):
-        assert modal_reveal(t, start, end, shape) == compute_spotlight_reveal(t, start, end, shape)

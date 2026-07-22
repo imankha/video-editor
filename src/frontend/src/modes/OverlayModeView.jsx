@@ -283,20 +283,19 @@ export function OverlayModeView({
   // touches no keyframe data. Null when no region covers the playhead (overlay hidden).
   // Standard behavior — always applied (no setting), so preview matches the export.
   const spotlightReveal = useMemo(() => {
-    // EDITOR-ONLY: the entrance/exit reveal animation plays during preview PLAYBACK. When
-    // paused (e.g. stopped at the region-start frame to edit) return null so HighlightOverlay
-    // renders the spotlight at FULL opacity/size (its `reveal ? ... : 1` fallback) — the full
-    // spotlight stays visible while editing, so click-to-highlight reads as selected at t=0.
-    // The BACKEND export ALWAYS applies the reveal (never gated on playing), so
-    // preview-during-playback still matches the exported video.
+    // EDITOR-ONLY: the exit fade-out plays during preview PLAYBACK. When paused (e.g.
+    // stopped at the region-start frame to edit) return null so HighlightOverlay renders
+    // the spotlight at FULL opacity/size (its `reveal ? ... : 1` fallback) — the full
+    // spotlight stays visible while editing. The BACKEND export ALWAYS applies the fade
+    // (never gated on playing), so preview-during-playback still matches the exported video.
     if (!isPlaying) return null;
     if (!highlightRegions?.length) return null;
     const region = highlightRegions.find(
       (r) => r.enabled !== false && currentTime >= r.startTime && currentTime <= r.endTime
     );
     if (!region) return null;
-    return computeSpotlightReveal(currentTime, region.startTime, region.endTime, highlightShape);
-  }, [isPlaying, highlightRegions, currentTime, highlightShape]);
+    return computeSpotlightReveal(currentTime, region.startTime, region.endTime);
+  }, [isPlaying, highlightRegions, currentTime]);
 
   // The hint teaches manual override: shown only while tracking is ON, a spotlight is
   // visible, the user hasn't overridden yet this session, AND no tracking/spotlight

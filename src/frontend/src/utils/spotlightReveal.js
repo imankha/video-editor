@@ -1,13 +1,12 @@
 /**
- * spotlightReveal - the shared entrance/exit "reveal" envelope for the spotlight
- * highlight (T5250).
+ * spotlightReveal - the shared exit "fade-out" envelope for the spotlight highlight
+ * (T5250).
  *
- * The spotlight used to POP on/off at a region's [start, end] bounds. This envelope
- * gives it a premium entrance FOCUS-PULL (fade-in while a larger ring CONTRACTS down to
- * the form-fitting size, ease-out) and an exit fade (ease-in), computed PURELY from the
- * region bounds and the current time. It is a DERIVED, render-time visual layer — it
- * never writes keyframes, so it can't corrupt saved data or violate the
- * gesture-persistence rule (T350 class).
+ * The spotlight is at FULL opacity + full size immediately at a region's start and stays
+ * full through the region; the ONLY animation is the fade-OUT over the last EXIT_SEC at the
+ * region end. There is NO entrance animation (no bloom, no contract-in) for any shape. It is
+ * a DERIVED, render-time visual layer — it never writes keyframes, so it can't corrupt saved
+ * data or violate the gesture-persistence rule (T350 class).
  *
  * SHARED SPEC — this file is the single source of the timing/easing. It is MIRRORED, not
  * imported, on the backend render side (the crop/default-shape mirroring pattern):
@@ -18,68 +17,41 @@
  * The envelope returns two multipliers the renderer applies on TOP of whatever the
  * keyframe interpolator yields:
  *   - opacityFactor: multiplies stroke / fill / dim / outline opacity (0 = invisible, 1 = full)
- *   - radiusScale:  multiplies radiusX / radiusY about the ellipse center (contract-in:
- *                   starts LARGER than 1 and tightens to 1.0 = form-fitting)
+ *   - radiusScale:  multiplies radiusX / radiusY about the ellipse center (always 1 now — the
+ *                   exit fade does not scale)
  *
- * ALWAYS-ON: the reveal is standard behavior for every spotlight — there is no setting or
+ * ALWAYS-ON: the fade-out is standard behavior for every spotlight — there is no setting or
  * gate. Preview and export apply it unconditionally, so they can't drift on whether it's on.
  */
 
 // Timing/easing constants. Mirror in spotlight_reveal.py + video_processing.py.
 export const SPOTLIGHT_REVEAL = {
-  ENTRANCE_SEC: 0.35, // entrance ramp length (fade-in + contract)
   EXIT_SEC: 0.25, // exit fade length
-  ENTRANCE_START_SCALE: 1.35, // radii start 35% LARGER and CONTRACT to 100% (focus-pull) over the entrance
 };
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /**
- * Compute the reveal multipliers for a spotlight at `currentTime` within a region
- * spanning [startTime, endTime] (seconds).
+ * Compute the exit-fade multipliers for a spotlight at `currentTime` within a region
+ * spanning [startTime, endTime] (seconds). Full (1, 1) everywhere except the exit window.
  *
  * @param {number} currentTime
  * @param {number} startTime
  * @param {number} endTime
- * @param {string} [shape] highlight shape ('body' | 'circle' | 'ground'). 'ground' has NO
- *   entrance animation (full immediately) but keeps the exit fade; all others contract in.
  * @returns {{opacityFactor: number, radiusScale: number}}
  */
-export function computeSpotlightReveal(currentTime, startTime, endTime, shape) {
+export function computeSpotlightReveal(currentTime, startTime, endTime) {
   const NONE = { opacityFactor: 1, radiusScale: 1 };
   if (startTime == null || endTime == null) return NONE;
 
   const dur = endTime - startTime;
   if (!(dur > 0)) return NONE;
 
-  // Cap each ramp at half the region so a short region still gets a symmetric in/out
-  // without the entrance and exit ramps overlapping.
-  const entrance = Math.min(SPOTLIGHT_REVEAL.ENTRANCE_SEC, dur / 2);
+  // Cap the exit ramp at half the region so a very short region still fades cleanly.
   const exit = Math.min(SPOTLIGHT_REVEAL.EXIT_SEC, dur / 2);
 
-  // Entrance: a FOCUS-PULL. The ring appears ~35% LARGER (ENTRANCE_START_SCALE) and
-  // CONTRACTS down to 1.0 (form-fitting), catching the eye before it tightens onto the
-  // player. Opacity fades in on a FASTER ease-out (cubic) than the contraction (quad), so
-  // the big ring reads clearly at near-full opacity while it's still oversized — it lands
-  // bold, then snaps in, rather than fading up faint. Since ENTRANCE_START_SCALE > 1, the
-  // shared `START + (1 - START) * e` formula interpolates big -> fitting automatically.
-  // EXCEPTION: the 'ground' shape has NO entrance animation — it's full immediately (the
-  // contract-in reads wrong on a floor ellipse). Its exit fade below is unchanged.
-  if (entrance > 0 && currentTime < startTime + entrance) {
-    if (shape === 'ground') return NONE;
-    const p = clamp01((currentTime - startTime) / entrance);
-    const eFade = 1 - (1 - p) * (1 - p) * (1 - p); // ease-out cubic (opacity leads)
-    const eContract = 1 - (1 - p) * (1 - p); // ease-out quad (radius trails)
-    return {
-      opacityFactor: eFade,
-      radiusScale:
-        SPOTLIGHT_REVEAL.ENTRANCE_START_SCALE +
-        (1 - SPOTLIGHT_REVEAL.ENTRANCE_START_SCALE) * eContract,
-    };
-  }
-
   // Exit: ease-IN fade-out (slow start, accelerate to gone). No scale change — the
-  // circle stays full-size and just dissolves. `q` is the fraction of the exit ramp
+  // spotlight stays full-size and just dissolves. `q` is the fraction of the exit ramp
   // still remaining (1 at the exit start, 0 at the region end).
   if (exit > 0 && currentTime > endTime - exit) {
     const q = clamp01((endTime - currentTime) / exit);

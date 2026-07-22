@@ -857,12 +857,11 @@ def _process_frames_to_ffmpeg(
             if active_region:
                 region_keyframes = _keyframes_within_bounds(active_region)
 
-                # T5250: entrance/exit reveal envelope, derived from the region bounds +
+                # T5250: exit fade-out envelope, derived from the region bounds +
                 # current_time (shared spec, mirrored in HighlightOverlay + video_processing).
                 # Applied by render_highlight_on_frame — never mutates keyframe data.
                 reveal_opacity, reveal_scale = compute_spotlight_reveal(
-                    current_time, *_region_bounds(active_region),
-                    (overlay_settings or {}).get('highlight_shape'),
+                    current_time, *_region_bounds(active_region)
                 )
 
                 highlight = KeyframeInterpolator.interpolate_highlight(region_keyframes, current_time)

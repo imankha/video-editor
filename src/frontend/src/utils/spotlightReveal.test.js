@@ -1,39 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { computeSpotlightReveal, SPOTLIGHT_REVEAL } from './spotlightReveal';
 
-// T5250: the reveal envelope is the shared spec that keeps the editor preview and the
-// backend export in lockstep. These cases pin the entrance ramp, exit ramp, easing shape
-// and no-op behaviour; the mirrored Python cases in
-// src/backend/tests/test_spotlight_reveal.py assert the same numbers so preview/export
-// can't drift.
+// T5250: the envelope is the shared spec that keeps the editor preview and the backend
+// export in lockstep. The spotlight is FULL at the region start and stays full through the
+// region; the ONLY animation is the exit fade-out. There is NO entrance animation. The
+// mirrored Python cases in src/backend/tests/test_spotlight_reveal.py assert the same
+// numbers so preview/export can't drift.
 describe('computeSpotlightReveal', () => {
-  const { ENTRANCE_SEC, EXIT_SEC, ENTRANCE_START_SCALE } = SPOTLIGHT_REVEAL;
+  const { EXIT_SEC } = SPOTLIGHT_REVEAL;
 
-  it('is invisible (opacity 0) exactly at region start, and starts LARGER than form-fitting (contract)', () => {
+  it('is FULL (opacity 1, scale 1) exactly at region start — no entrance animation', () => {
     const r = computeSpotlightReveal(0, 0, 5);
-    expect(r.opacityFactor).toBe(0);
-    // Entrance is a focus-pull: the ring begins oversized (>1) and contracts to 1.0.
-    expect(ENTRANCE_START_SCALE).toBeGreaterThan(1);
-    expect(r.radiusScale).toBeCloseTo(ENTRANCE_START_SCALE, 6);
+    expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
   });
 
-  it('is fully revealed (opacity 1, scale contracted to 1) once the entrance ramp completes', () => {
-    const r = computeSpotlightReveal(ENTRANCE_SEC, 0, 5);
-    expect(r.opacityFactor).toBe(1);
-    expect(r.radiusScale).toBe(1);
-  });
-
-  it('CONTRACTS the radius monotonically from oversized down to 1.0 across the entrance', () => {
-    const scales = [0, 0.25, 0.5, 0.75, 1].map(
-      (f) => computeSpotlightReveal(ENTRANCE_SEC * f, 0, 5).radiusScale
-    );
-    // Strictly decreasing: big -> fitting. Every intermediate scale stays > 1.
-    for (let i = 1; i < scales.length; i++) {
-      expect(scales[i]).toBeLessThan(scales[i - 1]);
-    }
-    expect(scales[0]).toBeCloseTo(ENTRANCE_START_SCALE, 6);
-    expect(scales.slice(0, -1).every((s) => s > 1)).toBe(true);
-    expect(scales[scales.length - 1]).toBe(1);
+  it('is FULL just after region start (no fade-in, no contract)', () => {
+    const r = computeSpotlightReveal(0.2, 0, 5);
+    expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
   });
 
   it('is a no-op (1, 1) in the steady middle of a region', () => {
@@ -41,16 +24,11 @@ describe('computeSpotlightReveal', () => {
     expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
   });
 
-  it('ramps opacity with ease-OUT on entrance, FASTER than the contraction so the big ring reads bold', () => {
-    // Opacity is ease-out CUBIC: at p=0.5 => 1 - 0.5^3 = 0.875 (well past linear 0.5).
-    const r = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5);
-    expect(r.opacityFactor).toBeCloseTo(0.875, 6);
-    // Radius contracts on ease-out QUAD (trails opacity): START + (1-START)*0.75, still > 1.
-    expect(r.radiusScale).toBeCloseTo(ENTRANCE_START_SCALE + (1 - ENTRANCE_START_SCALE) * 0.75, 6);
-    expect(r.radiusScale).toBeGreaterThan(1);
-    // Opacity (0.875) leads the contraction progress (0.75) — ring is near-full bright
-    // while still visibly oversized.
-    expect(r.opacityFactor).toBeGreaterThan(0.75);
+  it('is still FULL right up until the exit ramp begins', () => {
+    const end = 5;
+    // Exit ramp is the last EXIT_SEC; a hair before it, the spotlight is still full.
+    const r = computeSpotlightReveal(end - EXIT_SEC - 0.01, 0, end);
+    expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
   });
 
   it('fades to 0 at region end with NO scale change on exit', () => {
@@ -68,21 +46,16 @@ describe('computeSpotlightReveal', () => {
     expect(r.radiusScale).toBe(1);
   });
 
-  it('caps entrance+exit at half the region so a short region still fades symmetrically', () => {
-    // 0.4s region: entrance and exit each capped to 0.2s, meeting at the midpoint.
+  it('caps the exit ramp at half the region so a short region still fades to 0 at the end', () => {
+    // 0.4s region: exit capped to 0.2s. Full at start + steady middle, fades to 0 at end.
     const dur = 0.4;
-    const start = computeSpotlightReveal(0, 0, dur);
-    const mid = computeSpotlightReveal(0.2, 0, dur);
-    const end = computeSpotlightReveal(dur, 0, dur);
-    expect(start.opacityFactor).toBe(0);
-    expect(end.opacityFactor).toBe(0);
-    // Midpoint is fully revealed (both ramps completed there).
-    expect(mid.opacityFactor).toBe(1);
-    expect(mid.radiusScale).toBe(1);
+    expect(computeSpotlightReveal(0, 0, dur)).toEqual({ opacityFactor: 1, radiusScale: 1 });
+    expect(computeSpotlightReveal(0.2, 0, dur)).toEqual({ opacityFactor: 1, radiusScale: 1 });
+    expect(computeSpotlightReveal(dur, 0, dur).opacityFactor).toBe(0);
   });
 
   it('never touches keyframe data — returns only display multipliers', () => {
-    const r = computeSpotlightReveal(0.1, 0, 5);
+    const r = computeSpotlightReveal(4.9, 0, 5);
     expect(Object.keys(r).sort()).toEqual(['opacityFactor', 'radiusScale']);
   });
 
@@ -90,35 +63,5 @@ describe('computeSpotlightReveal', () => {
     expect(computeSpotlightReveal(1, null, 5)).toEqual({ opacityFactor: 1, radiusScale: 1 });
     expect(computeSpotlightReveal(1, 5, 5)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // zero-length
     expect(computeSpotlightReveal(1, 5, 2)).toEqual({ opacityFactor: 1, radiusScale: 1 }); // inverted
-  });
-
-  // Shape-aware entrance: the 'ground' shape has NO entrance animation (full immediately);
-  // every other shape keeps the contract-in. The exit fade is identical for all shapes.
-  describe('shape-aware entrance', () => {
-    it("ground has NO entrance animation — full (1, 1) immediately at region start", () => {
-      const r = computeSpotlightReveal(0, 0, 5, 'ground');
-      expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
-    });
-
-    it('ground is full (1, 1) throughout the entrance window (no fade-in, no contract)', () => {
-      const r = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5, 'ground');
-      expect(r).toEqual({ opacityFactor: 1, radiusScale: 1 });
-    });
-
-    it('ground STILL fades out on exit (ease-in), scale unchanged', () => {
-      const end = 5;
-      const r = computeSpotlightReveal(end - EXIT_SEC / 2, 0, end, 'ground');
-      expect(r.opacityFactor).toBeCloseTo(0.25, 6); // 0.5^2, same ease-in as other shapes
-      expect(r.radiusScale).toBe(1);
-      expect(computeSpotlightReveal(end, 0, end, 'ground').opacityFactor).toBe(0);
-    });
-
-    it('body still contracts in on entrance (unchanged from the default)', () => {
-      const withShape = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5, 'body');
-      const noShape = computeSpotlightReveal(ENTRANCE_SEC / 2, 0, 5);
-      expect(withShape).toEqual(noShape);
-      expect(withShape.opacityFactor).toBeCloseTo(0.875, 6);
-      expect(withShape.radiusScale).toBeGreaterThan(1);
-    });
   });
 });

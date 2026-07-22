@@ -672,38 +672,24 @@ def _spline_interpolate_highlight(sorted_kf, current_time):
     }
 
 
-# T5250 spotlight reveal envelope — INLINE MIRROR of the shared spec. Kept self-contained
+# T5250 spotlight exit-fade envelope — INLINE MIRROR of the shared spec. Kept self-contained
 # because the Modal image does not mount `app`, so `from app.services.spotlight_reveal ...`
 # is unavailable here. MUST stay in sync with:
 #   - src/backend/app/services/spotlight_reveal.py (backend canonical)
 #   - src/frontend/src/utils/spotlightReveal.js     (frontend canonical)
-_REVEAL_ENTRANCE_SEC = 0.35
-_REVEAL_EXIT_SEC = 0.25
-_REVEAL_ENTRANCE_START_SCALE = 1.35  # radii start 35% LARGER and CONTRACT to 100% (focus-pull)
+_REVEAL_EXIT_SEC = 0.25  # exit fade length
 
 
-def _spotlight_reveal(current_time, start_time, end_time, shape=None):
-    """Return (opacity_factor, radius_scale) for the entrance/exit reveal. See the
-    shared spec in app/services/spotlight_reveal.py — keep the math identical.
-    Always applied (standard behavior, no setting). The 'ground' shape has NO entrance
-    animation (full immediately) but keeps the exit fade; all others contract in."""
+def _spotlight_reveal(current_time, start_time, end_time):
+    """Return (opacity_factor, radius_scale) for the exit fade-out. See the shared spec in
+    app/services/spotlight_reveal.py — keep the math identical. Full (1, 1) everywhere
+    except the exit window; the only animation is the exit fade-out (no entrance)."""
     if start_time is None or end_time is None:
         return 1.0, 1.0
     dur = end_time - start_time
     if not dur > 0:
         return 1.0, 1.0
-    entrance = min(_REVEAL_ENTRANCE_SEC, dur / 2)
     exit_ = min(_REVEAL_EXIT_SEC, dur / 2)
-    if entrance > 0 and current_time < start_time + entrance:
-        # Focus-pull: opacity fades in on a faster ease-out (cubic) than the contraction
-        # (quad), so the ~35%-larger ring reads bold before it tightens to form-fitting.
-        # EXCEPTION: 'ground' has no entrance animation — full immediately.
-        if shape == 'ground':
-            return 1.0, 1.0
-        p = max(0.0, min(1.0, (current_time - start_time) / entrance))
-        e_fade = 1 - (1 - p) * (1 - p) * (1 - p)  # ease-out cubic (opacity leads)
-        e_contract = 1 - (1 - p) * (1 - p)  # ease-out quad (radius trails)
-        return e_fade, _REVEAL_ENTRANCE_START_SCALE + (1 - _REVEAL_ENTRANCE_START_SCALE) * e_contract
     if exit_ > 0 and current_time > end_time - exit_:
         q = max(0.0, min(1.0, (end_time - current_time) / exit_))
         return q * q, 1.0  # ease-in quad
@@ -716,7 +702,7 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     Uses Catmull-Rom cubic spline interpolation matching frontend.
     Supports bold stroke with dark outline, optional fill, configurable dim.
-    Applies the T5250 entrance/exit reveal envelope (fade + contract focus-pull) on top.
+    Applies the T5250 exit fade-out envelope on top (no entrance animation).
     """
     import cv2
     import numpy as np
@@ -741,11 +727,9 @@ def _render_highlight(frame, region: dict, current_time: float, effect_type: str
 
     settings = overlay_settings or {}
 
-    # T5250: entrance/exit reveal envelope (fade + contract focus-pull), derived from the
-    # region bounds. Standard behavior — always applied.
-    reveal_opacity, reveal_scale = _spotlight_reveal(
-        current_time, start_time, end_time, settings.get('highlight_shape')
-    )
+    # T5250: exit fade-out envelope, derived from the region bounds. Standard behavior —
+    # always applied. No entrance animation; only the exit fades.
+    reveal_opacity, reveal_scale = _spotlight_reveal(current_time, start_time, end_time)
 
     x = result['x']
     y = result['y']
