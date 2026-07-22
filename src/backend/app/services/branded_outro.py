@@ -48,24 +48,36 @@ logger = logging.getLogger(__name__)
 # a 1.75s card build on a cold start is negligible).
 _CARD_CACHE_DIR: Path = Path(tempfile.gettempdir()) / "rb_outro_cards"
 
-# ~1.75s: long enough to read the wordmark, short enough to not feel like an ad break.
-OUTRO_DURATION = 1.75
+# ~2.4s: room for the emblem to spin in, the play button to land, and the captions to
+# stagger — still short enough to not feel like an ad break.
+OUTRO_DURATION = 2.4
 # Entrance beat: a quick WHITE FLASH (the shared "flash" motion vocabulary with the animated
-# player intro, T5210 — the intro flashes out, the outro flashes in) instead of a plain
-# fade-from-black. The card punches in; it does not fade up. (Was OUTRO_FADE_IN=0.4 black fade.)
+# player intro, T5210). It gives a DETERMINISTIC white frame 0 on every ffmpeg build (proven
+# portable) and reveals the spinning emblem beneath it. (Was OUTRO_FADE_IN=0.4 black fade.)
 OUTRO_FLASH_IN = 0.15
-# Logo reveal: the wordmark slides UP into place while fading in over the first ~half second,
-# ease-out cubic. Mirrors the intro's photo push-in so the two cards read as one system.
-OUTRO_LOGO_REVEAL_ST = 0.08
-OUTRO_LOGO_REVEAL_D = 0.55
-# Staggered captions: "Made with" fades in first, then the URL follows on an offset — not both
-# at once. Each fades over OUTRO_CAPTION_FADE_D; both are fully in (and holding) well before the end.
-OUTRO_MADE_IN_ST = 0.50
-OUTRO_URL_IN_ST = 0.82
-OUTRO_CAPTION_FADE_D = 0.32
+# Emblem reveal (T5240 rework): the logo is assembled from its SVG PARTS, not the flat lockup.
+# The film-reel RING (outer ring + 4 sprocket holes, gradient #a855f7->#6366f1) SPINS in,
+# decelerating (ease-out) to a stop; then the white PLAY triangle LANDS with a button-press
+# bounce (ease-out-back overshoot). Ring + triangle resolve into the whole logo.
+OUTRO_SPIN_D = 1.0            # ring spins over the first second, easing to a stop
+OUTRO_SPIN_TURNS = 3         # full rotations before it settles
+OUTRO_RING_FADE_ST = 0.05
+OUTRO_RING_FADE_D = 0.40
+OUTRO_PLAY_ST = 1.00         # play triangle lands just as the ring comes to rest
+OUTRO_PLAY_D = 0.32          # press/bounce (scale overshoot) duration
+OUTRO_PLAY_FADE_D = 0.12
+# Staggered captions after the logo resolves: the "Made with" + "Reel Ballers" brand unit
+# comes in first, then the tagline, then the URL. Each fades over OUTRO_CAPTION_FADE_D and
+# holds to the end.
+OUTRO_BRAND_IN_ST = 1.30
+OUTRO_TAGLINE_IN_ST = 1.62
+OUTRO_URL_IN_ST = 1.86
+OUTRO_CAPTION_FADE_D = 0.28
 # Bump when the card LAYOUT or ANIMATION changes so stale cached cards (old build) rebuild.
-_CARD_VERSION = "v3-animated"
+_CARD_VERSION = "v4-spin-play"
 MADE_WITH_TEXT = "Made with"
+BRAND_TEXT = "Reel Ballers"
+TAGLINE_TEXT = "Share Your Player's Brilliance"
 URL_TEXT = "reelballers.com"
 
 # Bundled font -- the Fly image installs ffmpeg but NO fontconfig fonts, so drawtext
@@ -74,14 +86,21 @@ URL_TEXT = "reelballers.com"
 # /dotask container and in dev.
 _FONT_PATH = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "DejaVuSans-Bold.ttf"
 
-# The ReelBallers logo lockup (Reel / play-emblem / Ballers) pre-rendered on the
-# EXACT card background color, so it overlays seamlessly with no alpha compositing.
-# Regenerate at that same bg if _BG_COLOR ever changes (see the branding asset).
-_LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "branding" / "reelballers-lockup.png"
+# The logo EMBLEM split into its two animatable parts, rasterized from logo.svg on a
+# TRANSPARENT canvas (RGBA) so each can be moved independently and composited over the
+# card background at render time:
+#   - reelballers-ring.png : the film-reel outer ring + 4 sprocket holes (the gradient
+#     part that SPINS). Circular + centered, so it rotates without clipping.
+#   - reelballers-play.png : the white play triangle (the part that LANDS with a bounce).
+# Both share logo.svg's 48x48 viewbox, so overlaying them at the same position/scale
+# reconstructs the whole logo exactly. Regenerate from logo.svg if the mark changes.
+_RING_PATH = Path(__file__).resolve().parent.parent / "assets" / "branding" / "reelballers-ring.png"
+_PLAY_PATH = Path(__file__).resolve().parent.parent / "assets" / "branding" / "reelballers-play.png"
 
-# Brand palette (dark background, muted caption text; the logo carries the color).
+# Brand palette (dark background, muted caption text; the emblem carries the color).
 _BG_COLOR = "0x0B0F1A"
 _CAPTION_COLOR = "0x9CA3AF"
+_BRAND_COLOR = "0xF3F4F6"     # near-white for the "Reel Ballers" wordmark (stands out)
 
 
 def outro_enabled() -> bool:
@@ -203,101 +222,158 @@ def _probe_media(path: str) -> dict:
     }
 
 
+def _stagger_alpha(start: float) -> str:
+    """drawtext alpha ramp: 0 before `start`, linear up over OUTRO_CAPTION_FADE_D, then holds 1."""
+    end = start + OUTRO_CAPTION_FADE_D
+    return f"if(lt(t,{start}),0,if(lt(t,{end}),(t-{start})/{OUTRO_CAPTION_FADE_D},1))"
+
+
 def _build_outro_card(card_path: str, info: dict) -> None:
     """Render the end-card to `card_path`, matching the main video's params exactly.
 
-    Dark background + faded-in wordmark + URL, sized to the output resolution so all
-    three aspect ratios (9:16 / 1:1 / 16:9) get correctly-proportioned text with no
-    letterboxing/stretch. Silent audio track (matching layout) is included only when
-    the main video has audio, so a `-c copy` concat stays stream-aligned.
+    Dark background + an animated logo emblem (spinning film-reel ring that resolves into
+    the whole logo with a pressed-play-button beat) + staggered captions, sized to the
+    output resolution so all three aspect ratios (9:16 / 1:1 / 16:9) get correctly-
+    proportioned marks with no letterboxing/stretch. A silent audio track (matching
+    layout) is included only when the main video has audio, so a `-c copy` concat stays
+    stream-aligned.
+
+    The animation is deterministic across ffmpeg builds: frame 0 is a full white flash
+    (fade-from-white at fraction 0), and the spin/press are ordinary rotate/scale
+    expressions of the frame timestamp `t`. Motion timings may land a frame apart on
+    different builds, but the sampled luma windows the tests pin do not.
     """
     w, h = info["width"], info["height"]
     fps_str = info["fps_str"]
     pix_fmt = info["pix_fmt"]
     font = _escape_filter_path(_FONT_PATH.as_posix())
-    logo = _LOGO_PATH.as_posix()
+    ring = _RING_PATH.as_posix()
+    play = _PLAY_PATH.as_posix()
 
-    # Layout, centered as a group with the URL pinned near the bottom:
-    #   "Made with"  (small caption)
-    #   [logo lockup] (Reel / emblem / Ballers, the visual anchor)
-    #   reelballers.com  (caption, near the bottom edge)
-    # The logo is scaled to a fraction of the card HEIGHT; scale=-2 derives the
-    # width from the asset's aspect (portrait), so it never overflows on any of
-    # 9:16 / 1:1 / 16:9, and overlay=(W-w)/2 centers it horizontally.
-    logo_h = round(h * 0.46)
-    logo_y = round(h * 0.46 - logo_h / 2)          # logo group centered ~46% down
-    made_fs = max(16, round(h * 0.036))            # "Made with" -- deliberately small
-    url_fs = max(14, round(h * 0.030))
-    made_y = logo_y - made_fs - round(h * 0.02)    # caption sits just above the logo
-    url_y = round(h * 0.88)                         # URL near the bottom edge
+    # Layout: a centered vertical stack, URL pinned near the bottom.
+    #   "Made with"      (small caption, above the emblem)
+    #   [emblem]         (spinning ring + landing play triangle -- the visual anchor)
+    #   "Reel Ballers"   (brand wordmark, below the emblem: reads "Made with .. Reel Ballers")
+    #   tagline          ("Share Your Player's Brilliance")
+    #   reelballers.com  (URL, near the bottom edge)
+    # The emblem is a square, sized off the SHORTER card side so it never overflows on any
+    # of 9:16 / 1:1 / 16:9; overlay=(W-w)/2 centers it horizontally.
+    emblem = round(min(w, h) * 0.30)
+    emblem_cy = round(h * 0.40)                    # emblem centered ~40% down
+    emblem_top = emblem_cy - emblem // 2
+    emblem_bot = emblem_cy + emblem // 2
+    # The play triangle animates its scale (see below). overlay cannot composite an input
+    # whose size changes per frame, so each scaled play frame is padded back onto this
+    # constant canvas (bigger than the bounce's overshoot) before it reaches overlay.
+    play_canvas = round(emblem * 1.25)
 
-    # --- Motion (T5240) ----------------------------------------------------------
-    # The logo starts ~5% of the card height LOW and rises to `logo_y` on an ease-out
-    # cubic while fading up from the background; the two captions then stagger in.
-    # `t` is the card timeline (0..OUTRO_DURATION); the logo is looped into a full-length
-    # stream (see cmd below) so the alpha fade has frames to ramp across.
-    slide_px = round(h * 0.05)
-    # p = eased progress 0..1 over the reveal window; y drifts down by slide_px*(1-p).
+    made_fs = max(16, round(h * 0.030))            # "Made with" -- deliberately small
+    brand_fs = max(20, round(h * 0.045))           # "Reel Ballers" -- the brand, larger
+    tag_fs = max(15, round(h * 0.028))
+    url_fs = max(13, round(h * 0.024))
+    made_y = emblem_top - made_fs - round(h * 0.02)
+    brand_y = emblem_bot + round(h * 0.03)
+    tag_y = brand_y + brand_fs + round(h * 0.02)
+    url_y = round(h * 0.90)
+
+    # --- Motion (T5240 rework) ---------------------------------------------------
+    # `t` is the card timeline (0..OUTRO_DURATION); the ring/play are looped into full-
+    # length streams (see cmd below) so their filters have frames to animate across.
     # Expressions are wrapped in single quotes in the filtergraph, so commas inside them
-    # are protected literally (no backslash escaping needed — that would leak backslashes
-    # into the expression evaluator).
-    logo_p = f"clip((t-{OUTRO_LOGO_REVEAL_ST})/{OUTRO_LOGO_REVEAL_D},0,1)"
-    logo_y_expr = f"{logo_y}+{slide_px}*pow(1-{logo_p},3)"
+    # are protected literally (no backslash escaping needed).
+    #
+    # Ring spin: angle in radians, ease-OUT (decelerate) to a stop -- 1-(1-p)^2.
+    two_pi = 6.28318530718
+    spin_total = two_pi * OUTRO_SPIN_TURNS
+    spin_p = f"clip(t/{OUTRO_SPIN_D},0,1)"
+    angle = f"{spin_total:.5f}*(1-pow(1-{spin_p},2))"
+    # Play press: ease-OUT-back scale -- grows from ~0, overshoots ~10%, settles to 1.0.
+    # max(0.05,..) keeps the scaled width > 0 before/at the start (scale to 0 is invalid).
+    q = f"clip((t-{OUTRO_PLAY_ST})/{OUTRO_PLAY_D},0,1)"
+    eob = f"1+2.70158*pow({q}-1,3)+1.70158*pow({q}-1,2)"
+    play_dim = f"{emblem}*max(0.05,{eob})"
 
-    def _stagger_alpha(start: float) -> str:
-        """drawtext alpha ramp: 0 before `start`, linear up over the fade, then holds 1."""
-        end = start + OUTRO_CAPTION_FADE_D
-        return f"if(lt(t,{start}),0,if(lt(t,{end}),(t-{start})/{OUTRO_CAPTION_FADE_D},1))"
+    # The tagline contains an apostrophe, which cannot be reliably escaped inside a
+    # single-quoted drawtext `text=` across ffmpeg builds. Write it to a temp file and
+    # point drawtext at it with `textfile=` (sidesteps all filtergraph quoting).
+    tag_fd, tag_path = tempfile.mkstemp(suffix=".txt", prefix="rb_outro_tag_")
+    try:
+        with os.fdopen(tag_fd, "w", encoding="utf-8") as f:
+            f.write(TAGLINE_TEXT)
+        tagfile = _escape_filter_path(Path(tag_path).as_posix())
 
-    filter_complex = (
-        # Logo: scale, give it an alpha channel, fade it up over the reveal window.
-        f"[1:v]scale=-2:{logo_h},format=rgba,"
-        f"fade=t=in:st={OUTRO_LOGO_REVEAL_ST}:d={OUTRO_LOGO_REVEAL_D}:alpha=1[logo];"
-        # Overlay the logo, sliding up into place (ease-out) as it fades in.
-        f"[0:v][logo]overlay=x=(W-w)/2:y='{logo_y_expr}'[base];"
-        # Staggered captions: "Made with" first, the URL on a later offset.
-        f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"
-        f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y}:"
-        f"alpha='{_stagger_alpha(OUTRO_MADE_IN_ST)}',"
-        f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
-        f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y}:"
-        f"alpha='{_stagger_alpha(OUTRO_URL_IN_ST)}',"
-        # Entrance beat: a quick WHITE flash the card punches in from (shared intro vocab).
-        f"fade=t=in:st=0:d={OUTRO_FLASH_IN}:color=white,"
-        f"setsar={info['sar']},format={pix_fmt}[v]"
-    )
+        filter_complex = (
+            # Ring: scale to the emblem box, spin (decelerating), fade in.
+            f"[1:v]scale={emblem}:{emblem},format=rgba,"
+            f"rotate=a='{angle}':c=none,"
+            f"fade=t=in:st={OUTRO_RING_FADE_ST}:d={OUTRO_RING_FADE_D}:alpha=1[ring];"
+            # Play triangle: land with a per-frame press/bounce scale, then fade in.
+            # The scale changes size every frame; overlay freezes on a variable-size input,
+            # so pad each frame back onto a constant `play_canvas` (> the overshoot) -- the
+            # triangle stays centered and grows within it, and overlay sees a fixed size.
+            f"[2:v]scale=w='{play_dim}':h='{play_dim}':eval=frame,"
+            f"pad=w={play_canvas}:h={play_canvas}:x=({play_canvas}-iw)/2:y=({play_canvas}-ih)/2:"
+            f"color=black@0:eval=frame,format=rgba,"
+            f"fade=t=in:st={OUTRO_PLAY_ST}:d={OUTRO_PLAY_FADE_D}:alpha=1[play];"
+            # Compose the emblem: ring centered, play centered on the same point (the
+            # bounce scales about that center so ring + triangle stay registered).
+            f"[0:v][ring]overlay=x=(W-w)/2:y={emblem_top}[base0];"
+            f"[base0][play]overlay=x=(W-w)/2:y='{emblem_cy}-h/2'[base];"
+            # Captions stagger in after the logo resolves: brand unit, tagline, URL.
+            f"[base]drawtext=fontfile='{font}':text='{MADE_WITH_TEXT}':"
+            f"fontsize={made_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={made_y}:"
+            f"alpha='{_stagger_alpha(OUTRO_BRAND_IN_ST)}',"
+            f"drawtext=fontfile='{font}':text='{BRAND_TEXT}':"
+            f"fontsize={brand_fs}:fontcolor={_BRAND_COLOR}:x=(w-text_w)/2:y={brand_y}:"
+            f"alpha='{_stagger_alpha(OUTRO_BRAND_IN_ST)}',"
+            f"drawtext=fontfile='{font}':textfile='{tagfile}':"
+            f"fontsize={tag_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={tag_y}:"
+            f"alpha='{_stagger_alpha(OUTRO_TAGLINE_IN_ST)}',"
+            f"drawtext=fontfile='{font}':text='{URL_TEXT}':"
+            f"fontsize={url_fs}:fontcolor={_CAPTION_COLOR}:x=(w-text_w)/2:y={url_y}:"
+            f"alpha='{_stagger_alpha(OUTRO_URL_IN_ST)}',"
+            # Entrance flash: deterministic white frame 0 on every ffmpeg build.
+            f"fade=t=in:st=0:d={OUTRO_FLASH_IN}:color=white,"
+            f"setsar={info['sar']},format={pix_fmt}[v]"
+        )
 
-    cmd = [
-        "ffmpeg", "-y",
-        "-f", "lavfi",
-        "-i", f"color=c={_BG_COLOR}:s={w}x{h}:r={fps_str}:d={OUTRO_DURATION}",
-        # Loop the still logo into a full-length stream so the alpha fade has frames to
-        # ramp over (a single -i image is one frame — a fade filter can't animate it).
-        "-loop", "1", "-framerate", fps_str, "-t", str(OUTRO_DURATION), "-i", logo,
-    ]
-    audio_idx = 2
-    if info["has_audio"]:
-        layout = "mono" if info["a_channels"] == 1 else "stereo"
-        cmd += ["-f", "lavfi", "-i",
-                f"anullsrc=channel_layout={layout}:sample_rate={info['a_rate']}"]
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "lavfi",
+            "-i", f"color=c={_BG_COLOR}:s={w}x{h}:r={fps_str}:d={OUTRO_DURATION}",
+            # Loop each still into a full-length stream so its filters have frames to
+            # animate over (a single -i image is one frame -- filters can't animate it).
+            "-loop", "1", "-framerate", fps_str, "-t", str(OUTRO_DURATION), "-i", ring,
+            "-loop", "1", "-framerate", fps_str, "-t", str(OUTRO_DURATION), "-i", play,
+        ]
+        audio_idx = 3
+        if info["has_audio"]:
+            layout = "mono" if info["a_channels"] == 1 else "stereo"
+            cmd += ["-f", "lavfi", "-i",
+                    f"anullsrc=channel_layout={layout}:sample_rate={info['a_rate']}"]
 
-    cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
-    if info["has_audio"]:
-        cmd += ["-map", f"{audio_idx}:a"]
-    cmd += ["-t", str(OUTRO_DURATION)]
-    cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
-            "-pix_fmt", pix_fmt, "-r", fps_str,
-            "-video_track_timescale", str(info["timescale"])]
-    if info["has_audio"]:
-        cmd += ["-c:a", "aac", "-b:a", "128k",
-                "-ar", str(info["a_rate"]), "-ac", str(info["a_channels"]),
-                "-t", str(OUTRO_DURATION)]
-    else:
-        cmd += ["-an"]
-    # Force mp4 container explicitly so the output path extension doesn't need
-    # to be .mp4 (the cache builds to a .tmp path before an atomic rename).
-    cmd += ["-f", "mp4", card_path]
-    _run(cmd)
+        cmd += ["-filter_complex", filter_complex, "-map", "[v]"]
+        if info["has_audio"]:
+            cmd += ["-map", f"{audio_idx}:a"]
+        cmd += ["-t", str(OUTRO_DURATION)]
+        cmd += ["-c:v", "libx264", "-crf", "20", "-preset", "veryfast",
+                "-pix_fmt", pix_fmt, "-r", fps_str,
+                "-video_track_timescale", str(info["timescale"])]
+        if info["has_audio"]:
+            cmd += ["-c:a", "aac", "-b:a", "128k",
+                    "-ar", str(info["a_rate"]), "-ac", str(info["a_channels"]),
+                    "-t", str(OUTRO_DURATION)]
+        else:
+            cmd += ["-an"]
+        # Force mp4 container explicitly so the output path extension doesn't need
+        # to be .mp4 (the cache builds to a .tmp path before an atomic rename).
+        cmd += ["-f", "mp4", card_path]
+        _run(cmd)
+    finally:
+        try:
+            os.remove(tag_path)
+        except OSError:
+            pass
 
 
 def _concat_copy(main_path: str, card_path: str, out_path: str) -> None:
