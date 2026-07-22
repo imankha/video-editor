@@ -1717,61 +1717,39 @@ async def _export_clips(
                 if not upload_result:
                     raise Exception("Failed to upload working video to R2")
 
-                with get_db_connection() as conn:
-                    cursor = conn.cursor()
+                # T4010: do NOT null final_video_id on framing re-export; the
+                # published reel stays valid until a new final exists.
+                actual_durations = [get_video_duration(path) for path in processed_paths]
+                source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
 
-                    cursor.execute("""
-                        SELECT COALESCE(MAX(version), 0) + 1 as next_version
-                        FROM working_videos WHERE project_id = ?
-                    """, (project_id,))
-                    next_version = cursor.fetchone()['next_version']
+                try:
+                    highlight_regions = await run_local_detection_on_video_file(
+                        video_path=final_output,
+                        source_clips=source_clips,
+                    )
+                    logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
+                    for r in highlight_regions:
+                        if r.get('videoWidth') or r.get('videoHeight'):
+                            logger.info(f"[Multi-Clip Export] Region '{r.get('label')}' detection dims: {r.get('videoWidth')}x{r.get('videoHeight')}")
+                            break
+                except Exception as det_error:
+                    logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
+                    highlight_regions = generate_default_highlight_regions(source_clips)
 
-                    # T4010: do NOT null final_video_id on framing re-export; the
-                    # published reel stays valid until a new final exists.
-
-                    actual_durations = [get_video_duration(path) for path in processed_paths]
-                    source_clips = build_clip_boundaries_from_durations(clips_data, actual_durations, transition)
-
-                    try:
-                        highlight_regions = await run_local_detection_on_video_file(
-                            video_path=final_output,
-                            source_clips=source_clips,
-                        )
-                        logger.info(f"[Multi-Clip Export] Local detection complete: {len(highlight_regions)} regions")
-                        for r in highlight_regions:
-                            if r.get('videoWidth') or r.get('videoHeight'):
-                                logger.info(f"[Multi-Clip Export] Region '{r.get('label')}' detection dims: {r.get('videoWidth')}x{r.get('videoHeight')}")
-                                break
-                    except Exception as det_error:
-                        logger.warning(f"[Multi-Clip Export] Local detection failed, using defaults: {det_error}")
-                        highlight_regions = generate_default_highlight_regions(source_clips)
-
-                    highlights_encoded = encode_data(highlight_regions)
-
-                    cursor.execute("""
-                        INSERT INTO working_videos (project_id, filename, version, duration, highlights_data)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (project_id, working_filename, next_version, video_duration if video_duration > 0 else None, highlights_encoded))
-                    working_video_id = cursor.lastrowid
-
-                    cursor.execute("UPDATE projects SET working_video_id = ? WHERE id = ?", (working_video_id, project_id))
-
-                    cursor.execute("""
-                        UPDATE export_jobs
-                        SET status = 'complete', output_video_id = ?, output_filename = ?,
-                            completed_at = CURRENT_TIMESTAMP
-                        WHERE id = ?
-                    """, (working_video_id, working_filename, export_id))
-
-                    cursor.execute(f"""
-                        UPDATE working_clips
-                        SET exported_at = datetime('now'),
-                            raw_clip_version = (SELECT COALESCE(rc.boundaries_version, 1) FROM raw_clips rc WHERE rc.id = working_clips.raw_clip_id)
-                        WHERE project_id = ? AND id IN ({latest_working_clips_subquery()})
-                    """, (project_id, project_id))
-
-                    conn.commit()
-                    logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
+                # T5630: share the persist transaction with the Modal path. Local keeps
+                # its own detection (it needs the ephemeral processed clips, absent at
+                # recovery) but writes via the SAME upsert_working_video. detections_data
+                # stays omitted — writer 2's historical shape (regions carry embedded
+                # detections).
+                from ...services.export_finalize import upsert_working_video
+                working_video_id = upsert_working_video(
+                    {"id": export_id, "project_id": project_id, "output_video_id": None},
+                    filename=working_filename,
+                    duration=video_duration if video_duration > 0 else None,
+                    highlights_data=encode_data(highlight_regions),
+                    detections_data=None,
+                )
+                logger.info(f"[Multi-Clip Export] Created working video {working_video_id} for project {project_id}")
 
             except Exception as e:
                 # T4200: a DB-save (or R2 upload) failure is TERMINAL. The old code set
@@ -1793,6 +1771,10 @@ async def _export_clips(
                 export_progress[export_id] = sync_failed
                 await manager.send_progress(export_id, sync_failed)
                 return JSONResponse(status_code=503, content=DURABLE_SYNC_FAILED_RESPONSE)
+
+            # T5630: local exports have no resume path, but keep `stage` truthful.
+            from ...services.export_finalize import _set_export_stage
+            _set_export_stage(export_id, ExportStage.COMPLETE.value)
 
         # Complete
         complete_data = {
