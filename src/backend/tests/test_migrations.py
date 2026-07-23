@@ -113,9 +113,11 @@ class TestMigrationRunner:
 class TestTrackImports:
     def test_user_db_track(self):
         from app.migrations.user_db import RUNNER, MIGRATIONS
-        assert len(MIGRATIONS) == 6
+        # Dynamic invariants like profile_db below (T4940's v007 broke the old
+        # `== 6` literals; hardcoded heads rot every time the track grows).
+        assert len(MIGRATIONS) >= 7
         assert MIGRATIONS[0].version == 1
-        assert RUNNER.latest_version == 6
+        assert RUNNER.latest_version == MIGRATIONS[-1].version
 
     def test_profile_db_track(self):
         from app.migrations.profile_db import RUNNER, MIGRATIONS
