@@ -328,6 +328,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         '/api/quests/definitions',  # T1330: quest catalog is public (onboarding checklist)
         '/api/quests/progress',     # Pre-login quest panel: returns all-incomplete shape for anonymous callers
         '/api/shared/',             # T1750: public share links work without auth
+        '/api/payments/webhook',    # T4940: Stripe server-to-server calls carry no session; signature verification IS the auth
         '/api/client-errors/',      # T5641: video-error beacon must land even when the session is dead
         '/storage/warmup',          # T3310: unauthenticated warmup wakes Fly.io machine
         '/docs',                    # API docs

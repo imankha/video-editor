@@ -20,6 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..analytics import increment_total_spent, record_milestone
+from ..database import sync_user_db_to_r2_explicit
 from ..services.user_db import (
     get_stripe_customer_id,
     grant_credits,
@@ -167,7 +168,7 @@ async def create_payment_intent(request: CreateIntentRequest):
         )
     except stripe.StripeError as e:
         logger.error(f"[Payments] Stripe error creating PaymentIntent for {user_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})")
+        raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})") from e
 
     record_milestone(user_id, "payment_started", {"amount_cents": pack["price_cents"]})
     logger.info(f"[Payments] PaymentIntent created for {user_id}, pack={request.pack}, pi={intent.id}")
@@ -209,7 +210,7 @@ async def confirm_payment_intent(request: ConfirmIntentRequest):
         intent = stripe.PaymentIntent.retrieve(pi_id)
     except stripe.StripeError as e:
         logger.error(f"[Payments] Failed to retrieve PaymentIntent {pi_id}: {e}")
-        raise HTTPException(status_code=400, detail="Invalid payment intent")
+        raise HTTPException(status_code=400, detail="Invalid payment intent") from e
 
     if intent.status != "succeeded":
         return {"status": "not_succeeded", "intent_status": intent.status}
@@ -274,10 +275,10 @@ async def stripe_webhook(request: Request):
         event = stripe.Webhook.construct_event(body, sig_header, STRIPE_WEBHOOK_SECRET)
     except stripe.SignatureVerificationError:
         logger.warning("[Payments] Webhook signature verification failed")
-        raise HTTPException(status_code=400, detail="Invalid signature")
+        raise HTTPException(status_code=400, detail="Invalid signature") from None
     except ValueError:
         logger.warning("[Payments] Webhook payload invalid")
-        raise HTTPException(status_code=400, detail="Invalid payload")
+        raise HTTPException(status_code=400, detail="Invalid payload") from None
 
     # Handle checkout completion (legacy redirect flow)
     if event["type"] == "checkout.session.completed":
@@ -308,6 +309,9 @@ async def stripe_webhook(request: Request):
         record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
         if pack_info:
             increment_total_spent(user_id, pack_info["price_cents"])
+        # T4940: webhook runs outside a user session (middleware allowlist), so the
+        # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
+        sync_user_db_to_r2_explicit(user_id)
         logger.info(
             f"[Payments] Granted {credits} credits to {user_id} "
             f"(pack={pack}, session={session_id}), balance={new_balance}"
@@ -343,6 +347,9 @@ async def stripe_webhook(request: Request):
         record_milestone(user_id, "credit_purchased", {"amount": credits, "cents": pack_info["price_cents"] if pack_info else 0})
         if pack_info:
             increment_total_spent(user_id, pack_info["price_cents"])
+        # T4940: webhook runs outside a user session (middleware allowlist), so the
+        # middleware won't sync user.sqlite to R2 — persist the grant explicitly.
+        sync_user_db_to_r2_explicit(user_id)
         logger.info(
             f"[Payments] Webhook granted {credits} credits to {user_id} "
             f"(pack={pack}, pi={pi_id}), balance={new_balance}"
@@ -398,7 +405,7 @@ async def verify_session(request: Request):
         session = stripe.checkout.Session.retrieve(session_id)
     except stripe.StripeError as e:
         logger.error(f"[Payments] Failed to retrieve session {session_id}: {e}")
-        raise HTTPException(status_code=400, detail="Invalid session")
+        raise HTTPException(status_code=400, detail="Invalid session") from e
 
     if session.payment_status != "paid":
         return {"status": "unpaid", "payment_status": session.payment_status}
