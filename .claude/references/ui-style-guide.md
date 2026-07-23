@@ -231,6 +231,67 @@ ALL widths (do not hide on mobile — resume is the highest-value mobile tap). M
 drops the secondary metadata line (`hidden sm:block`) and shows icon + truncated
 name + chevron; `min-h-[44px]`. Distinct from the many-item carousel.
 
+### Poster tile (`DraftTile`)
+
+A reel rendered as a portrait **9:16** poster tile (Netflix idiom) — the home
+surface is a *video* product, so drafts scan by image, not text (T5672).
+
+```jsx
+<div className="group/tile relative shrink-0 snap-start w-[40vw] max-w-[200px] sm:w-[168px]
+                aspect-[9/16] rounded-lg overflow-hidden bg-gray-800 border border-gray-700">
+  <img src={`/api/projects/${id}/poster.jpg`} loading="lazy"
+       onLoad={...} onError={...}
+       className="absolute inset-0 w-full h-full object-cover" />
+  {/* loading  -> <div className="absolute inset-0 bg-gray-700 animate-pulse" />        */}
+  {/* 404/error-> branded gradient (from-cyan-900 via-gray-800 to-gray-900) + reel name */}
+  <span className="absolute top-1.5 right-1.5 ... bg-black/60 backdrop-blur-sm">{status}</span>
+  <div className="absolute inset-x-0 bottom-0 px-2 pt-8 pb-3
+                  bg-gradient-to-t from-black/85 via-black/45 to-transparent">
+    <h3 className="text-white text-xs font-medium line-clamp-2">{name}</h3>
+    <span className="text-[11px] text-gray-300">{gameClock}</span>  {/* 11'45" */}
+  </div>
+  <SegmentedProgressStrip variant="slim" ... />   {/* h-1.5, pinned to base, still clickable */}
+</div>
+```
+
+- **Poster is lazy** (`loading="lazy"`) — a row of 13+ tiles must not fire eager
+  requests. Poster endpoint 404s when none exists → render the branded fallback,
+  never a broken `<img>`.
+- Posters are the clip's clearest *source* frame at native aspect (often landscape),
+  so `object-cover` center-crops into the portrait tile — expect edge cropping.
+- Widths: `40vw` mobile (≈2.5 tiles visible = scroll affordance), fixed `168px` ≥sm.
+- Text over the poster always sits on a bottom scrim (the "text over video needs a
+  backdrop" rule). One tag chip max, `hidden sm:inline-flex` (dropped on narrow tiles).
+- A short status chip AND the slim progress strip both appear — the chip is the
+  coarse state, the strip stays the granular deep-link into Framing/Overlay.
+- Ready-to-publish tiles get a persistent corner badge (`aria-label="Move to My
+  Reels"`) that publishes on tap; the same action also lives in the hover/long-press
+  action set. Actions reveal on `group-hover/tile` (desktop) or long-press (mobile),
+  with `coarse-pointer:min-h-[44px]` floors.
+
+### Card carousel (`CardCarousel`)
+
+One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentational,
+**no persisted scroll state** — position is ephemeral DOM state. No JS carousel library.
+
+```jsx
+<div className="relative group/row">
+  <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth px-1 pb-1">
+    {tiles}   {/* each: shrink-0 snap-start */}
+  </div>
+  {/* chevrons: desktop-only, on row hover; page by ~one visible width */}
+  <button className="hidden fine-pointer:group-hover/row:flex absolute left-0 inset-y-0 w-10 ...">
+    <ChevronLeft />
+  </button>
+</div>
+```
+
+- Touch = native momentum swipe + snap (no chevrons on coarse pointers, so no 44px
+  concern for them). Desktop = `fine-pointer:` chevrons that `scrollBy(clientWidth * 0.85)`.
+- `scrollbar-hide` utility lives in `src/frontend/src/index.css` (hides the native bar).
+- The per-group header (game name + status dot-counts) stays a `CollapsibleGroup`; the
+  carousel is its collapsible child (rows still collapse).
+
 ---
 
 ## Layout Patterns
@@ -345,3 +406,4 @@ duration-300         /* panel animations */
 |------|--------|-------------|
 | 2026-02-09 | Initial style guide created | - |
 | 2026-07-22 | Home/card patterns: brand lockup, labeled metadata pills, borderless filter rows, compact resume strip (T5675) | user |
+| 2026-07-23 | Poster tile (`DraftTile`, 9:16, scrim, lazy poster + branded fallback) and card carousel (`CardCarousel`, snap-scroll + fine-pointer chevrons) patterns (T5672) | user |

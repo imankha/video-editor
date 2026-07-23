@@ -140,6 +140,15 @@ import { Button } from '@/components/shared';
 <input className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500" />
 ```
 
+### Poster tile + card carousel (home surfaces)
+
+Reels on the home surfaces render as portrait **9:16 poster tiles** (`DraftTile`) laid
+out in one horizontal **snap-scroll carousel per game** (`CardCarousel`) — lazy poster
+with a branded 404 fallback, bottom scrim for text, slim clickable progress strip,
+`fine-pointer:` chevrons on desktop, native swipe on touch, no persisted scroll state.
+Full spec (classes, states, fallbacks): "Poster tile" + "Card carousel" in
+[`.claude/references/ui-style-guide.md`](../../../../../.claude/references/ui-style-guide.md).
+
 ---
 
 ## Complete Rules
