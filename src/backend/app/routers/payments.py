@@ -72,6 +72,44 @@ CREDIT_PACKS = {
 }
 
 # ---------------------------------------------------------------------------
+# Stripe customer helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_or_create_customer(user_id: str) -> str:
+    """Return the user's Stripe customer id, creating one if none is stored."""
+    customer_id = get_stripe_customer_id(user_id)
+    if not customer_id:
+        customer = stripe.Customer.create(metadata={"user_id": user_id})
+        customer_id = customer.id
+        set_stripe_customer_id(user_id, customer_id)
+    return customer_id
+
+
+def _recreate_customer(user_id: str, stale_id: str) -> str:
+    """Replace a stored customer id that Stripe no longer recognizes.
+
+    T4940: stored ids minted in test mode became invalid when prod switched to
+    live keys ("No such customer"). Also covers customers deleted in the
+    Stripe dashboard. External-state cache invalidation — recreate and re-store.
+    """
+    logger.warning(
+        f"[Payments] Stripe customer {stale_id} not found in current mode — recreating for {user_id}"
+    )
+    customer = stripe.Customer.create(metadata={"user_id": user_id})
+    set_stripe_customer_id(user_id, customer.id)
+    return customer.id
+
+
+def _is_no_such_customer(e: stripe.StripeError) -> bool:
+    return (
+        isinstance(e, stripe.InvalidRequestError)
+        and e.code == "resource_missing"
+        and getattr(e, "param", None) == "customer"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Checkout endpoint
 # ---------------------------------------------------------------------------
 
@@ -91,18 +129,10 @@ async def create_checkout(request: CheckoutRequest):
         raise HTTPException(status_code=400, detail=f"Invalid pack: {request.pack}")
 
     user_id = get_current_user_id()
+    customer_id = _get_or_create_customer(user_id)
 
-    # Get or create Stripe customer
-    customer_id = get_stripe_customer_id(user_id)
-    if not customer_id:
-        customer = stripe.Customer.create(metadata={"user_id": user_id})
-        customer_id = customer.id
-        set_stripe_customer_id(user_id, customer_id)
-
-    # Create Checkout Session
-    session = stripe.checkout.Session.create(
+    session_kwargs = dict(
         mode="payment",
-        customer=customer_id,
         line_items=[
             {
                 "price_data": {
@@ -121,6 +151,16 @@ async def create_checkout(request: CheckoutRequest):
         success_url=f"{FRONTEND_URL}?payment=success&session_id={{CHECKOUT_SESSION_ID}}",
         cancel_url=f"{FRONTEND_URL}?payment=cancelled",
     )
+
+    # Create Checkout Session; retry once if the stored customer id is stale
+    # (test-mode id after live switch, or deleted in the dashboard)
+    try:
+        session = stripe.checkout.Session.create(customer=customer_id, **session_kwargs)
+    except stripe.InvalidRequestError as e:
+        if not _is_no_such_customer(e):
+            raise
+        customer_id = _recreate_customer(user_id, customer_id)
+        session = stripe.checkout.Session.create(customer=customer_id, **session_kwargs)
 
     logger.info(f"[Payments] Checkout session created for {user_id}, pack={request.pack}")
     return {"checkout_url": session.url}
@@ -146,26 +186,29 @@ async def create_payment_intent(request: CreateIntentRequest):
         raise HTTPException(status_code=400, detail=f"Invalid pack: {request.pack}")
 
     user_id = get_current_user_id()
+    customer_id = _get_or_create_customer(user_id)
 
-    # Get or create Stripe customer
-    customer_id = get_stripe_customer_id(user_id)
-    if not customer_id:
-        customer = stripe.Customer.create(metadata={"user_id": user_id})
-        customer_id = customer.id
-        set_stripe_customer_id(user_id, customer_id)
+    intent_kwargs = dict(
+        amount=pack["price_cents"],
+        currency="usd",
+        metadata={
+            "user_id": user_id,
+            "pack": request.pack,
+            "credits": str(pack["credits"]),
+        },
+        automatic_payment_methods={"enabled": True},
+    )
 
     try:
-        intent = stripe.PaymentIntent.create(
-            amount=pack["price_cents"],
-            currency="usd",
-            customer=customer_id,
-            metadata={
-                "user_id": user_id,
-                "pack": request.pack,
-                "credits": str(pack["credits"]),
-            },
-            automatic_payment_methods={"enabled": True},
-        )
+        # Retry once if the stored customer id is stale (test-mode id after
+        # live switch, or deleted in the dashboard)
+        try:
+            intent = stripe.PaymentIntent.create(customer=customer_id, **intent_kwargs)
+        except stripe.InvalidRequestError as e:
+            if not _is_no_such_customer(e):
+                raise
+            customer_id = _recreate_customer(user_id, customer_id)
+            intent = stripe.PaymentIntent.create(customer=customer_id, **intent_kwargs)
     except stripe.StripeError as e:
         logger.error(f"[Payments] Stripe error creating PaymentIntent for {user_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create payment ({e.http_status})") from e
