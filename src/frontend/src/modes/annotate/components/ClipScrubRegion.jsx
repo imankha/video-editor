@@ -379,22 +379,29 @@ export function ClipScrubRegion({
         className="relative h-10 bg-gray-800 rounded-lg select-none touch-none"
         style={{ cursor: dragging ? 'col-resize' : 'default' }}
       >
-        {/* Tick marks */}
-        {ticks.map((t) => {
-          const pct = timeToPercent(t);
-          return (
-            <div
-              key={t}
-              className="absolute top-0 h-full flex flex-col items-center pointer-events-none"
-              style={{ left: `${pct}%` }}
-            >
-              <div className="w-px h-2 bg-gray-600" />
-              <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
-                {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
-              </span>
-            </div>
-          );
-        })}
+        {/* Tick marks — clipped to the track. A tick's centered time label can
+            extend a few px past the track edge when a 5s mark lands near the
+            window boundary; unclipped it overflowed the fixed-width Annotate
+            sidebar and drew a stray horizontal scrollbar (T5674). The clip layer
+            wraps ONLY the ticks, so the drag handles / region / playhead (siblings
+            below) keep their edge overhang and are untouched. */}
+        <div className="absolute inset-0 overflow-hidden rounded-lg pointer-events-none">
+          {ticks.map((t) => {
+            const pct = timeToPercent(t);
+            return (
+              <div
+                key={t}
+                className="absolute top-0 h-full flex flex-col items-center"
+                style={{ left: `${pct}%` }}
+              >
+                <div className="w-px h-2 bg-gray-600" />
+                <span className="text-[9px] text-gray-600 mt-0.5 font-mono">
+                  {Math.floor(t / 60)}:{String(Math.floor(t % 60)).padStart(2, '0')}
+                </span>
+              </div>
+            );
+          })}
+        </div>
 
         {/* Selected region highlight */}
         <div

@@ -5,6 +5,11 @@ import useVideoDisplayRect, { round3 } from '../../../hooks/useVideoDisplayRect'
 import { MAX_ROT, rotatedFrameCorners } from '../../../utils/rotationSafeArea';
 import { correctionAngle, clampRotation } from '../../../utils/straighten';
 
+// When the crop's top edge is within this many screen px of the video container
+// top, the size/position badge (normally at top:-28px, above the reticle) would
+// clip outside the video rect — so it flips to just inside the top edge (T5674).
+const CROP_LABEL_FLIP_MARGIN = 30;
+
 /**
  * Get clientX/clientY from a pointer or touch event
  */
@@ -621,10 +626,14 @@ export default function CropOverlay({
         </svg>
 
         {/* Debug: Show crop size and position when keyframe is selected (only in development mode) */}
+        {/* Edge-flip: the label normally sits ABOVE the crop top border (top:-28px).
+            When the crop is within label-height of the video container top, that would
+            clip the badge outside the video rect — so flip it just INSIDE the top edge
+            instead (T5674). Positioning math only; no pointer-handler change. */}
         {versionInfo.environment !== 'production' && selectedKeyframeIndex !== null && (
           <div
             className={`absolute left-1/2 transform -translate-x-1/2 bg-black/75 px-2 py-1 rounded text-sm font-mono pointer-events-none whitespace-nowrap ${cropTooSmall ? 'text-red-400' : 'text-yellow-300'}`}
-            style={{ top: '-28px' }}
+            style={{ top: screenCrop.y < CROP_LABEL_FLIP_MARGIN ? '4px' : '-28px' }}
             title={`Crop: ${Math.round(currentCrop.width)}x${Math.round(currentCrop.height)} at position (${Math.round(currentCrop.x)}, ${Math.round(currentCrop.y)})${cropTooSmall ? ' (Too small for optimal 4x upscale)' : ''}`}
           >
             {Math.round(currentCrop.width)}x{Math.round(currentCrop.height)} @ ({Math.round(currentCrop.x)}, {Math.round(currentCrop.y)})
