@@ -27,10 +27,12 @@ import { shareInvite } from '../utils/inviteEmail';
 import { useGamesDataStore } from '../stores/gamesDataStore';
 import { InstallButton } from './InstallButton';
 import { useIsMobile } from '../hooks/useIsMobile';
-// ProjectCard + SegmentedProgressStrip were extracted to their own files (T5672).
-// Re-exported below so existing tests importing them from './ProjectManager' keep working.
-import { ProjectCard } from './DraftTile';
+// DraftTile (the restyled ProjectCard) + SegmentedProgressStrip were extracted to their
+// own files (T5672). Re-exported below (DraftTile aliased to ProjectCard) so existing
+// tests importing them from './ProjectManager' keep resolving.
+import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
+import { CardCarousel } from './shared/CardCarousel';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
@@ -874,7 +876,9 @@ export function ProjectManager({
             <p className="text-sm">Create a new reel or add a game to get started</p>
           </div>
         ) : (
-          <div className="w-full max-w-2xl">
+          /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
+             audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
+          <div className="w-full max-w-6xl">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
             {showFilters && (
@@ -1010,18 +1014,30 @@ export function ProjectManager({
                 </div>
               ) : (
                 <>
-                  {/* Ungrouped projects (no game association) shown first */}
-                  {groupedProjects.ungrouped.map(project => (
-                    <ProjectCard
-                      key={project.id}
-                      project={project}
-                      onSelect={() => onSelectProject(project.id)}
-                      onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                      onDelete={() => onDeleteProject(project.id)}
-                      exportingProject={exportingProject}
-                      pendingGameIds={pendingGameIds}
-                    />
-                  ))}
+                  {/* Ungrouped drafts (no game) -> one "Other reels" carousel row (Q5) */}
+                  {groupedProjects.ungrouped.length > 0 && (
+                    <div className="mb-2">
+                      <div className="flex items-center gap-2 px-3 py-2 min-h-11">
+                        <span className="text-sm font-medium text-gray-200 flex-1">Other reels</span>
+                        <span className="text-xs text-gray-500 bg-gray-700/50 px-2 py-0.5 rounded-full">
+                          {groupedProjects.ungrouped.length}
+                        </span>
+                      </div>
+                      <CardCarousel ariaLabel="Other reels">
+                        {groupedProjects.ungrouped.map(project => (
+                          <DraftTile
+                            key={project.id}
+                            project={project}
+                            onSelect={() => onSelectProject(project.id)}
+                            onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                            onDelete={() => onDeleteProject(project.id)}
+                            exportingProject={exportingProject}
+                            pendingGameIds={pendingGameIds}
+                          />
+                        ))}
+                      </CardCarousel>
+                    </div>
+                  )}
 
                   {/* Grouped projects by game - expand if has incomplete or unpublished projects */}
                   {groupedProjects.sortedKeys.map(groupKey => {
@@ -1036,9 +1052,9 @@ export function ProjectManager({
                       statusCounts={group.statusCounts}
                       defaultExpanded={hasIncomplete || hasUnpublished}
                     >
-                      <div className="space-y-2">
+                      <CardCarousel ariaLabel={`${groupKey} drafts`}>
                         {group.projects.map(project => (
-                          <ProjectCard
+                          <DraftTile
                             key={project.id}
                             project={project}
                             onSelect={() => onSelectProject(project.id)}
@@ -1048,7 +1064,7 @@ export function ProjectManager({
                             pendingGameIds={pendingGameIds}
                           />
                         ))}
-                      </div>
+                      </CardCarousel>
                     </CollapsibleGroup>
                     );
                   })}
@@ -1605,6 +1621,6 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
 
 
 // Back-compat re-exports (T5672 extraction): tests and callers import these from here.
-export { ProjectCard, SegmentedProgressStrip };
+export { DraftTile as ProjectCard, SegmentedProgressStrip };
 
 export default ProjectManager;

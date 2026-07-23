@@ -21,8 +21,12 @@ import { getClipDisplayName } from '../../utils/clipDisplayName';
  *
  * @param {Object} project - Project data
  * @param {string} isExporting - 'framing' | 'overlay' | null - Which stage is currently exporting
+ * @param {'full'|'slim'} variant - 'full' (default): labels row + h-3 strip for the
+ *   list card. 'slim': just the segment strip (no labels, h-1.5, square) pinned to a
+ *   poster tile's base (T5672). Segments stay clickable in both — the strip remains the
+ *   granular deep-link into Framing/Overlay.
  */
-export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null }) {
+export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, isExporting = null, isOffline = false, failedExportType = null, variant = 'full' }) {
   const {
     clip_count,
     clips_exported,
@@ -111,8 +115,9 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
   const isCompact = totalSegments > 10;
 
   return (
-    <div className="mt-3">
-      {/* Labels row */}
+    <div className={variant === 'slim' ? '' : 'mt-3'}>
+      {/* Labels row (hidden in the slim tile variant) */}
+      {variant !== 'slim' && (
       <div className="flex justify-between text-xs text-gray-500 mb-1">
         {has_final_video ? (
           <span className="text-green-400 w-full text-center">Done</span>
@@ -145,10 +150,11 @@ export function SegmentedProgressStrip({ project, onClipClick, onOverlayClick, i
           </>
         )}
       </div>
+      )}
 
       {/* Segments strip */}
       <div
-        className="flex h-3 bg-gray-700 rounded overflow-hidden"
+        className={`flex ${variant === 'slim' ? 'h-1.5' : 'h-3 rounded'} bg-gray-700 overflow-hidden`}
         style={{ gap: `${gapWidth}px` }}
       >
         {allSegments.map((segment, index) => {

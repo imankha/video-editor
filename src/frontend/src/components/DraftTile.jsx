@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Star, Pencil, CheckCircle, Tag, Upload, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
+import { Star, Pencil, CheckCircle, Tag, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
@@ -17,14 +17,17 @@ import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
 
 /**
- * ProjectCard - Individual project in the list
+ * DraftTile - a reel draft as a portrait 9:16 poster tile (T5672).
+ *
+ * Presentational shell over the SAME handlers the old list card used (open, publish,
+ * rename, delete, preview) — this restyle is view-only, no persistence change.
  *
  * Click behavior:
- * - Click on project name/info area: Open with smart mode (auto-detect next action)
- * - Click on a clip segment: Open in framing mode with that clip selected
- * - Click on overlay segment: Open in overlay mode
+ * - Primary tap on the tile: open with smart mode (auto-detect next action)
+ * - Click a progress-strip segment: open in framing (that clip) / overlay
+ * - Ready-to-publish corner badge: Move to My Reels (also in the hover/long-press actions)
  */
-export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
+export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, exportingProject = null, pendingGameIds = new Set() }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -34,6 +37,9 @@ export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exp
   const [publishRetry, setPublishRetry] = useState(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [actionsRevealed, setActionsRevealed] = useState(false);
+  // Poster load lifecycle (T5672): 'loading' -> skeleton shimmer; 'loaded' -> poster;
+  // 'error' -> branded fallback (the T5671 endpoint 404s when no poster exists).
+  const [posterState, setPosterState] = useState('loading');
   const longPressTimer = useRef(null);
   const touchMoved = useRef(false);
   const longPressFired = useRef(false);
@@ -235,8 +241,31 @@ export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exp
   };
 
   const isComplete = project.has_final_video;
-
   const isReadyToPublish = isComplete && !project.is_published;
+
+  const posterUrl = `${API_BASE}/api/projects/${project.id}/poster.jpg`;
+  const gameClock = formatGameClock(project.clip_game_start_time);
+  // Q4: one tag chip, only on wider (>=sm) tiles — dropped on narrow mobile tiles.
+  const firstTag = project.is_auto_created ? project.clips?.[0]?.tags?.[0] : null;
+
+  // Short status label + tint for the corner chip (Q7: kept alongside the slim
+  // progress strip). Mirrors the old metadata-row status logic, condensed to one word.
+  let statusLabel = 'Not started';
+  let statusTint = 'text-gray-200';
+  if (isComplete) { statusLabel = 'Done'; statusTint = 'text-green-300'; }
+  else if (isWaitingForUpload) { statusLabel = 'Uploading'; statusTint = 'text-amber-300'; }
+  else if (isExporting && isOffline) { statusLabel = 'Offline'; statusTint = 'text-gray-300'; }
+  else if (isExporting) { statusLabel = 'Exporting'; statusTint = 'text-amber-300'; }
+  else if (failedExportType) { statusLabel = 'Failed'; statusTint = 'text-orange-300'; }
+  else if (project.has_working_video) { statusLabel = 'In Overlay'; statusTint = 'text-blue-300'; }
+  else if (project.clips_in_progress > 0) { statusLabel = 'Framing'; statusTint = 'text-blue-300'; }
+  else if (project.clips_exported > 0) { statusLabel = 'Exported'; statusTint = 'text-gray-200'; }
+
+  // Desktop reveals actions on hover; mobile reveals them on long-press (actionsRevealed).
+  const actionsVisibility = isMobile
+    ? (actionsRevealed ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none')
+    : 'opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto';
+  const actionBtnClass = 'coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]';
 
   return (
     <div
@@ -245,220 +274,98 @@ export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exp
       onTouchStart={isMobile ? handleTouchStart : undefined}
       onTouchMove={isMobile ? handleTouchMove : undefined}
       onTouchEnd={isMobile ? handleTouchEnd : undefined}
-      className={`group relative p-3 sm:p-4 bg-gray-800 rounded-lg border transition-all ${
-        isReadyToPublish
-          ? 'border-gray-700'
-          : canOpen
-            ? `hover:bg-gray-750 cursor-pointer border-gray-700 ${REEL.borderHover}`
-            : 'cursor-not-allowed border-gray-700 opacity-75'
+      className={`group/tile relative shrink-0 snap-start w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16] rounded-lg overflow-hidden bg-gray-800 border transition-colors ${
+        canOpen ? `cursor-pointer border-gray-700 ${REEL.borderHover}` : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
-      title={undefined}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex-1 min-w-0">
-          {/* Name row */}
-          <div className="flex items-center gap-2">
-            {project.is_auto_created && (
-              <Star size={14} className="text-yellow-400 flex-shrink-0" fill="currentColor" title="Auto-created reel" />
-            )}
-            {isRenaming ? (
-              <input
-                ref={renameInputRef}
-                value={renameValue}
-                onChange={(e) => setRenameValue(e.target.value)}
-                onKeyDown={handleRenameKeyDown}
-                onBlur={handleSaveRename}
-                onClick={(e) => e.stopPropagation()}
-                className={`text-white font-medium bg-transparent border-b ${REEL.border} outline-none w-full`}
-                autoFocus
-              />
-            ) : (
-              <>
-                <h3 className="text-white font-medium truncate">
-                  {getProjectDisplayName(project)}
-                </h3>
-                <button
-                  onClick={handleStartRename}
-                  className={`${isMobile ? (actionsRevealed ? 'opacity-60' : 'opacity-0 pointer-events-none') : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'} text-gray-400 transition-opacity flex-shrink-0`}
-                  title="Rename reel"
-                >
-                  <Pencil size={14} />
-                </button>
-              </>
-            )}
-            {isComplete && project.is_published && (
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs ${REEL.bgMuted} ${REEL.accent} flex-shrink-0`}>
-                <CheckCircle size={12} />
-                In {SECTION_NAMES.LIBRARY}
-              </span>
-            )}
-            {/* T3920: clip's game time (single-clip drafts only) */}
-            {formatGameClock(project.clip_game_start_time) && (
-              <span className="shrink-0 text-sm text-gray-400" title="Game time">
-                {formatGameClock(project.clip_game_start_time)}
-              </span>
-            )}
-          </div>
-
-          {/* Tags row */}
-          {project.is_auto_created && project.clips?.[0]?.tags?.length > 0 && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {project.clips[0].tags.map((tag, idx) => (
-                <span
-                  key={idx}
-                  className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs ${REEL.bgMuted} ${REEL.accentMuted} rounded`}
-                >
-                  <Tag size={10} />
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Metadata row */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-sm text-gray-400">
-            <span>{project.aspect_ratio}</span>
-            <span>•</span>
-            <span>{project.clip_count} clip{project.clip_count !== 1 ? 's' : ''}</span>
-            {isComplete && (
-              <>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1 text-green-400">
-                  <CheckCircle size={12} />
-                  Done
-                </span>
-              </>
-            )}
-            {!project.has_final_video && (
-              <>
-                <span>•</span>
-                <span>
-                  {isWaitingForUpload ? (
-                    <span className="text-amber-400 inline-flex items-center gap-1">
-                      <Upload size={12} />
-                      Waiting for upload
-                    </span>
-                  ) :
-                  isExporting && isOffline ? (
-                    <span className="text-gray-400">Disconnected</span>
-                  ) :
-                  isExporting === 'overlay' ? (
-                    <span className="text-amber-400">Exporting...</span>
-                  ) :
-                  isExporting === 'framing' ? (
-                    <span className="text-amber-400">Exporting...</span>
-                  ) :
-                  failedExportType ? (
-                    <span className="text-orange-400">Export Failed</span>
-                  ) :
-                  project.has_working_video ? 'In Overlay' :
-                  project.clips_in_progress > 0 ? (
-                    <span className="text-blue-400">Framing started</span>
-                  ) :
-                  project.clips_exported > 0 ? 'Exported' : 'Not Started'}
-                </span>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Top-right: Move CTA for ready-to-publish, delete icon for other states */}
-        {isReadyToPublish ? (
-          <button
-            onClick={handlePublishToMyReels}
-            disabled={isPublishing}
-            className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${REEL.accent} border-2 ${REEL.borderSubtle} hover:bg-cyan-900/30 hover:text-cyan-300 hover:border-cyan-500 transition-all disabled:opacity-50`}
-          >
-            {isPublishing ? (
-              <Loader2 size={18} className="animate-spin" />
-            ) : (
-              <Image size={18} />
-            )}
-            Move to {SECTION_NAMES.LIBRARY}
-          </button>
-        ) : (
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            iconOnly
-            onClick={handleDelete}
-            className={isMobile
-              ? (!showDeleteConfirm && !actionsRevealed ? 'opacity-0 pointer-events-none' : '')
-              : (!showDeleteConfirm ? 'opacity-0 group-hover:opacity-100' : '')}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-          />
-        )}
-      </div>
-
-      {publishRetry && (
-        /* T4050: durable publish couldn't reach the cloud — keep the card and let
-           the user retry the same gesture instead of silently reverting later. */
-        <div className="mt-2 flex items-center justify-center gap-2 text-sm" role="alert">
-          <span className="text-amber-400">Couldn&apos;t save to the cloud.</span>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); publishProject(publishRetry); }}
-            disabled={isPublishing}
-            className="px-3 py-1 rounded-md font-medium border border-amber-500 text-amber-300 hover:bg-amber-900/30 disabled:opacity-50"
-          >
-            Retry
-          </button>
+      {/* Poster image (lazy — 13+ tiles must not fire eager requests) */}
+      {posterState !== 'error' && (
+        <img
+          src={posterUrl}
+          alt=""
+          loading="lazy"
+          onLoad={() => setPosterState('loaded')}
+          onError={() => setPosterState('error')}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      )}
+      {/* Skeleton shimmer while the poster loads */}
+      {posterState === 'loading' && (
+        <div className="absolute inset-0 bg-gray-700 animate-pulse" />
+      )}
+      {/* Branded fallback on 404 / decode error (no broken image) */}
+      {posterState === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 bg-gradient-to-br from-cyan-900 via-gray-800 to-gray-900">
+          <Film size={26} className="text-cyan-300/80" />
+          <span className="text-[11px] text-gray-200 text-center line-clamp-3 px-1">{getProjectDisplayName(project)}</span>
         </div>
       )}
 
-      {isComplete ? (
-        /* Secondary actions row — shown for all Done reels, published or not */
-        <div className="mt-2 flex items-center justify-center gap-2">
-          {project.final_video_id && (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={Play}
-              iconOnly
-              onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }}
-              title="Preview video"
-            />
+      {/* Auto-created marker */}
+      {project.is_auto_created && (
+        <Star size={14} className="absolute top-1.5 left-1.5 z-10 text-yellow-400 drop-shadow" fill="currentColor" title="Auto-created reel" />
+      )}
+
+      {/* Ready-to-publish badge (Q3) — persistent affordance; tap publishes (also on mobile) */}
+      {isReadyToPublish && (
+        <button
+          type="button"
+          onClick={handlePublishToMyReels}
+          disabled={isPublishing}
+          aria-label={`Move to ${SECTION_NAMES.LIBRARY}`}
+          title={`Move to ${SECTION_NAMES.LIBRARY}`}
+          className="absolute top-1.5 left-1.5 z-30 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-cyan-500/90 text-white shadow hover:bg-cyan-400 disabled:opacity-60 coarse-pointer:min-h-[44px] coarse-pointer:px-3"
+        >
+          {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <Image size={12} />}
+          Ready
+        </button>
+      )}
+
+      {/* Status chip (Q7) */}
+      <span className={`absolute top-1.5 right-1.5 z-20 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-black/60 backdrop-blur-sm ${statusTint}`}>
+        {statusLabel}
+      </span>
+
+      {/* In-My-Reels marker for published-complete reels */}
+      {isComplete && project.is_published && (
+        <span className="absolute top-9 right-1.5 z-20 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-black/60 backdrop-blur-sm text-cyan-300" title={`In ${SECTION_NAMES.LIBRARY}`}>
+          <CheckCircle size={11} />
+        </span>
+      )}
+
+      {/* Bottom scrim: name, game-time, one tag (>=sm) */}
+      <div className="absolute inset-x-0 bottom-0 z-10 px-2 pt-8 pb-3 bg-gradient-to-t from-black/85 via-black/45 to-transparent">
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={handleRenameKeyDown}
+            onBlur={handleSaveRename}
+            onClick={(e) => e.stopPropagation()}
+            className={`w-full text-white text-xs font-medium bg-black/40 border-b ${REEL.border} outline-none`}
+            autoFocus
+          />
+        ) : (
+          <h3 className="text-white text-xs font-medium leading-tight line-clamp-2 drop-shadow">
+            {getProjectDisplayName(project)}
+          </h3>
+        )}
+        <div className="mt-0.5 flex items-center gap-1.5 flex-nowrap overflow-hidden">
+          {gameClock && (
+            <span className="shrink-0 text-[11px] text-gray-300" title="Game time">{gameClock}</span>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Crop}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); handleClipClick(0); }}
-            title="Open in Framing"
-          />
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={Layers}
-            iconOnly
-            onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }}
-            title="Open in Overlay"
-          />
-          {isReadyToPublish ? (
-            <Button
-              variant={showDeleteConfirm ? 'danger' : 'ghost'}
-              size="sm"
-              icon={Trash2}
-              iconOnly
-              onClick={handleDelete}
-              title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'}
-            />
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={EyeOff}
-              iconOnly
-              loading={isPublishing}
-              onClick={handleHideFromDrafts}
-              title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`}
-            />
+          {firstTag && (
+            <span className="hidden sm:inline-flex shrink-0 items-center gap-0.5 px-1 py-0.5 text-[10px] rounded bg-black/50 text-cyan-200">
+              <Tag size={9} />
+              <span className="truncate max-w-[80px]">{firstTag}</span>
+            </span>
           )}
         </div>
-      ) : (
-        /* Segmented progress strip - clickable segments for direct navigation */
+      </div>
+
+      {/* Slim progress strip pinned to the base (Q7 deep-link stays clickable) */}
+      <div className="absolute inset-x-0 bottom-0 z-20 px-0.5 pb-0.5">
         <SegmentedProgressStrip
           project={project}
           onClipClick={handleClipClick}
@@ -466,7 +373,41 @@ export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exp
           isExporting={isExporting}
           isOffline={isOffline}
           failedExportType={failedExportType}
+          variant="slim"
         />
+      </div>
+
+      {/* Actions — desktop hover / mobile long-press sheet. Every old card action reachable. */}
+      <div className={`absolute top-9 right-1.5 z-30 flex flex-col items-end gap-1 transition-opacity ${actionsVisibility}`}>
+        {isComplete && project.final_video_id && (
+          <Button variant="secondary" size="sm" icon={Play} iconOnly onClick={(e) => { e.stopPropagation(); setIsPreviewing(true); }} title="Preview video" className={actionBtnClass} />
+        )}
+        <Button variant="secondary" size="sm" icon={Pencil} iconOnly onClick={handleStartRename} title="Rename reel" className={actionBtnClass} />
+        {isComplete && (
+          <Button variant="secondary" size="sm" icon={Crop} iconOnly onClick={(e) => { e.stopPropagation(); handleClipClick(0); }} title="Open in Framing" className={actionBtnClass} />
+        )}
+        {isComplete && (
+          <Button variant="secondary" size="sm" icon={Layers} iconOnly onClick={(e) => { e.stopPropagation(); handleOverlayClick(); }} title="Open in Overlay" className={actionBtnClass} />
+        )}
+        {isComplete && !isReadyToPublish && (
+          <Button variant="secondary" size="sm" icon={EyeOff} iconOnly loading={isPublishing} onClick={handleHideFromDrafts} title={`Hide from Drafts (stays in ${SECTION_NAMES.LIBRARY})`} className={actionBtnClass} />
+        )}
+        <Button variant={showDeleteConfirm ? 'danger' : 'secondary'} size="sm" icon={Trash2} iconOnly onClick={handleDelete} title={showDeleteConfirm ? 'Click again to confirm' : 'Delete reel'} className={actionBtnClass} />
+      </div>
+
+      {/* Durable publish failure — keep the tile and let the user retry (T4050) */}
+      {publishRetry && (
+        <div className="absolute inset-x-1 bottom-8 z-40 flex flex-col items-center gap-1 rounded-md bg-black/85 p-2 text-center" role="alert">
+          <span className="text-[10px] text-amber-300">Couldn&apos;t save to the cloud.</span>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); publishProject(publishRetry); }}
+            disabled={isPublishing}
+            className="px-3 py-1 rounded-md text-[11px] font-medium border border-amber-500 text-amber-300 hover:bg-amber-900/30 disabled:opacity-50"
+          >
+            Retry
+          </button>
+        </div>
       )}
 
       {/* Video preview modal */}
@@ -504,4 +445,4 @@ export function ProjectCard({ project, onSelect, onSelectWithMode, onDelete, exp
   );
 }
 
-export default ProjectCard;
+export default DraftTile;
