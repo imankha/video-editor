@@ -32,6 +32,23 @@ export const PATH_TO_MODE = Object.fromEntries(
   Object.entries(MODE_PATHS).map(([mode, path]) => [path, mode])
 );
 
+// Home tab deep-link sub-routes. The active tab is URL state (never persisted);
+// ProjectManager reads the path on mount to pick its tab. These must survive the
+// cold-load URL canonicalization below — collapsing them to /home would drop the
+// deep link before ProjectManager can read it.
+export const HOME_TAB_PATHS = ['/home/games', '/home/reels'];
+
+/**
+ * Resolve the editor mode a URL path maps to, or null when the path names no
+ * known mode. Known editor paths map directly; /home and its tab sub-routes
+ * (/home/games, /home/reels) are the project manager. Shared by cold-load init
+ * and the popstate handler so the two can never drift.
+ */
+export function modeFromPath(pathname = window.location.pathname) {
+  return PATH_TO_MODE[pathname]
+    || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
+}
+
 // Public routes render OUTSIDE the editor (share links, legal pages). The store
 // must never normalize/rewrite their URL — doing so at module load clobbers the
 // deep link before App reads it, so e.g. /shared/collection/{token} would bounce
@@ -129,19 +146,20 @@ export function resolveEditorScreen(editorMode, hasSelectedProject) {
  * @see CODE_SMELLS.md #15 for refactoring context
  * @see tasks/PHASE2-ARCHITECTURE-PLAN.md for migration plan
  */
-const initialMode = (() => {
-  const path = window.location.pathname;
-  return PATH_TO_MODE[path]
-    || (path.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : null);
-})();
+// Cold-load mode is derived purely from the URL. An unrecognized path (typo'd
+// URL, stale link, bare "/") resolves to the project manager — the app's home —
+// never into an editor, so a bad URL can't drop the user onto whatever project
+// state happens to be loaded (T5677).
+const initialMode = modeFromPath();
 
 export const useEditorStore = create((set, get) => ({
-  // Current screen object (new typed approach)
-  screen: initialMode ? getScreenByType(initialMode) : SCREENS.FRAMING,
+  // Current screen object (new typed approach). getScreenByType defaults to
+  // PROJECT_MANAGER when the mode is null (unknown route).
+  screen: getScreenByType(initialMode),
 
   // Editor mode: 'framing' | 'overlay' | 'annotate' | 'project-manager'
   // DEPRECATED: Use screen.type instead. Kept for backward compatibility.
-  editorMode: initialMode || EDITOR_MODES.FRAMING,
+  editorMode: initialMode || EDITOR_MODES.PROJECT_MANAGER,
 
   // Mode switch confirmation dialog
   modeSwitchDialog: {
@@ -304,8 +322,7 @@ export default useEditorStore;
 // so it always references the current store instance.
 function handlePopState() {
   const pathname = window.location.pathname;
-  const targetMode = PATH_TO_MODE[pathname]
-    || (pathname.startsWith('/home') ? EDITOR_MODES.PROJECT_MANAGER : undefined);
+  const targetMode = modeFromPath(pathname);
   const currentMode = useEditorStore.getState().editorMode;
   if (!targetMode || targetMode === currentMode) return;
 
@@ -337,13 +354,15 @@ function handlePopState() {
 if (window.__popstateHandler) {
   window.removeEventListener('popstate', window.__popstateHandler);
 } else if (!isPublicRoute()) {
-  // Seed history.state with the mode + normalize '/' -> a mode path, but NEVER on
-  // public routes (share links / legal pages) — that would discard the deep link.
-  window.history.replaceState(
-    { mode: useEditorStore.getState().editorMode },
-    '',
-    MODE_PATHS[useEditorStore.getState().editorMode] || '/home'
-  );
+  // Seed history.state with the mode + canonicalize the URL (e.g. '/' or an
+  // unknown route -> the mode path), but NEVER on public routes (share links /
+  // legal pages) — that would discard the deep link. Preserve the home tab
+  // sub-routes verbatim: the tab is URL state, so collapsing /home/games to
+  // /home here would bounce a cold-load deep link back to the default tab (T5677).
+  const mode = useEditorStore.getState().editorMode;
+  const path = window.location.pathname;
+  const canonicalPath = HOME_TAB_PATHS.includes(path) ? path : (MODE_PATHS[mode] || '/home');
+  window.history.replaceState({ mode }, '', canonicalPath);
 }
 window.__popstateHandler = handlePopState;
 window.addEventListener('popstate', handlePopState);

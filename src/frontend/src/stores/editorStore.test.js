@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { useEditorStore, resolveEditorScreen, APP_SCREENS, EDITOR_MODES } from './editorStore';
+import { useEditorStore, resolveEditorScreen, APP_SCREENS, EDITOR_MODES, modeFromPath, HOME_TAB_PATHS } from './editorStore';
 import { useProjectsStore } from './projectsStore';
 
 describe('editorStore', () => {
@@ -81,6 +81,38 @@ describe('editorStore', () => {
     it('can select highlight layer', () => {
       useEditorStore.getState().setSelectedLayer('highlight');
       expect(useEditorStore.getState().selectedLayer).toBe('highlight');
+    });
+  });
+
+  describe('modeFromPath (T5677)', () => {
+    it('maps known editor paths to their mode', () => {
+      expect(modeFromPath('/framing')).toBe(EDITOR_MODES.FRAMING);
+      expect(modeFromPath('/overlay')).toBe(EDITOR_MODES.OVERLAY);
+      expect(modeFromPath('/annotate')).toBe(EDITOR_MODES.ANNOTATE);
+      expect(modeFromPath('/admin')).toBe(EDITOR_MODES.ADMIN);
+    });
+
+    it('maps /home and its tab sub-routes to the project manager', () => {
+      expect(modeFromPath('/home')).toBe(EDITOR_MODES.PROJECT_MANAGER);
+      expect(modeFromPath('/home/games')).toBe(EDITOR_MODES.PROJECT_MANAGER);
+      expect(modeFromPath('/home/reels')).toBe(EDITOR_MODES.PROJECT_MANAGER);
+    });
+
+    it('returns null for unknown routes and bare root (caller lands them home)', () => {
+      // The store default turns this null into PROJECT_MANAGER, never an editor —
+      // an unknown URL must never fall through to /framing (the original bug).
+      expect(modeFromPath('/gallery')).toBe(null);
+      expect(modeFromPath('/')).toBe(null);
+      expect(modeFromPath('/does-not-exist')).toBe(null);
+    });
+  });
+
+  describe('HOME_TAB_PATHS (T5677)', () => {
+    it('lists the deep-linkable home tab sub-routes preserved during URL canonicalization', () => {
+      expect(HOME_TAB_PATHS).toContain('/home/games');
+      expect(HOME_TAB_PATHS).toContain('/home/reels');
+      // Bare /home is NOT in the list — it is already canonical and needs no preserving.
+      expect(HOME_TAB_PATHS).not.toContain('/home');
     });
   });
 
