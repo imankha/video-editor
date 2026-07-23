@@ -1,17 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical, ArrowRightLeft } from 'lucide-react';
+import { X, Image } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
 import { Button } from './shared/Button';
-import { CollapsibleGroup } from './shared/CollapsibleGroup';
 import { CollectionsTab } from './collections/CollectionsTab';
+import { ReelTile } from './collections/ReelTile';
 import { CollectionPlayer } from './collections/CollectionPlayer';
 import { ConfidenceBanner } from './ranking/ConfidenceBanner';
 import { RankingGame } from './ranking/RankingGame';
 import { toPlayerReel } from './collections/playerReels';
 import { useReEditReel } from '../hooks/useReEditReel';
-import { CardMedia, CardIconButton } from './shared/MediaCard';
 import { useDownloads } from '../hooks/useDownloads';
 import { useCollections } from '../hooks/useCollections';
 import { useMoveReels } from '../hooks/useMoveReels';
@@ -19,7 +18,7 @@ import { useProfileStore } from '../stores/profileStore';
 import { formatDurationHuman } from './collections/format';
 import { useWebShare } from '../hooks/useWebShare';
 import { useGalleryStore } from '../stores/galleryStore';
-import { SourceType, getSourceTypeLabel } from '../constants/sourceTypes';
+import { SourceType } from '../constants/sourceTypes';
 import { useQuestStore } from '../stores/questStore';
 import { setWarmupPriority, WARMUP_PRIORITY } from '../utils/cacheWarming';
 import { toast } from './shared/Toast';
@@ -28,7 +27,6 @@ import { API_BASE } from '../config';
 import apiFetch from '../utils/apiFetch';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
-import { ratioGlyph, ratioLabel } from '../constants/aspectRatios';
 import { formatGameClock } from '../utils/timeFormat';
 
 /**
@@ -99,10 +97,6 @@ export function DownloadsPanel({
     markWatched(reel.id);
     collections.patchMember(reel.id, { watched_at: new Date().toISOString() });
   }, [markWatched, collections]);
-
-  // State for inline rename
-  const [editingId, setEditingId] = useState(null);
-  const [editingName, setEditingName] = useState('');
 
   // State for before/after export
   const [exportingBeforeAfter, setExportingBeforeAfter] = useState(null);
@@ -192,10 +186,6 @@ export function DownloadsPanel({
     }
   };
 
-  // State for overflow menu on reel cards
-  const [overflowMenuId, setOverflowMenuId] = useState(null);
-  const overflowMenuRef = useRef(null);
-
   // T4850/T5678: move a reel to a sibling profile (multi-athlete accounts). The
   // per-reel "Move to profile…" action is hidden unless the account has 2+
   // profiles (there is nowhere to move a reel otherwise). Batch select mode was
@@ -229,21 +219,6 @@ export function DownloadsPanel({
 
   // Native share support
   const { isMobile, copyLink, webShare } = useWebShare();
-
-  useEffect(() => {
-    if (!overflowMenuId) return;
-    const handleClickOutside = (e) => {
-      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target)) {
-        setOverflowMenuId(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [overflowMenuId]);
 
   if (!isOpen && !storyPlayer) return null;
 
@@ -351,17 +326,6 @@ export function DownloadsPanel({
     }
   };
 
-  // Check if a filename is a UUID/hash pattern (not meaningful to users)
-  const isUuidFilename = (filename) => {
-    if (!filename) return true;
-    // Match patterns like: "3fc140fc2a79.mp4", "final_64_9753b5fe.mp4", "8ea26608de38.mp4"
-    return /^[a-f0-9]{12}\.mp4$/i.test(filename) ||
-           /^final_\d+_[a-f0-9]+\.mp4$/i.test(filename) ||
-           /^working_\d+_[a-f0-9]+\.mp4$/i.test(filename);
-  };
-
-  // getSourceTypeLabel imported from constants/sourceTypes.js
-
   // Find the latest unwatched download ID (first unwatched in created_at DESC order)
   const latestUnwatchedId = downloads.find(d => !d.watched_at)?.id ?? null;
 
@@ -372,279 +336,82 @@ export function DownloadsPanel({
     return { border: 'border-blue-500', dot: 'bg-blue-500' };
   };
 
-  // Render a single download item card
-  const renderDownloadCard = (download) => {
-    // Determine what to show as subtitle (avoid redundant or meaningless info)
-    const showFilename = !isUuidFilename(download.filename);
-    // Only show source type if project_name doesn't already indicate it
-    const projectNameLower = (download.project_name || '').toLowerCase();
-    const sourceTypeLabel = getSourceTypeLabel(download.source_type);
-    const showSourceType = sourceTypeLabel &&
-      !projectNameLower.includes('annotated') &&
-      !projectNameLower.includes('brilliant');
-
-    const isUnwatched = !download.watched_at;
-    const style = isUnwatched ? getUnwatchedStyle(download.id) : null;
-
-    // T3920: where the clip starts in the source game, in soccer notation
-    // (e.g. 50'15"). Only single-clip reels carry a start; multi-clip -> null.
-    const gameClock = formatGameClock(download.clip_game_start_time);
-
-    return (
-      <div
-        key={download.id}
-        data-testid="reel-card"
-        className={`p-3 bg-gray-700 rounded-lg border transition-colors ${
-          isUnwatched
-            ? `${style.border} border-l-4`
-            : 'border-gray-600 hover:border-gray-500'
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          {/* Video icon with unwatched dot (shared CardMedia) */}
-          <CardMedia
-            icon={Video}
-            wrapClassName={isUnwatched ? 'bg-cyan-900/40' : REEL.bgMuted}
-            iconClassName={isUnwatched ? 'text-cyan-400' : REEL.accent}
-          >
-            {isUnwatched && (
-              <span className={`absolute -top-1.5 -right-1.5 w-3.5 h-3.5 rounded-full ${style.dot} ring-2 ring-gray-700`} />
-            )}
-          </CardMedia>
-
-          {/* Info + actions */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-            {download.aspect_ratio && (
-              <span className={`text-base leading-none ${REEL.accent} shrink-0`} title={ratioLabel(download.aspect_ratio)}>
-                {ratioGlyph(download.aspect_ratio)}
-              </span>
-            )}
-            {editingId === download.id ? (
-              <input
-                autoFocus
-                className="w-full bg-gray-600 text-white font-medium px-1 py-0.5 rounded border border-cyan-500 outline-none text-sm"
-                value={editingName}
-                onChange={(e) => setEditingName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    const trimmed = editingName.trim();
-                    if (trimmed && trimmed !== download.project_name) {
-                      renameDownload(download.id, trimmed);
-                      collections.patchMember(download.id, { project_name: trimmed });
-                    }
-                    setEditingId(null);
-                  } else if (e.key === 'Escape') {
-                    setEditingId(null);
-                  }
-                }}
-                onBlur={() => {
-                  const trimmed = editingName.trim();
-                  if (trimmed && trimmed !== download.project_name) {
-                    renameDownload(download.id, trimmed);
-                    collections.patchMember(download.id, { project_name: trimmed });
-                  }
-                  setEditingId(null);
-                }}
-              />
-            ) : (
-              <div
-                className="text-white font-medium truncate transition-colors cursor-pointer hover:text-cyan-300"
-                onClick={() => { setEditingId(download.id); setEditingName(download.project_name || ''); }}
-                title="Click to rename"
-              >
-                {download.project_name}
-              </div>
-            )}
-            </div>
-            <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-500 min-w-0">
-              {(showFilename || showSourceType) && (
-                <span className="truncate">{showFilename ? download.filename : sourceTypeLabel}</span>
-              )}
-              {(showFilename || showSourceType) && <span aria-hidden>·</span>}
-              <span className="shrink-0">{formatDate(download.created_at)}</span>
-              {formatDurationHuman(download.duration) && <span aria-hidden>·</span>}
-              {formatDurationHuman(download.duration) && <span className="shrink-0">{formatDurationHuman(download.duration)}</span>}
-              {gameClock && <span aria-hidden>·</span>}
-              {gameClock && <span className="shrink-0" title="Game time">{gameClock}</span>}
-            </div>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-                <CardIconButton
-                  icon={Play}
-                  onClick={(e) => handlePlay(e, download)}
-                  title="Play video"
-                  iconClassName={`${REEL.accent} hover:text-cyan-300`}
-                  hoverClassName={`hover:${REEL.bgMuted}`}
-                />
-                {isMobile ? (
-                  <CardIconButton
-                    icon={Share2}
-                    title="Share video"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
-                        const method = await webShare({
-                          downloadId: download.id,
-                          title: download.project_name || 'Highlight Reel',
-                          text: `Check out ${download.project_name || 'this highlight reel'}!`,
-                          filename,
-                        });
-                        track('share_initiated', { method, source: 'gallery' });
-                        if (method === 'clipboard') {
-                          toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-                        }
-                      } catch (err) {
-                        if (err.name === 'AbortError') return;
-                        setSharingDownload(download);
-                      }
-                    }}
-                  />
-                ) : (
-                  <CardIconButton
-                    icon={Link2}
-                    title="Copy link"
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      try {
-                        await copyLink({ downloadId: download.id });
-                        track('share_initiated', { method: 'clipboard', source: 'gallery' });
-                        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-                      } catch (err) {
-                        if (err.name === 'AbortError') return;
-                        setSharingDownload(download);
-                      }
-                    }}
-                  />
-                )}
-                {/* Overflow menu */}
-                <div className="relative" ref={overflowMenuId === download.id ? overflowMenuRef : undefined}>
-                  <CardIconButton
-                    icon={MoreVertical}
-                    title="More actions"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOverflowMenuId(overflowMenuId === download.id ? null : download.id);
-                    }}
-                  />
-                  {overflowMenuId === download.id && (
-                    <div className="absolute right-0 bottom-full mb-1 bg-gray-700 border border-gray-600 rounded-lg shadow-xl z-50 min-w-[180px] py-1">
-                      <button
-                        onClick={(e) => { handleDownload(e, download); setOverflowMenuId(null); }}
-                        disabled={downloadingId === download.id}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
-                      >
-                        {downloadingId === download.id ? (
-                          <Loader size={18} className="text-gray-400 animate-spin flex-shrink-0" />
-                        ) : (
-                          <Download size={18} className="text-gray-300 flex-shrink-0" />
-                        )}
-                        <span className="text-gray-200">Download</span>
-                      </button>
-                      {isMobile ? (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setOverflowMenuId(null);
-                            try {
-                              await copyLink({ downloadId: download.id });
-                              track('share_initiated', { method: 'clipboard', source: 'gallery' });
-                              toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-                            } catch (err) {
-                              if (err.name === 'AbortError') return;
-                              setSharingDownload(download);
-                            }
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors"
-                        >
-                          <Link2 size={18} className="text-gray-300 flex-shrink-0" />
-                          <span className="text-gray-200">Copy Link</span>
-                        </button>
-                      ) : (
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            setOverflowMenuId(null);
-                            try {
-                              const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
-                              const method = await webShare({
-                                downloadId: download.id,
-                                title: download.project_name || 'Highlight Reel',
-                                text: `Check out ${download.project_name || 'this highlight reel'}!`,
-                                filename,
-                              });
-                              track('share_initiated', { method, source: 'gallery' });
-                              if (method === 'clipboard') {
-                                toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
-                              }
-                            } catch (err) {
-                              if (err.name === 'AbortError') return;
-                              setSharingDownload(download);
-                            }
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors"
-                        >
-                          <Share2 size={18} className="text-gray-300 flex-shrink-0" />
-                          <span className="text-gray-200">Share</span>
-                        </button>
-                      )}
-                      {!import.meta.env.PROD && (
-                        <button
-                          onClick={(e) => { handleBeforeAfter(e, download); setOverflowMenuId(null); }}
-                          disabled={exportingBeforeAfter === download.id}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
-                        >
-                          {exportingBeforeAfter === download.id ? (
-                            <Loader size={18} className="text-blue-400 animate-spin flex-shrink-0" />
-                          ) : (
-                            <Columns size={18} className="text-blue-400 flex-shrink-0" />
-                          )}
-                          <span className="text-gray-200">Before / After</span>
-                        </button>
-                      )}
-                      {canOpenSource(download) && (
-                        <button
-                          onClick={(e) => { handleOpenProject(e, download); setOverflowMenuId(null); }}
-                          disabled={restoringId === download.id}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors disabled:opacity-50"
-                        >
-                          {restoringId === download.id ? (
-                            <Loader size={18} className="text-gray-300 animate-spin flex-shrink-0" />
-                          ) : (
-                            <FolderOpen size={18} className="text-gray-300 flex-shrink-0" />
-                          )}
-                          <span className="text-gray-200">Open as Draft</span>
-                        </button>
-                      )}
-                      {canMoveProfiles && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOverflowMenuId(null);
-                            setMovingIds([download.id]);
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-gray-600 transition-colors"
-                        >
-                          <ArrowRightLeft size={18} className="text-gray-300 flex-shrink-0" />
-                          <span className="text-gray-200">Move to profile…</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { handleDelete(e, download); setOverflowMenuId(null); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-red-900/40 transition-colors"
-                      >
-                        <Trash2 size={18} className="text-red-400 flex-shrink-0" />
-                        <span className="text-red-400">Delete</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-          </div>
-        </div>
-    </div>
-  );
+  // Share via the native sheet (mobile). Falls back to the ShareModal on failure.
+  const webShareReel = async (e, download) => {
+    e.stopPropagation();
+    try {
+      const filename = `${download.project_name || 'highlight'}-highlight.mp4`;
+      const method = await webShare({
+        downloadId: download.id,
+        title: download.project_name || 'Highlight Reel',
+        text: `Check out ${download.project_name || 'this highlight reel'}!`,
+        filename,
+      });
+      track('share_initiated', { method, source: 'gallery' });
+      if (method === 'clipboard') {
+        toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      setSharingDownload(download);
+    }
   };
+
+  // Copy a share link (desktop). Falls back to the ShareModal on failure.
+  const copyReelLink = async (e, download) => {
+    e.stopPropagation();
+    try {
+      await copyLink({ downloadId: download.id });
+      track('share_initiated', { method: 'clipboard', source: 'gallery' });
+      toast.success('Link copied to clipboard', { dedupKey: 'copy-link' });
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      setSharingDownload(download);
+    }
+  };
+
+  // Rename gesture -> surgical PATCH + keep the cached member list honest.
+  const renameReel = (id, name) => {
+    renameDownload(id, name);
+    collections.patchMember(id, { project_name: name });
+  };
+
+  // A compact metadata line for the tile scrim: date · duration · game-time.
+  const reelMetaLine = (download) => [
+    formatDate(download.created_at),
+    formatDurationHuman(download.duration),
+    formatGameClock(download.clip_game_start_time),
+  ].filter(Boolean).join(' · ');
+
+  // Render one published reel as a poster tile (T5673). Per-tile poster load
+  // state lives in ReelTile (a component, not this closure).
+  const renderDownloadCard = (download) => (
+    <ReelTile
+      key={download.id}
+      download={download}
+      posterUrl={`${API_BASE}/api/downloads/${download.id}/poster.jpg`}
+      isUnwatched={!download.watched_at}
+      unwatchedStyle={getUnwatchedStyle(download.id)}
+      isMobile={isMobile}
+      displayName={download.project_name}
+      metaLine={reelMetaLine(download)}
+      onPlay={handlePlay}
+      onWebShare={webShareReel}
+      onCopyLink={copyReelLink}
+      onDownload={handleDownload}
+      downloadingId={downloadingId}
+      onBeforeAfter={handleBeforeAfter}
+      exportingBeforeAfter={exportingBeforeAfter}
+      showBeforeAfter={!import.meta.env.PROD}
+      onOpenProject={handleOpenProject}
+      canOpenSource={canOpenSource}
+      restoringId={restoringId}
+      onMove={(d) => setMovingIds([d.id])}
+      canMoveProfiles={canMoveProfiles}
+      onDelete={handleDelete}
+      onRename={renameReel}
+    />
+  );
 
   return (
     <>
