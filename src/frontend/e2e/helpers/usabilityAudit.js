@@ -163,6 +163,49 @@ export async function assertTouchTargetSizes(page, manifest, { min = 44 } = {}) 
 }
 
 /**
+ * Invariant #5 (T5674): the floating "Report a problem" trigger must never sit on
+ * top of an interactive control. It is a global fixed element (`hidden lg:block`,
+ * so present only on wide/desktop) that used to float mid-content over the video's
+ * lower-right and collided with the player controls. We assert its rect intersects
+ * NO currently-interactive control (a control that is faded/hidden — the video bar
+ * at rest — is skipped: it can't be clicked, so an overlap with it is harmless).
+ * No-op where the pill isn't rendered (mobile / narrow projects).
+ */
+export async function assertReportPillClearsControls(page) {
+  const hit = await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('button')].filter((b) =>
+      /Report a problem/i.test(b.getAttribute('aria-label') || b.textContent || ''),
+    );
+    const p = btns.find((b) => getComputedStyle(b).position === 'fixed');
+    if (!p) return null;
+    const cs = getComputedStyle(p);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) return null;
+    const r = p.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return null;
+    for (const el of document.querySelectorAll('input[type="range"], button, a[href], [role="slider"]')) {
+      if (el === p || p.contains(el) || el.contains(p)) continue;
+      const q = el.getBoundingClientRect();
+      if (q.width < 4 || q.height < 4) continue;
+      const es = getComputedStyle(el);
+      // Only controls the user can actually click count — faded/hidden video
+      // controls (pointer-events:none while not hovered) are not a collision.
+      if (es.pointerEvents === 'none' || es.visibility === 'hidden' || es.display === 'none' || +es.opacity === 0) continue;
+      const overlaps = !(q.right <= r.left || q.left >= r.right || q.bottom <= r.top || q.top >= r.bottom);
+      if (overlaps) {
+        return { tag: el.tagName, label: el.getAttribute('aria-label') || el.getAttribute('title') || (el.textContent || '').trim().slice(0, 30), cls: (el.className || '').toString().slice(0, 60) };
+      }
+    }
+    return null;
+  });
+  if (hit) {
+    throw new Error(
+      `[usability] "Report a problem" pill overlaps an interactive control ` +
+      `<${hit.tag}> "${hit.label}" (${hit.cls}) — it must stay in a safe corner clear of the player controls (T5674).`,
+    );
+  }
+}
+
+/**
  * Run the usability invariants against the currently-loaded screen.
  * @param {import('@playwright/test').Page} page
  * @param {{ id: string, name: string, actions: Array<{label:string, locator:(p)=>any, reachOnly?:boolean}>, touchTargets?: Array<{label:string, locator:(p)=>any, minTarget?:number}> }} manifest
@@ -171,6 +214,7 @@ export async function assertTouchTargetSizes(page, manifest, { min = 44 } = {}) 
 export async function auditScreen(page, manifest, tag = '') {
   await assertNoHorizontalOverflow(page);
   await assertNoDeadScrollTrap(page);
+  await assertReportPillClearsControls(page);
   for (const action of manifest.actions) {
     await assertReachable(page, action.locator(page), `${manifest.name} > ${action.label}`, {
       reachOnly: action.reachOnly,
