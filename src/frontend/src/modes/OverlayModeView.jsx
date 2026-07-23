@@ -7,7 +7,8 @@ import ZoomControls from '../components/ZoomControls';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { useFullscreenControls } from '../hooks/useFullscreenControls';
 import ExportButtonView from '../components/ExportButtonView';
-import { ExportButtonContainer, HIGHLIGHT_EFFECT_LABELS, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
+import OverlaySettingsCard from '../components/OverlaySettingsCard';
+import { ExportButtonContainer, EXPORT_CONFIG } from '../containers/ExportButtonContainer';
 import { Button } from '../components/shared';
 import { OverlayMode, HighlightOverlay, PlayerDetectionOverlay } from './overlay';
 import { Minimize, Maximize, RotateCcw } from 'lucide-react';
@@ -24,25 +25,14 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
   highlightRegions,
   highlightEffectType,
   onHighlightEffectTypeChange,
-  highlightColor,
-  onHighlightColorChange,
-  highlightShape,
-  onHighlightShapeChange,
-  strokeWidth,
-  fillEnabled,
-  fillOpacity,
-  dimStrength,
-  onStrokeWidthChange,
-  onFillEnabledChange,
-  onFillOpacityChange,
-  onDimStrengthChange,
   includeAudio,
   onIncludeAudioChange,
   onExportComplete,
   disabled,
 }, ref) {
 
-  // Container: all business logic
+  // Container: all business logic. Tuning controls moved to <OverlaySettingsCard>
+  // (T5676); this section is now the "Add Spotlight" button + progress only.
   const container = ExportButtonContainer({
     videoFile,
     cropKeyframes: [],
@@ -81,26 +71,10 @@ const OverlayExportButtonSection = forwardRef(function OverlayExportButtonSectio
         isButtonDisabled={container.isButtonDisabled}
         buttonTitle={container.buttonTitle}
         includeAudio={includeAudio}
-        isHighlightEnabled={highlightRegions.length > 0}
-        highlightEffectType={highlightEffectType}
-        highlightColor={highlightColor}
         onExport={container.handleExport}
         onRetryConnection={container.handleRetryConnection}
         onDismissExport={container.handleDismissExport}
         onAudioToggle={container.handleAudioToggle}
-        onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-        onHighlightColorChange={onHighlightColorChange}
-        highlightShape={highlightShape}
-        onHighlightShapeChange={onHighlightShapeChange}
-        strokeWidth={strokeWidth}
-        fillEnabled={fillEnabled}
-        fillOpacity={fillOpacity}
-        dimStrength={dimStrength}
-        onStrokeWidthChange={onStrokeWidthChange}
-        onFillEnabledChange={onFillEnabledChange}
-        onFillOpacityChange={onFillOpacityChange}
-        onDimStrengthChange={onDimStrengthChange}
-        HIGHLIGHT_EFFECT_LABELS={HIGHLIGHT_EFFECT_LABELS}
         EXPORT_CONFIG={EXPORT_CONFIG}
         showInsufficientCredits={null}
         onCloseInsufficientCredits={null}
@@ -246,6 +220,9 @@ export function OverlayModeView({
   framingVideoUrl,
   // T740: Outdated framing warning
   framingOutdated = false,
+  // T5676: locks the Overlay Settings card while an overlay export is in flight
+  // (mirrors the export container's isCurrentlyExporting; threaded from OverlayScreen).
+  settingsDisabled = false,
 }) {
   // Show "export required" message if no overlay video but framing has edits
   const showExportRequired = !effectiveOverlayVideoUrl && framingVideoUrl && (hasFramingEdits || hasMultipleClips);
@@ -256,6 +233,26 @@ export function OverlayModeView({
   // them (T4880); the inline scrollable layout keeps every control reachable.
   const [mobileExpanded, setMobileExpanded] = useState(false);
   const mobileFs = isMobile && mobileExpanded;
+
+  // T5676: aspect-fit stage. Size the non-fullscreen video box to the reel's true
+  // pixel aspect ratio so a 9:16 reel stops pillarboxing inside a 16:9-ish column.
+  // `object-contain` then becomes a no-op (box already == video aspect), and the
+  // freed horizontal space carries the Overlay Settings card beside the video on
+  // desktop. Only applied when metadata is known and NOT fullscreen/mobileFs —
+  // fullscreen keeps 100vw/100vh (CSS :fullscreen rules) and mobileFs keeps
+  // w-full h-full. The `.video-container` ResizeObserver (T5590) makes resizing
+  // the box safe for overlay alignment.
+  const aspectW = effectiveOverlayMetadata?.width;
+  const aspectH = effectiveOverlayMetadata?.height;
+  const useAspectStage = !isFullscreen && !mobileFs && aspectW > 0 && aspectH > 0;
+  const stageBoxClass = useAspectStage
+    ? 'relative bg-gray-900 rounded-lg overflow-hidden mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]'
+    : `relative bg-gray-900 ${
+        (isFullscreen || mobileFs)
+          ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
+          : 'rounded-lg'
+      }`;
+  const stageBoxStyle = useAspectStage ? { aspectRatio: `${aspectW} / ${aspectH}` } : undefined;
 
   // T5610: ephemeral "tap the spotlight to edit" state. NEVER persisted — it is an editing
   // affordance, not reel data (no store write, no reactive persistence). A tap inside the
@@ -369,6 +366,155 @@ export function OverlayModeView({
     </button>
   ) : null;
 
+  // T5676: video element + absolute badges (exit / reset / hint / mobile-expand),
+  // shared by the fullscreen and the non-fullscreen (aspect-fit) branches so the
+  // large VideoPlayer prop block is not duplicated. Controls render separately —
+  // inside the box for fullscreen, below the box for the aspect stage.
+  const videoStageInner = (
+    <>
+      <VideoPlayer
+        videoRef={videoRef}
+        videoUrl={effectiveOverlayVideoUrl}
+        handlers={handlers}
+        fitToAspect={useAspectStage}
+        overlays={[
+          currentHighlightState && effectiveOverlayMetadata && (
+            <HighlightOverlay
+              key="highlight"
+              videoRef={videoRef}
+              videoMetadata={effectiveOverlayMetadata}
+              currentHighlight={currentHighlightState}
+              onHighlightChange={onHighlightChange}
+              onHighlightComplete={onHighlightComplete}
+              isEnabled={isTimeInEnabledRegion(currentTime)}
+              effectType={highlightEffectType}
+              highlightShape={highlightShape}
+              strokeWidth={strokeWidth}
+              fillEnabled={fillEnabled}
+              fillOpacity={fillOpacity}
+              dimStrength={dimStrength}
+              zoom={zoom}
+              panOffset={panOffset}
+              isFullscreen={isFullscreen}
+              editable={editable}
+              // Tap-the-circle override is wired only while tracking is ON; with
+              // tracking OFF the circle is already fully editable (T5570 path).
+              onCircleTap={showPlayerBoxes ? handleCircleTap : undefined}
+              // T5250: entrance/exit reveal envelope (display-only multiplier).
+              reveal={spotlightReveal}
+            />
+          ),
+          effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
+            <PlayerDetectionOverlay
+              key="player-detection"
+              videoRef={videoRef}
+              videoMetadata={effectiveOverlayMetadata}
+              detections={playerDetections}
+              detectionVideoWidth={detectionVideoWidth}
+              detectionVideoHeight={detectionVideoHeight}
+              isLoading={isDetectionLoading}
+              onPlayerSelect={onPlayerSelect}
+              zoom={zoom}
+              panOffset={panOffset}
+              isFullscreen={isFullscreen}
+              isDisabled={!showPlayerBoxes}
+            />
+          ),
+        ].filter(Boolean)}
+        zoom={zoom}
+        panOffset={panOffset}
+        onZoomChange={onZoomByWheel}
+        onPanChange={onPanChange}
+        isFullscreen={isFullscreen}
+        isLoading={isLoading}
+        isVideoElementLoading={isVideoElementLoading}
+        loadingProgress={loadingProgress}
+        loadingElapsedSeconds={loadingElapsedSeconds}
+        error={error}
+        isUrlExpiredError={isUrlExpiredError}
+        onRetryVideo={onRetryVideo}
+        loadingMessage={loadingMessage}
+      />
+
+      {/* Fullscreen exit button - desktop only */}
+      {isFullscreen && !mobileFs && (
+        <div className="absolute top-4 right-4 z-10">
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={Minimize}
+            iconOnly
+            onClick={onToggleFullscreen}
+            title="Exit fullscreen (Esc)"
+            className="bg-black/50 hover:bg-black/70"
+          />
+        </div>
+      )}
+
+      {/* Reset pill — over the lower video area (T5370, relabeled T5658) */}
+      {resetPill}
+
+      {/* T5610 discoverability hint — subtle pill, non-interactive, below the
+          handles. Names BOTH override paths; fades on first override. T5643: sits
+          directly under the "N players detected" badge (PlayerDetectionOverlay's
+          top-4 right-4 count, same top-right corner of this relatively-positioned
+          video area) and hides while a tracking/spotlight keyframe is selected. */}
+      {effectiveOverlayVideoUrl && (
+        <OverrideHint visible={showOverrideHint} text={overrideHintText} />
+      )}
+
+      {/* Mobile expand — opt into fullscreen video (inline layout keeps
+          the overlay settings + Add Spotlight/export controls reachable below) */}
+      {isMobile && !mobileFs && effectiveOverlayVideoUrl && (
+        <button
+          onClick={() => setMobileExpanded(true)}
+          className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
+          title="Fullscreen video"
+          aria-label="Expand video to fullscreen"
+        >
+          <Maximize size={18} />
+        </button>
+      )}
+    </>
+  );
+
+  // Playback controls — bound to the VIDEO width (T5676): inside the box for
+  // fullscreen, directly under the box (video-width column) for the aspect stage.
+  const controlsEl = (!mobileFs && effectiveOverlayVideoUrl) ? (
+    <Controls
+      isPlaying={isPlaying}
+      currentTime={currentTime}
+      duration={effectiveOverlayMetadata?.duration || duration}
+      onStepForward={stepForward}
+      onStepBackward={stepBackward}
+      onRestart={restart}
+      isFullscreen={isFullscreen}
+      onToggleFullscreen={onToggleFullscreen}
+      {...spotlightControlsProps}
+    />
+  ) : null;
+
+  // T5676: Overlay tuning controls — beside the video on desktop, stacked above
+  // the Add Spotlight button on mobile. Extracted from ExportButtonView.
+  const overlaySettingsCard = (
+    <OverlaySettingsCard
+      highlightColor={highlightColor}
+      onHighlightColorChange={onHighlightColorChange}
+      highlightShape={highlightShape}
+      onHighlightShapeChange={onHighlightShapeChange}
+      strokeWidth={strokeWidth}
+      onStrokeWidthChange={onStrokeWidthChange}
+      fillOpacity={fillOpacity}
+      onFillEnabledChange={onFillEnabledChange}
+      onFillOpacityChange={onFillOpacityChange}
+      dimStrength={dimStrength}
+      onDimStrengthChange={onDimStrengthChange}
+      onHighlightEffectTypeChange={onHighlightEffectTypeChange}
+      isHighlightEnabled={highlightRegions.length > 0}
+      disabled={settingsDisabled}
+    />
+  );
+
   return (
     <>
       {/* T740: Outdated framing banner */}
@@ -465,142 +611,45 @@ export function OverlayModeView({
           className={`${(isFullscreen || mobileFs) ? `fixed inset-0 z-[100] bg-gray-900${mobileFs ? '' : ' flex flex-col'}` : ''}`}
           onMouseMove={mobileFs ? fsControls.handleInteraction : undefined}
         >
-          {/* Video Player with overlay-specific overlays */}
-          <div
-            className={`relative bg-gray-900 ${
-              (isFullscreen || mobileFs)
-                ? mobileFs ? 'w-full h-full' : 'flex-1 min-h-0'
-                : 'rounded-lg'
-            }`}
-            // While the circle is editable (tracking OFF or tap-the-circle override) the
-            // tap-nav owner YIELDS: no play toggle, no long-press speed control — so a
-            // move/resize drag can't be stolen (T5450/T5610). Pointer stopPropagation
-            // can't cancel these TOUCH handlers, so they must be gated on `editable`. The
-            // onClick handles a plain tap: it exits circle-edit when tapping OUTSIDE the
-            // circle (the circle's own tap is stopped at the overlay), else normal tap-nav.
-            onClick={mobileFs ? handleVideoAreaTap : undefined}
-            onTouchStart={mobileFs && !editable ? fsControls.handleLongPressTouchStart : undefined}
-            onTouchMove={mobileFs && !editable ? fsControls.handleLongPressTouchMove : undefined}
-            onTouchEnd={mobileFs && !editable ? fsControls.handleLongPressTouchEnd : undefined}
-          >
-            <VideoPlayer
-            videoRef={videoRef}
-            videoUrl={effectiveOverlayVideoUrl}
-            handlers={handlers}
-            overlays={[
-              currentHighlightState && effectiveOverlayMetadata && (
-                <HighlightOverlay
-                  key="highlight"
-                  videoRef={videoRef}
-                  videoMetadata={effectiveOverlayMetadata}
-                  currentHighlight={currentHighlightState}
-                  onHighlightChange={onHighlightChange}
-                  onHighlightComplete={onHighlightComplete}
-                  isEnabled={isTimeInEnabledRegion(currentTime)}
-                  effectType={highlightEffectType}
-                  highlightShape={highlightShape}
-                  strokeWidth={strokeWidth}
-                  fillEnabled={fillEnabled}
-                  fillOpacity={fillOpacity}
-                  dimStrength={dimStrength}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                  isFullscreen={isFullscreen}
-                  editable={editable}
-                  // Tap-the-circle override is wired only while tracking is ON; with
-                  // tracking OFF the circle is already fully editable (T5570 path).
-                  onCircleTap={showPlayerBoxes ? handleCircleTap : undefined}
-                  // T5250: entrance/exit reveal envelope (display-only multiplier).
-                  reveal={spotlightReveal}
-                />
-              ),
-              effectiveOverlayMetadata && playerDetectionEnabled && playerDetections?.length > 0 && (
-                <PlayerDetectionOverlay
-                  key="player-detection"
-                  videoRef={videoRef}
-                  videoMetadata={effectiveOverlayMetadata}
-                  detections={playerDetections}
-                  detectionVideoWidth={detectionVideoWidth}
-                  detectionVideoHeight={detectionVideoHeight}
-                  isLoading={isDetectionLoading}
-                  onPlayerSelect={onPlayerSelect}
-                  zoom={zoom}
-                  panOffset={panOffset}
-                  isFullscreen={isFullscreen}
-                  isDisabled={!showPlayerBoxes}
-                />
-              ),
-            ].filter(Boolean)}
-            zoom={zoom}
-            panOffset={panOffset}
-            onZoomChange={onZoomByWheel}
-            onPanChange={onPanChange}
-            isFullscreen={isFullscreen}
-            isLoading={isLoading}
-            isVideoElementLoading={isVideoElementLoading}
-            loadingProgress={loadingProgress}
-            loadingElapsedSeconds={loadingElapsedSeconds}
-            error={error}
-            isUrlExpiredError={isUrlExpiredError}
-            onRetryVideo={onRetryVideo}
-            loadingMessage={loadingMessage}
-          />
-
-            {/* Fullscreen exit button - desktop only */}
-            {isFullscreen && !mobileFs && (
-              <div className="absolute top-4 right-4 z-10">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={Minimize}
-                  iconOnly
-                  onClick={onToggleFullscreen}
-                  title="Exit fullscreen (Esc)"
-                  className="bg-black/50 hover:bg-black/70"
-                />
+          {/* Video Player + overlays. Fullscreen/mobileFs keep the single fixed
+              box (Controls inside); non-fullscreen uses the T5676 aspect-fit stage
+              with the Overlay Settings card in the reclaimed pillarbox width beside
+              the video on desktop, and Controls bound to the video width below it. */}
+          {(isFullscreen || mobileFs) ? (
+            <div
+              data-testid="overlay-video-stage"
+              className={stageBoxClass}
+              // While the circle is editable (tracking OFF or tap-the-circle override) the
+              // tap-nav owner YIELDS: no play toggle, no long-press speed control — so a
+              // move/resize drag can't be stolen (T5450/T5610). Pointer stopPropagation
+              // can't cancel these TOUCH handlers, so they must be gated on `editable`. The
+              // onClick handles a plain tap: it exits circle-edit when tapping OUTSIDE the
+              // circle (the circle's own tap is stopped at the overlay), else normal tap-nav.
+              onClick={mobileFs ? handleVideoAreaTap : undefined}
+              onTouchStart={mobileFs && !editable ? fsControls.handleLongPressTouchStart : undefined}
+              onTouchMove={mobileFs && !editable ? fsControls.handleLongPressTouchMove : undefined}
+              onTouchEnd={mobileFs && !editable ? fsControls.handleLongPressTouchEnd : undefined}
+            >
+              {videoStageInner}
+              {controlsEl}
+            </div>
+          ) : (
+            <div className="lg:flex lg:flex-row lg:items-start lg:gap-6">
+              {/* Video column — shrink-wraps the aspect box so Controls bind to the
+                  video width (lg:w-fit); full width when stacked on mobile. */}
+              <div className="flex flex-col w-full lg:w-fit lg:flex-none">
+                <div data-testid="overlay-video-stage" className={stageBoxClass} style={stageBoxStyle}>
+                  {videoStageInner}
+                </div>
+                {controlsEl}
               </div>
-            )}
-
-            {/* Reset pill — over the lower video area (T5370, relabeled T5658) */}
-            {resetPill}
-
-            {/* T5610 discoverability hint — subtle pill, non-interactive, below the
-                handles. Names BOTH override paths; fades on first override. T5643: sits
-                directly under the "N players detected" badge (PlayerDetectionOverlay's
-                top-4 right-4 count, same top-right corner of this relatively-positioned
-                video area) and hides while a tracking/spotlight keyframe is selected. */}
-            {effectiveOverlayVideoUrl && (
-              <OverrideHint visible={showOverrideHint} text={overrideHintText} />
-            )}
-
-            {/* Controls - desktop fullscreen & non-fullscreen */}
-            {!mobileFs && effectiveOverlayVideoUrl && (
-              <Controls
-                isPlaying={isPlaying}
-                currentTime={currentTime}
-                duration={effectiveOverlayMetadata?.duration || duration}
-                onStepForward={stepForward}
-                onStepBackward={stepBackward}
-                onRestart={restart}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={onToggleFullscreen}
-                {...spotlightControlsProps}
-              />
-            )}
-
-            {/* Mobile expand — opt into fullscreen video (inline layout keeps
-                the overlay settings + Add Spotlight/export controls reachable below) */}
-            {isMobile && !mobileFs && effectiveOverlayVideoUrl && (
-              <button
-                onClick={() => setMobileExpanded(true)}
-                className="absolute top-2 right-2 z-10 p-2 min-h-11 min-w-11 flex items-center justify-center rounded-lg bg-black/50 text-white hover:bg-black/70"
-                title="Fullscreen video"
-                aria-label="Expand video to fullscreen"
-              >
-                <Maximize size={18} />
-              </button>
-            )}
-          </div>
+              {/* Settings column — reclaimed pillarbox width, desktop only. Mobile
+                  renders its own copy above the Add Spotlight button (below). */}
+              <div className="hidden lg:block lg:flex-1 lg:min-w-0">
+                {overlaySettingsCard}
+              </div>
+            </div>
+          )}
 
           {/* Mobile-only clip title — minimal, under video (T5670: + game name/clock) */}
           {(videoTitle || (gameName && gameClock)) && !isFullscreen && !mobileFs && (
@@ -774,7 +823,16 @@ export function OverlayModeView({
           </div>
         )}
 
-        {/* Export Button - hidden in fullscreen and on mobile */}
+        {/* Overlay Settings — mobile only (stacked above Add Spotlight). Desktop
+            renders the card beside the video in the two-column stage row (T5676). */}
+        {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
+          <div className="lg:hidden mt-6">
+            {overlaySettingsCard}
+          </div>
+        )}
+
+        {/* Add Spotlight button + export progress — full width at the bottom on
+            all widths (settings moved out to <OverlaySettingsCard>, T5676). */}
         {effectiveOverlayVideoUrl && !isFullscreen && !mobileFs && (
           <OverlayExportButtonSection
             ref={exportButtonRef}
@@ -783,18 +841,6 @@ export function OverlayModeView({
             highlightRegions={getRegionsForExport()}
             highlightEffectType={highlightEffectType}
             onHighlightEffectTypeChange={onHighlightEffectTypeChange}
-            highlightColor={highlightColor}
-            onHighlightColorChange={onHighlightColorChange}
-            highlightShape={highlightShape}
-            onHighlightShapeChange={onHighlightShapeChange}
-            strokeWidth={strokeWidth}
-            fillEnabled={fillEnabled}
-            fillOpacity={fillOpacity}
-            dimStrength={dimStrength}
-            onStrokeWidthChange={onStrokeWidthChange}
-            onFillEnabledChange={onFillEnabledChange}
-            onFillOpacityChange={onFillOpacityChange}
-            onDimStrengthChange={onDimStrengthChange}
             includeAudio={includeAudio}
             onIncludeAudioChange={onIncludeAudioChange}
             onExportComplete={onExportComplete}

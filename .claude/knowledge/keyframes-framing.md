@@ -471,6 +471,30 @@ keyframed** — camera tilt is constant for a recording.
   PlayerDetectionOverlay all consume it (their local copies deleted). `videoToScreen` returns
   `{x,y,width,height}`; Highlight maps width/height→radiusX/radiusY at its call site. Drag handlers
   still hand-roll the inverse (`delta/scaleX`); `screenToVideo` is available if they migrate.
+- **Overlay stage is aspect-fit, not fixed-height (T5676, 2026-07-22).** `VideoPlayer` got an
+  opt-in `fitToAspect` prop: when true (Overlay, `!isFullscreen && !mobileFs`) the
+  `.video-player-container` + `.video-container` are `w-full h-full` (fill their parent) instead of
+  the legacy fixed `h-[40vh] sm:h-[60vh]`. `OverlayModeView` wraps VideoPlayer in a stage box
+  sized to the reel's true aspect via inline `style={{aspectRatio: 'W / H'}}` from
+  `effectiveOverlayMetadata.width/height` (class `stageBoxClass`, useAspectStage branch:
+  `mx-auto w-full max-w-full lg:w-fit lg:h-[70vh] lg:max-h-[70vh]`) → `object-contain` becomes a
+  no-op and the 9:16 pillarbox dies (was ~2/3 black). **`.video-container` is still the
+  ResizeObserver target — do NOT remove the class; resizing it is safe BECAUSE of T5590's RO.**
+  Overlays (`HighlightOverlay`/`PlayerDetectionOverlay`) map via `useVideoDisplayRect` unchanged;
+  since the box now == video aspect, the display rect fills the container (no letterbox math to
+  drift). Fullscreen/`mobileFs` branches are byte-identical (aspect box + `fitToAspect` gated off;
+  CSS `:fullscreen` still forces 100vw/100vh). Desktop `lg+` puts the Overlay Settings card
+  (extracted to `components/OverlaySettingsCard.jsx` from `ExportButtonView`) BESIDE the video in
+  a `lg:flex-row` row (reclaimed pillarbox width); the "Add Spotlight" CTA + progress stay
+  full-width at the bottom; Controls bind to the video width (below the box, inside the
+  `lg:w-fit` video column). `ExportButtonView`'s settings card is now framing-only. Real-browser
+  proof: dev-only harness `aspectdiag.html` + `src/aspectdiag/main.jsx` (NOT a vite build input)
+  mounts the REAL VideoPlayer(fitToAspect) + REAL HighlightOverlay for a 9:16 AND a 16:9 source;
+  `e2e/T5676-aspect-stage-alignment.qa.spec.js` asserts video fills container (no pillarbox) +
+  ellipse inside the video rect at 390/768/1315 (samples fulfilled via `page.route` from /tmp —
+  vite v5 dev caches publicDir at startup so post-start public files 404). Live-account path
+  honest-skips until this account has an exported reel. Vitest `OverlayModeView.aspectStage.test.jsx`
+  pins the aspect-ratio math for both aspects + the two settings-card placements.
 - **Overlay circle input = Pointer Events; edit levers gated on the tracking layer (T5450,
   2026-07-19, SUPERSEDES T5390's select-then-manipulate)**:
   `HighlightOverlay` is `onPointerDown` + `setPointerCapture` (mouse+touch one path); move/up
