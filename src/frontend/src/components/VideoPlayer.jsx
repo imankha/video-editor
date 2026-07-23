@@ -61,7 +61,7 @@ export function VideoPlayer({
   // T5676: when true (Overlay non-fullscreen), the container fills its parent
   // instead of imposing a fixed 40/60vh height — the parent is aspect-sized to
   // the video, so `object-contain` becomes a no-op and the 9:16 pillarbox dies.
-  // Fullscreen ignores this (CSS `:fullscreen` rules force 100vw/100vh).
+  // Fullscreen ignores this (CSS `:fullscreen` rules force the full viewport).
   fitToAspect = false
 }) {
   const isBuffering = useVideoStore((s) => s.isBuffering);

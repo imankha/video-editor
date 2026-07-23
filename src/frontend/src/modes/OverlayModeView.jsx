@@ -239,7 +239,7 @@ export function OverlayModeView({
   // `object-contain` then becomes a no-op (box already == video aspect), and the
   // freed horizontal space carries the Overlay Settings card beside the video on
   // desktop. Only applied when metadata is known and NOT fullscreen/mobileFs —
-  // fullscreen keeps 100vw/100vh (CSS :fullscreen rules) and mobileFs keeps
+  // fullscreen keeps the full viewport (CSS :fullscreen rules) and mobileFs keeps
   // w-full h-full. The `.video-container` ResizeObserver (T5590) makes resizing
   // the box safe for overlay alignment.
   const aspectW = effectiveOverlayMetadata?.width;

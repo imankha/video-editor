@@ -13,7 +13,7 @@ import { describe, it, expect, vi } from 'vitest';
  *
  * These pin: (1) the stage box carries the metadata-derived aspect-ratio for both
  * portrait and landscape reels, (2) it does NOT impose an aspect-ratio in
- * fullscreen (CSS :fullscreen governs 100vw/100vh there), (3) both settings-card
+ * fullscreen (CSS :fullscreen sizes the full viewport there), (3) both settings-card
  * placements render.
  */
 
@@ -82,7 +82,7 @@ describe('OverlayModeView aspect-fit stage (T5676)', () => {
     expect(stage.style.aspectRatio).toBe('1920 / 1080');
   });
 
-  it('does NOT impose an aspect-ratio in fullscreen (CSS governs 100vw/100vh)', () => {
+  it('does NOT impose an aspect-ratio in fullscreen (CSS sizes the full viewport)', () => {
     isMobileMock.mockReturnValue(false);
     renderView({ isFullscreen: true });
     const stage = screen.getByTestId('overlay-video-stage');
