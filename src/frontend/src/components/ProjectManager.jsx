@@ -879,9 +879,10 @@ export function ProjectManager({
           </div>
         ) : (
           <div className="w-full max-w-2xl">
-            {/* Filters - only show when useful */}
+            {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
+                and wrap onto their own line when they don't. */}
             {showFilters && (
-              <div className="mb-3 space-y-1.5">
+              <div className="mb-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
                 {/* Status Filter */}
                 {filterCounts.showStatusFilter && (
                   <div className="flex flex-wrap items-center gap-1.5">
