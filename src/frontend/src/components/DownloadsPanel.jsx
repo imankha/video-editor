@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical, ArrowRightLeft, CheckSquare, Square } from 'lucide-react';
+import { X, Download, Trash2, FolderOpen, Loader, AlertCircle, Video, Play, Image, Columns, Star, Folder, LayoutGrid, Share2, Link2, Pencil, MoreVertical, ArrowRightLeft } from 'lucide-react';
 import { ShareModal } from './ShareModal';
 import { CollectionShareModal } from './CollectionShareModal';
 import { MoveToProfileModal } from './MoveToProfileModal';
@@ -196,52 +196,34 @@ export function DownloadsPanel({
   const [overflowMenuId, setOverflowMenuId] = useState(null);
   const overflowMenuRef = useRef(null);
 
-  // T4850: transfer reels between profiles (multi-athlete accounts). Both the
-  // per-card action and the bulk-select mode are hidden unless the account has
-  // 2+ profiles (there is nowhere to move a reel otherwise).
+  // T4850/T5678: move a reel to a sibling profile (multi-athlete accounts). The
+  // per-reel "Move to profile…" action is hidden unless the account has 2+
+  // profiles (there is nowhere to move a reel otherwise). Batch select mode was
+  // removed in T5678 — moves are one-reel-at-a-time from the card's kebab menu.
   const profiles = useProfileStore((state) => state.profiles);
   const currentProfileId = useProfileStore((state) => state.currentProfileId);
   const otherProfiles = profiles.filter((p) => p.id !== currentProfileId);
   const canMoveProfiles = profiles.length >= 2;
 
-  // Multi-select mode + the ids chosen for a bulk move.
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState(() => new Set());
-  // Ids currently targeted by the Move-to-profile modal (single card or bulk).
+  // Ids currently targeted by the Move-to-profile modal (a single-reel list).
   const [movingIds, setMovingIds] = useState(null);
 
-  const toggleSelected = useCallback((id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const exitSelectMode = useCallback(() => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  }, []);
-
-  // Selections are source-profile-scoped final_video ids; drop them if the active
+  // A stale in-flight move target is source-profile-scoped; drop it if the active
   // profile changes while the panel is mounted (resets local UI only — NOT a
-  // reactive persistence write). Prevents a stale cross-profile selection.
+  // reactive persistence write).
   useEffect(() => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
     setMovingIds(null);
   }, [currentProfileId]);
 
   // Success handler for a completed move: the reels left this profile, so drop
-  // them from the cached member lists, refresh the summary + NEW badge, and clear
-  // any selection. Gesture-driven refresh only — no reactive persistence.
+  // them from the cached member lists, refresh the summary + NEW badge, and close
+  // the picker. Gesture-driven refresh only — no reactive persistence.
   const onReelsMoved = useCallback((movedIds) => {
     movedIds.forEach((id) => collections.removeMember(id));
     collections.fetchSummary();
     useGalleryStore.getState().fetchCount({ force: true });
     setMovingIds(null);
-    exitSelectMode();
-  }, [collections, exitSelectMode]);
+  }, [collections]);
 
   const { moveReels, moving } = useMoveReels(onReelsMoved);
 
@@ -408,30 +390,17 @@ export function DownloadsPanel({
     // (e.g. 50'15"). Only single-clip reels carry a start; multi-clip -> null.
     const gameClock = formatGameClock(download.clip_game_start_time);
 
-    const isSelected = selectedIds.has(download.id);
-
     return (
       <div
         key={download.id}
         data-testid="reel-card"
-        data-selected={isSelected}
-        onClick={selectMode ? () => toggleSelected(download.id) : undefined}
         className={`p-3 bg-gray-700 rounded-lg border transition-colors ${
-          selectMode
-            ? `cursor-pointer ${isSelected ? 'border-cyan-400 ring-1 ring-cyan-400' : 'border-gray-600 hover:border-gray-500'}`
-            : isUnwatched
-              ? `${style.border} border-l-4`
-              : 'border-gray-600 hover:border-gray-500'
+          isUnwatched
+            ? `${style.border} border-l-4`
+            : 'border-gray-600 hover:border-gray-500'
         }`}
       >
         <div className="flex items-center gap-3">
-          {selectMode && (
-            <span className="flex-shrink-0">
-              {isSelected
-                ? <CheckSquare size={20} className="text-cyan-400" />
-                : <Square size={20} className="text-gray-400" />}
-            </span>
-          )}
           {/* Video icon with unwatched dot (shared CardMedia) */}
           <CardMedia
             icon={Video}
@@ -480,9 +449,9 @@ export function DownloadsPanel({
               />
             ) : (
               <div
-                className={`text-white font-medium truncate transition-colors ${selectMode ? '' : 'cursor-pointer hover:text-cyan-300'}`}
-                onClick={selectMode ? undefined : () => { setEditingId(download.id); setEditingName(download.project_name || ''); }}
-                title={selectMode ? undefined : 'Click to rename'}
+                className="text-white font-medium truncate transition-colors cursor-pointer hover:text-cyan-300"
+                onClick={() => { setEditingId(download.id); setEditingName(download.project_name || ''); }}
+                title="Click to rename"
               >
                 {download.project_name}
               </div>
@@ -500,7 +469,6 @@ export function DownloadsPanel({
               {gameClock && <span className="shrink-0" title="Game time">{gameClock}</span>}
             </div>
           </div>
-          {!selectMode && (
           <div className="flex items-center gap-1 flex-shrink-0">
                 <CardIconButton
                   icon={Play}
@@ -673,7 +641,6 @@ export function DownloadsPanel({
                   )}
                 </div>
           </div>
-          )}
         </div>
     </div>
   );
@@ -700,15 +667,6 @@ export function DownloadsPanel({
             )}
           </div>
           <div className="flex items-center gap-1">
-            {canMoveProfiles && (
-              selectMode ? (
-                <Button variant="ghost" size="sm" onClick={exitSelectMode}>Cancel</Button>
-              ) : (
-                <Button variant="ghost" size="sm" icon={CheckSquare} onClick={() => setSelectMode(true)}>
-                  Select
-                </Button>
-              )
-            )}
             <Button
               variant="ghost"
               size="sm"
@@ -718,24 +676,6 @@ export function DownloadsPanel({
             />
           </div>
         </div>
-
-        {/* T4850: bulk-move action bar (multi-select mode) */}
-        {selectMode && (
-          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-gray-900/60 border-b border-gray-700">
-            <span className="text-sm text-gray-300">
-              {selectedIds.size} selected
-            </span>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={ArrowRightLeft}
-              disabled={selectedIds.size === 0}
-              onClick={() => setMovingIds([...selectedIds])}
-            >
-              Move to profile…
-            </Button>
-          </div>
-        )}
 
         {/* Content — single My Reels view (T3610 §0B.1) */}
         <div className="flex-1 overflow-y-auto p-4">
