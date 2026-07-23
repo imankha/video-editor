@@ -160,9 +160,27 @@ export const SCREENS = [
       await reachHome(page);
       const myReels = page.getByRole('button', { name: /My Reels/i }).first();
       await myReels.click();
-      // The DownloadsPanel drawer renders reel-card items when the account has reels.
-      const firstCard = page.getByTestId('reel-card').first();
-      const appeared = await firstCard.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+      // T5673: reels render as poster tiles INSIDE collapsed game/mix groups, so the
+      // drawer shows no reel-card until a group is expanded. Expand the first group
+      // that reveals tiles, so the audit exercises the re-skinned surface (not just
+      // the empty drawer chrome). Still a skip-with-reason if the account has none.
+      let appeared = await page.getByTestId('reel-card').first()
+        .waitFor({ state: 'visible', timeout: 6000 }).then(() => true).catch(() => false);
+      if (!appeared) {
+        // Scope to the drawer panel: the home Reel Drafts section renders its own
+        // CollapsibleGroups behind the backdrop, which are covered (not clickable).
+        const headers = page.locator('.animate-slide-in-right').getByTestId('collapsible-group-header');
+        // Wait for the summary to render group headers before iterating (the drawer
+        // opens before the collections summary finishes fetching).
+        await headers.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+        const n = await headers.count();
+        for (let i = 0; i < n && !appeared; i++) {
+          // Bounded click so a covered/animating header can't stall on the test timeout.
+          await headers.nth(i).click({ timeout: 3000 }).catch(() => {});
+          appeared = await page.getByTestId('reel-card').first()
+            .waitFor({ state: 'visible', timeout: 4000 }).then(() => true).catch(() => false);
+        }
+      }
       if (!appeared) return { ready: false, reason: 'no published reels on this account (My Reels drawer empty)' };
       return { ready: true };
     },
