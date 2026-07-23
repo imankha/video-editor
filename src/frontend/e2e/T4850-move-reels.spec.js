@@ -13,8 +13,8 @@ import { skipOnDeployedTarget, assertSeamAvailable, IS_DEPLOYED_TARGET } from '.
  *
  * Evidence map (acceptance criteria + user QA mandate a-g):
  *   c6  single-profile accounts never see the Move affordance
- *   c1  reel moves A->B via a card gesture; appears in B, gone from A
- *   c2  multiple reels move in one bulk gesture
+ *   c1  reel moves A->B via the per-reel kebab + confirm; appears in B, gone from A
+ *   c2  a second reel moves via the same per-reel action (T5678: no batch mode)
  *   c3  source no longer lists moved reels
  *   4a  moved video PLAYS in target (currentTime advances)
  *   4b  Download works in target (200 + bytes)
@@ -22,7 +22,18 @@ import { skipOnDeployedTarget, assertSeamAvailable, IS_DEPLOYED_TARGET } from '.
  *   4d  Delete in target removes the row
  *   4f  "Open as Draft" is HIDDEN for moved reels (lineage stayed in source)
  *   4g  moving the reel BACK to the original profile works (round-trip)
+ *
+ * T5678: the batch "Select" mode was removed. Move-to-profile is now a per-reel
+ * kebab action followed by a confirm step; there is no Select button anywhere.
  */
+
+// Open the per-reel move flow from the first card's kebab and confirm it.
+async function movePerReel(page, targetName) {
+  await page.getByTitle('More actions').first().click();
+  await page.getByRole('button', { name: /Move to profile/ }).click();
+  await page.getByRole('button', { name: targetName }).click();      // pick profile
+  await page.getByRole('button', { name: /^Move reel/ }).click();    // confirm step
+}
 
 const API_PORT = 8000;
 const API_BASE = process.env.E2E_API_BASE || `http://localhost:${API_PORT}/api`;
@@ -98,24 +109,33 @@ test.describe('T4850 move reels between profiles', () => {
     await request.post(`${API_BASE}/test/ensure-pg-user`, { headers: hdr(A) });
   });
 
-  test('c6: single-profile account never sees the Move affordance', async ({ page, request }) => {
+  test('c6: single-profile account never sees the Move affordance (and no Select button)', async ({ page, request }) => {
     await seedReel(request, A, 'Solo Reel');
     await bootAs(page, A);
+    // T5678: no batch Select button anywhere.
     await expect(page.getByRole('button', { name: 'Select' })).toHaveCount(0);
+    // One profile -> the per-reel kebab has no "Move to profile…" item.
+    await page.getByTitle('More actions').first().click();
+    await expect(page.getByRole('button', { name: /Move to profile/ })).toHaveCount(0);
     await saveEvidence(page, 'criterion-6-single-profile-no-affordance');
+    await page.keyboard.press('Escape');
   });
 
-  test('affordance appears once a 2nd profile exists', async ({ page, request }) => {
+  test('affordance appears in the per-reel menu once a 2nd profile exists', async ({ page, request }) => {
     B = (await (await request.post(`${API_BASE}/profiles`, {
       headers: hdr(A), data: { name: 'Athlete B', color: '#10B981' },
     })).json()).id;
     await request.put(`${API_BASE}/profiles/current`, { headers: hdr(A), data: { profileId: A } });
     await bootAs(page, A);
-    await expect(page.getByRole('button', { name: 'Select' })).toBeVisible();
+    // Still no Select button (T5678); the affordance lives in the kebab.
+    await expect(page.getByRole('button', { name: 'Select' })).toHaveCount(0);
+    await page.getByTitle('More actions').first().click();
+    await expect(page.getByRole('button', { name: /Move to profile/ })).toBeVisible();
     await saveEvidence(page, 'criterion-6-two-profiles-affordance-visible');
+    await page.keyboard.press('Escape');
   });
 
-  test('c1+4b: single reel moves A->B via the card menu; media follows (download 200)', async ({ page, request }) => {
+  test('c1+4b: single reel moves A->B via the kebab + confirm; media follows (download 200)', async ({ page, request }) => {
     const seeded = await seedReel(request, A, 'Wonder Goal');
     const before = await reelCount(request, A);
     const bBefore = await reelCount(request, B);
@@ -128,7 +148,8 @@ test.describe('T4850 move reels between profiles', () => {
     await page.getByTitle('More actions').first().click();
     await page.getByRole('button', { name: /Move to profile/ }).click();
     await saveEvidence(page, 'criterion-1-move-modal');
-    await page.getByRole('button', { name: 'Athlete B' }).click();
+    await page.getByRole('button', { name: 'Athlete B' }).click();      // pick profile
+    await page.getByRole('button', { name: /^Move reel/ }).click();      // confirm step (T5678)
     await page.waitForTimeout(1500);
 
     expect(await reelCount(request, A)).toBe(before - 1);
@@ -187,39 +208,22 @@ test.describe('T4850 move reels between profiles', () => {
     expect(resolved.status(), '4c: public share resolves').toBeLessThan(400);
   });
 
-  test('c2+c3: bulk-select moves several reels in one gesture', async ({ page, request }) => {
-    await seedReel(request, A, 'Bulk One');
-    await seedReel(request, A, 'Bulk Two');
+  test('c2+c3: a second reel moves via the same per-reel action (T5678: no batch mode)', async ({ page, request }) => {
+    await seedReel(request, A, 'Solo Move Two');
     const before = await reelCount(request, A);
     const bBefore = await reelCount(request, B);
 
     await bootAs(page, A);
-    await page.getByRole('button', { name: 'Select' }).click();
-    await page.waitForTimeout(400);
-    // Stable hook on the selectable card root (T5010). The old
-    // `div.cursor-pointer` locator also matched ancestor wrappers with no
-    // onClick, so clicks landed on nothing and the test timed out on the
-    // disabled Move button. getByTestId targets only the real card.
-    const cards = page.getByTestId('reel-card').filter({ hasText: 'Bulk' });
-    const n = await cards.count();
-    expect(n).toBeGreaterThanOrEqual(2);
-    // Assert the "N selected" counter after each click: fail fast on the first
-    // non-registering click instead of waiting 300s on the Move button.
-    for (let i = 0; i < n; i++) {
-      await cards.nth(i).click();
-      await expect(page.getByText(`${i + 1} selected`)).toBeVisible();
-    }
-    await saveEvidence(page, 'criterion-2-bulk-selected');
+    // T5678: no Select button — reels move one at a time from the kebab + confirm.
+    await expect(page.getByRole('button', { name: 'Select' })).toHaveCount(0);
+    await movePerReel(page, 'Athlete B');
+    await page.waitForTimeout(1800);
     await responsiveSweep(page);
 
-    await page.getByRole('button', { name: /Move to profile/ }).click();
-    await page.getByRole('button', { name: 'Athlete B' }).click();
-    await page.waitForTimeout(1800);
-
     const moved = before - (await reelCount(request, A));
-    expect(moved).toBeGreaterThanOrEqual(2);
+    expect(moved).toBe(1);
     expect(await reelCount(request, B)).toBe(bBefore + moved);
-    await saveEvidence(page, 'criterion-3-source-after-bulk-move');
+    await saveEvidence(page, 'criterion-3-source-after-per-reel-move');
   });
 
   test('4d: delete a moved reel in the target profile removes the row', async ({ request }) => {

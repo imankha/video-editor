@@ -39,6 +39,25 @@ describe('useMoveReels', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  it('moves a single reel (post-T5678 per-reel action) and fires onMoved with the singular toast', async () => {
+    apiFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: true, moved_ids: [7], target_profile_id: 'pB' }),
+    });
+    const onMoved = vi.fn();
+    const { result } = renderHook(() => useMoveReels(onMoved));
+
+    let ok;
+    await act(async () => { ok = await result.current.moveReels([7], 'pB'); });
+
+    expect(ok).toBe(true);
+    expect(JSON.parse(apiFetch.mock.calls[0][1].body)).toEqual({ video_ids: [7], target_profile_id: 'pB' });
+    expect(onMoved).toHaveBeenCalledWith([7], 'pB');
+    // Singular copy for the one-reel path.
+    expect(toast.success).toHaveBeenCalledWith('Reel moved', expect.anything());
+  });
+
   it('treats a 503 sync_failed as retryable and does NOT fire onMoved', async () => {
     apiFetch.mockResolvedValue({
       ok: false,

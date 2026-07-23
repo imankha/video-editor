@@ -269,6 +269,29 @@ surface is a *video* product, so drafts scan by image, not text (T5672).
   action set. Actions reveal on `group-hover/tile` (desktop) or long-press (mobile),
   with `coarse-pointer:min-h-[44px]` floors.
 
+### Published-reel tile (`ReelTile`)
+
+The My Reels drawer's poster tile (T5673) — the celebration-surface counterpart to
+`DraftTile`. Same poster idiom (lazy `<img>` → skeleton → branded fallback, bottom
+name/meta scrim, hover/long-press action set) but **without draft-progress chrome**:
+published reels have no Framing/Overlay pipeline, so there is NO `SegmentedProgressStrip`,
+status chip, or "Ready" publish badge.
+
+- **Poster source:** `GET /api/downloads/{id}/poster.jpg` (the owner-facing endpoint
+  for the T5280 publish poster; per-profile, 404 → branded fallback). NOT the draft
+  endpoint (`/api/projects/{id}/poster.jpg`).
+- **Per-reel aspect (differs from DraftTile's fixed 9:16):** a 9:16 reel renders a
+  portrait tile (`w-[42vw] max-w-[168px] sm:w-[150px] aspect-[9/16]`), a 16:9 reel a
+  landscape tile (`w-[72vw] max-w-[300px] sm:w-[260px] aspect-video`). Each ratio
+  collection renders its OWN `CardCarousel`, so tiles in a row share an aspect (rows
+  stay even within a carousel; only across carousels do heights differ).
+- **Actions:** play + share/copy direct, plus a kebab for the overflow set (Download,
+  Copy Link/Share, Rename, Before/After [dev], Open as Draft, **Move to profile…**,
+  Delete). Same `group-hover/tile` / long-press reveal and `coarse-pointer:min-h-[44px]`
+  floors as DraftTile. Rename lives in the kebab (there is no click-the-name affordance).
+- Move-to-profile (T5678) is a per-reel action with a two-step confirm (pick profile →
+  "Move to <name>?"); the old batch **Select** mode was removed from the drawer.
+
 ### Card carousel (`CardCarousel`)
 
 One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentational,
@@ -407,3 +430,4 @@ duration-300         /* panel animations */
 | 2026-02-09 | Initial style guide created | - |
 | 2026-07-22 | Home/card patterns: brand lockup, labeled metadata pills, borderless filter rows, compact resume strip (T5675) | user |
 | 2026-07-23 | Poster tile (`DraftTile`, 9:16, scrim, lazy poster + branded fallback) and card carousel (`CardCarousel`, snap-scroll + fine-pointer chevrons) patterns (T5672) | user |
+| 2026-07-23 | Published-reel tile (`ReelTile`) for the My Reels drawer: DraftTile idiom minus draft chrome, per-reel aspect (9:16/16:9), owner poster endpoint `/api/downloads/{id}/poster.jpg`, tiles laid out in `CardCarousel`; batch Select removed, per-reel Move-to-profile with confirm (T5673/T5678) | user |

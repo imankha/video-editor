@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Loader } from 'lucide-react';
 import { CollapsibleGroup } from '../shared/CollapsibleGroup';
+import { CardCarousel } from '../shared/CardCarousel';
 import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
@@ -95,7 +96,11 @@ export function GameCollectionGroup({
             onCopyLink={onCopyLink}
           />
           {members
-            ? membersFor(ratio).map((d) => renderCard(d))
+            ? (
+                <CardCarousel ariaLabel={`${cardTitle} ${ratio} reels`}>
+                  {membersFor(ratio).map((d) => renderCard(d))}
+                </CardCarousel>
+              )
             : loadingMembers && (
                 <div className="flex justify-center py-3">
                   <Loader size={16} className={`${REEL.accent} animate-spin`} />
