@@ -614,6 +614,169 @@ async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None
         logger.info(f"[RecapPoster] warm-at-share-creation failed for game_id={game_id}: {e}")
 
 
+# ---------------------------------------------------------------------------
+# Draft poster (T5671): a cheap, cacheable thumbnail JPEG for every reel DRAFT
+# so the home-screen tile/carousel redesign (T5672/T5673) has an image per draft.
+# Published reels already get a poster at publish (T5280); drafts did not.
+#
+# Key scheme (per-profile): posters/drafts/{project_id}.jpg -- DETERMINISTIC from
+# the project id, so there is NO new DB column and NO migration (the key is
+# derivable state; storing it would be redundant, per the correct-data rule).
+# Generated on first request from the draft's FIRST clip's source video (clearest
+# frame within the clip's region -- whole-clip heuristic, no slow-mo policy; that
+# is for published finals, T5090). Reuses the clearest-frame + source-resolution
+# helper families; does NOT fork them.
+# ---------------------------------------------------------------------------
+
+DRAFT_POSTER_SUBDIR = "posters/drafts"
+
+
+def draft_poster_rel_path(project_id: int) -> str:
+    """Profile-relative R2 path for a reel DRAFT's poster JPEG (T5671).
+
+    Deterministic from the project id -- no DB column, no migration. Stored
+    under the CURRENT profile prefix like every other per-user artifact
+    (`{env}/users/{user_id}/profiles/{profile_id}/posters/drafts/{id}.jpg`).
+    """
+    return f"{DRAFT_POSTER_SUBDIR}/{project_id}.jpg"
+
+
+def _load_first_clip_for_poster(project_id: int) -> dict | None:
+    """The draft's FIRST working clip (min sort_order, latest version) with the
+    columns `resolve_clip_source` needs, or None when the project has no clips.
+
+    Mirrors the framing render's clip query (`export/framing.py`) column-for-column
+    so the poster's source resolution matches the clip that would actually render.
+    """
+    from ..database import get_db_connection
+    from ..queries import latest_working_clips_subquery
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT
+                wc.id, wc.raw_clip_id, wc.uploaded_filename, wc.sort_order,
+                rc.filename AS raw_filename,
+                rc.game_id, rc.video_sequence,
+                rc.start_time AS raw_start_time, rc.end_time AS raw_end_time,
+                (rc.end_time - rc.start_time) AS raw_duration,
+                COALESCE(gv.blake3_hash, g.blake3_hash) AS game_blake3_hash
+            FROM working_clips wc
+            LEFT JOIN raw_clips rc ON wc.raw_clip_id = rc.id
+            LEFT JOIN games g ON rc.game_id = g.id
+            LEFT JOIN game_videos gv
+                ON rc.game_id = gv.game_id AND rc.video_sequence = gv.sequence
+            WHERE wc.project_id = ?
+              AND wc.id IN ({latest_working_clips_subquery()})
+            ORDER BY wc.sort_order
+            LIMIT 1
+            """,
+            (project_id, project_id),
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def ensure_draft_poster(project_id: int, user_id: str) -> str | None:
+    """Cache-first poster for a reel DRAFT; generate-on-miss (T5671).
+
+    Runs in the CURRENT profile context (the R2 key embeds the ContextVar
+    profile), so call it on the profile that owns the project. Returns the
+    profile-relative R2 path of the poster object when one is available, or None
+    when it could not be produced -- the GET endpoint 404s and the frontend
+    renders its no-poster fallback (no fabricated image, no-silent-fallback rule).
+
+    Steps:
+      1. If the poster object already exists in R2 -> return its path WITHOUT
+         re-running ffmpeg (this is the cache hit; a second GET does no work).
+      2. Load the draft's first clip; no clips -> None.
+      3. Resolve the clip's source (`resolve_clip_source`): game video, else the
+         preserved extract, else the recap. A reclaimed/expired source raises
+         SourceUnavailable -> None (the 404 the spec requires).
+      4. Extract the clearest frame WITHIN the clip's source region (window =
+         the clip's [in, out] offsets -- the whole-clip heuristic scoped to the
+         clip, NOT the slow-mo reel policy) and upload it to the deterministic
+         key.
+
+    Best effort: never raises. Any failure (missing source, ffmpeg, R2) logs at
+    info and returns None.
+    """
+    from ..storage import file_exists_in_r2, upload_bytes_to_r2
+    from .export_helpers import SourceUnavailable, resolve_clip_source
+
+    rel_path = draft_poster_rel_path(project_id)
+    try:
+        # 1. Cache hit: the object is already in R2 -> reuse, no ffmpeg.
+        if file_exists_in_r2(user_id, rel_path):
+            return rel_path
+
+        # 2. First clip (source of the thumbnail).
+        clip = _load_first_clip_for_poster(project_id)
+        if clip is None:
+            logger.info(f"[DraftPoster] project {project_id} has no clips -> no poster")
+            return None
+
+        # 3. Resolve the editable source. A reclaimed/expired source raises
+        #    SourceUnavailable -> None -> 404 (no fabricated image).
+        try:
+            source_url, in_off, out_off, _flexible = resolve_clip_source(clip)
+        except SourceUnavailable:
+            logger.info(
+                f"[DraftPoster] project {project_id} first clip source unavailable "
+                f"(expired/reclaimed) -> no poster"
+            )
+            return None
+
+        # 4. Clearest frame within the clip's region (whole-clip heuristic scoped
+        #    to [in, out]); the helper falls back to the first frame on a bad
+        #    window or ffprobe failure.
+        window = (in_off, out_off) if out_off > in_off else None
+        basename = f"{project_id}.jpg"
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = str(Path(tmp) / basename)
+            if not extract_clearest_frame_jpeg(source_url, out_path, window=window):
+                logger.info(f"[DraftPoster] extraction failed for project {project_id}; no poster")
+                return None
+            data = Path(out_path).read_bytes()
+            dims = _jpeg_dimensions(out_path)
+
+        metadata = {"width": dims[0], "height": dims[1]} if dims else None
+        if not upload_bytes_to_r2(
+            user_id, rel_path, data,
+            fast=True, content_type="image/jpeg", metadata=metadata,
+        ):
+            logger.info(f"[DraftPoster] R2 upload failed for {rel_path}; no poster")
+            return None
+
+        logger.info(f"[DraftPoster] stored {rel_path} ({len(data)} bytes, dims={dims or 'unknown'})")
+        return rel_path
+    except Exception as e:
+        # Never raise: the poster is best-effort; a failure just yields the
+        # frontend fallback tile.
+        logger.info(f"[DraftPoster] project {project_id} poster error: {e}")
+        return None
+
+
+def invalidate_draft_poster(project_id: int) -> None:
+    """Delete a draft's cached poster object so the next GET regenerates it
+    (T5671). Called from the gesture-triggered backend actions that change a
+    project's clip composition (add/remove/reorder) -- the draft's first clip,
+    and thus its thumbnail, may have changed. NO reactive watcher.
+
+    Runs in the CURRENT profile context. Best effort: `delete_from_r2` already
+    swallows R2 errors, and this wrapper never lets an unexpected error escape,
+    so poster invalidation can NEVER fail the parent clip action.
+    """
+    from ..storage import delete_from_r2
+    from ..user_context import get_current_user_id
+
+    try:
+        delete_from_r2(get_current_user_id(), draft_poster_rel_path(project_id))
+    except Exception as e:
+        logger.info(f"[DraftPoster] invalidation failed for project {project_id}: {e}")
+
+
 def backfill_posters(limit: int = 25, dry_run: bool = False, force: bool = False) -> dict:
     """Admin-triggered one-off: generate posters for PUBLISHED reels that have none
     (T4890). Pre-existing reels published before this feature carry no poster, so

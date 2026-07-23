@@ -80,3 +80,20 @@ Give every reel draft a cheap, cacheable poster JPEG:
 - [ ] Changing the draft's first clip serves a fresh poster on next GET
 - [ ] Poster failure does not break clip actions (test with R2 write forced to fail)
 - [ ] Backend tests pass (`run_tests.py` — warn user first: tests wipe dev Postgres)
+
+## Progress Log
+
+- 2026-07-22 (worker, branch `feature/T5671-draft-poster-thumbnails`): Implemented.
+  - `poster.py`: `ensure_draft_poster` (cache-first, clearest frame in the first
+    clip's `[in,out]` region via reused `resolve_clip_source` + `extract_clearest_frame_jpeg`,
+    SourceUnavailable -> None), `invalidate_draft_poster` (best-effort delete, never raises),
+    `draft_poster_rel_path`, `_load_first_clip_for_poster`. Key: `posters/drafts/{id}.jpg`
+    (no DB column, no migration).
+  - `projects.py`: `GET /api/projects/{id}/poster.jpg` + `_serve_draft_poster_jpeg`
+    (session-authed, per-profile presign proxy, 404 on missing source/no clips).
+  - `clips.py`: invalidation wired into add/upload/reorder/remove clip handlers.
+  - Tests: `tests/test_t5671_draft_poster.py` (21 passing). Knowledge doc updated.
+  - QA (live, imankh@gmail.com, project 39): 1st GET 200 image/jpeg 321KB 5.58s
+    (`[DraftPoster] stored`); 2nd GET 0.25s identical bytes, no ffmpeg log = cache hit;
+    reorder gesture -> next GET regenerated (5.67s, fresh store); no-clips draft -> 404;
+    real-data expired-source (SourceUnavailable) -> None -> 404. All acceptance criteria met.
