@@ -1455,7 +1455,11 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
       <div
         className="group relative p-3 sm:p-4 bg-yellow-950/20 rounded-lg border border-yellow-800/40 transition-all hover:bg-yellow-950/30"
       >
-        <div className="flex items-center justify-between">
+        {/* Single row: identity left, action cluster right (wraps below on very narrow
+            screens instead of reserving a dedicated button row). Hierarchy: Recap
+            (primary, only bordered/colored) > Extend (ghost) > Remove (icon-only ghost,
+            expands to a red Confirm on first click). */}
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <Gamepad2 size={18} className="text-yellow-500 flex-shrink-0" />
@@ -1468,39 +1472,40 @@ export function GameCard({ game, onLoad, onDelete, onExtend, onPlayRecap, onShar
             <GameMetaRow game={game} />
           </div>
 
-          {hasAnnotations && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
-              className={`flex-shrink-0 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-base font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
-              title="Watch the recap (annotations and highlights)"
-            >
-              <Play size={18} />
-              Recap
-            </button>
-          )}
-        </div>
-
-        <div className="mt-2 flex items-center justify-center gap-2">
-          {canExtend && (
+          <div className="flex-shrink-0 flex items-center gap-1.5">
+            {hasAnnotations && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPlayRecap?.('annotations'); }}
+                className={`flex items-center justify-center gap-1.5 px-3 py-2 coarse-pointer:min-h-[44px] rounded-lg text-sm font-medium bg-transparent ${GAME.accent} border-2 ${GAME.borderSubtle} hover:bg-green-900/30 hover:text-green-300 hover:border-green-500 transition-all`}
+                title="Watch the recap (annotations and highlights)"
+              >
+                <Play size={16} />
+                Recap
+              </button>
+            )}
+            {canExtend && (
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={RefreshCw}
+                onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
+                title="Extend storage"
+              >
+                Extend
+              </Button>
+            )}
             <Button
-              variant="ghost"
+              variant={showDeleteConfirm ? 'danger' : 'ghost'}
               size="sm"
-              icon={RefreshCw}
-              onClick={(e) => { e.stopPropagation(); onExtend?.(); }}
-              title="Extend storage"
+              icon={Trash2}
+              iconOnly={!showDeleteConfirm}
+              onClick={handleDelete}
+              title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
+              aria-label={showDeleteConfirm ? 'Click again to confirm removal' : 'Remove from list'}
             >
-              Extend Storage
+              {showDeleteConfirm ? 'Confirm' : undefined}
             </Button>
-          )}
-          <Button
-            variant={showDeleteConfirm ? 'danger' : 'ghost'}
-            size="sm"
-            icon={Trash2}
-            onClick={handleDelete}
-            title={showDeleteConfirm ? 'Click again to confirm' : 'Remove from list'}
-          >
-            Remove
-          </Button>
+          </div>
         </div>
       </div>
     );
