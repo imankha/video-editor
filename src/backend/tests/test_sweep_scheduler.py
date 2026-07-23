@@ -7,10 +7,10 @@ _run_sweep_loop delay calculation, keepalive, and error handling.
 
 import asyncio
 import sqlite3
-import time
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch, MagicMock, AsyncMock
 
 M = "app.services.sweep_scheduler"
 
@@ -25,8 +25,8 @@ PROFILE_ID = "testdefault"
 @pytest.fixture(autouse=True)
 def isolated_profile_db(tmp_path):
     """Create isolated profile.sqlite with games + game_videos + game_storage tables."""
-    from app.user_context import set_current_user_id
     from app.profile_context import set_current_profile_id
+    from app.user_context import set_current_user_id
 
     set_current_user_id(USER_ID)
     set_current_profile_id(PROFILE_ID)
@@ -134,11 +134,23 @@ def _insert_game_video(db_path, game_id, blake3_hash, sequence):
 
 def _insert_expired_storage(db_path, blake3_hash):
     """Insert an expired game_storage row directly into SQLite."""
-    past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     conn = sqlite3.connect(str(db_path))
     conn.execute(
         "INSERT OR IGNORE INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) VALUES (?, 1000, ?)",
         (blake3_hash, past),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _insert_live_storage(db_path, blake3_hash):
+    """Insert a LIVE (future-expiry) game_storage row — a profile still wants it."""
+    future = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "INSERT OR IGNORE INTO game_storage (blake3_hash, game_size_bytes, storage_expires_at) VALUES (?, 1000, ?)",
+        (blake3_hash, future),
     )
     conn.commit()
     conn.close()
@@ -211,8 +223,8 @@ class TestFindGamesForHash:
 
     def test_failed_at_cap_excluded(self, isolated_profile_db):
         """A failed export that exhausted its retries is not re-selected."""
-        from app.services.sweep_scheduler import _find_games_for_hash
         from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import _find_games_for_hash
 
         db = isolated_profile_db["db_path"]
         _insert_game(db, blake3_hash="hash_a", status="failed", attempts=MAX_AUTO_EXPORT_ATTEMPTS)
@@ -260,7 +272,7 @@ class TestDoSweep:
         mock_delete_ref, mock_has_remaining, mock_insert_grace,
         mock_grace_expired, isolated_profile_db
     ):
-        from app.services.sweep_scheduler import do_sweep, GRACE_PERIOD_DAYS
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
 
         db = isolated_profile_db["db_path"]
         game_id = _insert_game(db, blake3_hash="hash_abc")
@@ -345,7 +357,7 @@ class TestDoSweep:
 
         db = isolated_profile_db["db_path"]
         # Mock mirrors auto_export_game's failure path: status='failed', one attempt used.
-        gid = _insert_game(db, blake3_hash="hash_abc")
+        _insert_game(db, blake3_hash="hash_abc")
         mock_export.side_effect = lambda u, p, g: (
             _set_attempts_and_status(db, g, status="failed", attempts=1) or "failed"
         )
@@ -371,8 +383,8 @@ class TestDoSweep:
     ):
         """A failed export that exhausted the retry cap is no longer retryable, so
         the sweep reclaims the ref + schedules source deletion."""
-        from app.services.sweep_scheduler import do_sweep, GRACE_PERIOD_DAYS
         from app.services.auto_export import MAX_AUTO_EXPORT_ATTEMPTS
+        from app.services.sweep_scheduler import GRACE_PERIOD_DAYS, do_sweep
 
         db = isolated_profile_db["db_path"]
         # Already at the cap with status='failed' -> excluded from _find_games_for_hash,
@@ -427,6 +439,7 @@ class TestDoSweep:
     @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
     def test_sweep_timing_logged(self, mock_users, mock_profiles, mock_expired, mock_grace, isolated_profile_db, caplog):
         import logging
+
         from app.services.sweep_scheduler import do_sweep
 
         with caplog.at_level(logging.INFO, logger="app.services.sweep_scheduler"):
@@ -449,6 +462,7 @@ class TestDoSweep:
         mock_grace_expired, isolated_profile_db, caplog
     ):
         import logging
+
         from app.services.sweep_scheduler import do_sweep
 
         db = isolated_profile_db["db_path"]
@@ -461,6 +475,95 @@ class TestDoSweep:
 
 
 # ---------------------------------------------------------------------------
+# Root-cause guard: never delete an R2 video while a live ref exists
+# ---------------------------------------------------------------------------
+
+class TestGraceDeletionLiveRefGuard:
+    """The bug that lost imankh games 2/3/5: the grace deletion fires off a
+    drift-prone counter (game_ref_counts.ref_count <= 0) and permanently deletes
+    a video that a profile still holds a live, non-expired ref to."""
+
+    @patch(f"{M}.heal_ref_count")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_live"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_grace_delete_aborted_when_live_ref_exists(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_heal, isolated_profile_db
+    ):
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_live_storage(db, "hash_live")  # a profile still wants this video
+
+        do_sweep()
+
+        mock_r2_delete.assert_not_called()               # video NOT destroyed
+        mock_del_grace.assert_called_once_with("hash_live")  # grace canceled
+        mock_heal.assert_called_once_with("hash_live", 1)    # counter healed to truth
+
+    @patch(f"{M}.heal_ref_count")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_old"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_grace_delete_proceeds_when_only_expired_refs(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_heal, isolated_profile_db
+    ):
+        from app.services.sweep_scheduler import do_sweep
+
+        db = isolated_profile_db["db_path"]
+        _insert_expired_storage(db, "hash_old")  # only an expired ref -> safe to delete
+
+        do_sweep()
+
+        mock_r2_delete.assert_called_once_with("games/hash_old.mp4")
+        mock_del_grace.assert_called_once_with("hash_old")
+        mock_heal.assert_not_called()
+
+
+class TestDeleteRefCounterDrift:
+    """delete_ref must not drive game_ref_counts.ref_count below the true number
+    of live refs — that is what makes the sweep delete a still-wanted video."""
+
+    def test_skips_pg_decrement_when_no_row_existed(self, isolated_profile_db):
+        from app.services import auth_db
+
+        # No game_storage row for this hash: a decrement here would under-count.
+        with patch("app.services.auth_db.get_pg") as mock_pg:
+            auth_db.delete_ref(USER_ID, PROFILE_ID, "never_existed")
+            mock_pg.assert_not_called()
+
+    def test_decrements_with_floor_when_row_existed(self, isolated_profile_db):
+        from app.services import auth_db
+
+        db = isolated_profile_db["db_path"]
+        _insert_expired_storage(db, "hash_x")
+
+        mock_cur = MagicMock()
+        mock_pg = MagicMock()
+        mock_pg.return_value.__enter__.return_value.cursor.return_value = mock_cur
+        with patch("app.services.auth_db.get_pg", mock_pg):
+            auth_db.delete_ref(USER_ID, PROFILE_ID, "hash_x")
+
+        sql = mock_cur.execute.call_args[0][0]
+        assert "GREATEST(ref_count - 1, 0)" in sql  # floored, never negative
+        # SQLite row actually removed
+        conn = sqlite3.connect(str(db))
+        remaining = conn.execute(
+            "SELECT COUNT(*) FROM game_storage WHERE blake3_hash='hash_x'"
+        ).fetchone()[0]
+        conn.close()
+        assert remaining == 0
+
+
+# ---------------------------------------------------------------------------
 # start/stop sweep loop tests
 # ---------------------------------------------------------------------------
 
@@ -469,7 +572,7 @@ class TestSweepLoopLifecycle:
     async def test_start_creates_task(self, isolated_profile_db):
         import app.services.sweep_scheduler as sched
 
-        with patch.object(sched, "_run_sweep_loop", new_callable=AsyncMock) as mock_loop:
+        with patch.object(sched, "_run_sweep_loop", new_callable=AsyncMock):
             await sched.start_sweep_loop()
             assert sched._sweep_task is not None
 
@@ -580,7 +683,7 @@ class TestRunSweepLoop:
     async def test_loop_clamps_delay_to_min(self, isolated_profile_db):
         import app.services.sweep_scheduler as sched
 
-        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        past = datetime.now(UTC) - timedelta(hours=1)
         sleep_delays = []
 
         async def _mock_sleep(delay):
@@ -603,7 +706,7 @@ class TestRunSweepLoop:
     async def test_loop_clamps_delay_to_max(self, isolated_profile_db):
         import app.services.sweep_scheduler as sched
 
-        future = datetime.now(timezone.utc) + timedelta(hours=48)
+        future = datetime.now(UTC) + timedelta(hours=48)
         sleep_delays = []
 
         async def _mock_sleep(delay):
@@ -653,7 +756,7 @@ class TestRunSweepLoop:
     async def test_loop_normal_delay(self, isolated_profile_db):
         import app.services.sweep_scheduler as sched
 
-        future = datetime.now(timezone.utc) + timedelta(hours=2)
+        future = datetime.now(UTC) + timedelta(hours=2)
         sleep_delays = []
 
         async def _mock_sleep(delay):

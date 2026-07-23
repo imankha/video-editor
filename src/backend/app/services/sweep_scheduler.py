@@ -16,6 +16,7 @@ from ..profile_context import set_current_profile_id
 from ..storage import r2_delete_object_global
 from ..user_context import set_current_user_id
 from .auth_db import (
+    count_refs_in_profile,
     delete_grace_deletion,
     delete_ref,
     expire_game_storage,
@@ -23,6 +24,7 @@ from .auth_db import (
     get_expired_refs_for_profile,
     get_next_expiry,
     has_remaining_refs,
+    heal_ref_count,
     insert_grace_deletion,
 )
 from .auto_export import MAX_AUTO_EXPORT_ATTEMPTS, auto_export_game
@@ -163,6 +165,24 @@ def do_sweep():
     if grace_expired:
         logger.info(f"[Sweep] Phase 2: deleting {len(grace_expired)} grace-expired R2 objects")
     for blake3_hash in grace_expired:
+        # AUTHORITATIVE GATE (source of truth, not the drift-prone counter):
+        # before permanently deleting the R2 source, verify no profile still
+        # holds a LIVE (non-expired) game_storage ref for this hash.  The
+        # grace deletion was queued off game_ref_counts.ref_count <= 0, which
+        # can be wrong (the counter drifts — see delete_ref / heal_ref_count).
+        # Deleting while a live ref exists strands a user with a "ready" game
+        # and a 404 video (the bug that lost imankh games 2/3/5).
+        total_refs, live_refs = _count_refs_all_profiles(blake3_hash, users)
+        if live_refs > 0:
+            logger.error(
+                f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
+                f"ref(s) still exist across profiles; canceling grace deletion and "
+                f"healing ref_count {total_refs}"
+            )
+            delete_grace_deletion(blake3_hash)
+            heal_ref_count(blake3_hash, total_refs)
+            continue
+
         r2_delete_object_global(f"games/{blake3_hash}.mp4")
         delete_grace_deletion(blake3_hash)
         logger.info(f"[Sweep] Deleted R2 object hash={blake3_hash[:12]} (grace expired)")
@@ -179,6 +199,41 @@ def do_sweep():
 
     elapsed = time.perf_counter() - t0
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
+
+
+def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int]:
+    """Sum (total_refs, live_refs) for a hash across all initialized profiles.
+
+    live_refs > 0 means at least one profile still holds a non-expired
+    game_storage ref — the video is still wanted and must NOT be deleted.
+    Reads local profile DBs (already downloaded by Phase 1 this same sweep), so
+    this is cheap and only runs for the rare grace-expired hashes in Phase 2.
+    """
+    from ..database import USER_DATA_BASE
+    from ..migrations import _get_profile_ids
+
+    total = live = 0
+    for user in users:
+        user_id = user["user_id"]
+        for profile_id in _get_profile_ids(user_id):
+            db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
+            if not db_path.exists():
+                continue
+            set_current_user_id(user_id)
+            set_current_profile_id(profile_id)
+            try:
+                t, live_n = count_refs_in_profile(blake3_hash)
+                total += t
+                live += live_n
+            except Exception:
+                # A profile we cannot read is indeterminate — treat as a live
+                # ref so we never delete a video on incomplete information.
+                logger.exception(
+                    f"[Sweep] count_refs_in_profile failed for "
+                    f"user={user_id[:8]} profile={profile_id[:8]} — assuming live ref"
+                )
+                live += 1
+    return total, live
 
 
 def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:

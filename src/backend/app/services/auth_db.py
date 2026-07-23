@@ -166,14 +166,17 @@ def validate_session(session_id: str) -> dict | None:
     impersonation_expires_at = row["impersonation_expires_at"]
 
     # T1510: impersonation TTL enforcement
-    if impersonator_user_id and impersonation_expires_at:
-        if impersonation_expires_at < datetime.now(UTC):
-            try:
-                log_impersonation(impersonator_user_id, user_id, "expire", None, None)
-            except Exception:
-                logger.exception("[AuthDB] Failed to write impersonation expire audit")
-            invalidate_session(session_id)
-            return None
+    if (
+        impersonator_user_id
+        and impersonation_expires_at
+        and impersonation_expires_at < datetime.now(UTC)
+    ):
+        try:
+            log_impersonation(impersonator_user_id, user_id, "expire", None, None)
+        except Exception:
+            logger.exception("[AuthDB] Failed to write impersonation expire audit")
+        invalidate_session(session_id)
+        return None
 
     result = {
         "user_id": user_id,
@@ -450,14 +453,62 @@ def delete_ref(user_id: str, profile_id: str, blake3_hash: str) -> None:
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM game_storage WHERE blake3_hash = ?", (blake3_hash,))
+        row_existed = cursor.rowcount > 0
         conn.commit()
 
+    # Only decrement the shared counter when this profile actually held a ref.
+    # A no-op delete (double-delete, or a hash whose row was already gone) that
+    # still decremented would drive ref_count below the true number of live
+    # refs — and the sweep treats ref_count <= 0 as "no one wants this video"
+    # and permanently deletes the R2 source.  That is exactly how non-expired
+    # game videos were lost (imankh games 2/3/5).  Floor at 0 as defence in
+    # depth against any residual drift.
+    if not row_existed:
+        return
     with get_pg() as pg_conn:
         cur = pg_conn.cursor()
         cur.execute(
-            "UPDATE game_ref_counts SET ref_count = ref_count - 1 WHERE blake3_hash = %s",
+            "UPDATE game_ref_counts SET ref_count = GREATEST(ref_count - 1, 0) "
+            "WHERE blake3_hash = %s",
             (blake3_hash,),
         )
+
+
+def count_refs_in_profile(blake3_hash: str) -> tuple[int, int]:
+    """Count game_storage rows for a hash in the CURRENT profile (SQLite).
+
+    Returns (total_rows, live_rows) where live_rows are refs whose
+    storage_expires_at is still in the future (a profile that still wants the
+    video).  Used by the sweep to verify — against the source of truth, the
+    per-profile game_storage rows — that no one still holds the video before
+    permanently deleting its R2 source.  Ambiguous/unparseable expiries count as
+    LIVE (conservative: never let a parse failure trigger an irreversible delete).
+    """
+    from ..database import get_db_connection
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            "SELECT storage_expires_at FROM game_storage WHERE blake3_hash = ?",
+            (blake3_hash,),
+        ).fetchall()
+
+    total = len(rows)
+    live = 0
+    now = datetime.now(UTC)
+    for r in rows:
+        exp = r["storage_expires_at"]
+        if not exp:
+            continue  # no expiry recorded -> treat as expired, not live
+        try:
+            exp_dt = datetime.fromisoformat(str(exp))
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=UTC)
+            if exp_dt >= now:
+                live += 1
+        except (ValueError, TypeError):
+            live += 1  # unparseable -> conservative: count as live
+    return total, live
 
 
 def has_remaining_refs(blake3_hash: str) -> bool:
@@ -478,6 +529,22 @@ def get_all_ref_hashes(user_id: str | None = None) -> set[str]:
         cursor = conn.cursor()
         rows = cursor.execute("SELECT blake3_hash FROM game_storage").fetchall()
         return {r["blake3_hash"] for r in rows}
+
+
+def heal_ref_count(blake3_hash: str, true_count: int) -> None:
+    """Force game_ref_counts.ref_count to a recomputed true value.
+
+    The counter is redundant, hand-maintained state that can drift out of sync
+    with the per-profile game_storage rows (the source of truth).  When the
+    sweep discovers a drift while deciding whether to delete an R2 object, it
+    heals the counter to the count it just derived from the profile DBs.
+    """
+    with get_pg() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE game_ref_counts SET ref_count = %s WHERE blake3_hash = %s",
+            (true_count, blake3_hash),
+        )
 
 
 def get_next_expiry() -> datetime | None:
