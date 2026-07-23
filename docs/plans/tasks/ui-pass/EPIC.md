@@ -83,6 +83,7 @@ Annotate, Framing, and Overlay. Code map from a parallel audit of `ProjectManage
 | T5675 | [Home header/hero + games-card legibility](T5675-home-hero-legibility.md) | IN PROGRESS |
 | T5676 | [Aspect-aware video stage (kill the 9:16 pillarbox)](T5676-aspect-aware-video-stage.md) | IN PROGRESS |
 | T5677 | [Home tab deep-links + unknown-route fallback](T5677-home-deeplinks-route-fallback.md) | IN PROGRESS |
+| T5678 | [Remove batch Select flow from My Reels](T5678-remove-batch-select-my-reels.md) — bundled into the T5673 worker | TODO |
 
 T5671 → T5672 → T5673 are sequenced (thumbnails unlock tiles). T5674–T5677 are independent of
 the tile track and of each other; they may run in parallel workers (file-ownership check: T5675
