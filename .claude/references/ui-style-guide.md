@@ -292,6 +292,38 @@ status chip, or "Ready" publish badge.
 - Move-to-profile (T5678) is a per-reel action with a two-step confirm (pick profile →
   "Move to <name>?"); the old batch **Select** mode was removed from the drawer.
 
+### Game tile (`GameTile`)
+
+The Games tab's poster tile (T5681) — a landscape **16:9** tile (game footage aspect)
+rendered in a chronological responsive grid. Unlike DraftTile (portrait, single-game
+progress pipeline) and ReelTile (per-profile reel aspect), GameTile uses a fixed
+landscape aspect and groups games by month with game-count badges.
+
+- **Poster source:** `GET /api/games/{id}/poster.jpg` (owner-facing endpoint for the
+  game's recap poster; per-profile, generate-on-first-request, 404 → branded fallback).
+- **Grid layout:** Responsive CSS grid:
+  - Mobile (390px): `grid-cols-2` gap-2
+  - Tablet (768px): `grid-cols-3` gap-3
+  - Desktop (1280px+): `grid-cols-6` gap-4
+- **Minimal overlay** (always visible): bottom gradient scrim `from-black/90 via-black/40
+  to-transparent`, contains date + clip count in `text-xs` (no game name on tile).
+- **Expiry chip** (top-right, if applicable): `bg-yellow-900/70 text-yellow-300`,
+  shows "Expired" or "{N}d left" (days until expiry). Only visible on near/expired games.
+- **Expired variant:** `grayscale filter opacity-60` on the poster, border `border-yellow-800/40`
+  instead of `border-gray-700`, primary action is Extend (if eligible) or Play Recap (fallback).
+- **Actions** (reveal on `group-hover:` desktop / long-press 500ms mobile):
+  - Play Recap (if recap exists)
+  - Share Game (not on expired games)
+  - Edit Game (always)
+  - Extend Storage (if near/expired & eligible)
+  - Delete Game (with 3s confirm on second click)
+- **Poster loading:** Skeleton pulse (gray-700 animate-pulse) until loaded; 404 → branded
+  fallback (⚾ icon + "Reel Ballers" + "No poster" text on a gradient to-gray-900).
+- **Month grouping:** Games sorted chronological descending (newest first), grouped by
+  "Month Year" (e.g. "September 2026"). Header shows count badge: "September 2026 • 6 games".
+- **Container width:** `max-w-6xl` (same as the Reel Drafts grid to maximize canvas for
+  landscape tiles). Games tab only; Projects tab stays `max-w-6xl` (Reel Drafts).
+
 ### Card carousel (`CardCarousel`)
 
 One horizontal, snap-scrolling row per group (e.g. a game's drafts). Presentational,
@@ -431,3 +463,4 @@ duration-300         /* panel animations */
 | 2026-07-22 | Home/card patterns: brand lockup, labeled metadata pills, borderless filter rows, compact resume strip (T5675) | user |
 | 2026-07-23 | Poster tile (`DraftTile`, 9:16, scrim, lazy poster + branded fallback) and card carousel (`CardCarousel`, snap-scroll + fine-pointer chevrons) patterns (T5672) | user |
 | 2026-07-23 | Published-reel tile (`ReelTile`) for the My Reels drawer: DraftTile idiom minus draft chrome, per-reel aspect (9:16/16:9), owner poster endpoint `/api/downloads/{id}/poster.jpg`, tiles laid out in `CardCarousel`; batch Select removed, per-reel Move-to-profile with confirm (T5673/T5678) | user |
+| 2026-07-24 | Games tab poster grid (`GameTile`, 16:9 landscape, chronological grid 2-up mobile / 3-up tablet / 6-up desktop, month grouping with game-count badges, minimal overlay date+clip-count, top-right expiry chip, grayscale expired variant, poster endpoint `/api/games/{id}/poster.jpg`) (T5681) | user |
