@@ -5,7 +5,7 @@ import { CardCarousel } from '../shared/CardCarousel';
 import { CollectionCard } from './CollectionCard';
 import { RatioUnlockGroup } from './RatioUnlockGroup';
 import { REEL } from '../../config/themeColors';
-import { RATIO_ORDER } from '../../constants/aspectRatios';
+import { RATIO_ORDER, splitByAspect } from '../../constants/aspectRatios';
 import { compareGameTime } from '../../utils/timeFormat';
 
 /**
@@ -15,6 +15,13 @@ import { compareGameTime } from '../../utils/timeFormat';
  * Renders one CollectionCard per eligible ratio (budget slider + Play-all),
  * each followed by that ratio's browsable clips; sub-30s ratios render as
  * RatioUnlockGroups. Members load lazily on first expand.
+ *
+ * A group whose reels mix aspects (both 9:16 and 16:9 present) already
+ * renders as separate rows this way, one per ratio, portrait first -- but the
+ * only ratio indicator was the CollectionCard/RatioUnlockGroup glyph (▯/▭,
+ * legible via tooltip only). When more than one ratio is present, a small
+ * "9:16"/"16:9" text chip is shown above each row so the split is legible at
+ * a glance (T5672); a single-aspect group renders with no chip, unchanged.
  *
  * @param {string}   name           - group header name (game name / "Mixes & compilations")
  * @param {Object}   collection     - RatioBucketed bucket from the summary
@@ -49,6 +56,13 @@ export function GameCollectionGroup({
   const subThresholdRatios = RATIO_ORDER.filter(
     (r) => !ratioEligible[r] && (ratioCounts[r] || 0) > 0,
   );
+  // Two rows already render whenever a game/mixes group mixes aspects (one
+  // per ratio, portrait first) via the eligible/sub-threshold split above --
+  // but the only ratio indicator on those rows was a glyph (▯/▭) with no
+  // legible text, easy to miss (T5672). Show a small "9:16"/"16:9" chip per
+  // row, but only when there's more than one row to distinguish -- a
+  // single-aspect group keeps its current no-chrome look.
+  const isMultiAspect = eligibleRatios.length + subThresholdRatios.length > 1;
 
   // Inside a GAME group the play-all collection reads "Game Highlights" (T4810);
   // the CollapsibleGroup header still shows the game name, so two games stay
@@ -65,11 +79,15 @@ export function GameCollectionGroup({
   }, []);
 
   // Order each ratio's reels by their in-game time so My Reels matches the
-  // annotation clip-list order (T4080); multi-clip reels (null start) sort last.
-  const membersFor = (ratio) =>
-    (members || [])
-      .filter((m) => m.aspect_ratio === ratio)
-      .sort((a, b) => compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
+  // annotation clip-list order (T4080); multi-clip reels (null start) sort
+  // last -- then bucket by ratio (shared splitByAspect, portrait first).
+  const sortedMembers = (members || [])
+    .slice()
+    .sort((a, b) => compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
+  const membersByRatio = Object.fromEntries(
+    splitByAspect(sortedMembers).map((bucket) => [bucket.ratio, bucket.projects]),
+  );
+  const membersFor = (ratio) => membersByRatio[ratio] || [];
   const loadingMembers = memberState === 'loading' || memberState === undefined;
 
   return (
@@ -82,6 +100,11 @@ export function GameCollectionGroup({
     >
       {eligibleRatios.map((ratio) => (
         <div key={`elig-${ratio}`} className="space-y-2 mb-2">
+          {isMultiAspect && (
+            <span className="inline-block text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+              {ratio}
+            </span>
+          )}
           <CollectionCard
             title={cardTitle}
             playTitle={name}
@@ -111,14 +134,20 @@ export function GameCollectionGroup({
       ))}
 
       {subThresholdRatios.map((ratio) => (
-        <RatioUnlockGroup
-          key={`sub-${ratio}`}
-          name={cardTitle}
-          ratio={ratio}
-          currentSec={ratioDurations[ratio]}
-          reels={members ? membersFor(ratio) : []}
-          renderCard={renderCard}
-        />
+        <div key={`sub-${ratio}`}>
+          {isMultiAspect && (
+            <span className="inline-block text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+              {ratio}
+            </span>
+          )}
+          <RatioUnlockGroup
+            name={cardTitle}
+            ratio={ratio}
+            currentSec={ratioDurations[ratio]}
+            reels={members ? membersFor(ratio) : []}
+            renderCard={renderCard}
+          />
+        </div>
       ))}
     </CollapsibleGroup>
   );
