@@ -4,7 +4,7 @@
 **Impact:** 8
 **Complexity:** 5
 **Created:** 2026-07-12
-**Updated:** 2026-07-12
+**Updated:** 2026-07-24 (moved into monetization-pass epic; pre-flight export cost carved out to T5790)
 
 ## Problem
 
@@ -12,13 +12,13 @@ User direction (2026-07-12): "What you get for your credits should be clear. Can
 
 Two gaps, one pricing + one transparency:
 
-**Pricing.** Packs currently sell at 10.0c / 8.2c / 7.2c per credit (`CREDIT_PACKS`, [payments.py:67-71](../../src/backend/app/routers/payments.py#L67)). The original pricing analysis (T520) was never completed — packs shipped without it. This task supersedes T520.
+**Pricing.** Packs currently sell at 10.0c / 8.2c / 7.2c per credit (`CREDIT_PACKS`, [payments.py:67-71](../../../src/backend/app/routers/payments.py#L67)). The original pricing analysis (T520) was never completed — packs shipped without it. This task supersedes T520.
 
 **Transparency.** Users can't tell what a credit buys or when they're spent:
-- Pack cards say "~3 clips / ~6 clips / ~14 clips" ([BuyCreditsModal.jsx:45-76](../../src/frontend/src/components/BuyCreditsModal.jsx#L45)) — nowhere does the UI state the actual rule: **1 credit = 1 second of exported video**.
-- The export flow computes the exact cost pre-flight ([ExportButtonContainer.jsx:535-558](../../src/frontend/src/containers/ExportButtonContainer.jsx#L535)) but only shows it when the user CAN'T afford it (insufficient-credits modal). A user who can afford it spends N credits with zero upfront notice.
+- Pack cards say "~3 clips / ~6 clips / ~14 clips" ([BuyCreditsModal.jsx:45-76](../../../src/frontend/src/components/BuyCreditsModal.jsx#L45)) — nowhere does the UI state the actual rule: **1 credit = 1 second of exported video**.
+- The export flow computes the exact cost pre-flight ([ExportButtonContainer.jsx:535-558](../../../src/frontend/src/containers/ExportButtonContainer.jsx#L535)) but only shows it when the user CAN'T afford it (insufficient-credits modal). A user who can afford it spends N credits with zero upfront notice.
 - Upload cost (storage-based, +1 auto-export surcharge) is charged at game activation with no explanation of the formula or the 30-day storage window it buys.
-- A `/credits/transactions` endpoint exists ([credits.py:53](../../src/backend/app/routers/credits.py#L53)) but there's no user-facing usage history.
+- A `/credits/transactions` endpoint exists ([credits.py:53](../../../src/backend/app/routers/credits.py#L53)) but there's no user-facing usage history.
 - What's FREE (spotlight render, player detection, downloads, sharing, storage of exported reels) is never stated — users may assume everything costs credits.
 
 ## Investigation Findings (2026-07-12, this task's economic basis)
@@ -26,7 +26,7 @@ Two gaps, one pricing + one transparency:
 ### Consumption model (code ground truth)
 | Action | Credits | Where |
 |---|---|---|
-| Game upload (30d storage) | `ceil(GB x $0.015 x 1.1 / $0.072)` + 1 surcharge; typical 2-6GB game = 2-3 cr | [storage_credits.py](../../src/backend/app/services/storage_credits.py), games.py:724 |
+| Game upload (30d storage) | `ceil(GB x $0.015 x 1.1 / $0.072)` + 1 surcharge; typical 2-6GB game = 2-3 cr | [storage_credits.py](../../../src/backend/app/services/storage_credits.py), games.py:724 |
 | Framing export (single + multi-clip) | `ceil(video_seconds)` — 1 cr/sec | exports.py:594, multi_clip.py:1971 |
 | Storage extension | size x days formula | games.py:1230 |
 | Spotlight/overlay render (2nd Modal pass) | **FREE** (no deduction in overlay.py) | — |
@@ -44,7 +44,7 @@ Two gaps, one pricing + one transparency:
 **Yes — comfortably profitable.** At 5c/credit the estimated gross margin on marginal cloud cost is ~90% (vs ~93% at 7.2c). GPU cost is ~10x below even the reduced price; current prices are value-based, not cost-forced. Fixed infra (Fly VMs, Postgres) is volume-independent and fine to run lean during growth, per user intent. Free-user liability: a fully-quested free account (88 cr) costs us ~$0.40-0.45 marginal — cheap acquisition.
 
 ### Caveats the implementation must handle
-1. `CREDIT_VALUE = 0.072` is hardcoded in [storage_credits.py:19](../../src/backend/app/services/storage_credits.py#L19) as "worst-case per-credit" — it converts $ storage cost into credits. Repricing to 5c means updating it to the new worst-case (0.05), which makes uploads cost slightly MORE credits (4GB: 2 -> 3 cr incl. surcharge) while costing users less in $. Keep formula cost-recovering.
+1. `CREDIT_VALUE = 0.072` is hardcoded in [storage_credits.py:19](../../../src/backend/app/services/storage_credits.py#L19) as "worst-case per-credit" — it converts $ storage cost into credits. Repricing to 5c means updating it to the new worst-case (0.05), which makes uploads cost slightly MORE credits (4GB: 2 -> 3 cr incl. surcharge) while costing users less in $. Keep formula cost-recovering.
 2. Pack definitions are **duplicated** (backend `CREDIT_PACKS` + frontend `PACKS` display copy). Single-source them: extend the existing `/payments/config` endpoint to return packs; frontend renders from it (leverage existing systems, no new parallel config).
 3. Existing balances are unaffected (consumption rules unchanged; a cheaper price for future purchases strictly benefits users). No migration.
 4. In-flight Stripe sessions carry pack metadata; deploy is safe (grant reads metadata, not current constants) — verify.
@@ -74,7 +74,7 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 
 ### Workstream B — "What you get" transparency
 1. **State the rule everywhere credits appear:** "1 credit = 1 second of exported video" on pack cards (with honest per-pack conversion: "80 credits = 80 seconds ≈ 6 clips"), in the buy modal, and in a compact "How credits work" explainer (buy modal link + help surface): what costs credits (export seconds, upload storage/30 days), what's free (spotlight, detection, downloads, sharing), credits never expire.
-2. **Pre-flight cost display:** Export/Add Spotlight primary button area shows the cost BEFORE click ("Export · 14 credits") using the already-computed `getRequiredCredits(totalVideoSeconds)` — surface it always, not only on insufficiency. Same for upload: show the storage cost + what it includes (30 days) before activation ([storageCost.js](../../src/frontend/src/utils/storageCost.js) exists for this).
+2. **Pre-flight cost display:** ~~Export button shows the cost BEFORE click~~ **CARVED OUT to [T5790](T5790-export-credit-cost-estimate.md)** (2026-07-24, epic restructure — do NOT rebuild here; consume its `estimatedCredits` derivation if this task's surfaces need the number). What REMAINS in this task: the upload-side preview — show the storage cost + what it includes (30 days) before activation ([storageCost.js](../../../src/frontend/src/utils/storageCost.js) exists for this).
 3. **Usage history:** minimal transactions view (source, amount, date, running balance) fed by the existing `/credits/transactions` endpoint — likely in the profile/account surface next to the balance.
 4. Copy tone per user intent: value-forward, not scarcity-forward ("your credits go further now").
 
@@ -82,7 +82,7 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 
 **CONFIRMED 2026-07-13: prod is in Stripe TEST mode — it has never collected real money.** Reported by user (the `4242 4242 4242 4242` test card completes a purchase on prod) and confirmed in the config:
 - repo-root `.env.prod` (pushed to the prod Fly backend by `scripts/push-secrets.sh production`, per `scripts/deploy_production.sh`): `STRIPE_SECRET_KEY=sk_test_...` and `STRIPE_PUBLISHABLE_KEY=pk_test_...`. The **test secret key on the backend is the direct cause** — test-mode PaymentIntents accept test cards and "succeed", so credits are granted against fake payments.
-- `src/frontend/.env.production` (baked by `vite build --mode production` -> `reel-ballers-prod` Cloudflare Pages): `VITE_STRIPE_PUBLIC_KEY=pk_test_...`. Frontend prefers this baked var over `/payments/config` ([BuyCreditsModal.jsx:30](../../src/frontend/src/components/BuyCreditsModal.jsx#L30)), so even a fixed backend key would be shadowed until this is fixed too.
+- `src/frontend/.env.production` (baked by `vite build --mode production` -> `reel-ballers-prod` Cloudflare Pages): `VITE_STRIPE_PUBLIC_KEY=pk_test_...`. Frontend prefers this baked var over `/payments/config` ([BuyCreditsModal.jsx:30](../../../src/frontend/src/components/BuyCreditsModal.jsx#L30)), so even a fixed backend key would be shadowed until this is fixed too.
 
 **Fix (operator/user runs — env files are gitignored and AI must NOT handle live keys):**
 1. In the **Stripe Dashboard, toggle to Live mode**; get `sk_live_...` + `pk_live_...`.
@@ -117,12 +117,13 @@ Final pack numbers remain a user gate at kickoff (recommended vs alternate). Upd
 - Tests: `creditStore.test.js`, payments/export backend tests
 
 ### Related Tasks
-- Supersedes: T520 (pricing exploration, never completed) — close it when this lands
+- Epic: task 3/4 of [Monetization Pass](EPIC.md) (2026-07-24 restructure) — sequenced after T5780/T5790; T5790 delivers this task's pre-flight export cost display
+- Supersedes: T520 (pricing exploration, never completed) — close it when this lands; also supersedes T780's credit-pack-pricing half (quest redesign half stays standalone)
 - Related: T4870 (admin credit display) / T4860 (bulk grants) — admin-side credit views, unaffected by pack prices
 - Storage Credits epic decisions (memory): no migration, new-signups-only patterns for credit changes
 
 ### Technical Notes
-- Modal cost anchors: [modal-gpu.md](../../.claude/knowledge/modal-gpu.md) E6 benchmark (T4 ~681ms/frame; 10s clip ~$0.03). Step 0 measures overlay render the same way.
+- Modal cost anchors: [modal-gpu.md](../../../.claude/knowledge/modal-gpu.md) E6 benchmark (T4 ~681ms/frame; 10s clip ~$0.03). Step 0 measures overlay render the same way.
 - No schema change (packs are constants; transactions table exists). No Migration agent.
 - Stripe: prices are inline `price_data` per session, not Stripe Price objects — repricing is a pure code change.
 - Deduction/refund paths (reserve -> confirm/release, refund on failure) are untouched; only pack contents and presentation change.

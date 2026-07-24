@@ -10,7 +10,7 @@
 
 User direction 2026-07-23 (day after Stripe go-live, T4940 Workstream C): "instead of double logging can our tools take from Stripe?"
 
-Our analytics double-records revenue: every purchase increments `user_segments.total_spent_cents` in Postgres ([analytics.py:499](../../src/backend/app/analytics.py#L499), called from all three fulfillment paths in [payments.py](../../src/backend/app/routers/payments.py)). Stripe holds the authoritative record of the same money. The local copy exists for a good reason — admin views must not pay Stripe API latency/rate limits per page load — but nothing ever checks the two agree, and they WILL drift:
+Our analytics double-records revenue: every purchase increments `user_segments.total_spent_cents` in Postgres ([analytics.py:499](../../../src/backend/app/analytics.py#L499), called from all three fulfillment paths in [payments.py](../../../src/backend/app/routers/payments.py)). Stripe holds the authoritative record of the same money. The local copy exists for a good reason — admin views must not pay Stripe API latency/rate limits per page load — but nothing ever checks the two agree, and they WILL drift:
 
 - **Refunds are not tracked at all.** `total_spent_cents` is increment-only; a refund issued from the Stripe dashboard silently leaves our number too high. Concretely: the go-live verification purchase (pi_3TwPFMIxob3dHqK044Ye5tgk, $3.99, 2026-07-23, imankh) may be refunded — that would create the first drift on day one.
 - **Disputes/chargebacks** — same gap as refunds.
@@ -27,7 +27,7 @@ A reconciliation pass that compares per-user Stripe truth against `user_segments
 2. **Reconciliation report** — per user: local cents, stripe net cents, delta, classified cause where determinable (`refund`, `test_mode_era` (local > 0, zero live history, all local purchases pre-2026-07-22), `unknown`). Expose as `GET /api/admin/revenue-reconciliation` (admin-gated, on-demand — no cron; volume is tiny).
 3. **Admin surface** — reconciliation panel/section in the admin tool: table of drifted users only, with an explicit per-user or all-users **"Adopt Stripe value"** heal button (`POST /api/admin/revenue-reconciliation/heal`) that sets `total_spent_cents` to the Stripe net figure. Heal is a deliberate admin gesture, never automatic (gesture-based persistence rule).
 4. **Refund policy decision (with user, at kickoff):** does `total_spent_cents` mean gross-collected or net-of-refunds? Recommend NET (matches "how much has this user actually paid us"). Whichever is chosen, the reconciliation delta definition and heal both follow it.
-5. **Optional hardening (same task, cheap):** handle `charge.refunded` in the existing webhook ([payments.py webhook](../../src/backend/app/routers/payments.py)) to decrement at refund time — keeps steady-state drift near zero so reconciliation is a safety net, not a routine correction. Requires adding the event to the Stripe webhook endpoint config (dashboard, live mode — operator step, document it).
+5. **Optional hardening (same task, cheap):** handle `charge.refunded` in the existing webhook ([payments.py webhook](../../../src/backend/app/routers/payments.py)) to decrement at refund time — keeps steady-state drift near zero so reconciliation is a safety net, not a routine correction. Requires adding the event to the Stripe webhook endpoint config (dashboard, live mode — operator step, document it).
 
 ## Context
 
@@ -39,6 +39,7 @@ A reconciliation pass that compares per-user Stripe truth against `user_segments
 - `src/backend/tests/` — reconciliation classification unit tests (mock Stripe responses)
 
 ### Related Tasks
+- Epic: task 4/4 of [Monetization Pass](EPIC.md) (2026-07-24 restructure) — independent of the other three, lands last
 - Grew out of: T4940 Workstream C (live-mode go-live, 2026-07-22/23)
 - Related: T4870 (admin credit display), T4860 (bulk grants) — admin credit surfaces, read-only relation
 - Related decision: prior test-mode credit GRANTS audit (open decision from T4940 — this task's `test_mode_era` classification supplies the data for it)

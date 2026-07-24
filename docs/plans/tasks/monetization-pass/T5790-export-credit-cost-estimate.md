@@ -62,7 +62,9 @@ calc.
 - `src/frontend/src/containers/FramingContainer.jsx` — thread live segment state if not already available to the export button (T5780 wiring)
 
 ### Related Tasks
+- Epic: task 2/4 of [Monetization Pass](EPIC.md) — see EPIC.md for shared design decisions
 - Depends on: T5780 (extracted util + live effective-duration derivation)
+- Delivers: T4940 Workstream B item 2 (pre-flight export cost display) — T4940's implementor must not rebuild it
 - Related: T530 (credit check + insufficient-credits modal), T525/T526 (buy-credits flow)
 
 ### Technical Notes

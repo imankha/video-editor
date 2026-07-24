@@ -66,6 +66,7 @@ no-redundant-state rule; compute via selector/helper).
 - `src/frontend/src/modes/framing/hooks/useSegments.js` (or equivalent) — source of live `segmentSpeeds`/`boundaries`/`trimRange`
 
 ### Related Tasks
+- Epic: task 1/4 of [Monetization Pass](EPIC.md) — see EPIC.md for shared design decisions (one cost calculator, estimates-are-optimistic, no fabricated numbers)
 - Blocks: T5790 (credit estimate on Export button — consumes the same extracted util + live total)
 - Related: T5090 (slow-mo timeline math for posters — reference for stretched-timeline reasoning)
 
