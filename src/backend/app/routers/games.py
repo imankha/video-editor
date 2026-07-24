@@ -763,10 +763,12 @@ async def activate_game(game_id: int):
     logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
 
     # T5683: Warm the game source poster at gesture (non-blocking background task).
-    # Best-effort -- never fails the activation.
+    # Best-effort -- never fails the activation. get_current_user_id/
+    # get_current_profile_id are already imported at module level (top of
+    # file) -- do NOT re-import locally here: a local import makes the name
+    # local to the WHOLE function, which broke the EARLIER self-heal call at
+    # get_current_user_id()/get_current_profile_id() above (UnboundLocalError).
     from app.services.poster_warmer import fire_and_forget, warm_game_source_poster_background
-    from app.user_context import get_current_user_id
-    from app.profile_context import get_current_profile_id
     fire_and_forget(
         warm_game_source_poster_background(
             get_current_user_id(), get_current_profile_id(), game_id
