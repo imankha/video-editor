@@ -69,6 +69,13 @@ export function sportEmoji(sport) {
   return SPORT_EMOJI[sport] || '🏅'; // 🏅 fallback for custom sports
 }
 
+// Like sportEmoji but returns null (not the medal) for unknown/custom sports, so
+// callers can distinguish "known sport -> show its ball" from "unknown -> show the
+// app logo" (never another sport's ball). Used by the games-tab poster fallback.
+export function sportEmojiOrNull(sport) {
+  return SPORT_EMOJI[sport] || null;
+}
+
 export function getTagSet(sport) {
   return TAG_SETS[sport] || null;
 }
