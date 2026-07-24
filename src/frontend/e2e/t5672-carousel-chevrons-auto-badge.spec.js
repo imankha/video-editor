@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
-test.describe('T5672: CardCarousel chevrons + DraftTile clip-count marker', () => {
+test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => {
   test.beforeEach(async ({ context, page }) => {
     // Login as real user with real data (games + drafts)
     await loginAsRealUser(context, 'imankh@gmail.com');
   });
 
-  test('Desktop (1315px): chevrons visible on overflow, hide at edges, clip-count chip has tooltip', async ({
+  test('Desktop (1315px): solid circular arrows visible on overflow, dim at edges, clip-count chip has tooltip', async ({
     context,
     page,
   }) => {
@@ -59,47 +59,57 @@ test.describe('T5672: CardCarousel chevrons + DraftTile clip-count marker', () =
       if (tileCount > 3) {
         console.log(`  Row ${i}: ${tileCount} tiles (overflowing)`);
 
-        // Check for chevrons
-        const chevrons = await page.locator('button[aria-label*="Scroll"]').all();
-        if (chevrons.length > 0) {
-          console.log(`  ✓ Chevrons present (${chevrons.length} total)`);
+        // Check for the solid circular arrow buttons
+        const arrows = await page.locator('button[aria-label*="Scroll"]').all();
+        if (arrows.length > 0) {
+          console.log(`  ✓ Arrows present (${arrows.length} total)`);
 
-          // Test left chevron at start
-          const leftChevron = chevrons.find(async (btn) => {
-            return (await btn.getAttribute('aria-label')) === 'Scroll left';
+          const rightArrow = page.locator('button[aria-label="Scroll right"]').first();
+          const bg = await rightArrow.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+          const radius = await rightArrow.evaluate((el) => window.getComputedStyle(el).borderRadius);
+          const box = await rightArrow.evaluate((el) => {
+            const r = el.getBoundingClientRect();
+            return { width: r.width, height: r.height };
           });
+          console.log(`  Right arrow background: ${bg}, border-radius: ${radius}, size: ${box.width}x${box.height}`);
+          // Solid circle: fully rounded (borderRadius >= half of width/height), not transparent
+          expect(bg).not.toBe('rgba(0, 0, 0, 0)');
+          expect(box.width).toBeGreaterThan(30);
+          expect(box.height).toBeGreaterThan(30);
 
-          // Hover to brighten (state change)
-          if (leftChevron) {
-            const color = await leftChevron.evaluate((el) => {
-              return window.getComputedStyle(el).color;
-            });
-            console.log(`  Chevron initial color: ${color}`);
+          const leftArrow = page.locator('button[aria-label="Scroll left"]').first();
 
-            // Test smooth scroll on click
-            await leftChevron.click();
-            console.log(`  ✓ Chevron click triggered scroll`);
-          }
+          // Test smooth scroll on click
+          await leftArrow.click();
+          console.log(`  ✓ Arrow click triggered scroll`);
         }
       }
     }
   });
 
-  test('Mobile (390px): no chevrons, native swipe works, clip-count chip visible', async ({
-    context,
-    page,
+  test('Mobile (390px): no arrows, native swipe works, clip-count chip visible', async ({
+    browser,
   }) => {
-    // Set mobile viewport
-    await page.setViewportSize({ width: 390, height: 844 });
+    // A plain resized desktop context still reports (pointer: fine), since
+    // Chromium's pointer/hover media features follow touch emulation, not
+    // viewport size. Use a real touch-emulated context so this actually
+    // exercises the coarse-pointer path the component branches on.
+    const mobileContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    const page = await mobileContext.newPage();
+    await loginAsRealUser(mobileContext, 'imankh@gmail.com');
     await page.goto('/');
 
     // Wait for drafts to load
     await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
 
-    // Verify no chevrons on mobile
-    const chevrons = await page.locator('button[aria-label*="Scroll"]').count();
-    expect(chevrons).toBe(0);
-    console.log(`✓ No chevrons on mobile (${chevrons} found)`);
+    // Verify no arrows on mobile
+    const arrows = await page.locator('button[aria-label*="Scroll"]').count();
+    expect(arrows).toBe(0);
+    console.log(`✓ No arrows on mobile (${arrows} found)`);
 
     // Verify clip-count chip is still visible on mobile (for multi-clip drafts)
     const clipCountChips = await page.locator('[aria-label*="Contains"][aria-label*="clips"]').count();
@@ -112,8 +122,10 @@ test.describe('T5672: CardCarousel chevrons + DraftTile clip-count marker', () =
 
     if (scrollWidth > clientWidth) {
       console.log(`✓ Carousel is scrollable (${scrollWidth}px > ${clientWidth}px)`);
-      // Native scroll-snap behavior is preserved — no JS chevrons needed
+      // Native scroll-snap behavior is preserved — no JS arrows needed
     }
+
+    await mobileContext.close();
   });
 
   test('Verify all 13 drafts belong to one game (Legends Mar 28)', async ({
