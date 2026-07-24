@@ -2425,3 +2425,67 @@ async def stream_game_bounded(
             "Cache-Control": "private, max-age=300, immutable",
         },
     )
+
+
+@router.get("/{game_id:int}/poster.jpg")
+async def get_game_poster(game_id: int):
+    """Poster thumbnail for a game's recap video (T5681).
+
+    Cache-first from R2 (`recaps/posters/{game_id}.jpg`); generated on first
+    request from the game's recap video via ensure_recap_poster(). Session-authed
+    by the same middleware as every other `/api/games` route.
+
+    404 when the game has no recap OR the recap video is expired/missing --
+    the frontend renders its no-poster fallback tile; we never fabricate an image
+    (no-silent-fallback rule, CLAUDE.md). Poster generation is best-effort and
+    never fails a parent operation.
+    """
+    from fastapi.responses import Response
+    import httpx
+
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, recap_video_url FROM games WHERE id = ?",
+            (game_id,),
+        )
+        row = cursor.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    # No recap video -> no poster
+    if not row["recap_video_url"]:
+        raise HTTPException(status_code=404, detail="No recap for this game")
+
+    from app.services.poster import ensure_recap_poster
+
+    user_id = get_current_user_id()
+    profile_id = get_current_profile_id()
+
+    # R2 keys for this game's recap and poster
+    recap_key = f"users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
+    poster_key = f"users/{user_id}/profiles/{profile_id}/recaps/posters/{game_id}.jpg"
+
+    # Ensure poster exists (generate on first request if recap exists)
+    if not ensure_recap_poster(recap_key, poster_key):
+        raise HTTPException(status_code=404, detail="No poster for this game")
+
+    # Serve the poster with a presigned URL (private cache, session-authed)
+    url = generate_presigned_url(
+        user_id, f"profiles/{profile_id}/recaps/posters/{game_id}.jpg",
+        expires_in=3600, content_type="image/jpeg"
+    )
+    if not url:
+        raise HTTPException(status_code=404, detail="No poster for this game")
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+        resp = await client.get(url)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    return Response(
+        content=resp.content,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "private, max-age=300"},
+    )
