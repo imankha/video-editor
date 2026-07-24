@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from ..database import mark_sync_pending, sync_user_db_to_r2_explicit
 from ..services.auth_db import (
     IMPERSONATION_TTL_MINUTES,
     create_impersonation_session,
@@ -58,6 +59,31 @@ def _require_admin():
 # ---------------------------------------------------------------------------
 # Credit helpers
 # ---------------------------------------------------------------------------
+
+async def _persist_target_user_db(target_user_id: str) -> bool:
+    """Push a credit change written to ANOTHER user's user.sqlite up to R2.
+
+    The request middleware only syncs the SESSION user's databases -- here the
+    admin's, not the grantee's. Without this an admin credit change lives only on
+    the machine's local disk and is destroyed the next time the machine is
+    replaced, which is exactly how a 400-credit prod grant was lost. Same fix the
+    Stripe webhook got in T4940 (sync_user_db_to_r2_explicit), applied to the
+    admin write paths that target a user other than the caller.
+
+    Deliberately NOT turned into a 5xx: admin_grant carries no idempotency key
+    (reference_id is NULL), so a retry would double-grant. Instead the failure is
+    logged loudly and the grantee is marked sync-pending, which makes the
+    middleware retry the upload on their next write.
+    """
+    synced = await asyncio.to_thread(sync_user_db_to_r2_explicit, target_user_id)
+    if not synced:
+        mark_sync_pending(target_user_id)
+        logger.error(
+            f"[Admin] R2 sync FAILED for target user {target_user_id} -- credit change is "
+            f"local-only until their next write; marked sync-pending"
+        )
+    return synced
+
 
 def _compute_money_spent_cents(purchase_credit_amounts: list[int]) -> int:
     """Map individual Stripe purchase credit amounts to total dollars spent (in cents)."""
@@ -284,7 +310,8 @@ async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
             continue
         try:
             balance = grant_credits(uid, request.amount, source="admin_grant")
-            results.append({"user_id": uid, "ok": True, "balance": balance})
+            synced = await _persist_target_user_db(uid)
+            results.append({"user_id": uid, "ok": True, "balance": balance, "synced": synced})
             granted += 1
         except Exception as exc:
             logger.exception(f"[Admin] bulk grant-credits failed for {uid}")
@@ -379,7 +406,8 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
         raise HTTPException(status_code=404, detail="User not found")
 
     new_balance = grant_credits(user_id, request.amount, source="admin_grant")
-    return {"balance": new_balance}
+    synced = await _persist_target_user_db(user_id)
+    return {"balance": new_balance, "synced": synced}
 
 
 class SetCreditsRequest(BaseModel):
@@ -400,7 +428,8 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
 
     from ..services.user_db import set_credits
     new_balance = set_credits(user_id, request.amount)
-    return {"balance": new_balance}
+    synced = await _persist_target_user_db(user_id)
+    return {"balance": new_balance, "synced": synced}
 
 
 # ---------------------------------------------------------------------------
