@@ -34,6 +34,7 @@ import { DraftTile } from './DraftTile';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
 import { CardCarousel } from './shared/CardCarousel';
 import { GameTile } from './GameTile';
+import { RATIO, RATIO_ORDER } from '../constants/aspectRatios';
 
 const SCORING_TAGS = new Set([
   'Goal', 'Touchdown Pass', 'Touchdown Catch', 'Touchdown Run', 'Field Goal',
@@ -93,6 +94,19 @@ function TagBadges({ tagBadges }) {
   }
   if (pills.length === 0) return null;
   return <>{pills}</>;
+}
+
+// Splits a project list into one bucket per aspect ratio present, portrait
+// first (RATIO_ORDER), dropping empty buckets. A single-aspect list yields a
+// single-entry array, so callers can treat "one row" and "N rows" the same
+// way without a separate branch.
+export function splitByAspect(list) {
+  return RATIO_ORDER
+    .map(ratio => ({
+      ratio,
+      projects: list.filter(p => (p.aspect_ratio || RATIO.PORTRAIT) === ratio),
+    }))
+    .filter(bucket => bucket.projects.length > 0);
 }
 
 /**
@@ -395,6 +409,10 @@ export function ProjectManager({
       groups[key].projects.sort((a, b) =>
         compareGameTime(a.clip_game_start_time, b.clip_game_start_time));
       groups[key].statusCounts = getProjectStatusCounts(groups[key].projects);
+      // Portrait/landscape drafts render in separate carousel rows so tile
+      // heights stay consistent within a row (mirrors ReelTile/Collections);
+      // count/statusCounts above stay whole-game (both aspects combined).
+      groups[key].byAspect = splitByAspect(groups[key].projects);
       // Find the most recent game date in this group
       let mostRecentDate = null;
       groups[key].projects.forEach(project => {
@@ -431,7 +449,7 @@ export function ProjectManager({
       return a.localeCompare(b);
     });
 
-    return { groups, sortedKeys, ungrouped };
+    return { groups, sortedKeys, ungrouped, ungroupedByAspect: splitByAspect(ungrouped) };
   }, [filteredProjects, getProjectStatusCounts]);
 
   // Compute most recent items for "Continue Where You Left Off" section
@@ -1053,7 +1071,9 @@ export function ProjectManager({
                 </div>
               ) : (
                 <>
-                  {/* Ungrouped drafts (no game) -> one "Other reels" carousel row (Q5) */}
+                  {/* Ungrouped drafts (no game) -> one "Other reels" section, one carousel
+                      row per aspect ratio present (portrait first) so tiles keep their
+                      aspect-correct shape and row heights stay consistent (Q5 + aspect split) */}
                   {groupedProjects.ungrouped.length > 0 && (
                     <div className="mb-2">
                       <div className="flex items-center gap-2 px-3 py-2 min-h-11">
@@ -1062,19 +1082,30 @@ export function ProjectManager({
                           {groupedProjects.ungrouped.length}
                         </span>
                       </div>
-                      <CardCarousel ariaLabel="Other reels">
-                        {groupedProjects.ungrouped.map(project => (
-                          <DraftTile
-                            key={project.id}
-                            project={project}
-                            onSelect={() => onSelectProject(project.id)}
-                            onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                            onDelete={() => onDeleteProject(project.id)}
-                            exportingProject={exportingProject}
-                            pendingGameIds={pendingGameIds}
-                          />
-                        ))}
-                      </CardCarousel>
+                      {groupedProjects.ungroupedByAspect.map(({ ratio, projects: aspectProjects }) => (
+                        <div key={ratio}>
+                          {groupedProjects.ungroupedByAspect.length > 1 && (
+                            <div className="px-3 pb-1">
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                                {ratio}
+                              </span>
+                            </div>
+                          )}
+                          <CardCarousel ariaLabel={groupedProjects.ungroupedByAspect.length > 1 ? `Other reels ${ratio}` : 'Other reels'}>
+                            {aspectProjects.map(project => (
+                              <DraftTile
+                                key={project.id}
+                                project={project}
+                                onSelect={() => onSelectProject(project.id)}
+                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                                onDelete={() => onDeleteProject(project.id)}
+                                exportingProject={exportingProject}
+                                pendingGameIds={pendingGameIds}
+                              />
+                            ))}
+                          </CardCarousel>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -1091,19 +1122,34 @@ export function ProjectManager({
                       statusCounts={group.statusCounts}
                       defaultExpanded={hasIncomplete || hasUnpublished}
                     >
-                      <CardCarousel ariaLabel={`${groupKey} drafts`}>
-                        {group.projects.map(project => (
-                          <DraftTile
-                            key={project.id}
-                            project={project}
-                            onSelect={() => onSelectProject(project.id)}
-                            onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
-                            onDelete={() => onDeleteProject(project.id)}
-                            exportingProject={exportingProject}
-                            pendingGameIds={pendingGameIds}
-                          />
-                        ))}
-                      </CardCarousel>
+                      {/* One carousel row per aspect ratio present (portrait first) --
+                          a game with both 9:16 and 16:9 drafts never mixes them in one
+                          row; single-aspect games render exactly as before (one row,
+                          no aspect chip) since byAspect has exactly one entry. */}
+                      {group.byAspect.map(({ ratio, projects: aspectProjects }) => (
+                        <div key={ratio}>
+                          {group.byAspect.length > 1 && (
+                            <div className="px-3 pb-1">
+                              <span className="text-[10px] font-semibold text-gray-500 bg-gray-700/40 px-1.5 py-0.5 rounded">
+                                {ratio}
+                              </span>
+                            </div>
+                          )}
+                          <CardCarousel ariaLabel={group.byAspect.length > 1 ? `${groupKey} drafts ${ratio}` : `${groupKey} drafts`}>
+                            {aspectProjects.map(project => (
+                              <DraftTile
+                                key={project.id}
+                                project={project}
+                                onSelect={() => onSelectProject(project.id)}
+                                onSelectWithMode={(options) => onSelectProjectWithMode?.(project.id, options)}
+                                onDelete={() => onDeleteProject(project.id)}
+                                exportingProject={exportingProject}
+                                pendingGameIds={pendingGameIds}
+                              />
+                            ))}
+                          </CardCarousel>
+                        </div>
+                      ))}
                     </CollapsibleGroup>
                     );
                   })}

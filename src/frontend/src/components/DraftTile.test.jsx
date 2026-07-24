@@ -132,4 +132,18 @@ describe('DraftTile (T5672)', () => {
     expect(screen.queryByText('1')).toBeNull();
     expect(screen.queryByTitle(/Contains \d+ clips/)).toBeNull();
   });
+
+  it('renders a portrait 9:16 tile shape by default', () => {
+    const { container } = renderTile({ aspect_ratio: '9:16' });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-\[9\/16\]/);
+    expect(tile.className).not.toMatch(/aspect-video/);
+  });
+
+  it('renders a landscape 16:9 tile shape (mirrors ReelTile, not letterboxed into portrait)', () => {
+    const { container } = renderTile({ aspect_ratio: '16:9' });
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.className).toMatch(/aspect-video/);
+    expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
 });
