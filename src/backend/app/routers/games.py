@@ -2454,25 +2454,31 @@ async def get_game_poster(game_id: int):
     if not row:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    # No recap video -> no poster
-    if not row["recap_video_url"]:
-        raise HTTPException(status_code=404, detail="No recap for this game")
-
-    from app.services.poster import ensure_recap_poster
+    from app.services.poster import ensure_game_source_poster, ensure_recap_poster
     from app.storage import APP_ENV
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
-    # Full (env-prefixed) R2 keys -- ensure_recap_poster/r2_head_object_global
-    # operate on GLOBAL keys, same scheme as the share-unfurl path (_recap_r2_key/
-    # _recap_poster_r2_key in shares.py): {env}/users/{uid}/profiles/{pid}/...
-    recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
-    poster_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/posters/{game_id}.jpg"
+    if row["recap_video_url"]:
+        # Recap-derived poster wins whenever a recap exists (T5681 item 3).
+        # Full (env-prefixed) R2 keys -- ensure_recap_poster/r2_head_object_global
+        # operate on GLOBAL keys, same scheme as the share-unfurl path
+        # (_recap_r2_key/_recap_poster_r2_key in shares.py):
+        # {env}/users/{uid}/profiles/{pid}/...
+        recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
+        poster_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/posters/{game_id}.jpg"
 
-    # Ensure poster exists (generate on first request if recap exists)
-    if not ensure_recap_poster(recap_key, poster_key):
-        raise HTTPException(status_code=404, detail="No poster for this game")
+        # Ensure poster exists (generate on first request if recap exists)
+        if not ensure_recap_poster(recap_key, poster_key):
+            raise HTTPException(status_code=404, detail="No poster for this game")
+    else:
+        # No recap yet: extract ONE frame from the live game source (T5681 item
+        # 2/3) -- highest-rated clip's timestamp, else a fixed offset. Cached at
+        # the SAME poster key so the serving path below is identical. An expired /
+        # reclaimed source (no live video) -> False -> 404 -> branded fallback.
+        if not ensure_game_source_poster(user_id, profile_id, game_id):
+            raise HTTPException(status_code=404, detail="No poster for this game")
 
     # Serve the poster with a presigned URL (private cache, session-authed).
     # generate_presigned_url's relative_path is relative to users/{uid}/ and
