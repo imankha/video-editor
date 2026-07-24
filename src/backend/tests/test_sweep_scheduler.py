@@ -527,6 +527,34 @@ class TestGraceDeletionLiveRefGuard:
         mock_del_grace.assert_called_once_with("hash_old")
         mock_heal.assert_not_called()
 
+    @patch("app.database.has_recent_sync_error", return_value=True)
+    @patch(f"{M}.heal_ref_count")
+    @patch(f"{M}.delete_grace_deletion")
+    @patch(f"{M}.r2_delete_object_global")
+    @patch(f"{M}.get_expired_grace_deletions", return_value=["hash_unsynced"])
+    @patch(f"{M}.get_expired_refs_for_profile", return_value=[])
+    @patch("app.migrations._get_profile_ids", return_value=[PROFILE_ID])
+    @patch("app.services.auth_db.get_all_users_for_admin", return_value=[{"user_id": USER_ID}])
+    def test_grace_delete_deferred_when_profile_not_authoritatively_synced(
+        self, mock_users, mock_profiles, mock_expired_refs, mock_grace_expired,
+        mock_r2_delete, mock_del_grace, mock_heal, mock_sync_error, isolated_profile_db
+    ):
+        """Transient-sync hole (review MAJOR): a profile whose R2 restore failed
+        this sweep fell through to an EMPTY local DB, so a naive recount returns
+        0 live refs and would let the irreversible delete proceed while a live
+        ref sits in the un-downloaded DB. With the cooldown active, the sweep
+        must treat the profile as indeterminate: skip the delete, and neither
+        cancel the grace row nor heal the counter (so it retries next sweep)."""
+        from app.services.sweep_scheduler import do_sweep
+
+        # Local DB shows NO ref for this hash (it wasn't downloaded) — a naive
+        # 0-count would delete. has_recent_sync_error=True marks it indeterminate.
+        do_sweep()
+
+        mock_r2_delete.assert_not_called()   # video NOT destroyed on incomplete info
+        mock_del_grace.assert_not_called()   # grace row kept -> retried next sweep
+        mock_heal.assert_not_called()        # counter not healed to a wrong value
+
 
 class TestDeleteRefCounterDrift:
     """delete_ref must not drive game_ref_counts.ref_count below the true number

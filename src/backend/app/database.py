@@ -355,6 +355,25 @@ def get_local_db_version(user_id: str, profile_id: str) -> int | None:
     return None
 
 
+def has_recent_sync_error(user_id: str, profile_id: str) -> bool:
+    """True if the last R2 restore for this profile failed transiently and the
+    retry cooldown is still active — i.e. we do NOT currently hold authoritative
+    (freshly R2-synced) data for it.
+
+    Distinct from "no data": a genuinely new/empty profile syncs cleanly
+    (NOT_FOUND, version locked to 0, no cooldown) and returns False here. Only a
+    real transient failure (network/download error) sets the cooldown. Callers
+    that make irreversible decisions from local rows — the sweep's R2-delete
+    gate — must treat a True here as indeterminate (assume a live ref) rather
+    than trust a possibly-empty local DB.
+    """
+    cache_key = f"{user_id}:{profile_id}"
+    last_fail = _r2_restore_cooldowns.get(cache_key)
+    if last_fail is None:
+        return False
+    return (time.time() - last_fail) < RESTORE_COOLDOWN_SECONDS
+
+
 def set_local_db_version(user_id: str, profile_id: str, version: int | None) -> None:
     """
     Set the locally cached database version for a user+profile.

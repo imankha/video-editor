@@ -172,15 +172,31 @@ def do_sweep():
         # can be wrong (the counter drifts — see delete_ref / heal_ref_count).
         # Deleting while a live ref exists strands a user with a "ready" game
         # and a 404 video (the bug that lost imankh games 2/3/5).
-        total_refs, live_refs = _count_refs_all_profiles(blake3_hash, users)
+        total_refs, live_refs, authoritative = _count_refs_all_profiles(blake3_hash, users)
         if live_refs > 0:
-            logger.error(
-                f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
-                f"ref(s) still exist across profiles; canceling grace deletion and "
-                f"healing ref_count {total_refs}"
-            )
-            delete_grace_deletion(blake3_hash)
-            heal_ref_count(blake3_hash, total_refs)
+            if authoritative:
+                # Every profile was read from authoritative data and a live ref
+                # exists: the video is genuinely wanted.  Cancel the grace
+                # deletion and heal the drift-prone counter to the truth we just
+                # computed.
+                logger.error(
+                    f"[Sweep] ABORT delete hash={blake3_hash[:12]} — {live_refs} live "
+                    f"ref(s) still exist across profiles; canceling grace deletion and "
+                    f"healing ref_count to {total_refs}"
+                )
+                delete_grace_deletion(blake3_hash)
+                heal_ref_count(blake3_hash, total_refs)
+            else:
+                # At least one profile could not be authoritatively read this
+                # sweep (transient R2 sync failure / missing DB).  total_refs is
+                # NOT the truth, so do not heal the counter, and leave the grace
+                # row queued so we re-evaluate next sweep once the profile syncs.
+                # Never delete on incomplete information.
+                logger.error(
+                    f"[Sweep] DEFER delete hash={blake3_hash[:12]} — could not "
+                    f"authoritatively confirm refs (indeterminate profile); keeping "
+                    f"grace row to retry next sweep"
+                )
             continue
 
         r2_delete_object_global(f"games/{blake3_hash}.mp4")
@@ -201,23 +217,45 @@ def do_sweep():
     logger.info(f"[Sweep] Complete in {elapsed:.2f}s (refs={total_expired}, grace_deleted={len(grace_expired)})")
 
 
-def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int]:
-    """Sum (total_refs, live_refs) for a hash across all initialized profiles.
+def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int, bool]:
+    """Sum (total_refs, live_refs, authoritative) for a hash across all profiles.
 
     live_refs > 0 means at least one profile still holds a non-expired
     game_storage ref — the video is still wanted and must NOT be deleted.
-    Reads local profile DBs (already downloaded by Phase 1 this same sweep), so
-    this is cheap and only runs for the rare grace-expired hashes in Phase 2.
+    authoritative is False when at least one profile could not be trusted this
+    sweep (transient R2 sync failure / missing local DB / read error); in that
+    case total_refs is not the truth and the caller must not heal the counter to
+    it. Reads local profile DBs (downloaded by Phase 1 this same sweep), so this
+    is cheap and only runs for the rare grace-expired hashes in Phase 2.
     """
-    from ..database import USER_DATA_BASE
+    from ..database import USER_DATA_BASE, has_recent_sync_error
     from ..migrations import _get_profile_ids
 
     total = live = 0
+    authoritative = True
     for user in users:
         user_id = user["user_id"]
         for profile_id in _get_profile_ids(user_id):
             db_path = USER_DATA_BASE / user_id / "profiles" / profile_id / "profile.sqlite"
-            if not db_path.exists():
+            # INDETERMINATE => LIVE.  We may only trust a 0-count from a profile
+            # whose local DB is authoritative this sweep.  A profile whose R2
+            # restore failed transiently (cooldown active) fell through to an
+            # EMPTY local DB in Phase 1 (ensure_database creates a fresh, valid
+            # game_storage table on error) — reading it would return 0 refs and
+            # let the irreversible R2 delete proceed while a live ref still sits
+            # in the un-downloaded DB.  Likewise a profile with no local DB at
+            # all was never read.  Count either as a live ref AND mark the whole
+            # count non-authoritative: never delete on incomplete information.
+            # (A genuinely new/empty profile syncs cleanly — NOT_FOUND, no
+            # cooldown — and is counted normally below.)
+            if not db_path.exists() or has_recent_sync_error(user_id, profile_id):
+                logger.error(
+                    f"[Sweep] hash={blake3_hash[:12]} user={user_id[:8]} "
+                    f"profile={profile_id[:8]} not authoritatively synced "
+                    f"(db_exists={db_path.exists()}) — assuming live ref, will not delete"
+                )
+                live += 1
+                authoritative = False
                 continue
             set_current_user_id(user_id)
             set_current_profile_id(profile_id)
@@ -233,7 +271,8 @@ def _count_refs_all_profiles(blake3_hash: str, users: list) -> tuple[int, int]:
                     f"user={user_id[:8]} profile={profile_id[:8]} — assuming live ref"
                 )
                 live += 1
-    return total, live
+                authoritative = False
+    return total, live, authoritative
 
 
 def _expire_game_storage_all_profiles(blake3_hash: str, users: list) -> int:
