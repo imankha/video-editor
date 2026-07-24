@@ -1,0 +1,8 @@
+---
+import UseCasePage from '../components/UseCasePage.astro'
+import { useCaseBySlug } from '../data/useCases'
+
+const useCase = useCaseBySlug('for-coaches')!
+---
+
+<UseCasePage useCase={useCase} />

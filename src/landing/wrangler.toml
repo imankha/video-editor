@@ -1,7 +1,17 @@
-# Wrangler configuration for ReelBallers Landing Page
+# Wrangler configuration for the ReelBallers marketing site (reelballers.com).
+#
+# Static Astro output served straight from Cloudflare's asset host. worker.js is
+# only a fallback -- assets are matched first, so it should almost never run.
 name = "video-editor"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-11-01"
 main = "worker.js"
 
-# Static assets from Vite build output
-assets = { directory = "./dist" }
+[assets]
+directory = "./dist"
+# Astro builds with `format: 'file'`, so /soccer.html is served at /soccer.
+# auto-trailing-slash keeps a single canonical URL per page instead of letting
+# /soccer and /soccer/ both resolve.
+html_handling = "auto-trailing-slash"
+# Serve dist/404.html with a real 404 status for unknown paths. Without this a
+# missing page returns worker.js's bare "Not found" string.
+not_found_handling = "404-page"

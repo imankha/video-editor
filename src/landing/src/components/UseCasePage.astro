@@ -1,0 +1,93 @@
+---
+/**
+ * Shared body for the use-case pages.
+ *
+ * Rendered by one explicit page file per URL (recruiting-videos.astro,
+ * for-parents.astro, ...) rather than a dynamic [slug] route. Two reasons:
+ * a root-level dynamic route would collide with [sport].astro, and explicit
+ * filenames mean every public URL is greppable in the pages directory.
+ */
+import PageLayout from '../layouts/PageLayout.astro'
+import Faq from './Faq.astro'
+import Cta from './Cta.astro'
+import Testimonials from './Testimonials.astro'
+import type { UseCase } from '../data/useCases'
+import { APP_URL } from '../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs } from '../lib/schema'
+
+interface Props {
+  useCase: UseCase
+}
+
+const { useCase } = Astro.props as Props
+const path = `/${useCase.slug}`
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: useCase.h1, description: useCase.description, path }),
+  breadcrumbs([{ name: useCase.h1, path }]),
+  faqPage(useCase.faqs),
+]
+---
+
+<PageLayout
+  title={`${useCase.title.length > 60 ? useCase.h1 : useCase.title}`}
+  description={useCase.description}
+  path={path}
+  schemas={schemas}
+  trail={[{ name: useCase.h1, path }]}
+  current={path === '/recruiting-videos' ? '/recruiting-videos' : undefined}
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">{useCase.h1}</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">{useCase.answer}</p>
+      <a
+        href={APP_URL}
+        data-cta
+        class="inline-block mt-8 px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+      >
+        Get started free
+      </a>
+    </div>
+  </section>
+
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-3xl space-y-12">
+      {
+        useCase.sections.map((section) => (
+          <section>
+            <h2 class="text-2xl md:text-3xl font-bold text-white mb-4">{section.heading}</h2>
+            {section.body.map((para) => (
+              <p class="text-gray-300 leading-relaxed mb-4">{para}</p>
+            ))}
+          </section>
+        ))
+      }
+
+      {
+        useCase.checklist && (
+          <section class="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+            <h2 class="text-2xl font-bold text-white mb-6">{useCase.checklist.heading}</h2>
+            <ul class="space-y-3">
+              {useCase.checklist.items.map((item) => (
+                <li class="flex gap-3 text-gray-300">
+                  <span class="shrink-0 text-purple-400" aria-hidden="true">
+                    &#10003;
+                  </span>
+                  <span class="leading-relaxed">{item}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
+      }
+    </div>
+  </div>
+
+  <Testimonials topics={['sharing', 'reel-building']} />
+
+  <Faq items={useCase.faqs} />
+
+  <Cta heading={useCase.ctaHeading} />
+</PageLayout>

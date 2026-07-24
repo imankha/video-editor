@@ -1,0 +1,35 @@
+---
+/**
+ * Visible breadcrumb trail. Pairs with breadcrumbs() JSON-LD -- structured data
+ * should always describe something a human can actually see on the page.
+ */
+interface Props {
+  trail: { name: string; path: string }[]
+}
+
+const { trail } = Astro.props
+---
+
+<nav aria-label="Breadcrumb" class="container mx-auto px-4 pt-6">
+  <ol class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+    <li><a href="/" class="hover:text-gray-300 transition-colors">Home</a></li>
+    {
+      trail.map((crumb, i) => (
+        <>
+          <li aria-hidden="true">/</li>
+          <li>
+            {i === trail.length - 1 ? (
+              <span class="text-gray-400" aria-current="page">
+                {crumb.name}
+              </span>
+            ) : (
+              <a href={crumb.path} class="hover:text-gray-300 transition-colors">
+                {crumb.name}
+              </a>
+            )}
+          </li>
+        </>
+      ))
+    }
+  </ol>
+</nav>

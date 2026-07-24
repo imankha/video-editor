@@ -1,0 +1,62 @@
+---
+/**
+ * The layout every content page uses: BaseLayout's <head> plus header, a real
+ * <main>, and the footer link graph.
+ *
+ * Semantic landmarks (<header>/<nav>/<main>/<footer>) are here rather than in
+ * each page so no page can forget them.
+ */
+import BaseLayout from './BaseLayout.astro'
+import Header from '../components/Header.astro'
+import Footer from '../components/Footer.astro'
+import Breadcrumbs from '../components/Breadcrumbs.astro'
+
+export interface Props {
+  title: string
+  description: string
+  path: string
+  image?: string
+  ogType?: 'website' | 'article'
+  schemas?: Record<string, unknown>[]
+  dateModified?: string
+  noindex?: boolean
+  /** Breadcrumb trail excluding Home. Omit on the homepage. */
+  trail?: { name: string; path: string }[]
+  /** Nav item to mark as current. */
+  current?: string
+}
+
+const { trail, current, ...base } = Astro.props
+---
+
+<BaseLayout {...base}>
+  <Header current={current} />
+  {trail && trail.length > 0 && <Breadcrumbs trail={trail} />}
+  <main id="main">
+    <slot />
+  </main>
+  <Footer />
+
+  <!--
+    Carry attribution query params (utm_*, ref, etc.) across to the app, which
+    is a different host. Progressive enhancement: without JS the CTA still
+    links correctly, it just loses the params.
+  -->
+  <script is:inline>
+    ;(function () {
+      var search = window.location.search
+      if (!search) return
+      document.querySelectorAll('a[data-cta]').forEach(function (a) {
+        try {
+          var url = new URL(a.href)
+          new URLSearchParams(search).forEach(function (v, k) {
+            if (!url.searchParams.has(k)) url.searchParams.set(k, v)
+          })
+          a.href = url.toString()
+        } catch (e) {
+          /* leave the href untouched */
+        }
+      })
+    })()
+  </script>
+</BaseLayout>

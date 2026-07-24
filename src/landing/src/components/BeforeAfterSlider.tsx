@@ -3,21 +3,65 @@ import { useRef, useState, useEffect, useCallback } from 'react'
 interface BeforeAfterSliderProps {
   beforeSrc: string
   afterSrc: string
+  beforePoster: string
+  afterPoster: string
+  label?: string
 }
 
-export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProps) {
+export function BeforeAfterSlider({
+  beforeSrc,
+  afterSrc,
+  beforePoster,
+  afterPoster,
+  label,
+}: BeforeAfterSliderProps) {
   const [sliderPos, setSliderPos] = useState(100)
   const [isDragging, setIsDragging] = useState(false)
   const [hasInteracted, setHasInteracted] = useState(false)
   const [hasRevealed, setHasRevealed] = useState(false)
   const [beforeReady, setBeforeReady] = useState(false)
   const [afterReady, setAfterReady] = useState(false)
+  // The two demo clips are large. Nothing is fetched until the slider is
+  // actually on screen and the browser is idle, so the hero paints from the
+  // poster images (~45 KB) instead of blocking on ~73 MB of video. `load`
+  // stays false on Save-Data connections -- those users get the posters and a
+  // tap-to-play affordance instead of a surprise 73 MB download.
+  const [load, setLoad] = useState(false)
+  const [blocked, setBlocked] = useState(false)
   const videosReady = beforeReady && afterReady
   const containerRef = useRef<HTMLDivElement>(null)
   const beforeVideoRef = useRef<HTMLVideoElement>(null)
   const afterVideoRef = useRef<HTMLVideoElement>(null)
   const sliderPosRef = useRef(sliderPos)
   useEffect(() => { sliderPosRef.current = sliderPos }, [sliderPos])
+
+  // Gate the video download on visibility + idle. Honour Save-Data and the
+  // reduced-data preference by never auto-loading.
+  useEffect(() => {
+    const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+    if (conn?.saveData) {
+      setBlocked(true)
+      return
+    }
+    const el = containerRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((e) => e.isIntersecting)) return
+        io.disconnect()
+        const start = () => setLoad(true)
+        if ('requestIdleCallback' in window) {
+          ;(window as Window & { requestIdleCallback: (cb: () => void, o?: object) => void })
+            .requestIdleCallback(start, { timeout: 2000 })
+        } else {
+          setTimeout(start, 200)
+        }
+      },
+      { threshold: 0.25 }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -31,6 +75,19 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
     }, 500)
     return () => clearInterval(id)
   }, [])
+
+  // React sets src as a property after mount, which does not re-trigger the
+  // autoplay the `autoPlay` attribute would have done at parse time. play() is
+  // enough to start the fetch under preload="none" -- calling load() as well
+  // aborts the request play() just started (ERR_CACHE_OPERATION_NOT_SUPPORTED).
+  useEffect(() => {
+    if (!load) return
+    for (const ref of [beforeVideoRef, afterVideoRef]) {
+      ref.current?.play().catch(() => {
+        /* autoplay refused (e.g. low power mode) -- poster stays, no crash */
+      })
+    }
+  }, [load])
 
   useEffect(() => {
     if (hasRevealed || !videosReady) return
@@ -91,26 +148,33 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
           >
-            {/* After video (full, underneath) */}
+            {/* After video (full, underneath). The poster paints immediately;
+                src is attached only once `load` flips, so the hero never waits
+                on video bytes. */}
             <video
               ref={afterVideoRef}
-              src={afterSrc}
+              {...(load ? { src: afterSrc } : {})}
+              poster={afterPoster}
+              preload="none"
               autoPlay
               loop
               muted
               playsInline
+              aria-label={label}
               onCanPlay={() => setAfterReady(true)}
-              className={`absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
             />
 
             {/* Before video (clipped) */}
             <div
-              className={`absolute inset-0 overflow-hidden transition-opacity duration-300 ${videosReady ? 'opacity-100' : 'opacity-0'}`}
+              className="absolute inset-0 overflow-hidden"
               style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}
             >
               <video
                 ref={beforeVideoRef}
-                src={beforeSrc}
+                {...(load ? { src: beforeSrc } : {})}
+                poster={beforePoster}
+                preload="none"
                 autoPlay
                 loop
                 muted
@@ -119,6 +183,22 @@ export function BeforeAfterSlider({ beforeSrc, afterSrc }: BeforeAfterSliderProp
                 className="w-full h-full object-cover pointer-events-none"
               />
             </div>
+
+            {/* Save-Data users: posters only, with an explicit opt-in. */}
+            {blocked && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBlocked(false)
+                  setLoad(true)
+                }}
+                className="absolute inset-0 flex items-center justify-center bg-black/40 text-white"
+              >
+                <span className="px-4 py-2 rounded-full bg-purple-600/90 text-sm font-semibold">
+                  Tap to play comparison
+                </span>
+              </button>
+            )}
 
             {/* Labels */}
             <div
