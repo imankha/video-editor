@@ -761,6 +761,19 @@ async def activate_game(game_id: int):
         conn.commit()
 
     logger.info(f"Activated game {game_id}: status=ready, cost={upload_cost}cr")
+
+    # T5683: Warm the game source poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the activation.
+    import asyncio
+    from app.services.poster_warmer import warm_game_source_poster_background
+    from app.user_context import get_current_user_id
+    from app.profile_context import get_current_profile_id
+    asyncio.create_task(
+        warm_game_source_poster_background(
+            get_current_user_id(), get_current_profile_id(), game_id
+        )
+    )
+
     return {
         "game_id": game_id,
         "status": GameStatus.READY,
