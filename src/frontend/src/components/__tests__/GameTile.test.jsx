@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 // Mutable state so tests can vary the current profile's sport + viewport.
 const h = vi.hoisted(() => ({
@@ -72,5 +72,64 @@ describe('GameTile — sport-aware fallback (item 1)', () => {
     expect(screen.queryByText('⚽')).toBeNull();
     expect(screen.queryByText('🏅')).toBeNull();
     expect(container.querySelector('svg')).toBeTruthy();
+  });
+});
+
+describe('GameTile — kebab menu (item 4)', () => {
+  it('opens a menu with full-label actions from the single kebab button', () => {
+    const hs = handlers();
+    render(<GameTile game={baseGame} {...hs} />);
+
+    // No action labels until the kebab is opened.
+    expect(screen.queryByText('Edit game')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('More actions'));
+
+    expect(screen.getByText('Watch recap')).toBeTruthy(); // hasRecap
+    expect(screen.getByText('Share game')).toBeTruthy();   // active
+    expect(screen.getByText('Edit game')).toBeTruthy();
+    expect(screen.getByText('Delete game')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Edit game'));
+    expect(hs.onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('delete requires a second confirm tap', () => {
+    const hs = handlers();
+    render(<GameTile game={baseGame} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+
+    fireEvent.click(screen.getByText('Delete game'));
+    expect(hs.onDelete).not.toHaveBeenCalled();
+    expect(screen.getByText('Tap again to confirm')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Tap again to confirm'));
+    expect(hs.onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a bottom sheet on coarse (mobile) pointers', () => {
+    h.isMobile = true;
+    const hs = handlers();
+    render(<GameTile game={baseGame} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    const sheet = document.querySelector('[data-game-menu]');
+    expect(sheet).toBeTruthy();
+    expect(within(sheet).getByText('Edit game')).toBeTruthy();
+  });
+
+  it('tapping the tile body triggers the primary open (annotate), not the menu', () => {
+    const hs = handlers();
+    const { container } = render(<GameTile game={baseGame} {...hs} />);
+    fireEvent.click(container.firstChild);
+    expect(hs.onLoad).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits Share for an expired game and offers Extend', () => {
+    const hs = handlers();
+    const expired = { ...baseGame, storage_status: 'expired' };
+    render(<GameTile game={expired} {...hs} />);
+    fireEvent.click(screen.getByLabelText('More actions'));
+    expect(screen.queryByText('Share game')).toBeNull();
+    expect(screen.getByText('Extend storage')).toBeTruthy();
   });
 });
