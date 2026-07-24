@@ -130,15 +130,65 @@ def test_get_game_poster_404_when_game_missing():
     assert resp.headers["cache-control"] == "private, max-age=60"
 
 
-def test_get_game_poster_404_when_no_recap():
-    """404 when game exists but has no recap_video_url."""
+def test_get_game_poster_404_when_no_recap_and_no_source():
+    """404 when game has no recap AND no live source (expired/reclaimed): the
+    source-frame poster path returns False (T5681 item 2/3)."""
+    from app.services import poster
+
     game_row = {"id": GAME_ID, "recap_video_url": None}
 
-    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)):
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
+         patch.object(games, "get_current_user_id", return_value=USER_ID), \
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=False):
         resp = asyncio.run(games.get_game_poster(GAME_ID))
-    # T5682: negative cache on 404s
+    # T5682: negative cache on 404s (merged: source-frame path returns False)
     assert resp.status_code == 404
     assert resp.headers["cache-control"] == "private, max-age=60"
+
+
+def test_get_game_poster_source_frame_served_when_no_recap():
+    """200 image/jpeg for an ACTIVE game with NO recap: the source-frame poster is
+    generated (highest-rated clip frame) and served from the same key (T5681)."""
+    import httpx
+    from app.services import poster
+
+    game_row = {"id": GAME_ID, "recap_video_url": None}
+
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
+         patch.object(games, "get_current_user_id", return_value=USER_ID), \
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_game_source_poster", return_value=True) as gen, \
+         patch.object(poster, "ensure_recap_poster") as recap_gen, \
+         patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
+         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
+        resp = asyncio.run(games.get_game_poster(GAME_ID))
+
+    assert resp.media_type == "image/jpeg"
+    assert resp.body == b"\xff\xd8jpegbytes"
+    gen.assert_called_once_with(USER_ID, PROFILE_ID, GAME_ID)
+    # Recap-wins invariant: the recap generator is NOT touched for a no-recap game.
+    recap_gen.assert_not_called()
+
+
+def test_get_game_poster_recap_wins_over_source_frame():
+    """Recap-derived poster wins whenever a recap exists: the source-frame path is
+    NEVER invoked for a game that has a recap (T5681 item 3)."""
+    import httpx
+    from app.services import poster
+
+    game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
+
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
+         patch.object(games, "get_current_user_id", return_value=USER_ID), \
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_recap_poster", return_value=True), \
+         patch.object(poster, "ensure_game_source_poster") as source_gen, \
+         patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
+         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
+        asyncio.run(games.get_game_poster(GAME_ID))
+
+    source_gen.assert_not_called()
 
 
 def test_get_game_poster_404_when_ensure_recap_poster_fails():
@@ -218,3 +268,189 @@ def test_get_game_poster_session_auth_uses_current_profile():
         expires_in=3600,
         content_type="image/jpeg"
     )
+
+
+# ---------------------------------------------------------------------------
+# Source-frame poster generation (T5681 item 2/3): frame choice + gating.
+# ---------------------------------------------------------------------------
+
+import sqlite3
+
+from app.services.poster import (
+    GAME_POSTER_FALLBACK_OFFSET_SEC,
+    _choose_game_poster_frame,
+    _primary_game_video_hash,
+    ensure_game_source_poster,
+)
+
+
+def _seeded_frame_db(clips, game_hash="ghash", game_videos=()):
+    """In-memory sqlite (sqlite3.Row) with the minimal games/game_videos/raw_clips
+    columns the frame-choice query reads. `clips` is a list of
+    (rating, start_time, video_sequence) tuples for GAME_ID."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE games (id INTEGER PRIMARY KEY, blake3_hash TEXT)")
+    conn.execute(
+        "CREATE TABLE game_videos (game_id INTEGER, blake3_hash TEXT, sequence INTEGER)"
+    )
+    conn.execute(
+        "CREATE TABLE raw_clips (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id INTEGER, "
+        "rating INTEGER, start_time REAL, video_sequence INTEGER)"
+    )
+    conn.execute("INSERT INTO games (id, blake3_hash) VALUES (?, ?)", (GAME_ID, game_hash))
+    for gid_hash, seq in game_videos:
+        conn.execute(
+            "INSERT INTO game_videos (game_id, blake3_hash, sequence) VALUES (?, ?, ?)",
+            (GAME_ID, gid_hash, seq),
+        )
+    for rating, start_time, seq in clips:
+        conn.execute(
+            "INSERT INTO raw_clips (game_id, rating, start_time, video_sequence) "
+            "VALUES (?, ?, ?, ?)",
+            (GAME_ID, rating, start_time, seq),
+        )
+    conn.commit()
+    return conn
+
+
+def test_choose_frame_prefers_highest_rating():
+    """Brilliant (5) beats Good (4) beats the rest -- picks the 5-star clip's time."""
+    conn = _seeded_frame_db([
+        (3, 10.0, None),
+        (5, 120.0, None),  # Brilliant -> chosen
+        (4, 30.0, None),
+    ])
+    hash_, ts = _choose_game_poster_frame(conn.cursor(), GAME_ID)
+    assert hash_ == "ghash"
+    assert ts == 120.0
+
+
+def test_choose_frame_tie_breaks_to_earliest():
+    """On equal rating, the EARLIEST start_time wins."""
+    conn = _seeded_frame_db([
+        (5, 200.0, None),
+        (5, 45.0, None),   # earliest 5-star -> chosen
+        (5, 90.0, None),
+    ])
+    _hash, ts = _choose_game_poster_frame(conn.cursor(), GAME_ID)
+    assert ts == 45.0
+
+
+def test_choose_frame_resolves_multi_video_sequence_hash():
+    """A clip on video_sequence 2 resolves to that game_video's hash, not the
+    legacy games.blake3_hash."""
+    conn = _seeded_frame_db(
+        [(5, 15.0, 2)],
+        game_hash=None,
+        game_videos=[("hash_seq1", 1), ("hash_seq2", 2)],
+    )
+    hash_, ts = _choose_game_poster_frame(conn.cursor(), GAME_ID)
+    assert hash_ == "hash_seq2"
+    assert ts == 15.0
+
+
+def test_choose_frame_none_when_no_clips():
+    """No annotated clips -> None (caller uses the fixed offset)."""
+    conn = _seeded_frame_db([])
+    assert _choose_game_poster_frame(conn.cursor(), GAME_ID) is None
+
+
+def test_primary_video_hash_prefers_sequence_one():
+    conn = _seeded_frame_db(
+        [], game_hash=None, game_videos=[("hash_seq1", 1), ("hash_seq2", 2)]
+    )
+    assert _primary_game_video_hash(conn.cursor(), GAME_ID) == "hash_seq1"
+
+
+def _extract_capture(captured):
+    """A stand-in for extract_first_frame_jpeg that records the seek and writes a
+    fake JPEG so the caller's read_bytes() succeeds."""
+    def _fake(source, output_path, seek=0.0):
+        captured["seek"] = seek
+        from pathlib import Path as _P
+        _P(output_path).write_bytes(b"\xff\xd8fake")
+        return True
+    return _fake
+
+
+def test_ensure_game_source_poster_cache_hit():
+    """Poster already in R2 -> True with NO ffmpeg extraction (cache hit)."""
+    from app.services import poster
+    from app import storage
+
+    with patch.object(storage, "r2_head_object_global", return_value={"ContentLength": 1}), \
+         patch.object(poster, "extract_first_frame_jpeg") as extract:
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is True
+    extract.assert_not_called()
+
+
+def test_ensure_game_source_poster_no_clips_uses_offset():
+    """No clips -> seek the primary video at the fixed 60s offset."""
+    from app.services import poster
+    from app import storage, database
+
+    captured = {}
+    # HEAD: poster key miss (None) then game source present (dict).
+    head = MagicMock(side_effect=[None, {"ContentLength": 1}])
+
+    with patch.object(storage, "r2_head_object_global", head), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=None), \
+         patch.object(poster, "_primary_game_video_hash", return_value="ghash"), \
+         patch.object(storage, "generate_presigned_url_global", return_value="https://r2/g.mp4?sig"), \
+         patch.object(poster, "extract_first_frame_jpeg", _extract_capture(captured)), \
+         patch.object(poster, "_jpeg_dimensions", return_value=(1280, 720)), \
+         patch.object(storage, "upload_bytes_to_r2_global", return_value=True) as upload:
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is True
+
+    assert captured["seek"] == GAME_POSTER_FALLBACK_OFFSET_SEC
+    assert upload.called
+
+
+def test_ensure_game_source_poster_uses_highest_rated_timestamp():
+    """The chosen clip's timestamp is the ffmpeg seek offset."""
+    from app.services import poster
+    from app import storage, database
+
+    captured = {}
+    head = MagicMock(side_effect=[None, {"ContentLength": 1}])
+
+    with patch.object(storage, "r2_head_object_global", head), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=("ghash", 87.5)), \
+         patch.object(storage, "generate_presigned_url_global", return_value="https://r2/g.mp4?sig"), \
+         patch.object(poster, "extract_first_frame_jpeg", _extract_capture(captured)), \
+         patch.object(poster, "_jpeg_dimensions", return_value=None), \
+         patch.object(storage, "upload_bytes_to_r2_global", return_value=True):
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is True
+
+    assert captured["seek"] == 87.5
+
+
+def test_ensure_game_source_poster_404_when_source_expired():
+    """Live source object gone (HEAD miss) -> False (expired game stays 404)."""
+    from app.services import poster
+    from app import storage, database
+
+    # HEAD: poster key miss, then game source ALSO miss (reclaimed).
+    head = MagicMock(side_effect=[None, None])
+
+    with patch.object(storage, "r2_head_object_global", head), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=("ghash", 12.0)), \
+         patch.object(poster, "extract_first_frame_jpeg") as extract:
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is False
+    extract.assert_not_called()
+
+
+def test_ensure_game_source_poster_false_when_no_hash():
+    """No clips AND no primary video hash -> False (nothing to seek)."""
+    from app.services import poster
+    from app import storage, database
+
+    with patch.object(storage, "r2_head_object_global", return_value=None), \
+         patch.object(database, "get_db_connection", _fake_db_with_row(None)), \
+         patch.object(poster, "_choose_game_poster_frame", return_value=None), \
+         patch.object(poster, "_primary_game_video_hash", return_value=None):
+        assert ensure_game_source_poster(USER_ID, PROFILE_ID, GAME_ID) is False

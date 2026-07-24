@@ -128,6 +128,65 @@ test.describe('T5672: CardCarousel arrows + DraftTile clip-count marker', () => 
     await mobileContext.close();
   });
 
+  test('A game with both 9:16 and 16:9 drafts renders one row per aspect, portrait first', async ({
+    page,
+  }) => {
+    // Set desktop viewport
+    await page.setViewportSize({ width: 1315, height: 800 });
+    await page.goto('/');
+    await page.waitForSelector('[data-testid="project-card"]', { timeout: 10000 });
+    // Let the initial fetchProjects() settle before injecting, so the
+    // synthetic entry isn't overwritten by that resolving promise.
+    await page.waitForLoadState('networkidle');
+
+    // The real account's "at Legends Mar 28" group is all-portrait today, so
+    // splice in one synthetic 16:9 draft under the SAME group_key to exercise
+    // the split. Client-side only, no backend/DB writes.
+    await page.evaluate(async () => {
+      const { useProjectsStore } = await import('/src/stores/projectsStore.js');
+      const current = useProjectsStore.getState().projects;
+      const portraitDraft = current.find((p) => p.aspect_ratio === '9:16' && p.group_key);
+      const landscapeDraft = {
+        ...portraitDraft,
+        id: 888888,
+        name: 'Synthetic Landscape Draft',
+        aspect_ratio: '16:9',
+      };
+      useProjectsStore.setState({ projects: [landscapeDraft, ...current] });
+    });
+
+    await page.waitForSelector('text=Synthetic Landscape Draft', { timeout: 3000 });
+
+    // Two carousel rows for that game now: one per aspect, portrait first.
+    const portraitRow = page.locator('[role="group"][aria-label*="9:16"]');
+    const landscapeRow = page.locator('[role="group"][aria-label*="16:9"]');
+    await expect(portraitRow).toHaveCount(1);
+    await expect(landscapeRow).toHaveCount(1);
+
+    // Portrait row precedes the landscape row in DOM order.
+    const rowLabels = await page.locator('[role="group"][aria-label*="drafts"]').evaluateAll(
+      (els) => els.map((el) => el.getAttribute('aria-label'))
+    );
+    const portraitIdx = rowLabels.findIndex((l) => l?.includes('9:16'));
+    const landscapeIdx = rowLabels.findIndex((l) => l?.includes('16:9'));
+    console.log(`Row order: ${JSON.stringify(rowLabels)}`);
+    expect(portraitIdx).toBeGreaterThanOrEqual(0);
+    expect(landscapeIdx).toBeGreaterThan(portraitIdx);
+
+    // Aspect label chips visible, using the raw filter-chip vocabulary ("9:16"/"16:9").
+    expect(await page.getByText('9:16', { exact: true }).count()).toBeGreaterThan(0);
+    expect(await page.getByText('16:9', { exact: true }).count()).toBeGreaterThan(0);
+
+    // The synthetic landscape tile renders as a landscape (aspect-video) shape,
+    // not letterboxed into a portrait tile.
+    const landscapeTile = page.locator('[data-testid="project-card"]', { hasText: 'Synthetic Landscape Draft' });
+    const tileClass = await landscapeTile.first().getAttribute('class');
+    expect(tileClass).toMatch(/aspect-video/);
+
+    await page.screenshot({ path: '/tmp/t5672-aspect-split-rows.png' });
+    console.log('Screenshot saved: /tmp/t5672-aspect-split-rows.png');
+  });
+
   test('Verify all 13 drafts belong to one game (Legends Mar 28)', async ({
     context,
     page,

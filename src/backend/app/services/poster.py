@@ -140,19 +140,22 @@ def extract_clearest_frame_jpeg(
 
 
 def extract_first_frame_jpeg(
-    source: str, output_path: str,
+    source: str, output_path: str, seek: float = 0.0,
     resize_width: int | None = None, jpeg_quality: int = 3
 ) -> bool:
-    """Grab the first frame of a video to a JPEG via ffmpeg.
+    """Grab a single frame of a video to a JPEG via ffmpeg.
 
     `source` may be a local path OR a presigned HTTPS URL -- ffmpeg reads remote
-    URLs directly (range requests), so no full download is needed.
-    `resize_width` and `jpeg_quality` match extract_clearest_frame_jpeg (T5682).
+    URLs directly (range requests), so no full download is needed. `seek` is the
+    ABSOLUTE timestamp (seconds) to grab; defaults to the first frame (0.0). For a
+    faststart MP4 a remote seek is a ranged read, not a full download (T5681 game
+    source poster picks the highest-rated clip's timestamp here). `resize_width`
+    and `jpeg_quality` match extract_clearest_frame_jpeg (T5682: card-size thumbs).
     Returns True on success, False on any failure (never raises).
     """
     cmd = [
         "ffmpeg", "-y",
-        "-ss", "0",
+        "-ss", f"{seek:.3f}",
         "-i", source,
         "-frames:v", "1",
     ]
@@ -630,6 +633,162 @@ async def warm_recap_poster(user_id: str, profile_id: str, game_id: int) -> None
         await asyncio.to_thread(ensure_recap_poster, recap_key, poster_key)
     except Exception as e:
         logger.info(f"[RecapPoster] warm-at-share-creation failed for game_id={game_id}: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Game source poster (T5681): a poster for an ACTIVE game that has NO recap yet.
+#
+# The recap poster (above) only exists once a game has a recap master. Games that
+# are still live (source video present in R2) but not yet auto-exported would 404
+# and show the branded fallback tile. Here we extract ONE frame directly from the
+# live game source (`games/{blake3}.mp4`, global namespace) and cache it at the
+# SAME per-profile key the recap poster uses (`recaps/posters/{game_id}.jpg`), so
+# the serving path in the endpoint is identical regardless of which producer wrote
+# the object. Recap-derived posters always win when a recap exists (the endpoint
+# only calls this when recap_video_url is NULL).
+#
+# Frame choice: the timestamp of the HIGHEST-RATED annotated clip (rating 5
+# "Brilliant" > 4 "Good" > ...; ties -> earliest start_time). A game with no clips
+# uses a fixed offset into its primary video. Reuses extract_first_frame_jpeg (a
+# single ranged seek) -- no fork.
+# ---------------------------------------------------------------------------
+
+GAME_POSTER_FALLBACK_OFFSET_SEC = 60.0
+
+
+def _choose_game_poster_frame(cursor, game_id: int) -> tuple[str | None, float] | None:
+    """(video_hash, timestamp_sec) for a game's HIGHEST-RATED annotated clip, or
+    None when the game has no clips.
+
+    Highest rating wins (Brilliant=5 beats Good=4 beats the rest); ties break to
+    the EARLIEST clip (`start_time ASC`). `video_hash` is the clip's source video
+    (`game_videos.blake3_hash` for the clip's `video_sequence`, else the legacy
+    `games.blake3_hash`), keyed by the same COALESCE(video_sequence,1) join the
+    render path uses. May be None when the row carries no resolvable hash (caller
+    then has no live source to seek)."""
+    cursor.execute(
+        """
+        SELECT rc.start_time AS ts,
+               COALESCE(gv.blake3_hash, g.blake3_hash) AS video_hash
+        FROM raw_clips rc
+        LEFT JOIN games g ON rc.game_id = g.id
+        LEFT JOIN game_videos gv
+            ON gv.game_id = rc.game_id
+           AND gv.sequence = COALESCE(rc.video_sequence, 1)
+        WHERE rc.game_id = ?
+        ORDER BY rc.rating DESC, rc.start_time ASC
+        LIMIT 1
+        """,
+        (game_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    ts = row["ts"] if row["ts"] is not None else 0.0
+    return (row["video_hash"], float(ts))
+
+
+def _primary_game_video_hash(cursor, game_id: int) -> str | None:
+    """The game's PRIMARY source video hash (sequence 1, else legacy
+    `games.blake3_hash`), or None. Used for the no-clips fallback frame."""
+    cursor.execute(
+        """
+        SELECT COALESCE(gv.blake3_hash, g.blake3_hash) AS video_hash
+        FROM games g
+        LEFT JOIN game_videos gv ON gv.game_id = g.id AND gv.sequence = 1
+        WHERE g.id = ?
+        """,
+        (game_id,),
+    )
+    row = cursor.fetchone()
+    return row["video_hash"] if row else None
+
+
+def ensure_game_source_poster(user_id: str, profile_id: str, game_id: int) -> bool:
+    """Cache-first poster for an ACTIVE game with NO recap, from its live source
+    video (T5681). Generate-on-miss; caches at the recap poster key so the endpoint
+    serves it identically.
+
+    Returns True when the poster object exists (already cached or freshly stored),
+    False when it could not be produced -- the endpoint then 404s and the frontend
+    renders the branded fallback (no fabricated image, no-silent-fallback rule).
+    Specifically False when the game's live source object is gone
+    (expired/reclaimed) -> an expired game with no recap stays 404.
+
+    Steps:
+      1. Poster already in R2 -> True without ffmpeg (cache hit).
+      2. Pick the frame: highest-rated clip's (video_hash, start_time); no clips ->
+         (primary video hash, GAME_POSTER_FALLBACK_OFFSET_SEC).
+      3. HEAD-probe `games/{hash}.mp4` (global). Missing -> False (no live source).
+      4. Presign + extract ONE frame at the timestamp + upload to the poster key.
+
+    Best effort: never raises. Runs blocking ffmpeg/R2 work, so callers on the
+    event loop wrap it in asyncio.to_thread.
+    """
+    from ..database import get_db_connection
+    from ..storage import (
+        generate_presigned_url_global,
+        r2_head_object_global,
+        upload_bytes_to_r2_global,
+    )
+
+    _, poster_key = recap_poster_r2_keys(user_id, profile_id, game_id)
+    try:
+        # 1. Cache hit.
+        if r2_head_object_global(poster_key) is not None:
+            return True
+
+        # 2. Choose the frame (highest-rated clip, else primary video @ offset).
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            choice = _choose_game_poster_frame(cursor, game_id)
+            if choice is not None:
+                video_hash, timestamp = choice
+            else:
+                video_hash = _primary_game_video_hash(cursor, game_id)
+                timestamp = GAME_POSTER_FALLBACK_OFFSET_SEC
+
+        if not video_hash:
+            logger.info(f"[GamePoster] game {game_id} has no source video hash -> no poster")
+            return False
+
+        # 3. Live source must still exist (expired/reclaimed -> 404 -> fallback).
+        game_key = f"games/{video_hash}.mp4"
+        if r2_head_object_global(game_key) is None:
+            logger.info(f"[GamePoster] game {game_id} source {game_key} gone -> no poster")
+            return False
+
+        source_url = generate_presigned_url_global(game_key, expires_in=3600)
+        if not source_url:
+            logger.info(f"[GamePoster] presign failed for {game_key}; skipping")
+            return False
+
+        # 4. Extract ONE frame at the chosen timestamp (single ranged seek).
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = str(Path(tmp) / f"{game_id}.jpg")
+            if not extract_first_frame_jpeg(source_url, out_path, seek=timestamp):
+                logger.info(
+                    f"[GamePoster] extraction failed for game {game_id} @ {timestamp:.3f}s"
+                )
+                return False
+            data = Path(out_path).read_bytes()
+            dims = _jpeg_dimensions(out_path)
+
+        metadata = {"width": dims[0], "height": dims[1]} if dims else None
+        if not upload_bytes_to_r2_global(
+            poster_key, data, fast=True, content_type="image/jpeg", metadata=metadata,
+        ):
+            logger.info(f"[GamePoster] R2 upload failed for {poster_key}; no poster stored")
+            return False
+
+        logger.info(
+            f"[GamePoster] stored {poster_key} from {game_key} @ {timestamp:.3f}s "
+            f"({len(data)} bytes, dims={dims or 'unknown'})"
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"[GamePoster] unexpected error for game {game_id}: {e}")
+        return False
 
 
 # ---------------------------------------------------------------------------
