@@ -2,7 +2,9 @@ import React, { useState, useRef } from 'react';
 import { Play, Share2, Pencil, RefreshCw, Trash2, Loader2, Clock } from 'lucide-react';
 import { Button } from './shared/Button';
 import { useIsMobile } from '../hooks/useIsMobile';
-import { GAME } from '../config/themeColors';
+import { useProfileStore } from '../stores';
+import { sportEmojiOrNull } from '../modes/annotate/constants/tagRegistry';
+import { Logo } from './Logo';
 import { getDaysUntil, ExpirationBadge } from './ExpirationBadge';
 
 /**
@@ -34,6 +36,13 @@ export function GameTile({
   const touchMoved = useRef(false);
   const longPressFired = useRef(false);
   const isMobile = useIsMobile();
+
+  // Current profile's sport drives the no-poster fallback glyph. Same store access
+  // ProfileSportButton uses; an unknown/custom sport -> app logo (never another sport).
+  const profiles = useProfileStore((state) => state.profiles);
+  const currentProfileId = useProfileStore((state) => state.currentProfileId);
+  const currentProfile = profiles.find((p) => p.id === currentProfileId);
+  const sportGlyph = sportEmojiOrNull(currentProfile?.sport);
 
   const isExpired = game.storage_status === 'expired';
   const hasRecap = Boolean(game.recap_video_url);
@@ -130,11 +139,17 @@ export function GameTile({
         />
       )}
 
-      {/* Branded fallback (no poster) */}
+      {/* Branded fallback (no poster): current sport ball, else the app logo. */}
       {posterState === 'error' && (
         <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 flex flex-col items-center justify-center">
           <div className="text-center px-4">
-            <div className={`text-2xl font-bold mb-2 ${GAME.accent}`}>⚾</div>
+            {sportGlyph ? (
+              <div className="text-2xl mb-2" aria-hidden>{sportGlyph}</div>
+            ) : (
+              <div className="mb-2 flex justify-center" aria-hidden>
+                <Logo size={28} />
+              </div>
+            )}
             <p className="text-xs text-gray-400">Reel Ballers</p>
             <p className="text-[10px] text-gray-500 mt-1">No poster</p>
           </div>
