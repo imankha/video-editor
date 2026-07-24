@@ -15,6 +15,7 @@ import { getProjectDisplayName } from '../utils/clipDisplayName';
 import { formatGameClock } from '../utils/timeFormat';
 import { SECTION_NAMES } from '../config/displayNames';
 import { REEL } from '../config/themeColors';
+import { RATIO } from '../constants/aspectRatios';
 
 /**
  * DraftTile - a reel draft as a portrait 9:16 poster tile (T5672).
@@ -267,6 +268,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
     : 'opacity-0 pointer-events-none group-hover/tile:opacity-100 group-hover/tile:pointer-events-auto';
   const actionBtnClass = 'coarse-pointer:min-h-[44px] coarse-pointer:min-w-[44px]';
 
+  // Per-reel aspect (mirrors ReelTile T5673): 9:16 drafts render portrait
+  // tiles, 16:9 drafts render landscape tiles. A caller that puts both
+  // aspects in one row (rare) will get mixed tile heights -- callers should
+  // split into one-aspect-per-row instead (see ProjectManager grouping).
+  const isLandscape = project.aspect_ratio === RATIO.LANDSCAPE;
+  const sizeClass = isLandscape
+    ? 'w-[72vw] max-w-[300px] sm:w-[260px] aspect-video'
+    : 'w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16]';
+
   return (
     <div
       data-testid="project-card"
@@ -274,7 +284,7 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
       onTouchStart={isMobile ? handleTouchStart : undefined}
       onTouchMove={isMobile ? handleTouchMove : undefined}
       onTouchEnd={isMobile ? handleTouchEnd : undefined}
-      className={`group/tile relative shrink-0 snap-start w-[40vw] max-w-[200px] sm:w-[168px] aspect-[9/16] rounded-lg overflow-hidden bg-gray-800 border transition-colors ${
+      className={`group/tile relative shrink-0 snap-start ${sizeClass} rounded-lg overflow-hidden bg-gray-800 border transition-colors ${
         canOpen ? `cursor-pointer border-gray-700 ${REEL.borderHover}` : 'cursor-not-allowed border-gray-700 opacity-75'
       }`}
     >

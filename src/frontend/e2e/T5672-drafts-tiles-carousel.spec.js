@@ -83,10 +83,14 @@ test('T5672 drafts render as per-game poster-tile carousels', async ({ context, 
   const openable = tiles.filter({ hasNot: page.getByRole('button', { name: /move to/i }) });
   const openTarget = (await openable.count()) ? openable.first() : tiles.first();
   await openTarget.click();
-  await page.waitForTimeout(1200);
-  // Opened the draft: navigated into an editor mode and the home tiles are gone.
+  // Opening a draft is async (fetch project details + load, ~1-2.5s). The drafts
+  // list blanks to a "Loading" state first — projectsStore.loading flips true
+  // during fetchProject — and only once the load resolves does editorMode + the
+  // URL flip to the editor. Wait on the URL (the true navigation signal) with a
+  // retry: the list emptying alone would satisfy toHaveCount(0) before navigation
+  // completes, so asserting the URL synchronously right after is a race.
+  await page.waitForURL(/\/(framing|overlay|annotate)/, { timeout: 20000 });
   await expect(tiles, 'left the drafts list on tile tap').toHaveCount(0);
-  expect(page.url(), 'tile opened an editor mode (framing/overlay)').toMatch(/\/(framing|overlay|annotate)/);
   await saveEvidence(page, 'criterion-6-tile-opens-draft');
 
   // ---- Mobile 390: swipe + partial next tile + no page overflow (criterion 2) ----
