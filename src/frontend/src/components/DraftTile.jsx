@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Star, Pencil, CheckCircle, Tag, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
+import { Pencil, CheckCircle, Tag, Loader2, Image, Trash2, Play, Crop, Layers, EyeOff, X, Film } from 'lucide-react';
 import { Button } from './shared/Button';
 import { MediaPlayer } from './MediaPlayer';
 import { SegmentedProgressStrip } from './shared/SegmentedProgressStrip';
@@ -301,15 +301,15 @@ export function DraftTile({ project, onSelect, onSelectWithMode, onDelete, expor
         </div>
       )}
 
-      {/* Auto-created marker — labeled chip instead of bare icon */}
-      {project.is_auto_created && (
+      {/* Multi-clip marker — only shown when the draft has more than 1 clip */}
+      {project.clip_count > 1 && (
         <span
-          className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-amber-500/90 text-white shadow hover:bg-amber-400 transition-colors"
-          title="Created automatically by the system"
-          aria-label="Auto-created reel"
+          className="absolute top-1.5 left-1.5 z-20 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold bg-gray-900/80 text-white shadow backdrop-blur-sm"
+          title={`Contains ${project.clip_count} clips`}
+          aria-label={`Contains ${project.clip_count} clips`}
         >
-          <Star size={12} fill="currentColor" />
-          Auto
+          <Layers size={12} />
+          {project.clip_count}
         </span>
       )}
 

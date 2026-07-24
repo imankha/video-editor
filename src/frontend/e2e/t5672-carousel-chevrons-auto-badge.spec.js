@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { loginAsRealUser } from './helpers/realAuth';
 
-test.describe('T5672: CardCarousel chevrons + DraftTile auto-created marker', () => {
+test.describe('T5672: CardCarousel chevrons + DraftTile clip-count marker', () => {
   test.beforeEach(async ({ context, page }) => {
     // Login as real user with real data (games + drafts)
     await loginAsRealUser(context, 'imankh@gmail.com');
   });
 
-  test('Desktop (1315px): chevrons visible on overflow, hide at edges, Auto chip has tooltip', async ({
+  test('Desktop (1315px): chevrons visible on overflow, hide at edges, clip-count chip has tooltip', async ({
     context,
     page,
   }) => {
@@ -36,17 +36,16 @@ test.describe('T5672: CardCarousel chevrons + DraftTile auto-created marker', ()
     });
     console.log(`Total drafts: ${draftsData.length}`);
 
-    // Verify auto-created marker is a chip with label + tooltip
-    const autoChips = await page.locator('[aria-label*="Auto-created"]').all();
-    if (autoChips.length > 0) {
-      console.log(`\n✓ Found ${autoChips.length} auto-created chips`);
-      const firstChip = autoChips[0];
+    // Verify multi-clip marker is a chip with label + tooltip (only on drafts with >1 clip)
+    const clipCountChips = await page.locator('[aria-label*="Contains"][aria-label*="clips"]').all();
+    if (clipCountChips.length > 0) {
+      console.log(`\n✓ Found ${clipCountChips.length} clip-count chips`);
+      const firstChip = clipCountChips[0];
       const title = await firstChip.getAttribute('title');
       const label = await firstChip.textContent();
       console.log(`  Title: ${title}`);
       console.log(`  Label: ${label}`);
-      expect(title).toMatch(/Created automatically/);
-      expect(label).toContain('Auto');
+      expect(title).toMatch(/Contains \d+ clips/);
     }
 
     // Look for carousel row with multiple tiles
@@ -86,7 +85,7 @@ test.describe('T5672: CardCarousel chevrons + DraftTile auto-created marker', ()
     }
   });
 
-  test('Mobile (390px): no chevrons, native swipe works, Auto chip visible', async ({
+  test('Mobile (390px): no chevrons, native swipe works, clip-count chip visible', async ({
     context,
     page,
   }) => {
@@ -102,9 +101,9 @@ test.describe('T5672: CardCarousel chevrons + DraftTile auto-created marker', ()
     expect(chevrons).toBe(0);
     console.log(`✓ No chevrons on mobile (${chevrons} found)`);
 
-    // Verify auto-created chip is still visible on mobile
-    const autoChips = await page.locator('[aria-label*="Auto-created"]').count();
-    console.log(`✓ Auto-created chips visible on mobile: ${autoChips}`);
+    // Verify clip-count chip is still visible on mobile (for multi-clip drafts)
+    const clipCountChips = await page.locator('[aria-label*="Contains"][aria-label*="clips"]').count();
+    console.log(`✓ Clip-count chips visible on mobile: ${clipCountChips}`);
 
     // Verify carousel can be scrolled (swipe)
     const carousel = await page.locator('[role="group"]').first();
