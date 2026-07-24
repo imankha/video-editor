@@ -22,7 +22,11 @@ from app.middleware.db_sync import DURABLE_SYNC_FAILED_RESPONSE, durable_sync
 from app.profile_context import get_current_profile_id
 from app.queries import exclude_teammate_reels_clause, latest_final_videos_subquery
 from app.services.collection_metadata import ORDER_BY_RANK, route_collection
-from app.services.materialization import _open_profile_db, ensure_profile_db_local
+from app.services.materialization import (
+    ProfileDBRefreshFailed,
+    _open_profile_db,
+    ensure_profile_db_local,
+)
 from app.services.poster import generate_poster_at_publish, poster_rel_path
 from app.services.project_archive import archive_project, is_project_archived, restore_project
 from app.storage import (
@@ -1082,10 +1086,28 @@ async def move_reels_to_profile(
             copied_paths.append(rel_path)
 
         # --- Phase 1: write + durably sync the TARGET profile DB -------------
-        ensure_profile_db_local(user_id, target_profile_id)
+        # require_fresh: refuse to write against a copy we could not confirm is
+        # current. The write-back force-pushes, so building on a stale local file
+        # reverts the target profile in R2 -- silently deleting reels moved there
+        # earlier while their media survives. Abort retryably instead.
+        try:
+            ensure_profile_db_local(user_id, target_profile_id, require_fresh=True)
+        except ProfileDBRefreshFailed:
+            _cleanup_target_objects(user_id, target_profile_id, copied_paths)
+            logger.warning(
+                f"[MoveReels] could not confirm target profile {target_profile_id} is "
+                f"current (R2 error); aborting rather than force-pushing a stale copy "
+                f"req_id={req_id} -> 503"
+            )
+            raise HTTPException(
+                status_code=503, detail=DURABLE_SYNC_FAILED_RESPONSE
+            ) from None
         target_conn = _open_profile_db(user_id, target_profile_id)
         if target_conn is None:
-            # Target has no local/R2 DB yet -> materialize an empty schema for it.
+            # Only reachable now when R2 genuinely has NO DB for this profile
+            # (NOT_FOUND, not an error) -- i.e. the first reel ever moved here.
+            # Creating an empty schema after an R2 *error* would force-push it and
+            # wipe the whole target, which is why require_fresh must run first.
             _ensure_empty_profile_db(target_profile_id)
             target_conn = _open_profile_db(user_id, target_profile_id)
         if target_conn is None:
@@ -1139,7 +1161,7 @@ async def move_reels_to_profile(
             logger.exception(
                 f"[MoveReels] target insert failed ids={video_ids} req_id={req_id}"
             )
-            raise HTTPException(status_code=500, detail="Failed to write target profile")
+            raise HTTPException(status_code=500, detail="Failed to write target profile") from None
         finally:
             target_conn.close()
 

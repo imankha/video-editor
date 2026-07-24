@@ -40,7 +40,19 @@ def _open_profile_db(user_id: str, profile_id: str) -> sqlite3.Connection | None
     return conn
 
 
-def ensure_profile_db_local(user_id: str, profile_id: str) -> Path | None:
+class ProfileDBRefreshFailed(RuntimeError):
+    """R2 was unreachable, so a profile DB could not be confirmed current.
+
+    Only raised for WRITE callers (require_fresh=True). Serving a stale copy to a
+    reader is fine; handing one to a writer is not, because the write-back
+    force-pushes (skip_version_check=True) and would revert the profile in R2 to
+    the stale snapshot plus the new row.
+    """
+
+
+def ensure_profile_db_local(
+    user_id: str, profile_id: str, require_fresh: bool = False
+) -> Path | None:
     """Guarantee a profile's SQLite DB is present in the local cache, downloading
     it from R2 if missing/stale, then return its path (or None if R2 has none).
 
@@ -69,6 +81,14 @@ def ensure_profile_db_local(user_id: str, profile_id: str) -> Path | None:
         if downloaded and new_version is not None:
             # Cache bookkeeping only (db_version table); not owner data.
             set_local_db_version(user_id, profile_id, new_version)
+        if was_error and require_fresh:
+            # A writer must never build on an unconfirmed copy: the sync back is a
+            # force-push, so proceeding here silently REVERTS the profile in R2 to
+            # whatever this machine happens to hold. This is how moved reels lost
+            # their final_videos row while the mp4 survived.
+            raise ProfileDBRefreshFailed(
+                f"could not confirm profile {profile_id} is current (R2 error)"
+            )
         if was_error and not db_path.exists():
             logger.warning(
                 f"[collection-share] R2 error and no local DB for "
