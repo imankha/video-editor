@@ -60,6 +60,47 @@ def _require_admin():
 # Credit helpers
 # ---------------------------------------------------------------------------
 
+def _refresh_target_user_db(target_user_id: str) -> None:
+    """Pull the grantee's user.sqlite from R2 BEFORE mutating it.
+
+    `ensure_user_database` only restores from R2 when `local_version is None`, so
+    once a machine has materialized this user's DB it keeps serving that snapshot
+    forever. The admin panel materializes other users' DBs routinely
+    (`get_credit_stats_for_admin`), so the admin's machine is likely holding a
+    stale copy of the grantee.
+
+    That matters because the write-back uses `skip_version_check=True` and
+    force-pushes the whole file. Granting against a stale snapshot would upload it
+    over the grantee's newer state -- losing their recent activity AND, once their
+    own machine syncs again, the grant too. Read the authoritative copy first so
+    this is a real read-modify-write instead of a write against a snapshot.
+    """
+    from ..database import (
+        USER_DATA_BASE,
+        get_local_user_db_version,
+        set_local_user_db_version,
+    )
+    from ..services.user_db import ensure_user_database
+    from ..storage import R2_ENABLED, sync_user_db_from_r2_if_newer
+
+    if not R2_ENABLED:
+        return
+    ensure_user_database(target_user_id)
+    db_path = USER_DATA_BASE / target_user_id / "user.sqlite"
+    downloaded, new_version, was_error = sync_user_db_from_r2_if_newer(
+        target_user_id, db_path, get_local_user_db_version(target_user_id)
+    )
+    if downloaded and new_version is not None:
+        set_local_user_db_version(target_user_id, new_version)
+    elif was_error:
+        # Visible, not silently swallowed: the grant is about to be applied to a
+        # copy we could not confirm is current.
+        logger.warning(
+            f"[Admin] could not refresh user.sqlite for {target_user_id} from R2 "
+            f"-- granting against a possibly stale local copy"
+        )
+
+
 async def _persist_target_user_db(target_user_id: str) -> bool:
     """Push a credit change written to ANOTHER user's user.sqlite up to R2.
 
@@ -71,16 +112,26 @@ async def _persist_target_user_db(target_user_id: str) -> bool:
     admin write paths that target a user other than the caller.
 
     Deliberately NOT turned into a 5xx: admin_grant carries no idempotency key
-    (reference_id is NULL), so a retry would double-grant. Instead the failure is
-    logged loudly and the grantee is marked sync-pending, which makes the
-    middleware retry the upload on their next write.
+    (reference_id is NULL, and SQLite treats NULLs as distinct in the UNIQUE
+    index), so a retry would double-grant. The caller reports `synced` instead and
+    the admin UI surfaces it, leaving the operator to decide.
+
+    `mark_sync_pending` is a BEST-EFFORT nudge only -- do not rely on it. The
+    marker file lives on the same volume as the un-uploaded DB, so a machine
+    replacement (the scenario this function exists to prevent) destroys both. Even
+    when the volume survives, the middleware's retry is gated on the GRANTEE
+    issuing a write that lands on THIS machine. `synced=False` reaching a human is
+    the real mitigation.
+
+    lock_timeout is left at None (block indefinitely) on purpose: the middleware's
+    0.5s defer is a silent-loss path, unacceptable for a one-shot credit gesture.
     """
     synced = await asyncio.to_thread(sync_user_db_to_r2_explicit, target_user_id)
     if not synced:
         mark_sync_pending(target_user_id)
         logger.error(
             f"[Admin] R2 sync FAILED for target user {target_user_id} -- credit change is "
-            f"local-only until their next write; marked sync-pending"
+            f"NOT durable and will be lost if this machine is replaced; reported as synced=false"
         )
     return synced
 
@@ -309,14 +360,23 @@ async def admin_bulk_grant_credits(request: BulkGrantCreditsRequest):
             failed += 1
             continue
         try:
+            await asyncio.to_thread(_refresh_target_user_db, uid)
             balance = grant_credits(uid, request.amount, source="admin_grant")
-            synced = await _persist_target_user_db(uid)
-            results.append({"user_id": uid, "ok": True, "balance": balance, "synced": synced})
-            granted += 1
         except Exception as exc:
             logger.exception(f"[Admin] bulk grant-credits failed for {uid}")
             results.append({"user_id": uid, "ok": False, "error": str(exc)})
             failed += 1
+            continue
+        # The grant is COMMITTED past this point. A sync problem must never flip
+        # ok to False: the admin would re-run the batch and, with reference_id
+        # NULL, double-grant. Report it as synced=False instead.
+        try:
+            synced = await _persist_target_user_db(uid)
+        except Exception:
+            logger.exception(f"[Admin] bulk grant-credits R2 sync raised for {uid}")
+            synced = False
+        results.append({"user_id": uid, "ok": True, "balance": balance, "synced": synced})
+        granted += 1
 
     return {"results": results, "granted": granted, "failed": failed}
 
@@ -405,6 +465,7 @@ async def admin_grant_credits(user_id: str, request: GrantCreditsRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    await asyncio.to_thread(_refresh_target_user_db, user_id)
     new_balance = grant_credits(user_id, request.amount, source="admin_grant")
     synced = await _persist_target_user_db(user_id)
     return {"balance": new_balance, "synced": synced}
@@ -427,6 +488,7 @@ async def admin_set_credits(user_id: str, request: SetCreditsRequest):
         raise HTTPException(status_code=404, detail="User not found")
 
     from ..services.user_db import set_credits
+    await asyncio.to_thread(_refresh_target_user_db, user_id)
     new_balance = set_credits(user_id, request.amount)
     synced = await _persist_target_user_db(user_id)
     return {"balance": new_balance, "synced": synced}

@@ -100,7 +100,7 @@ export const useAdminStore = create((set, get) => ({
         const err = await res.json();
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      const { balance } = await res.json();
+      const { balance, synced } = await res.json();
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: null } },
         users: state.users.map(u =>
@@ -108,7 +108,7 @@ export const useAdminStore = create((set, get) => ({
         ),
       }));
       useCreditStore.getState().fetchCredits();
-      return balance;
+      return { balance, synced };
     } catch (err) {
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },
@@ -263,7 +263,7 @@ export const useAdminStore = create((set, get) => ({
         const err = await res.json();
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      const { balance } = await res.json();
+      const { balance, synced } = await res.json();
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: null } },
         users: state.users.map(u =>
@@ -271,7 +271,7 @@ export const useAdminStore = create((set, get) => ({
         ),
       }));
       useCreditStore.getState().fetchCredits();
-      return balance;
+      return { balance, synced };
     } catch (err) {
       set(state => ({
         grantState: { ...state.grantState, [userId]: { loading: false, error: err.message } },

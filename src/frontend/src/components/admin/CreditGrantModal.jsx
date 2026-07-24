@@ -20,6 +20,10 @@ export function CreditGrantModal({ users, onClose }) {
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState(null); // bulk result summary
+  // Credits committed locally but the R2 upload failed -- see admin.py
+  // _persist_target_user_db. Surfaced so the operator can re-run rather than
+  // trusting a green checkmark for a change that will not survive a deploy.
+  const [notDurable, setNotDurable] = useState(false);
 
   const grantCredits = useAdminStore(state => state.grantCredits);
   const setCredits = useAdminStore(state => state.setCredits);
@@ -38,19 +42,22 @@ export function CreditGrantModal({ users, onClose }) {
       if (isBulk) {
         const data = await bulkGrantCredits(users.map(u => u.user_id), n);
         const failedIds = data.results.filter(r => !r.ok);
-        setSummary({ granted: data.granted, failed: data.failed, failedIds });
+        // Granted but not uploaded to R2: real, and lost on the next machine
+        // swap unless re-run. Must not read as a clean success.
+        const notSynced = data.results.filter(r => r.ok && r.synced === false);
+        setSummary({ granted: data.granted, failed: data.failed, failedIds, notSynced });
         setSuccess(true);
         setAmount('');
       } else {
         const userId = users[0].user_id;
-        if (mode === 'set') {
-          await setCredits(userId, n);
-        } else {
-          await grantCredits(userId, n);
-        }
+        const result = mode === 'set'
+          ? await setCredits(userId, n)
+          : await grantCredits(userId, n);
+        setNotDurable(result?.synced === false);
         setSuccess(true);
         setAmount('');
-        setTimeout(() => onClose(), 1200);
+        // Keep a failed upload on screen instead of auto-dismissing it.
+        if (result?.synced !== false) setTimeout(() => onClose(), 1200);
       }
     } catch (err) {
       setError(err.message);
@@ -123,6 +130,19 @@ export function CreditGrantModal({ users, onClose }) {
                   ))}
                 </ul>
               )}
+              {summary.notSynced?.length > 0 && (
+                <div className="mt-2 text-amber-400 text-xs">
+                  <p>
+                    {summary.notSynced.length} granted but NOT saved to the cloud
+                    &mdash; these will be lost on the next deploy. Re-run for:
+                  </p>
+                  <ul className="mt-1 max-h-24 overflow-auto">
+                    {summary.notSynced.map(r => (
+                      <li key={r.user_id}>{r.user_id}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <button
                 onClick={onClose}
                 className="mt-3 w-full bg-purple-600 hover:bg-purple-500 text-white rounded-lg px-4 py-2 text-sm font-medium transition-colors"
@@ -131,9 +151,17 @@ export function CreditGrantModal({ users, onClose }) {
               </button>
             </div>
           ) : (
-            <p className="text-green-400 text-sm text-center py-2">
-              {mode === 'grant' ? 'Credits granted!' : 'Credits updated!'}
-            </p>
+            <div className="text-sm text-center py-2">
+              <p className={notDurable ? 'text-amber-400' : 'text-green-400'}>
+                {mode === 'grant' ? 'Credits granted!' : 'Credits updated!'}
+              </p>
+              {notDurable && (
+                <p className="mt-1 text-amber-400 text-xs">
+                  Not saved to the cloud &mdash; this will be lost on the next
+                  deploy. Please run it again.
+                </p>
+              )}
+            </div>
           )
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">

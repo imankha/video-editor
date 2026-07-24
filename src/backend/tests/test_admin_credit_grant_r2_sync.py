@@ -26,13 +26,15 @@ def admin_stub(monkeypatch):
     """Neutralise auth/db, and record R2-sync + sync-pending calls."""
     from app.routers import admin as m
 
-    calls = {"synced": [], "pending": [], "granted": [], "set": []}
+    calls = {"synced": [], "pending": [], "granted": [], "set": [], "refreshed": []}
 
     monkeypatch.setattr(m, "_require_admin", lambda: None)
     monkeypatch.setattr(m, "get_user_by_id", lambda uid: {"user_id": uid})
-    monkeypatch.setattr(m, "get_current_user_id", lambda: ADMIN_ID)
+    # Reading the authoritative copy first is covered by its own test; keep it
+    # inert here so these assertions are about the write-back only.
+    monkeypatch.setattr(m, "_refresh_target_user_db", lambda uid: calls["refreshed"].append(uid))
 
-    def _grant(uid, amount, source=None, reference_id=None):
+    def _grant(uid, amount, source, reference_id=None):
         calls["granted"].append((uid, amount))
         return 400 + amount
 
@@ -40,10 +42,19 @@ def admin_stub(monkeypatch):
 
     def _sync(uid, lock_timeout=None):
         calls["synced"].append(uid)
-        return calls.get("sync_result", True)
+        if uid in calls.get("sync_raises", ()):
+            raise RuntimeError("boom")
+        return uid not in calls.get("sync_fails", ())
 
-    monkeypatch.setattr(m, "sync_user_db_to_r2_explicit", _sync)
-    monkeypatch.setattr(m, "mark_sync_pending", lambda uid: calls["pending"].append(uid))
+    # Patch BOTH the source module and the router's binding. Patching only the
+    # router would let a version that imports the symbol but never calls it pass;
+    # this way the red lands on the assertion, not on fixture setup.
+    monkeypatch.setattr("app.database.sync_user_db_to_r2_explicit", _sync)
+    monkeypatch.setattr(m, "sync_user_db_to_r2_explicit", _sync, raising=False)
+    monkeypatch.setattr("app.database.mark_sync_pending", lambda uid: None)
+    monkeypatch.setattr(
+        m, "mark_sync_pending", lambda uid: calls["pending"].append(uid), raising=False
+    )
     return m, calls
 
 
@@ -73,13 +84,61 @@ class TestSingleGrant:
         retry the upload on the grantee's next write instead.
         """
         m, calls = admin_stub
-        calls["sync_result"] = False
+        calls["sync_fails"] = {TARGET_ID}
 
         resp = await m.admin_grant_credits(TARGET_ID, m.GrantCreditsRequest(amount=400))
 
         assert resp["balance"] == 800, "credits were still granted locally"
         assert resp["synced"] is False
         assert calls["pending"] == [TARGET_ID]
+
+    @pytest.mark.asyncio
+    async def test_reads_authoritative_copy_before_granting(self, admin_stub):
+        """Refresh must happen BEFORE the grant, else we mutate a stale snapshot
+        and force-push it over the grantee's newer state."""
+        m, calls = admin_stub
+        order = []
+        m_refresh = m._refresh_target_user_db
+        monkey_grant = m.grant_credits
+
+        def _refresh(uid):
+            order.append("refresh")
+            return m_refresh(uid)
+
+        def _grant(uid, amount, source, reference_id=None):
+            order.append("grant")
+            return monkey_grant(uid, amount, source, reference_id)
+
+        m._refresh_target_user_db = _refresh
+        m.grant_credits = _grant
+        try:
+            await m.admin_grant_credits(TARGET_ID, m.GrantCreditsRequest(amount=400))
+        finally:
+            m._refresh_target_user_db = m_refresh
+            m.grant_credits = monkey_grant
+
+        assert order == ["refresh", "grant"]
+        assert calls["refreshed"] == [TARGET_ID]
+
+    @pytest.mark.asyncio
+    async def test_sync_runs_after_the_grant_commits(self, admin_stub):
+        """The upload must push an already-committed DB, never precede it."""
+        m, calls = admin_stub
+        order = []
+        real_grant = m.grant_credits
+
+        def _grant(uid, amount, source, reference_id=None):
+            order.append("grant")
+            return real_grant(uid, amount, source, reference_id)
+
+        m.grant_credits = _grant
+        try:
+            await m.admin_grant_credits(TARGET_ID, m.GrantCreditsRequest(amount=400))
+        finally:
+            m.grant_credits = real_grant
+
+        assert order == ["grant"]
+        assert calls["synced"] == [TARGET_ID]
 
 
 class TestSetCredits:
@@ -112,3 +171,39 @@ class TestBulkGrant:
         assert calls["synced"] == uids
         assert resp["granted"] == 3
         assert all(r["synced"] is True for r in resp["results"])
+
+    @pytest.mark.asyncio
+    async def test_sync_failure_does_not_mark_the_grant_failed(self, admin_stub):
+        """A committed grant whose upload failed must stay ok=True.
+
+        Flipping it to ok=False makes the admin re-run the batch, and since
+        admin_grant writes reference_id=NULL (distinct under the UNIQUE index)
+        the second run double-grants.
+        """
+        m, calls = admin_stub
+        calls["sync_fails"] = {"u2"}
+
+        resp = await m.admin_bulk_grant_credits(
+            m.BulkGrantCreditsRequest(user_ids=["u1", "u2"], amount=10)
+        )
+
+        by_id = {r["user_id"]: r for r in resp["results"]}
+        assert by_id["u2"]["ok"] is True, "credits were committed -- must not read as failed"
+        assert by_id["u2"]["synced"] is False
+        assert resp["granted"] == 2
+        assert resp["failed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_sync_exception_does_not_mark_the_grant_failed(self, admin_stub):
+        """Same guarantee when the upload RAISES rather than returning False."""
+        m, calls = admin_stub
+        calls["sync_raises"] = {"u2"}
+
+        resp = await m.admin_bulk_grant_credits(
+            m.BulkGrantCreditsRequest(user_ids=["u1", "u2"], amount=10)
+        )
+
+        by_id = {r["user_id"]: r for r in resp["results"]}
+        assert by_id["u2"]["ok"] is True
+        assert by_id["u2"]["synced"] is False
+        assert resp["failed"] == 0
