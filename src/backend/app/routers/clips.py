@@ -10,6 +10,7 @@ Files are stored in:
 - uploads/ - Clips uploaded directly to projects
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -1619,6 +1620,21 @@ async def add_clip_to_project(
     # regenerates. Best-effort -- never fails the clip action.
     invalidate_draft_poster(project_id)
 
+    # T5683: Warm the draft poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the clip action. get_current_user_id is
+    # already imported at module level -- do NOT re-import it locally: two of
+    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
+    # call it EARLIER in the same function, and a local import makes the name
+    # local to the WHOLE function, breaking that earlier call with
+    # UnboundLocalError (confirmed by the full backend test suite).
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
+    from app.profile_context import get_current_profile_id
+    fire_and_forget(
+        warm_draft_poster_background(
+            get_current_user_id(), get_current_profile_id(), project_id
+        )
+    )
+
     return WorkingClipResponse(
         id=clip_id,
         project_id=project_id,
@@ -1749,6 +1765,22 @@ async def upload_clip_with_metadata(
     # T5671: a new clip changes composition (and may become the first clip) ->
     # invalidate the draft poster. Best-effort (never fails the action).
     invalidate_draft_poster(project_id)
+
+    # T5683: Warm the draft poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the clip action. get_current_user_id is
+    # already imported at module level -- do NOT re-import it locally: two of
+    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
+    # call it EARLIER in the same function, and a local import makes the name
+    # local to the WHOLE function, breaking that earlier call with
+    # UnboundLocalError (confirmed by the full backend test suite).
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
+    from app.profile_context import get_current_profile_id
+    fire_and_forget(
+        warm_draft_poster_background(
+            get_current_user_id(), get_current_profile_id(), project_id
+        )
+    )
+
     return response
 
 
@@ -1770,6 +1802,22 @@ async def reorder_clips(project_id: int, clip_ids: list[int]):
     # T5671: reordering can change which clip is first -> invalidate the draft
     # poster so the next GET regenerates. Best-effort (never fails the action).
     invalidate_draft_poster(project_id)
+
+    # T5683: Warm the draft poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the clip action. get_current_user_id is
+    # already imported at module level -- do NOT re-import it locally: two of
+    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
+    # call it EARLIER in the same function, and a local import makes the name
+    # local to the WHOLE function, breaking that earlier call with
+    # UnboundLocalError (confirmed by the full backend test suite).
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
+    from app.profile_context import get_current_profile_id
+    fire_and_forget(
+        warm_draft_poster_background(
+            get_current_user_id(), get_current_profile_id(), project_id
+        )
+    )
+
     return {"success": True}
 
 
@@ -2303,6 +2351,22 @@ async def remove_clip_from_project(project_id: int, clip_id: int):
     # T5671: removing a clip can change the draft's first clip -> invalidate the
     # cached poster so the next GET regenerates. Best-effort (never fails).
     invalidate_draft_poster(project_id)
+
+    # T5683: Warm the draft poster at gesture (non-blocking background task).
+    # Best-effort -- never fails the clip action. get_current_user_id is
+    # already imported at module level -- do NOT re-import it locally: two of
+    # these four call sites (add_clip_to_project, upload_clip_with_metadata)
+    # call it EARLIER in the same function, and a local import makes the name
+    # local to the WHOLE function, breaking that earlier call with
+    # UnboundLocalError (confirmed by the full backend test suite).
+    from app.services.poster_warmer import fire_and_forget, warm_draft_poster_background
+    from app.profile_context import get_current_profile_id
+    fire_and_forget(
+        warm_draft_poster_background(
+            get_current_user_id(), get_current_profile_id(), project_id
+        )
+    )
+
     return {"success": True}
 
 
