@@ -801,7 +801,7 @@ export function ProjectManager({
             <p className="text-sm">Add a game to annotate your footage</p>
           </div>
         ) : (
-          <div className="w-full max-w-6xl">
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Active Upload Section - Currently uploading */}
             {activeUpload && (
               <div className="mb-6">
@@ -917,7 +917,7 @@ export function ProjectManager({
         ) : (
           /* Drafts tab widens to max-w-6xl so the carousels use the viewport (Q1 /
              audit finding #13 desktop dead-space fix); the Games tab stays max-w-2xl. */
-          <div className="w-full max-w-6xl">
+          <div className="w-full max-w-6xl 2xl:max-w-7xl">
             {/* Filters - only show when useful. Groups sit inline (gap-x) when they fit,
                 and wrap onto their own line when they don't. */}
             {showFilters && (
