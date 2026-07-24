@@ -12,6 +12,15 @@ The T950-era version-conflict check exists (`storage.py:884-897`, compares R2 `x
 
 Failure mode: machine pinning is a cookie + circuit breaker (`db_sync.py:447-471`). When the pinned machine dies mid-session, another machine serves the user from a freshly downloaded DB copy. If both machines hold the DB across any window (e.g., an in-flight export worker on machine A syncs after machine B took over), both compute `new_version = local + 1` and upload — **the loser's writes vanish silently and version metadata shows no anomaly**. The per-user write lock (`db_sync.py:188-211`) is per-process only. Data at risk: the user's entire profile DB.
 
+**Single-server evidence (2026-07-24) — this is NOT purely multi-machine.** arshia's move_reels
+clobber proved the same force-push loses data on ONE server: a WRITE path built on a stale local
+copy (returned by a read-optimized helper on an R2 blip) and force-pushed `[stale + new row]`,
+reverting the profile. CAS on upload would have refused that push (loaded-version < R2 version →
+conflict). So T4310 is not safely deferred to "when we scale past one server" — it also guards
+against a stale writer racing R2's own newer state on a single machine. Pair with **T4315**
+(restore-if-newer), which prevents the stale read in the first place; a point-fix (`require_fresh`
+in move_reels, commit a5ff3e48) already landed but is per-caller, not the general CAS guarantee.
+
 ## Solution
 
 Reinstate the check as compare-and-swap, in two stages:
