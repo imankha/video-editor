@@ -117,18 +117,19 @@ describe('DraftTile (T5672)', () => {
     expect(screen.getByText(/11'45/)).toBeTruthy();
   });
 
-  it('renders an auto-created marker chip with star icon and label', () => {
-    renderTile({ is_auto_created: true });
-    const chip = screen.getByText('Auto').closest('span');
+  it('renders a clip-count chip when the draft has more than 1 clip', () => {
+    renderTile({ clip_count: 3 });
+    const chip = screen.getByText('3').closest('span');
     expect(chip).toBeTruthy();
-    expect(chip.getAttribute('title')).toMatch(/Created automatically/);
-    expect(chip.getAttribute('aria-label')).toMatch(/Auto-created/);
-    // Star icon should be present (rendered via Lucide)
+    expect(chip.getAttribute('title')).toBe('Contains 3 clips');
+    expect(chip.getAttribute('aria-label')).toBe('Contains 3 clips');
+    // Layers icon should be present (rendered via Lucide)
     expect(chip.querySelector('svg')).toBeTruthy();
   });
 
-  it('does not show auto-created marker if not auto-created', () => {
-    renderTile({ is_auto_created: false });
-    expect(screen.queryByText('Auto')).toBeNull();
+  it('does not show a clip-count chip for a single-clip draft', () => {
+    renderTile({ clip_count: 1 });
+    expect(screen.queryByText('1')).toBeNull();
+    expect(screen.queryByTitle(/Contains \d+ clips/)).toBeNull();
   });
 });
