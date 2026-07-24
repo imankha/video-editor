@@ -94,6 +94,32 @@ def test_get_game_poster_serves_jpeg_when_present():
     assert resp.body == b"\xff\xd8jpegbytes"
 
 
+def test_get_game_poster_ensure_recap_poster_gets_env_prefixed_keys():
+    """Regression: ensure_recap_poster/r2_head_object_global operate on GLOBAL
+    (env-prefixed) keys -- same scheme as shares.py's _recap_r2_key/
+    _recap_poster_r2_key. A key missing the {APP_ENV}/ prefix silently 404s
+    every game (caught by live QA against the real account: all 6 games 404'd
+    despite 2 having real recaps, because the keys were built without APP_ENV)."""
+    import httpx
+    from app.services import poster
+    from app.storage import APP_ENV
+
+    game_row = {"id": GAME_ID, "recap_video_url": "https://example.com/recap.mp4"}
+
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
+         patch.object(games, "get_current_user_id", return_value=USER_ID), \
+         patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
+         patch.object(poster, "ensure_recap_poster", return_value=True) as ensure, \
+         patch.object(games, "generate_presigned_url", return_value="https://r2/p.jpg?sig=1"), \
+         patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
+        asyncio.run(games.get_game_poster(GAME_ID))
+
+    ensure.assert_called_once_with(
+        f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/{GAME_ID}.mp4",
+        f"{APP_ENV}/users/{USER_ID}/profiles/{PROFILE_ID}/recaps/posters/{GAME_ID}.jpg",
+    )
+
+
 def test_get_game_poster_404_when_game_missing():
     """404 when game row doesn't exist."""
     with patch.object(games, "get_db_connection", _fake_db_with_row(None)), \
@@ -180,10 +206,13 @@ def test_get_game_poster_session_auth_uses_current_profile():
          patch.object(httpx, "AsyncClient", _fake_jpeg_client()):
         asyncio.run(games.get_game_poster(GAME_ID))
 
-    # Called with the current user/profile, not a global key.
+    # relative_path is relative to users/{uid}/ -- generate_presigned_url's r2_key()
+    # ALREADY inserts /profiles/{current_profile_id}/ internally, so the call must
+    # NOT include a profiles/ prefix (that would double it -- this was a real bug
+    # caught by live QA against the real account, see T5681 QA notes).
     presign.assert_called_once_with(
         USER_ID,
-        f"profiles/{PROFILE_ID}/recaps/posters/{GAME_ID}.jpg",
+        f"recaps/posters/{GAME_ID}.jpg",
         expires_in=3600,
         content_type="image/jpeg"
     )

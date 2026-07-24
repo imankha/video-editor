@@ -2459,21 +2459,27 @@ async def get_game_poster(game_id: int):
         raise HTTPException(status_code=404, detail="No recap for this game")
 
     from app.services.poster import ensure_recap_poster
+    from app.storage import APP_ENV
 
     user_id = get_current_user_id()
     profile_id = get_current_profile_id()
 
-    # R2 keys for this game's recap and poster
-    recap_key = f"users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
-    poster_key = f"users/{user_id}/profiles/{profile_id}/recaps/posters/{game_id}.jpg"
+    # Full (env-prefixed) R2 keys -- ensure_recap_poster/r2_head_object_global
+    # operate on GLOBAL keys, same scheme as the share-unfurl path (_recap_r2_key/
+    # _recap_poster_r2_key in shares.py): {env}/users/{uid}/profiles/{pid}/...
+    recap_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/{game_id}.mp4"
+    poster_key = f"{APP_ENV}/users/{user_id}/profiles/{profile_id}/recaps/posters/{game_id}.jpg"
 
     # Ensure poster exists (generate on first request if recap exists)
     if not ensure_recap_poster(recap_key, poster_key):
         raise HTTPException(status_code=404, detail="No poster for this game")
 
-    # Serve the poster with a presigned URL (private cache, session-authed)
+    # Serve the poster with a presigned URL (private cache, session-authed).
+    # generate_presigned_url's relative_path is relative to users/{uid}/ and
+    # ALREADY inserts /profiles/{current_profile_id}/ internally (r2_key()) --
+    # passing a profiles/-prefixed path here would double it.
     url = generate_presigned_url(
-        user_id, f"profiles/{profile_id}/recaps/posters/{game_id}.jpg",
+        user_id, f"recaps/posters/{game_id}.jpg",
         expires_in=3600, content_type="image/jpeg"
     )
     if not url:

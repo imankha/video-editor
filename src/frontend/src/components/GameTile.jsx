@@ -167,7 +167,11 @@ export function GameTile({
         </div>
       )}
 
-      {/* Action buttons (hidden on desktop, revealed on mobile long-press) */}
+      {/* Action buttons: desktop reveals on hover (opacity-0 -> group-hover:opacity-100);
+          mobile stays hidden until a long-press sets actionsRevealed (matches GameCard's
+          `(!isMobile || actionsRevealed)` gate -- the tile must NOT render this cluster
+          on mobile until the gesture fires, or every tile shows its actions at once). */}
+      {(!isMobile || actionsRevealed) && (
       <div className={`absolute top-2 right-2 flex flex-col gap-1 transition-opacity z-30 ${
         isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
       }`}>
@@ -228,6 +232,7 @@ export function GameTile({
           title={showDeleteConfirm ? 'Click again to confirm' : 'Delete game'}
         />
       </div>
+      )}
     </div>
   );
 }
