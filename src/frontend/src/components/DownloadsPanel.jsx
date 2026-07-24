@@ -421,8 +421,10 @@ export function DownloadsPanel({
           My Reels); the X button is the only way to close. */}
       <div className="fixed inset-0 bg-black/50 z-40" />
 
-      {/* Panel */}
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-gray-800 shadow-xl z-50 flex flex-col border-l border-gray-700 animate-slide-in-right">
+      {/* Panel — max-w-md (448px) below lg; widens at lg+ so poster-tile
+          carousels/grids show more tiles per row (T5673). Slide-in transform is
+          width-relative, so the open/close animation holds at every width. */}
+      <div className="fixed right-0 top-0 h-full w-full max-w-md lg:max-w-2xl xl:max-w-3xl bg-gray-800 shadow-xl z-50 flex flex-col border-l border-gray-700 animate-slide-in-right">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div className="flex items-center gap-3">
