@@ -214,10 +214,22 @@ class TrackedConnection:
     during the request, and we sync once at the end, not after every write.
     """
 
-    def __init__(self, conn: sqlite3.Connection, db_type: str = 'profile'):
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        db_type: str = 'profile',
+        owner_user_id: str | None = None,
+        owner_profile_id: str | None = None,
+    ):
         self._conn = conn
         self._has_writes = False
         self._db_type = db_type
+        # WHOSE database this connection points at. Without it the middleware can
+        # only sync the SESSION user by construction, so a handler that writes
+        # another user's DB (admin credit grants, the Stripe webhook) leaves that
+        # write stranded on local disk -- the 400-credit prod loss.
+        self._owner_user_id = owner_user_id
+        self._owner_profile_id = owner_profile_id
 
     def _mark_write(self):
         """Mark that a write operation occurred."""
@@ -232,8 +244,14 @@ class TrackedConnection:
         if ctx is not None:
             if self._db_type == 'user':
                 ctx['has_user_db_writes'] = True
+                if self._owner_user_id:
+                    ctx.setdefault('written_user_dbs', set()).add(self._owner_user_id)
             else:
                 ctx['has_writes'] = True
+                if self._owner_user_id:
+                    ctx.setdefault('written_profile_dbs', set()).add(
+                        (self._owner_user_id, self._owner_profile_id)
+                    )
 
     @property
     def has_writes(self) -> bool:
@@ -395,6 +413,32 @@ def get_request_has_writes() -> bool:
     if ctx is None:
         return False
     return ctx.get('has_writes', False)
+
+
+def get_request_written_user_dbs() -> set:
+    """user_ids whose user.sqlite was written during this request.
+
+    Normally just the session user. It differs when a handler writes SOMEONE
+    ELSE's DB (admin credit grants, Stripe webhook fulfilment) -- those are the
+    writes the middleware would otherwise never upload.
+    """
+    ctx = _request_context.get()
+    if ctx is None:
+        return set()
+    return set(ctx.get('written_user_dbs', ()))
+
+
+def get_request_written_profile_dbs() -> set:
+    """(user_id, profile_id) pairs whose profile.sqlite was written this request.
+
+    NOTE: only covers connections opened through get_db_connection. Raw
+    connections (materialization._open_profile_db) are invisible here and must
+    still sync themselves explicitly.
+    """
+    ctx = _request_context.get()
+    if ctx is None:
+        return set()
+    return set(ctx.get('written_profile_dbs', ()))
 
 
 def clear_request_context() -> None:
@@ -1086,7 +1130,11 @@ def get_db_connection() -> TrackedConnection:
     # T86: Enable foreign key enforcement (required for ON DELETE CASCADE/SET NULL)
     raw_conn.execute("PRAGMA foreign_keys=ON")
 
-    conn = TrackedConnection(raw_conn)
+    conn = TrackedConnection(
+        raw_conn,
+        owner_user_id=get_current_user_id(),
+        owner_profile_id=get_current_profile_id(),
+    )
     try:
         yield conn
     finally:

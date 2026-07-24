@@ -44,6 +44,8 @@ from ..database import (
     clear_sync_pending,
     get_request_has_user_db_writes,
     get_request_has_writes,
+    get_request_written_profile_dbs,
+    get_request_written_user_dbs,
     has_sync_pending,
     init_request_context,
     mark_sync_pending,
@@ -676,6 +678,18 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             # After request, check if writes occurred
             had_writes = get_request_has_writes()
             had_user_db_writes = get_request_has_user_db_writes()
+            # Databases touched this request that are NOT the session user's --
+            # admin credit grants, webhook fulfilment, cross-profile writes.
+            # Historically invisible here (write tracking recorded only WHETHER a
+            # write happened, never WHOSE), so they never got uploaded and died
+            # with the machine. Captured NOW, before the background task starts:
+            # clear_request_context() runs in the dispatch finally and the task
+            # can outlive it.
+            foreign_user_dbs = get_request_written_user_dbs() - {user_id}
+            foreign_profile_dbs = {
+                pair for pair in get_request_written_profile_dbs()
+                if pair != (user_id, profile_id)
+            }
             if had_writes or had_user_db_writes:
                 # T930: Mark pending BEFORE response returns (crash safety)
                 mark_sync_pending(user_id)
@@ -695,6 +709,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                         had_writes, had_user_db_writes,
                         do_profile, force_profile,
                         durable=True,
+                        foreign_user_dbs=foreign_user_dbs,
+                        foreign_profile_dbs=foreign_profile_dbs,
                     )
                     if sync_status != "ok":
                         logger.warning(
@@ -717,6 +733,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                             user_id, profile_id, req_id, method, path,
                             had_writes, had_user_db_writes,
                             do_profile, force_profile,
+                            foreign_user_dbs=foreign_user_dbs,
+                            foreign_profile_dbs=foreign_profile_dbs,
                         )
                     )
 
@@ -779,6 +797,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         force_profile: bool,
         is_error_path: bool = False,
         durable: bool = False,
+        foreign_user_dbs: set | None = None,
+        foreign_profile_dbs: set | None = None,
     ):
         """T3250: R2 sync as background task. Runs after response is sent.
 
@@ -885,6 +905,42 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                 sync_status = "conflict"
             elif db_status == "failed" or not user_sync_success:
                 sync_status = "failed"
+
+            # Upload any database this request touched that is NOT the session
+            # user's. Each owner gets its own sync + its own sync-pending marker,
+            # so a failure is attributed to the DB that actually failed.
+            for foreign_uid in sorted(foreign_user_dbs or ()):
+                ok = await asyncio.to_thread(
+                    sync_user_db_to_r2_explicit, foreign_uid, lock_timeout
+                )
+                if ok:
+                    logger.info(
+                        f"[SYNC] {method} {path} -> synced FOREIGN user.sqlite "
+                        f"user={foreign_uid} (session user={user_id})"
+                    )
+                else:
+                    mark_sync_pending(foreign_uid)
+                    sync_status = "failed"
+                    logger.error(
+                        f"[SYNC] {method} {path} -> FAILED to sync foreign user.sqlite "
+                        f"user={foreign_uid} (session user={user_id}); change is local-only"
+                    )
+            for foreign_uid, foreign_pid in sorted(foreign_profile_dbs or ()):
+                ok = await asyncio.to_thread(
+                    sync_db_to_r2_explicit, foreign_uid, foreign_pid, lock_timeout
+                )
+                if ok:
+                    logger.info(
+                        f"[SYNC] {method} {path} -> synced FOREIGN profile.sqlite "
+                        f"user={foreign_uid} profile={foreign_pid}"
+                    )
+                else:
+                    mark_sync_pending(foreign_uid)
+                    sync_status = "failed"
+                    logger.error(
+                        f"[SYNC] {method} {path} -> FAILED to sync foreign profile.sqlite "
+                        f"user={foreign_uid} profile={foreign_pid}; change is local-only"
+                    )
         except Exception as sync_error:
             log_msg = "Sync to R2 raised exception"
             if is_error_path:

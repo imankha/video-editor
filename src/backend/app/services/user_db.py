@@ -220,7 +220,7 @@ def forget_user_db(user_id: str) -> None:
 
 
 @contextmanager
-def get_user_db_connection(user_id: str = None):
+def get_user_db_connection(user_id: str | None = None):
     """Get connection to user-level database."""
     if user_id is None:
         from ..user_context import get_current_user_id
@@ -237,7 +237,9 @@ def get_user_db_connection(user_id: str = None):
     raw_conn.execute("PRAGMA busy_timeout=30000")
     raw_conn.execute("PRAGMA foreign_keys=ON")
 
-    conn = TrackedConnection(raw_conn, db_type='user')
+    # owner_user_id is the ARG, not the session user: that is the whole point --
+    # a handler writing another user's DB must be syncable by the middleware.
+    conn = TrackedConnection(raw_conn, db_type='user', owner_user_id=user_id)
     try:
         yield conn
     finally:
@@ -457,7 +459,7 @@ def set_stripe_customer_id(user_id: str, stripe_customer_id: str):
 # Credit reservations (for T890)
 # ---------------------------------------------------------------------------
 
-def reserve_credits(user_id: str, amount: int, job_id: str, video_seconds: float = None) -> dict:
+def reserve_credits(user_id: str, amount: int, job_id: str, video_seconds: float | None = None) -> dict:
     """Atomic: INSERT credit_reservations + UPDATE credits -= amount."""
     with get_user_db_connection(user_id) as conn:
         row = conn.execute("SELECT balance FROM credits WHERE user_id = ?", (user_id,)).fetchone()
@@ -818,7 +820,7 @@ def set_selected_profile_id(user_id: str, profile_id: str) -> None:
 PREF_PREFIX = "pref."
 
 
-def get_all_preferences(user_id: str = None) -> dict[str, str]:
+def get_all_preferences(user_id: str | None = None) -> dict[str, str]:
     """Return all preference key-value pairs from user_settings.
 
     Keys are stored as 'pref.statusFilter' etc; returned without the prefix.
@@ -830,7 +832,7 @@ def get_all_preferences(user_id: str = None) -> dict[str, str]:
         return {row["key"][len(PREF_PREFIX):]: row["value"] for row in rows}
 
 
-def set_preference(user_id: str = None, key: str = "", value: str = "") -> None:
+def set_preference(user_id: str | None = None, key: str = "", value: str = "") -> None:
     """Set a single preference in user_settings."""
     with get_user_db_connection(user_id) as conn:
         conn.execute(
@@ -840,7 +842,7 @@ def set_preference(user_id: str = None, key: str = "", value: str = "") -> None:
         conn.commit()
 
 
-def set_preferences_bulk(user_id: str = None, prefs: dict[str, str] = None) -> None:
+def set_preferences_bulk(user_id: str | None = None, prefs: dict[str, str] | None = None) -> None:
     """Set multiple preferences in a single transaction."""
     if not prefs:
         return
@@ -853,7 +855,7 @@ def set_preferences_bulk(user_id: str = None, prefs: dict[str, str] = None) -> N
         conn.commit()
 
 
-def clear_all_preferences(user_id: str = None) -> None:
+def clear_all_preferences(user_id: str | None = None) -> None:
     """Delete all preference rows from user_settings."""
     with get_user_db_connection(user_id) as conn:
         conn.execute("DELETE FROM user_settings WHERE key LIKE 'pref.%'")
