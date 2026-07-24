@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // jsdom lacks matchMedia (useIsMobile) — stub desktop.
 vi.mock('../hooks/useIsMobile', () => ({
@@ -10,7 +10,7 @@ vi.mock('../hooks/useIsMobile', () => ({
 // DraftTile reads several stores; stub the minimal surface it touches.
 vi.mock('../utils/apiFetch', () => ({ default: vi.fn() }));
 vi.mock('../stores/projectsStore', () => {
-  const state = { fetchProjects: vi.fn(), renameProject: vi.fn() };
+  const state = { fetchProjects: vi.fn(), renameProject: vi.fn(), selectedProjectId: null };
   const useProjectsStore = (sel) => sel(state);
   useProjectsStore.getState = () => state;
   return { useProjectsStore };
@@ -41,6 +41,7 @@ vi.mock('../stores/questStore', () => {
 });
 
 import { DraftTile } from './DraftTile';
+import { useProjectsStore } from '../stores/projectsStore';
 
 const baseProject = {
   id: 7,
@@ -56,18 +57,24 @@ const baseProject = {
   game_ids: [],
 };
 
-function renderTile(overrides = {}) {
-  return render(
+function renderTile(overrides = {}, handlers = {}) {
+  const onSelect = handlers.onSelect || vi.fn();
+  const onSelectWithMode = handlers.onSelectWithMode || vi.fn();
+  const result = render(
     <DraftTile
       project={{ ...baseProject, ...overrides }}
-      onSelect={vi.fn()}
-      onSelectWithMode={vi.fn()}
+      onSelect={onSelect}
+      onSelectWithMode={onSelectWithMode}
       onDelete={vi.fn()}
     />
   );
+  return { ...result, onSelect, onSelectWithMode };
 }
 
 describe('DraftTile (T5672)', () => {
+  afterEach(() => {
+    useProjectsStore.getState().selectedProjectId = null;
+  });
   it('renders a lazy poster img pointing at the T5671 endpoint', () => {
     const { container } = renderTile();
     const img = container.querySelector('img[loading="lazy"]');
@@ -75,12 +82,33 @@ describe('DraftTile (T5672)', () => {
     expect(img.getAttribute('src')).toMatch(/\/api\/projects\/7\/poster\.jpg$/);
   });
 
-  it('shows a skeleton while the poster loads, then hides it on load', () => {
+  it('shows a shimmer skeleton while the poster loads, then hides it on load', () => {
     const { container } = renderTile();
-    // animate-pulse skeleton present initially
-    expect(container.querySelector('.animate-pulse')).toBeTruthy();
+    // shimmer skeleton present initially (not the flat gray / branded fallback)
+    expect(container.querySelector('.skeleton-shimmer')).toBeTruthy();
     fireEvent.load(container.querySelector('img'));
-    expect(container.querySelector('.animate-pulse')).toBeNull();
+    expect(container.querySelector('.skeleton-shimmer')).toBeNull();
+  });
+
+  it('fades the poster in on load (opacity-0 while loading -> opacity-100 loaded)', () => {
+    const { container } = renderTile();
+    const img = container.querySelector('img');
+    expect(img.className).toMatch(/transition-opacity/);
+    expect(img.className).toMatch(/opacity-0/);
+    fireEvent.load(img);
+    expect(container.querySelector('img').className).toMatch(/opacity-100/);
+  });
+
+  it('shows the branded fallback ONLY after a real poster error, never before', () => {
+    const { container } = renderTile();
+    // While loading: shimmer, no branded fallback gradient
+    expect(container.querySelector('.skeleton-shimmer')).toBeTruthy();
+    expect(container.querySelector('.from-cyan-900')).toBeNull();
+    fireEvent.error(container.querySelector('img'));
+    // After error: branded fallback gradient, no shimmer, no img
+    expect(container.querySelector('.from-cyan-900')).toBeTruthy();
+    expect(container.querySelector('.skeleton-shimmer')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
   });
 
   it('renders the branded reel-name fallback (no img) when the poster 404s', () => {
@@ -145,5 +173,76 @@ describe('DraftTile (T5672)', () => {
     const tile = container.querySelector('[data-testid="project-card"]');
     expect(tile.className).toMatch(/aspect-video/);
     expect(tile.className).not.toMatch(/aspect-\[9\/16\]/);
+  });
+
+  // Item 3 — selected/active + currently-loaded accent ring
+  it('is keyboard-focusable and exposes a focus-visible ring (item 3)', () => {
+    const { container } = renderTile();
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.getAttribute('tabindex')).toBe('0');
+    expect(tile.getAttribute('role')).toBe('button');
+    expect(tile.className).toMatch(/focus-visible:ring-2/);
+  });
+
+  it('gives the CURRENTLY-LOADED draft a persistent accent ring (item 3)', () => {
+    useProjectsStore.getState().selectedProjectId = baseProject.id;
+    const { container } = renderTile();
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.getAttribute('aria-current')).toBe('true');
+    expect(tile.className).toMatch(/ring-cyan-400/);
+    expect(tile.className).toMatch(/border-cyan-400/);
+  });
+
+  it('does not accent a draft that is not the loaded project (item 3)', () => {
+    useProjectsStore.getState().selectedProjectId = 999; // a different project
+    const { container } = renderTile();
+    const tile = container.querySelector('[data-testid="project-card"]');
+    expect(tile.getAttribute('aria-current')).toBeNull();
+    expect(tile.className).toMatch(/border-gray-700/);
+  });
+
+  it('activates via Enter key like a button (item 3)', () => {
+    // A not-yet-started draft opens via onSelect (the default earliest stage).
+    const onSelect = vi.fn();
+    const { container } = renderTile(
+      { clips_in_progress: 0, clips_exported: 0 },
+      { onSelect }
+    );
+    const tile = container.querySelector('[data-testid="project-card"]');
+    fireEvent.keyDown(tile, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  // Item 6 — click opens the furthest stage reached
+  it('routes an overlay-started draft (working video) to Overlay on click (item 6)', () => {
+    const onSelectWithMode = vi.fn();
+    const { container } = renderTile(
+      { has_working_video: true, clips_in_progress: 0 },
+      { onSelectWithMode }
+    );
+    fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+    expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'overlay' });
+  });
+
+  it('routes a framing-started draft (no working video) to Framing clip 0 on click (item 6)', () => {
+    const onSelectWithMode = vi.fn();
+    const { container } = renderTile(
+      { has_working_video: false, clips_in_progress: 1 },
+      { onSelectWithMode }
+    );
+    fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+    expect(onSelectWithMode).toHaveBeenCalledWith({ mode: 'framing', clipIndex: 0 });
+  });
+
+  it('routes a not-yet-started draft to the default open (earliest stage) on click (item 6)', () => {
+    const onSelect = vi.fn();
+    const onSelectWithMode = vi.fn();
+    const { container } = renderTile(
+      { has_working_video: false, clips_in_progress: 0, clips_exported: 0 },
+      { onSelect, onSelectWithMode }
+    );
+    fireEvent.click(container.querySelector('[data-testid="project-card"]'));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelectWithMode).not.toHaveBeenCalled();
   });
 });

@@ -146,11 +146,12 @@ export function ReelTile({
       onTouchStart={isMobile ? handleTouchStart : undefined}
       onTouchMove={isMobile ? clearLongPress : undefined}
       onTouchEnd={isMobile ? clearLongPress : undefined}
-      className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-colors ${sizeClass} ${
-        isUnwatched ? unwatchedStyle.border : `border-gray-700 ${REEL.borderHover}`
+      className={`group/tile relative shrink-0 snap-start rounded-lg overflow-hidden bg-gray-800 border transition-all duration-150
+        hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40 hover:ring-2 hover:ring-cyan-400/60 ${sizeClass} ${
+        isUnwatched ? unwatchedStyle.border : `border-gray-700 hover:border-cyan-400`
       }`}
     >
-      {/* Poster (lazy — a carousel of many tiles must not fire eager requests) */}
+      {/* Poster (lazy — a carousel of many tiles must not fire eager requests); fades in on load */}
       {posterState !== 'error' && (
         <img
           src={posterUrl}
@@ -158,10 +159,12 @@ export function ReelTile({
           loading="lazy"
           onLoad={() => setPosterState('loaded')}
           onError={() => setPosterState('error')}
-          className="absolute inset-0 w-full h-full object-cover"
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${
+            posterState === 'loaded' ? 'opacity-100' : 'opacity-0'
+          }`}
         />
       )}
-      {posterState === 'loading' && <div className="absolute inset-0 bg-gray-700 animate-pulse" />}
+      {posterState === 'loading' && <div className="absolute inset-0 skeleton-shimmer" />}
       {posterState === 'error' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-2 bg-gradient-to-br from-cyan-900 via-gray-800 to-gray-900">
           <Film size={26} className="text-cyan-300/80" />
