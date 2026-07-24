@@ -209,6 +209,8 @@ class DownloadItem(BaseModel):
     quality_score: float | None = None  # Frozen single-clip star (T3630); seed + secondary ordering
     clip_count: int | None = None  # Distinct constituent clips (T3630); 1 = collection-eligible
     clip_game_start_time: float | None = None  # Unified two-half in-match start (sec) for single-clip reels; soccer-notation card mark (T3920). NULL for multi-clip reels.
+    season_rank: int | None = None  # Computed rank in sorted order (T5679); top-20 only (else None)
+    leading_reel_id: int | None = None  # Representative reel id for collapsed rows (T5673 item 2)
     # Game grouping info
     watched_at: str | None = None  # ISO timestamp when first played in gallery
     game_ids: list[int] = []  # List of game IDs (single for annotated, multiple possible for projects)
@@ -415,8 +417,12 @@ async def list_downloads(
                     project_games[project_id]['game_names'].append(display_name)
                     project_games[project_id]['game_dates'].append(game_row['game_date'] or '')
 
+        # Compute season_rank (top 20 only) and track leading_reel_id per bucket
+        # (T5679: rank badge for top-20; T5673 item 2: leading poster)
+        leading_reel_ids = {}  # bucket_key -> first_reel_id
+
         downloads = []
-        for row in rows:
+        for rank_idx, row in enumerate(rows):
             # Get file size if file exists
             file_path = get_final_videos_path() / row['filename']
             file_size = None
@@ -515,6 +521,13 @@ async def list_downloads(
                 # Convert space to 'T' for ISO format and append 'Z' for UTC
                 created_at_utc = created_at_utc.replace(' ', 'T') + 'Z'
 
+            # Compute season_rank: 1-indexed, top-20 only (T5679)
+            season_rank = (rank_idx + 1) if rank_idx < 20 else None
+
+            # Track leading_reel_id per group for collapsed rows (T5673)
+            if group_key and group_key not in leading_reel_ids:
+                leading_reel_ids[group_key] = row['id']
+
             downloads.append(DownloadItem(
                 id=row['id'],
                 project_id=row['project_id'],
@@ -533,6 +546,8 @@ async def list_downloads(
                 quality_score=row['quality_score'],
                 clip_count=row['clip_count'],
                 clip_game_start_time=row['clip_game_start_time'],
+                season_rank=season_rank,
+                leading_reel_id=leading_reel_ids.get(group_key),
                 watched_at=row['watched_at'],
                 game_ids=game_ids,
                 game_names=game_names,
