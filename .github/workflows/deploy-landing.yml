@@ -1,6 +1,7 @@
 name: Deploy Landing
 
 on:
+  workflow_dispatch:
   push:
     branches: [master]
     paths:
@@ -15,7 +16,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - run: npm ci
         working-directory: src/landing
