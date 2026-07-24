@@ -210,3 +210,19 @@ directory listings. See the handoff checklist in the task write-up.
   `FACTS.pricingSummary` and `softwareApplication()`'s `offers` — those two places only.
 - The app at `app.reelballers.com` still serves `/*` as a 200 SPA shell, so unknown app
   URLs are soft-404s and it has no `robots.txt`. That is a separate fix in `src/frontend`.
+
+## IndexNow (Bing / Yandex auto-submit)
+
+Every deploy pings IndexNow with the live URLs, so Bing and other participating
+engines re-crawl changed pages immediately instead of waiting. Google does not
+participate (it uses Search Console + the sitemap).
+
+- Key: `8bd3e9e92808827bf0fa0e10875af105`, served at
+  `https://reelballers.com/8bd3e9e92808827bf0fa0e10875af105.txt`
+  (`public/<key>.txt`). **This file must persist** -- if it 404s, IndexNow
+  rejects submissions. The same key is hard-coded in
+  `scripts/indexnow-submit.mjs`; keep the two in sync if you ever rotate it.
+- Submission runs as the last step of `deploy-landing.yml`
+  (`node scripts/indexnow-submit.mjs`), after `wrangler deploy`, with
+  `continue-on-error: true` so it can never fail a deploy. URLs come from the
+  built sitemap.

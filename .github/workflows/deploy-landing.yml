@@ -29,3 +29,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Ping IndexNow (Bing, Yandex, et al.) with the freshly deployed URLs.
+      # Runs after deploy so the pages are live; never fails the build.
+      - run: node scripts/indexnow-submit.mjs
+        working-directory: src/landing
+        continue-on-error: true
