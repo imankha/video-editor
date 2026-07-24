@@ -1,0 +1,57 @@
+---
+/**
+ * Site header. Real <nav> with real <a href> -- this is the crawl graph. Before
+ * this existed the site had ZERO internal links and nothing to discover.
+ */
+import { LogoWithText } from './Logo'
+import { NAV, APP_URL } from '../site'
+
+const { current = '' } = Astro.props
+---
+
+<header class="border-b border-white/10">
+  <div class="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
+    <a href="/" aria-label="ReelBallers home" class="shrink-0">
+      <LogoWithText />
+    </a>
+
+    <nav aria-label="Main" class="hidden md:flex items-center gap-6">
+      {
+        NAV.map((item) => (
+          <a
+            href={item.href}
+            aria-current={current === item.href ? 'page' : undefined}
+            class:list={[
+              'text-sm font-medium transition-colors',
+              current === item.href ? 'text-white' : 'text-gray-400 hover:text-white',
+            ]}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <a
+      href={APP_URL}
+      data-cta
+      class="shrink-0 px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-full transition-all"
+    >
+      Get started free
+    </a>
+  </div>
+
+  <!-- Mobile nav: no JS, no drawer -- a wrapping row of links is crawlable,
+       accessible, and costs nothing. -->
+  <nav aria-label="Main (mobile)" class="md:hidden border-t border-white/5">
+    <div class="container mx-auto px-4 py-2 flex flex-wrap gap-x-5 gap-y-1">
+      {
+        NAV.map((item) => (
+          <a href={item.href} class="text-xs font-medium text-gray-400 hover:text-white transition-colors">
+            {item.label}
+          </a>
+        ))
+      }
+    </div>
+  </nav>
+</header>

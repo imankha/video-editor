@@ -1,0 +1,806 @@
+{
+  "soccer": {
+    "positions": [
+      {
+        "id": "attacker",
+        "name": "Attacker"
+      },
+      {
+        "id": "midfielder",
+        "name": "Midfielder"
+      },
+      {
+        "id": "defender",
+        "name": "Defender"
+      },
+      {
+        "id": "goalie",
+        "name": "Goalie"
+      }
+    ],
+    "plays": {
+      "attacker": [
+        {
+          "name": "Goal",
+          "description": "All types of finishes in scoring situations."
+        },
+        {
+          "name": "Assist",
+          "description": "Final pass that leads directly to a goal."
+        },
+        {
+          "name": "Dribble",
+          "description": "Beating defenders in individual attacking duels."
+        }
+      ],
+      "midfielder": [
+        {
+          "name": "Pass",
+          "description": "Short, long, and line-breaking passes to advance play."
+        },
+        {
+          "name": "Chance Creation",
+          "description": "Key passes that set up opportunities for teammates."
+        },
+        {
+          "name": "Control",
+          "description": "Quick turnover play and composure under pressure."
+        }
+      ],
+      "defender": [
+        {
+          "name": "Tackle",
+          "description": "Clean defensive challenges that win the ball."
+        },
+        {
+          "name": "Interception",
+          "description": "Reading and winning possession before the opponent."
+        },
+        {
+          "name": "Build-Up",
+          "description": "Accurate passes from the back that start attacks."
+        }
+      ],
+      "goalie": [
+        {
+          "name": "Save",
+          "description": "All shot-stopping and 1v1 saves."
+        },
+        {
+          "name": "Distribution",
+          "description": "Accurate throws and kicks to start counterattacks."
+        }
+      ]
+    }
+  },
+  "flag_football": {
+    "positions": [
+      {
+        "id": "quarterback",
+        "name": "Quarterback"
+      },
+      {
+        "id": "receiver",
+        "name": "Receiver"
+      },
+      {
+        "id": "center",
+        "name": "Center"
+      },
+      {
+        "id": "rusher",
+        "name": "Rusher"
+      },
+      {
+        "id": "defensive_back",
+        "name": "Defensive Back"
+      }
+    ],
+    "plays": {
+      "quarterback": [
+        {
+          "name": "Touchdown Pass",
+          "description": "Completed pass that results in a score."
+        },
+        {
+          "name": "Scramble",
+          "description": "Evading rushers to extend the play or gain yards."
+        },
+        {
+          "name": "Play Action",
+          "description": "Fake handoff that freezes the defense before a pass."
+        }
+      ],
+      "receiver": [
+        {
+          "name": "Touchdown Catch",
+          "description": "Receiving a pass in the end zone for a score."
+        },
+        {
+          "name": "Route Running",
+          "description": "Crisp cuts and separation from defenders on passing routes."
+        },
+        {
+          "name": "YAC",
+          "description": "Yards after catch; gaining extra ground after the reception."
+        }
+      ],
+      "center": [
+        {
+          "name": "Snap",
+          "description": "Clean snaps that start the play on time."
+        },
+        {
+          "name": "Block",
+          "description": "Positioning to shield the quarterback from rushers."
+        },
+        {
+          "name": "Route",
+          "description": "Center releasing into a passing route after the snap."
+        }
+      ],
+      "rusher": [
+        {
+          "name": "Sack",
+          "description": "Pulling the quarterback's flag behind the line of scrimmage."
+        },
+        {
+          "name": "Pressure",
+          "description": "Forcing the quarterback into a hurried throw or scramble."
+        },
+        {
+          "name": "Flag Pull",
+          "description": "Pulling the ball carrier's flag to end the play."
+        }
+      ],
+      "defensive_back": [
+        {
+          "name": "Interception",
+          "description": "Catching a pass intended for the offense."
+        },
+        {
+          "name": "Pass Breakup",
+          "description": "Deflecting or disrupting a pass without intercepting."
+        },
+        {
+          "name": "Coverage",
+          "description": "Staying with a receiver to deny the pass."
+        }
+      ]
+    }
+  },
+  "american_football": {
+    "positions": [
+      {
+        "id": "quarterback",
+        "name": "Quarterback"
+      },
+      {
+        "id": "wide_receiver",
+        "name": "Wide Receiver / Tight End"
+      },
+      {
+        "id": "running_back",
+        "name": "Running Back"
+      },
+      {
+        "id": "offensive_line",
+        "name": "Offensive Line"
+      },
+      {
+        "id": "defensive_line",
+        "name": "Defensive Line"
+      },
+      {
+        "id": "linebacker",
+        "name": "Linebacker"
+      },
+      {
+        "id": "defensive_back",
+        "name": "Defensive Back"
+      },
+      {
+        "id": "kicker",
+        "name": "Kicker / Punter"
+      }
+    ],
+    "plays": {
+      "quarterback": [
+        {
+          "name": "Touchdown Pass",
+          "description": "Completed pass that results in a score."
+        },
+        {
+          "name": "Deep Ball",
+          "description": "Accurate throws of 20+ yards downfield."
+        },
+        {
+          "name": "Scramble",
+          "description": "Evading pressure to extend the play or gain yards."
+        }
+      ],
+      "wide_receiver": [
+        {
+          "name": "Touchdown Catch",
+          "description": "Receiving a pass in the end zone for a score."
+        },
+        {
+          "name": "Route Running",
+          "description": "Crisp cuts and separation from defenders on passing routes."
+        },
+        {
+          "name": "YAC",
+          "description": "Yards after catch; gaining extra ground after the reception."
+        }
+      ],
+      "running_back": [
+        {
+          "name": "Touchdown Run",
+          "description": "Rushing the ball into the end zone for a score."
+        },
+        {
+          "name": "Broken Tackle",
+          "description": "Breaking through or spinning off a defender's tackle attempt."
+        },
+        {
+          "name": "Receiving",
+          "description": "Catching passes out of the backfield."
+        }
+      ],
+      "offensive_line": [
+        {
+          "name": "Pancake Block",
+          "description": "Driving a defender flat to the ground."
+        },
+        {
+          "name": "Pass Protection",
+          "description": "Keeping the pocket clean for the quarterback."
+        }
+      ],
+      "defensive_line": [
+        {
+          "name": "Sack",
+          "description": "Tackling the quarterback behind the line of scrimmage."
+        },
+        {
+          "name": "TFL",
+          "description": "Tackle for loss; stopping the ball carrier behind the line."
+        },
+        {
+          "name": "Run Stop",
+          "description": "Stuffing a run play at or near the line of scrimmage."
+        }
+      ],
+      "linebacker": [
+        {
+          "name": "Tackle",
+          "description": "Bringing down the ball carrier in the open field."
+        },
+        {
+          "name": "Blitz",
+          "description": "Rushing the quarterback from a linebacker position."
+        },
+        {
+          "name": "Coverage",
+          "description": "Defending a pass from a linebacker position."
+        }
+      ],
+      "defensive_back": [
+        {
+          "name": "Interception",
+          "description": "Catching a pass intended for the offense."
+        },
+        {
+          "name": "Pass Breakup",
+          "description": "Deflecting or disrupting a pass without intercepting."
+        },
+        {
+          "name": "Forced Fumble",
+          "description": "Stripping or knocking the ball loose from the carrier."
+        }
+      ],
+      "kicker": [
+        {
+          "name": "Field Goal",
+          "description": "Successful kick through the uprights for 3 points."
+        },
+        {
+          "name": "Punt",
+          "description": "Booming kicks that pin the opponent deep."
+        },
+        {
+          "name": "Kickoff",
+          "description": "Strong kicks that limit return yardage."
+        }
+      ]
+    }
+  },
+  "basketball": {
+    "positions": [
+      {
+        "id": "guard",
+        "name": "Guard"
+      },
+      {
+        "id": "forward",
+        "name": "Forward"
+      },
+      {
+        "id": "center",
+        "name": "Center"
+      }
+    ],
+    "plays": {
+      "guard": [
+        {
+          "name": "Scoring",
+          "description": "Baskets from any range: layups, mid-range, three-pointers, dunks."
+        },
+        {
+          "name": "Assist",
+          "description": "Pass that directly leads to a teammate's basket."
+        },
+        {
+          "name": "Steal",
+          "description": "Taking the ball from the opposing team."
+        }
+      ],
+      "forward": [
+        {
+          "name": "Dunk",
+          "description": "Powerful finish at the rim by slamming the ball through the hoop."
+        },
+        {
+          "name": "Rebound",
+          "description": "Grabbing the ball after a missed shot."
+        },
+        {
+          "name": "Fastbreak",
+          "description": "Pushing the ball up court quickly for an easy scoring chance."
+        }
+      ],
+      "center": [
+        {
+          "name": "Post Move",
+          "description": "Skilled footwork and finishing in the low post area."
+        },
+        {
+          "name": "Block",
+          "description": "Deflecting or swatting an opponent's shot attempt."
+        },
+        {
+          "name": "Screen",
+          "description": "Setting a pick to free a teammate for a shot or drive."
+        }
+      ]
+    }
+  },
+  "lacrosse": {
+    "positions": [
+      {
+        "id": "attack",
+        "name": "Attack"
+      },
+      {
+        "id": "midfield",
+        "name": "Midfield"
+      },
+      {
+        "id": "defense",
+        "name": "Defense"
+      },
+      {
+        "id": "goalie",
+        "name": "Goalie"
+      }
+    ],
+    "plays": {
+      "attack": [
+        {
+          "name": "Goal",
+          "description": "Scoring by putting the ball in the net."
+        },
+        {
+          "name": "Assist",
+          "description": "Pass that directly leads to a teammate's goal."
+        },
+        {
+          "name": "Dodge",
+          "description": "Beating a defender one-on-one to create a scoring chance."
+        }
+      ],
+      "midfield": [
+        {
+          "name": "Ground Ball",
+          "description": "Winning possession of a loose ball."
+        },
+        {
+          "name": "Transition",
+          "description": "Carrying or passing the ball quickly up the field on a fast break."
+        },
+        {
+          "name": "Shot",
+          "description": "On-target shots that test the goalkeeper."
+        }
+      ],
+      "defense": [
+        {
+          "name": "Check",
+          "description": "Legal stick check that dislodges the ball from an opponent."
+        },
+        {
+          "name": "Clear",
+          "description": "Moving the ball from the defensive end past midfield."
+        },
+        {
+          "name": "Caused Turnover",
+          "description": "Forcing the opponent to lose possession through a check or pressure."
+        }
+      ],
+      "goalie": [
+        {
+          "name": "Save",
+          "description": "Goalkeeper stopping a shot."
+        },
+        {
+          "name": "Outlet",
+          "description": "Quick pass after a save to start the transition."
+        }
+      ]
+    }
+  },
+  "rugby": {
+    "positions": [
+      {
+        "id": "forward",
+        "name": "Forward"
+      },
+      {
+        "id": "back",
+        "name": "Back"
+      },
+      {
+        "id": "halfback",
+        "name": "Halfback"
+      }
+    ],
+    "plays": {
+      "forward": [
+        {
+          "name": "Tackle",
+          "description": "Bringing down the ball carrier and competing for the ball."
+        },
+        {
+          "name": "Carry",
+          "description": "Running with the ball into contact, gaining ground."
+        },
+        {
+          "name": "Ruck",
+          "description": "Securing or contesting possession at the breakdown."
+        }
+      ],
+      "back": [
+        {
+          "name": "Try",
+          "description": "Scoring by grounding the ball in the in-goal area."
+        },
+        {
+          "name": "Line Break",
+          "description": "Breaking through the defensive line into open space."
+        },
+        {
+          "name": "Kick",
+          "description": "Tactical kicking: conversions, penalties, territory kicks."
+        }
+      ],
+      "halfback": [
+        {
+          "name": "Pass",
+          "description": "Accurate service from the ruck to the backline."
+        },
+        {
+          "name": "Box Kick",
+          "description": "Contestable kick from behind the ruck."
+        },
+        {
+          "name": "Snipe",
+          "description": "Darting run close to the ruck to exploit gaps."
+        }
+      ]
+    }
+  },
+  "volleyball": {
+    "positions": [
+      {
+        "id": "setter",
+        "name": "Setter"
+      },
+      {
+        "id": "hitter",
+        "name": "Hitter"
+      },
+      {
+        "id": "middle_blocker",
+        "name": "Middle Blocker"
+      },
+      {
+        "id": "libero",
+        "name": "Libero"
+      }
+    ],
+    "plays": {
+      "setter": [
+        {
+          "name": "Set",
+          "description": "Accurate sets that put hitters in position to attack."
+        },
+        {
+          "name": "Assist",
+          "description": "Set that directly leads to a teammate's kill."
+        },
+        {
+          "name": "Dump",
+          "description": "Surprise second-touch attack over the net."
+        }
+      ],
+      "hitter": [
+        {
+          "name": "Kill",
+          "description": "Attack that lands for a point or forces an error."
+        },
+        {
+          "name": "Tip",
+          "description": "Soft touch placed past or over the block."
+        },
+        {
+          "name": "Ace",
+          "description": "Serve that lands for a point untouched or unreturned."
+        }
+      ],
+      "middle_blocker": [
+        {
+          "name": "Block",
+          "description": "Stopping an opponent's attack at the net."
+        },
+        {
+          "name": "Slide",
+          "description": "Quick attack off a one-foot approach behind the setter."
+        },
+        {
+          "name": "Stuff Block",
+          "description": "Block that sends the ball straight back for a point."
+        }
+      ],
+      "libero": [
+        {
+          "name": "Dig",
+          "description": "Defensive save of a hard-driven attack."
+        },
+        {
+          "name": "Serve Receive",
+          "description": "Clean pass off the opponent's serve to the setter."
+        },
+        {
+          "name": "Pancake",
+          "description": "Diving one-hand floor save to keep the rally alive."
+        }
+      ]
+    }
+  },
+  "hockey": {
+    "positions": [
+      {
+        "id": "forward",
+        "name": "Forward"
+      },
+      {
+        "id": "defenseman",
+        "name": "Defenseman"
+      },
+      {
+        "id": "goalie",
+        "name": "Goalie"
+      }
+    ],
+    "plays": {
+      "forward": [
+        {
+          "name": "Goal",
+          "description": "Putting the puck in the net to score."
+        },
+        {
+          "name": "Assist",
+          "description": "Pass that directly sets up a teammate's goal."
+        },
+        {
+          "name": "Deke",
+          "description": "Stickhandling move that beats a defender or goalie."
+        }
+      ],
+      "defenseman": [
+        {
+          "name": "Check",
+          "description": "Body or stick check that separates an opponent from the puck."
+        },
+        {
+          "name": "Shot Block",
+          "description": "Getting in front of an opponent's shot to stop it."
+        },
+        {
+          "name": "Breakout",
+          "description": "Clean pass out of the defensive zone to start the rush."
+        }
+      ],
+      "goalie": [
+        {
+          "name": "Save",
+          "description": "Stopping a shot from beating you into the net."
+        },
+        {
+          "name": "Glove Save",
+          "description": "Catching the puck cleanly out of the air."
+        },
+        {
+          "name": "Poke Check",
+          "description": "Stick jab that knocks the puck off an attacker on a breakaway."
+        }
+      ]
+    }
+  },
+  "tennis": {
+    "positions": [
+      {
+        "id": "serve",
+        "name": "Serve"
+      },
+      {
+        "id": "baseline",
+        "name": "Baseline"
+      },
+      {
+        "id": "net",
+        "name": "Net"
+      },
+      {
+        "id": "defense",
+        "name": "Defense"
+      }
+    ],
+    "plays": {
+      "serve": [
+        {
+          "name": "Ace",
+          "description": "Serve that lands in untouched for a point."
+        },
+        {
+          "name": "Service Winner",
+          "description": "Serve that forces a weak return and an easy point."
+        },
+        {
+          "name": "Kick Serve",
+          "description": "Heavy topspin serve that bounces high to push the returner back."
+        }
+      ],
+      "baseline": [
+        {
+          "name": "Forehand Winner",
+          "description": "Forehand that lands in for an unreturnable point."
+        },
+        {
+          "name": "Backhand Winner",
+          "description": "Backhand that lands in for an unreturnable point."
+        },
+        {
+          "name": "Rally",
+          "description": "Sustained baseline exchange that earns the point."
+        }
+      ],
+      "net": [
+        {
+          "name": "Volley",
+          "description": "Putting away a ball out of the air at the net."
+        },
+        {
+          "name": "Overhead",
+          "description": "Smash on a high ball for a point."
+        },
+        {
+          "name": "Drop Shot",
+          "description": "Soft touch that dies just over the net to win the point."
+        }
+      ],
+      "defense": [
+        {
+          "name": "Passing Shot",
+          "description": "Drive past an opponent who has come to the net."
+        },
+        {
+          "name": "Return",
+          "description": "Strong return of serve that takes control of the rally."
+        },
+        {
+          "name": "Lob",
+          "description": "High shot over the opponent at the net to reset or win the point."
+        }
+      ]
+    }
+  },
+  "baseball": {
+    "positions": [
+      {
+        "id": "pitcher",
+        "name": "Pitcher"
+      },
+      {
+        "id": "batter",
+        "name": "Batter"
+      },
+      {
+        "id": "infielder",
+        "name": "Infielder"
+      },
+      {
+        "id": "outfielder",
+        "name": "Outfielder"
+      }
+    ],
+    "plays": {
+      "pitcher": [
+        {
+          "name": "Strikeout",
+          "description": "Retiring a batter on a third strike."
+        },
+        {
+          "name": "Pitch",
+          "description": "Well-located pitch that earns a weak swing or take."
+        },
+        {
+          "name": "Pickoff",
+          "description": "Throw that catches a baserunner off the bag for an out."
+        }
+      ],
+      "batter": [
+        {
+          "name": "Home Run",
+          "description": "Hit that clears the fence for a run."
+        },
+        {
+          "name": "Hit",
+          "description": "Base hit that puts the batter safely on base."
+        },
+        {
+          "name": "RBI",
+          "description": "At-bat that drives in a run."
+        }
+      ],
+      "infielder": [
+        {
+          "name": "Fielding",
+          "description": "Clean glove work on a ground ball for an out."
+        },
+        {
+          "name": "Double Play",
+          "description": "Turning two outs on a single batted ball."
+        },
+        {
+          "name": "Throw Out",
+          "description": "Strong throw across the diamond to retire a runner."
+        }
+      ],
+      "outfielder": [
+        {
+          "name": "Catch",
+          "description": "Tracking down a fly ball for an out."
+        },
+        {
+          "name": "Diving Catch",
+          "description": "Full-extension grab to take away a hit."
+        },
+        {
+          "name": "Outfield Assist",
+          "description": "Throw from the outfield that retires a runner."
+        }
+      ]
+    }
+  }
+}

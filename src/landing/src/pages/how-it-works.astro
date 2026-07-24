@@ -1,0 +1,165 @@
+---
+import PageLayout from '../layouts/PageLayout.astro'
+import Faq from '../components/Faq.astro'
+import Cta from '../components/Cta.astro'
+import { TutorialLauncher } from '../components/TutorialLauncher'
+import {
+  LearnIllustration,
+  ElevateIllustration,
+  CelebrateIllustration,
+} from '../components/Illustrations'
+import { FACTS, INPUT_SOURCES, APP_URL } from '../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs, howTo, type FaqItem } from '../lib/schema'
+
+const path = '/how-it-works'
+
+const steps = [
+  {
+    name: 'Upload a game',
+    text: 'Upload the game video you already filmed. Full-length matches are fine -- there is no need to trim first, and no format conversion to do. Nothing installs; the editor runs in your browser.',
+  },
+  {
+    name: 'Mark the plays worth keeping',
+    text: 'Watch the game and mark each moment worth keeping, tagging it by position and play type, with a rating and optional notes. This is the only manual step, and it takes about as long as watching the game.',
+  },
+  {
+    name: 'Frame and spotlight your player',
+    text: 'Choose the player each clip is about. The crop follows them through the play, so a wide sideline shot becomes a tight, watchable frame. You can start wide and tighten as the play develops, and add a spotlight marker so a viewer knows immediately where to look.',
+  },
+  {
+    name: 'Export and share',
+    text: `ReelBallers upscales toward ${FACTS.upscaleTarget}, renders the reel, and gives you one link to share. The same clips can be exported in more than one aspect ratio, so a wide recruiting cut and a vertical social version come from the same work.`,
+  },
+]
+
+const faqs: FaqItem[] = [
+  {
+    q: 'How long does making a highlight reel take?',
+    a: 'The marking step takes roughly the length of the game, because you tag plays while watching it. Rendering and export happen after that without your involvement. There is no separate editing session.',
+  },
+  {
+    q: 'Do I need any video editing experience?',
+    a: 'No. There is no timeline to learn. You mark plays, choose who each clip is about, and export.',
+  },
+  {
+    q: 'What do I need to install?',
+    a: FACTS.install,
+  },
+  {
+    q: 'What footage can I upload?',
+    a: `Any standard video file: ${INPUT_SOURCES.join('; ')}. There is no hardware to buy and no integration to configure.`,
+  },
+  {
+    q: 'Can I reuse clips across several reels?',
+    a: 'Yes. Tagged clips go into a library, so a season reel, a single-tournament cut, and a recruiting reel can all be generated from the same tagging work rather than edited separately.',
+  },
+  {
+    q: 'What does the person receiving the reel need?',
+    a: `Just ${FACTS.viewerRequirement}. The reel plays at full resolution in a browser.`,
+  },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: 'How ReelBallers works', description: 'The four steps from raw game footage to a shareable highlight reel.', path }),
+  breadcrumbs([{ name: 'How it works', path }]),
+  howTo({
+    name: 'How to turn game footage into a highlight reel',
+    description: 'Upload a game, mark the plays worth keeping, choose the player each clip follows, and export a shareable reel.',
+    path,
+    steps,
+  }),
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title="How ReelBallers Works | From Game Footage to Reel"
+  description="The four steps from a two-hour game file to a shareable highlight reel: upload, mark the plays, follow your player, export. No editing experience needed."
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'How it works', path }]}
+  current="/how-it-works"
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">How ReelBallers works</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
+        Four steps. Upload a game, mark the plays worth keeping while you watch, choose which player
+        each clip should follow, and export a reel you can share with one link. The only manual step
+        is marking the plays.
+      </p>
+      <div class="flex flex-col sm:flex-row gap-4 mt-8">
+        <a
+          href={APP_URL}
+          data-cta
+          class="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg text-center shadow-lg shadow-purple-500/25 transition-all"
+        >
+          Get started free
+        </a>
+        <button
+          type="button"
+          data-tutorial="full"
+          class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg transition-all"
+        >
+          Watch the full walkthrough
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-12" aria-labelledby="steps-heading">
+    <h2 id="steps-heading" class="sr-only">The four steps</h2>
+    <ol class="space-y-6 max-w-3xl">
+      {
+        steps.map((step, i) => (
+          <li id={`step-${i + 1}`} class="flex gap-5 bg-white/5 border border-white/10 rounded-2xl p-6">
+            <span class="shrink-0 w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+              {i + 1}
+            </span>
+            <div>
+              <h3 class="text-xl font-bold text-white mb-2">{step.name}</h3>
+              <p class="text-gray-300 leading-relaxed">{step.text}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <section class="container mx-auto px-4 py-12 space-y-16" aria-labelledby="tour-heading">
+    <h2 id="tour-heading" class="text-2xl md:text-3xl font-bold text-white text-center">
+      See each step
+    </h2>
+
+    <div class="grid md:grid-cols-3 gap-8">
+      <div>
+        <button type="button" data-tutorial="learn" class="group block w-full rounded-2xl mb-4" aria-label="Play the Annotate tutorial">
+          <LearnIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
+        </button>
+        <h3 class="text-lg font-bold text-white mb-1">Annotate</h3>
+        <p class="text-sm text-gray-400">Mark plays, rate them, tag teammates, and leave notes.</p>
+      </div>
+      <div>
+        <button type="button" data-tutorial="elevate" class="group block w-full rounded-2xl mb-4" aria-label="Play the Framing and Highlights tutorials">
+          <ElevateIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
+        </button>
+        <h3 class="text-lg font-bold text-white mb-1">Frame &amp; highlight</h3>
+        <p class="text-sm text-gray-400">Follow your player through the play and add a spotlight.</p>
+      </div>
+      <div>
+        <button type="button" data-tutorial="celebrate" class="group block w-full rounded-2xl mb-4" aria-label="Play the Share tutorial">
+          <CelebrateIllustration className="group-hover:scale-[1.02] transition-transform duration-300" />
+        </button>
+        <h3 class="text-lg font-bold text-white mb-1">Share</h3>
+        <p class="text-sm text-gray-400">One link, full resolution, no app required to watch.</p>
+      </div>
+    </div>
+  </section>
+
+  <Faq items={faqs} />
+
+  <Cta />
+
+  <TutorialLauncher client:idle />
+</PageLayout>

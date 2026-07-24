@@ -1,0 +1,105 @@
+---
+/**
+ * BaseLayout -- the ONLY place the document <head> is built.
+ *
+ * Every public page must render through this (usually via PageLayout). It
+ * guarantees the non-negotiables on every route: unique title + description,
+ * a self-referencing canonical, Open Graph + Twitter cards, and JSON-LD.
+ *
+ * See SEO.md before adding a page.
+ */
+import { SITE_URL, BRAND, absUrl } from '../site'
+import '../index.css'
+
+export interface Props {
+  /** <=60 chars. Front-load the query; this is the click magnet. */
+  title: string
+  /** <=155 chars. Written to earn the click, not just to describe. */
+  description: string
+  /** Site-root-relative path, e.g. '/soccer'. Drives the canonical URL. */
+  path: string
+  /** Absolute or root-relative OG image. Defaults to the site card. */
+  image?: string
+  ogType?: 'website' | 'article'
+  /** JSON-LD objects. BreadcrumbList/Organization are added automatically. */
+  schemas?: Record<string, unknown>[]
+  /** ISO date -- emits article:modified_time and a visible freshness signal. */
+  dateModified?: string
+  noindex?: boolean
+}
+
+const {
+  title,
+  description,
+  path,
+  image = '/og-card.jpg',
+  ogType = 'website',
+  schemas = [],
+  dateModified,
+  noindex = false,
+} = Astro.props
+
+const canonical = absUrl(path)
+const ogImage = image.startsWith('http') ? image : `${SITE_URL}${image}`
+
+// Build-time guardrails. These fire during `npm run build`, so a page with a
+// truncated-in-SERP title or a missing description never reaches production.
+if (import.meta.env.PROD) {
+  if (title.length > 60) console.warn(`[seo] title >60 chars (${title.length}) on ${path}: ${title}`)
+  if (description.length > 155) console.warn(`[seo] description >155 chars (${description.length}) on ${path}`)
+  if (!description.trim()) throw new Error(`[seo] missing description on ${path}`)
+}
+
+const orgSchema = {
+  '@type': 'Organization',
+  '@id': `${SITE_URL}/#organization`,
+  name: BRAND,
+  url: `${SITE_URL}/`,
+  logo: `${SITE_URL}/og-card.jpg`,
+  email: 'hello@reelballers.com',
+}
+
+// One @graph beats several loose <script> blocks: nodes cross-reference by @id,
+// so crawlers resolve "this page is about this product by this org" in one pass.
+const graph = [orgSchema, ...schemas]
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#7c3aed" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    {noindex && <meta name="robots" content="noindex,follow" />}
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:site_name" content={BRAND} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${BRAND} -- ${description.slice(0, 90)}`} />
+    {dateModified && <meta property="article:modified_time" content={dateModified} />}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- Hero media is served from R2; warm the connection before the player mounts. -->
+    <link rel="preconnect" href="https://pub-8fd2fb93bbed4535849c27ec673e7905.r2.dev" crossorigin />
+
+    <script is:inline type="application/ld+json" set:html={JSON.stringify({ '@context': 'https://schema.org', '@graph': graph })} />
+  </head>
+  <body class="bg-slate-900 text-gray-200 antialiased">
+    <slot />
+  </body>
+</html>

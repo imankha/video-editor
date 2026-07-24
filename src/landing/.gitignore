@@ -1,0 +1,9 @@
+# Astro build + type-gen output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Wrangler
+.wrangler/

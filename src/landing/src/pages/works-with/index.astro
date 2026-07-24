@@ -1,0 +1,92 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro'
+import Cta from '../../components/Cta.astro'
+import Faq from '../../components/Faq.astro'
+import { CAMERAS } from '../../data/cameras'
+import { INPUT_SOURCES, SITE_URL } from '../../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs, type FaqItem } from '../../lib/schema'
+
+const path = '/works-with'
+
+const faqs: FaqItem[] = [
+  {
+    q: 'What cameras does ReelBallers work with?',
+    a: `Any camera that produces a standard video file. That includes ${INPUT_SOURCES.join('; ')}. There is no hardware to buy and no integration to set up.`,
+  },
+  {
+    q: 'Does ReelBallers integrate with Veo, Trace, or Hudl?',
+    a: 'No, and it does not need to. Those systems capture matches; ReelBallers works with the video file you export from them. That means you keep your club setup and add per-player editing on top.',
+  },
+  {
+    q: 'Do I need to convert my footage first?',
+    a: 'No. Standard MP4 and MOV files upload as they are.',
+  },
+  {
+    q: 'Does it matter what resolution I filmed at?',
+    a: 'It matters for how the finished reel looks. Reels are built by cropping into the frame to follow a player, so cropping into 4K leaves far more detail than cropping into 1080p. Film at the highest resolution you can, and film wide rather than zoomed.',
+  },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: 'Cameras and footage sources ReelBallers works with', description: 'ReelBallers works with any standard video file, from any camera.', path }),
+  breadcrumbs([{ name: 'Works with', path }]),
+  {
+    '@type': 'ItemList',
+    name: 'Supported footage sources',
+    itemListElement: CAMERAS.map((camera, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: camera.name,
+      url: `${SITE_URL}/works-with/${camera.slug}`,
+    })),
+  },
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title="What Cameras Does ReelBallers Work With?"
+  description="ReelBallers works with any standard video file: iPhone, GoPro, XbotGo, action cameras, and exports from Veo, Trace or Hudl. No hardware to buy."
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Works with', path }]}
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
+        What footage does ReelBallers work with?
+      </h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
+        Any standard video file, from any camera. ReelBallers has no hardware integrations and needs
+        none &mdash; you upload the file your camera already produces. That includes phones, action
+        cameras, camcorders, and match video exported from team systems like Veo, Trace, or Hudl.
+      </p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8" aria-label="Footage sources">
+    <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        CAMERAS.map((camera) => (
+          <li>
+            <a
+              href={`/works-with/${camera.slug}`}
+              class="block h-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-400/50 rounded-2xl p-6 transition-all"
+            >
+              <h2 class="text-xl font-bold text-white mb-2">{camera.name}</h2>
+              {camera.exportOnly && (
+                <p class="text-xs text-amber-300/80 mb-2">Works with the exported video file</p>
+              )}
+              <p class="text-sm text-gray-300 leading-relaxed">{camera.answer.split('. ')[0]}.</p>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <Faq items={faqs} />
+
+  <Cta />
+</PageLayout>

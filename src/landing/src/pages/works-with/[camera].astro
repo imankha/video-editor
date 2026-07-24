@@ -1,0 +1,195 @@
+---
+/**
+ * Camera / footage-source pages -- /works-with/iphone, /works-with/gopro, ...
+ *
+ * These target device-name queries, which are high intent and low competition.
+ * The capture tips are the substance: concrete, checkable advice that is useful
+ * whether or not the reader signs up. That is what earns citations.
+ */
+import PageLayout from '../../layouts/PageLayout.astro'
+import Faq from '../../components/Faq.astro'
+import Cta from '../../components/Cta.astro'
+import { CAMERAS, type Camera } from '../../data/cameras'
+import { SPORTS } from '../../data/sports'
+import { FACTS, APP_URL } from '../../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs, howTo, type FaqItem } from '../../lib/schema'
+
+export function getStaticPaths() {
+  return CAMERAS.map((camera) => ({ params: { camera: camera.slug }, props: { camera } }))
+}
+
+interface Props {
+  camera: Camera
+}
+
+const { camera } = Astro.props as Props
+const path = `/works-with/${camera.slug}`
+
+const steps = [
+  {
+    name: camera.exportOnly
+      ? `Export the match video from ${camera.name}`
+      : `Get the video off your ${camera.name}`,
+    text: camera.exportOnly
+      ? `Download the full match video from your ${camera.name} account. Choose the highest quality available, and prefer the full match over any pre-cut clips.`
+      : `Transfer the file to the device you will edit on. Upload the original recording rather than a re-exported copy -- re-encoding costs detail that the upscaler could otherwise use.`,
+  },
+  {
+    name: 'Upload it and mark the plays',
+    text: `Upload the file to ReelBallers and tag the moments worth keeping as you watch, by position and play type.`,
+  },
+  {
+    name: 'Export the reel',
+    text: `ReelBallers crops and follows your player, upscales toward ${FACTS.upscaleTarget}, and produces a shareable link plus optional vertical cut for social.`,
+  },
+]
+
+const faqs: FaqItem[] = [
+  {
+    q: `Can I edit ${camera.name} footage into a highlight reel?`,
+    a: camera.answer,
+  },
+  {
+    q: `Does ReelBallers integrate with ${camera.name}?`,
+    a: camera.exportOnly
+      ? `No. There is no direct integration. ReelBallers works with the video file you export from ${camera.name}, which means you keep your existing setup and add per-player editing on top of it.`
+      : `There is no integration to set up, and none is needed -- ReelBallers accepts the standard video file your ${camera.name} already produces. Upload it and start editing.`,
+  },
+  {
+    q: `Do I need to convert the file first?`,
+    a: `No. Standard MP4 and MOV files upload as they are. There is no transcoding step for you to do.`,
+  },
+  {
+    q: `What settings should I use when filming?`,
+    a: camera.tips[0],
+  },
+  {
+    q: `Will cropped footage still look sharp?`,
+    a: `That depends mostly on what you shot. Cropping into 4K leaves far more detail than cropping into 1080p, which is why the resolution advice above matters. ReelBallers also upscales toward ${FACTS.upscaleTarget} on export to recover some of what cropping costs.`,
+  },
+  {
+    q: `How much does it cost?`,
+    a: `${FACTS.pricingSummary} There is no hardware to buy and nothing to install -- ${FACTS.install.toLowerCase()}`,
+  },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: camera.h1, description: camera.description, path }),
+  breadcrumbs([
+    { name: 'Works with', path: '/works-with' },
+    { name: camera.name, path },
+  ]),
+  howTo({ name: camera.h1, description: camera.answer, path, steps }),
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title={camera.title}
+  description={camera.description}
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Works with', path: '/works-with' }, { name: camera.name, path }]}
+>
+  <section class="container mx-auto px-4 pt-10 pb-12">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">{camera.h1}</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">{camera.answer}</p>
+      <a
+        href={APP_URL}
+        data-cta
+        class="inline-block mt-8 px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg shadow-lg shadow-purple-500/25 transition-all"
+      >
+        Get started free
+      </a>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8" aria-labelledby="reality-heading">
+    <div class="max-w-3xl bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+      <h2 id="reality-heading" class="text-xl md:text-2xl font-bold text-white mb-4">
+        What {camera.name} footage is actually like
+      </h2>
+      <p class="text-gray-300 leading-relaxed">{camera.reality}</p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-12" aria-labelledby="tips-heading">
+    <h2 id="tips-heading" class="text-2xl md:text-3xl font-bold text-white mb-3">
+      Best {camera.name} settings for sports footage
+    </h2>
+    <p class="text-gray-400 mb-8 max-w-2xl">
+      Getting these right at capture time matters more than anything you can do in editing.
+    </p>
+    <ul class="space-y-4 max-w-3xl">
+      {
+        camera.tips.map((tip, i) => (
+          <li class="flex gap-4 bg-white/5 border border-white/10 rounded-xl p-5">
+            <span class="shrink-0 w-7 h-7 rounded-full bg-purple-600/30 border border-purple-500/40 flex items-center justify-center text-purple-200 text-sm font-bold">
+              {i + 1}
+            </span>
+            <p class="text-gray-300 leading-relaxed">{tip}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <section class="container mx-auto px-4 py-12" aria-labelledby="steps-heading">
+    <h2 id="steps-heading" class="text-2xl md:text-3xl font-bold text-white mb-8">
+      Turning that footage into a reel
+    </h2>
+    <ol class="grid gap-6 md:grid-cols-3">
+      {
+        steps.map((step, i) => (
+          <li id={`step-${i + 1}`} class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold mb-4">
+              {i + 1}
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2">{step.name}</h3>
+            <p class="text-gray-300 text-sm leading-relaxed">{step.text}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <Faq items={faqs} heading={`${camera.name} footage: common questions`} />
+
+  <section class="container mx-auto px-4 py-12">
+    <h2 class="text-xl font-bold text-white mb-4">Other footage sources</h2>
+    <ul class="flex flex-wrap gap-3 mb-8">
+      {
+        CAMERAS.filter((c) => c.slug !== camera.slug).map((c) => (
+          <li>
+            <a
+              href={`/works-with/${c.slug}`}
+              class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-all text-sm text-gray-300 inline-block"
+            >
+              {c.name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <h2 class="text-xl font-bold text-white mb-4">By sport</h2>
+    <ul class="flex flex-wrap gap-3">
+      {
+        SPORTS.map((s) => (
+          <li>
+            <a
+              href={`/${s.slug}`}
+              class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-all text-sm text-gray-300 inline-flex items-center gap-2"
+            >
+              <span aria-hidden="true">{s.emoji}</span>
+              {s.name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <Cta heading={`Turn your ${camera.name} footage into a highlight reel`} />
+</PageLayout>

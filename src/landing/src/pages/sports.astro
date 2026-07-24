@@ -1,0 +1,106 @@
+---
+import PageLayout from '../layouts/PageLayout.astro'
+import Cta from '../components/Cta.astro'
+import Faq from '../components/Faq.astro'
+import { SPORTS, positionsFor, playNames } from '../data/sports'
+import { FACTS, CONTACT_EMAIL } from '../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs, type FaqItem } from '../lib/schema'
+
+const path = '/sports'
+
+const faqs: FaqItem[] = [
+  {
+    q: 'Which sports does ReelBallers support?',
+    a: `${FACTS.sportCount}: ${SPORTS.map((s) => s.name).join(', ')}. Each has its own tagging presets covering the positions and play types that sport actually uses.`,
+  },
+  {
+    q: 'What happens if my sport is not listed?',
+    a: `You can still upload footage and build reels -- the framing, spotlight, and export work regardless of sport. What you would be missing is the sport-specific tagging presets. Email ${CONTACT_EMAIL} to request a sport and it can be added.`,
+  },
+  {
+    q: 'What does a sport preset actually change?',
+    a: `The tagging vocabulary. A soccer preset offers goals, assists, tackles and saves by position; a volleyball preset offers kills, blocks, digs and aces. Across all ${FACTS.sportCount} sports there are ${FACTS.positionCount} positions and ${FACTS.playTypeCount} play types.`,
+  },
+  {
+    q: 'Can one account cover two sports?',
+    a: 'Yes. A player who plays more than one sport, or a family with children in different sports, can keep separate profiles and tag each with the right preset.',
+  },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: 'Sports ReelBallers supports', description: `Highlight reel tools for ${FACTS.sportCount} sports.`, path }),
+  breadcrumbs([{ name: 'Sports', path }]),
+  {
+    '@type': 'ItemList',
+    name: 'Sports supported by ReelBallers',
+    itemListElement: SPORTS.map((sport, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: `${sport.name} highlight videos`,
+      url: `https://reelballers.com/${sport.slug}`,
+    })),
+  },
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title={`Sports We Support | ${FACTS.sportCount} Sports | ReelBallers`}
+  description={`Highlight reel tools for ${FACTS.sportCount} sports, each with its own play-tagging presets. Soccer, basketball, football, baseball, volleyball and more.`}
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Sports', path }]}
+  current="/sports"
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
+        Sports ReelBallers supports
+      </h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
+        ReelBallers supports {FACTS.sportCount} sports, each with its own tagging presets &mdash;
+        {' '}{FACTS.positionCount} positions and {FACTS.playTypeCount} play types in total. Pick your sport
+        for the specifics on filming it, tagging it, and what coaches look for.
+      </p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8" aria-label="All sports">
+    <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        SPORTS.map((sport) => {
+          const positions = positionsFor(sport)
+          const plays = playNames(sport)
+          return (
+            <li>
+              <a
+                href={`/${sport.slug}`}
+                class="block h-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-400/50 rounded-2xl p-6 transition-all"
+              >
+                <p class="text-3xl mb-3" aria-hidden="true">{sport.emoji}</p>
+                <h2 class="text-xl font-bold text-white mb-2">{sport.name}</h2>
+                <p class="text-sm text-gray-400 mb-3">
+                  {positions.length} positions &middot; {plays.length} play types
+                </p>
+                <p class="text-sm text-gray-300 leading-relaxed">
+                  {plays.slice(0, 6).join(', ')}&hellip;
+                </p>
+              </a>
+            </li>
+          )
+        })
+      }
+    </ul>
+    <p class="text-gray-400 text-sm mt-8 text-center">
+      Don&rsquo;t see your sport?{' '}
+      <a href={`mailto:${CONTACT_EMAIL}?subject=New%20sport%20request`} class="text-purple-400 hover:text-purple-300 transition-colors">
+        Request it
+      </a>{' '}and it can be added.
+    </p>
+  </section>
+
+  <Faq items={faqs} />
+
+  <Cta />
+</PageLayout>

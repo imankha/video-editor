@@ -1,0 +1,106 @@
+---
+/**
+ * Guides index.
+ *
+ * While no guide is published this page is noindex -- an empty listing page is
+ * a thin page, and thin pages drag on the whole site's quality signal. It
+ * flips to indexable automatically as soon as the first guide is approved and
+ * published (see data/guides.ts).
+ */
+import PageLayout from '../../layouts/PageLayout.astro'
+import Cta from '../../components/Cta.astro'
+import { PUBLISHED_GUIDES } from '../../data/guides'
+import { SITE_URL } from '../../site'
+import { softwareApplication, webPage, breadcrumbs } from '../../lib/schema'
+
+const path = '/guides'
+const hasGuides = PUBLISHED_GUIDES.length > 0
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: 'Guides', description: 'Practical guides to filming and editing youth sports video.', path }),
+  breadcrumbs([{ name: 'Guides', path }]),
+  ...(hasGuides
+    ? [
+        {
+          '@type': 'ItemList',
+          name: 'ReelBallers guides',
+          itemListElement: PUBLISHED_GUIDES.map((g, i) => ({
+            '@type': 'ListItem',
+            position: i + 1,
+            name: g.title,
+            url: `${SITE_URL}/guides/${g.slug}`,
+          })),
+        },
+      ]
+    : []),
+]
+---
+
+<PageLayout
+  title="Guides: Filming and Editing Youth Sports Video"
+  description="Practical guides to filming youth sports from the sideline, camera settings that matter, and building recruiting video that coaches actually watch."
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Guides', path }]}
+  current="/guides"
+  noindex={!hasGuides}
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">Guides</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
+        Practical, specific guidance on filming youth sports and turning the footage into something
+        worth watching &mdash; written for parents doing this from the sideline with the gear they
+        already own.
+      </p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8">
+    {
+      hasGuides ? (
+        <ul class="grid gap-5 md:grid-cols-2 max-w-4xl">
+          {PUBLISHED_GUIDES.map((guide) => (
+            <li>
+              <a
+                href={`/guides/${guide.slug}`}
+                class="block h-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-400/50 rounded-2xl p-6 transition-all"
+              >
+                <h2 class="text-xl font-bold text-white mb-3">{guide.h1}</h2>
+                <p class="text-sm text-gray-300 leading-relaxed mb-3">{guide.description}</p>
+                {guide.dateModified && (
+                  <p class="text-xs text-gray-500">
+                    Updated <time datetime={guide.dateModified}>{guide.dateModified}</time>
+                  </p>
+                )}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div class="max-w-2xl bg-white/5 border border-white/10 rounded-2xl p-8">
+          <h2 class="text-xl font-bold text-white mb-3">Guides are being written</h2>
+          <p class="text-gray-300 leading-relaxed mb-6">
+            The first set covers filming from the sideline, recruiting video length, camera choices,
+            and making a reel for free. In the meantime, the sport and camera pages carry the same
+            practical detail.
+          </p>
+          <div class="flex flex-wrap gap-3">
+            <a href="/works-with/iphone" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm text-gray-300 transition-all">
+              Filming on an iPhone
+            </a>
+            <a href="/recruiting-videos" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm text-gray-300 transition-all">
+              Recruiting videos
+            </a>
+            <a href="/vs/editing-by-hand" class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 text-sm text-gray-300 transition-all">
+              Editing by hand
+            </a>
+          </div>
+        </div>
+      )
+    }
+  </section>
+
+  <Cta />
+</PageLayout>

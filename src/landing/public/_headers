@@ -1,0 +1,39 @@
+# Cache policy for the marketing site.
+#
+# Cloudflare's asset host defaults every file to `max-age=0, must-revalidate`,
+# which makes hashed, immutable build output revalidate on every repeat visit.
+# These rules fix that without risking a stale HTML document.
+
+# Build output is content-hashed, so a change always produces a new filename.
+# Safe to cache for a year and never revalidate.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Poster frames are swapped only alongside the hero videos, and their filenames
+# are stable. A day is long enough to help repeat visits, short enough that a
+# hero swap goes live the next day without a purge.
+/hero/*
+  Cache-Control: public, max-age=86400
+
+/og-card.jpg
+  Cache-Control: public, max-age=86400
+
+/favicon.svg
+  Cache-Control: public, max-age=604800
+
+# HTML must always revalidate so a deploy is visible immediately.
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Crawler-facing files: short cache so edits propagate quickly.
+/robots.txt
+  Cache-Control: public, max-age=3600
+
+/llms.txt
+  Cache-Control: public, max-age=3600
+
+/sitemap-index.xml
+  Cache-Control: public, max-age=3600
+
+/sitemap-0.xml
+  Cache-Control: public, max-age=3600

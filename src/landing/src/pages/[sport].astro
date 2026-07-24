@@ -1,0 +1,224 @@
+---
+/**
+ * Per-sport landing page -- /soccer, /basketball, ...
+ *
+ * One template, ten pages. The differentiating content is real: the positions
+ * and play-type presets come from the editor's actual tag registry (see
+ * data/sports.ts), so each page carries specifics no competitor page has,
+ * rather than the same paragraph with the sport name swapped.
+ */
+import PageLayout from '../layouts/PageLayout.astro'
+import Faq from '../components/Faq.astro'
+import Cta from '../components/Cta.astro'
+import Testimonials from '../components/Testimonials.astro'
+import { SPORTS, positionsFor, playsFor, playNames, type Sport } from '../data/sports'
+import { FACTS, APP_URL } from '../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs, howTo, type FaqItem } from '../lib/schema'
+
+export function getStaticPaths() {
+  return SPORTS.map((sport) => ({ params: { sport: sport.slug }, props: { sport } }))
+}
+
+interface Props {
+  sport: Sport
+}
+
+const { sport } = Astro.props as Props
+const positions = positionsFor(sport)
+const plays = playsFor(sport)
+const allPlays = playNames(sport)
+const path = `/${sport.slug}`
+
+const steps = [
+  {
+    name: `Upload your ${sport.lower} game`,
+    text: `Upload the footage you already filmed -- phone, action camera, or an export from a team camera system. Full matches are fine; there is no need to trim first.`,
+  },
+  {
+    name: 'Mark the plays worth keeping',
+    text: `Watch the game and tag each moment by position and play type. ${sport.name} presets cover ${positions.length} positions and ${allPlays.length} play types, so tagging is a click rather than typing.`,
+  },
+  {
+    name: 'Export and share the reel',
+    text: `ReelBallers crops and follows your player through every clip, upscales toward ${FACTS.upscaleTarget}, and stitches the reel together. Share it with one link, or export a vertical cut for social.`,
+  },
+]
+
+const faqs: FaqItem[] = [
+  {
+    q: `How do I make a ${sport.lower} highlight video?`,
+    a: `Upload your ${sport.lower} game footage to ReelBallers, mark the plays worth keeping as you watch, and export. It crops and follows your player through each clip automatically, then produces one shareable link. You do not need editing experience or a separate video editor.`,
+  },
+  {
+    q: `What ${sport.lower} plays can I tag?`,
+    a: `${sport.name} has ${allPlays.length} built-in play types across ${positions.length} positions: ${allPlays.join(', ')}. You can also rate clips and add notes.`,
+  },
+  {
+    q: `What camera do I need to film ${sport.lower}?`,
+    a: `Whatever you already own. ReelBallers works with any standard video file -- iPhone and Android video, GoPro and other action cameras, XbotGo mounts, camcorders, or match video exported from Veo, Trace, or Hudl. There is no hardware to buy.`,
+  },
+  {
+    q: `Can I make a ${sport.lower} recruiting video with this?`,
+    a: `Yes. Build the reel from your tagged clips, and export a wide cut for college coaches plus a vertical version for social from the same set of clips. Most college coaches want three to five minutes, with your strongest plays first.`,
+  },
+  {
+    q: `How do I keep my player in frame in wide ${sport.lower} footage?`,
+    a: `That is what the auto-follow framing does. You pick the player, and the crop tracks them through the clip, so a wide sideline shot becomes a tight, watchable frame. You can also start wide and tighten through a clip.`,
+  },
+  {
+    q: `How much does it cost?`,
+    a: `${FACTS.pricingSummary} You can upload a game and build a ${sport.lower} reel without paying up front.`,
+  },
+  {
+    q: `What does the person I send the reel to need?`,
+    a: `Just ${FACTS.viewerRequirement}. Coaches, recruiters, and family open a link and watch at full resolution.`,
+  },
+]
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: sport.h1, description: sport.description, path }),
+  breadcrumbs([
+    { name: 'Sports', path: '/sports' },
+    { name: sport.name, path },
+  ]),
+  howTo({
+    name: `How to make a ${sport.lower} highlight reel`,
+    description: sport.answer,
+    path,
+    steps,
+  }),
+  faqPage(faqs),
+]
+---
+
+<PageLayout
+  title={sport.title}
+  description={sport.description}
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Sports', path: '/sports' }, { name: sport.name, path }]}
+  current="/sports"
+>
+  <!-- Hero: H1 then the direct answer, before anything else -->
+  <section class="container mx-auto px-4 pt-10 pb-12">
+    <div class="max-w-3xl">
+      <p class="text-5xl mb-4" aria-hidden="true">{sport.emoji}</p>
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">{sport.h1}</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">{sport.answer}</p>
+      <div class="flex flex-col sm:flex-row gap-4 mt-8">
+        <a
+          href={APP_URL}
+          data-cta
+          class="px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full text-lg text-center shadow-lg shadow-purple-500/25 transition-all"
+        >
+          Get started free
+        </a>
+        <a
+          href="/how-it-works"
+          class="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/15 text-white font-semibold rounded-full text-lg text-center transition-all"
+        >
+          See how it works
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- How to -->
+  <section class="container mx-auto px-4 py-12" aria-labelledby="how-heading">
+    <h2 id="how-heading" class="text-2xl md:text-3xl font-bold text-white mb-8">
+      How to make a {sport.lower} highlight reel
+    </h2>
+    <ol class="grid gap-6 md:grid-cols-3">
+      {
+        steps.map((step, i) => (
+          <li id={`step-${i + 1}`} class="bg-white/5 border border-white/10 rounded-2xl p-6">
+            <div class="w-9 h-9 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold mb-4">
+              {i + 1}
+            </div>
+            <h3 class="text-lg font-bold text-white mb-2">{step.name}</h3>
+            <p class="text-gray-300 text-sm leading-relaxed">{step.text}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </section>
+
+  <!-- The real differentiator: actual tagging presets -->
+  <section class="container mx-auto px-4 py-12" aria-labelledby="tags-heading">
+    <h2 id="tags-heading" class="text-2xl md:text-3xl font-bold text-white mb-3">
+      {sport.name} plays you can tag
+    </h2>
+    <p class="text-gray-400 mb-8 max-w-2xl">
+      Every clip is tagged by position and play type, so you can later pull "every goal" or "every
+      defensive stop" without scrubbing footage. These are the {sport.name.toLowerCase()} presets
+      built in today.
+    </p>
+    <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      {
+        positions.map((position) => (
+          <div class="bg-white/5 border border-white/10 rounded-2xl p-5">
+            <h3 class="text-lg font-bold text-white mb-3">{position.name}</h3>
+            <ul class="space-y-3">
+              {(plays[position.id] ?? []).map((play) => (
+                <li>
+                  <p class="text-sm font-semibold text-purple-300">{play.name}</p>
+                  <p class="text-xs text-gray-400 leading-relaxed">{play.description}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Sport-specific filming reality -->
+  <section class="container mx-auto px-4 py-12" aria-labelledby="challenge-heading">
+    <div class="grid gap-8 md:grid-cols-2 max-w-5xl">
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+        <h2 id="challenge-heading" class="text-xl md:text-2xl font-bold text-white mb-4">
+          Why {sport.lower} footage is hard to edit
+        </h2>
+        <p class="text-gray-300 leading-relaxed">{sport.challenge}</p>
+      </div>
+      <div class="bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+        <h2 class="text-xl md:text-2xl font-bold text-white mb-4">
+          What {sport.lower} coaches look for
+        </h2>
+        <p class="text-gray-300 leading-relaxed">{sport.scouting}</p>
+        <p class="mt-4">
+          <a href="/recruiting-videos" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">
+            Building a recruiting video &rarr;
+          </a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Testimonials topics={['framing', 'sharing']} heading="What people say" />
+
+  <Faq items={faqs} heading={`${sport.name} highlight reels: common questions`} />
+
+  <!-- Internal links to sibling sports keep the crawl graph dense -->
+  <section class="container mx-auto px-4 py-12" aria-labelledby="other-sports">
+    <h2 id="other-sports" class="text-xl font-bold text-white mb-4">Other sports</h2>
+    <ul class="flex flex-wrap gap-3">
+      {
+        SPORTS.filter((s) => s.slug !== sport.slug).map((s) => (
+          <li>
+            <a
+              href={`/${s.slug}`}
+              class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-all text-sm text-gray-300"
+            >
+              <span aria-hidden="true">{s.emoji}</span>
+              {s.name}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <Cta heading={`Make your ${sport.lower} highlight reel`} />
+</PageLayout>

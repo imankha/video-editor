@@ -1,0 +1,182 @@
+---
+/**
+ * Comparison pages -- /vs/editing-by-hand, /vs/capcut.
+ *
+ * Comparison content is disproportionately cited by AI engines, but only when
+ * it reads as even-handed. The "when to choose them" section is not a courtesy,
+ * it is what makes the rest credible -- see data/comparisons.ts.
+ */
+import PageLayout from '../../layouts/PageLayout.astro'
+import Faq from '../../components/Faq.astro'
+import Cta from '../../components/Cta.astro'
+import { COMPARISONS, type Comparison } from '../../data/comparisons'
+import { BRAND, APP_URL } from '../../site'
+import { faqPage, softwareApplication, webPage, breadcrumbs } from '../../lib/schema'
+
+export function getStaticPaths() {
+  return COMPARISONS.map((comparison) => ({
+    params: { comparison: comparison.slug },
+    props: { comparison },
+  }))
+}
+
+interface Props {
+  comparison: Comparison
+}
+
+const { comparison } = Astro.props as Props
+const path = `/vs/${comparison.slug}`
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: comparison.h1, description: comparison.description, path }),
+  breadcrumbs([
+    { name: 'Compare', path: '/vs' },
+    { name: comparison.h1, path },
+  ]),
+  faqPage(comparison.faqs),
+]
+
+const winnerLabel = {
+  us: BRAND,
+  them: 'The alternative',
+  depends: 'Depends',
+}
+---
+
+<PageLayout
+  title={comparison.title}
+  description={comparison.description}
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Compare', path: '/vs' }, { name: comparison.h1, path }]}
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">{comparison.h1}</h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">{comparison.answer}</p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8" aria-labelledby="fair-heading">
+    <div class="max-w-3xl bg-white/5 border border-white/10 rounded-2xl p-6 md:p-8">
+      <h2 id="fair-heading" class="text-xl md:text-2xl font-bold text-white mb-4">
+        What the alternative is genuinely good at
+      </h2>
+      <p class="text-gray-300 leading-relaxed">{comparison.fairSummary}</p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-12" aria-labelledby="table-heading">
+    <h2 id="table-heading" class="text-2xl md:text-3xl font-bold text-white mb-6">
+      Side by side
+    </h2>
+    <!-- Wide tables must scroll inside their own container, never the page. -->
+    <div class="overflow-x-auto rounded-2xl border border-white/10">
+      <table class="w-full text-sm min-w-[44rem]">
+        <thead>
+          <tr class="bg-white/10 text-left">
+            <th scope="col" class="p-4 font-semibold text-white">Dimension</th>
+            <th scope="col" class="p-4 font-semibold text-white">The alternative</th>
+            <th scope="col" class="p-4 font-semibold text-white">{BRAND}</th>
+            <th scope="col" class="p-4 font-semibold text-white whitespace-nowrap">Better fit</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/10">
+          {
+            comparison.rows.map((row) => (
+              <tr class="align-top">
+                <th scope="row" class="p-4 font-semibold text-gray-200 text-left">
+                  {row.dimension}
+                </th>
+                <td class="p-4 text-gray-400 leading-relaxed">{row.them}</td>
+                <td class="p-4 text-gray-300 leading-relaxed">{row.us}</td>
+                <td class="p-4 whitespace-nowrap">
+                  <span
+                    class:list={[
+                      'text-xs font-semibold px-2 py-1 rounded-full',
+                      row.winner === 'us' && 'bg-purple-500/20 text-purple-300',
+                      row.winner === 'them' && 'bg-amber-500/20 text-amber-300',
+                      row.winner === 'depends' && 'bg-white/10 text-gray-400',
+                    ]}
+                  >
+                    {winnerLabel[row.winner]}
+                  </span>
+                </td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-12" aria-labelledby="choose-heading">
+    <h2 id="choose-heading" class="text-2xl md:text-3xl font-bold text-white mb-8">
+      Which one should you use?
+    </h2>
+    <div class="grid gap-6 md:grid-cols-2">
+      <div class="bg-white/5 border border-amber-500/20 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-amber-300 mb-4">Choose the alternative if&hellip;</h3>
+        <ul class="space-y-3">
+          {
+            comparison.chooseThem.map((item) => (
+              <li class="text-gray-300 text-sm leading-relaxed flex gap-2">
+                <span aria-hidden="true" class="text-amber-400/70">
+                  &bull;
+                </span>
+                {item}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+      <div class="bg-white/5 border border-purple-500/20 rounded-2xl p-6">
+        <h3 class="text-lg font-bold text-purple-300 mb-4">Choose {BRAND} if&hellip;</h3>
+        <ul class="space-y-3">
+          {
+            comparison.chooseUs.map((item) => (
+              <li class="text-gray-300 text-sm leading-relaxed flex gap-2">
+                <span aria-hidden="true" class="text-purple-400/70">
+                  &bull;
+                </span>
+                {item}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+    </div>
+    <p class="mt-8">
+      <a
+        href={APP_URL}
+        data-cta
+        class="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold rounded-full transition-all"
+      >
+        Try {BRAND} free
+      </a>
+    </p>
+  </section>
+
+  <Faq items={comparison.faqs} />
+
+  <section class="container mx-auto px-4 pb-8">
+    <h2 class="text-xl font-bold text-white mb-4">Other comparisons</h2>
+    <ul class="flex flex-wrap gap-3">
+      {
+        COMPARISONS.filter((c) => c.slug !== comparison.slug).map((c) => (
+          <li>
+            <a
+              href={`/vs/${c.slug}`}
+              class="bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-4 py-2 transition-all text-sm text-gray-300 inline-block"
+            >
+              {c.h1}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <Cta />
+</PageLayout>

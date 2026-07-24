@@ -1,0 +1,66 @@
+---
+import PageLayout from '../../layouts/PageLayout.astro'
+import Cta from '../../components/Cta.astro'
+import { COMPARISONS } from '../../data/comparisons'
+import { SITE_URL, BRAND } from '../../site'
+import { softwareApplication, webPage, breadcrumbs } from '../../lib/schema'
+
+const path = '/vs'
+
+const schemas = [
+  softwareApplication(),
+  webPage({ name: `${BRAND} comparisons`, description: 'Honest comparisons against the alternatives.', path }),
+  breadcrumbs([{ name: 'Compare', path }]),
+  {
+    '@type': 'ItemList',
+    name: `${BRAND} comparisons`,
+    itemListElement: COMPARISONS.map((c, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: c.h1,
+      url: `${SITE_URL}/vs/${c.slug}`,
+    })),
+  },
+]
+---
+
+<PageLayout
+  title="ReelBallers Compared to the Alternatives"
+  description="Honest, specific comparisons of ReelBallers against editing by hand and against CapCut, including where the alternative is the better choice."
+  path={path}
+  schemas={schemas}
+  trail={[{ name: 'Compare', path }]}
+>
+  <section class="container mx-auto px-4 pt-10 pb-10">
+    <div class="max-w-3xl">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 leading-tight">
+        How ReelBallers compares
+      </h1>
+      <p class="text-lg md:text-xl text-gray-300 leading-relaxed">
+        Straight comparisons against the realistic alternatives, including the cases where the
+        alternative is the better choice. ReelBallers is narrow on purpose &mdash; it does
+        sport-specific work well and general video editing not at all.
+      </p>
+    </div>
+  </section>
+
+  <section class="container mx-auto px-4 py-8">
+    <ul class="grid gap-5 md:grid-cols-2 max-w-4xl">
+      {
+        COMPARISONS.map((c) => (
+          <li>
+            <a
+              href={`/vs/${c.slug}`}
+              class="block h-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-400/50 rounded-2xl p-6 transition-all"
+            >
+              <h2 class="text-xl font-bold text-white mb-3">{c.h1}</h2>
+              <p class="text-sm text-gray-300 leading-relaxed">{c.answer}</p>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+
+  <Cta />
+</PageLayout>
