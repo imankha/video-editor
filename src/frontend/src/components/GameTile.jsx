@@ -112,16 +112,28 @@ export function GameTile({
     fn?.();
   };
 
-  const handleClick = (e) => {
-    // A tap inside the kebab or its menu must not trigger the primary open.
-    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]')) return;
-    // Primary action: load (annotate) unless expired.
+  // Primary tile action: load (annotate) a live game; Extend/Recap an expired one.
+  const activatePrimary = () => {
     if (isExpired) {
       if (canExtend) onExtend?.();
       else if (hasRecap) onPlayRecap?.();
     } else {
       onLoad();
     }
+  };
+
+  const handleClick = (e) => {
+    // A tap inside the kebab or its menu must not trigger the primary open.
+    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]')) return;
+    activatePrimary();
+  };
+
+  // Keyboard activation (item 3): Enter/Space opens the tile's primary action.
+  const handleKeyDown = (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    if (e.target.closest('[data-game-kebab]') || e.target.closest('[data-game-menu]')) return;
+    e.preventDefault();
+    activatePrimary();
   };
 
   const posterUrl = `/api/games/${game.id}/poster.jpg`;
@@ -164,21 +176,28 @@ export function GameTile({
   return (
     <div
       onClick={handleClick}
-      className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all cursor-pointer ${
+      onKeyDown={handleKeyDown}
+      role="button"
+      tabIndex={0}
+      className={`relative group aspect-video bg-gray-800 rounded-lg overflow-hidden border transition-all duration-150 cursor-pointer outline-none
+        hover:scale-[1.03] hover:z-10 hover:brightness-105 hover:shadow-lg hover:shadow-cyan-900/40
+        focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 focus-visible:z-10 ${
         isExpired
-          ? 'border-yellow-800/40 hover:border-yellow-700/50'
-          : 'border-gray-700 hover:border-gray-600'
+          ? 'border-yellow-800/40 hover:border-yellow-600'
+          : 'border-gray-700 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/60'
       }`}
     >
-      {/* Poster image or fallback */}
+      {/* Poster image or fallback (item 5 — shimmer while loading, fade in on load) */}
       {posterState === 'loading' && (
-        <div className="absolute inset-0 bg-gray-700 animate-pulse" />
+        <div className="absolute inset-0 skeleton-shimmer" />
       )}
       {posterState !== 'error' && (
         <img
           src={posterUrl}
           alt={game.name}
-          className={`w-full h-full object-cover ${isExpired ? 'grayscale opacity-60' : ''}`}
+          className={`w-full h-full object-cover transition-opacity duration-500 ${isExpired ? 'grayscale' : ''} ${
+            posterState !== 'loaded' ? 'opacity-0' : isExpired ? 'opacity-60' : 'opacity-100'
+          }`}
           onLoad={() => setPosterState('loaded')}
           onError={() => setPosterState('error')}
         />

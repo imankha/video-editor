@@ -65,6 +65,28 @@
   background-image: linear-gradient(90deg, #3b82f6 0%, #60a5fa 40%, #93c5fd 50%, #60a5fa 60%, #3b82f6 100%);
 }
 
+/* Poster-tile loading skeleton (T5672 item 5): a polished shimmer sweep, NOT a
+   flat gray box and NOT the branded fallback. Used by DraftTile / GameTile /
+   ReelTile while the poster image is still loading; replaced by a fade-in image
+   on load, or the branded fallback only on a real error/404. */
+.skeleton-shimmer {
+  background-color: #374151; /* gray-700 base so it reads as a placeholder, not broken */
+  background-image: linear-gradient(
+    100deg,
+    rgba(55, 65, 81, 0) 20%,
+    rgba(148, 163, 184, 0.18) 40%,
+    rgba(148, 163, 184, 0.28) 50%,
+    rgba(148, 163, 184, 0.18) 60%,
+    rgba(55, 65, 81, 0) 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer { animation: none; }
+}
+
 /* Custom styles */
 body {
   margin: 0;
