@@ -909,9 +909,10 @@ async def _serve_reel_poster_jpeg(rel_path: str):
     Per-profile (the owner's current profile prefix), resolved through
     `generate_presigned_url`. Mirrors `projects._serve_draft_poster_jpeg`. The
     caller verifies object existence first, so a missing poster is a clean 404
-    upstream rather than a 502 from a signed GET of a nonexistent key. `private`
-    cache (session-authed, user-specific) with a short TTL.
+    upstream rather than a 502 from a signed GET of a nonexistent key.
+    T5682: long cache (86400s) + ETag for 304 cache hits.
     """
+    import hashlib
     import httpx
     from fastapi.responses import Response
 
@@ -924,10 +925,16 @@ async def _serve_reel_poster_jpeg(rel_path: str):
         resp = await client.get(url)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: generate ETag from content hash for 304 cache validation
+    etag = f'"{hashlib.md5(resp.content).hexdigest()}"'
     return Response(
         content=resp.content,
         media_type="image/jpeg",
-        headers={"Cache-Control": "private, max-age=300"},
+        headers={
+            "Cache-Control": "private, max-age=86400",
+            "ETag": etag,
+        },
     )
 
 
@@ -944,21 +951,33 @@ async def get_reel_poster(download_id: int):
     404 when the reel row is missing OR has no poster object (pre-T5280 reels;
     poster generation was best-effort and never fabricated) -> the drawer renders
     its branded fallback tile. We never fabricate an image (no-silent-fallback
-    rule, CLAUDE.md).
+    rule, CLAUDE.md). T5682: 404s are cached (private, 60s negative cache).
     """
+    from fastapi.responses import Response
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT filename FROM final_videos WHERE id = ?", (download_id,))
         row = cursor.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Reel not found")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     rel_path = poster_rel_path(poster_basename(row["filename"]))
 
     # Existence check under the current profile prefix: a poster-less reel must be
     # a clean 404 (branded fallback), NOT a 502 from signing a nonexistent object.
     if not profile_object_exists(get_current_user_id(), get_current_profile_id(), rel_path):
-        raise HTTPException(status_code=404, detail="No poster for this reel")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     return await _serve_reel_poster_jpeg(rel_path)
 

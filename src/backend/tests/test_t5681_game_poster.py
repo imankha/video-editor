@@ -90,7 +90,8 @@ def test_get_game_poster_serves_jpeg_when_present():
         resp = asyncio.run(games.get_game_poster(GAME_ID))
 
     assert resp.media_type == "image/jpeg"
-    assert resp.headers["cache-control"] == "private, max-age=300"
+    assert resp.headers["cache-control"] == "private, max-age=86400"  # T5682: long cache + ETag
+    assert "etag" in resp.headers  # T5682: ETag for 304 hits
     assert resp.body == b"\xff\xd8jpegbytes"
 
 
@@ -122,22 +123,22 @@ def test_get_game_poster_ensure_recap_poster_gets_env_prefixed_keys():
 
 def test_get_game_poster_404_when_game_missing():
     """404 when game row doesn't exist."""
-    with patch.object(games, "get_db_connection", _fake_db_with_row(None)), \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(GAME_ID))
-    assert e.value.status_code == 404
-    assert "Game not found" in e.value.detail
+    with patch.object(games, "get_db_connection", _fake_db_with_row(None)):
+        resp = asyncio.run(games.get_game_poster(GAME_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_get_game_poster_404_when_no_recap():
     """404 when game exists but has no recap_video_url."""
     game_row = {"id": GAME_ID, "recap_video_url": None}
 
-    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(GAME_ID))
-    assert e.value.status_code == 404
-    assert "No recap" in e.value.detail
+    with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)):
+        resp = asyncio.run(games.get_game_poster(GAME_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_get_game_poster_404_when_ensure_recap_poster_fails():
@@ -149,11 +150,11 @@ def test_get_game_poster_404_when_ensure_recap_poster_fails():
     with patch.object(games, "get_db_connection", _fake_db_with_row(game_row)), \
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
-         patch.object(poster, "ensure_recap_poster", return_value=False), \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(GAME_ID))
-    assert e.value.status_code == 404
-    assert "No poster" in e.value.detail
+         patch.object(poster, "ensure_recap_poster", return_value=False):
+        resp = asyncio.run(games.get_game_poster(GAME_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_get_game_poster_404_when_presign_fails():
@@ -166,10 +167,11 @@ def test_get_game_poster_404_when_presign_fails():
          patch.object(games, "get_current_user_id", return_value=USER_ID), \
          patch.object(games, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(poster, "ensure_recap_poster", return_value=True), \
-         patch.object(games, "generate_presigned_url", return_value=None), \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(games.get_game_poster(GAME_ID))
-    assert e.value.status_code == 404
+         patch.object(games, "generate_presigned_url", return_value=None):
+        resp = asyncio.run(games.get_game_poster(GAME_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_get_game_poster_502_when_r2_fails():

@@ -108,13 +108,13 @@ def test_leading_segmentless_clip_with_unknown_duration_bails():
 def test_generate_poster_slowmo_samples_first_half(monkeypatch):
     captured = {}
 
-    def fake_clearest(source, output_path, window=None):
+    def fake_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         captured["window"] = window
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpeg")
         return True
 
-    def boom_first(source, output_path):
+    def boom_first(source, output_path, resize_width=None, jpeg_quality=3):
         raise AssertionError("first-frame path must NOT run when slow-mo exists")
 
     monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
@@ -125,20 +125,20 @@ def test_generate_poster_slowmo_samples_first_half(monkeypatch):
 
     # Caller resolves the FULL section; the poster samples the FIRST HALF.
     res = generate_and_store_poster(USER_ID, "reel.mp4", (2.0, 6.0))
-    assert res == "reel.mp4.jpg"
+    assert res == "reel.mp4.v2.jpg"  # T5682: versioned for resized thumbs
     assert captured["window"] == (2.0, 4.0)
 
 
 def test_generate_poster_no_slowmo_uses_first_frame(monkeypatch):
     called = {}
 
-    def fake_first(source, output_path):
+    def fake_first(source, output_path, resize_width=None, jpeg_quality=3):
         called["yes"] = True
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpeg")
         return True
 
-    def boom_clearest(source, output_path, window=None):
+    def boom_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         raise AssertionError("clearest path must NOT run without slow-mo")
 
     monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
@@ -148,14 +148,14 @@ def test_generate_poster_no_slowmo_uses_first_frame(monkeypatch):
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
     # No section resolved (no slow-mo) -> first frame.
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.v2.jpg"  # T5682
     assert called.get("yes")
 
 
 def test_generate_poster_missing_segments_uses_first_frame(monkeypatch):
     called = {}
 
-    def fake_first(source, output_path):
+    def fake_first(source, output_path, resize_width=None, jpeg_quality=3):
         called["yes"] = True
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpeg")
@@ -163,16 +163,15 @@ def test_generate_poster_missing_segments_uses_first_frame(monkeypatch):
 
     monkeypatch.setattr(poster_mod, "generate_presigned_url", lambda *a, **k: "http://x/v.mp4")
     monkeypatch.setattr(poster_mod, "extract_first_frame_jpeg", fake_first)
-    monkeypatch.setattr(
-        poster_mod, "extract_clearest_frame_jpeg",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("no window without data")),
-    )
+    def boom_clearest(source, output_path, window=None, resize_width=None, jpeg_quality=3):
+        raise AssertionError("no window without data")
+    monkeypatch.setattr(poster_mod, "extract_clearest_frame_jpeg", boom_clearest)
     monkeypatch.setattr(poster_mod, "_jpeg_dimensions", lambda p: None)
     monkeypatch.setattr(poster_mod, "upload_bytes_to_r2", lambda *a, **k: True)
 
     # Explicit None AND the default both -> first frame (no fabricated section).
-    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.jpg"
-    assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.jpg"
+    assert generate_and_store_poster(USER_ID, "reel.mp4", None) == "reel.mp4.v2.jpg"  # T5682
+    assert generate_and_store_poster(USER_ID, "reel.mp4") == "reel.mp4.v2.jpg"
     assert called.get("yes")
 
 

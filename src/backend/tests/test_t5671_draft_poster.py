@@ -81,9 +81,11 @@ def test_ensure_draft_poster_cache_hit_no_ffmpeg():
 def test_ensure_draft_poster_generates_within_clip_window(tmp_path):
     captured = {}
 
-    def fake_extract(source, output_path, window=None):
+    def fake_extract(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         captured["window"] = window
         captured["source"] = source
+        captured["resize_width"] = resize_width  # T5682
+        captured["jpeg_quality"] = jpeg_quality
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpegbytes")
         return True
@@ -108,6 +110,8 @@ def test_ensure_draft_poster_generates_within_clip_window(tmp_path):
     # Clearest frame sampled WITHIN the clip's source region [in, out].
     assert captured["window"] == (10.0, 16.0)
     assert captured["source"] == "https://r2/game.mp4?sig=1"
+    assert captured["resize_width"] == 480  # T5682: card-size thumbnail
+    assert captured["jpeg_quality"] == 3  # q~70%
     assert captured["up_user"] == USER_ID
     assert captured["up_key"] == REL_PATH
     assert captured["content_type"] == "image/jpeg"
@@ -137,7 +141,7 @@ def test_ensure_draft_poster_missing_source_returns_none():
 
 
 def test_ensure_draft_poster_upload_failure_returns_none(tmp_path):
-    def fake_extract(source, output_path, window=None):
+    def fake_extract(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8jpegbytes")
         return True
@@ -173,8 +177,9 @@ def test_ensure_draft_poster_degenerate_window_falls_back_no_window():
     # out <= in (bad bounds) -> no window passed; the helper grabs the first frame.
     captured = {}
 
-    def fake_extract(source, output_path, window=None):
+    def fake_extract(source, output_path, window=None, resize_width=None, jpeg_quality=3):
         captured["window"] = window
+        captured["resize_width"] = resize_width
         from pathlib import Path
         Path(output_path).write_bytes(b"\xff\xd8x")
         return True
@@ -188,6 +193,7 @@ def test_ensure_draft_poster_degenerate_window_falls_back_no_window():
          patch("app.storage.upload_bytes_to_r2", return_value=True):
         assert poster_mod.ensure_draft_poster(PROJECT_ID, USER_ID) == REL_PATH
     assert captured["window"] is None
+    assert captured["resize_width"] == 480  # T5682: card-size thumbnail
 
 
 # ---------------------------------------------------------------------------
@@ -236,17 +242,19 @@ def test_get_draft_poster_serves_jpeg():
         resp = asyncio.run(projects.get_draft_poster(PROJECT_ID))
 
     assert resp.media_type == "image/jpeg"
-    assert resp.headers["cache-control"] == "private, max-age=300"
+    assert resp.headers["cache-control"] == "private, max-age=86400"  # T5682: long cache + ETag
+    assert "etag" in resp.headers  # T5682: ETag for 304 hits
     assert resp.body == b"\xff\xd8jpegbytes"
 
 
 def test_get_draft_poster_404_when_no_poster():
     from app.routers import projects
     with patch("app.services.poster.ensure_draft_poster", return_value=None), \
-         patch("app.routers.projects.get_current_user_id", return_value=USER_ID), \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(projects.get_draft_poster(PROJECT_ID))
-    assert e.value.status_code == 404
+         patch("app.routers.projects.get_current_user_id", return_value=USER_ID):
+        resp = asyncio.run(projects.get_draft_poster(PROJECT_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
 
 
 def test_serve_draft_poster_404_when_no_presign():

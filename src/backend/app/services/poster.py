@@ -36,18 +36,20 @@ from ..storage import generate_presigned_url, upload_bytes_to_r2
 logger = logging.getLogger(__name__)
 
 POSTER_SUBDIR = "posters"
+POSTER_VERSION = "v2"  # T5682: card-size thumbnails, bump for regeneration
 
 
 def poster_basename(final_filename: str) -> str:
-    """The poster object's basename for a final video filename: `{name}.jpg`."""
-    return f"{final_filename}.jpg"
+    """The poster object's basename for a final video filename: `{name}.v2.jpg`
+    (T5682: versioned for card-size thumbnail regeneration)."""
+    return f"{final_filename}.{POSTER_VERSION}.jpg"
 
 
 def poster_rel_path(basename: str) -> str:
     """Profile-relative R2 path for a poster basename.
 
     Mirrors the video's `final_videos/{filename}` with a `posters/` sub-prefix,
-    e.g. `final_videos/posters/reel_final_ab12cd34.mp4.jpg`.
+    e.g. `final_videos/posters/reel_final_ab12cd34.mp4.v2.jpg`.
     """
     return f"final_videos/{POSTER_SUBDIR}/{basename}"
 
@@ -74,7 +76,8 @@ def _probe_duration(source: str) -> float | None:
 
 
 def extract_clearest_frame_jpeg(
-    source: str, output_path: str, window: tuple[float, float] | None = None
+    source: str, output_path: str, window: tuple[float, float] | None = None,
+    resize_width: int | None = None, jpeg_quality: int = 3
 ) -> bool:
     """Pick the CLEAREST frame among a handful of samples (largest JPEG wins).
 
@@ -88,8 +91,12 @@ def extract_clearest_frame_jpeg(
     on the final timeline) - used by the reel poster policy (T5090) to sample only
     within the first half of the first slow-mo section. Without a window, samples
     across the whole clip (recap posters, T5180; legacy behavior). Falls back to
-    the plain first frame when probing/sampling fails. Returns True when
-    output_path holds a poster; never raises.
+    the plain first frame when probing/sampling fails.
+
+    `resize_width` (pixels) scales the frame to a card-sized thumbnail (e.g. 480 for
+    home tiles); aspect ratio preserved. T5682: card-size thumbnails for faster TTFB.
+    `jpeg_quality` is ffmpeg's q:v (3=~70%, 2=~80%, 1=~90%; lower = smaller file).
+    Returns True when output_path holds a poster; never raises.
     """
     if window is not None:
         start, end = window
@@ -112,9 +119,10 @@ def extract_clearest_frame_jpeg(
                 "-ss", f"{ts:.3f}",
                 "-i", source,
                 "-frames:v", "1",
-                "-q:v", "3",
-                cand,
             ]
+            if resize_width:
+                cmd.extend(["-vf", f"scale={resize_width}:-1"])
+            cmd.extend(["-q:v", str(jpeg_quality), cand])
             try:
                 subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=30)
             except Exception:
@@ -126,26 +134,31 @@ def extract_clearest_frame_jpeg(
                     best_bytes = data
 
     if best_bytes is None:
-        return extract_first_frame_jpeg(source, output_path)
+        return extract_first_frame_jpeg(source, output_path, resize_width, jpeg_quality)
     Path(output_path).write_bytes(best_bytes)
     return True
 
 
-def extract_first_frame_jpeg(source: str, output_path: str) -> bool:
+def extract_first_frame_jpeg(
+    source: str, output_path: str,
+    resize_width: int | None = None, jpeg_quality: int = 3
+) -> bool:
     """Grab the first frame of a video to a JPEG via ffmpeg.
 
     `source` may be a local path OR a presigned HTTPS URL -- ffmpeg reads remote
-    URLs directly (range requests), so no full download is needed. Returns True
-    on success, False on any failure (never raises).
+    URLs directly (range requests), so no full download is needed.
+    `resize_width` and `jpeg_quality` match extract_clearest_frame_jpeg (T5682).
+    Returns True on success, False on any failure (never raises).
     """
     cmd = [
         "ffmpeg", "-y",
         "-ss", "0",
         "-i", source,
         "-frames:v", "1",
-        "-q:v", "3",
-        output_path,
     ]
+    if resize_width:
+        cmd.extend(["-vf", f"scale={resize_width}:-1"])
+    cmd.extend(["-q:v", str(jpeg_quality), output_path])
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=60)
         return Path(output_path).exists() and Path(output_path).stat().st_size > 0
@@ -443,10 +456,13 @@ def generate_and_store_poster(
     basename = poster_basename(final_filename)
     with tempfile.TemporaryDirectory() as tmp:
         out_path = str(Path(tmp) / basename)
+        # T5682: resize to card-size thumbnail (480px width, JPEG q~70)
         extracted = (
-            extract_clearest_frame_jpeg(video_url, out_path, window=window)
+            extract_clearest_frame_jpeg(video_url, out_path, window=window,
+                                       resize_width=480, jpeg_quality=3)
             if window is not None
-            else extract_first_frame_jpeg(video_url, out_path)
+            else extract_first_frame_jpeg(video_url, out_path,
+                                         resize_width=480, jpeg_quality=3)
         )
         if not extracted:
             logger.info(f"[Poster] extraction failed for {final_filename}; no poster stored")
@@ -560,7 +576,9 @@ def ensure_recap_poster(recap_key: str, recap_poster_key: str) -> bool:
             return False
         with tempfile.TemporaryDirectory() as tmp:
             out_path = str(Path(tmp) / "recap_poster.jpg")
-            if not extract_clearest_frame_jpeg(recap_url, out_path):
+            # T5682: resize to card-size thumbnail
+            if not extract_clearest_frame_jpeg(recap_url, out_path,
+                                              resize_width=480, jpeg_quality=3):
                 logger.info(f"[RecapPoster] extraction failed for {recap_key}")
                 return False
             data = Path(out_path).read_bytes()
@@ -730,12 +748,13 @@ def ensure_draft_poster(project_id: int, user_id: str) -> str | None:
 
         # 4. Clearest frame within the clip's region (whole-clip heuristic scoped
         #    to [in, out]); the helper falls back to the first frame on a bad
-        #    window or ffprobe failure.
+        #    window or ffprobe failure. T5682: resize to card-size thumbnail.
         window = (in_off, out_off) if out_off > in_off else None
         basename = f"{project_id}.jpg"
         with tempfile.TemporaryDirectory() as tmp:
             out_path = str(Path(tmp) / basename)
-            if not extract_clearest_frame_jpeg(source_url, out_path, window=window):
+            if not extract_clearest_frame_jpeg(source_url, out_path, window=window,
+                                              resize_width=480, jpeg_quality=3):
                 logger.info(f"[DraftPoster] extraction failed for project {project_id}; no poster")
                 return None
             data = Path(out_path).read_bytes()

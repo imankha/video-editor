@@ -63,8 +63,8 @@ def _fake_db_with_row(row):
 
 def test_reel_poster_key_derives_from_filename():
     # The endpoint serves the SAME object the share-unfurl path derives:
-    # final_videos/posters/{filename}.jpg, per-profile.
-    assert REL_PATH == "final_videos/posters/reel_final_ab12cd34.mp4.jpg"
+    # final_videos/posters/{filename}.v2.jpg (T5682: versioned for resized thumbs)
+    assert REL_PATH == "final_videos/posters/reel_final_ab12cd34.mp4.v2.jpg"
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +85,8 @@ def test_get_reel_poster_serves_jpeg_when_present():
     # Existence probed under the owner's CURRENT profile prefix (per-profile media).
     exists.assert_called_once_with(USER_ID, PROFILE_ID, REL_PATH)
     assert resp.media_type == "image/jpeg"
-    assert resp.headers["cache-control"] == "private, max-age=300"
+    assert resp.headers["cache-control"] == "private, max-age=86400"  # T5682: long cache + ETag
+    assert "etag" in resp.headers  # T5682: ETag for 304 hits
     assert resp.body == b"\xff\xd8jpegbytes"
 
 
@@ -93,10 +94,11 @@ def test_get_reel_poster_404_when_reel_missing():
     with patch.object(downloads, "get_db_connection", _fake_db_with_row(None)), \
          patch.object(downloads, "get_current_user_id", return_value=USER_ID), \
          patch.object(downloads, "get_current_profile_id", return_value=PROFILE_ID), \
-         patch.object(downloads, "profile_object_exists") as exists, \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(downloads.get_reel_poster(DOWNLOAD_ID))
-    assert e.value.status_code == 404
+         patch.object(downloads, "profile_object_exists") as exists:
+        resp = asyncio.run(downloads.get_reel_poster(DOWNLOAD_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
     # Never probes R2 for a nonexistent reel.
     exists.assert_not_called()
 
@@ -108,10 +110,11 @@ def test_get_reel_poster_404_when_no_poster_object():
          patch.object(downloads, "get_current_user_id", return_value=USER_ID), \
          patch.object(downloads, "get_current_profile_id", return_value=PROFILE_ID), \
          patch.object(downloads, "profile_object_exists", return_value=False), \
-         patch.object(downloads, "generate_presigned_url") as presign, \
-         pytest.raises(HTTPException) as e:
-        asyncio.run(downloads.get_reel_poster(DOWNLOAD_ID))
-    assert e.value.status_code == 404
+         patch.object(downloads, "generate_presigned_url") as presign:
+        resp = asyncio.run(downloads.get_reel_poster(DOWNLOAD_ID))
+    # T5682: negative cache on 404s
+    assert resp.status_code == 404
+    assert resp.headers["cache-control"] == "private, max-age=60"
     # Short-circuits before signing anything.
     presign.assert_not_called()
 

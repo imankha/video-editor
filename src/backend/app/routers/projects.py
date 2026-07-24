@@ -1179,9 +1179,10 @@ async def _serve_draft_poster_jpeg(rel_path: str):
     Mirrors `shares.py::_serve_poster_jpeg`, but the key is PROFILE-scoped (the
     draft's owner), resolved through `generate_presigned_url` (current-context
     profile prefix). 404 when the object/presign is absent; 502 on an R2 fetch
-    failure. `private` cache (session-authed, user-specific) with a short TTL so
-    a first-clip change surfaces on the tile without a hard reload.
+    failure. T5682: long cache (86400s) + ETag for 304 cache hits on 200s;
+    short negative cache (60s) on 404s.
     """
+    import hashlib
     import httpx
     from fastapi.responses import Response
 
@@ -1193,10 +1194,16 @@ async def _serve_draft_poster_jpeg(rel_path: str):
         resp = await client.get(url)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Poster fetch failed")
+
+    # T5682: generate ETag from content hash for 304 cache validation
+    etag = f'"{hashlib.md5(resp.content).hexdigest()}"'
     return Response(
         content=resp.content,
         media_type="image/jpeg",
-        headers={"Cache-Control": "private, max-age=300"},
+        headers={
+            "Cache-Control": "private, max-age=86400",
+            "ETag": etag,
+        },
     )
 
 
@@ -1212,14 +1219,20 @@ async def get_draft_poster(project_id: int):
     404 when the project has no clips OR the source video is expired/missing --
     the frontend renders its no-poster fallback tile; we never fabricate an image
     (no-silent-fallback rule). Poster generation is best-effort and never fails
-    a parent operation.
+    a parent operation. T5682: 404s are cached (private, 60s negative cache).
     """
     from app.services.poster import ensure_draft_poster
+    from fastapi.responses import Response
 
     user_id = get_current_user_id()
     rel_path = ensure_draft_poster(project_id, user_id)
     if not rel_path:
-        raise HTTPException(status_code=404, detail="No poster for this draft")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
     return await _serve_draft_poster_jpeg(rel_path)
 
 

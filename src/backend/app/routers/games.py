@@ -2438,7 +2438,7 @@ async def get_game_poster(game_id: int):
     404 when the game has no recap OR the recap video is expired/missing --
     the frontend renders its no-poster fallback tile; we never fabricate an image
     (no-silent-fallback rule, CLAUDE.md). Poster generation is best-effort and
-    never fails a parent operation.
+    never fails a parent operation. T5682: 404s are cached (private, 60s).
     """
     from fastapi.responses import Response
     import httpx
@@ -2452,11 +2452,21 @@ async def get_game_poster(game_id: int):
         row = cursor.fetchone()
 
     if not row:
-        raise HTTPException(status_code=404, detail="Game not found")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     # No recap video -> no poster
     if not row["recap_video_url"]:
-        raise HTTPException(status_code=404, detail="No recap for this game")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     from app.services.poster import ensure_recap_poster
     from app.storage import APP_ENV
@@ -2472,7 +2482,12 @@ async def get_game_poster(game_id: int):
 
     # Ensure poster exists (generate on first request if recap exists)
     if not ensure_recap_poster(recap_key, poster_key):
-        raise HTTPException(status_code=404, detail="No poster for this game")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     # Serve the poster with a presigned URL (private cache, session-authed).
     # generate_presigned_url's relative_path is relative to users/{uid}/ and
@@ -2483,15 +2498,26 @@ async def get_game_poster(game_id: int):
         expires_in=3600, content_type="image/jpeg"
     )
     if not url:
-        raise HTTPException(status_code=404, detail="No poster for this game")
+        # T5682: negative cache on 404s (60s)
+        return Response(
+            status_code=404,
+            headers={"Cache-Control": "private, max-age=60"},
+            media_type="image/jpeg",
+        )
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
         resp = await client.get(url)
     if resp.status_code != 200:
         raise HTTPException(status_code=502, detail="Poster fetch failed")
 
+    # T5682: generate ETag from content hash for 304 cache validation
+    import hashlib
+    etag = f'"{hashlib.md5(resp.content).hexdigest()}"'
     return Response(
         content=resp.content,
         media_type="image/jpeg",
-        headers={"Cache-Control": "private, max-age=300"},
+        headers={
+            "Cache-Control": "private, max-age=86400",
+            "ETag": etag,
+        },
     )
