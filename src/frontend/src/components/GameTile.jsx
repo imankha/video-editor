@@ -220,9 +220,18 @@ export function GameTile({
         </div>
       )}
 
-      {/* Minimal overlay: date + clip count (always visible) */}
-      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent px-2 py-2">
-        <div className="flex items-center justify-between gap-1 text-xs">
+      {/* Bottom scrim: game name (primary line) + date/clip count (secondary line).
+          One structure for BOTH the poster and the fallback -- this div is always
+          rendered (not gated on posterState), so it overlays whichever variant is
+          showing beneath it. Name is a single truncated line (tiles run as small
+          as ~90px tall at the 2-up 390px breakpoint, so no 2-line clamp here). The
+          gradient is opaque enough at the base to stay legible over a bright
+          poster frame. */}
+      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/55 to-transparent px-2 pt-6 pb-1.5">
+        <h3 className="text-white text-xs sm:text-sm font-medium truncate drop-shadow" title={game.name}>
+          {game.name}
+        </h3>
+        <div className="mt-0.5 flex items-center justify-between gap-1 text-xs">
           <span className="text-gray-300">
             {new Date(game.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
           </span>

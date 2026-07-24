@@ -133,3 +133,38 @@ describe('GameTile — kebab menu (item 4)', () => {
     expect(screen.getByText('Extend storage')).toBeTruthy();
   });
 });
+
+describe('GameTile — game name on the scrim (T5681 follow-up)', () => {
+  it('shows the game name as the scrim primary line when a poster is showing', () => {
+    render(<GameTile game={baseGame} {...handlers()} />);
+    // Poster is still loading/showing (no forced error) -- the name must render
+    // on the SAME shared scrim regardless of poster state.
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(heading.textContent).toBe(baseGame.name);
+  });
+
+  it('shows the SAME name element on the no-poster fallback (one consistent structure)', () => {
+    render(<GameTile game={baseGame} {...handlers()} />);
+    forcePosterError();
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(heading.textContent).toBe(baseGame.name);
+  });
+
+  it('truncates a long name (single line, no wrap) and carries a full-text title tooltip', () => {
+    const longName = 'A Very Long Tournament Game Name That Should Not Wrap Or Overflow The Tile';
+    render(<GameTile game={{ ...baseGame, name: longName }} {...handlers()} />);
+    const heading = screen.getByRole('heading', { level: 3 });
+    expect(heading.textContent).toBe(longName);
+    expect(heading.className).toContain('truncate');
+    // Full name still reachable (hover tooltip) even though it's visually clipped.
+    expect(heading.getAttribute('title')).toBe(longName);
+  });
+
+  it('keeps date + clip count as the secondary line under the name', () => {
+    render(<GameTile game={baseGame} {...handlers()} />);
+    const heading = screen.getByRole('heading', { level: 3 });
+    // Secondary line (date/clip count) renders in a sibling below the name.
+    const secondary = heading.nextElementSibling;
+    expect(secondary.textContent).toContain('3 clips');
+  });
+});
