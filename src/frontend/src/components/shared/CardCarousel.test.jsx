@@ -6,9 +6,10 @@ describe('CardCarousel (T5672)', () => {
   beforeEach(() => {
     // jsdom doesn't implement scrollBy — spy so paging is observable.
     Element.prototype.scrollBy = vi.fn();
-    // Mock fine-pointer detection
+    // Mock fine-pointer detection: default to desktop (fine pointer). The
+    // component queries '(hover: hover) and (pointer: fine)' verbatim.
     window.matchMedia = vi.fn().mockImplementation(query => ({
-      matches: query.includes('fine-pointer'),
+      matches: query === '(hover: hover) and (pointer: fine)',
       media: query,
       onchange: null,
       addListener: vi.fn(),
@@ -33,7 +34,7 @@ describe('CardCarousel (T5672)', () => {
     expect(screen.getByText('tile-b')).toBeTruthy();
   });
 
-  it('does not show chevrons on coarse-pointer (mobile)', () => {
+  it('does not show arrows on coarse-pointer (mobile)', () => {
     // Mock coarse pointer
     window.matchMedia = vi.fn().mockImplementation(query => ({
       matches: false, // coarse pointer
@@ -44,16 +45,16 @@ describe('CardCarousel (T5672)', () => {
     }));
 
     render(<CardCarousel ariaLabel="row"><div>t</div></CardCarousel>);
-    // Chevrons should not be rendered on mobile
+    // Arrows should not be rendered on mobile
     expect(screen.queryByRole('button', { name: 'Scroll left' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Scroll right' })).toBeNull();
   });
 
-  it('pages left/right with smooth scroll on chevron click', () => {
+  it('pages left/right with smooth scroll on arrow click', () => {
     const { container } = render(<CardCarousel ariaLabel="row"><div>t</div></CardCarousel>);
     const scrollDiv = container.querySelector('div[role="group"]');
 
-    // Mock overflow to make chevrons appear
+    // Mock overflow to make arrows appear
     Object.defineProperties(scrollDiv, {
       scrollWidth: { value: 1000, configurable: true },
       clientWidth: { value: 300, configurable: true },
@@ -61,20 +62,70 @@ describe('CardCarousel (T5672)', () => {
     });
 
     // Trigger initial layout detection
-    scrollDiv.dispatchEvent(new Event('scroll', { bubbles: true }));
+    fireEvent.scroll(scrollDiv);
 
-    // If chevrons exist (component detected overflow), test the click behavior
-    const rightBtn = screen.queryByRole('button', { name: 'Scroll right' });
-    const leftBtn = screen.queryByRole('button', { name: 'Scroll left' });
+    const rightBtn = screen.getByRole('button', { name: 'Scroll right' });
+    const leftBtn = screen.getByRole('button', { name: 'Scroll left' });
 
-    if (rightBtn && leftBtn) {
-      fireEvent.click(rightBtn);
-      fireEvent.click(leftBtn);
-      expect(Element.prototype.scrollBy).toHaveBeenCalledTimes(2);
-      // Verify smooth scroll behavior
-      for (const call of Element.prototype.scrollBy.mock.calls) {
-        expect(call[0]).toMatchObject({ behavior: 'smooth' });
-      }
+    fireEvent.click(rightBtn);
+    fireEvent.click(leftBtn);
+    expect(Element.prototype.scrollBy).toHaveBeenCalledTimes(2);
+    // Verify smooth scroll behavior
+    for (const call of Element.prototype.scrollBy.mock.calls) {
+      expect(call[0]).toMatchObject({ behavior: 'smooth' });
     }
+  });
+
+  it('renders solid circular arrow buttons positioned outside the row edge, vertically centered', () => {
+    const { container } = render(<CardCarousel ariaLabel="row"><div>t</div></CardCarousel>);
+    const scrollDiv = container.querySelector('div[role="group"]');
+
+    Object.defineProperties(scrollDiv, {
+      scrollWidth: { value: 1000, configurable: true },
+      clientWidth: { value: 300, configurable: true },
+      scrollLeft: { value: 350, configurable: true }, // middle: both enabled
+    });
+    fireEvent.scroll(scrollDiv);
+
+    const leftBtn = screen.getByRole('button', { name: 'Scroll left' });
+    const rightBtn = screen.getByRole('button', { name: 'Scroll right' });
+
+    for (const btn of [leftBtn, rightBtn]) {
+      // Solid circle: rounded, sized, bordered, shadowed
+      expect(btn.className).toMatch(/rounded-full/);
+      expect(btn.className).toMatch(/w-9/);
+      expect(btn.className).toMatch(/h-9/);
+      expect(btn.className).toMatch(/border-gray-600/);
+      expect(btn.className).toMatch(/shadow-lg/);
+      // Vertically centered on the row
+      expect(btn.className).toMatch(/top-1\/2/);
+      expect(btn.className).toMatch(/-translate-y-1\/2/);
+      // Enabled (mid-scroll) state is the solid dark fill, not the dimmed disabled one
+      expect(btn.className).toMatch(/bg-gray-800\/95/);
+      expect(btn.className).toMatch(/text-white/);
+    }
+
+    // Positioned half-out past the row's own edges
+    expect(leftBtn.className).toMatch(/-left-4/);
+    expect(rightBtn.className).toMatch(/-right-4/);
+  });
+
+  it('dims and disables the left arrow at scroll start, right arrow at scroll end', () => {
+    const { container } = render(<CardCarousel ariaLabel="row"><div>t</div></CardCarousel>);
+    const scrollDiv = container.querySelector('div[role="group"]');
+
+    Object.defineProperties(scrollDiv, {
+      scrollWidth: { value: 1000, configurable: true },
+      clientWidth: { value: 300, configurable: true },
+      scrollLeft: { value: 0, configurable: true }, // at start
+    });
+    fireEvent.scroll(scrollDiv);
+
+    const leftBtn = screen.getByRole('button', { name: 'Scroll left' });
+    expect(leftBtn.disabled).toBe(true);
+    expect(leftBtn.className).toMatch(/text-gray-500/);
+
+    const rightBtn = screen.getByRole('button', { name: 'Scroll right' });
+    expect(rightBtn.disabled).toBe(false);
   });
 });

@@ -7,10 +7,11 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
  * Presentational primitive (a View): it owns NO data and NO persisted state —
  * scroll position is ephemeral DOM state, never written anywhere (epic decision #3).
  *
- * - Touch (coarse pointer): native momentum swipe + CSS scroll-snap; no chevrons.
- * - Desktop (fine pointer): chevrons always visible when row overflows, track
- *   scroll position to hide left chevron at start, right chevron at end. Subtle
- *   idle state (gray) that brightens on hover.
+ * - Touch (coarse pointer): native momentum swipe + CSS scroll-snap; no arrows.
+ * - Desktop (fine pointer): solid circular arrow buttons, always visible when
+ *   the row overflows, vertically centered and half-out past the row edge.
+ *   Track scroll position to disable/hide the left arrow at scroll start and
+ *   the right arrow at scroll end.
  *
  * No JS carousel library — CSS scroll-snap only (epic decision #2).
  *
@@ -85,35 +86,39 @@ export function CardCarousel({ children, ariaLabel, className = '' }) {
         {children}
       </div>
 
-      {/* Left chevron — desktop only, visible when can scroll left */}
+      {/* Left arrow — desktop only, solid circular button half-out past the row edge */}
       {showChevrons && (
         <button
           type="button"
           aria-label="Scroll left"
           onClick={() => page(-1)}
           disabled={!scrollState.canScrollLeft}
-          className={`absolute left-0 inset-y-0 z-10 w-10 flex items-center justify-center
-                     bg-gradient-to-r from-gray-900/90 to-transparent
-                     transition-colors group-hover/row:text-white
-                     ${scrollState.canScrollLeft ? 'text-gray-400 hover:from-gray-900' : 'text-gray-600 cursor-not-allowed'}`}
+          className={`absolute -left-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+                     flex items-center justify-center border border-gray-600 shadow-lg
+                     transition-colors
+                     ${scrollState.canScrollLeft
+                       ? 'bg-gray-800/95 text-white hover:bg-gray-700'
+                       : 'bg-gray-800/60 text-gray-500 cursor-not-allowed'}`}
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={20} />
         </button>
       )}
 
-      {/* Right chevron — desktop only, visible when can scroll right */}
+      {/* Right arrow — desktop only, solid circular button half-out past the row edge */}
       {showChevrons && (
         <button
           type="button"
           aria-label="Scroll right"
           onClick={() => page(1)}
           disabled={!scrollState.canScrollRight}
-          className={`absolute right-0 inset-y-0 z-10 w-10 flex items-center justify-center
-                     bg-gradient-to-l from-gray-900/90 to-transparent
-                     transition-colors group-hover/row:text-white
-                     ${scrollState.canScrollRight ? 'text-gray-400 hover:from-gray-900' : 'text-gray-600 cursor-not-allowed'}`}
+          className={`absolute -right-4 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full
+                     flex items-center justify-center border border-gray-600 shadow-lg
+                     transition-colors
+                     ${scrollState.canScrollRight
+                       ? 'bg-gray-800/95 text-white hover:bg-gray-700'
+                       : 'bg-gray-800/60 text-gray-500 cursor-not-allowed'}`}
         >
-          <ChevronRight size={22} />
+          <ChevronRight size={20} />
         </button>
       )}
     </div>
